@@ -7,7 +7,7 @@ import { v5HumanActorId } from "../services/v5-authorization.js";
 import { readCustomerSupportHistory } from "../services/experience/customer-support.js";
 import { customerSupportCaseService } from "../services/experience/support-cases.js";
 import { readSupportCaseDataPolicy } from "../services/experience/support-case-configuration.js";
-import { supportAssistantAvailabilityQuerySchema, supportAssistantRequestSchema, supportAssistantResponseSchema } from "@paperclipai/shared";
+import { supportAssistantAvailabilityQuerySchema, supportAssistantRequestSchema, supportAssistantResponseSchema, supportCaseIssueLinkSchema, linkSupportCaseIssueSchema } from "@paperclipai/shared";
 import type { firstPartySupportModelGateway } from "../services/orchestration/first-party-support-model-gateway.js";
 export function customerSupportRoutes(db: Db, options: {
   runtimeEnv?: Readonly<Record<string, string | undefined>>;
@@ -71,6 +71,14 @@ export function customerSupportRoutes(db: Db, options: {
   router.get("/companies/:companyId/support/cases/:caseId", async (req, res) => {
     assertBoard(req);
     res.json(await cases.get(req.actor, z.uuid().toLowerCase().parse(req.params.companyId), z.uuid().toLowerCase().parse(req.params.caseId), req.query));
+  });
+  router.post("/companies/:companyId/support/cases/:caseId/issue-links", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().toLowerCase().parse(req.params.companyId);
+    const caseId = z.uuid().toLowerCase().parse(req.params.caseId);
+    z.strictObject({}).parse(req.query);
+    const body = linkSupportCaseIssueSchema.parse(req.body);
+    res.status(201).json(supportCaseIssueLinkSchema.parse(await cases.linkIssue(req.actor, companyId, caseId, body)));
   });
   router.post("/companies/:companyId/support/cases/:caseId/replies", async (req, res) => {
     assertBoard(req);

@@ -9,6 +9,7 @@ import {
   supportCaseCategorySchema,
   supportCaseImpactSchema,
   supportCaseIntakePolicySchema, supportCaseSafeContextSchema, SUPPORT_CASE_LIMITS,
+  linkSupportCaseIssueSchema, supportCaseIssueLinkSchema,
   type CreateSupportCase,
   type CloseSupportCase,
   type ReplySupportCase,
@@ -165,6 +166,9 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn, active
   const [accessLost, setAccessLost] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState<string | null>(null);
+  const [issueRef, setIssueRef] = useState("");
+  const [issueLinkBusy, setIssueLinkBusy] = useState(false);
+  const [issueLinkMessage, setIssueLinkMessage] = useState<string | null>(null);
   const createInFlight = useRef(false);
   const replyInFlight = useRef(false);
   const ready = selectedCompanyId === companyId && identity.settled && !identity.localImplicit &&
@@ -452,6 +456,28 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn, active
     }
   }
 
+  async function linkIssue() {
+    if (!selectedCaseId || !ready || !issueRef.trim() || issueLinkBusy || !hasCurrentV9Session(client, principal, identity.sessionId)) return;
+    const input = linkSupportCaseIssueSchema.parse({ expectedUserId: principal, issueRef: issueRef.trim() });
+    setIssueLinkBusy(true); setIssueLinkMessage(null);
+    try {
+      const value = supportCaseIssueLinkSchema.parse(await api.post(
+        supportPath(companyId, `/cases/${encodeURIComponent(selectedCaseId)}/issue-links`), input,
+      ));
+      if (value.companyId !== companyId || value.caseId !== selectedCaseId || !current()) throw new Error("Support source changed");
+      if (!value.issue) throw new Error("The linked Issue is no longer available");
+      setIssueRef("");
+      setIssueLinkMessage(t("supportCases.issueLinked"));
+      await detailQuery.refetch();
+    } catch (error) {
+      if (!current()) return;
+      if (hasAccountError(error)) { loseAccess(); return; }
+      setIssueLinkMessage(t("supportCases.issueLinkFailed"));
+    } finally {
+      if (mounted.current) setIssueLinkBusy(false);
+    }
+  }
+
   const statusText = (status: string) => labels.statuses[status as keyof typeof labels.statuses] ?? status;
   const categories = supportCaseCategorySchema.options;
   const impacts = supportCaseImpactSchema.options;
@@ -522,6 +548,17 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn, active
         <Button variant="outline" className="min-h-11" onClick={() => setSelectedCaseId(null)}>{t("supportCases.backToCases")}</Button>
       </div>
       <p className="whitespace-pre-wrap break-words">{detailQuery.data.description}</p>
+      <section className="space-y-2 rounded-md border border-border p-3">
+        <h3 className="font-medium">{t("supportCases.investigation")}</h3>
+        <p className="text-sm text-muted-foreground">{t("supportCases.investigationPrivacy")}</p>
+        {detailQuery.data.relatedIssue ? <div className="space-y-2"><Link className="text-primary underline" to={`${selectedCompany?.issuePrefix ? `/${selectedCompany.issuePrefix}` : ""}/issues/${encodeURIComponent(detailQuery.data.relatedIssue.identifier ?? detailQuery.data.relatedIssue.id)}`}>{t("supportCases.linkedIssue", { issue: detailQuery.data.relatedIssue.identifier ?? detailQuery.data.relatedIssue.id })}</Link><p className="text-sm text-muted-foreground">{t("supportCases.linkedIssueNextStep")}</p><Link className="text-primary underline" to="/decisions">{t("supportCases.openDecisions")}</Link></div> : <form className="flex flex-wrap items-end gap-2" onSubmit={event => { event.preventDefault(); void linkIssue(); }}>
+          <label className="min-w-52 flex-1 space-y-1 text-sm font-medium">{t("supportCases.issueRef")}
+            <input aria-label={t("supportCases.issueRef")} className="min-h-11 w-full rounded-md border border-input bg-background px-3 text-foreground" maxLength={100} value={issueRef} disabled={issueLinkBusy} onChange={event => setIssueRef(event.target.value)} />
+          </label>
+          <Button className="min-h-11" type="submit" disabled={!issueRef.trim() || issueLinkBusy || !current()}>{issueLinkBusy ? t("supportCases.linkingIssue") : t("supportCases.linkIssue")}</Button>
+        </form>}
+        {issueLinkMessage && <p role="status">{issueLinkMessage}</p>}
+      </section>
       {detailQuery.data.safeContext && contextPreview(detailQuery.data.safeContext)}
       {detailQuery.data.requestedResponse && <div role="status" className="rounded-md border border-border p-3">
         <p className="font-medium">{labels.statuses.WAITING_FOR_YOU}</p>

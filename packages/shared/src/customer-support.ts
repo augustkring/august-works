@@ -235,8 +235,18 @@ export const supportCaseDetailSchema = z.strictObject({
   ...supportCaseSummarySchema.shape,
   description: z.string().min(1).max(SUPPORT_CASE_LIMITS.description), safeContext: supportCaseSafeContextSchema.nullable(),
   followUpOfId: z.uuid().nullable(), timeline: z.array(supportCaseTimelineEntrySchema).max(SUPPORT_CASE_LIMITS.timelinePage),
+  relatedIssue: z.strictObject({ id: z.uuid(), identifier: z.string().min(1).max(100).nullable() }).nullable(),
   nextCursor: supportCaseCursorSchema.nullable(),
 });
+export const supportCaseIssueLinkSchema = z.strictObject({
+  companyId: z.uuid(), caseId: z.uuid(),
+  issue: z.strictObject({ id: z.uuid(), identifier: z.string().min(1).max(100).nullable() }).nullable(),
+});
+export const linkSupportCaseIssueSchema = z.strictObject({
+  expectedUserId: z.string().min(1).max(300), issueRef: z.string().trim().min(1).max(100),
+});
+export type SupportCaseIssueLink = z.infer<typeof supportCaseIssueLinkSchema>;
+export type LinkSupportCaseIssue = z.infer<typeof linkSupportCaseIssueSchema>;
 export const supportCaseListSchema = z.strictObject({
   companyId: z.uuid(), entries: z.array(supportCaseSummarySchema).max(SUPPORT_CASE_LIMITS.timelinePage),
   nextCursor: supportCaseCursorSchema.nullable(),

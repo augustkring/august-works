@@ -12,6 +12,7 @@ import {
   companySecrets,
   humanWorkflowCoverages,
   heartbeatRuns,
+  supportCaseIssueLinks,
   type Db,
 } from "@paperclipai/db";
 import { accountDeletionRequestSchema } from "@paperclipai/shared";
@@ -298,6 +299,9 @@ export async function eraseAccountAccess(
       select own.id from support_cases own where own.opened_by_user_id=${userId}
       union select e.case_id from support_case_events e where e.author_user_id=${userId}
     ) order by c.id for update`);
+  // Issue links retain no support content, and their author identity is not
+  // needed to preserve the customer's current support/work reference.
+  await tx.update(supportCaseIssueLinks).set({ linkedByUserId: null }).where(eq(supportCaseIssueLinks.linkedByUserId, userId));
   // A hold or attempted/unknown provider outcome keeps physical erasure
   // pending; it must never roll back immediate credential revocation.
   await tx.execute(sql`delete from support_case_events e using support_cases c

@@ -3921,6 +3921,13 @@
       "when": 1793202169674,
       "tag": "0561_equal_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 562,
+      "version": "7",
+      "when": 1793214428685,
+      "tag": "0562_curious_scarecrow",
+      "breakpoints": true
     }
   ]
 }

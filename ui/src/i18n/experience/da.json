@@ -3459,6 +3459,8 @@
     "linkIssue": "Knyt Issue",
     "linkingIssue": "Knytter…",
     "linkedIssue": "Knyttet Issue: {{issue}}",
+    "linkedIssueNextStep": "Registrér det menneskeskrevne problem, hypotesen om grundårsag og det korrigerende arbejde i Issuen. Find en relateret beslutning under Decisions for at bruge dens eksisterende resultatgennemgang; start Learning fra en afsluttet gennemgang. Supportsagen beviser ikke årsag eller resultat.",
+    "openDecisions": "Åbn Decisions",
     "issueLinked": "Issue-linket blev gemt.",
     "issueLinkFailed": "Issue kunne ikke knyttes. Kontrollér referencen og din aktuelle adgang.",
     "contextPage": "Side",

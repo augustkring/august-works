@@ -3459,6 +3459,8 @@
     "linkIssue": "Link Issue",
     "linkingIssue": "Linking…",
     "linkedIssue": "Linked Issue: {{issue}}",
+    "linkedIssueNextStep": "In the Issue, record the human problem, root-cause hypothesis, and corrective work. Find a related Decision in Decisions to use its existing outcome review; start Learning from a completed review. The support case does not prove a cause or outcome.",
+    "openDecisions": "Open Decisions",
     "issueLinked": "The Issue link was saved.",
     "issueLinkFailed": "Could not link that Issue. Check the reference and your current access.",
     "contextPage": "Page",

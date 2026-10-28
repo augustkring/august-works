@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   accountDeletionOperations, authRateLimits, authUsers, boardApiKeys, companies, companyMemberships, agents, agentApiKeys, supportCaseDeletionMarkers,
-  supportCaseEvents, supportCases, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
+  supportCaseEvents, supportCases, supportCaseIssueLinks, issues, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
 } from "@paperclipai/db";
 import { actorMiddleware } from "../middleware/auth.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -153,7 +153,12 @@ const policy = {
     const own = await create(companyA, "opener", "Export-visible customer canary");
     const other = await create(companyA, "member", "Other-member export canary");
     const foreign = await create(companyB, "foreign", "Foreign-company export canary");
-    for (const response of [own, other, foreign]) expect(response.status).toBe(201);
+    for (const response of [own, other, foreign]) expect(response.status, JSON.stringify(response.body)).toBe(201);
+    const exportIssueId = randomUUID();
+    await db.insert(issues).values({ id: exportIssueId, companyId: companyA, title: "Export-safe issue reference",
+      identifier: "SUPA01-44", visibility: "open" });
+    await request(app).post(`${path(companyA)}/cases/${own.body.id}/issue-links`).set(auth("opener"))
+      .send({ expectedUserId: users.opener, issueRef: "SUPA01-44" }).expect(201);
     await db.insert(supportCaseEvents).values(Array.from({ length: 55 }, (_, index) => ({
       companyId: companyA, caseId: own.body.id, authorUserId: users.opener!, kind: "customer_reply" as const,
       body: `Historical response ${index}`, customerStatus: "RECEIVED" as const,
@@ -196,6 +201,8 @@ const policy = {
     expect(exported.manifest.includes.supportCases).toBe(true);
     const archive = JSON.parse(exported.files["blentera-support-cases-v1.json"] as string);
     expect(archive.cases.map((row: { id: string }) => row.id)).toEqual(expect.arrayContaining([own.body.id, other.body.id]));
+    expect(archive.cases.find((row: { id: string }) => row.id === own.body.id).relatedIssue)
+      .toEqual({ id: exportIssueId, identifier: "SUPA01-44" });
     expect(JSON.stringify(archive)).not.toContain("Foreign-company export canary");
     const deselected = await portability.exportBundle(companyA, { ...input, include: { ...input.include, supportCases: true }, selectedFiles: [] }, { actor: await actor("owner") });
     expect(deselected.files).not.toHaveProperty("blentera-support-cases-v1.json");
@@ -245,6 +252,36 @@ const policy = {
       eq(companyMemberships.companyId, companyA), eq(companyMemberships.principalId, users.admin!),
     ));
     expect((await detail(companyA, "admin", created.body.id)).status).toBe(404);
+  });
+
+  it("links a visible support case to a current readable Issue without copying private text", async () => {
+    const privateText = "Private support body stays in the support owner";
+    const created = await create(companyA, "opener", privateText);
+    const issueId = randomUUID();
+    await db.insert(issues).values({ id: issueId, companyId: companyA, title: "Investigate sign-in failures",
+      identifier: "SUPA01-42", visibility: "open", description: "Human-authored investigation and root-cause notes" });
+    const link = await request(app).post(`${path(companyA)}/cases/${created.body.id}/issue-links`).set(auth("opener"))
+      .send({ expectedUserId: users.opener, issueRef: "SUPA01-42" });
+    expect(link.status, JSON.stringify(link.body)).toBe(201);
+    expect(link.body).toEqual({ companyId: companyA, caseId: created.body.id,
+      issue: { id: issueId, identifier: "SUPA01-42" } });
+    const linkedCase = await detail(companyA, "opener", created.body.id);
+    expect(linkedCase.body.relatedIssue).toEqual({ id: issueId, identifier: "SUPA01-42" });
+    expect(JSON.stringify(await db.select().from(supportCaseIssueLinks))).not.toContain(privateText);
+    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
+    expect(issue!.description).toBe("Human-authored investigation and root-cause notes");
+    expect((await request(app).post(`${path(companyA)}/cases/${created.body.id}/issue-links`).set(auth("member"))
+      .send({ expectedUserId: users.member, issueRef: "SUPA01-42" })).status).toBe(404);
+    expect((await request(app).post(`${path(companyA)}/cases/${created.body.id}/issue-links`).set(auth("opener"))
+      .send({ expectedUserId: users.opener, issueRef: "SUPB01-999" })).status).toBe(404);
+    const [caseBeforeExpiry] = await db.select({ lastMessageAt: supportCases.lastMessageAt }).from(supportCases)
+      .where(eq(supportCases.id, created.body.id));
+    await db.update(supportCases).set({ expiresAt: new Date(caseBeforeExpiry!.lastMessageAt.getTime() + 100) })
+      .where(eq(supportCases.id, created.body.id));
+    await db.execute(sql`select pg_sleep(0.15)`);
+    await eraseExpiredSupportCases(db);
+    expect(await db.select().from(supportCases).where(eq(supportCases.id, created.body.id))).toEqual([]);
+    expect(await db.select().from(supportCaseIssueLinks).where(eq(supportCaseIssueLinks.caseId, created.body.id))).toEqual([]);
   });
 
   it("turns a reply to RESOLVED into an investigation on the same case", async () => {
@@ -396,11 +433,19 @@ const policy = {
 
   it("hides pending-deletion principals and expired content from ordinary reads", async () => {
     const pending = await create(companyA, "member", "Account is being erased");
+    const linkedIssueId = randomUUID();
+    await db.insert(issues).values({ id: linkedIssueId, companyId: companyA, title: "Review deletion-hold support case",
+      identifier: "SUPA01-43", visibility: "open" });
+    const linkedPending = await request(app).post(`${path(companyA)}/cases/${pending.body.id}/issue-links`).set(auth("member"))
+      .send({ expectedUserId: users.member, issueRef: "SUPA01-43" });
+    expect(linkedPending.status, JSON.stringify(linkedPending.body)).toBe(201);
     const prefix = "support-case:" + createHash("sha256").update(JSON.stringify(users.member)).digest("hex") + ":";
     expect((await db.select().from(authRateLimits)).some(row => row.key.startsWith(prefix))).toBe(true);
     await db.update(supportCases).set({ legalHold: true, holdReason: "Account erasure fixture hold" }).where(eq(supportCases.id, pending.body.id));
     await db.insert(accountDeletionOperations).values({ userId: users.member!, idempotencyKey: randomUUID() });
     await db.transaction(tx => eraseAccountAccess(tx, users.member!));
+    expect(await db.select().from(supportCaseIssueLinks).where(eq(supportCaseIssueLinks.caseId, pending.body.id)))
+      .toMatchObject([{ companyId: companyA, caseId: pending.body.id, issueId: linkedIssueId, linkedByUserId: null }]);
     expect((await db.select().from(authRateLimits)).some(row => row.key.startsWith(prefix))).toBe(false);
     expect(await db.select().from(supportCases).where(eq(supportCases.id, pending.body.id))).toHaveLength(1);
     expect((await list(companyA, "owner")).body.entries.map((row: { id: string }) => row.id)).not.toContain(pending.body.id);

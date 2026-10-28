@@ -46,6 +46,7 @@ const waitingDetail = {
   description: "Private support description",
   safeContext: null,
   followUpOfId: null,
+  relatedIssue: null,
   timeline: [{
     id: "00000000-0000-4000-8000-000000000006", kind: "request", body: "Private support description",
     status: "WAITING_FOR_YOU", author: "customer", safeContext: null, delivery: "pending", createdAt: "2026-10-23T10:00:00Z",
@@ -70,6 +71,7 @@ const receipt = {
   description: "Help with a task",
   safeContext: null,
   followUpOfId: null,
+  relatedIssue: null,
   timeline: [{
     id: "00000000-0000-4000-8000-000000000004", kind: "request", body: "Help with a task",
     status: "RECEIVED", author: "customer", safeContext: null, delivery: "pending", createdAt: "2026-10-23T10:00:00Z",
@@ -164,6 +166,26 @@ it("keeps an unsent reply when the existing case policy can no longer accept it"
   expect(post).toHaveBeenCalledTimes(1);
   expect(lastLocation!.state).not.toHaveProperty("supportRequest");
 });
+
+it("guides a linked support case to its canonical Issue and existing review owners", async () => {
+  const linked = { ...waitingDetail, relatedIssue: {
+    id: "00000000-0000-4000-8000-000000000042", identifier: "BLT-42",
+  } };
+  vi.spyOn(api, "get").mockImplementation(async path => {
+    if (path.includes("/policy?")) return policy as never;
+    if (path.includes(`/cases/${waitingCase.id}?`)) return linked as never;
+    if (path.includes("/cases?")) return list as never;
+    throw new Error("Unexpected support request");
+  });
+  await mount(`/company/support?case=${waitingCase.id}`);
+  await vi.waitFor(() => expect(container.querySelector("article")).not.toBeNull());
+  const issueLink = container.querySelector<HTMLAnchorElement>('a[href="/BLT/issues/BLT-42"]');
+  expect(issueLink?.textContent).toBe("Linked Issue: BLT-42");
+  expect(container.querySelector('a[href="/BLT/decisions"]')?.textContent).toBe("Open Decisions");
+  expect(container.textContent).toContain("record the human problem, root-cause hypothesis, and corrective work");
+  expect(container.textContent).toContain("start Learning from a completed review");
+});
+
 async function clickSubmit() {
   const button = container.querySelector<HTMLButtonElement>('form button[type="submit"]');
   expect(button).not.toBeNull();

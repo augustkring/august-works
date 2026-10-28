@@ -3,12 +3,13 @@ import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import {
   accountDeletionOperations, authRateLimits, authUsers, companies, companyDeletionOperations, companyMemberships,
-  agents, heartbeatRuns, issues, supportCases, supportCaseEvents, supportCaseDeletionMarkers, type Db,
+  agents, heartbeatRuns, issues, supportCases, supportCaseEvents, supportCaseDeletionMarkers, supportCaseIssueLinks, type Db,
 } from "@paperclipai/db";
 import {
   createSupportCaseSchema, replySupportCaseSchema, closeSupportCaseSchema, deriveSupportCaseSubject,
   nativeSupportCaseRequestSchema,
   supportCaseReadQuerySchema, supportCaseDetailSchema, supportCaseListSchema, supportCaseDataPolicySchema, supportCaseIntakePolicySchema,
+  linkSupportCaseIssueSchema, supportCaseIssueLinkSchema,
   SUPPORT_CASE_LIMITS, type SupportCaseDataPolicy, type SupportCaseDetail,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, tooManyRequests, unprocessable } from "../../errors.js";
@@ -16,6 +17,7 @@ import { pinCurrentBoardActor, type AuthorizationActor } from "../authorization.
 import { assertV5Authorization } from "../v5-authorization.js";
 import { logActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 import { withCurrentTaskSourceRead } from "../task-source-read-scope.js";
+import { z } from "zod";
 
 type Case = typeof supportCases.$inferSelect;
 type Event = typeof supportCaseEvents.$inferSelect;
@@ -85,6 +87,27 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
     if (!row) throw notFound("Support case not found");
     return row;
   }
+  async function readableIssueLink(tx: Db, actor: AuthorizationActor, userId: string, administrator: boolean, companyId: string, caseId: string) {
+    const issue = await withCurrentTaskSourceRead(tx, companyId, actor, async (sourceTx) => {
+      const [row] = await sourceTx.select({ issueId: supportCaseIssueLinks.issueId }).from(supportCaseIssueLinks)
+        .where(and(eq(supportCaseIssueLinks.companyId, companyId), eq(supportCaseIssueLinks.caseId, caseId)))
+        .limit(1).for("share", { noWait: true });
+      if (!row) return null;
+      const [candidate] = await sourceTx.select({ id: issues.id, identifier: issues.identifier }).from(issues).where(and(
+        eq(issues.companyId, companyId), eq(issues.id, row.issueId),
+      )).limit(1).for("share", { noWait: true });
+      if (!candidate) return null;
+      try {
+        await assertV5Authorization(sourceTx, actor, companyId, "issue:read", { type: "issue", companyId, issueId: candidate.id });
+        return { id: candidate.id, identifier: candidate.identifier };
+      } catch (error) {
+        if (error && typeof error === "object" && "status" in error && [403, 404].includes(Number(error.status))) return null;
+        throw error;
+      }
+    });
+    await currentCase(tx, companyId, userId, administrator, caseId);
+    return issue;
+  }
   async function summary(tx: Db, row: Case) {
     const [last] = await tx.select().from(supportCaseEvents).where(and(eq(supportCaseEvents.companyId, row.companyId),
       eq(supportCaseEvents.caseId, row.id), sql`${supportCaseEvents.kind} in ('request','customer_reply')
@@ -95,7 +118,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
       requestedResponse: row.requestedResponse, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
       resolvedAt: row.resolvedAt?.toISOString() ?? null, closedAt: row.closedAt?.toISOString() ?? null, delivery: delivery(last) };
   }
-  async function detail(tx: Db, row: Case, userId: string, administrator: boolean, query?: Query) {
+  async function detail(tx: Db, row: Case, userId: string, administrator: boolean, actor: AuthorizationActor, query?: Query) {
     const cursor = query?.beforeId ? sql`(${supportCaseEvents.createdAt},${supportCaseEvents.id})<(${query.beforeCreatedAt}::timestamptz,${query.beforeId}::uuid)` : sql`true`;
     const events = await tx.select().from(supportCaseEvents).where(and(eq(supportCaseEvents.companyId, row.companyId),
       eq(supportCaseEvents.caseId, row.id), cursor,
@@ -107,6 +130,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
     const page = events.slice(0, SUPPORT_CASE_LIMITS.timelinePage), last = page.at(-1);
     return supportCaseDetailSchema.parse({ ...await summary(tx, row), description: row.description,
       safeContext: row.safeContext, followUpOfId: row.followUpOfId,
+      relatedIssue: await readableIssueLink(tx, actor, userId, administrator, row.companyId, row.id),
       timeline: page.reverse().map(e => ({ id: e.id, kind: e.kind, body: e.body, status: e.customerStatus,
         author: ["request", "customer_reply"].includes(e.kind) ? "customer" : "support", safeContext: e.safeContext,
         delivery: delivery(e), createdAt: e.createdAt.toISOString() })),
@@ -179,11 +203,11 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
         const cases: SupportCaseDetail[] = [];
         let eventCount = 0, bytes = 0;
         for (const row of rows) {
-          const first = await detail(tx, row, userId, administrator);
+          const first = await detail(tx, row, userId, administrator, actor);
           const timeline = [...first.timeline];
           let cursor = first.nextCursor;
           while (cursor) {
-            const page = await detail(tx, row, userId, administrator, {
+            const page = await detail(tx, row, userId, administrator, actor, {
               expectedUserId, beforeCreatedAt: cursor.createdAt, beforeId: cursor.id,
             });
             timeline.unshift(...page.timeline);
@@ -258,13 +282,38 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
     async get(actor: AuthorizationActor, companyId: string, id: string, raw: unknown) {
       const query = supportCaseReadQuerySchema.parse(raw);
       return within(actor, companyId, query.expectedUserId, false, async (tx, userId, administrator) =>
-        detail(tx, await currentCase(tx, companyId, userId, administrator, id), userId, administrator, query));
+        detail(tx, await currentCase(tx, companyId, userId, administrator, id), userId, administrator, actor, query));
+    },
+    async linkIssue(actor: AuthorizationActor, companyId: string, caseId: string, raw: unknown) {
+      const input = linkSupportCaseIssueSchema.parse(raw);
+      return within(actor, companyId, input.expectedUserId, true, async (tx, userId, administrator, publications) => {
+        const source = await currentCase(tx, companyId, userId, administrator, caseId, true);
+        const [issue] = await withCurrentTaskSourceRead(tx, companyId, actor, async (sourceTx) => {
+          const issueId = z.uuid().safeParse(input.issueRef);
+          const [candidate] = await sourceTx.select({ id: issues.id, identifier: issues.identifier }).from(issues).where(and(
+            eq(issues.companyId, companyId), issueId.success ? eq(issues.id, issueId.data) : eq(issues.identifier, input.issueRef),
+          )).limit(1).for("share", { noWait: true });
+          if (!candidate) throw notFound("Issue not found");
+          await assertV5Authorization(sourceTx, actor, companyId, "issue:read", { type: "issue", companyId, issueId: candidate.id });
+          return [candidate];
+        });
+        if (!issue) throw notFound("Issue not found");
+        const [linked] = await tx.insert(supportCaseIssueLinks).values({ companyId, caseId: source.id, issueId: issue.id, linkedByUserId: userId })
+          .onConflictDoNothing().returning({ id: supportCaseIssueLinks.id });
+        if (!linked) {
+          const [existingLink] = await tx.select({ issueId: supportCaseIssueLinks.issueId }).from(supportCaseIssueLinks)
+            .where(and(eq(supportCaseIssueLinks.companyId, companyId), eq(supportCaseIssueLinks.caseId, caseId))).limit(1).for("share", { noWait: true });
+          if (existingLink?.issueId !== issue.id) throw conflict("This support case is already linked to another Issue");
+        } else await record(tx, publications, source, userId, "support.case_issue_linked");
+        await currentCase(tx, companyId, userId, administrator, caseId);
+        return supportCaseIssueLinkSchema.parse({ companyId, caseId, issue: await readableIssueLink(tx, actor, userId, administrator, companyId, caseId) });
+      });
     },
     async getRequest(actor: AuthorizationActor, companyId: string, key: string, expectedUserId: string) {
       return within(actor, companyId, expectedUserId, false, async (tx, userId, administrator) => {
         const event = await existing(tx, companyId, userId, key);
         if (!event) throw notFound("Support request not found");
-        return detail(tx, await currentCase(tx, companyId, userId, administrator, event.caseId), userId, administrator);
+        return detail(tx, await currentCase(tx, companyId, userId, administrator, event.caseId), userId, administrator, actor);
       });
     },
     async create(actor: AuthorizationActor, companyId: string, raw: unknown) {
@@ -275,7 +324,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
         const hash = digest(["create", companyId, userId, input]), prior = await existing(tx, companyId, userId, input.idempotencyKey);
         if (prior) {
           if (prior.requestHash !== hash) throw conflict("This request key was already used for different content");
-          return detail(tx, await currentCase(tx, companyId, userId, administrator, prior.caseId), userId, administrator);
+          return detail(tx, await currentCase(tx, companyId, userId, administrator, prior.caseId), userId, administrator, actor);
         }
         const eventId = await requestIdentity(tx, companyId, userId, input.idempotencyKey);
         const dataPolicy = observedPolicy(input.expectedPolicyRevision), at = await now(tx);
@@ -287,7 +336,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
           kind: "request", body: input.description, customerStatus: "RECEIVED", safeContext: input.safeContext ?? null,
           requestKey: input.idempotencyKey, requestHash: hash, createdAt: at });
         await record(tx, publications, row!, userId, "support.case_created");
-        return detail(tx, row!, userId, administrator);
+        return detail(tx, row!, userId, administrator, actor);
       });
     },
     /** A narrow Native request path. It attributes the durable case to the
@@ -339,7 +388,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
         if (prior) {
           if (prior.requestHash !== hash) throw conflict("This request key was already used for different content");
           return detail(tx, await currentCase(tx, companyId, userId, ["owner", "admin"].includes(membership.membershipRole ?? ""), prior.caseId), userId,
-            ["owner", "admin"].includes(membership.membershipRole ?? ""));
+            ["owner", "admin"].includes(membership.membershipRole ?? ""), actor);
         }
         const eventId = await requestIdentity(tx, companyId, userId, input.idempotencyKey);
         const dataPolicy = observedPolicy(input.expectedPolicyRevision), at = await now(tx);
@@ -354,7 +403,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
           action: "support.case_requested", entityType: "support_case", entityId: row!.id,
           details: { supportCaseId: row!.id, representedUserId: userId, requestKey: input.idempotencyKey } });
         const administrator = ["owner", "admin"].includes(membership.membershipRole ?? "");
-        return detail(tx, row!, userId, administrator);
+        return detail(tx, row!, userId, administrator, actor);
       }, true, true);
       return result;
     },
@@ -366,7 +415,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
         const hash = digest(["reply", companyId, userId, id, input]), prior = await existing(tx, companyId, userId, input.idempotencyKey);
         if (prior) {
           if (prior.requestHash !== hash) throw conflict("This request key was already used for different content");
-          return detail(tx, await currentCase(tx, companyId, userId, administrator, prior.caseId), userId, administrator);
+          return detail(tx, await currentCase(tx, companyId, userId, administrator, prior.caseId), userId, administrator, actor);
         }
         const eventId = await requestIdentity(tx, companyId, userId, input.idempotencyKey);
         const original = await currentCase(tx, companyId, userId, administrator, id, true), dataPolicy = observedPolicy(input.expectedPolicyRevision);
@@ -393,7 +442,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
           kind: row.id === original.id ? "customer_reply" : "request", body: input.body, customerStatus: row.customerStatus,
           safeContext: input.safeContext ?? null, requestKey: input.idempotencyKey, requestHash: hash, createdAt: at });
         await record(tx, publications, row, userId, row.id === original.id ? "support.customer_replied" : "support.follow_up_created");
-        return detail(tx, row, userId, administrator);
+        return detail(tx, row, userId, administrator, actor);
       });
     },
     async close(actor: AuthorizationActor, companyId: string, id: string, raw: unknown) {
@@ -404,11 +453,11 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
         const hash = digest(["close", companyId, userId, id, input]), prior = await existing(tx, companyId, userId, input.idempotencyKey);
         if (prior) {
           if (prior.requestHash !== hash) throw conflict("This request key was already used for different content");
-          return detail(tx, await currentCase(tx, companyId, userId, administrator, prior.caseId), userId, administrator);
+          return detail(tx, await currentCase(tx, companyId, userId, administrator, prior.caseId), userId, administrator, actor);
         }
         const eventId = await requestIdentity(tx, companyId, userId, input.idempotencyKey);
         const original = await currentCase(tx, companyId, userId, administrator, id, true);
-        if (original.customerStatus === "CLOSED") return detail(tx, original, userId, administrator);
+        if (original.customerStatus === "CLOSED") return detail(tx, original, userId, administrator, actor);
         // Closing adds no customer-supplied content and changes no recipient.
         // Keep the original case policy even when new intake is unavailable.
         const dataPolicy = original.dataPolicy;
@@ -425,7 +474,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
           kind: "customer_reply", body, customerStatus: "CLOSED", requestKey: input.idempotencyKey,
           requestHash: hash, createdAt: at });
         await record(tx, publications, row!, userId, "support.customer_closed_case");
-        return detail(tx, row!, userId, administrator);
+        return detail(tx, row!, userId, administrator, actor);
       });
     },
   };
