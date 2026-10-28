@@ -646,7 +646,9 @@ describe("resolveEnvironmentExecutionTarget", () => {
       tracer: input.tracer as never,
     });
     return (target as { runner?: {
-      execute(input: { command: string; args?: string[] }): Promise<unknown>;
+      execute(input: { command: string; args?: string[]; bypassSession?: boolean; useSession?: boolean;
+        nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" |
+          "native_workspace_prepare" | "native_runtime_context_prepare" }): Promise<unknown>;
     } }).runner!;
   }
 
@@ -1007,6 +1009,51 @@ describe("resolveEnvironmentExecutionTarget", () => {
     const execSpan = spans.find((span) => span.name === "sandbox.exec");
     expect(execSpan).toBeTruthy();
     expect(execSpan!.parent).toBeNull();
+  });
+
+  it("serializes one-shot Native preparation execs without blocking ordinary execs", async () => {
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>(resolve => { releaseFirst = resolve; });
+    let prepInFlight = 0;
+    let maxPrepInFlight = 0;
+    let preparationCalls = 0;
+    const execute = vi.fn(async (rawInput: unknown) => {
+      const input = rawInput as { nativePreparationPurpose?: string };
+      if (input.nativePreparationPurpose) {
+        preparationCalls += 1;
+        prepInFlight += 1;
+        maxPrepInFlight = Math.max(maxPrepInFlight, prepInFlight);
+        try {
+          if (preparationCalls === 1) {
+            await firstGate;
+            throw new Error("first preparation failed");
+          }
+        } finally {
+          prepInFlight -= 1;
+        }
+      }
+      return { exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "" };
+    });
+    const { tracer } = createRecordingTrace();
+    const runner = await runnerWithExecute({ provider: "daytona", tracer, execute });
+    const preparation = { command: "sh", args: ["-c", "true"], bypassSession: true as const,
+      nativePreparationPurpose: "native_harness_state" as const };
+
+    const first = runner.execute(preparation);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    const second = runner.execute(preparation);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(execute).toHaveBeenCalledTimes(1);
+
+    // An ordinary session command remains able to run while setup waits. The
+    // serialized lane covers only server-owned one-shot preparation/status RPCs.
+    await runner.execute({ command: "session", useSession: true });
+    expect(execute).toHaveBeenCalledTimes(2);
+    releaseFirst();
+    await expect(first).rejects.toThrow("first preparation failed");
+    await second;
+    expect(execute).toHaveBeenCalledTimes(3);
+    expect(maxPrepInFlight).toBe(1);
   });
 
   // The three baseline tests below record the third `startSpan` argument — the

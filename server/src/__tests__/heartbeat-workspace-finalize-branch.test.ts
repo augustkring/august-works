@@ -47,6 +47,7 @@ import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/index.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -288,8 +289,10 @@ describeEmbeddedPostgres("heartbeat workspace finalization branch guard", () => 
   let db!: Db;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const tempRoots: string[] = [];
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-finalize-branch-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
@@ -343,6 +346,7 @@ describeEmbeddedPostgres("heartbeat workspace finalization branch guard", () => 
   afterAll(async () => {
     await db.$client.end();
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   }, 60_000);
 
   it("repairs clean unrecorded branch drift before recording workspace finalization", async () => {

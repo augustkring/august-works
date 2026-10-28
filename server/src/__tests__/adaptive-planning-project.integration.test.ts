@@ -8,7 +8,7 @@ import { inspectAnalyticalContextPins } from "../services/analytical-context-aut
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { agents, authUsers, companyMemberships, principalPermissionGrants, heartbeatRuns, learningDomainCandidates, learningHypotheses, policyChangeProposals, memoryBindings, memoryBindingTargets, memoryRecords, learningCycles, learningAnalyticalDependencies, analyticalLineageEdges, analyticalLineageManifests, companies, createDb, issues, issueRelations, projects, projectRoadmapProposals } from "@paperclipai/db";
 import { roadmapPolicySchema, projectPlanningProfileSchema, type ProjectPlanningProfile } from "@paperclipai/shared";
@@ -99,7 +99,10 @@ describe.skipIf(!support.supported)("Native project planning source and canonica
     await db.update(issues).set({executionRunId:run!.id}).where(eq(issues.id,nativeTask!.id));
     await initializeRunIdentity(db,{companyId,runId:run!.id,issueId:nativeTask!.id,responsibleUserId:userId,cause:"instruction"});
     const nativeActor={type:"agent" as const,source:"agent_jwt" as const,companyId,agentId:agent!.id,runId:run!.id,onBehalfOfUserId:userId};
-    const nativeRead=()=>withNativeAnalyticalReader(db,companyId,nativeActor,()=>outcomes.detail(companyId,f.project.id,nativeActor,f.created.id,fresh.manifestId),"task");
+    const nativeRead=()=>db.transaction(async raw=>{
+      const tx=raw as unknown as typeof db;
+      return withNativeAnalyticalReader(tx,companyId,nativeActor,()=>planningOutcomeService(tx).detail(companyId,f.project.id,nativeActor,f.created.id,fresh.manifestId),"task");
+    });
     await expect(outcomes.detail(companyId,f.project.id,nativeActor,f.created.id,fresh.manifestId)).rejects.toMatchObject({status:403});
     expect((await nativeRead()).outcome).toEqual(fresh.outcome);
     await db.update(companyMemberships).set({status:"inactive"}).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
@@ -110,7 +113,10 @@ describe.skipIf(!support.supported)("Native project planning source and canonica
     const [binding]=await db.insert(memoryBindings).values({companyId,key:"planning_outcomes",name:"Software verified outcomes",providerKey:"local"}).returning();
     await db.insert(memoryBindingTargets).values({companyId,bindingId:binding!.id,targetType:"company",targetId:companyId});
     const independent=await db.insert(issues).values([0,1].map(index=>({companyId,title:`Independent comparison outcome ${index}`,status:"done",completedAt:new Date()}))).returning();
-    const outcomeTasks=[...f.tasks,...independent],roots=[];
+    const outcomeTaskIds=[...f.tasks.map(task=>task.id),...independent.map(task=>task.id)];
+    const currentOutcomeTasks=await db.select().from(issues).where(inArray(issues.id,outcomeTaskIds));
+    const currentOutcomeTasksById=new Map(currentOutcomeTasks.map(task=>[task.id,task]));
+    const outcomeTasks=outcomeTaskIds.map(id=>currentOutcomeTasksById.get(id)!),roots=[];
     const memoryActor={principal:{type:"user" as const,userId:"local-board"},authorizationActor:actor};
     for(const task of outcomeTasks){
       const observedAt=new Date(),created=await memoryService(db).createCandidate(companyId,{bindingId:binding!.id,memoryType:"outcome",scope:{type:"company",id:null},subject:null,ownerAgentId:null,title:"Software verified native outcome",content:`Explicit software verified outcome prerequisite for ${task.id}`,summary:"A software reviewed completed Task outcome; no causal claim",sensitivity:"internal",importance:50,confidenceScore:0.8,validFrom:null,validUntil:null,observedAt:observedAt.toISOString(),retentionPolicy:"standard",expiresAt:null,createdByOperationId:null,metadata:{},evidence:[{sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${task.id}`,sourceVersion:task.updatedAt.toISOString(),sourceUpdatedAt:task.updatedAt.toISOString(),observedAt:observedAt.toISOString(),excerptHash:nativeSha256({taskId:task.id,updatedAt:task.updatedAt.toISOString()}),citation:{label:"Native completed Task"},trustLevel:"high",relation:"supports"}]},memoryActor);

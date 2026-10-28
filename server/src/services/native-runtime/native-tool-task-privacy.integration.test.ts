@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   agents, authUsers, companyMemberships, companies, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
-  heartbeatRuns, issues, issueAccessGrants,
+  heartbeatRuns, issues, issueAccessGrants, issueComments,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
 import { issueService } from "../issues.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 
 describe("native task tools respect canonical task privacy", () => {
@@ -94,6 +96,29 @@ describe("native task tools respect canonical task privacy", () => {
     expect(result.childTasksTruncated).toBe(false);
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
+  it("keeps the bound current Task ACL for foreign private owners and revoked Humans", async () => {
+    const f = await fixture();
+    const bindPrivateOwner = async (userId: string) => db.update(issues).set({
+      visibility: "private", privacyRootIssueId: f.parentId, privacyParentIssueId: null,
+      responsibleUserId: userId, createdByUserId: userId,
+    }).where(and(eq(issues.companyId, f.companyId), eq(issues.id, f.parentId)));
+    const context = () => f.authority.execute({ tool: "get_task_context", callId: randomUUID(), arguments: {} });
+
+    await bindPrivateOwner(f.aliceId);
+    expect(await canActorReadIssuePrivacy(db, f.actor, { companyId: f.companyId, id: f.parentId })).toBe(false);
+    await expect(context()).rejects.toThrow();
+
+    await bindPrivateOwner(f.bobId);
+    expect(await canActorReadIssuePrivacy(db, f.actor, { companyId: f.companyId, id: f.parentId })).toBe(true);
+    await context();
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(
+      eq(companyMemberships.companyId, f.companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, f.bobId),
+    ));
+    expect(await canActorReadIssuePrivacy(db, f.actor, { companyId: f.companyId, id: f.parentId })).toBe(false);
+    await expect(context()).rejects.toThrow();
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
   it("searches only task rows Bob can canonically read", async () => {
     const f = await fixture();
     expect(await canActorReadIssuePrivacy(db, f.actor, f.privateChild)).toBe(false);
@@ -108,6 +133,38 @@ describe("native task tools respect canonical task privacy", () => {
     expect(JSON.stringify(result)).not.toContain("PRIVATE_CHILD_");
     expect(JSON.stringify(result)).not.toContain("PRIVATE_BODY_CANARY");
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  it("keeps the mutation writer fence and rejects reassignment after its wait", async () => {
+    const f = await fixture();
+    let releaseRead!: () => void, announceRead!: (pid: number) => void;
+    const release = new Promise<void>(resolve => { releaseRead = resolve; });
+    const locked = new Promise<number>(resolve => { announceRead = resolve; });
+    const heldRead = db.transaction(async tx => {
+      await lockAnalyticalCompany(tx, f.companyId, "read");
+      await lockMemoryPrivacy(tx as unknown as typeof db, f.companyId, "read");
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      announceRead(backend!.pid); await release;
+    });
+    const readerPid = await locked;
+    const body = `Blocked mutation ${randomUUID()}`;
+    const effect = f.authority.execute({ tool: "report_progress", callId: randomUUID(),
+      arguments: { body, idempotencyKey: randomUUID() } }).then(() => null, error => error);
+    try {
+      let observedWriterWait = false;
+      for (let attempt = 0; attempt < 150 && !observedWriterWait; attempt++) {
+        const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity a
+          where ${readerPid}=any(pg_blocking_pids(a.pid)) and a.wait_event_type='Lock') as waiting`);
+        observedWriterWait = row?.waiting === true;
+        if (!observedWriterWait) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(observedWriterWait, "a Native effect must retain its exclusive privacy writer fence").toBe(true);
+      await db.update(issues).set({ assigneeAgentId: null }).where(and(eq(issues.companyId, f.companyId), eq(issues.id, f.parentId)));
+    } finally { releaseRead(); await heldRead; }
+    const rejected = await effect;
+    expect(rejected).toBeInstanceOf(Error);
+    expect((await db.select().from(issueComments).where(and(eq(issueComments.companyId, f.companyId),
+      eq(issueComments.issueId, f.parentId), eq(issueComments.body, body))))).toHaveLength(0);
+  });
+
   it("uses current explicit sharing on both tools after revocation", async () => {
     const f = await fixture();
     const [grant] = await db.insert(issueAccessGrants).values({ companyId: f.companyId, issueId: f.privateChild.id,

@@ -45,6 +45,7 @@ import {
   chatPublications,
   companySecretBindings,
   companySecrets,
+  companyMemberships,
   companySkills,
   companies,
   completionContracts,
@@ -75,6 +76,7 @@ import {
   nativeRunFinalizations,
   nativeRunResults,
   plugins,
+  principalPermissionGrants,
   projects,
   projectWorkspaces,
   statusDecisionEffects,
@@ -84,6 +86,7 @@ import {
   workAssessments,
   workspaceOperations,
 } from "@paperclipai/db";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -95,6 +98,8 @@ import {
 } from "../home-paths.js";
 import { buildNativeExecutionInput } from "../services/native-runtime/native-execution-input.js";
 import { nativeRuntimeContextFixture } from "../services/native-runtime/runtime-context.test-fixture.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 import { NativeRunnerOwnershipUnverifiedError } from "../services/native-runtime/native-runner-ownership.js";
 import {
   CHAT_CONTROL_RECOVERY_ADMISSION_KEY,
@@ -472,8 +477,21 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   > | null = null;
   const childProcesses = new Set<ChildProcess>();
   const cleanupPids = new Set<number>();
+  let restoreApiUrl: (() => void) | null = null;
+
+  async function insertCompanyFixture(values: typeof companies.$inferInsert | Array<typeof companies.$inferInsert>) {
+    const rows = Array.isArray(values) ? values : [values];
+    await db.insert(companies).values(values as typeof companies.$inferInsert | Array<typeof companies.$inferInsert>);
+    for (const row of rows) {
+      if (row.id && row.defaultResponsibleUserId) {
+        await seedHeartbeatResponsibleHuman(db, row.id, row.defaultResponsibleUserId, "owner");
+        await seedHeartbeatResponsibleHuman(db, row.id, "user-1", "owner");
+      }
+    }
+  }
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     if (externalTestDatabaseUrl) {
       db = createDb(externalTestDatabaseUrl);
     } else {
@@ -490,7 +508,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       emailVerified: true,
       createdAt: now,
       updatedAt: now,
-    });
+    }).onConflictDoNothing();
   }, 20_000);
 
   afterEach(async () => {
@@ -647,6 +665,12 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
     }
+    // The fixture's retained responsible Human is an actual company member.
+    // These authority tables intentionally use restrictive company FKs, so
+    // remove their test-only rows after runtime work drains and before deleting
+    // the fixture company.
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await db.delete(companySkills);
       await db.delete(workspaceOperations);
@@ -691,6 +715,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       await closeRegisteredClients(externalTestDatabaseUrl);
     }
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   });
 
   async function seedRunFixture(input?: {
@@ -704,6 +729,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     includeIssue?: boolean;
     runErrorCode?: string | null;
     runError?: string | null;
+    responsibleUserId?: string | null;
     contextSnapshot?: Record<string, unknown>;
   }) {
     const companyId = randomUUID();
@@ -714,7 +740,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const now = new Date("2026-03-19T00:00:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -755,6 +781,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       triggerDetail: "system",
       status: input?.runStatus ?? "running",
       wakeupRequestId,
+      responsibleUserId: input?.responsibleUserId === undefined ? "responsible-user" : input.responsibleUserId,
       contextSnapshot:
         input?.includeIssue === false
           ? (input?.contextSnapshot ?? {})
@@ -948,7 +975,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const now = new Date("2026-03-19T00:00:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -1146,7 +1173,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     const wakeReason = input?.wakeReason ?? "execution_review_requested";
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -1239,7 +1266,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const issueId = randomUUID();
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -1280,7 +1307,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const agentId = randomUUID();
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -1432,7 +1459,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const now = new Date("2026-03-19T00:00:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -1506,6 +1533,13 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     });
 
     return { companyId, agentId, runId, wakeupRequestId, issueId };
+  }
+
+  async function admitQueuedNativeFixture(input: { companyId: string; agentId: string; runId: string }) {
+    await db.update(heartbeatRuns).set({ status: "running", responsibleUserId: "responsible-user" })
+      .where(eq(heartbeatRuns.id, input.runId));
+    await preparePlatformSkillAdmission(db, { ...input, responsibleUserId: "responsible-user", requireExisting: false }, blenteraPlatformContractHashes());
+    await db.update(heartbeatRuns).set({ status: "queued" }).where(eq(heartbeatRuns.id, input.runId));
   }
 
   async function runRecoveryWorkerProcess(databaseUrl: string, issueId: string) {
@@ -1740,9 +1774,12 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await waitForRunToSettle(heartbeat, runId);
     await heartbeat.waitForRunExecutionDrain(runId);
 
-    expect(await heartbeat.getRun(runId)).toMatchObject({
+    const failedRun = await heartbeat.getRun(runId);
+    const failureProjection = { status: failedRun?.status, errorCode: failedRun?.errorCode, error: failedRun?.error };
+    expect(failureProjection, JSON.stringify(failureProjection)).toMatchObject({
       status: "failed",
-      errorCode: "low_trust_isolation_unavailable",
+      errorCode: "setup_failed",
+      error: expect.stringContaining("low_trust_review agents cannot use company-wide or privileged company_scope:read APIs by default."),
     });
     expect(
       mockAdapterExecute.mock.calls.some(
@@ -2832,19 +2869,36 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       await db.update(heartbeatRuns).set({ invocationSource: "automation" }).where(eq(heartbeatRuns.id, runId));
       const factory = vi.fn(() => { throw new Error("provider must not start"); });
       let reachedDispatch = false;
+      let cancellation: Promise<unknown> | null = null;
+      let cancellationError: unknown;
       const heartbeat = heartbeatService(db, {
         nativeSessionBackendFactory: factory,
         beforeChatControlRecoveryCheck: async ({ stage, runId: id }) => {
           if (stage !== "dispatch") return;
           reachedDispatch = true;
           expect((await heartbeat.getRun(id))?.runtimeMode).toBe("native");
-          await heartbeat.cancelRun(id);
+          // Do not await cancellation from the dispatch gate: cancelRun waits
+          // for the very execution that is currently inside this gate.
+          cancellation = heartbeat.cancelRun(id).catch((error) => { cancellationError = error; });
+          const requested = await waitForValue(async () => {
+            const [current] = await db.select({ resultJson: heartbeatRuns.resultJson })
+              .from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
+            const result = current?.resultJson as Record<string, unknown> | null | undefined;
+            const state = (result?.executionCancellation as Record<string, unknown> | undefined)?.state;
+            return state === "requested" ? true : null;
+          });
+          expect(requested).toBe(true);
         },
       });
       await heartbeat.resumeQueuedRuns();
       await heartbeat.drainActiveRunExecutions();
+      await cancellation;
+      expect(cancellationError).toBeUndefined();
       expect(reachedDispatch).toBe(true);
-      expect(await heartbeat.getRun(runId)).toMatchObject({ status: "cancelled", runtimeMode: "native",
+      const finalRun = await heartbeat.getRun(runId);
+      const finalProjection = { status: finalRun?.status, errorCode: finalRun?.errorCode, error: finalRun?.error,
+        resultJson: finalRun?.resultJson };
+      expect(finalProjection, JSON.stringify(finalProjection)).toMatchObject({ status: "cancelled", runtimeMode: "native",
         resultJson: { startupPreparationSettledAt: expect.any(String) },
       });
       expect(factory).not.toHaveBeenCalled();
@@ -2889,6 +2943,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       if (redactSecret) await createRunSecretRedactionRegistry(db).register(plan.document.companyId, runId, registeredSecret);
       const factory = vi.fn(() => { throw new Error("provider must not start"); });
       let reachedDispatch = false;
+      let cancellation: Promise<unknown> | null = null;
+      let cancellationError: unknown;
       const heartbeat = heartbeatService(db, {
         nativeSessionBackendFactory: factory,
         beforeChatControlRecoveryCheck: async ({ stage, runId: id }) => {
@@ -2955,11 +3011,23 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
             .where(eq(issueThreadInteractions.id, question!.id));
           const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
           expect(after!.runnerProfileJson).toEqual(retained);
-          await heartbeat.cancelRun(id);
+          // Let the dispatch gate return so the run can observe cancellation;
+          // awaiting cancelRun here would wait on this same execution.
+          cancellation = heartbeat.cancelRun(id).catch((error) => { cancellationError = error; });
+          const requested = await waitForValue(async () => {
+            const [current] = await db.select({ resultJson: heartbeatRuns.resultJson })
+              .from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
+            const result = current?.resultJson as Record<string, unknown> | null | undefined;
+            const state = (result?.executionCancellation as Record<string, unknown> | undefined)?.state;
+            return state === "requested" ? true : null;
+          });
+          expect(requested).toBe(true);
         },
       });
       await heartbeat.resumeQueuedRuns();
       await heartbeat.drainActiveRunExecutions();
+      await cancellation;
+      expect(cancellationError).toBeUndefined();
       expect(reachedDispatch).toBe(true);
       expect(factory).not.toHaveBeenCalled();
       expect(await heartbeat.getRun(runId)).toMatchObject({ status: "cancelled", runtimeMode: "native" });
@@ -3187,6 +3255,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           runnerProfileJson: { nativeExecutionInput },
         })
         .where(eq(heartbeatRuns.id, runId));
+      await admitQueuedNativeFixture({ companyId, agentId, runId });
       const { leaseId } = await seedEnvironmentLeaseFixture({
         companyId,
         runId,
@@ -9969,7 +10038,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -10214,7 +10283,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -10388,7 +10457,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -10531,7 +10600,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const succeededAt = new Date("2026-03-19T00:06:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -10620,7 +10689,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const unrelatedRunAt = new Date("2026-03-19T00:06:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -10720,7 +10789,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -11136,7 +11205,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const blockerIssueId = randomUUID();
     const blockedIssueId = randomUUID();
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -11319,7 +11388,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const agentId = randomUUID();
     const issueId = randomUUID();
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
-    await db.insert(companies).values({
+    await insertCompanyFixture({
       id: companyId,
       name: "Paperclip",
       issuePrefix,

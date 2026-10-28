@@ -411,6 +411,7 @@ describeEmbeddedPostgres("heartbeat runtime MCP servers", () => {
   });
 
   it("audits uninstalled App access while still delivering first-party run tools", async () => {
+    process.env.PAPERCLIP_API_URL = "https://paperclip.example.test";
     const [company] = await db.insert(companies).values({
       name: `Runtime MCP diagnostic ${randomUUID()}`,
       issuePrefix: `RD${randomUUID().slice(0, 5).toUpperCase()}`,

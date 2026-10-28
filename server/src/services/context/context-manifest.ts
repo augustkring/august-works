@@ -528,6 +528,8 @@ export function contextManifestService(db: Db) {
           throw contextDeadlineError();
       };
       assertActive();
+      const diagnosticStartedAt = Date.now();
+      let diagnosticStage = "transaction_start";
       let statementDeadlineAt: number | null = null;
       try {
       return await db.transaction(async (tx) => {
@@ -545,6 +547,7 @@ export function contextManifestService(db: Db) {
         };
         await refreshStatementTimeout();
         const sourceDb = tx as unknown as Db;
+        diagnosticStage = "manifest_references";
         const delegated = input.delegatedExecution;
         if (delegated && (input.runId || input.companyId !== delegated.guestCompanyId || input.agentId !== delegated.guestAgentId ||
           input.responsibleUserId !== delegated.responsibleUserId || input.issueId || input.projectId))
@@ -659,6 +662,7 @@ export function contextManifestService(db: Db) {
         // the privacy tree is locked.
         if (delegated) await assertScopePrivacy();
         await refreshStatementTimeout();
+        diagnosticStage = "privacy_tree_lock";
         await lockIssuePrivacyTree(tx,input.companyId);
         if (delegated) {
           await refreshStatementTimeout();
@@ -668,6 +672,7 @@ export function contextManifestService(db: Db) {
         const selectedPayloadSnapshots = new Map<string, typeof issues.$inferSelect["payloadSourceSnapshot"]>();
         const sourceKey = (provider: string, ref: string) => `${provider}:${ref.toLowerCase()}`;
         await refreshStatementTimeout();
+        diagnosticStage = "selected_task_currentness";
         for (const {decision} of input.selected) {
           const evidence = decision.evidence;
           if (evidence.sourceProvider !== "august_works_tasks") continue;
@@ -691,6 +696,7 @@ export function contextManifestService(db: Db) {
               throw forbidden("Context source access is unavailable");
         }
         await refreshStatementTimeout();
+        diagnosticStage = "manifest_insert";
         const [manifest] = await tx
           .insert(contextManifests)
           .values({
@@ -732,6 +738,7 @@ export function contextManifestService(db: Db) {
 
         const learnedRoots = new Map<string, string>();
         const learnedAssets:{type:string;id:string}[]=[];
+        diagnosticStage = "learned_source_lineage";
         const purpose = input.policySnapshot && typeof input.policySnapshot === "object" && "intent" in input.policySnapshot && typeof input.policySnapshot.intent === "string" ? input.policySnapshot.intent : "general_work";
         for (const { decision } of input.selected) {
           const evidence = decision.evidence;
@@ -784,6 +791,7 @@ export function contextManifestService(db: Db) {
         if(rootIds.length>256)throw forbidden("Complete Context Memory roots exceed their source budget");
         if (rootIds.length) {
           await refreshStatementTimeout();
+          diagnosticStage = "memory_roots_currentness";
           const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt,scopeType:memoryRecords.scopeType,ownerAgentId:memoryRecords.ownerAgentId,payloadSourceSnapshot:memoryRecords.payloadSourceSnapshot }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible())).for("share");
           if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary");
           for(const root of roots){
@@ -804,6 +812,7 @@ export function contextManifestService(db: Db) {
             memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(), payloadSourceSnapshot: root.payloadSourceSnapshot }))).returning();
         }
 
+        diagnosticStage = "learned_asset_retention";
         await retainLearnedAssetsInContext(tx as unknown as Db,input.companyId,sourceActor,manifest!.id,learnedAssets);
 
         // Insert immutable items after the selected Task and Memory bodies
@@ -811,6 +820,7 @@ export function contextManifestService(db: Db) {
         let items: typeof contextManifestItems.$inferSelect[] = [];
         if (values.length > 0) {
           await refreshStatementTimeout();
+          diagnosticStage = "manifest_item_insert";
           items = await tx.insert(contextManifestItems).values(values.map(value => ({ ...value,
             payloadSourceSnapshot: selectedPayloadSnapshots.get(sourceKey(value.sourceProvider,value.sourceRef)) ?? null,
           }))).returning();
@@ -832,9 +842,11 @@ export function contextManifestService(db: Db) {
           });
         }
 
+        diagnosticStage = "final_memory_acl";
         for(const id of rootIds)
           if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,id))
             throw forbidden("Context Memory source access changed during assembly");
+        diagnosticStage = "final_task_acl";
         for (const id of selectedTaskIds) {
           // `assertScopePrivacy` below rechecks this exact primary Task after
           // all source ACL waits. Keep it on that final owner check; copied
@@ -846,6 +858,7 @@ export function contextManifestService(db: Db) {
         // Recheck accountable Run, primary Task, Human authority and project
         // after the source ACL work above; this is the last awaited owner proof
         // before the manifest result escapes its transaction.
+        diagnosticStage = "final_scope_privacy";
         await assertScopePrivacy();
         assertActive();
 
@@ -866,6 +879,10 @@ export function contextManifestService(db: Db) {
           ? error.code
           : cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string"
             ? cause.code : null;
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+          console.warn("native_context_manifest_failure_stage", JSON.stringify({ stage: diagnosticStage,
+            elapsedMs: Math.max(0, Date.now() - diagnosticStartedAt), deadlineExpired: options.deadlineAt !== undefined && options.deadlineAt <= Date.now(),
+            statementCanceled: code === "57014" }));
         if (options.signal?.aborted) throw options.signal.reason ?? error;
         if (code === "57014" && statementDeadlineAt !== null && Date.now() >= statementDeadlineAt)
           throw contextDeadlineError();

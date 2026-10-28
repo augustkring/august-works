@@ -1,4 +1,5 @@
 import { defaultGitHubReviewPolicy } from "../../packages/shared/src/types/chat-github";
+import { PRODUCT_IDENTITY } from "../../packages/shared/src/product-identity";
 import {
   expect,
   test,
@@ -160,6 +161,7 @@ export type Seed = {
   prefix: string;
   agentId: string;
   otherAgentId: string;
+  userId: string;
 };
 
 export async function json<T>(
@@ -174,6 +176,10 @@ export async function json<T>(
 }
 
 export async function seedCompanyAndAgent(request: APIRequestContext): Promise<Seed> {
+  const session = await json<{ user: { id: string } }>(
+    await request.get("/api/auth/get-session"),
+    "read current account session",
+  );
   const company = await json<{ id: string; issuePrefix: string }>(
     await request.post("/api/companies", {
       data: { name: `Chat adapters browser E2E ${Date.now()}` },
@@ -217,6 +223,7 @@ export async function seedCompanyAndAgent(request: APIRequestContext): Promise<S
     prefix: company.issuePrefix,
     agentId: agent.id,
     otherAgentId: otherAgent.id,
+    userId: session.user.id,
   };
 }
 
@@ -347,7 +354,7 @@ export async function installChatControlPlaneMock(
   let slackIdentityLinked = false;
   let githubAppConnected = false;
   let githubConfiguration = { revision: 0, configuration: {
-    version: 1, toolsEnabled: false, responsibleUserId: "local-board", memberAccess: "all_linked", people: [], defaults: defaultGitHubReviewPolicy(), repositories: {},
+    version: 1, toolsEnabled: false, responsibleUserId: seed.userId, memberAccess: "all_linked", people: [], defaults: defaultGitHubReviewPolicy(), repositories: {},
   }};
   const state: ChatMock & {
     created: boolean;
@@ -678,7 +685,7 @@ export async function installChatControlPlaneMock(
           ...(provider.provider === "slack" && (slackIdentityLinked || endpoint.setup.step === "test") ? [{
             id: "link-slack-self", principalId: "principal-slack-self", externalLabel: "Test operator",
             externalDetail: "operator@slack", lastConnectAt: new Date().toISOString(),
-            paperclipUserId: slackIdentityLinked ? "local-board" : null,
+            paperclipUserId: slackIdentityLinked ? seed.userId : null,
             status: slackIdentityLinked ? "linked" : "pending",
           }] : []),
           {
@@ -969,7 +976,7 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   agent_view:
-    agent_description: "Work with a Paperclip agent in a task-backed conversation."
+    agent_description: "Work with a ${PRODUCT_IDENTITY.productName} agent in a task-backed conversation."
   bot_user:
     display_name: "maya"
   slash_commands:

@@ -53,6 +53,9 @@ import {
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { listCompanyCaseEvents } from "../services/pipelines-aggregation.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe.sequential : describe.skip;
@@ -1054,7 +1057,6 @@ describeEmbeddedPostgres("pipeline routes", () => {
       title: "PRIVATE DOCUMENT TITLE", format: "markdown", body: "PRIVATE DOCUMENT EXCERPT", createdByUserId: first.userId });
     await db.insert(issueDocuments).values({ companyId: company.id, issueId: taskId, documentId, key: "report" });
     await db.insert(pipelineCaseIssueLinks).values({ companyId: company.id, caseId: manualCase.case.id, issueId: taskId, role: "work" });
-
     const firstHttp = request(app(first.actor));
     const secondHttp = request(app(second.actor));
     const secondCase = await secondHttp.get(`/api/cases/${manualCase.case.id}`).expect(200);
@@ -1077,6 +1079,46 @@ describeEmbeddedPostgres("pipeline routes", () => {
     expect((await firstHttp.get(`/api/cases/${manualCase.case.id}/outputs`).expect(200)).body.items).toEqual([]);
     const afterDocumentUnlink = await secondHttp.get(`/api/cases/${manualCase.case.id}/context-pack`).expect(200);
     expect(JSON.stringify(afterDocumentUnlink)).not.toContain("PRIVATE DOCUMENT EXCERPT");
+
+    const eventProducer = await seedAutomationAgent(company.id);
+    const inaccessibleHistoryRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: inaccessibleHistoryRunId, companyId: company.id,
+      agentId: eventProducer.id, responsibleUserId: first.userId, nativeIssueId: taskId,
+      scopeKind: "issue", status: "succeeded", contextSnapshot: {} });
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: first.userId,
+      payload: { decision: "request_changes", reason: "Keep this learning visible." } });
+    // This unrelated non-learning event inherits a private Task/run source.
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "automation_executed", actorType: "agent", actorAgentId: eventProducer.id, runId: inaccessibleHistoryRunId,
+      payload: { automationId: randomUUID() } });
+    const privateLearningCase = await pipelineService(db).ingestCase({ companyId: company.id,
+      pipelineId: pipeline.body.id, caseKey: "private-learning-source", title: "Shared human case",
+      actor: { type: "user", userId: first.userId } });
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: privateLearningCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: first.userId,
+      payload: { decision: "request_changes", reason: "This learning has a private source.", issueId: taskId } });
+    const sharedLearning = await secondHttp.get(`/api/companies/${company.id}/case-events?types=review_decided`).expect(200);
+    const visibleLearning = sharedLearning.body.items.find((event: { caseId: string }) => event.caseId === manualCase.case.id);
+    expect(visibleLearning).toMatchObject({ type: "review_decided", payload: {
+      decision: "request_changes", reason: "Keep this learning visible.",
+    } });
+    expect(visibleLearning).toBeTruthy();
+    const authorizedEventId = visibleLearning.id;
+    // Model a private event appended after the route's source snapshot. The
+    // canonical projector must honor the exact checked IDs and never widen
+    // back to all events for this otherwise readable case.
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: first.userId,
+      payload: { decision: "request_changes", reason: "Late private event.", issueId: taskId } });
+    const snapshotProjection = await listCompanyCaseEvents(db, {
+      companyId: company.id, types: ["review_decided"], caseIds: [manualCase.case.id], eventIds: [authorizedEventId],
+    });
+    expect(snapshotProjection.items.map((row) => row.id)).toEqual([authorizedEventId]);
+    expect(JSON.stringify(snapshotProjection)).not.toContain("Late private event.");
+    expect(sharedLearning.body.items.some((event: { caseId: string }) => event.caseId === privateLearningCase.case.id)).toBe(false);
+    await secondHttp.get(`/api/cases/${manualCase.case.id}/events`).expect(404);
+
     const opened = await firstHttp.post(`/api/cases/${manualCase.case.id}/open-conversation`);
     expect([200, 201]).toContain(opened.status);
     expect(opened.body.issue.description).toContain("PRIVATE TASK BODY");
@@ -1109,6 +1151,93 @@ describeEmbeddedPostgres("pipeline routes", () => {
     const agentSearch = await secondHttp.get(`/api/pipelines/${pipeline.body.id}/cases?q=PRIVATE%20AGENT`).expect(200);
     expect(agentSearch.body.map((row: { case: { id: string } }) => row.case.id)).not.toContain(agentCase.case.id);
   });
+
+  it("rechecks source privacy after the case-event read waits behind a source writer", async () => {
+    const company = await seedCompany("Pipeline event source writer");
+    const owner = await seedHumanMember(company.id, "Pipeline event source reader");
+    const http = request(app(owner.actor));
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "event-source-writer", name: "Event source writer" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "event-source-writer", title: "Shared case", actor: { type: "user", userId: owner.userId } });
+    const sourceTaskId = randomUUID();
+    await db.insert(issues).values({ id: sourceTaskId, companyId: company.id, title: "Private source task",
+      description: "Private source body", status: "done", visibility: "private", createdByUserId: owner.userId,
+      responsibleUserId: owner.userId });
+    const [event] = await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: owner.userId,
+      payload: { decision: "request_changes", reason: "Source-backed review", issueId: sourceTaskId } }).returning();
+    const before = await http.get(`/api/companies/${company.id}/case-events?types=review_decided`).expect(200);
+    expect(before.body.items.map((row: { id: string }) => row.id)).toContain(event!.id);
+
+    let signalWriterReady!: () => void;
+    let releaseWriter!: () => void;
+    const writerReady = new Promise<void>(resolve => { signalWriterReady = resolve; });
+    const writerGate = new Promise<void>(resolve => { releaseWriter = resolve; });
+    const sourceWriter = db.transaction(async tx => {
+      await lockAnalyticalCompany(tx, company.id);
+      await lockMemoryPrivacy(tx, company.id);
+      await tx.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, sourceTaskId));
+      signalWriterReady();
+      await writerGate;
+    });
+    await writerReady;
+    const pendingRead = http.get(`/api/companies/${company.id}/case-events?types=review_decided`).then(response => response);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      releaseWriter();
+      await sourceWriter;
+      const after = await pendingRead;
+      expect(after.status).toBe(200);
+      expect(after.body.items.some((row: { id: string }) => row.id === event!.id)).toBe(false);
+      expect(JSON.stringify(after.body)).not.toContain("Source-backed review");
+      expect(after.headers["cache-control"]).toContain("private");
+      expect(after.headers["cache-control"]).toContain("no-store");
+    } finally {
+      releaseWriter();
+      await sourceWriter;
+    }
+  }, 90_000);
+
+  it("denies company case-events when membership is revoked while waiting for privacy locks", async () => {
+    const company = await seedCompany("Pipeline event membership revoke");
+    const owner = await seedHumanMember(company.id, "Pipeline event revoked reader");
+    const http = request(app(owner.actor));
+    const pipeline = await request(app(boardActor)).post(`/api/companies/${company.id}/pipelines`)
+      .send({ key: "event-membership-revoke", name: "Event membership revoke" }).expect(201);
+    const manualCase = await pipelineService(db).ingestCase({ companyId: company.id, pipelineId: pipeline.body.id,
+      caseKey: "event-membership-revoke", title: "Membership protected case", actor: { type: "user", userId: owner.userId } });
+    await db.insert(pipelineCaseEvents).values({ companyId: company.id, caseId: manualCase.case.id,
+      type: "review_decided", actorType: "user", actorUserId: owner.userId,
+      payload: { decision: "request_changes", reason: "Must remain private after revoke" } });
+
+    let signalLockAcquired!: () => void;
+    let releaseRowLock!: () => void;
+    const lockAcquired = new Promise<void>(resolve => { signalLockAcquired = resolve; });
+    const releaseGate = new Promise<void>(resolve => { releaseRowLock = resolve; });
+    const holdPrivacy = db.transaction(async tx => {
+      await lockAnalyticalCompany(tx, company.id);
+      await lockMemoryPrivacy(tx, company.id);
+      signalLockAcquired();
+      await releaseGate;
+    });
+    await lockAcquired;
+    const pendingRead = http.get(`/api/companies/${company.id}/case-events?types=review_decided`).then(response => response);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await db.update(companyMemberships).set({ status: "revoked" }).where(and(
+        eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, owner.userId)));
+      releaseRowLock();
+      await holdPrivacy;
+      const denied = await pendingRead;
+      expect(denied.status).toBe(404);
+      expect(JSON.stringify(denied.body)).not.toContain("Must remain private after revoke");
+    } finally {
+      releaseRowLock();
+      await holdPrivacy;
+    }
+  }, 90_000);
 
   it("retries a live case-body proof after session-row contention and rechecks the revoked session", async () => {
     const company = await seedCompany("Pipeline session contention");

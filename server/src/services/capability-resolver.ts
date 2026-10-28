@@ -16,7 +16,8 @@ export function capabilityResolverService(db: Db) {
   return {
     search: async (rawActor: AuthorizationActor, companyId: string, query: string) => db.transaction(async raw => {
       const db = raw as unknown as Db, actor = { ...rawActor, isInstanceAdmin: false, ignoreInstanceAdmin: true };
-      await lockAnalyticalCompany(db, companyId); await lockMemoryPrivacy(db, companyId);
+      // Inventory search is read-only; keep it compatible with caller-held privacy read locks.
+      await lockAnalyticalCompany(db, companyId, "read"); await lockMemoryPrivacy(db, companyId, "read");
       await assertV5Authorization(db, actor, companyId, "company_scope:read");
       const auth = authorizationService(db), accessByRef = new Map<string, "allowed" | "requires_approval">();
       const visible = workflowCapabilityVisibility(db, companyId, actor);

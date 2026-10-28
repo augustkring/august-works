@@ -42,12 +42,12 @@ import {instanceSettingsService} from "../services/instance-settings.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {aiGovernanceService} from "../services/ai-governance/governance-service.js";
 import {contextManifestService} from "../services/context/context-manifest.js";
-import {assertAnalyticalContextPayloadAccess,assertAnalyticalContextPayloadAccessBatch,assertNativeAnalyticalRunPayloadAccess} from "../services/analytical-context-authority.js";
+import {assertAnalyticalContextPayloadAccess,assertAnalyticalContextPayloadAccessBatch,assertAnalyticalContextPayloadOwnersAccessBatch,assertNativeAnalyticalRunPayloadAccess} from "../services/analytical-context-authority.js";
 import type {NativePayloadSourceSet} from "../services/native-runtime/native-execution-input.js";
 import {withAnalyticalConversationRetention} from "../services/analytical-context-privacy.js";
-import {heartbeatMemoryPayloadRetained,reapplyMemoryDeletionMarkers} from "../services/memory/memory-privacy.js";
+import {heartbeatMemoryPayloadRetained,lockMemoryPrivacy,reapplyMemoryDeletionMarkers} from "../services/memory/memory-privacy.js";
 import {purgeCompanyContent} from "../services/saas/company-purge.js";
-import {suppressAnalyticalSource} from "../services/analytical-privacy.js";
+import {lockAnalyticalCompany,suppressAnalyticalSource} from "../services/analytical-privacy.js";
 import {eraseExpiredAnalyticalLineage} from "../services/analytical-retention.js";
 import {analyticalPurpose,metricDefinition} from "./helpers/business-metric-fixture.js";
 import {PaperclipRunnerToolAuthority} from "../services/native-runtime/paperclip-runner-tool-authority.js";
@@ -122,15 +122,118 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   try {
     await expect(assertAnalyticalContextPayloadAccessBatch(db,companyId,reader,[issueId],"task",{fastPathOnly:true})).resolves.toBe(false);
     expect(admissionLog).toHaveBeenCalledWith("native-analytical-batch-deep-route",
-      expect.stringContaining('"privacyLockMode":"write"'));
+      expect.stringContaining('"privacyLockMode":"read"'));
   } finally {
     admissionLog.mockRestore();
     if(priorDiagnostics===undefined)delete process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS;
     else process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS=priorDiagnostics;
   }
   await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId})).resolves.toBeUndefined();
-  await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
+  const mixedRunId=randomUUID();
+  await db.insert(heartbeatRuns).values({id:mixedRunId,companyId,agentId,nativeIssueId:issueId,runtimeMode:"native",status:"running",
+    responsibleUserId:userId,contextSnapshot:{issueId,conversationSessionGeneration:0}});
+  await db.update(issues).set({executionRunId:mixedRunId,checkoutRunId:mixedRunId}).where(eq(issues.id,issueId));
+  await expect(assertAnalyticalContextPayloadOwnersAccessBatch(db,companyId,actor(),
+    {issueIds:[issueId],runIds:[mixedRunId]},"task")).resolves.toBeUndefined();
+
+  await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,mixedRunId)).resolves.toBeUndefined();
+
+  // Hold the original source-writer lock before starting mixed-owner review.
+  // Revoking the actual reader while it waits must be observed after admission,
+  // rather than reusing a pre-wait Task or run ACL decision.
+  let releaseLock!: () => void;
+  let announceLock!: (pid: number) => void;
+  const release = new Promise<void>(resolve => { releaseLock = resolve; });
+  const locked = new Promise<number>(resolve => { announceLock = resolve; });
+  const lockHolder = db.transaction(async tx => {
+    await lockAnalyticalCompany(tx,companyId);
+    await lockMemoryPrivacy(tx as unknown as typeof db,companyId);
+    const [backend] = await tx.execute<{pid:number}>(sql`select pg_backend_pid() as pid`);
+    announceLock(backend!.pid);
+    await release;
+  });
+  const holderPid = await locked;
+  const pendingMixedReview = assertNativeAnalyticalRunPayloadAccess(db,companyId,mixedRunId);
+  let observedWait = false;
+  for(let attempt=0;attempt<100&&!observedWait;attempt++){
+    const [row]=await db.execute<{waiting:boolean}>(sql`select exists(
+      select 1 from pg_stat_activity a where ${holderPid}=any(pg_blocking_pids(a.pid))
+        and a.wait_event_type='Lock') as waiting`);
+    observedWait=row?.waiting===true;
+    if(!observedWait)await new Promise(resolve=>setTimeout(resolve,10));
+  }
+  try {
+    expect(observedWait,"the mixed native source review must wait on its original privacy lock").toBe(true);
+    await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
+  } finally {
+    releaseLock();
+    await lockHolder;
+  }
+  await expect(pendingMixedReview).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
   await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId})).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
+ });
+
+ it("shares read-only source review while retaining contended writer revocation",async()=>{
+  let releaseRead!:()=>void,announceRead!:(pid:number)=>void;
+  const release=new Promise<void>(resolve=>{releaseRead=resolve;});
+  const locked=new Promise<number>(resolve=>{announceRead=resolve;});
+  const heldRead=db.transaction(async tx=>{
+   const sourceDb=tx as unknown as typeof db;
+   await assertAnalyticalContextPayloadAccess(sourceDb,companyId,reader,{issueId},undefined,{privacyLockMode:"read"});
+   await assertAnalyticalContextPayloadAccess(sourceDb,companyId,reader,{runId},undefined,{privacyLockMode:"read"});
+   const [backend]=await tx.execute<{pid:number}>(sql`select pg_backend_pid() as pid`);
+   announceRead(backend!.pid);await release;
+  });
+  const readerPid=await locked;
+  let writer:Promise<void>|undefined;
+  try{
+   let timeout:ReturnType<typeof setTimeout>|undefined;
+   const secondRead=(async()=>{
+    await assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId},undefined,{privacyLockMode:"read"});
+    await assertAnalyticalContextPayloadAccess(db,companyId,reader,{runId},undefined,{privacyLockMode:"read"});
+    return true;
+   })();
+   const completed=await Promise.race([secondRead,new Promise<false>(resolve=>{timeout=setTimeout(()=>resolve(false),2000);})]);
+   if(timeout)clearTimeout(timeout);
+   expect(completed,"a second source reader must not wait for the first reader to release").toBe(true);
+   writer=db.transaction(async tx=>{
+    await lockAnalyticalCompany(tx,companyId);await lockMemoryPrivacy(tx as unknown as typeof db,companyId);
+    await tx.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));
+   });
+   let observedWriterWait=false;
+   for(let attempt=0;attempt<100&&!observedWriterWait;attempt++){
+    const [row]=await db.execute<{waiting:boolean}>(sql`select exists(select 1 from pg_stat_activity a
+     where ${readerPid}=any(pg_blocking_pids(a.pid)) and a.wait_event_type='Lock') as waiting`);
+    observedWriterWait=row?.waiting===true;
+    if(!observedWriterWait)await new Promise(resolve=>setTimeout(resolve,10));
+   }
+   expect(observedWriterWait,"the privacy writer must remain exclusive behind the source reader").toBe(true);
+   const pendingRead=assertAnalyticalContextPayloadAccess(db,companyId,reader,{runId},undefined,{privacyLockMode:"read"})
+    .then(()=>null,error=>error);
+   releaseRead();await heldRead;await writer;
+   expect(await pendingRead).toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
+   await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId},undefined,{privacyLockMode:"read"}))
+    .rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
+  }finally{releaseRead();await heldRead;await writer;}
+ });
+
+ it.each(["private_source","erased","retired"] as const)("keeps marked conversation admission denied for %s",async(reason)=>{
+  await db.update(heartbeatRuns).set({contextSnapshot:{issueId,conversationSessionGeneration:0}}).where(eq(heartbeatRuns.id,runId));
+  await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,runId)).resolves.toBeUndefined();
+  if(reason==="private_source"){
+   const privateTaskId=randomUUID(),privateRunId=randomUUID();
+   await db.insert(issues).values({id:privateTaskId,companyId,title:"Human-only private source",visibility:"private",responsibleUserId:userId,createdByUserId:userId});
+   await db.insert(heartbeatRuns).values({id:privateRunId,companyId,agentId,nativeIssueId:privateTaskId,runtimeMode:"native",status:"running",
+    responsibleUserId:userId,contextSnapshot:{issueId:privateTaskId,conversationSessionGeneration:0}});
+   await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,privateRunId)).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
+  }else{
+   if(reason==="erased")await db.insert(memoryDeletionMarkers).values({companyId,kind:"source",key:`memory-run-source-erasure:v1:${runId}`});
+   else await db.update(issues).set({conversationAgentId:null,conversationUserId:null,conversationState:null,status:"cancelled",hiddenAt:new Date(),
+    assigneeAgentId:null,assigneeUserId:null,executionRunId:null,checkoutRunId:null,conversationRetiredAt:new Date()}).where(eq(issues.id,issueId));
+   const [erasure]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${runId}::uuid,${issueId}::uuid) as erased`);
+   expect(erasure?.erased).toBe(true);
+   await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,runId)).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
+  }
  });
 
  it("retains a managed metric result in a separate immutable Context and revokes its original sources",async()=>{

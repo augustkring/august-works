@@ -57,6 +57,8 @@ import {
   routines,
   workflowRuns,
   workflows,
+  companyMemberships,
+  companies,
 } from "@paperclipai/db";
 import { validate } from "../middleware/validate.js";
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized, unprocessable } from "../errors.js";
@@ -90,6 +92,8 @@ import {
 import { logPostgresLockUnavailable } from "../services/postgres-lock-diagnostics.js";
 import { accessService } from "../services/access.js";
 import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, pinCurrentBoardActor } from "../services/authorization.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { issueService } from "../services/issues.js";
 import { visibleIssueCondition } from "../services/issue-visibility.js";
 import { assertCompanyAccess } from "./authz.js";
@@ -348,6 +352,32 @@ function assertPipelineCompanyAccess(req: Request, companyId: string) {
     }
     throw error;
   }
+}
+
+/** Recheck live company access inside the same transaction as case/event proof.
+ * For an authenticated Human, pin their current credential and active company
+ * membership so revocation cannot race the response after the final check. */
+async function assertCurrentPipelineCompanyRead(db: Db, req: Request, companyId: string) {
+  const [company] = await db.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("share");
+  if (!company) throw notFound("Pipeline resource not found");
+  let actor = req.actor;
+  if (actor.type === "board" && actor.source !== "local_implicit") {
+    const pinned = await pinCurrentBoardActor(db, actor);
+    if (!pinned) throw notFound("Pipeline resource not found");
+    actor = {
+      ...pinned.actor,
+      userId: pinned.actor.userId ?? undefined,
+      sessionId: pinned.actor.sessionId ?? undefined,
+    };
+    const [membership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, actor.userId!), eq(companyMemberships.status, "active"),
+    )).for("share", { noWait: true });
+    if (!membership) throw notFound("Pipeline resource not found");
+  }
+  const decision = await authorizationService(db).decide({ actor, action: "company_scope:read",
+    resource: { type: "company", companyId }, scope: null });
+  if (!decision.allowed) throw notFound("Pipeline resource not found");
 }
 
 function actorForMutation(req: Request): PipelineActor {
@@ -827,10 +857,13 @@ async function requirePipelineCaseBodySources(db: Db, req: Request, companyId: s
   if (!await canReadPipelineCaseBodySources(db, req, companyId, caseId)) throw notFound("Pipeline case not found");
 }
 
-async function canReadPipelineCaseEventSources(db: Db, req: Request, companyId: string, caseId: string) {
-  const events = await db.select({ actorType: pipelineCaseEvents.actorType, runId: pipelineCaseEvents.runId,
+async function canReadPipelineCaseEventSources(db: Db, req: Request, companyId: string, caseId: string,
+  types?: string[], eventIds?: string[]) {
+  const events = await db.select({ id: pipelineCaseEvents.id, actorType: pipelineCaseEvents.actorType, runId: pipelineCaseEvents.runId,
     payload: pipelineCaseEvents.payload }).from(pipelineCaseEvents).where(and(
-      eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId))).limit(257);
+      eq(pipelineCaseEvents.companyId, companyId), eq(pipelineCaseEvents.caseId, caseId),
+      eventIds ? inArray(pipelineCaseEvents.id, eventIds) : undefined,
+      types && types.length > 0 ? inArray(pipelineCaseEvents.type, types) : undefined)).limit(257);
   if (events.length > 256) return false;
   for (const event of events) {
     if (event.actorType === "agent" && (!event.runId ||
@@ -845,7 +878,10 @@ async function canReadPipelineCaseEventSources(db: Db, req: Request, companyId: 
 }
 
 async function requirePipelineCaseEventSources(db: Db, req: Request, companyId: string, caseId: string) {
-  if (!await canReadPipelineCaseEventSources(db, req, companyId, caseId))
+  // Match the case-body proof's bounded retry on no-wait session/run locks;
+  // retries re-run the same exact per-event source checks with current auth.
+  if (!await retryPipelineCasePrivacyProof(db, "pipeline_case_event_source", () =>
+    canReadPipelineCaseEventSources(db, req, companyId, caseId)))
     throw notFound("Pipeline case events not found");
 }
 
@@ -1055,28 +1091,54 @@ export function pipelineRoutes(db: Db, options: Parameters<typeof pipelineServic
   router.get("/companies/:companyId/case-events", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertPipelineCompanyAccess(req, companyId);
+    res.setHeader("Cache-Control", "private, no-store");
     const types = parseEventTypesQuery(req.query.types);
     const requestedLimit = parseOptionalNonNegativeInteger(req.query.limit, "limit");
     if (requestedLimit === 0) throw badRequest("limit must be a positive integer");
     const limit = Math.min(requestedLimit ?? COMPANY_CASE_EVENTS_DEFAULT_LIMIT, COMPANY_CASE_EVENTS_MAX_LIMIT);
     const offset = parseOptionalNonNegativeInteger(req.query.offset, "offset") ?? 0;
-    const eventCaseRows = await db.selectDistinct({ caseId: pipelineCaseEvents.caseId }).from(pipelineCaseEvents)
-      .where(and(eq(pipelineCaseEvents.companyId, companyId),
-        types && types.length > 0 ? inArray(pipelineCaseEvents.type, types) : undefined)).limit(10_001);
-    if (eventCaseRows.length > 10_000) {
-      res.json({ items: [], pagination: { limit, offset, nextOffset: null, hasMore: false } });
-      return;
-    }
-    const readableCaseIds: string[] = [];
-    for (const row of eventCaseRows) {
-      const [bodyReadable, tasksReadable, eventsReadable] = await Promise.all([
-        canReadPipelineCaseBodySources(db, req, companyId, row.caseId),
-        canReadAllPipelineCaseTaskSources(db, req, companyId, row.caseId),
-        canReadPipelineCaseEventSources(db, req, companyId, row.caseId).then(() => true, () => false),
-      ]);
-      if (bodyReadable && tasksReadable && eventsReadable) readableCaseIds.push(row.caseId);
-    }
-    res.json(await listCompanyCaseEvents(db, { companyId, types, limit, offset, caseIds: readableCaseIds }));
+    const result = await retryPipelineCasePrivacyProof(db, "pipeline_company_case_events", () => db.transaction(async raw => {
+      const tx = raw as unknown as Db;
+      // Match source writers' canonical order and hold both read locks through
+      // event/source checks and final projection. The exact ID snapshot also
+      // prevents later appended events from entering the projection.
+      await lockAnalyticalCompany(tx, companyId, "read");
+      await lockMemoryPrivacy(tx, companyId, "read");
+      await assertCurrentPipelineCompanyRead(tx, req, companyId);
+      const eventCaseRows = await tx.select({ id: pipelineCaseEvents.id, caseId: pipelineCaseEvents.caseId }).from(pipelineCaseEvents)
+        .where(and(eq(pipelineCaseEvents.companyId, companyId),
+          types && types.length > 0 ? inArray(pipelineCaseEvents.type, types) : undefined))
+        .orderBy(desc(pipelineCaseEvents.createdAt), desc(pipelineCaseEvents.id)).limit(10_001);
+      if (eventCaseRows.length > 10_000) {
+        throw new HttpError(503, "Company case-event history is temporarily unavailable; narrow the requested event types", {
+          code: "pipeline_case_events_unavailable",
+          retryable: true,
+        });
+      }
+      const eventIdsByCase = new Map<string, string[]>();
+      for (const row of eventCaseRows) eventIdsByCase.set(row.caseId, [...(eventIdsByCase.get(row.caseId) ?? []), row.id]);
+      const readableCaseIds: string[] = [];
+      const readableEventIds: string[] = [];
+      for (const [caseId, eventIds] of eventIdsByCase) {
+        // Keep this event-list proof scoped to the event types actually projected
+        // below. Full case history has a separate, stricter source proof.
+        const bodyReadable = await canReadPipelineCaseBodySources(tx, req, companyId, caseId);
+        const eventsReadable = await canReadPipelineCaseEventSources(tx, req, companyId, caseId, types, eventIds)
+          .catch(error => {
+            if (hasPostgresLockUnavailableCode(error)) throw error;
+            return false;
+          });
+        if (bodyReadable && eventsReadable) {
+          readableCaseIds.push(caseId);
+          readableEventIds.push(...eventIds);
+        }
+      }
+      const projection = await listCompanyCaseEvents(tx, { companyId, types, limit, offset,
+        caseIds: readableCaseIds, eventIds: readableEventIds });
+      await assertCurrentPipelineCompanyRead(tx, req, companyId);
+      return projection;
+    }));
+    res.json(result);
   });
 
   router.post("/companies/:companyId/pipelines", validate(createPipelineSchema), async (req, res) => {

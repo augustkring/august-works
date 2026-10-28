@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { PRODUCT_IDENTITY } from "../../packages/shared/src/index.ts";
 import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 import { mockOnboardingLocalAiConnection } from "./helpers/onboarding-ai-connection";
 import {
@@ -22,7 +23,7 @@ registerEnglishAccountLocaleIsolation(test);
  * exactly that failing condition.
  */
 
-const FIRST_TASK_TITLE = "Paperclip onboarding";
+const FIRST_TASK_TITLE = `${PRODUCT_IDENTITY.productName} onboarding`;
 
 /**
  * Intercept authentication, environment checks, and hiring so no real CLI check

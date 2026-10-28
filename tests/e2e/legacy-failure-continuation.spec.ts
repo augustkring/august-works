@@ -14,6 +14,9 @@ async function json(response: APIResponse) {
 for (const action of ["task_retry", "thread_retry", "inbox_retry", "message", "queued_interrupt", "automatic_message"] as const) {
   test(`legacy startup hold: ${action} reaches a new agent response`, async ({ page, request }) => {
     test.setTimeout(120_000);
+    const humanUserId = action === "automatic_message"
+      ? (await json(await request.get("/api/auth/get-session"))).user.id as string
+      : null;
     const root = await mkdtemp(path.join(os.tmpdir(), "legacy-recovery-browser-"));
     const config = JSON.parse(await readFile(process.env.PAPERCLIP_E2E_SERVER_CONFIG!, "utf8"));
     // Use the running test server's actual port, including fallback allocation.
@@ -34,6 +37,11 @@ for (const action of ["task_retry", "thread_retry", "inbox_retry", "message", "q
         title: "Continue after startup failure", description: "Answer the pending follow-up once.",
         status: "backlog", assigneeAgentId: agent.id,
       } }));
+      if (action === "automatic_message") {
+        await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user",
+          principalId: humanUserId!, membershipRole: "operator", status: "active" }).onConflictDoNothing();
+        await db.update(issues).set({ responsibleUserId: humanUserId! }).where(eq(issues.id, issue.id));
+      }
       const sourceRunId = randomUUID();
       // Seed the historical incident, then exercise all recovery through the UI.
       // No adapter.invoke or new dispatch identity exists on this pre-upgrade run.
@@ -60,7 +68,7 @@ for (const action of ["task_retry", "thread_retry", "inbox_retry", "message", "q
         // Reproduce a real user comment saved while the failed run was active,
         // including queues originally created by a system wake.
         await db.insert(issueComments).values({ id: commentId, companyId: company.id, issueId: issue.id,
-          authorType: "user", authorUserId: action === "queued_interrupt" ? "original-board" : "local-board", body: "Approved",
+          authorType: "user", authorUserId: action === "queued_interrupt" ? "original-board" : humanUserId!, body: "Approved",
           createdAt: new Date(Date.now() - 8_000),
         });
         await db.insert(agentWakeupRequests).values({ companyId: company.id, agentId: agent.id,

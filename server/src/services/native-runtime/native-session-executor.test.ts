@@ -683,7 +683,7 @@ describe("remote runner process supervision", () => {
         timeoutMs?: number;
         useSession?: boolean;
         bypassSession?: boolean;
-        nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare";
+        nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare";
       }) => {
         const label = input.args?.[2];
         if (label === "paperclip-runner-launch") {

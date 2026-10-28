@@ -40,6 +40,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 import { heartbeatService } from "../services/heartbeat.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
 import { issueService } from "../services/issues.ts";
@@ -115,8 +116,10 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const tempRoots: string[] = [];
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-accepted-plan-workspace-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
@@ -171,6 +174,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
   afterAll(async () => {
     await db.$client.end();
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   });
 
   async function seedAcceptedPlanClaim(args: {

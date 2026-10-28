@@ -281,6 +281,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
   instanceId: string;
   steps?: ManagedNativeOpenCodeModelStep[];
   taskTitle?: string;
+  /** Execute an already sealed Task as this fixture's actual Native run root. */
+  existingTaskId?: string;
   humanActions?: ManagedNativeOpenCodeHumanAction[];
   /** Prepare a private Task source; create its Human-reviewed Memory root after the configured model step. */
   privateContextContent?: string;
@@ -301,7 +303,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
       sourceSet: import("../../services/native-runtime/native-execution-input.js").NativePayloadSourceSet } }) => Promise<void>;
   /** Validate the exact persisted Project source prefix when its actual tool_result reaches the next provider request. */
   nativeProjectCreatePrefixProbe?: { callId: string };
-  reuseIdentity?: { companyId: string; agentId: string; aliceUserId: string; bobUserId: string };
+  reuseIdentity?: { companyId: string; agentId: string; aliceUserId: string; bobUserId: string;
+    aliceSessionId?: string; bobSessionId?: string };
   onPreserveDebugArtifacts?: () => void;
 }) {
   const { db, root, instanceId } = input;
@@ -459,7 +462,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const companyId = input.reuseIdentity?.companyId ?? f!.home;
     const agentId = input.reuseIdentity?.agentId ?? f!.presence.id;
     const aliceUserId = input.reuseIdentity?.aliceUserId ?? f!.userId;
-    const sessionId = await seedNativePasskeySession(db, aliceUserId);
+    const sessionId = input.reuseIdentity?.aliceSessionId ?? await seedNativePasskeySession(db, aliceUserId);
     const [membership] = await db.select({ companyId: companyMemberships.companyId,
       membershipRole: companyMemberships.membershipRole, status: companyMemberships.status })
       .from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, aliceUserId)));
@@ -478,7 +481,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: bobUserId,
         status: "active", membershipRole: "admin" });
     }
-    const bobSessionId = await seedNativePasskeySession(db, bobUserId);
+    const bobSessionId = input.reuseIdentity?.bobSessionId ?? await seedNativePasskeySession(db, bobUserId);
     const [bobMembership] = await db.select({ companyId: companyMemberships.companyId,
       membershipRole: companyMemberships.membershipRole, status: companyMemberships.status })
       .from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, bobUserId)));
@@ -685,6 +688,15 @@ export async function runManagedNativeOpenCodeFixture(input: {
         !humanComment.snapshot || humanComment.invalidated)
         throw new Error("managed_fixture_conversation_task_was_not_human_sealed");
       task = openedTask;
+    } else if (input.existingTaskId) {
+      const [existingTask] = await db.select().from(issues).where(and(
+        eq(issues.companyId, companyId), eq(issues.id, input.existingTaskId)));
+      if (!existingTask?.payloadSourceSnapshot || existingTask.payloadSourceProtocolVersion !== 1 ||
+        existingTask.payloadSourceSnapshotInvalidated)
+        throw new Error("managed_fixture_existing_task_source_was_not_sealed");
+      await db.update(issues).set({ status: "todo", assigneeAgentId: agentId })
+        .where(and(eq(issues.companyId, companyId), eq(issues.id, existingTask.id)));
+      task = (await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, existingTask.id))))[0]!;
     } else {
       const createTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
         .send({ title: input.taskTitle ?? "Save a source-bound note", description: "Create a short internal note and finish the task.",
@@ -1032,9 +1044,10 @@ export async function runManagedNativeOpenCodeFixture(input: {
             const content = (message as Record<string, unknown>).content;
             return Array.isArray(content) ? content : [];
           }).filter(block => block && typeof block === "object") as Array<Record<string, unknown>>;
-          contextResultConsumers.push({ callId, consumed: toolResults.some(block =>
+          const consumed = toolResults.some(block =>
             block.type === "tool_result" && block.tool_use_id === callId && block.is_error !== true &&
-            (typeof block.content === "string" || Array.isArray(block.content))) });
+            (typeof block.content === "string" || Array.isArray(block.content)));
+          contextResultConsumers.push({ callId, consumed });
         }
         if (responseCount > 1 && modelSteps[responseCount - 2]?.tool === "call_api") {
           const previousStep = modelSteps[responseCount - 2]!;
@@ -1581,7 +1594,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
       ...(process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1"
         ? { PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS: "1" } : {}),
       ...(process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1"
-        ? { PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS: "1" } : {}) };
+        ? { PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS: "1" } : {}),
+      ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
+        ? { PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS: "1" } : {}) };
     const qualifiedOpenCodeSha256 = createHash("sha256")
       .update(await readFile(opencodeBinary)).digest("hex");
     const diagnostics: string[] = [];
@@ -2886,7 +2901,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
     return {
       companyId,
       agentId,
-      reuseIdentity: { companyId, agentId, aliceUserId, bobUserId },
+      reuseIdentity: { companyId, agentId, aliceUserId, bobUserId,
+        aliceSessionId: sessionId, bobSessionId },
       runId: run!.id,
       issueId: task.id,
       planId: plan.id,

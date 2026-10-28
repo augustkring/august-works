@@ -62,6 +62,7 @@ import {
   heartbeatService,
 } from "../services/heartbeat.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
@@ -72,8 +73,10 @@ const support = await getEmbeddedPostgresTestSupport();
     let companyId: string;
     let agentId: string;
     let localBoardSessionId: string;
+    let restoreApiUrl: (() => void) | null = null;
     const sessionIds = new Map<string, string>();
     beforeAll(async () => {
+      restoreApiUrl = installHeartbeatApiUrlFixture();
       database = await startEmbeddedPostgresTestDatabase(
         "paperclip-agent-conversations-",
       );
@@ -122,6 +125,7 @@ const support = await getEmbeddedPostgresTestSupport();
       if (db) await heartbeatService(db).drainActiveRunExecutions();
       await db?.$client.end({ timeout: 0 });
       await database?.cleanup();
+      restoreApiUrl?.();
     });
     const create = (user = randomUUID()) =>
       issueService(db).create(companyId, {
@@ -350,7 +354,10 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await issueService(db).getById(chatId))?.workMode).toBe("planning");
       const expandedModeChange = await request(appFor(owner)).patch(`/api/issues/${chatId}`)
         .send({ workMode: "standard", title: "Must not change through the narrow exception" });
-      expect(expandedModeChange.status).toBe(422);
+      // The mode-only exception is intentionally unavailable once this request
+      // carries any additional field, so the ordinary unreadable-shell path
+      // keeps the conversation hidden.
+      expect(expandedModeChange.status).toBe(404);
       expect(await issueService(db).getById(chatId)).toMatchObject({
         title: beforeModeChange!.title,
         workMode: "planning",

@@ -16,6 +16,8 @@ import { existingCellContainerBackend } from "./compatibility-backend.js";
 import { sandboxProbeCases, type ExecutionSandboxBackend, type SandboxIdentity } from "./backend.js";
 import { fenceSandboxAdmissionOutcome, releaseSandboxAdmissionClaim } from "./sandbox-guardian.js";
 import { createToolGatewayService, type SandboxCredentialBrokerBinding } from "../tool-gateway.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 
 type Binding = typeof runtimeSandboxBindings.$inferSelect;
 function sandboxCapabilityFacts(value: ReturnType<typeof sandboxCapabilitySnapshotSchema.parse>) {
@@ -91,6 +93,12 @@ export function executionSandboxService(db: Db, options: {
   }
   async function assertTaskExecutionContext(tx: Db, input: { companyId: string; runId: string; leaseId: string; now?: Date }) {
     const now = input.now ?? new Date();
+    // Source authority checks below must share the same privacy-before-row
+    // order as source writers and host-command admission. Keep both locks in
+    // this caller-owned transaction through every lease, Run, and manifest
+    // recheck; these are reads, so do not take the exclusive writer variants.
+    await lockAnalyticalCompany(tx, input.companyId, "read");
+    await lockMemoryPrivacy(tx, input.companyId, "read");
     const [lease] = await tx.select().from(environmentLeases).where(and(
       eq(environmentLeases.companyId, input.companyId), eq(environmentLeases.id, input.leaseId),
       eq(environmentLeases.heartbeatRunId, input.runId), eq(environmentLeases.status, "active"),

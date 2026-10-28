@@ -3343,7 +3343,7 @@ export * from "./saas-types.js";
 export * from "./runtime-host-contracts.js";
 export * from "./runtime-relay-contracts.js";
 
-export type { SaasOperationsSnapshot, SaasSupportStatus, SaasProviderInventory } from "./saas-operations.js";
+export type { SaasOperationsSnapshot, SaasSupportStatus, SaasProviderInventory, SaasModelDependencyInventory } from "./saas-operations.js";
 export { saasCostReportSchema } from "./saas-costs.js";
 export type { SaasCostSnapshot } from "./saas-costs.js";
 export * from "./learning.js";

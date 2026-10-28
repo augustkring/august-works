@@ -1,13 +1,13 @@
 import { publicChatTaskUrl } from "../chat-task-url.js";
 import { assertPlatformSkillAdmission } from "../platform-skill-admission.js";
 import {MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS,isManagementAnalyticalTool,executeManagementAnalyticalTool} from "./management-analytical-tools.js";
-import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
+import {assertAnalyticalContextPayloadAccess,assertNativeAnalyticalRunPayloadAccess} from "../analytical-context-authority.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent } from "../orchestration/native-tool-boundary.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
-import { authorizationService, canActorReadIssuePrivacy, issueReadSqlCondition, type AuthorizationActor } from "../authorization.js";
+import { authorizationService, issueReadSqlCondition, type AuthorizationActor } from "../authorization.js";
 import { handoffPlanContext } from "./handoff-plan-context.js";
 import { callCreateSkillTool } from "../skill-tools.js";
 import { callProjectTool } from "../project-tools.js";
@@ -142,7 +142,7 @@ type Binding = {
   testAfterManagedProjectCreate?: (input: { actor: AuthorizationActor; companyId: string; issueId: string; capture: NativeModelOutputCapture; callId: string;
     arguments: Record<string, unknown>; result: Awaited<ReturnType<typeof createManagedNativeProjectOutput>> }) => Promise<void>;
   /** Managed-only ContextEngine read callback with a server-owned witness carrier. */
-  managedNativeContextRead?: (query: string) => Promise<{ markdown: string }>;
+  managedNativeContextRead?: (query: string, callId?: string) => Promise<{ markdown: string }>;
   managedNativeContextReadCapture?: { value: NativeContextReadBinding | null };
   /** Server-derived scope for one addressed native completion review. */
   nativeReview?: NativeReviewAssignmentContext;
@@ -742,7 +742,7 @@ export class PaperclipRunnerToolAuthority {
         !this.binding.managedNativeContextReadCapture ||
         Object.keys(input).length !== 1 || typeof input.query !== "string" || !input.query.trim() || input.query.length > 4_000)
         throw forbidden("Managed Context read arguments are invalid");
-      return this.binding.managedNativeContextRead(input.query);
+      return this.binding.managedNativeContextRead(input.query, call.callId);
     }
     if (call.tool === MANAGED_NATIVE_REMEMBER_TOOL) {
       if (!this.binding.nativeModelOutputCapture)
@@ -1452,9 +1452,10 @@ export class PaperclipRunnerToolAuthority {
     this.#assertConversationGeneration(row);
     const actor: AuthorizationActor = { type:"agent",source:"agent_jwt",companyId:this.binding.companyId,
       agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:row.run.responsibleUserId };
-    if (!await canActorReadIssuePrivacy(this.db, actor, row.issue))
-      throw forbidden("The native Task source is no longer readable");
-    await assertAnalyticalContextPayloadAccess(this.db,this.binding.companyId,actor,{issueId:this.binding.issueId});
+    // The analytical reviewer below includes the same current Task reader ACL
+    // after pinning source rows under the privacy locks. Avoid a duplicate
+    // standalone ACL query before that authoritative recheck.
+    await assertAnalyticalContextPayloadAccess(this.db,this.binding.companyId,actor,{issueId:this.binding.issueId},undefined,{privacyLockMode:"read"});
     return row;
   }
 
@@ -2517,10 +2518,14 @@ export class PaperclipRunnerToolAuthority {
   }
 
   async #assertMutationSourceCurrent(tx: Db, context: { run: typeof heartbeatRuns.$inferSelect }) {
+    if(context.run.id!==this.binding.runId||context.run.nativeIssueId!==this.binding.issueId)
+      throw new Error("paperclip_runner_tool_binding_not_authorized");
+    // Recheck the exact run and native Task as one worklist at each mutation
+    // boundary. The pre-effect and post-effect calls remain separate proofs;
+    // the latter gates receipt storage and the transaction commit.
+    await assertNativeAnalyticalRunPayloadAccess(tx, this.binding.companyId, context.run.id);
     const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: this.binding.companyId,
       agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
-    await assertAnalyticalContextPayloadAccess(tx, this.binding.companyId, actor, { runId: this.binding.runId });
-    await assertAnalyticalContextPayloadAccess(tx, this.binding.companyId, actor, { issueId: this.binding.issueId });
     await assertPlatformSkillAdmission(tx, actor, blenteraPlatformContractHashes());
   }
 

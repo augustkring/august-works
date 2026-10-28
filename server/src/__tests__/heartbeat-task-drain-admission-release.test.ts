@@ -7,11 +7,13 @@ import {
   agentRuntimeState,
   agentWakeupRequests,
   companies,
+  companyMemberships,
   companySkills,
   createDb,
   heartbeatRunEvents,
   heartbeatRuns,
   issues,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -19,6 +21,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { heartbeatService, getTaskDrainStatus, startTaskDrain, stopTaskDrain } from "../services/heartbeat.ts";
 import { subscribeCompanyLiveEvents } from "../services/live-events.ts";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -32,8 +35,10 @@ if (!embeddedPostgresSupport.supported) {
 describeEmbeddedPostgres("heartbeat task-drain admission release", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("heartbeat-task-drain-admission-release-");
     db = createDb(tempDb.connectionString);
   }, 60_000);
@@ -68,11 +73,14 @@ describeEmbeddedPostgres("heartbeat task-drain admission release", () => {
     await db.delete(agentRuntimeState);
     await db.delete(agents);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
   });
 
   afterAll(async () => {
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   });
 
   async function seedAgentAndIssue() {
@@ -86,6 +94,7 @@ describeEmbeddedPostgres("heartbeat task-drain admission release", () => {
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
 
     await db.insert(agents).values({
       id: agentId,

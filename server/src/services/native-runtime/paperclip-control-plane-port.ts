@@ -267,6 +267,9 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
         markDiagnosticStage("transaction_source_access_check");
         if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId) {
           const sourceAccessStartedAt = Date.now();
+          // This performs a fresh mixed run+native-Task source review for every
+          // provider event; the exact current owner proof stays in this append
+          // transaction before any event can become durable.
           await assertNativeAnalyticalRunPayloadAccess(tx, this.#binding.companyId, this.#binding.runId);
           sourceAccessElapsedMs = Date.now() - sourceAccessStartedAt;
         }

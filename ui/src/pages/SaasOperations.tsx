@@ -234,6 +234,51 @@ export function SaasOperationsPage() {
       {operations.data && (
         <>
           <p>Environment: {operations.data.environment}</p>
+          <section className="saas-section" aria-label="AI model lifecycle inventory">
+            <h2 className="saas-subtitle">AI model lifecycle inventory</h2>
+            <p className="saas-muted">
+              This view combines current Agent bindings with the pinned worker, verifier, and first-party Support profiles.
+              Unknown lifecycle facts stay untracked. This inventory does not select a replacement model.
+            </p>
+            {operations.data.modelDependencies.truncated && (
+              <p role="alert" className="saas-error">The model inventory is truncated; review the bounded source before relying on totals.</p>
+            )}
+            {operations.data.modelDependencies.coverage.map((item) => (
+              <p key={item.dependency}>
+                {item.dependency.replaceAll("_", " ")} · {item.configuration} · {item.entries} entries ·
+                {" "}{item.untracked} untracked · {item.unresolved} unresolved
+              </p>
+            ))}
+            {operations.data.modelDependencies.entries.map((item, index) => (
+              <div className="saas-row" key={item.dependency + ":" + item.companyId + ":" + (item.agentId ?? "service") + ":" + index}>
+                <span>
+                  {item.dependency.replaceAll("_", " ")} · {item.companyId}
+                  {item.agentId ? " · " + item.agentId : ""}
+                </span>
+                <span>
+                  {item.provider ?? "provider unknown"}{item.model ? " / " + item.model : ""}
+                  {" · "}{item.lifecycleStatus}{item.lifecycleOwner ? " · owner: " + item.lifecycleOwner : ""}
+                  {item.retirementAt ? " · retires " + new Date(item.retirementAt).toLocaleString() : ""}
+                  {" · "}{item.bindingState.replaceAll("_", " ")} · availability not assessed
+                </span>
+                {(item.regionOrRoutingProfile || item.dataUseProfile || item.supportedInputOutput || item.toolUseCapability !== null ||
+                  item.contextLimits || item.costProfile || item.rateLimits) && (
+                  <span className="saas-muted">
+                    {item.regionOrRoutingProfile ? "Route: " + item.regionOrRoutingProfile + " · " : ""}
+                    {item.dataUseProfile ? "Data use: " + item.dataUseProfile + " · " : ""}
+                    {item.supportedInputOutput ? "I/O: " + item.supportedInputOutput.join(", ") + " · " : ""}
+                    {item.toolUseCapability !== null ? "Tools: " + (item.toolUseCapability ? "yes" : "no") + " · " : ""}
+                    {item.contextLimits ? "Context: " + item.contextLimits.inputTokensUpperBound + " input tokens / " + item.contextLimits.maxOutputTokens + " output tokens · " : ""}
+                    {item.costProfile ? "Tariff: " + item.costProfile.currency + " " + item.costProfile.inputMinorPerMillion + "/" + item.costProfile.outputMinorPerMillion + " minor units per million · " : ""}
+                    {item.rateLimits ? "Rate: " + (item.rateLimits.requestsPerMinute ?? "unknown") + " requests/min, " + (item.rateLimits.tokensPerMinute ?? "unknown") + " tokens/min" : ""}
+                  </span>
+                )}
+              </div>
+            ))}
+            {operations.data.modelDependencies.entries.length === 0 && (
+              <p className="saas-muted">No model profiles or current Paperclip Runner Agent bindings were found.</p>
+            )}
+          </section>
           <section
             className="saas-section"
             aria-label="Operational cost estimate"

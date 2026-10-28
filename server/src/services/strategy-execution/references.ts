@@ -1,4 +1,5 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, is, isNull } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import { businessMetrics, businessMetricVersions, businessMetricTargets, businessMetricTargetVersions, businessMetricObservations, decisions, decisionTargetIssues, documentRevisions, foundationDocuments, foundationSections, goals, issues, projects, projectMilestones, type Db } from "@paperclipai/db";
 import { v5FeatureEnabled, type BusinessMetricResult, type StrategyExecutionReference } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
@@ -25,6 +26,7 @@ type NativePopulationReads = {
   issues: Map<string, Pick<typeof issues.$inferSelect, keyof typeof nativeIssueColumns>>;
   projects: Map<string, Pick<typeof projects.$inferSelect, keyof typeof nativeProjectColumns>>;
 };
+type NativePopulationResult = Map<string, Awaited<ReturnType<typeof authorizeStrategyReference>>>;
 export async function authorizeStrategyReference(tx: Db, companyId: string, actor: AuthorizationActor, ref: StrategyExecutionReference, sensitivity: "internal" | "confidential", includeNativeSnapshot=false) {
   return authorizeReference(tx, companyId, actor, ref, sensitivity, includeNativeSnapshot);
 }
@@ -136,7 +138,16 @@ async function authorizeReference(tx: Db, companyId: string, actor: Authorizatio
  * never accept caller material or escape this native owner/transaction. No grant,
  * source admission or actor decision is cached or skipped. */
 export async function authorizeStrategyNativePopulation(tx: Db, companyId: string, actor: AuthorizationActor,
-  type: "issue" | "project", unitIds: string[], sensitivity: "internal" | "confidential", deadline: number) {
+  type: "issue" | "project", unitIds: string[], sensitivity: "internal" | "confidential", deadline: number): Promise<NativePopulationResult> {
+  // The transport rows and their batch privacy proof must share one native
+  // transaction. Some canonical readers arrive with the root database; start
+  // the transaction here before selecting rows so the owner cannot mistake
+  // autocommit facts for the locked population.
+  if (!is(tx, PgTransaction)) return tx.transaction(async raw => {
+    const scoped = raw as unknown as Db;
+    if (!is(scoped, PgTransaction)) throw forbidden("Strategy source authorization requires its native read transaction.");
+    return authorizeStrategyNativePopulation(scoped, companyId, actor, type, unitIds, sensitivity, deadline);
+  });
   if (unitIds.length > 4000 || new Set(unitIds).size !== unitIds.length) throw unprocessable("Native strategy source population exceeds its exact bounds");
   const budget = () => { if (performance.now() > deadline) throw unprocessable("Native strategy source population budget exceeded"); };
   const reads: NativePopulationReads = { issues: new Map(), projects: new Map() };
@@ -161,7 +172,7 @@ export async function authorizeStrategyNativePopulation(tx: Db, companyId: strin
   return authorizationService(tx).withReadSources(companyId, type === "issue" ? unitIds : [], projectIds, async authority => {
     await authority.assertTaskPrivacyBatch(actor, type === "issue" ? unitIds : [], projectIds, deadline);
     const currentReads: NativePopulationReads = { ...reads, authority, batchAdmittedSources: true };
-    const admitted = new Map<string, Awaited<ReturnType<typeof authorizeReference>>>();
+    const admitted: NativePopulationResult = new Map();
   for (let offset = 0; offset < unitIds.length; offset += 32) {
     budget();
     // Drain every in-flight authorization before throwing: no admission may

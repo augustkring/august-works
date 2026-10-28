@@ -7,6 +7,46 @@ export interface SaasProviderInventory {
   untracked: string[];
   mismatched: string[];
 }
+export interface SaasModelDependencyInventory {
+  observedAt: string;
+  truncated: boolean;
+  unresolvedAgentBindings: number;
+  coverage: {
+    dependency: "agent_runtime" | "worker_qualification_profile" | "read_only_verifier" | "first_party_support";
+    configuration: "database_inventory" | "configured" | "unconfigured";
+    entries: number;
+    untracked: number;
+    unresolved: number;
+  }[];
+  entries: {
+    dependency: "agent_runtime" | "worker_qualification_profile" | "read_only_verifier" | "first_party_support";
+    companyId: string;
+    agentId: string | null;
+    provider: string | null;
+    model: string | null;
+    modelVersionOrReleaseIdentity: string | null;
+    lifecycleStatus: "candidate" | "qualifying" | "qualified" | "active" | "deprecated" | "migration_required" | "blocked" | "retired" | "untracked";
+    lifecycleOwner: string | null;
+    retirementAt: string | null;
+    regionOrRoutingProfile: string | null;
+    dataUseProfile: string | null;
+    supportedInputOutput: ("text" | "image" | "audio" | "video")[] | null;
+    toolUseCapability: boolean | null;
+    contextLimits: { inputTokensUpperBound: number; maxOutputTokens: number; maximumEnvelopeBytes: number } | null;
+    costProfile: {
+      currency: string;
+      model: string;
+      inputMinorPerMillion: number;
+      outputMinorPerMillion: number;
+      fixedMinor: number;
+      expiresAt: string;
+    } | null;
+    rateLimits: { requestsPerMinute: number | null; tokensPerMinute: number | null } | null;
+    runtimeAvailability: "not_assessed";
+    bindingState: "unresolved" | "qualification_profile_unresolved" | "qualified_profile_bound" |
+      "provider_model_configured" | "provider_model_unresolved" | "configured_profile" | "configured_not_currently_selected";
+  }[];
+}
 export interface SaasOperationsSnapshot {
   environment: "staging" | "production";
   jobs: {
@@ -54,6 +94,7 @@ export interface SaasOperationsSnapshot {
     verificationResult: string;
     deployedAt: string;
   }[];
+  modelDependencies: SaasModelDependencyInventory;
 }
 export interface SaasSupportStatus {
   companyId: string;

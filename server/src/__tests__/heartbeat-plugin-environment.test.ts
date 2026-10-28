@@ -30,6 +30,7 @@ import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/index.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const adapterExecute = vi.hoisted(() => vi.fn(async () => ({
   exitCode: 0,
@@ -68,8 +69,10 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
   let stopDb: (() => Promise<void>) | null = null;
   let db!: ReturnType<typeof createDb>;
   const tempRoots: string[] = [];
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     const started = await startEmbeddedPostgresTestDatabase("heartbeat-plugin-environment");
     stopDb = started.stop;
     db = createDb(started.connectionString);
@@ -86,6 +89,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
   afterAll(async () => {
     await db.$client.end();
     await stopDb?.();
+    restoreApiUrl?.();
   });
 
   async function seedNativeHuman(companyId: string, userId: string) {

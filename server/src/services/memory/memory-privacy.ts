@@ -246,7 +246,8 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   state:MemorySourceReadScope,diagnosticDenied:(reason:NativeMemorySourceFailureStage|"scope_guard"|"cycle"|"deadline"|"work_budget")=>void,
   forbiddenRecordId?:string,skipActorAdmission=false):Promise<boolean> {
   if (!actor) { diagnosticDenied("source_owner"); return false; }
-  const { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
+  const { authorizationService, canActorReadIssuePrivacy, canActorReadIssuePrivacyBatch,
+    canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
   const roots = typeof recordIds === "string" ? [recordIds] : [...new Set(recordIds)].sort();
   if (!roots.length || roots.length > 256) { diagnosticDenied("source_budget"); return false; }
   const admitted = () => memorySourceActorCurrent(db,companyId,actor,roots[0]);
@@ -396,6 +397,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   const {withReadMemoryTemporalSources}=await import("../authorization.js");
   const {canActorReadNativeTaskSource}=await import("../native-direct-input.js");
   const temporalOwnerChecks = new Map<string, { runs: string[]; tasks: string[] }>();
+  const unscopedTaskChecks: string[] = [];
   const temporalChecksFor = (ownerId: string) => {
     let checks = temporalOwnerChecks.get(ownerId);
     if (!checks) { checks = { runs: [], tasks: [] }; temporalOwnerChecks.set(ownerId, checks); }
@@ -410,22 +412,42 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   for (const [id,owners] of taskChecks) for (const [ownerId,encoded] of owners) {
     try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
     if (encoded === null) {
-      if (performance.now()>deadline || !await canActorReadIssuePrivacy(db,actor,{companyId,id})) { diagnosticDenied("task_reader"); return false; }
+      if (performance.now()>deadline) { diagnosticDenied("task_reader"); return false; }
+      unscopedTaskChecks.push(id);
     } else temporalChecksFor(ownerId).tasks.push(id);
+  }
+  if (unscopedTaskChecks.length) {
+    try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
+    const readers = await canActorReadIssuePrivacyBatch(db, actor, companyId, unscopedTaskChecks);
+    const deniedIds = unscopedTaskChecks.filter(id=>readers.get(id)!==true);
+    if (performance.now()>deadline || deniedIds.length) {
+      diagnosticDenied("task_reader"); return false;
+    }
   }
   for (const ownerId of new Set([...qualifiedOutputMemoryIds, ...temporalOwnerChecks.keys()])) {
     try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
     const checks = temporalOwnerChecks.get(ownerId) ?? { runs: [], tasks: [] };
-    const allowed = await withReadMemoryTemporalSources(db,actor,companyId,ownerId,async () => {
+    const allowed = await withReadMemoryTemporalSources(db,actor,companyId,ownerId,async sourceDb => {
       for (const id of checks.runs) {
         try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
-        if (!await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) { diagnosticDenied("run_reader"); return false; }
+        if (!await canActorReadHeartbeatRunPrivacy(sourceDb,actor,{companyId,id})) { diagnosticDenied("run_reader"); return false; }
       }
+      const currentTaskAclChecks: string[] = [];
       for (const id of checks.tasks) {
         try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
-        const nativeAllowed = await canActorReadNativeTaskSource(db, { companyId, actor, issueId: id });
-        if (nativeAllowed === false || nativeAllowed === null &&
-          !await canActorReadIssuePrivacy(db,actor,{companyId,id})) { diagnosticDenied("task_reader"); return false; }
+        const nativeAllowed = await canActorReadNativeTaskSource(sourceDb, { companyId, actor, issueId: id });
+        if (nativeAllowed === false) {
+          diagnosticDenied("task_reader"); return false;
+        }
+        if (nativeAllowed === null) currentTaskAclChecks.push(id);
+      }
+      if (currentTaskAclChecks.length) {
+        try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
+        const readers = await canActorReadIssuePrivacyBatch(sourceDb, actor, companyId, currentTaskAclChecks);
+        const deniedIds = currentTaskAclChecks.filter(id=>readers.get(id)!==true);
+        if (performance.now()>deadline || deniedIds.length) {
+          diagnosticDenied("task_reader"); return false;
+        }
       }
       return true;
     }, qualifiedOutputMemoryExpectations.get(ownerId));

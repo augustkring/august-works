@@ -344,6 +344,13 @@ export async function resolveEnvironmentExecutionTarget(input: {
       !capabilityResolutionFailed &&
       (!effectiveCapabilities || effectiveCapabilities.persistentProcessSessions);
 
+    // RuntimeControl admits one outstanding sandbox exec per run attempt. Keep
+    // server-owned Native preparation/status commands on the run-scoped lane so
+    // the async runnerd monitor cannot race neighboring setup commands.
+    // Persistent-session and ordinary commands remain independent so stop and
+    // bridge control paths never queue behind a long-lived process.
+    let nativePreparationExecTail: Promise<void> = Promise.resolve();
+
     // Resolve the per-run duplex bridge kill switch. It rides the host-side
     // sandbox target on the same seam as `effectiveCapabilities`, so the value
     // stays on the host and never enters the sandbox environment. Fail closed:
@@ -425,6 +432,13 @@ export async function resolveEnvironmentExecutionTarget(input: {
             // provider never permits concurrent sync operations.
             allowConcurrentSyncOperations: effectiveCapabilities?.concurrentSyncOperations === true,
             execute: async (commandInput) => {
+              let releasePreparation: (() => void) | undefined;
+              if (commandInput.nativePreparationPurpose && commandInput.bypassSession === true &&
+                commandInput.useSession !== true) {
+                const previous = nativePreparationExecTail;
+                nativePreparationExecTail = new Promise<void>(resolve => { releasePreparation = resolve; });
+                await previous;
+              }
               // Record true start and stop timestamps around the provider await,
               // so the exec span and the result carry a real wall time.
               const startedAtMs = Date.now();
@@ -581,6 +595,7 @@ export async function resolveEnvironmentExecutionTarget(input: {
                     // Observability must not change execution control flow.
                   }
                 }
+                releasePreparation?.();
               }
             },
             // Expose the native file-sync capability only when the provider's

@@ -606,7 +606,9 @@ async function writeRemoteStamp(input: {
       "-c",
       `umask 077; mkdir -p ${shellQuote(runtimeDir)} && printf %s ${shellQuote(encoded)} | base64 -d > ${shellQuote(tempPath)} && mv ${shellQuote(tempPath)} ${shellQuote(stampPath)}`,
     ],
-    cwd: "/",
+    // RuntimeControl binds conversation commands to the exact private Task
+    // workspace. The stamp itself lives under that workspace's runtime root.
+    cwd: input.target.remoteCwd,
     timeoutMs: 15_000,
     bypassSession: true,
   });
@@ -632,7 +634,7 @@ async function remoteStampMatches(input: {
       "-c",
       `test -f ${shellQuote(stampPath)} && cat ${shellQuote(stampPath)}`,
     ],
-    cwd: "/",
+    cwd: input.target.remoteCwd,
     timeoutMs: 15_000,
     bypassSession: true,
   });

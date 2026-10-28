@@ -82,6 +82,7 @@ import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import { REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "../native-runtime/remote-runner-identity.js";
 
 type IssuedWorkerModelCredential = Awaited<
   ReturnType<ReturnType<typeof workerModelGateway>["issueForRun"]>
@@ -116,13 +117,21 @@ function configuredPaperclipEndpointOrigin(raw: string | undefined): string | nu
   }
 }
 
-function exactNativeHarnessStateCommand(input: {
+export function exactNativeHarnessStateCommand(input: {
   request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
   taskRoot: string;
   execution: ReturnType<typeof parseNativeExecutionInput>;
   runId: string;
 }): boolean {
   if (input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server") return false;
+  const forbiddenCredentialEnvironment = new Set([
+    "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_SANDBOX_BROKER_TOKEN",
+    "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
+    "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+  ]);
+  if (input.request.modelBrokerCredential !== undefined || input.request.brokerCredential !== undefined ||
+    Object.keys(input.request.env ?? {}).some(key => forbiddenCredentialEnvironment.has(key))) return false;
   const runtimeRoot = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner");
   const sessionId = input.execution.session.normalizedSessionId ?? `session-${input.runId}`;
   const sessionRoot = path.posix.join(runtimeRoot, "sessions", sha256(sessionId));
@@ -143,17 +152,81 @@ function exactNativeHarnessStateCommand(input: {
     `base64 < ${quote(runnerState)}`,
   ].join(" && ");
   const materialize = `umask 077; install -d -m 0700 ${quote(filesystemDir)}`;
-  if (input.request.cwd !== input.taskRoot || input.request.stdinBase64 !== "") return false;
-  if (read(runnerState) || read(providerState) || matches("sh", "-c", inspect) || matches("sh", "-c", materialize)) return true;
-  if (matches("sh", "-c", 'test -f "$1" && test ! -L "$1" && cat -- "$1"',
+  if (input.request.cwd !== input.taskRoot) return false;
+  if (input.request.stdinBase64 === "" && (read(runnerState) || read(providerState) || matches("sh", "-c", inspect) ||
+    matches("sh", "-c", materialize) || matches("sh", "-c", `test -f ${quote(runnerState)}`) ||
+    matches("sh", "-c", `test -d ${quote(runnerDir)}`) || matches("sh", "-c", `test -d ${quote(filesystemDir)}`))) return true;
+  if (input.request.stdinBase64 === "" && matches("sh", "-c", 'test -f "$1" && test ! -L "$1" && cat -- "$1"',
     "paperclip-runner-process-identity", processIdentity)) return true;
-  const identityCheck = 'set -eu; identity_path=$1; expected_nonce=$2; expected_runner_id=$3; expected_pid=$4; test -f "$identity_path" && test ! -L "$identity_path" || exit 3; { IFS= read -r nonce; IFS= read -r pid; IFS= read -r started_at; IFS= read -r runner_id; } < "$identity_path"; test "$nonce" = "$expected_nonce" && test "$runner_id" = "$expected_runner_id" && test "$pid" = "$expected_pid" && test -n "$started_at" || exit 4; kill -0 "$pid" 2>/dev/null || exit 3; if test -r "/proc/$pid/cmdline"; then command_line=$(tr "\\000" "\\n" < "/proc/$pid/cmdline"); printf "%s\\n" "$command_line" | grep -Fqx -- "--runner-id" || exit 4; printf "%s\\n" "$command_line" | grep -Fqx -- "$expected_runner_id" || exit 4; fi';
-  if (argv.length === 8 && argv[0] === "sh" && argv[1] === "-c" && argv[2] === identityCheck &&
+  if (exactNativeRunnerMonitorStatusCommand(input)) return true;
+  if (exactNativeRunnerSignalCommand(input)) return true;
+  if (input.request.stdinBase64 === "" && argv.length === 8 && argv[0] === "sh" && argv[1] === "-c" &&
+    argv[2] === REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT && argv[3] === "paperclip-runner-identity-failure-cleanup" &&
+    argv[4] === processIdentity && /^[0-9a-f-]{36}$/i.test(argv[5] ?? "") &&
+    /^[0-9a-f-]{36}$/i.test(argv[6] ?? "") && argv[7] === REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT) return true;
+  const diagnostics = 'set -eu; directory=$1; file="$directory/runnerd.stderr.log"; test -d "$directory" && test ! -L "$directory" && test -f "$file" && test ! -L "$file"; tail -c 65536 -- "$file"';
+  if (input.request.stdinBase64 === "" && matches("sh", "-c", diagnostics, "paperclip-runner-diagnostics", diagnosticsDir)) return true;
+  const persistenceRoots = [runnerDir, filesystemDir];
+  if (persistenceRoots.some(directory => matches("sh", "-c", `tar -czf - -C ${quote(directory)} . | base64`)))
+    return input.request.stdinBase64 === "";
+  const archiveIsBoundedBase64 = input.request.stdinBase64.length > 0 && input.request.stdinBase64.length <= 512 * 1024 &&
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(input.request.stdinBase64) &&
+    Buffer.from(input.request.stdinBase64, "base64").toString("base64") === input.request.stdinBase64;
+  return persistenceRoots.some(directory => matches("sh", "-c",
+    `umask 077; mkdir -p ${quote(directory)} && base64 -d | tar -xzf - -C ${quote(directory)} && chmod 700 ${quote(directory)}`)) &&
+    archiveIsBoundedBase64;
+}
+
+export function exactNativeRunnerMonitorStatusCommand(input: {
+  request: Pick<import("@paperclipai/shared").RuntimeSandboxExecRelayRequest, "argv" | "cwd" | "stdinBase64">;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+  runId: string;
+}): boolean {
+  if (input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
+    input.request.cwd !== input.taskRoot || input.request.stdinBase64 !== "") return false;
+  const sessionId = input.execution.session.normalizedSessionId ?? `session-${input.runId}`;
+  const processIdentity = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions",
+    sha256(sessionId), "runner", "runner-process.identity");
+  const { argv } = input.request;
+  return argv.length === 8 && argv[0] === "sh" && argv[1] === "-c" && argv[2] === REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT &&
     argv[3] === "paperclip-runner-monitor" && argv[4] === processIdentity &&
     /^[0-9a-f-]{36}$/i.test(argv[5] ?? "") && /^[0-9a-f-]{36}$/i.test(argv[6] ?? "") &&
-    /^[1-9][0-9]{0,9}$/.test(argv[7] ?? "")) return true;
-  const diagnostics = 'set -eu; directory=$1; file="$directory/runnerd.stderr.log"; test -d "$directory" && test ! -L "$directory" && test -f "$file" && test ! -L "$file"; tail -c 65536 -- "$file"';
-  return matches("sh", "-c", diagnostics, "paperclip-runner-diagnostics", diagnosticsDir);
+    /^[1-9][0-9]{0,9}$/.test(argv[7] ?? "");
+}
+
+/** Exact server-generated signal for a runner process recorded by this
+ * session. The identity check binds the nonce, runner id, and PID immediately
+ * before signalling; only signals emitted by the launcher are accepted.
+ */
+function exactNativeRunnerSignalCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+  runId: string;
+}): boolean {
+  if (input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
+    input.request.cwd !== input.taskRoot || input.request.stdinBase64 !== "") return false;
+  const sessionId = input.execution.session.normalizedSessionId ?? `session-${input.runId}`;
+  const processIdentity = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions",
+    sha256(sessionId), "runner", "runner-process.identity");
+  const { argv } = input.request;
+  if (argv.length !== 9 || argv[0] !== "sh" || argv[1] !== "-c" || argv[3] !== "paperclip-runner-signal" ||
+    argv[4] !== processIdentity || !/^[0-9a-f-]{36}$/i.test(argv[5] ?? "") ||
+    !/^[0-9a-f-]{36}$/i.test(argv[6] ?? "") || !/^[1-9][0-9]{0,9}$/.test(argv[7] ?? "") ||
+    argv[8] !== "require-fingerprint") return false;
+  return ["INT", "TERM", "KILL"].some(signal => argv[2] ===
+    `${REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT}; kill -${signal} "$expected_pid"`);
+}
+
+/** A CLAIMED exec is terminal only when its entire command is the read-only monitor. */
+export function nativeRelayClaimFailureStatus(
+  initialStatus: "PENDING" | "CLAIMED",
+  exactNativeRunnerMonitorStatus: boolean,
+): "FAILED" | "CLAIMED" {
+  return initialStatus === "PENDING" || (initialStatus === "CLAIMED" && exactNativeRunnerMonitorStatus)
+    ? "FAILED"
+    : "CLAIMED";
 }
 
 function exactNativeSessionLaunchCommand(input: {
@@ -175,6 +248,75 @@ function exactNativeSessionLaunchCommand(input: {
     argv[0] === "sh" && argv[1] === "-c" && argv[2] === childLaunch && argv[3] === "paperclip-runner-launch" &&
     argv[4] === processIdentity && /^[0-9a-f-]{36}$/i.test(argv[5] ?? "") && /^[0-9a-f-]{36}$/i.test(argv[6] ?? "") &&
     argv[7] === childScript && argv[8] === diagnosticsDir && argv[9] === runnerBinary;
+}
+
+function exactNativeRuntimeContextPrepareCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+}): boolean {
+  const context = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
+  if (!context || input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
+    input.request.cwd !== input.taskRoot || input.request.stdinBase64 === "") return false;
+  const runtimeRoot = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner");
+  const sessionId = input.execution.session.normalizedSessionId ?? `session-${input.execution.binding.runId}`;
+  const filesystemRoot = path.posix.join(runtimeRoot, "sessions", sha256(sessionId), "filesystem");
+  const runtimeContextFile = path.posix.join(filesystemRoot, "runtime-context.json");
+  const targets = [
+    path.posix.join(filesystemRoot, "context", "instructions"),
+    ...context.skills.map((skill, index) => path.posix.join(
+      filesystemRoot, "context", "skills", `${index}-${skill.bundle.digest.slice(0, 12)}`,
+    )),
+  ];
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const argv = input.request.argv;
+  if (argv.length !== 3 || argv[0] !== "sh" || argv[1] !== "-c") return false;
+  if (targets.some(target => argv[2] ===
+    `umask 077; mkdir -p ${quote(target)} && base64 -d | tar -xzf - -C ${quote(target)} && chmod 555 ${quote(target)}`)) return true;
+  const fileDirectory = path.posix.dirname(runtimeContextFile);
+  const stageRuntimeContextFile = `umask 077; mkdir -p ${quote(fileDirectory)} && base64 -d > ${quote(runtimeContextFile)} && chmod 600 ${quote(runtimeContextFile)}`;
+  const fileBytesAreBoundedBase64 = input.request.stdinBase64.length <= 512 * 1024 &&
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(input.request.stdinBase64) &&
+    Buffer.from(input.request.stdinBase64, "base64").toString("base64") === input.request.stdinBase64;
+  return argv[2] === stageRuntimeContextFile && fileBytesAreBoundedBase64;
+}
+
+/** Pure owner predicate for server-staged runtime context. RuntimeControl still
+ * checks the current Human/task source in its transaction; this closes the
+ * additional immutable Run/manifest/profile, exact target, and no-credential
+ * binding so it can be exercised with commands produced by the staging helper. */
+export function exactNativeRuntimeContextPreparationOwner(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+  companyId: string;
+  runId: string;
+  agentId: string;
+  responsibleUserId: string;
+  manifest: { runId: string; agentId: string; responsibleUserId: string };
+  nativeExecutionInput: unknown;
+  sourceAuthority: unknown;
+  credentialMode: string;
+  credentialBindingCount: number;
+}): boolean {
+  const authority = input.sourceAuthority && typeof input.sourceAuthority === "object" && !Array.isArray(input.sourceAuthority)
+    ? input.sourceAuthority as Record<string, unknown> : {};
+  const env = input.request.env ?? {};
+  const forbiddenEnvironmentKeys = [
+    "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_SANDBOX_BROKER_TOKEN",
+    "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
+    "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+  ];
+  return input.execution.provider.kind === "opencode" && input.execution.session.driverKind === "opencode_server" &&
+    input.execution.binding.companyId === input.companyId && input.execution.binding.runId === input.runId &&
+    input.execution.binding.agentId === input.agentId && input.manifest.runId === input.runId &&
+    input.manifest.agentId === input.agentId && input.manifest.responsibleUserId === input.responsibleUserId &&
+    authority.version === 1 && authority.executionInputHash === nativeSha256(input.nativeExecutionInput) &&
+    input.credentialMode === "none" && input.credentialBindingCount === 0 &&
+    input.request.modelBrokerCredential === undefined && input.request.brokerCredential === undefined &&
+    !Object.keys(env).some(key => forbiddenEnvironmentKeys.includes(key)) &&
+    exactNativeRuntimeContextPrepareCommand({ request: input.request, taskRoot: input.taskRoot, execution: input.execution });
 }
 
 function exactNativeWorkspacePrepareCommand(input: {
@@ -2471,12 +2613,14 @@ export function runtimeControlService(
       const nativePreparationPurpose = expected.nativePreparationPurpose;
       if (nativePreparationPurpose !== undefined && nativePreparationPurpose !== "provider_artifact" &&
         nativePreparationPurpose !== "native_session_start" && nativePreparationPurpose !== "native_harness_state" &&
-        nativePreparationPurpose !== "native_workspace_prepare")
+        nativePreparationPurpose !== "native_workspace_prepare" &&
+        nativePreparationPurpose !== "native_runtime_context_prepare")
         throw forbidden("Sandbox preparation purpose is unsupported");
       const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
       const nativeSessionStart = nativePreparationPurpose === "native_session_start";
       const nativeHarnessState = nativePreparationPurpose === "native_harness_state";
       const nativeWorkspacePrepare = nativePreparationPurpose === "native_workspace_prepare";
+      const nativeRuntimeContextPrepare = nativePreparationPurpose === "native_runtime_context_prepare";
       let nativeSessionStartValid = false;
       let nativeHarnessStateValid = false;
       if (providerArtifactPreparation) {
@@ -2531,7 +2675,7 @@ export function runtimeControlService(
           !exactNativeProviderArtifactChunkCommand({ request, taskRoot: expectedTaskRoot }))
           throw forbidden("Provider artifact relay chunk is outside its exact private Task target");
       }
-      if (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare) {
+      if (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare) {
         const task = source.source.task;
         const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
         const [taskOwnerVersion] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` })
@@ -2598,6 +2742,25 @@ export function runtimeControlService(
         const exactWorkspace = expectedTaskRoot !== null && path.resolve(request.cwd) === expectedTaskRoot &&
           readRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot) &&
           writeRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot);
+        const runtimeContextSourceAuthority = profile.nativeOpenCodeSourceAuthority &&
+          typeof profile.nativeOpenCodeSourceAuthority === "object" && !Array.isArray(profile.nativeOpenCodeSourceAuthority)
+          ? profile.nativeOpenCodeSourceAuthority as Record<string, unknown> : {};
+        const exactRuntimeContextSource = nativeRuntimeContextPrepare && execution !== null &&
+          runtimeContextSourceAuthority.version === 1 &&
+          runtimeContextSourceAuthority.executionInputHash === nativeSha256(profile.nativeExecutionInput);
+        const exactRuntimeContextTarget = nativeRuntimeContextPrepare && execution !== null && expectedTaskRoot !== null &&
+          exactNativeRuntimeContextPrepareCommand({ request, taskRoot: expectedTaskRoot, execution });
+        const runtimeContextManifestOwner = source.manifest.manifest.responsibleUserId;
+        const exactRuntimeContextOwner = nativeRuntimeContextPrepare && execution !== null && expectedTaskRoot !== null &&
+          typeof runtimeContextManifestOwner === "string" && runtimeContextManifestOwner === source.run.responsibleUserId &&
+          exactNativeRuntimeContextPreparationOwner({
+            request, taskRoot: expectedTaskRoot, execution, companyId: claims.company_id,
+            runId: source.run.id, agentId: source.run.agentId!, responsibleUserId: source.run.responsibleUserId!,
+            manifest: { runId: source.manifest.runId, agentId: source.manifest.agentId,
+              responsibleUserId: runtimeContextManifestOwner },
+            nativeExecutionInput: profile.nativeExecutionInput, sourceAuthority: runtimeContextSourceAuthority,
+            credentialMode: credentials.mode, credentialBindingCount: credentials.bindings.length,
+          });
         const exactTrustedCommand = nativeSessionStart
           ? execution !== null && expectedTaskRoot !== null && exactNativeSessionLaunchCommand({
             request, taskRoot: expectedTaskRoot, execution,
@@ -2606,8 +2769,10 @@ export function runtimeControlService(
             ? execution !== null && expectedTaskRoot !== null && exactNativeWorkspacePrepareCommand({
               request, taskRoot: expectedTaskRoot, execution,
             })
-            : execution !== null && expectedTaskRoot !== null &&
-            exactNativeHarnessStateCommand({ request, taskRoot: expectedTaskRoot, execution, runId: source.run.id });
+            : nativeRuntimeContextPrepare
+              ? exactRuntimeContextOwner
+              : execution !== null && expectedTaskRoot !== null &&
+              exactNativeHarnessStateCommand({ request, taskRoot: expectedTaskRoot, execution, runId: source.run.id });
         const exactCredentialShape = nativeSessionStart
           ? request.modelBrokerCredential !== undefined
           : request.modelBrokerCredential === undefined && Object.keys(request.env).every(key => ![
@@ -2616,13 +2781,31 @@ export function runtimeControlService(
             "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
             "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
           ].includes(key));
-        if (resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)?.provider !== "opencode" ||
-          !exactNativeInput || !exactHumanTask || !exactCurrentComment || !exactWorkspace || !exactTrustedCommand || !exactCredentialShape ||
-          !taskSnapshot.success || taskSnapshot.data.owner.kind !== "issue" || taskSnapshot.data.owner.companyId !== claims.company_id ||
-          taskSnapshot.data.owner.id !== task.id || task.payloadSourceProtocolVersion !== 1 || task.payloadSourceSnapshotInvalidated ||
-          !taskOwnerVersion?.sourceVersion || credentials.mode !== "none" || credentials.bindings.length !== 0 ||
-          request.brokerCredential !== undefined)
-          throw forbidden("Native pre-receipt command is outside the current conversation Run, input, Human and workspace scope");
+        const exactRuntimeProvider = resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)?.provider === "opencode";
+        const exactTaskSource = taskSnapshot.success && taskSnapshot.data.owner.kind === "issue" &&
+          taskSnapshot.data.owner.companyId === claims.company_id && taskSnapshot.data.owner.id === task.id &&
+          task.payloadSourceProtocolVersion === 1 && !task.payloadSourceSnapshotInvalidated && Boolean(taskOwnerVersion?.sourceVersion);
+        const exactNoWorkloadCredentials = credentials.mode === "none" && credentials.bindings.length === 0 &&
+          request.brokerCredential === undefined;
+        if (!exactRuntimeProvider || !exactNativeInput || !exactHumanTask || !exactCurrentComment || !exactWorkspace ||
+          !exactTrustedCommand || !exactCredentialShape || !exactTaskSource || !exactNoWorkloadCredentials) {
+          const failedChecks = [
+            ...(!exactRuntimeProvider ? ["provider"] : []),
+            ...(!exactNativeInput ? ["execution_input"] : []),
+            ...(!exactHumanTask ? ["human_run_manifest"] : []),
+            ...(!exactCurrentComment ? ["comment_source"] : []),
+            ...(!exactWorkspace ? ["workspace_roots"] : []),
+            ...(!exactTrustedCommand ? ["trusted_command"] : []),
+            ...(nativeRuntimeContextPrepare && !exactRuntimeContextSource ? ["runtime_context_source_authority"] : []),
+            ...(nativeRuntimeContextPrepare && !exactRuntimeContextTarget ? ["runtime_context_target"] : []),
+            ...(!exactCredentialShape ? ["credential_shape"] : []),
+            ...(!exactTaskSource ? ["task_source_owner"] : []),
+            ...(!exactNoWorkloadCredentials ? ["workload_credentials"] : []),
+          ];
+          throw forbidden(`Native pre-receipt command is outside the current conversation Run, input, Human and workspace scope${
+            process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" ? `:${failedChecks.join(",")}` : ""
+          }`);
+        }
         await assertNativeTaskSourceOwnerCurrent(tx, { companyId: claims.company_id,
           actor: { type: "board", source: "session", userId: claims.responsible_user_id },
           source: { kind: "task", issueId: task.id, sourceVersion: taskOwnerVersion.sourceVersion,
@@ -2630,7 +2813,7 @@ export function runtimeControlService(
         nativeSessionStartValid = nativeSessionStart;
         nativeHarnessStateValid = nativeHarnessState;
       }
-      if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && credentials.mode === "brokered") {
+      if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && !nativeRuntimeContextPrepare && credentials.mode === "brokered") {
         const brokerClaims = brokerCredential ? verifySandboxBrokerJwt(brokerCredential.capabilityToken) : null;
         const brokerCapability = brokerClaims?.sandbox_broker;
         const endpointOrigin = credentialBrokerOrigin;
@@ -2660,7 +2843,7 @@ export function runtimeControlService(
           nativeSha256(resolved.bindings) !== nativeSha256(brokerCapability.bindings) ||
           credentials.bindings.some(binding => resolved.authorizedConnectionGrantHashes[binding.connectionId] !== binding.grantVersionHash))
           throw forbidden("Current assigned ToolGateway grants changed before sandbox dispatch");
-      } else if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && (credentials.mode !== "none" || credentials.bindings.length ||
+      } else if (!providerArtifactPreparation && !nativeHarnessState && !nativeWorkspacePrepare && !nativeRuntimeContextPrepare && (credentials.mode !== "none" || credentials.bindings.length ||
         brokerCredential !== undefined)) {
         throw forbidden("Sandbox execution contains an unauthorized broker capability");
       }
@@ -2693,7 +2876,7 @@ export function runtimeControlService(
         // The server-stored preparation purpose is the only path that may run
         // a Native artifact command without either credential family.
         if (modelCredential !== undefined) throw forbidden("Provider-artifact preparation cannot receive a model credential");
-      } else if (nativeHarnessState || nativeWorkspacePrepare) {
+      } else if (nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare) {
         if (modelCredential !== undefined || credentials.mode !== "none" || credentials.bindings.length !== 0 || brokerCredential !== undefined)
           throw forbidden("Native harness state commands cannot receive workload credentials");
       } else if (nativeProvider?.provider === "opencode") {
@@ -2875,7 +3058,7 @@ export function runtimeControlService(
     env?: Record<string, string>;
     stdin?: string;
     timeoutMs?: number;
-    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare";
+    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare";
     signal?: AbortSignal;
     onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
   }): Promise<{ exitCode: number | null; signal: null; timedOut: boolean; stdout: string; stderr: string } | null> {
@@ -2885,7 +3068,8 @@ export function runtimeControlService(
     const requestedNativePreparationPurpose = input.nativePreparationPurpose;
     if (requestedNativePreparationPurpose !== undefined && requestedNativePreparationPurpose !== "provider_artifact" &&
       requestedNativePreparationPurpose !== "native_session_start" && requestedNativePreparationPurpose !== "native_harness_state" &&
-      requestedNativePreparationPurpose !== "native_workspace_prepare")
+      requestedNativePreparationPurpose !== "native_workspace_prepare" &&
+      requestedNativePreparationPurpose !== "native_runtime_context_prepare")
       throw conflict("Sandbox preparation purpose is unsupported");
     if (!cwd || !cwd.startsWith("/")) throw conflict("Sandbox execution requires an absolute workspace path");
     const env = { ...(input.env ?? {}) };
@@ -2912,6 +3096,11 @@ export function runtimeControlService(
     if (!initialSource) return null;
     const conversationTask = initialSource.source.task;
     const hasConversationIdentity = conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null;
+    let conversationTaskRoot: string | null = null;
+    let conversationExecution: ReturnType<typeof parseNativeExecutionInput> | null = null;
+    const runProfile = initialSource.run.runnerProfileJson && typeof initialSource.run.runnerProfileJson === "object" &&
+      !Array.isArray(initialSource.run.runnerProfileJson) ? initialSource.run.runnerProfileJson as Record<string, unknown> : {};
+    try { conversationExecution = parseNativeExecutionInput(runProfile.nativeExecutionInput); } catch { /* monitor ownership fails closed */ }
     // The shared remote artifact helpers also serve ordinary Worker runs. Only
     // a route-created conversation Task can use this pre-receipt setup lane;
     // Workers retain their existing typed model/MCP credential path.
@@ -2921,12 +3110,15 @@ export function runtimeControlService(
       throw conflict("Native harness state requires an authenticated conversation Task");
     if (requestedNativePreparationPurpose === "native_workspace_prepare" && !hasConversationIdentity)
       throw conflict("Native workspace preparation requires an authenticated conversation Task");
+    if (requestedNativePreparationPurpose === "native_runtime_context_prepare" && !hasConversationIdentity)
+      throw conflict("Native runtime-context preparation requires an authenticated conversation Task");
     const nativePreparationPurpose = requestedNativePreparationPurpose && hasConversationIdentity
       ? requestedNativePreparationPurpose : undefined;
     const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
     const nativeSessionStart = nativePreparationPurpose === "native_session_start";
     const nativeHarnessState = nativePreparationPurpose === "native_harness_state";
     const nativeWorkspacePrepare = nativePreparationPurpose === "native_workspace_prepare";
+    const nativeRuntimeContextPrepare = nativePreparationPurpose === "native_runtime_context_prepare";
     if (conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null) {
       const contextSnapshot = initialSource.run.contextSnapshot &&
         typeof initialSource.run.contextSnapshot === "object"
@@ -2949,6 +3141,7 @@ export function runtimeControlService(
       const expectedTaskRoot = workspaceScope && workspaceScope.projectId === null
         ? nativeChatWorkspaceCwd(workspaceScope, null, false)
         : null;
+      conversationTaskRoot = expectedTaskRoot;
       const filesystem = initialSource.policy.compilation.compiledPolicy.filesystem;
       const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
       const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
@@ -2957,6 +3150,11 @@ export function runtimeControlService(
         !writeRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot))
         throw conflict("Sandbox conversation execution requires the exact private Task workspace in its current read/write policy");
     }
+    const exactNativeRunnerMonitorStatus = nativeHarnessState && conversationTaskRoot && conversationExecution
+      ? exactNativeRunnerMonitorStatusCommand({
+        request: { argv, cwd, stdinBase64: stdinBytes.toString("base64") },
+        taskRoot: conversationTaskRoot, execution: conversationExecution, runId: initialSource.run.id,
+      }) : false;
     const deadlineAt = new Date(Math.min(
       initialSource.deadlineAt.getTime(),
       input.timeoutMs && input.timeoutMs > 0 ? now.getTime() + input.timeoutMs : Number.POSITIVE_INFINITY,
@@ -2973,7 +3171,7 @@ export function runtimeControlService(
     const runnerProfile = initialSource.source.agent.adapterType === "paperclip_runner"
       ? resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)
       : null;
-    if (providerArtifactPreparation || nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare) {
+    if (providerArtifactPreparation || nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare) {
       const task = initialSource.source.task;
       const contextSnapshot = initialSource.run.contextSnapshot && typeof initialSource.run.contextSnapshot === "object"
         ? initialSource.run.contextSnapshot as Record<string, unknown> : {};
@@ -2986,7 +3184,7 @@ export function runtimeControlService(
         initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
         initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId)
         throw conflict("Provider artifact preparation requires the current Native conversation Run and manifest");
-      if ((providerArtifactPreparation || nativeHarnessState || nativeWorkspacePrepare) &&
+      if ((providerArtifactPreparation || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare) &&
         (credentials.mode !== "none" || credentials.bindings.length !== 0 || managedModelPlaceholder))
         throw conflict("Provider artifact preparation cannot receive workload credentials");
     }
@@ -3024,7 +3222,7 @@ export function runtimeControlService(
       env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = String(minted.inputTokensUpperBound);
       env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = String(minted.maxOutputTokens);
     }
-    if (managedModelPlaceholder && (!modelBrokerCredential || nativeHarnessState || nativeWorkspacePrepare))
+    if (managedModelPlaceholder && (!modelBrokerCredential || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare))
       throw conflict("Managed model sentinel requires its current typed broker credential");
     if (credentials.mode === "brokered" && !nativePreparationPurpose) {
       if (credentials.bindings.length === 0) throw conflict("Brokered sandbox policy has no current credential bindings");
@@ -3131,6 +3329,7 @@ export function runtimeControlService(
       }).returning();
       if (!claim) throw conflict("Sandbox execution claim could not be persisted");
       return { source, claim, requestId, commandDigest, attempt, deadlineAt, argv, cwd, env, stdinBytes,
+        exactNativeRunnerMonitorStatus,
         ...(brokerCapabilityToken && brokerProviderProfile && brokerCapability ? { brokerCredential: {
           capabilityToken: brokerCapabilityToken, profileId: brokerProviderProfile.id,
           profileHash: brokerProviderProfile.hash, expiresAt: brokerCapability.expiresAt,
@@ -3280,6 +3479,11 @@ export function runtimeControlService(
         ? error.message : "exec_unknown";
       await db.update(runtimeHostCommands).set({ status: "FAILED", completedAt: new Date(), errorCode: code })
         .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "PENDING")));
+      if (nativeRelayClaimFailureStatus("CLAIMED", prepared.exactNativeRunnerMonitorStatus) === "FAILED") {
+        await db.update(runtimeHostCommands).set({ status: "FAILED", completedAt: new Date(), errorCode: code })
+          .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED")));
+        throw new Error("runner_process_status_unavailable", { cause: error });
+      }
       await db.update(runtimeHostCommands).set({ errorCode: code })
         .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED")));
       throw error;

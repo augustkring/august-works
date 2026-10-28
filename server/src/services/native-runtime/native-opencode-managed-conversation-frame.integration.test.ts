@@ -1,6 +1,6 @@
 import {and,eq,gte,sql} from "drizzle-orm";
 import {randomUUID} from "node:crypto";
-import {authSessions,authUsers,companyMemberships,heartbeatRunEvents,heartbeatRuns,issues,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects} from "@paperclipai/db";
+import {authSessions,authUsers,companyMemberships,heartbeatRunEvents,heartbeatRuns,issues,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects,runtimeHostCommands} from "@paperclipai/db";
 import type {BusinessMetricQuery} from "@paperclipai/shared";
 import {instanceSettingsService} from "../instance-settings.js";
 import {businessMetricService} from "../business-metrics/service.js";
@@ -25,6 +25,7 @@ import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
 import { projectRoutes } from "../../routes/projects.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { seedNativePasskeySession } from "../../__tests__/helpers/native-authentication-fixtures.js";
+import { nativeCancelOriginTestFactsForRun } from "./native-session-executor.js";
 
 function qualifiedOpenCodeBinary(): string | null {
   if (process.platform !== "linux") return null;
@@ -55,7 +56,6 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
   it("uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows", async () => {
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
-    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
     let liveBoundary: { runId: string; issueId: string; manifestId: string; reservationId: string;
       requestHash: string; wireBodyHash: string; sourceReceiptHash: string; inputTokens: number; outputTokens: number } | null = null;
     const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary,
@@ -116,9 +116,11 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
   }, 240_000);
 
   it("runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay", async () => {
+    vi.stubEnv("PAPERCLIP_NATIVE_CANCEL_ORIGIN_TEST_DIAGNOSTICS", "1");
+    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
+    let settledRunEvidence: Record<string, unknown> | null = null;
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
-    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
     const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary, sandboxRelay: true, timeoutSec: 600,
       configureHeartbeat: context => configureManagedConversationSandboxHost({ ...context, root }),
       beforeProviderResponse: async facts => {
@@ -126,16 +128,75 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         expect(facts.run.nativeIssueId).toBe(facts.issueId);
         expect(facts.reservation).toMatchObject({ purpose: "conversation_model", status: "dispatched",
           conversationRunId: facts.run.id, conversationIssueId: facts.issueId, executionManifestId: facts.manifest.id });
+      },
+      afterRunSettledBeforeTeardown: async facts => {
+        if (!facts.run) return;
+        const events = await db.select({ seq: heartbeatRunEvents.seq, eventType: heartbeatRunEvents.eventType })
+          .from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId, facts.run.id)).orderBy(heartbeatRunEvents.seq);
+        const commands = await db.select({ requestId: runtimeHostCommands.idempotencyKey, status: runtimeHostCommands.status,
+          errorCode: runtimeHostCommands.errorCode, attempt: runtimeHostCommands.attempt, createdAt: runtimeHostCommands.createdAt,
+          purpose: sql<string | null>`${runtimeHostCommands.payload}->>'nativePreparationPurpose'`,
+          commandDigest: sql<string | null>`${runtimeHostCommands.payload}->>'commandDigest'` })
+          .from(runtimeHostCommands).where(and(eq(runtimeHostCommands.companyId, facts.companyId),
+            eq(runtimeHostCommands.commandType, "sandbox_exec"),
+            sql`${runtimeHostCommands.payload}->>'runId' = ${facts.run.id}`)).orderBy(runtimeHostCommands.createdAt).limit(256);
+        const resultJson = facts.run.resultJson && typeof facts.run.resultJson === "object" && !Array.isArray(facts.run.resultJson)
+          ? facts.run.resultJson as Record<string, unknown> : {};
+        const nativeCancellation = resultJson.nativeCancellation && typeof resultJson.nativeCancellation === "object" &&
+          !Array.isArray(resultJson.nativeCancellation) ? resultJson.nativeCancellation as Record<string, unknown> : {};
+        const startupCancellation = resultJson.startupCancellation && typeof resultJson.startupCancellation === "object" &&
+          !Array.isArray(resultJson.startupCancellation) ? resultJson.startupCancellation as Record<string, unknown> : {};
+        const relayCommandOwners = new Map((Array.isArray(facts.sandboxRuntimeFacts?.relayCommandOwners)
+          ? facts.sandboxRuntimeFacts.relayCommandOwners as Array<Record<string, unknown>> : [])
+          .filter(owner => typeof owner.requestId === "string" && typeof owner.owner === "string")
+          .map(owner => [owner.requestId as string, owner.owner as string]));
+        settledRunEvidence = {
+          eventTypes: events.map(event => event.eventType),
+          eventCount: events.length,
+          runStartedAt: facts.run.startedAt?.toISOString() ?? null,
+          nativeCancellationPresent: Object.keys(nativeCancellation).length > 0,
+          nativeCancellationScope: nativeCancellation.scope === "run" ? "run" : nativeCancellation.scope ? "other" : "absent",
+          nativeCancellationDispatchState: nativeCancellation.dispatchState === "pending" || nativeCancellation.dispatchState === "acknowledged"
+            ? nativeCancellation.dispatchState : nativeCancellation.dispatchState ? "other" : "absent",
+          startupCancellationPresent: Object.keys(startupCancellation).length > 0,
+          startupCancelledBeforeNativeSelection: startupCancellation.beforeNativeSelection === true,
+          sandboxCommandCounts: commands.reduce<Record<string, number>>((counts, command) => {
+            const key = `${command.purpose ?? "unclassified"}:${command.status}:${command.errorCode ?? "none"}`;
+            counts[key] = (counts[key] ?? 0) + 1;
+            return counts;
+          }, {}),
+          failedSandboxCommands: commands.filter(command => command.status === "FAILED")
+            .slice(-16).map(command => ({ requestId: command.requestId, errorCode: command.errorCode,
+              attempt: command.attempt, purpose: command.purpose, commandDigest: command.commandDigest,
+              relayCommandOwner: relayCommandOwners.get(command.requestId) ?? null,
+              createdAt: command.createdAt.toISOString() })),
+          runErrorMarkers: ["runner_remote_process_launch_failed", "runner_remote_process_launch_timed_out",
+            "runner_remote_process_identity_unavailable", "runner_remote_process_identity_unavailable_cleanup_failed",
+            "runner_remote_process_exited", "runner_remote_process_identity_mismatch", "runner_process_status_unavailable",
+            "runner_remote_process_signal_failed"].filter(marker => facts.run?.stderrExcerpt?.includes(marker)),
+          unresolvedSandboxCommands: commands.filter(command => command.status === "PENDING" || command.status === "CLAIMED")
+            .map(command => ({ requestId: command.requestId, status: command.status,
+              errorCode: command.errorCode, purpose: command.purpose, attempt: command.attempt,
+              commandDigest: command.commandDigest, createdAt: command.createdAt.toISOString() })).slice(0, 32),
+        };
       } });
     expect(result.success, JSON.stringify({ runStatus: result.runStatus, runError: result.run?.error,
       run: result.run ? { id: result.run.id, status: result.run.status, startedAt: result.run.startedAt,
         runtimeMode: result.run.runtimeMode, scopeKind: result.run.scopeKind, nativeIssueId: result.run.nativeIssueId,
         runtimeModeReason: result.run.runtimeModeReason, runtimeModeResolvedAt: result.run.runtimeModeResolvedAt,
         responsibleUserId: result.run.responsibleUserId, agentId: result.run.agentId,
+        nativePhase: result.run.nativePhase, nativePhaseUpdatedAt: result.run.nativePhaseUpdatedAt,
+        executionStage: result.run.executionStage, lastOutputAt: result.run.lastOutputAt,
+        lastOutputSeq: result.run.lastOutputSeq, lastOutputStream: result.run.lastOutputStream,
+        stdoutExcerptPresent: Boolean(result.run.stdoutExcerpt), stderrExcerptPresent: Boolean(result.run.stderrExcerpt),
         executionCancellation: result.run.resultJson?.executionCancellation } : null,
       errorCode: result.run?.errorCode, providerCallCount: result.providerCallCount,
+      reservation: result.reservation ? { status: result.reservation.status, purpose: result.reservation.purpose,
+        dispatchedAt: result.reservation.dispatchedAt, completedAt: result.reservation.completedAt } : null,
       providerHookInvoked: result.providerHookInvoked, providerHookFailure: result.providerHookFailure,
       providerStubFailure: result.providerStubFailure, brokerRequestFacts: result.brokerRequestFacts,
+      cancelOriginFacts: result.run ? nativeCancelOriginTestFactsForRun(result.run.id) : [],
+      settledRunEvidence,
       sandboxRuntimeFacts: result.sandboxRuntimeFacts })).toBe(true);
     expect(result.providerHookInvoked).toBe(true);
     expect(result.providerKeyMatched).toBe(true);
@@ -171,6 +232,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       fact.modelCredentialPresent === false && fact.managedModelBrokerOriginPresent === false &&
       fact.credentialEnvironmentAbsent === true && fact.assignedMcpEnvironmentAbsent === true &&
       fact.cwdExact === true)).toBe(true);
+    expect(relayExecFacts.some(fact => fact.nativePreparationPurpose === "native_runtime_context_prepare" &&
+      fact.modelCredentialPresent === false && fact.managedModelBrokerOriginPresent === false &&
+      fact.credentialEnvironmentAbsent === true && fact.assignedMcpEnvironmentAbsent === true &&
+      fact.cwdExact === true)).toBe(true);
     expect(relayExecFacts.some(fact => fact.nativePreparationPurpose === "provider_artifact" &&
       fact.providerPackImageProbe === true && fact.modelCredentialPresent === false &&
       fact.credentialEnvironmentAbsent === true && fact.cwdExact === true)).toBe(true);
@@ -188,7 +253,6 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
   it("continues the real conversation after a metric tool result with its original immutable source receipt",async()=>{
     const binary=qualifiedOpenCodeBinary();
     if(!binary)throw new Error("qualified_opencode_binary_unavailable");
-    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS","1");
     vi.stubEnv("PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS","1");
     let query:BusinessMetricQuery|null=null,receivedMetricResult=false;
     let startupFacts:unknown=null;

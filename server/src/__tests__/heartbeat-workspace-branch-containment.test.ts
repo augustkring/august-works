@@ -42,6 +42,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 import { heartbeatService } from "../services/heartbeat.ts";
 import { noticeMetadataReferencesRecoveryAction } from "../services/recovery/index.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
@@ -897,8 +898,10 @@ describeEmbeddedPostgres("heartbeat workspace branch containment", () => {
   let db!: Db;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const tempRoots: string[] = [];
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-branch-containment-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
@@ -957,6 +960,7 @@ describeEmbeddedPostgres("heartbeat workspace branch containment", () => {
   afterAll(async () => {
     await db.$client.end();
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   }, 60_000);
 
   it("blocks projectless isolated git-worktree issues before dispatch", async () => {

@@ -1,0 +1,108 @@
+import { describe, expect, it } from "vitest";
+import type { WorkerModelProfile } from "../orchestration/worker-model-profiles.js";
+import type { ReadOnlyModelProfile } from "../orchestration/read-only-model-profiles.js";
+import type { FirstPartySupportModelProfile } from "../orchestration/first-party-support-model-profiles.js";
+import { projectSaasModelDependencyInventory } from "./model-dependency-inventory.js";
+
+const companyId = "00000000-0000-4000-8000-000000000001";
+const agentId = "00000000-0000-4000-8000-000000000002";
+const profileId = "00000000-0000-4000-8000-000000000003";
+const model = {
+  contract: "anthropic-text-messages-2023-06-01",
+  tariff: { provider: "anthropic", model: "claude-exact-release", currency: "USD", inputMinorPerMillion: 10,
+    outputMinorPerMillion: 20, fixedMinor: 0, qualificationHash: "a".repeat(64), sourceSha: "b".repeat(40),
+    testedAt: "2026-10-27T00:00:00.000Z", expiresAt: "2026-10-29T00:00:00.000Z" },
+  maximumEnvelopeBytes: 4096, inputTokensUpperBound: 10000, maxOutputTokens: 1024,
+  qualificationEvidenceRef: "https://evidence.example.test/qualification/private-record",
+  qualificationArtifactSha256: "c".repeat(64),
+};
+const worker = (lifecycle?: WorkerModelProfile["lifecycle"]) => ({
+  ...model, id: profileId, companyId, workerAgentId: agentId,
+  transport: "server-text-only-v1", providerBindingId: "00000000-0000-4000-8000-000000000004",
+  providerSnapshotHash: "d".repeat(64), providerProfileRef: "/private/model-profile.json",
+  qualifiedConfigurationHash: "e".repeat(64), binding: { provider: "anthropic", method: "api_key", apiKey: "never-return-this" },
+  ...(lifecycle ? { lifecycle } : {}),
+}) as unknown as WorkerModelProfile;
+const readOnly = () => ({
+  ...model, id: "00000000-0000-4000-8000-000000000005", companyId, reviewerAgentId: agentId,
+  purposes: ["read_only_verification"], calibrationHash: "f".repeat(64),
+  binding: { provider: "anthropic", method: "api_key", secretRef: "operator-private-secret" },
+}) as unknown as ReadOnlyModelProfile;
+const support = () => ({
+  ...model, companyId, packageVersionId: "00000000-0000-4000-8000-000000000006",
+  purpose: "first_party_support", funder: "blentera_platform", profileId: "support-primary",
+  providerAccountId: "support-account", credentialBindingHash: "1".repeat(64),
+  privacyNoticeUrl: "https://example.test/privacy", periodKey: "2026-10",
+  periodStartsAt: "2026-10-01T00:00:00.000Z", periodEndsAt: "2026-11-01T00:00:00.000Z",
+  maxCostMinor: 1000, maxCalls: 100,
+}) as unknown as FirstPartySupportModelProfile;
+const empty = () => ({
+  agents: [], workerProfiles: [], readOnlyProfiles: [], supportProfiles: [],
+  workerProfilesConfigured: false, readOnlyProfilesConfigured: false, supportProfilesConfigured: false,
+});
+
+describe("operator model dependency inventory projection", () => {
+  it("covers current native Agent bindings and reports lifecycle facts as untracked", () => {
+    const result = projectSaasModelDependencyInventory({
+      ...empty(),
+      agents: [{ id: agentId, companyId, adapterType: "paperclip_runner",
+        adapterConfig: { provider: "opencode", model: "provider/model-exact", env: { TOKEN: "secret-value" } } }],
+    });
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({
+      dependency: "agent_runtime", companyId, agentId, provider: "opencode", model: "provider/model-exact",
+      modelVersionOrReleaseIdentity: null, lifecycleStatus: "untracked", bindingState: "provider_model_configured",
+      regionOrRoutingProfile: null, dataUseProfile: null, costProfile: null,
+    });
+    expect(JSON.stringify(result)).not.toContain("secret-value");
+  });
+
+  it("uses only the exact selected worker qualification and projects its lifecycle without credentials or private refs", () => {
+    const lifecycle = { status: "migration_required", owner: "model owner",
+      retirementAt: "2026-11-01T00:00:00.000Z", replacementProfileId: "private-candidate",
+      regionOrRoutingProfile: "region-a", dataUseProfile: "no-training",
+      supportedInputOutput: ["text"] as ("text" | "image" | "audio" | "video")[], toolUseCapability: false,
+      rateLimits: { requestsPerMinute: 10, tokensPerMinute: 1000 } };
+    const result = projectSaasModelDependencyInventory({
+      ...empty(),
+      agents: [{ id: agentId, companyId, adapterType: "paperclip_runner",
+        adapterConfig: { provider: "aw_text_only", model: "claude-exact-release", workerModelProfileId: profileId } }],
+      workerProfiles: [worker(lifecycle)],
+      workerProfilesConfigured: true,
+    });
+    expect(result.entries[0]).toMatchObject({ dependency: "agent_runtime", lifecycleStatus: "migration_required",
+      lifecycleOwner: "model owner", retirementAt: lifecycle.retirementAt, bindingState: "qualified_profile_bound" });
+    expect(result.entries.some(entry => entry.dependency === "worker_qualification_profile")).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("private-candidate");
+    expect(JSON.stringify(result)).not.toContain("never-return-this");
+    expect(JSON.stringify(result)).not.toContain("private/model-profile");
+  });
+
+  it("includes operator-owned verifier and Support profiles and states missing lifecycle facts explicitly", () => {
+    const result = projectSaasModelDependencyInventory({
+      ...empty(), readOnlyProfiles: [readOnly()], supportProfiles: [support()],
+      readOnlyProfilesConfigured: true, supportProfilesConfigured: true,
+    });
+    expect(result.coverage).toEqual(expect.arrayContaining([
+      expect.objectContaining({ dependency: "read_only_verifier", configuration: "configured", entries: 1, untracked: 1 }),
+      expect.objectContaining({ dependency: "first_party_support", configuration: "configured", entries: 1, untracked: 1 }),
+    ]));
+    expect(result.entries.map(entry => entry.dependency)).toEqual(["read_only_verifier", "first_party_support"]);
+    expect(result.entries.every(entry => entry.lifecycleStatus === "untracked")).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("operator-private-secret");
+    expect(JSON.stringify(result)).not.toContain("qualification/private-record");
+  });
+
+  it("records an unresolved current Agent provider binding and makes missing profile config visible", () => {
+    const result = projectSaasModelDependencyInventory({
+      ...empty(), agents: [{ id: agentId, companyId, adapterType: "paperclip_runner", adapterConfig: { provider: "unsupported" } }],
+    });
+    expect(result.entries[0]).toMatchObject({ lifecycleStatus: "untracked", bindingState: "unresolved",
+      provider: null, model: null });
+    expect(result.unresolvedAgentBindings).toBe(1);
+    expect(result.coverage).toEqual(expect.arrayContaining([
+      expect.objectContaining({ dependency: "read_only_verifier", configuration: "unconfigured", entries: 0 }),
+      expect.objectContaining({ dependency: "first_party_support", configuration: "unconfigured", entries: 0 }),
+    ]));
+  });
+});

@@ -1,4 +1,4 @@
-import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
+import {assertAnalyticalContextPayloadAccess,assertAnalyticalContextPayloadAccessBatch} from "../services/analytical-context-authority.js";
 import { resolveAgentAppearance, agentAvatarUrl } from "@paperclipai/shared";
 import { listOpenRouterModels } from "../services/openrouter-models.js";
 import { prepareManagedAiRuntime, assertManagedAiProjectAuth, stripAiAuthBindings } from "../services/ai-connection-runtime.js";
@@ -723,12 +723,32 @@ export function agentRoutes(
 
   const runRedactions = createRunSecretRedactionRegistry(db);
   async function redactRunResponse<T>(req:Request,companyId:string,runId:string,value:T) {
-    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId});
+    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId},undefined,{privacyLockMode:req.method==="GET"||req.method==="HEAD"?"read":"write"});
     return runRedactions.redactForRun(companyId,runId,value);
   }
   async function redactRunResponses<T extends {id:string}>(req:Request,companyId:string,runs:T[]) {
-    for(const run of runs)await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId:run.id});
-    return runRedactions.redactForRuns(companyId,runs);
+    const runIds=[...new Set(runs.map(run=>run.id))];
+    const readableRunIds=new Set<string>();
+    const lockMode=req.method==="GET"||req.method==="HEAD"?"read":"write";
+    for(let offset=0;offset<runIds.length;offset+=256){
+      const batch=runIds.slice(offset,offset+256);
+      try{
+        await assertAnalyticalContextPayloadAccessBatch(db,companyId,req.actor,[],undefined,
+          {directRunIds:batch,privacyLockMode:lockMode});
+        batch.forEach(id=>readableRunIds.add(id));
+      }catch(error){
+        if(!(error instanceof HttpError&&error.status===403))throw error;
+        for(const id of batch){
+          try{
+            await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId:id},undefined,{privacyLockMode:lockMode});
+            readableRunIds.add(id);
+          }catch(rowError){
+            if(!(rowError instanceof HttpError&&rowError.status===403))throw rowError;
+          }
+        }
+      }
+    }
+    return runRedactions.redactForRuns(companyId,runs.filter(run=>readableRunIds.has(run.id)));
   }
   const heartbeat = heartbeatService(db, {
     pluginWorkerManager: options.pluginWorkerManager,
@@ -7121,7 +7141,7 @@ export function agentRoutes(
       "Heartbeat run not found",
     );
     if (!run) return;
-    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
+    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id},undefined,{privacyLockMode:"read"});
     const inspection = await providerTraces.inspect(run.id, run.companyId);
     await logActivity(db, {
       companyId: run.companyId,
@@ -7252,7 +7272,7 @@ export function agentRoutes(
         "Heartbeat run not found",
       );
       if (!run) return;
-      await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
+      await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id},undefined,{privacyLockMode:"read"});
       const download = await providerTraces.download(run.id, run.companyId);
       if (!download) throw notFound("Provider trace not found");
       await logActivity(db, {
@@ -7344,7 +7364,7 @@ export function agentRoutes(
     if (!run) return;
     if (!(await assertRunTelemetryReadAllowed(req, res, run.companyId))) return;
 
-    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id});
+    await assertAnalyticalContextPayloadAccess(db,run.companyId,req.actor,{runId:run.id},undefined,{privacyLockMode:"read"});
     const context = asRecord(run.contextSnapshot);
     const executionWorkspaceId = asNonEmptyString(context?.executionWorkspaceId);
     const operations = await workspaceOperations.listForRun(runId, executionWorkspaceId);

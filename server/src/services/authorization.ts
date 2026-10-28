@@ -600,6 +600,13 @@ function privatePrincipalCurrent(actor: AuthorizationActor, company: SQL): SQL<b
     ${actor.runId ? run : key} and ${actor.keyId ? key : sql`true`})`;
 }
 
+/** Current principal admission without consuming any source payload authority. */
+export async function isCurrentTaskPrivacyPrincipal(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string): Promise<boolean> {
+  const [current] = await db.execute<{ allowed: boolean }>(sql`select ${privatePrincipalCurrent(actor, sql`${companyId}::uuid`)} as allowed`);
+  return current?.allowed === true;
+}
+
 function projectPrincipalAccess(actor: AuthorizationActor, project: SQL, company: SQL): SQL<boolean> {
   const subjectType = actor.type === "board" ? "user" : "agent";
   const subjectId = actor.type === "board" ? actor.userId : actor.agentId;
@@ -808,6 +815,90 @@ export async function canActorReadIssuePrivacyBatch(db: Db | DbTransaction, acto
   for (const id of ids) {
     if (readable.get(id)) continue;
     readable.set(id, await canActorReadIssuePrivacy(db, actor, { companyId, id }));
+  }
+  return readable;
+}
+
+/** Batch Native Task ACLs only after each temporal Task's frozen Context prefix
+ * has been captured inside its own pinned owner callback. The callback accepts
+ * hashes, never Context IDs, so a broader ambient Memory scope cannot replace
+ * the Task's exact current prefix. */
+export async function canActorReadPinnedIssuePrivacyBatch(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, temporalTasks: readonly { issueId: string; contentHash: string; snapshotDigest: string }[],
+  unscopedIssueIds: readonly string[]): Promise<Map<string, boolean>> {
+  const temporal = new Map<string, { contentHash: string; snapshotDigest: string }>();
+  const invalid = new Set<string>();
+  for (const task of temporalTasks) {
+    const existing = temporal.get(task.issueId);
+    if (existing && (existing.contentHash !== task.contentHash || existing.snapshotDigest !== task.snapshotDigest))
+      invalid.add(task.issueId);
+    else temporal.set(task.issueId, { contentHash: task.contentHash, snapshotDigest: task.snapshotDigest });
+  }
+  const ids = [...new Set([...temporal.keys(), ...unscopedIssueIds])];
+  if (temporalTasks.length + unscopedIssueIds.length > 256 || ids.some(id => !privacyUuid.test(id)))
+    throw forbidden("The complete current Task reader set is unavailable");
+  const readable = new Map(ids.map(id => [id, false]));
+  if (!ids.length) return readable;
+  if (!is(db, PgTransaction))
+    return db.transaction(tx => canActorReadPinnedIssuePrivacyBatch(tx, actor, companyId, temporalTasks, unscopedIssueIds));
+
+  const readPinnedContext = async (issueId: string, expected: { contentHash: string; snapshotDigest: string }) => {
+    let captured: readonly string[] | undefined;
+    try {
+      const matches = await withReadPinnedNativeTaskSnapshot(db, actor, companyId, issueId,
+        async (contentHash, snapshotDigest) => {
+          const contexts = activeMemoryTemporalContexts(db, actor, "issue", issueId);
+          if (contentHash !== expected.contentHash || snapshotDigest !== expected.snapshotDigest || contexts === undefined)
+            return false;
+          captured = [...contexts];
+          return true;
+        });
+      return matches && captured !== undefined ? captured : null;
+    } catch (error) {
+      if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return null;
+      throw error;
+    }
+  };
+
+  const scopedGroups = new Map<string, { contextIds: readonly string[]; ids: string[] }>();
+  const pinnedContexts = new Map<string, readonly string[]>();
+  for (const [id, expected] of temporal) {
+    if (invalid.has(id)) continue;
+    const contextIds = await readPinnedContext(id, expected);
+    if (!contextIds) continue;
+    const key = JSON.stringify(contextIds);
+    const group = scopedGroups.get(key) ?? { contextIds, ids: [] };
+    group.ids.push(id);
+    pinnedContexts.set(id, contextIds);
+    scopedGroups.set(key, group);
+  }
+
+  // Preserve any enclosing exact Memory context for Tasks that have no frozen
+  // Native output snapshot of their own.
+  const unscoped = [...new Set(unscopedIssueIds)].filter(id => !temporal.has(id));
+  if (unscoped.length) {
+    const current = await canActorReadIssuePrivacyBatch(db, actor, companyId, unscoped);
+    for (const [id, allowed] of current) readable.set(id, allowed);
+  }
+
+  for (const group of scopedGroups.values()) {
+    const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId: group.ids[0]!,
+      actorKey: routineActorKey(actor), issueIds: new Set(group.ids), runIds: new Set(),
+      contextIds: group.contextIds, active: true };
+    try {
+      const current = await memoryTemporalReadScopes.run(scope,
+        () => canActorReadIssuePrivacyBatch(db, actor, companyId, group.ids));
+      for (const [id, allowed] of current) readable.set(id, allowed);
+    } finally { scope.active = false; }
+  }
+
+  // Keep the pin through the ACL queries and prove every exact owner prefix
+  // again after their waits before returning a transaction-local result.
+  for (const [id, expected] of temporal) {
+    const originalContexts = pinnedContexts.get(id);
+    const currentContexts = invalid.has(id) ? null : await readPinnedContext(id, expected);
+    if (!originalContexts || !currentContexts || !isDeepStrictEqual(currentContexts, originalContexts))
+      readable.set(id, false);
   }
   return readable;
 }
@@ -1776,6 +1867,40 @@ export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, ac
   }
   return readable;
 }
+/** Exact canonical Run readers, grouped only by their original transaction-bound
+ * frozen Context scopes. The caller consumes this result within its lock phase. */
+export async function canActorReadHeartbeatRunPrivacyBatch(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, runIds: readonly string[]): Promise<Map<string, boolean>> {
+  const ids = [...new Set(runIds)];
+  if (ids.length > 256 || ids.some(id => !privacyUuid.test(id)))
+    throw forbidden("The complete current Run reader set is unavailable");
+  const readable = new Map(ids.map(id => [id, false]));
+  if (!ids.length) return readable;
+  if (!is(db, PgTransaction))
+    return db.transaction(tx => canActorReadHeartbeatRunPrivacyBatch(tx, actor, companyId, ids));
+  const groups = new Map<string, { contextIds: readonly string[] | undefined; ids: string[] }>();
+  for (const id of ids) {
+    const contextIds = activeMemoryTemporalContexts(db, actor, "run", id);
+    const key = contextIds === undefined ? "unscoped" : JSON.stringify(contextIds);
+    const group = groups.get(key) ?? { contextIds, ids: [] };
+    group.ids.push(id); groups.set(key, group);
+  }
+  const evaluated = new Set<string>();
+  for (const group of groups.values()) {
+    const condition = group.contextIds === undefined ? await heartbeatRunReadSqlCondition(db, actor)
+      : taskSourcePrivacySqlCondition(db, "run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`,
+        actor, group.contextIds);
+    const rows = await executePrivacyIdSelect(db, db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.id, group.ids), condition)));
+    const allowed = new Set(rows.map(row => row.id));
+    for (const id of group.ids) {
+      readable.set(id, allowed.has(id) && (!evaluated.has(id) || readable.get(id) === true));
+      evaluated.add(id);
+    }
+  }
+  return readable;
+}
+
 let nativeRunReaderDiagnostics = 0;
 
 /** Same persisted native run closure for pre-limit projections and direct reads. */
@@ -1855,7 +1980,7 @@ let nativeMemoryTemporalDiagnostics = 0;
 /** Bind a no-live-future-Context read to one existing immutable Memory output.
  * This is callable only by the Memory source owner, never from request fields. */
 export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, actor: AuthorizationActor,
-  companyId: string, recordId: string, read: () => Promise<T>, expected?: { sourceVersion: string; snapshot: unknown;
+  companyId: string, recordId: string, read: (sourceDb: Db | DbTransaction) => Promise<T>, expected?: { sourceVersion: string; snapshot: unknown;
     issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[] }): Promise<T | false> {
   const diagnostic = (stage: "source_snapshot" | "source_body_hash" | "output_snapshot_currentness" |
     "context_inputs_currentness" | "callback_reader",
@@ -1865,79 +1990,92 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
       console.error("native_memory_temporal_reader_test_denial", JSON.stringify({ stage, ...facts }));
     }
   };
-  const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId),
-    isNull(memoryRecords.deletedAt), sql`not exists(select 1 from ${memoryDeletionMarkers} d
-      where d.company_id=${companyId} and d.record_id=${recordId})`)).for("share");
-  const snapshot = row && nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
-  const dispatch = snapshot?.success ? snapshot.data.inputs.filter((input): input is Extract<typeof input,
-    { kind: "worker_model_dispatch" | "conversation_model_dispatch" }> =>
-    input.kind === "worker_model_dispatch" || input.kind === "conversation_model_dispatch").at(-1) : undefined;
-  const capturedRunIds = dispatch
-    ? [...new Set([...(snapshot?.success ? snapshot.data.policy.runIds : []), dispatch.runId])].sort()
-    : row?.sourceRunIds ?? [];
-  if (!row || expected && (row.updatedAt.toISOString() !== expected.sourceVersion ||
-      !isDeepStrictEqual(row.payloadSourceSnapshot, expected.snapshot) || !isDeepStrictEqual(row.sourceIssueIds, expected.issueIds) ||
-      !isDeepStrictEqual(row.sourceProjectIds, expected.projectIds) || !isDeepStrictEqual(row.sourceRunIds, expected.runIds) ||
-      !isDeepStrictEqual(row.sourceMemoryIds, expected.memoryIds) ||
-      !isDeepStrictEqual(row.sourceFoundationRevisionIds, expected.foundationRevisionIds)) ||
-    !snapshot?.success || !row.sourceProvenanceQualified || row.payloadSourceProtocolVersion !== 1 || row.payloadSourceSnapshotInvalidated
-    || snapshot.data.owner.kind !== "memory_record" || snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== recordId
-    || !dispatch && (!snapshot.data.policy.runIds.length || snapshot.data.inputs.some(input => input.kind !== "context"))
-    || !isDeepStrictEqual(snapshot.data.policy.issueIds, [...row.sourceIssueIds].sort())
-    || !isDeepStrictEqual(snapshot.data.policy.projectIds, [...row.sourceProjectIds].sort())
-    || !isDeepStrictEqual([...row.sourceRunIds].sort(), capturedRunIds)
-    || !isDeepStrictEqual(snapshot.data.policy.memoryIds, [...row.sourceMemoryIds].sort())
-    || !isDeepStrictEqual(snapshot.data.policy.foundationRevisionIds, [...row.sourceFoundationRevisionIds].sort()))
-    {
-      diagnostic("source_snapshot", { rowPresent: Boolean(row), expectedPresent: Boolean(expected), snapshotValid: Boolean(snapshot?.success),
-        sourceQualified: row?.sourceProvenanceQualified === true, protocolOne: row?.payloadSourceProtocolVersion === 1,
-        snapshotNotInvalidated: row?.payloadSourceSnapshotInvalidated === false,
-        ownerBound: Boolean(snapshot?.success && row && snapshot.data.owner.kind === "memory_record" &&
-          snapshot.data.owner.companyId === companyId && snapshot.data.owner.id === recordId),
-        expectedMatches: Boolean(row && expected && row.updatedAt.toISOString() === expected.sourceVersion &&
-          isDeepStrictEqual(row.payloadSourceSnapshot, expected.snapshot)) });
-      return false;
-    }
-  const [binding] = await db.execute<{ valid: boolean }>(sql`select
-    public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${snapshot.data.owner.contentHash}
-      and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid
-    from ${memoryRecords} m where m.company_id=${companyId} and m.id=${recordId}
-      and m.payload_source_snapshot is not null and m.payload_source_snapshot_invalidated=false`);
-  if (!binding?.valid) { diagnostic("source_body_hash", { bodyAndSnapshotDigestValid: binding?.valid === true }); return false; }
-  const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
-  const { assertNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
-  const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId, actorKey: routineActorKey(actor),
-    issueIds: new Set(row.sourceIssueIds), runIds: new Set(capturedRunIds),
-    contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
-  let currentnessStage: "output_snapshot_currentness" | "context_inputs_currentness" = "output_snapshot_currentness";
-  try {
-    const result = await memoryTemporalReadScopes.run(scope, async () => {
-      try {
-        // The exact frozen Context prefix must govern the Memory owner proof
-        // itself, not only the final caller. Otherwise validating an older
-        // Memory can consult a later Context manifest before its ALS scope is
-        // installed and retroactively taint the earlier output.
-        if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(db as Db, { companyId, recordId, snapshot: snapshot.data, actor });
-        currentnessStage = "context_inputs_currentness";
-        await assertNativeTemporalContextInputsCurrent(db as Db, companyId, contextInputs);
-      } catch (error) {
-        if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
-          const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {
-            const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
-            return match ? [`${match[1]}:${match[2]}`] : [];
-          }).slice(0, 5);
-          diagnostic(currentnessStage, { status: error.status,
-            errorName: ["HttpError", "Error"].includes(error.name) ? error.name : "other", frames: frames.join(",") });
-          return false;
-        }
-        throw error;
+  const readInTransaction = async (sourceDb: Db | DbTransaction): Promise<T | false> => {
+    const [{ lockAnalyticalCompany, markAnalyticalPrivacyReadLocked }, { lockMemoryPrivacy }] = await Promise.all([
+      import("./analytical-privacy.js"), import("./memory/memory-privacy.js"),
+    ]);
+    await lockAnalyticalCompany(sourceDb as Db, companyId, "read");
+    await lockMemoryPrivacy(sourceDb as Db, companyId, "read");
+    markAnalyticalPrivacyReadLocked(sourceDb as object);
+    const [row] = await sourceDb.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId),
+      isNull(memoryRecords.deletedAt), sql`not exists(select 1 from ${memoryDeletionMarkers} d
+        where d.company_id=${companyId} and d.record_id=${recordId})`)).for("share");
+    const snapshot = row && nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
+    const dispatch = snapshot?.success ? snapshot.data.inputs.filter((input): input is Extract<typeof input,
+      { kind: "worker_model_dispatch" | "conversation_model_dispatch" }> =>
+      input.kind === "worker_model_dispatch" || input.kind === "conversation_model_dispatch").at(-1) : undefined;
+    const capturedRunIds = dispatch
+      ? [...new Set([...(snapshot?.success ? snapshot.data.policy.runIds : []), dispatch.runId])].sort()
+      : row?.sourceRunIds ?? [];
+    if (!row || expected && (row.updatedAt.toISOString() !== expected.sourceVersion ||
+        !isDeepStrictEqual(row.payloadSourceSnapshot, expected.snapshot) || !isDeepStrictEqual(row.sourceIssueIds, expected.issueIds) ||
+        !isDeepStrictEqual(row.sourceProjectIds, expected.projectIds) || !isDeepStrictEqual(row.sourceRunIds, expected.runIds) ||
+        !isDeepStrictEqual(row.sourceMemoryIds, expected.memoryIds) ||
+        !isDeepStrictEqual(row.sourceFoundationRevisionIds, expected.foundationRevisionIds)) ||
+      !snapshot?.success || !row.sourceProvenanceQualified || row.payloadSourceProtocolVersion !== 1 || row.payloadSourceSnapshotInvalidated
+      || snapshot.data.owner.kind !== "memory_record" || snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== recordId
+      || !dispatch && (!snapshot.data.policy.runIds.length || snapshot.data.inputs.some(input => input.kind !== "context"))
+      || !isDeepStrictEqual(snapshot.data.policy.issueIds, [...row.sourceIssueIds].sort())
+      || !isDeepStrictEqual(snapshot.data.policy.projectIds, [...row.sourceProjectIds].sort())
+      || !isDeepStrictEqual([...row.sourceRunIds].sort(), capturedRunIds)
+      || !isDeepStrictEqual(snapshot.data.policy.memoryIds, [...row.sourceMemoryIds].sort())
+      || !isDeepStrictEqual(snapshot.data.policy.foundationRevisionIds, [...row.sourceFoundationRevisionIds].sort()))
+      {
+        diagnostic("source_snapshot", { rowPresent: Boolean(row), expectedPresent: Boolean(expected), snapshotValid: Boolean(snapshot?.success),
+          sourceQualified: row?.sourceProvenanceQualified === true, protocolOne: row?.payloadSourceProtocolVersion === 1,
+          snapshotNotInvalidated: row?.payloadSourceSnapshotInvalidated === false,
+          ownerBound: Boolean(snapshot?.success && row && snapshot.data.owner.kind === "memory_record" &&
+            snapshot.data.owner.companyId === companyId && snapshot.data.owner.id === recordId),
+          expectedMatches: Boolean(row && expected && row.updatedAt.toISOString() === expected.sourceVersion &&
+            isDeepStrictEqual(row.payloadSourceSnapshot, expected.snapshot)) });
+        return false;
       }
-      return read();
-    });
-    if (result === false) diagnostic("callback_reader", { callbackReturnedFalse: true });
-    return result;
-  }
-  finally { scope.active = false; }
+    const [binding] = await sourceDb.execute<{ valid: boolean }>(sql`select
+      public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${snapshot.data.owner.contentHash}
+        and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid
+      from ${memoryRecords} m where m.company_id=${companyId} and m.id=${recordId}
+        and m.payload_source_snapshot is not null and m.payload_source_snapshot_invalidated=false`);
+    if (!binding?.valid) { diagnostic("source_body_hash", { bodyAndSnapshotDigestValid: binding?.valid === true }); return false; }
+    const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
+    const { assertNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
+    const scope: MemoryTemporalReadScope = { db: sourceDb as object, companyId, recordId, actorKey: routineActorKey(actor),
+      issueIds: new Set(row.sourceIssueIds), runIds: new Set(capturedRunIds),
+      contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
+    let currentnessStage: "output_snapshot_currentness" | "context_inputs_currentness" = "output_snapshot_currentness";
+    try {
+      const result = await memoryTemporalReadScopes.run(scope, async () => {
+        try {
+          // The exact frozen Context prefix must govern the Memory owner proof
+          // itself, not only the final caller. Otherwise validating an older
+          // Memory can consult a later Context manifest before its ALS scope is
+          // installed and retroactively taint the earlier output.
+          if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(sourceDb as Db, { companyId, recordId, snapshot: snapshot.data, actor });
+          currentnessStage = "context_inputs_currentness";
+          await assertNativeTemporalContextInputsCurrent(sourceDb as Db, companyId, contextInputs);
+        } catch (error) {
+          if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
+            const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {
+              const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+              return match ? [`${match[1]}:${match[2]}`] : [];
+            }).slice(0, 5);
+            diagnostic(currentnessStage, { status: error.status,
+              errorName: ["HttpError", "Error"].includes(error.name) ? error.name : "other", frames: frames.join(",") });
+            return false;
+          }
+          throw error;
+        }
+        return read(sourceDb);
+      });
+      if (result === false) diagnostic("callback_reader", { callbackReturnedFalse: true });
+      return result;
+    }
+    finally { scope.active = false; }
+  };
+  // The captured temporal prefix and the output owner/current-reader recheck
+  // must share the same physical transaction. If the pool is supplied, start
+  // that transaction here and hand it to the callback; otherwise a nested
+  // owner read would create a different transaction and lose the ALS scope.
+  return is(db, PgTransaction) ? readInTransaction(db) : db.transaction(tx => readInTransaction(tx));
 }
 
 /** Install the Context prefix from one exact, current Native output Task row.

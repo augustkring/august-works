@@ -609,7 +609,7 @@ function taskProvider(db: Db): ContextProvider {
           });
         }
 
-        await assertAnalyticalContextPayloadAccess(txDb,request.companyId,sourceActor,{issueId:issueScope.id},"task");
+        await assertAnalyticalContextPayloadAccess(txDb,request.companyId,sourceActor,{issueId:issueScope.id},"task",{privacyLockMode:"read"});
         const issue = await txDb
           .select({
             id: issues.id,
@@ -743,7 +743,6 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
           reason: principalDecision.reason,
         });
       }
-
       const providers = options.providers ?? [
         ...(input.issueId ? [taskProvider(activeDb)] : []),
         ...(input.sourceScope === "task_only" ? [] : [
@@ -821,6 +820,15 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         selectedEstimatedTokens: budgeted.selectedEstimatedTokens,
       }) : null;
       const bootstrapMarkdown = bootstrapPacket ? serializeContextPacket(bootstrapPacket) : null;
+      const manifestBudgetStartedAt = Date.now();
+      const manifestBudgetMs = deadlineAt - manifestBudgetStartedAt;
+      if (!inspectionActor && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+        console.warn("native_context_manifest_budget", JSON.stringify({ remainingMs: Math.max(0, manifestBudgetMs),
+          selectedCount: budgeted.selected.length, providerCount: providers.length,
+          nativeBootstrap, taskInputCount: contextSourceInput.selected.filter(({ decision }) =>
+            decision.evidence.sourceProvider === "august_works_tasks").length,
+          memoryInputCount: contextSourceInput.selected.filter(({ decision }) =>
+            decision.evidence.sourceProvider === "august_works_memory" || decision.evidence.sourceProvider === "august_works_derived_memory").length }));
       const manifestResult = inspectionActor ? null : await withContextStageDeadline(
         "context_manifest", signal => manifests.create(contextSourceInput,
           nativeBootstrap && bootstrapMarkdown !== null ? { renderedMarkdown: bootstrapMarkdown } : undefined,

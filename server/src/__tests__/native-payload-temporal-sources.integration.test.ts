@@ -5,7 +5,8 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { companyMemberships, contextManifestItems, createDb, documents, documentRevisions, heartbeatRuns, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations } from "@paperclipai/db";
+import { companyMemberships, contextManifestItems, createDb, documents, documentRevisions,
+  heartbeatRuns, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
@@ -107,7 +108,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     if (!taskB) throw new Error("The Native Task B disappeared");
 
     const second = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
-      root, instanceId, reuseIdentity: first.reuseIdentity,
+      root, instanceId, reuseIdentity: first.reuseIdentity, existingTaskId: taskBId,
       taskTitle: `Temporal follow-up ${randomUUID()}`,
       steps: [
         { tool: "read_context", id: `temporal-context-b-${randomUUID()}`, input: { query: `${taskBTitle} ${taskB.description ?? ""}` } },
@@ -130,8 +131,9 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       item.sourceRef === `memory://record/${privateRootId}`)).toBe(true);
     expect(firstContextCapture.sourceSet?.policy?.memoryIds).toContain(privateRootId);
     expect(firstContextCapture.sourceSet?.policy?.issueIds).toContain(first.privateRoot?.issueId);
-    expect((await memories.get(first.companyId, privateRootId!, first.aliceMemoryActor))?.record.id).toBe(privateRootId);
-    expect(await memories.get(first.companyId, privateRootId!, first.bobMemoryActor)).toBeNull();
+    expect(await memories.get(first.companyId, privateRootId!, first.aliceMemoryActor)).toBeNull();
+    expect((await memories.get(first.companyId, privateRootId!, second.aliceMemoryActor))?.record.id).toBe(privateRootId);
+    expect(await memories.get(first.companyId, privateRootId!, second.bobMemoryActor)).toBeNull();
 
     const contextCapture = second.contextReadCaptures[0]?.contextRead as {
       manifestIds?: Array<{ contextManifestId: string }>;
@@ -143,9 +145,9 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       eq(contextManifestItems.companyId, first.companyId), eq(contextManifestItems.manifestId, manifestId)));
     const memoryCId = second.toolResults.find(value => value.toolName === "paperclip-self:remember")?.memoryId;
     if (!memoryCId) throw new Error("The second managed run omitted Memory C");
-    await memories.reviewCandidate(first.companyId, memoryCId, { decision: "accept" }, first.aliceMemoryActor);
+    await memories.reviewCandidate(first.companyId, memoryCId, { decision: "accept" }, second.aliceMemoryActor);
     await issueService(db).update(taskBId, { assigneeAgentId: null, assigneeUserId: first.bobUserId,
-      actorUserId: first.aliceUserId, privacyActor: first.aliceActor });
+      actorUserId: first.aliceUserId, privacyActor: second.aliceActor });
     const [assignedTaskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
     if (!assignedTaskB || assignedTaskB.assigneeUserId !== first.bobUserId)
       throw new Error("The Native Task B assignee transfer was not persisted");
@@ -175,34 +177,34 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
   }, 30_000);
 
   it("keeps earlier shared Memory A readable after the same run later reads private Context, while narrowing Memory B", async () => {
-    const { first, memoryAId, memoryBId } = temporal;
+    const { first, second, memoryAId, memoryBId } = temporal;
     const memories = memoryService(db);
-    expect((await memories.get(first.companyId, memoryAId, first.aliceMemoryActor))?.record.id).toBe(memoryAId);
-    expect((await memories.get(first.companyId, memoryAId, first.bobMemoryActor))?.record.id).toBe(memoryAId);
+    expect((await memories.get(first.companyId, memoryAId, second.aliceMemoryActor))?.record.id).toBe(memoryAId);
+    expect((await memories.get(first.companyId, memoryAId, second.bobMemoryActor))?.record.id).toBe(memoryAId);
     const [memoryA] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot }).from(memoryRecords)
       .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryAId)));
     const snapshot = nativePayloadSourceSnapshotSchema.parse(memoryA?.payloadSourceSnapshot);
     await expect(assertNativeMemoryOutputSnapshotCurrent(db, { companyId: first.companyId, recordId: memoryAId,
-      snapshot, actor: first.bobMemoryActor.authorizationActor })).resolves.toBeUndefined();
+      snapshot, actor: second.bobMemoryActor.authorizationActor })).resolves.toBeUndefined();
     const bobMembershipFilter = and(eq(companyMemberships.companyId, first.companyId),
       eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, first.bobUserId));
     try {
       await db.update(companyMemberships).set({ status: "suspended" }).where(bobMembershipFilter);
-      await expect(memories.get(first.companyId, memoryAId, first.bobMemoryActor)).rejects.toMatchObject({ status: 403 });
+      await expect(memories.get(first.companyId, memoryAId, second.bobMemoryActor)).rejects.toMatchObject({ status: 403 });
       await expect(assertNativeMemoryOutputSnapshotCurrent(db, { companyId: first.companyId, recordId: memoryAId,
-        snapshot, actor: first.bobMemoryActor.authorizationActor })).rejects.toMatchObject({ status: 403 });
+        snapshot, actor: second.bobMemoryActor.authorizationActor })).rejects.toMatchObject({ status: 403 });
     } finally {
       await db.update(companyMemberships).set({ status: "active" }).where(bobMembershipFilter);
     }
-    expect((await memories.get(first.companyId, memoryAId, first.bobMemoryActor))?.record.id).toBe(memoryAId);
+    expect((await memories.get(first.companyId, memoryAId, second.bobMemoryActor))?.record.id).toBe(memoryAId);
     await expect(assertNativeMemoryOutputSnapshotCurrent(db, { companyId: first.companyId, recordId: memoryAId,
-      snapshot, actor: first.bobMemoryActor.authorizationActor })).resolves.toBeUndefined();
-    expect((await memories.get(first.companyId, memoryBId, first.aliceMemoryActor))?.record.id).toBe(memoryBId);
-    expect(await memories.get(first.companyId, memoryBId, first.bobMemoryActor)).toBeNull();
+      snapshot, actor: second.bobMemoryActor.authorizationActor })).resolves.toBeUndefined();
+    expect((await memories.get(first.companyId, memoryBId, second.aliceMemoryActor))?.record.id).toBe(memoryBId);
+    expect(await memories.get(first.companyId, memoryBId, second.bobMemoryActor)).toBeNull();
   });
 
   it("keeps earlier Task A readable while later Task B retains the private source", async () => {
-    const { first, taskAId, taskBId, assignedTaskB } = temporal;
+    const { first, second, taskAId, taskBId, assignedTaskB } = temporal;
     const [run] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
       .where(and(eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
     const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object"
@@ -217,14 +219,14 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect(taskB).toBeDefined();
     expect(taskA).toMatchObject({ status: "backlog", parentId: null });
     expect(taskB).toMatchObject({ status: "backlog", parentId: null });
-    expect(await canActorReadIssuePrivacy(db, first.bobActor, taskA!)).toBe(true);
-    expect(await canActorReadIssuePrivacy(db, first.aliceActor, taskB!)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, second.bobActor, taskA!)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, second.aliceActor, taskB!)).toBe(true);
     expect(assignedTaskB.assigneeUserId).toBe(first.bobUserId);
-    expect(await canActorReadIssuePrivacy(db, first.bobActor, assignedTaskB)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, second.bobActor, assignedTaskB)).toBe(false);
   });
 
   it("keeps document A independent while document B carries the later private Context source", async () => {
-    const { first, documentKey, documentKeyB, privateRootId } = temporal;
+    const { first, second, documentKey, documentKeyB, privateRootId } = temporal;
     expect(first.documents).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: documentKey, aliceHttpStatus: 200, bobHttpStatus: 200 }),
       expect.objectContaining({ key: documentKeyB, aliceHttpStatus: 200, bobHttpStatus: 403 }),
@@ -242,13 +244,14 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect(nativePayloadSourceSnapshotSchema.parse(revisionA.payloadSourceSnapshot).policy.memoryIds).not.toContain(privateRootId);
     expect(nativePayloadSourceSnapshotSchema.parse(revisionB.payloadSourceSnapshot).policy.memoryIds).toContain(privateRootId);
     await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
-      issueId: first.issueId, revisionId: revisionA.id, actor: first.bobActor, requireLatest: true })).resolves.toBeUndefined();
+      issueId: first.issueId, revisionId: revisionA.id, actor: second.bobActor, requireLatest: true })).resolves.toBeUndefined();
     await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
-      issueId: first.issueId, revisionId: revisionB.id, actor: first.bobActor, requireLatest: true })).rejects.toMatchObject({ status: 403 });
+      issueId: first.issueId, revisionId: revisionB.id, actor: second.bobActor, requireLatest: true })).rejects.toMatchObject({ status: 403 });
   });
 
-  it("carries inherited Task B privacy into fresh Context and Memory C without a direct root Memory item", async () => {
-    const { first, privateRootId, taskBId, memoryCId, contextCapture, selectedItems } = temporal;
+  it("carries private Context lineage into fresh Context and Memory C without a direct root Memory item", async () => {
+    const { first, second, privateRootId, taskBId, memoryCId, contextCapture, selectedItems } = temporal;
+    expect(second.issueId).toBe(taskBId);
     expect(selectedItems).toEqual(expect.arrayContaining([expect.objectContaining({
       sourceProvider: "august_works_tasks", sourceRef: `issue://${taskBId}`,
     })]));
@@ -258,8 +261,8 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect(contextCapture.sourceSet?.inputs?.some(source => source.kind === "context")).toBe(true);
     expect(contextCapture.manifestIds?.[0]?.contextManifestId).toMatch(/^[0-9a-f-]{36}$/i);
     const memories = memoryService(db);
-    expect((await memories.get(first.companyId, memoryCId, first.aliceMemoryActor))?.record.id).toBe(memoryCId);
-    expect(await memories.get(first.companyId, memoryCId, first.bobMemoryActor)).toBeNull();
+    expect((await memories.get(first.companyId, memoryCId, second.aliceMemoryActor))?.record.id).toBe(memoryCId);
+    expect(await memories.get(first.companyId, memoryCId, second.bobMemoryActor)).toBeNull();
   });
 
   it("replays only a current Native Memory output when its input roots remain readable", async () => {
@@ -278,7 +281,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
           .where(and(eq(memoryRecords.companyId, producer.companyId), eq(memoryRecords.id, recordId)));
         const snapshot = nativePayloadSourceSnapshotSchema.parse(output?.payloadSourceSnapshot);
         await expect(assertNativeMemoryOutputSnapshotCurrent(db, { companyId: producer.companyId, recordId,
-          snapshot, actor: producer.aliceMemoryActor.authorizationActor })).resolves.toBeUndefined();
+          snapshot, actor: second.aliceMemoryActor.authorizationActor })).resolves.toBeUndefined();
       }
       await db.transaction(async rawTx => {
         const tx = rawTx as unknown as typeof db;
@@ -294,17 +297,17 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const memoryBCallId = first.toolResults.find(value => value.memoryId === memoryBId)?.callId;
     if (!memoryBCallId) throw new Error("The Native Memory B call receipt is unavailable");
     await verifyReceipt(first, memoryBCallId, memoryBId);
-    expect((await memories.get(first.companyId, privateRootId, first.aliceMemoryActor))?.record.id).toBe(privateRootId);
-    await memories.revoke(first.companyId, memoryBId, { reason: "The Human revoked this output." }, first.aliceMemoryActor);
-    expect((await memories.get(first.companyId, privateRootId, first.aliceMemoryActor))?.record.id).toBe(privateRootId);
-    await expect(verifyReceipt(first, memoryBCallId, memoryBId)).rejects.toMatchObject({
+    expect((await memories.get(first.companyId, privateRootId, second.aliceMemoryActor))?.record.id).toBe(privateRootId);
+    await memories.revoke(first.companyId, memoryBId, { reason: "The Human revoked this output." }, second.aliceMemoryActor);
+    expect((await memories.get(first.companyId, privateRootId, second.aliceMemoryActor))?.record.id).toBe(privateRootId);
+    await expect(verifyReceipt(first, memoryBCallId, memoryBId, false)).rejects.toMatchObject({
       reasonCode: "native_memory_capture_invalid",
     });
 
     await verifyReceipt(second, second.toolResults.find(value => value.memoryId === memoryCId)!.callId, memoryCId);
-    expect(await memories.get(first.companyId, taskBId, first.aliceMemoryActor)).not.toBeNull();
+    expect(await canActorReadIssuePrivacy(db, second.aliceActor, { companyId: first.companyId, id: taskBId })).toBe(true);
     await memories.forget(first.companyId, memoryCId, second.aliceMemoryActor);
-    expect(await memories.get(first.companyId, taskBId, first.aliceMemoryActor)).not.toBeNull();
+    expect(await canActorReadIssuePrivacy(db, second.aliceActor, { companyId: first.companyId, id: taskBId })).toBe(true);
     await expect(verifyReceipt(second, second.toolResults.find(value => value.memoryId === memoryCId)!.callId, memoryCId, false))
       .rejects.toMatchObject({ reasonCode: "native_memory_capture_invalid" });
   });
@@ -319,14 +322,14 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect((await readFile(laterProviderDb)).byteLength).toBeGreaterThan(0);
     const memories = memoryService(db);
     if (!first.privateRoot || first.privateRoot.memoryId !== privateRootId) throw new Error("The actual private Memory root is unavailable");
-    const erased = await memories.forget(first.companyId, privateRootId, first.aliceMemoryActor);
+    const erased = await memories.forget(first.companyId, privateRootId, second.aliceMemoryActor);
     expect(erased.deletedRecordCount).toBeGreaterThan(1);
-    expect((await memories.get(first.companyId, memoryAId, first.aliceMemoryActor))?.record.id).toBe(memoryAId);
-    expect((await memories.get(first.companyId, memoryAId, first.bobMemoryActor))?.record.id).toBe(memoryAId);
-    expect(await memories.get(first.companyId, memoryBId, first.aliceMemoryActor)).toBeNull();
-    expect(await memories.get(first.companyId, memoryBId, first.bobMemoryActor)).toBeNull();
-    expect(await memories.get(first.companyId, memoryCId, first.aliceMemoryActor)).toBeNull();
-    expect(await memories.get(first.companyId, memoryCId, first.bobMemoryActor)).toBeNull();
+    expect((await memories.get(first.companyId, memoryAId, second.aliceMemoryActor))?.record.id).toBe(memoryAId);
+    expect((await memories.get(first.companyId, memoryAId, second.bobMemoryActor))?.record.id).toBe(memoryAId);
+    expect(await memories.get(first.companyId, memoryBId, second.aliceMemoryActor)).toBeNull();
+    expect(await memories.get(first.companyId, memoryBId, second.bobMemoryActor)).toBeNull();
+    expect(await memories.get(first.companyId, memoryCId, second.aliceMemoryActor)).toBeNull();
+    expect(await memories.get(first.companyId, memoryCId, second.bobMemoryActor)).toBeNull();
     const erasedOutputCalls = [
       { producer: first, callId: first.toolResults.find(value => value.memoryId === memoryBId)?.callId },
       { producer: second, callId: second.toolResults.find(value => value.memoryId === memoryCId)?.callId },
@@ -347,9 +350,9 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const [retainedTaskA] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskAId)));
     const [erasedTaskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
     expect(retainedTaskA?.payloadSourceSnapshotInvalidated).toBe(false);
-    expect(await canActorReadIssuePrivacy(db, first.bobActor, retainedTaskA!)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, second.bobActor, retainedTaskA!)).toBe(true);
     expect(erasedTaskB?.payloadSourceSnapshotInvalidated).toBe(true);
-    expect(await canActorReadIssuePrivacy(db, first.aliceActor, erasedTaskB!)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, second.aliceActor, erasedTaskB!)).toBe(false);
     const [documentLink] = await db.select().from(issueDocuments).where(and(
       eq(issueDocuments.companyId, first.companyId), eq(issueDocuments.issueId, first.issueId), eq(issueDocuments.key, documentKey)));
     expect(documentLink).toBeDefined();
@@ -360,7 +363,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       eq(documentRevisions.id, document!.latestRevisionId!)));
     expect(documentRevision?.payloadSourceSnapshotInvalidated).toBe(false);
     await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
-      issueId: first.issueId, revisionId: documentRevision!.id, actor: first.bobActor, requireLatest: true })).resolves.toBeUndefined();
+      issueId: first.issueId, revisionId: documentRevision!.id, actor: second.bobActor, requireLatest: true })).resolves.toBeUndefined();
     const [documentLinkB] = await db.select().from(issueDocuments).where(and(
       eq(issueDocuments.companyId, first.companyId), eq(issueDocuments.issueId, first.issueId), eq(issueDocuments.key, documentKeyB)));
     expect(documentLinkB).toBeDefined();
@@ -371,7 +374,7 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       eq(documentRevisions.id, documentB!.latestRevisionId!)));
     expect(documentRevisionB?.payloadSourceSnapshotInvalidated).toBe(true);
     await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
-      issueId: first.issueId, revisionId: documentRevisionB!.id, actor: first.aliceActor, requireLatest: true })).rejects.toMatchObject({ status: 403 });
+      issueId: first.issueId, revisionId: documentRevisionB!.id, actor: second.aliceActor, requireLatest: true })).rejects.toMatchObject({ status: 403 });
     const [retainedMemoryA] = await db.select({ deletedAt: memoryRecords.deletedAt,
       payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated }).from(memoryRecords)
       .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryAId)));

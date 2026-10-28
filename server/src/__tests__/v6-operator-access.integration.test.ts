@@ -230,6 +230,7 @@ const support = await getEmbeddedPostgresTestSupport();
         .get("/api/saas/internal/operations?expectedUserId=operator")
         .set("x-fixture-user", "operator");
       expect(response.status).toBe(200);
+      expect(response.headers["cache-control"]).toBe("no-store");
       expect(response.body).toMatchObject({
         environment: "staging",
         hosts: [],
@@ -237,6 +238,17 @@ const support = await getEmbeddedPostgresTestSupport();
         versions: [],
         support: [],
         deployments: [],
+        modelDependencies: {
+          truncated: false,
+          unresolvedAgentBindings: 0,
+          entries: [],
+          coverage: expect.arrayContaining([
+            expect.objectContaining({ dependency: "agent_runtime", configuration: "database_inventory", entries: 0 }),
+            expect.objectContaining({ dependency: "worker_qualification_profile", configuration: "unconfigured", entries: 0 }),
+            expect.objectContaining({ dependency: "read_only_verifier", configuration: "unconfigured", entries: 0 }),
+            expect.objectContaining({ dependency: "first_party_support", configuration: "unconfigured", entries: 0 }),
+          ]),
+        },
       });
       expect(JSON.stringify(response.body)).not.toContain("example.test");
       expect((await request(app).get("/api/saas/internal/fleet").set("x-fixture-user", "operator")).body)

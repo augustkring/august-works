@@ -34,6 +34,7 @@ import {
 import { runningProcesses } from "../adapters/index.ts";
 import { recoveryService } from "../services/recovery/service.ts";
 import { withQueuedCommentIdsInWakePayload } from "../services/issue-queued-comment-queue.ts";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const mockAdapterExecute = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -133,6 +134,7 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const previousPaperclipHome = process.env.PAPERCLIP_HOME;
   let fixtureHome: string | undefined;
+  let restoreApiUrl: (() => void) | null = null;
   let beforeContinuationDispatchCheck:
     | ((input: { runId: string; issueId: string }) => Promise<void>)
     | null = null;
@@ -144,6 +146,7 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     mockAdapterExecute.mock.calls.filter(([context]) => context?.runId === runId).length;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     fixtureHome = await mkdtemp(path.join(os.tmpdir(), "paperclip-stale-queue-home-"));
     process.env.PAPERCLIP_HOME = fixtureHome;
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-stale-queue-");
@@ -190,6 +193,7 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
       if (previousPaperclipHome === undefined) delete process.env.PAPERCLIP_HOME;
       else process.env.PAPERCLIP_HOME = previousPaperclipHome;
       if (fixtureHome) await rm(fixtureHome, { recursive: true, force: true });
+      restoreApiUrl?.();
     }
   }, 30_000);
 
@@ -203,6 +207,8 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
       defaultResponsibleUserId: "responsible-user",
       requireBoardApprovalForNewAgents: false,
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
+    await seedHeartbeatResponsibleHuman(db, companyId, "local-board", "owner");
     await db.insert(agents).values({
       id: agentId,
       companyId,

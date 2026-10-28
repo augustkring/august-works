@@ -512,7 +512,8 @@ export async function runManagedNativeConversationFrame(input: {
     const commentsAfterForeignWrite = await db.select().from(issueComments).where(eq(issueComments.issueId, chat.body.id as string));
     const sandboxRuntimeFacts = sandboxHeartbeat?.facts?.() ?? null;
     const nativeInputSourceReceipt = profileValue.nativeInputSourceReceipt ?? null;
-    if (finalRun && ["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(finalRun.status))
+    if (finalRun && (["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(finalRun.status) ||
+      process.env.PAPERCLIP_NATIVE_CANCEL_ORIGIN_TEST_DIAGNOSTICS === "1"))
       await input.afterRunSettledBeforeTeardown?.({ db, actor: human, companyId, agentId,
         issueId: chat.body.id as string, run: finalRun, manifest: manifest ?? null, reservation: reservation ?? null,
         nativeInputSourceReceipt, sandboxRuntimeFacts, providerCallCount: providerCalls.length,

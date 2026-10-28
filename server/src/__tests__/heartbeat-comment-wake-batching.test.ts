@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { WebSocketServer } from "ws";
@@ -18,6 +19,7 @@ import {
   companies,
   companyMemberships,
   createDb,
+  heartbeatRunEvents,
   heartbeatRuns,
   issueComments,
   issueRecoveryActions,
@@ -39,6 +41,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.ts";
 import { parseWakePayloadFromMessage } from "./helpers/wake-message.ts";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported
@@ -68,15 +71,34 @@ async function closeDbClient(db: ReturnType<typeof createDb> | undefined) {
   await db?.$client?.end?.({ timeout: 0 });
 }
 
+async function insertCompanyFixture(db: ReturnType<typeof createDb>, values: typeof companies.$inferInsert | Array<typeof companies.$inferInsert>) {
+  const rows = Array.isArray(values) ? values : [values];
+  await db.insert(companies).values(values as typeof companies.$inferInsert | Array<typeof companies.$inferInsert>);
+  for (const row of rows) {
+    if (row.id && row.defaultResponsibleUserId) {
+      await seedHeartbeatResponsibleHuman(db, row.id, row.defaultResponsibleUserId, "owner");
+        // The historical interaction fixtures use this user as the authored
+        // Board actor while the company default is a separate Human.
+        await seedHeartbeatResponsibleHuman(db, row.id, "user-1", "owner");
+    }
+  }
+}
+
 async function createControlledGatewayServer(beforeComplete?: (turn: number) => Promise<void>) {
   const server = createServer();
   const wss = new WebSocketServer({ server });
+  const platformSkillText = await readFile(
+    new URL("../../../skills-releases/blentera-platform/v1/SKILL.md", import.meta.url),
+    "utf8",
+  );
   const agentPayloads: Array<Record<string, unknown>> = [];
+  let platformSkillInstalled = false;
   let firstWaitRelease: (() => void) | null = null;
   let firstWaitGate = new Promise<void>((resolve) => {
     firstWaitRelease = resolve;
   });
   let waitCount = 0;
+  let governedPaperclipRunId: string | null = null;
 
   wss.on("connection", (socket) => {
     socket.send(
@@ -106,10 +128,15 @@ async function createControlledGatewayServer(beforeComplete?: (turn: number) => 
             ok: true,
             payload: {
               type: "hello-ok",
-              protocol: 3,
+              protocol: 4,
               server: { version: "test", connId: "conn-1" },
               features: {
-                methods: ["connect", "agent", "agent.wait"],
+                methods: [
+                  "connect", "agent", "agent.wait", "chat.abort", "skills.status",
+                  "skills.files.get", "skills.upload.begin", "skills.upload.chunk",
+                  "skills.upload.commit", "skills.install", "blentera.platform.bind.v1",
+                  "blentera.platform.status.v1", "blentera.platform.unbind.v1",
+                ],
                 events: ["agent"],
               },
               snapshot: { version: 1, ts: Date.now() },
@@ -121,6 +148,51 @@ async function createControlledGatewayServer(beforeComplete?: (turn: number) => 
             },
           }),
         );
+        return;
+      }
+
+      if (frame.method === "blentera.platform.bind.v1") {
+        governedPaperclipRunId = typeof frame.params?.paperclipRunId === "string" ? frame.params.paperclipRunId : null;
+      }
+
+      if (frame.method === "skills.status") {
+        const skills = platformSkillInstalled
+          ? [{ name: "Blentera platform", skillKey: "blentera-platform", filePath: "/remote/agent/skills/blentera-platform/SKILL.md", eligible: true, blockedByAgentFilter: false }]
+          : [];
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { managedSkillsDir: "/remote/agent/skills", skills } }));
+        return;
+      }
+      if (frame.method === "skills.upload.begin") {
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { uploadId: "11111111-1111-4111-8111-111111111111", receivedBytes: 0 } }));
+        return;
+      }
+      if (frame.method === "skills.upload.chunk") {
+        const receivedBytes = Number(frame.params?.offset ?? 0) + Buffer.from(String(frame.params?.dataBase64 ?? ""), "base64").byteLength;
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { uploadId: frame.params?.uploadId, receivedBytes } }));
+        return;
+      }
+      if (frame.method === "skills.upload.commit") {
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { uploadId: frame.params?.uploadId, sha256: frame.params?.sha256 } }));
+        return;
+      }
+      if (frame.method === "skills.install") {
+        platformSkillInstalled = true;
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { ok: true, slug: "blentera-platform", sha256: frame.params?.sha256, targetDir: "/remote/agent/skills/blentera-platform" } }));
+        return;
+      }
+      if (frame.method === "blentera.platform.bind.v1") {
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { protocolVersion: 1, pluginVersion: "1.0.0", toolCount: 7, toolsHash: "b".repeat(64) } }));
+        return;
+      }
+      if (frame.method === "blentera.platform.status.v1") {
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { protocolVersion: 1, ready: true, paperclipRunId: governedPaperclipRunId, toolCount: 7, toolsHash: "b".repeat(64), expiresAt: new Date(Date.now() + 60_000).toISOString() } }));
+        return;
+      }
+      if (frame.method === "blentera.platform.unbind.v1" || frame.method === "skills.files.get") {
+        const payload = frame.method === "skills.files.get"
+          ? { path: frame.params?.path, name: "Blentera platform", content: platformSkillText }
+          : { ok: true };
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload }));
         return;
       }
 
@@ -198,8 +270,10 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
   let tempDb: Awaited<
     ReturnType<typeof startEmbeddedPostgresTestDatabase>
   > | null = null;
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     const started = await startEmbeddedPostgresTestDatabase(
       "paperclip-heartbeat-comment-wake-",
     );
@@ -211,6 +285,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     await heartbeatService(db).drainActiveRunExecutions();
     await closeDbClient(db);
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   });
 
   afterEach(() => {
@@ -225,7 +300,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     const heartbeat = heartbeatService(db);
 
-    await db.insert(companies).values({
+    await insertCompanyFixture(db, {
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -252,6 +327,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
       invocationSource: "assignment",
       triggerDetail: "system",
       status: "running",
+      responsibleUserId: "responsible-user",
       contextSnapshot: {
         issueId,
         taskId: issueId,
@@ -347,7 +423,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     const heartbeat = heartbeatService(db);
 
-    await db.insert(companies).values({
+    await insertCompanyFixture(db, {
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -374,6 +450,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
       invocationSource: "assignment",
       triggerDetail: "system",
       status: "running",
+      responsibleUserId: "responsible-user",
       contextSnapshot: {
         issueId,
         taskId: issueId,
@@ -471,7 +548,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -488,6 +565,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -538,7 +616,16 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
       });
 
       expect(firstRun).not.toBeNull();
-      await waitFor(() => gateway.getAgentPayloads().length === 1);
+      try {
+        await waitFor(() => gateway.getAgentPayloads().length === 1);
+      } catch (error) {
+        const [run, events] = await Promise.all([
+          db.select({ status: heartbeatRuns.status, responsibleUserId: heartbeatRuns.responsibleUserId, errorCode: heartbeatRuns.errorCode, error: heartbeatRuns.error, resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, firstRun!.id)).then(rows => rows[0] ?? null),
+          db.select({ eventType: heartbeatRunEvents.eventType, payload: heartbeatRunEvents.payload }).from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId, firstRun!.id)),
+        ]);
+        console.log("heartbeat current-gateway first-run failure", JSON.stringify({ run, events, payloads: gateway.getAgentPayloads() }));
+        throw error;
+      }
 
       await db.insert(issueComments).values({
         companyId,
@@ -708,7 +795,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -724,6 +811,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: { "x-openclaw-token": "gateway-token" },
           payloadTemplate: { message: "wake now" },
           waitTimeoutMs: 2_000,
@@ -864,7 +952,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -881,6 +969,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -981,13 +1070,18 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
 
       expect(followupRun).toBeNull();
 
-      await heartbeat.cancelRun(firstRun!.id);
+      await expect(heartbeat.cancelRun(firstRun!.id)).rejects.toMatchObject({ status: 409 });
 
       gateway.releaseFirstWait();
       await heartbeat.reconcileStrandedAssignedIssues();
       expect(gateway.getAgentPayloads()).toHaveLength(1);
       const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
-      expect(runs).toEqual([expect.objectContaining({ id: firstRun!.id, status: "cancelled" })]);
+      expect(runs).toEqual([expect.objectContaining({
+        id: firstRun!.id,
+        status: "cancelled",
+        errorCode: "cancelled",
+      })]);
+      expect(runs[0]?.resultJson?.executionCancellation).toMatchObject({ state: "requested" });
       const [action] = await db.select().from(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, issueId));
       expect(action).toMatchObject({ cause: "legacy_execution_requires_reconciliation", ownerType: "board", returnOwnerAgentId: agentId });
       const [retained] = await db.select().from(issueComments).where(eq(issueComments.id, queuedComment.id));
@@ -1009,7 +1103,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -1026,6 +1120,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -1220,7 +1315,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const wakeReason = targetAssignee ? "issue_commented" : "issue_comment_mentioned";
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -1238,6 +1333,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           adapterType: "openclaw_gateway",
           adapterConfig: {
             url: gateway.url,
+            agentId: "paperclip-fixture-agent",
             headers: {
               "x-openclaw-token": "gateway-token",
             },
@@ -1258,6 +1354,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           adapterType: "openclaw_gateway",
           adapterConfig: {
             url: gateway.url,
+            agentId: "paperclip-fixture-agent",
             headers: {
               "x-openclaw-token": "gateway-token",
             },
@@ -1461,7 +1558,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -1478,6 +1575,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -1658,7 +1756,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -1675,6 +1773,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -1874,7 +1973,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
       const heartbeat = heartbeatService(db);
 
       try {
-        await db.insert(companies).values({
+        await insertCompanyFixture(db, {
           id: companyId,
           name: "Paperclip",
           issuePrefix,
@@ -1890,6 +1989,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           adapterType: "openclaw_gateway",
           adapterConfig: {
             url: gateway.url,
+            agentId: "paperclip-fixture-agent",
             headers: { "x-openclaw-token": "gateway-token" },
             payloadTemplate: { message: "wake now" },
             waitTimeoutMs: 2_000,
@@ -2028,6 +2128,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           invocationSource: "assignment",
           triggerDetail: "system",
           status: "running",
+          responsibleUserId: "responsible-user",
           runtimeMode: "native",
           nativeIssueId: issueId,
           driverKind: "codex",
@@ -2358,7 +2459,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -2375,6 +2476,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -2577,7 +2679,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -2594,6 +2696,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -2765,7 +2868,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -2782,6 +2885,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -2951,7 +3055,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -2968,6 +3072,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -3116,7 +3221,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -3133,6 +3238,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -3281,7 +3387,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -3299,6 +3405,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           adapterType: "openclaw_gateway",
           adapterConfig: {
             url: gateway.url,
+            agentId: "paperclip-fixture-agent",
             headers: {
               "x-openclaw-token": "gateway-token",
             },
@@ -3319,6 +3426,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           adapterType: "openclaw_gateway",
           adapterConfig: {
             url: gateway.url,
+            agentId: "paperclip-fixture-agent",
             headers: {
               "x-openclaw-token": "gateway-token",
             },
@@ -3488,7 +3596,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -3506,6 +3614,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           adapterType: "openclaw_gateway",
           adapterConfig: {
             url: gateway.url,
+            agentId: "paperclip-fixture-agent",
             headers: {
               "x-openclaw-token": "gateway-token",
             },
@@ -3526,6 +3635,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           adapterType: "openclaw_gateway",
           adapterConfig: {
             url: gateway.url,
+            agentId: "paperclip-fixture-agent",
             headers: {
               "x-openclaw-token": "gateway-token",
             },
@@ -3639,7 +3749,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const heartbeat = heartbeatService(db);
 
     try {
-      await db.insert(companies).values({
+      await insertCompanyFixture(db, {
         id: companyId,
         name: "Paperclip",
         issuePrefix,
@@ -3656,6 +3766,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
         adapterType: "openclaw_gateway",
         adapterConfig: {
           url: gateway.url,
+          agentId: "paperclip-fixture-agent",
           headers: {
             "x-openclaw-token": "gateway-token",
           },
@@ -3788,7 +3899,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     // no-ops under suppression and would leave the promoted wake at "queued".
     const heartbeat = heartbeatService(db, { runtimeEnv: {} });
 
-    await db.insert(companies).values({
+    await insertCompanyFixture(db, {
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -3919,7 +4030,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const otherIssuePrefix = `T${otherCompanyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     const heartbeat = heartbeatService(db);
 
-    await db.insert(companies).values([
+    await insertCompanyFixture(db, [
       {
         id: companyId,
         name: "Paperclip",
@@ -4025,7 +4136,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     // no-ops under suppression and would leave the promoted wake at "queued".
     const heartbeat = heartbeatService(db, { runtimeEnv: {} });
 
-    await db.insert(companies).values({
+    await insertCompanyFixture(db, {
       id: companyId,
       name: "Paperclip",
       issuePrefix,
@@ -4178,7 +4289,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     const heartbeat = heartbeatService(db);
 
-    await db.insert(companies).values({
+    await insertCompanyFixture(db, {
       id: companyId,
       name: "Paperclip",
       issuePrefix,

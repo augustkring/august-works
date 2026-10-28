@@ -17,6 +17,7 @@ import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopI
 import { stoppedCodexTurnIsTextOnly } from "./stopped-codex-turn.js";
 import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
 import { readNativeLocalProcessStop, PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
+import { REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
 import { remoteLeaseCleanupScope } from "../remote-execution-termination.js";
 import { managedOpenCodeRuntimeDirectory } from "./runtime-asset-retention.js";
 import { resolveConnectorAssignments, isConnectorSkill } from "../connector-runtime.js";
@@ -247,6 +248,57 @@ export class NativeControllerDetachedForRestartError extends Error {
 }
 
 const activeNativeSessions = new Map<string, ActiveNativeSession>();
+type NativeCancelOriginTestFact = {
+  stage: "cancel_native_session" | "lease_renewal_failed" | "startup_stop_requested" | "startup_gate" | "active_cancel_requested";
+  reason: "analytical_source_access_lost" | "execution_lease_lost" | "stop_during_startup" | "run_stopped_during_startup" | "other" | null;
+  runStatus?: "running" | "cancelled" | "failed" | "interrupted" | "succeeded" | "timed_out" | "other" | "missing";
+  startupCancellationPresent?: boolean;
+  cancellationScope?: "run" | "other" | "absent";
+  cancellationDispatchState?: "pending" | "acknowledged" | "other" | "absent";
+  frames: Array<{ functionName: string | null; sourceFile: string; line: number }>;
+};
+const nativeCancelOriginTestFacts = new Map<string, NativeCancelOriginTestFact[]>();
+
+function nativeCancelOriginFrames(): NativeCancelOriginTestFact["frames"] {
+  const stack = new Error().stack?.split("\n").slice(2) ?? [];
+  const frames: NativeCancelOriginTestFact["frames"] = [];
+  for (const line of stack) {
+    const match = /^\s*at (?:(.*?) \()?(.+?):(\d+):\d+\)?$/.exec(line);
+    if (!match) continue;
+    const sourceFile = match[2]!.split(/[\\/]/).at(-1)!;
+    const row = Number(match[3]);
+    if (!/^[-\w.]+\.(?:ts|js|mjs|cjs)$/.test(sourceFile) || !Number.isSafeInteger(row)) continue;
+    frames.push({ functionName: match[1] || null, sourceFile, line: row });
+    if (frames.length >= 8) break;
+  }
+  return frames;
+}
+
+function recordNativeCancelOriginTestFact(runId: string, fact: Omit<NativeCancelOriginTestFact, "frames">) {
+  if (process.env.PAPERCLIP_NATIVE_CANCEL_ORIGIN_TEST_DIAGNOSTICS !== "1") return;
+  const values = nativeCancelOriginTestFacts.get(runId) ?? [];
+  if (values.length >= 12) return;
+  values.push({ ...fact, frames: nativeCancelOriginFrames() });
+  nativeCancelOriginTestFacts.set(runId, values);
+  while (nativeCancelOriginTestFacts.size > 64) {
+    const oldest = nativeCancelOriginTestFacts.keys().next().value;
+    if (!oldest) break;
+    nativeCancelOriginTestFacts.delete(oldest);
+  }
+}
+
+/** Bounded, opt-in fixture evidence; contains enum facts and source frames only. */
+export function nativeCancelOriginTestFactsForRun(runId: string): NativeCancelOriginTestFact[] {
+  return (nativeCancelOriginTestFacts.get(runId) ?? []).map(fact => ({ ...fact, frames: [...fact.frames] }));
+}
+
+function cancellationReasonClass(reason: string): NativeCancelOriginTestFact["reason"] {
+  if (reason === "native analytical source access lost" || reason === "Analytical source access lost") return "analytical_source_access_lost";
+  if (reason === "native session execution lease lost") return "execution_lease_lost";
+  if (reason === "Stop requested during native startup") return "stop_during_startup";
+  if (reason === "Run stopped during native session startup") return "run_stopped_during_startup";
+  return "other";
+}
 // Shutdown can race provider startup before onSession publishes its handle.
 // Retain the request for the remainder of this controller's lifetime so that
 // the late publication detaches before it can dispatch another turn.
@@ -4709,6 +4761,7 @@ async function verifyWarmTransitionRestart(input: {
 async function migrateRunnerdStateRootForExecution(input: {
   db: Db;
   execution: NativeExecutionInput;
+  conversationMode?: boolean;
   allowVerifiedBackup: boolean;
   allowRetainedWarmRunner: boolean;
   allowLocalRecovery: boolean;
@@ -4776,6 +4829,8 @@ async function migrateRunnerdStateRootForExecution(input: {
       await verifyRemoteRunnerReattachment({
         claim: input.restartRecovery, target: input.runnerExecutionTarget, identity,
         runId: input.execution.binding.runId, normalizedSessionId: nativeSessionKey(input.execution),
+        nativeHarnessState: input.conversationMode === true && input.execution.provider.kind === "opencode" &&
+          input.runnerExecutionTarget?.kind === "remote" && input.runnerExecutionTarget.transport === "sandbox",
       });
       return;
     }
@@ -6726,6 +6781,10 @@ export async function cancelNativeSession(
       auditId: string | null;
     }
 > {
+  recordNativeCancelOriginTestFact(runId, {
+    stage: "cancel_native_session",
+    reason: cancellationReasonClass(reason),
+  });
   const runStop = (options?.scope ?? "run") === "run";
   let decision: NativeStatusDecision | null = null;
   let decisionContext: {
@@ -7604,7 +7663,16 @@ const nativeDispatchSourceOwnerDiagnosticReasons = new Map<string, string>([
   ["The Native source prefix owner is unavailable", "prefix_owner_unavailable"],
   ["The Native source prefix is not in its original receipt", "receipt_membership"],
   ["The Native source completion contract changed", "completion_contract_changed"],
-  ["The Native source workspace tuple changed", "workspace_tuple_changed"],
+  ["A Native source workspace tuple changed", "workspace_tuple_changed"],
+  ["The Native output workspace tuple changed", "output_workspace_tuple_changed"],
+  ["The Native output agent workspace changed", "output_agent_workspace_changed"],
+  ["The Native task-session workspace source changed", "output_task_session_workspace_changed"],
+  ["The Native output workspace owner changed", "output_workspace_owner_changed"],
+  ["The Native document workspace source is unavailable", "document_workspace_source_unavailable"],
+  ["The Native document workspace tuple changed", "document_workspace_tuple_changed"],
+  ["The Native document agent workspace changed", "document_agent_workspace_changed"],
+  ["The Native document task-session workspace source changed", "document_task_session_workspace_changed"],
+  ["The Native document workspace owner changed", "document_workspace_owner_changed"],
   ["The Native source agent workspace changed", "agent_workspace_changed"],
   ["The Native source task-session workspace changed", "task_session_workspace_changed"],
   ["The Native source execution workspace changed", "execution_workspace_changed"],
@@ -7846,6 +7914,16 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     stage = "lease_recheck_after";
     await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
   }).catch((error: unknown) => {
+    if (stage === "source_owner_recheck" && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+      const stack = error instanceof Error ? error.stack ?? "" : "";
+      const frames = stack.split("\n").slice(1).flatMap(line => {
+        const match = /\bat (?:(.{1,100}?) \()?[^\s():]*server\/src\/services\/([^\s():]+\.ts):(\d+):\d+\)?$/.exec(line.trim());
+        if (!match) return [];
+        const fn = /^[A-Za-z0-9_.$<>-]+$/.test(match[1] ?? "") ? match[1]! : "anonymous";
+        return [`${fn} ${match[2]}:${match[3]}`];
+      }).slice(0, 6);
+      console.error("native_source_owner_failure_frames", JSON.stringify(frames));
+    }
     // A driver's query/params can include the existing private run profile.
     // Keep only our finite control errors; never propagate raw DB diagnostics.
     const message = error instanceof Error ? error.message : "";
@@ -9087,6 +9165,11 @@ function startNativeSessionExecutionLeaseRenewal(input: {
           error instanceof Error
             ? error
             : new Error("native_session_lease_lost");
+        recordNativeCancelOriginTestFact(input.runId, {
+          stage: "lease_renewal_failed",
+          reason: leaseLost instanceof HttpError && (leaseLost.details as {code?:unknown}|undefined)?.code === "analytical_source_access_lost"
+            ? "analytical_source_access_lost" : "execution_lease_lost",
+        });
         await cancelNativeSession(
           input.runId,
           leaseLost instanceof HttpError && (leaseLost.details as {code?:unknown}|undefined)?.code === "analytical_source_access_lost"
@@ -9433,6 +9516,7 @@ async function executePaperclipNativeSessionWithinScope(
       onLog: input.onLog,
       restartRecovery: input.restartRecovery,
       runnerExecutionTarget: input.runnerExecutionTarget,
+      conversationMode: input.conversationMode,
     });
   }
   const durableRunnerBinding = input.useRunnerd
@@ -10698,6 +10782,10 @@ async function executePaperclipNativeSessionWithinScope(
                 const startup = nativeSessionStartups.get(input.execution.binding.runId);
                 startup?.resolve(active);
                 if (startup?.stopRequested) {
+                  recordNativeCancelOriginTestFact(input.execution.binding.runId, {
+                    stage: "startup_stop_requested",
+                    reason: "stop_during_startup",
+                  });
                   // Publication wakes the Stop caller; wait for its durable ACK
                   // before unwinding. No provider turn may be submitted between
                   // session startup and the execution-owned cleanup below.
@@ -10724,6 +10812,18 @@ async function executePaperclipNativeSessionWithinScope(
                     currentRun.resultJson?.startupCancellation ||
                     (cancellation.scope === "run" &&
                       ["pending", "acknowledged"].includes(String(cancellation.dispatchState)))) {
+                  const status = currentRun?.status;
+                  recordNativeCancelOriginTestFact(input.execution.binding.runId, {
+                    stage: "startup_gate",
+                    reason: "run_stopped_during_startup",
+                    runStatus: status === "running" || status === "cancelled" || status === "failed" ||
+                      status === "interrupted" || status === "succeeded" || status === "timed_out"
+                      ? status : currentRun ? "other" : "missing",
+                    startupCancellationPresent: Boolean(currentRun?.resultJson?.startupCancellation),
+                    cancellationScope: cancellation.scope === "run" ? "run" : cancellation.scope ? "other" : "absent",
+                    cancellationDispatchState: cancellation.dispatchState === "pending" || cancellation.dispatchState === "acknowledged"
+                      ? cancellation.dispatchState : cancellation.dispatchState ? "other" : "absent",
+                  });
                   await cancelNativeSession(input.execution.binding.runId, "Run stopped during native session startup");
                   // The execution-owned finally closes the session when this
                   // callback fails; no provider turn may follow publication.
@@ -10733,7 +10833,13 @@ async function executePaperclipNativeSessionWithinScope(
                 if (nativeRunsDetachingForRestart.has(input.execution.binding.runId)) {
                   if (session.detachControllerForRestart) await detachActiveNativeSessionForRestart(active);
                 }
-                if (active.cancelRequested) throw new NativeCancellationPendingRecoveryError();
+                if (active.cancelRequested) {
+                  recordNativeCancelOriginTestFact(input.execution.binding.runId, {
+                    stage: "active_cancel_requested",
+                    reason: null,
+                  });
+                  throw new NativeCancellationPendingRecoveryError();
+                }
               } else {
                 liveQuestions.close();
                 activeNativeSessions.delete(input.execution.binding.runId);
@@ -11774,13 +11880,13 @@ export function assertRemoteRunnerBuildMetadata(
   }
 }
 
-async function stageRemoteRunnerFile(input: {
+export async function stageRemoteRunnerFile(input: {
   target: Extract<AdapterExecutionTarget, { kind: "remote" }>;
   runner: CommandManagedRuntimeRunner;
   sourcePath: string;
   targetPath: string;
   mode: number;
-  nativePreparationPurpose?: "provider_artifact";
+  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare";
   forceRelayChunking?: boolean;
 }): Promise<void> {
   const runner = input.runner;
@@ -11795,7 +11901,7 @@ async function stageRemoteRunnerFile(input: {
     });
     return;
   }
-  if (runner.syncIn) {
+  if (runner.syncIn && input.nativePreparationPurpose !== "native_runtime_context_prepare") {
     await runner.syncIn([
       {
         operationId: `runner-stage-${randomUUID()}`,
@@ -11856,10 +11962,15 @@ export async function stageRemoteRunnerDirectory(input: {
   targetPath: string;
   mode: number;
   excludeEntries?: readonly string[];
-  nativePreparationPurpose?: "provider_artifact";
+  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare" | "native_harness_state";
 }): Promise<void> {
   const excludeArgs = archiveExcludeArgs(input.excludeEntries ?? []);
-  if (input.runner.syncIn) {
+  // Runtime context is a source-pinned, server-owned preparation phase. Route
+  // it through the signed execute relay so RuntimeControl can bind the exact
+  // run/profile and private context target; native provider sync has no owner
+  // field and cannot prove those bindings.
+  if (input.runner.syncIn && input.nativePreparationPurpose !== "native_runtime_context_prepare" &&
+    input.nativePreparationPurpose !== "native_harness_state") {
     let stagingRoot: string | null = null;
     let sourcePath = input.sourcePath;
     try {
@@ -11959,10 +12070,11 @@ async function stageRemoteArtifactBytesInChunks(input: {
   await run(`chmod ${input.mode.toString(8)} ${quote(tempPath)} && mv -f ${quote(tempPath)} ${quote(input.targetPath)}`);
 }
 
-async function remoteRunnerPathExists(input: {
+export async function remoteRunnerPathExists(input: {
   runner: CommandManagedRuntimeRunner;
   path: string;
   kind: "file" | "directory";
+  nativeHarnessState?: boolean;
 }): Promise<boolean> {
   const escapedPath = input.path.replaceAll("'", "'\\''");
   const result = await input.runner.execute({
@@ -11970,6 +12082,7 @@ async function remoteRunnerPathExists(input: {
     args: ["-c", `test -${input.kind === "file" ? "f" : "d"} '${escapedPath}'`],
     bypassSession: true,
     timeoutMs: 10_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   return result.exitCode === 0 && !result.timedOut;
 }
@@ -12082,12 +12195,14 @@ export async function syncRemoteRunnerDirectoryOut(input: {
   targetPath: string;
   mode: number;
   excludeEntries?: readonly string[];
+  nativeHarnessState?: boolean;
 }): Promise<void> {
   if (
     !(await remoteRunnerPathExists({
       runner: input.runner,
       path: input.sourcePath,
       kind: "directory",
+      nativeHarnessState: input.nativeHarnessState,
     }))
   )
     return;
@@ -12120,6 +12235,7 @@ export async function syncRemoteRunnerDirectoryOut(input: {
         ],
         bypassSession: true,
         timeoutMs: 120_000,
+        ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
       });
       if (snapshotResult.exitCode !== 0 || snapshotResult.timedOut) {
         throw new Error("runner_remote_checkpoint_snapshot_failed");
@@ -12149,6 +12265,7 @@ export async function syncRemoteRunnerDirectoryOut(input: {
             args: ["-c", `rm -rf -- '${escapedSnapshot}'`],
             bypassSession: true,
             timeoutMs: 30_000,
+            ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
           })
           .catch(() => undefined);
       }
@@ -12156,11 +12273,13 @@ export async function syncRemoteRunnerDirectoryOut(input: {
     return;
   }
   const escapedSource = input.sourcePath.replaceAll("'", "'\\''");
+  const exclusionPrefix = excludeArgs.length > 0 ? `${excludeArgs} ` : "";
   const result = await input.runner.execute({
     command: "sh",
-    args: ["-c", `tar ${excludeArgs} -czf - -C '${escapedSource}' . | base64`],
+    args: ["-c", `tar ${exclusionPrefix}-czf - -C '${escapedSource}' . | base64`],
     bypassSession: true,
     timeoutMs: 120_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_checkpoint_failed");
@@ -12287,16 +12406,10 @@ const REMOTE_RUNNER_PROCESS_POLL_MS = 1_000;
 const REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT =
   "process_fingerprint=$(node -e 'const fs=require(\"node:fs\");try{const stat=fs.readFileSync(\"/proc/\"+process.argv[1]+\"/stat\",\"utf8\");const end=stat.lastIndexOf(\") \");const ticks=stat.slice(end+2).trim().split(/\\s+/)[19];const boot=fs.readFileSync(\"/proc/sys/kernel/random/boot_id\",\"utf8\").trim();if(end<0||!/^\\d+$/.test(ticks||\"\")||!/^[-a-fA-F0-9]+$/.test(boot))process.exit(4);process.stdout.write(\"linux:\"+boot+\":\"+ticks)}catch{process.exit(4)}' \"$pid\")";
 
-const REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT =
-  'set -eu; identity_path=$1; expected_nonce=$2; expected_runner_id=$3; expected_pid=$4; test -f "$identity_path" && test ! -L "$identity_path" || exit 3; { IFS= read -r nonce; IFS= read -r pid; IFS= read -r started_at; IFS= read -r runner_id; } < "$identity_path"; test "$nonce" = "$expected_nonce" && test "$runner_id" = "$expected_runner_id" && test "$pid" = "$expected_pid" && test -n "$started_at" || exit 4; kill -0 "$pid" 2>/dev/null || exit 3; if test -r "/proc/$pid/cmdline"; then command_line=$(tr "\\000" "\\n" < "/proc/$pid/cmdline"); printf "%s\\n" "$command_line" | grep -Fqx -- "--runner-id" || exit 4; printf "%s\\n" "$command_line" | grep -Fqx -- "$expected_runner_id" || exit 4; fi';
-
 export const REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT =
   'set -eu; identity_path=$1; identity_nonce=$2; runner_instance_id=$3; diagnostics_directory=$4; shift 4; umask 077; test ! -L "$diagnostics_directory"; if test -e "$diagnostics_directory"; then test -d "$diagnostics_directory"; else mkdir -p -- "$diagnostics_directory"; fi; chmod 0700 "$diagnostics_directory"; started_at=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ"); pid=$$; process_fingerprint=""; if ' +
   REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT +
   '; then :; else process_fingerprint=""; fi; identity_tmp="${identity_path}.tmp.$$"; printf "%s\\n%s\\n%s\\n%s\\n%s\\n" "$identity_nonce" "$$" "$started_at" "$runner_instance_id" "$process_fingerprint" > "$identity_tmp"; chmod 0600 "$identity_tmp"; mv -f -- "$identity_tmp" "$identity_path"; exec "$@"';
-
-const REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT =
-  'set -eu; identity_path=$1; expected_nonce=$2; expected_runner_id=$3; marker_wait=0; while { test ! -f "$identity_path" || test -L "$identity_path"; } && test "$marker_wait" -lt 50; do marker_wait=$((marker_wait + 1)); sleep 0.1; done; test -f "$identity_path" && test ! -L "$identity_path" || exit 3; { IFS= read -r nonce; IFS= read -r pid; IFS= read -r started_at; IFS= read -r runner_id; } < "$identity_path"; test "$nonce" = "$expected_nonce" && test "$runner_id" = "$expected_runner_id" && test -n "$started_at" || exit 4; case "$pid" in ""|*[!0-9]*) exit 4 ;; esac; test "$pid" -gt 0 || exit 4; if kill -0 "$pid" 2>/dev/null; then if test -r "/proc/$pid/cmdline"; then command_line=$(tr "\\000" "\\n" < "/proc/$pid/cmdline"); printf "%s\\n" "$command_line" | grep -Fqx -- "--runner-id" || exit 4; printf "%s\\n" "$command_line" | grep -Fqx -- "$expected_runner_id" || exit 4; fi; signal_target=$pid; if command -v ps >/dev/null 2>&1; then session_id=$(ps -o sid= -p "$pid" 2>/dev/null | tr -d " ") || true; if test "$session_id" = "$pid"; then signal_target="-$pid"; fi; fi; kill -TERM -- "$signal_target" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true; term_wait=0; while kill -0 "$pid" 2>/dev/null && test "$term_wait" -lt 50; do term_wait=$((term_wait + 1)); sleep 0.1; done; if kill -0 "$pid" 2>/dev/null; then kill -KILL -- "$signal_target" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true; kill_wait=0; while kill -0 "$pid" 2>/dev/null && test "$kill_wait" -lt 50; do kill_wait=$((kill_wait + 1)); sleep 0.1; done; fi; kill -0 "$pid" 2>/dev/null && exit 5; fi; test -f "$identity_path" && test ! -L "$identity_path" || exit 4; { IFS= read -r final_nonce; IFS= read -r final_pid; IFS= read -r final_started_at; IFS= read -r final_runner_id; } < "$identity_path"; test "$final_nonce" = "$nonce" && test "$final_pid" = "$pid" && test "$final_started_at" = "$started_at" && test "$final_runner_id" = "$runner_id" || exit 4; rm -f -- "$identity_path"';
 
 export function parseRemoteRunnerProcessIdentity(
   value: string,
@@ -12331,6 +12444,7 @@ export async function verifyRemoteRunnerReattachment(input: {
   identity: Record<string, unknown>;
   runId: string;
   normalizedSessionId: string;
+  nativeHarnessState?: boolean;
 }) {
   const { claim, target, identity } = input;
   if (
@@ -12356,7 +12470,7 @@ export async function verifyRemoteRunnerReattachment(input: {
     createHash("sha256").update(input.normalizedSessionId).digest("hex"),
     "runner",
   );
-  const runnerState = await readRemoteRunnerState({ runner, stateDirectory });
+  const runnerState = await readRemoteRunnerState({ runner, stateDirectory, nativeHarnessState: input.nativeHarnessState });
   for (const field of [
     "runId",
     "normalizedSessionId",
@@ -12384,6 +12498,7 @@ export async function verifyRemoteRunnerReattachment(input: {
     ],
     bypassSession: true,
     timeoutMs: 10_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   const nonce = marker.stdout.split("\n")[0] ?? "";
   const runnerInstanceId = identity.runnerInstanceId as string;
@@ -12414,6 +12529,7 @@ export async function verifyRemoteRunnerReattachment(input: {
       ],
       bypassSession: true,
       timeoutMs: 10_000,
+      ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
     });
     return result.exitCode === 0 && !result.timedOut;
   };
@@ -12467,6 +12583,7 @@ async function cleanupRemoteRunnerAfterIdentityFailure(input: {
   identityPath: string;
   nonce: string;
   runnerInstanceId: string;
+  nativeHarnessState?: boolean;
 }): Promise<boolean> {
   const result = await input.runner
     .execute({
@@ -12478,9 +12595,11 @@ async function cleanupRemoteRunnerAfterIdentityFailure(input: {
         input.identityPath,
         input.nonce,
         input.runnerInstanceId,
+        REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
       ],
       bypassSession: true,
       timeoutMs: 20_000,
+      ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
     })
     .catch(() => null);
   return result?.exitCode === 0 && result.timedOut === false;
@@ -12542,9 +12661,11 @@ export function createRemoteRunnerProcessLauncher(input: {
             identity.nonce,
             input.runnerInstanceId,
             String(identity.pid),
+            "require-fingerprint",
           ],
           bypassSession: true,
           timeoutMs: 10_000,
+          ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
         }).catch(async () => {
           // kill() follows Node's synchronous child-process contract. A deleted
           // sandbox or failed signal RPC must not reject outside that boundary
@@ -12644,6 +12765,7 @@ export function createRemoteRunnerProcessLauncher(input: {
           identityPath: input.processIdentityPath,
           nonce: identityNonce,
           runnerInstanceId: input.runnerInstanceId,
+          nativeHarnessState: input.nativeHarnessState,
         });
         await input.trace?.record({
           name: "runner.process.identity_failure_cleanup",
@@ -12674,22 +12796,33 @@ export function createRemoteRunnerProcessLauncher(input: {
         attributes: { identitySource: "remote_marker", detached: true },
       });
 
+      let statusObservationFailures = 0;
       while (true) {
-        const observed = await runner.execute({
-          command: "sh",
-          args: [
-            "-c",
-            REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
-            "paperclip-runner-monitor",
-            input.processIdentityPath,
-            identityNonce,
-            input.runnerInstanceId,
-            String(identity.pid),
-          ],
-          bypassSession: true,
-          timeoutMs: 10_000,
-          ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
-        });
+        let observed: Awaited<ReturnType<CommandManagedRuntimeRunner["execute"]>>;
+        try {
+          observed = await runner.execute({
+            command: "sh",
+            args: [
+              "-c",
+              REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
+              "paperclip-runner-monitor",
+              input.processIdentityPath,
+              identityNonce,
+              input.runnerInstanceId,
+              String(identity.pid),
+            ],
+            bypassSession: true,
+            timeoutMs: 10_000,
+            ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+          });
+        } catch (error) {
+          if (!input.nativeHarnessState || !(error instanceof Error) ||
+            error.message !== "runner_process_status_unavailable" || statusObservationFailures >= 3) throw error;
+          statusObservationFailures++;
+          await new Promise<void>(resolve => setTimeout(resolve, REMOTE_RUNNER_PROCESS_POLL_MS));
+          continue;
+        }
+        statusObservationFailures = 0;
         if (observed.exitCode === 0 && !observed.timedOut) {
           await new Promise<void>((resolve) =>
             setTimeout(resolve, REMOTE_RUNNER_PROCESS_POLL_MS),
@@ -12880,6 +13013,7 @@ export async function createRunnerdBackend(input: {
         onLog: input.onLog,
         restartRecovery: input.restartRecovery,
         runnerExecutionTarget: input.runnerExecutionTarget,
+        conversationMode: input.conversationMode,
       });
     }
     return await createRunnerdBackendWithinSessionClaim(
@@ -12990,7 +13124,7 @@ async function createRunnerdBackendWithinSessionClaim(
     managedNativeContextReadCapture: input.managedNativeContextReadCapture,
     testBeforeManagedProjectCreate: input.testBeforeManagedProjectCreate,
     testAfterManagedProjectCreate: input.testAfterManagedProjectCreate,
-    ...(input.managedNativeContextReadCapture ? { managedNativeContextRead: async (query: string) => {
+    ...(input.managedNativeContextReadCapture ? { managedNativeContextRead: async (query: string, callId?: string) => {
       const [current] = await input.db.select({ projectId: issues.projectId, responsibleUserId: heartbeatRuns.responsibleUserId })
         .from(heartbeatRuns).innerJoin(issues, and(eq(issues.companyId, heartbeatRuns.companyId),
           eq(issues.id, input.execution.binding.issueId))).where(and(
@@ -13000,34 +13134,14 @@ async function createRunnerdBackendWithinSessionClaim(
         ));
       if (!current) throw new Error("managed_native_context_read_binding_invalid");
       let binding: NativeContextReadBinding;
-      try {
-        binding = await assembleNativeContextRead(input.db, {
-          companyId: input.execution.binding.companyId, agentId: input.execution.binding.agentId,
-          runId: input.execution.binding.runId, issueId: input.execution.binding.issueId,
-          projectId: current.projectId ?? null, responsibleUserId: current.responsibleUserId ?? null,
-          actor: { type: "agent", source: "none", companyId: input.execution.binding.companyId,
-            agentId: input.execution.binding.agentId, runId: input.execution.binding.runId,
-            onBehalfOfUserId: current.responsibleUserId ?? undefined }, query,
-        });
-      } catch (error) {
-        if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
-          const diagnostic = error && typeof error === "object"
-            ? error as Error & { code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown } } : null;
-          const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,100}$/i.test(value) ? value : null;
-          const frames = diagnostic?.stack?.split("\n").slice(1).flatMap(frame => {
-            const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
-            return match ? [`${match[1]}:${match[2]}`] : [];
-          }).slice(0, 6) ?? [];
-          console.error("managed_native_context_assembly_test_failure", JSON.stringify({
-            name: diagnostic?.name === "HttpError" || diagnostic?.name === "Error" ? diagnostic.name : "other",
-            code: safeCode(diagnostic?.code), causeCode: safeCode(diagnostic?.cause?.code),
-            status: typeof diagnostic?.status === "number" ? diagnostic.status :
-              typeof diagnostic?.statusCode === "number" ? diagnostic.statusCode : null,
-            frames,
-          }));
-        }
-        throw error;
-      }
+      binding = await assembleNativeContextRead(input.db, {
+        companyId: input.execution.binding.companyId, agentId: input.execution.binding.agentId,
+        runId: input.execution.binding.runId, issueId: input.execution.binding.issueId,
+        projectId: current.projectId ?? null, responsibleUserId: current.responsibleUserId ?? null,
+        actor: { type: "agent", source: "none", companyId: input.execution.binding.companyId,
+          agentId: input.execution.binding.agentId, runId: input.execution.binding.runId,
+          onBehalfOfUserId: current.responsibleUserId ?? undefined }, query,
+      });
       input.managedNativeContextReadCapture!.value = binding;
       return { markdown: binding.markdown };
     } } : {}),
@@ -13059,8 +13173,14 @@ async function createRunnerdBackendWithinSessionClaim(
     authorityEpoch.revoke();
     throw error;
   }
+  // Persist the managed OpenCode source authority for an authenticated
+  // conversation before any model credential exists. Runtime-context bundles
+  // are staged in this pre-receipt phase, so source pinning must derive from
+  // the server-owned conversation mode and current Run/manifest binding, not
+  // from whether this particular setup command carries broker credentials.
   const managedOpenCode = input.execution.provider.kind === "opencode" &&
-    Boolean((input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim());
+    (input.conversationMode === true ||
+      Boolean((input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()));
   let managedOpenCodeTools: Readonly<Record<string, unknown>>[] | null = null;
   let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
   if (managedOpenCode) {
@@ -14168,6 +14288,7 @@ async function createRunnerdBackendWithinSessionClaim(
             sourcePath: resolve(backup.root, directory.name),
             targetPath,
             mode: 0o700,
+            ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
           });
         }
       },
@@ -14406,6 +14527,7 @@ async function createRunnerdBackendWithinSessionClaim(
                             : remoteDirectory,
                         kind:
                           directory.name === "runner" ? "file" : "directory",
+                        nativeHarnessState: nativeConversationHarnessState,
                       }))
                     ) {
                       await stageRemoteRunnerDirectory({
@@ -14415,6 +14537,7 @@ async function createRunnerdBackendWithinSessionClaim(
                         targetPath: remoteDirectory,
                         mode: 0o700,
                         excludeEntries: directory.excludeEntries,
+                        ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
                       });
                     }
                   }
@@ -14456,6 +14579,7 @@ async function createRunnerdBackendWithinSessionClaim(
                 sourcePath: sourceRuntimeContext.instructions.bundle.rootPath,
                 targetPath: remoteRuntimeContext.instructions.bundle.rootPath,
                 mode: 0o555,
+                nativePreparationPurpose: "native_runtime_context_prepare",
               });
               for (
                 let index = 0;
@@ -14470,6 +14594,7 @@ async function createRunnerdBackendWithinSessionClaim(
                   targetPath:
                     remoteRuntimeContext.skills[index]!.bundle.rootPath,
                   mode: 0o555,
+                  nativePreparationPurpose: "native_runtime_context_prepare",
                 });
               }
               await stageRemoteRunnerFile({
@@ -14481,6 +14606,7 @@ async function createRunnerdBackendWithinSessionClaim(
                   "runtime-context.json",
                 ),
                 mode: 0o600,
+                nativePreparationPurpose: "native_runtime_context_prepare",
               });
             },
           );
@@ -14592,6 +14718,7 @@ async function createRunnerdBackendWithinSessionClaim(
                     targetPath,
                     mode: 0o700,
                     excludeEntries: directory.excludeEntries,
+                    nativeHarnessState: nativeConversationHarnessState,
                   });
                   if (!existsSync(targetPath)) {
                     throw new Error("runner_harness_state_mismatch");
@@ -14855,6 +14982,8 @@ async function createRunnerdBackendWithinSessionClaim(
           identity: durableIdentity ?? {},
           runId: input.execution.binding.runId,
           normalizedSessionId: nativeSessionKey(input.execution),
+          nativeHarnessState: input.conversationMode === true && input.execution.provider.kind === "opencode" &&
+            target.kind === "remote" && target.transport === "sandbox",
         })
       : target.kind === "local" && localRecoveryProcess
         ? {

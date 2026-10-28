@@ -797,6 +797,19 @@ test.describe("Pipelines tutorial UI flow", () => {
       sentBackStage: configured.stages.find((stage) => stage.key === "drafting")!.id,
     });
 
+    const changelogEventsResponse = await board.get(`/api/cases/${changelog!.id}/events`);
+    // Full case history can include producer-run sources this board member
+    // cannot inspect. The filtered company projection below proves the exact
+    // Human-authored learning event without widening full-history access.
+    expect(changelogEventsResponse.status()).toBe(404);
+    const learningEventsResponse = await board.get(`/api/companies/${company.id}/case-events?types=review_decided,transition_forced&limit=100`);
+    await expectOk(learningEventsResponse, "read company learning events");
+    const learningEvents = await learningEventsResponse.json() as { items: Array<{
+      type: string; case?: { id: string }; payload?: Record<string, unknown>;
+    }> };
+    expect(learningEvents.items.find((event) => event.case?.id === changelog!.id && event.type === "review_decided")?.payload)
+      .toMatchObject({ decision: "request_changes", reason: "Tighten the framing before publishing." });
+
     await page.goto(`${companyPath}/learnings`);
     await expect(page.getByRole("heading", { name: "Learnings" }).first()).toBeVisible();
     await expect(page.getByText("Tighten the framing before publishing.")).toBeVisible();

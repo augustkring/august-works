@@ -72,6 +72,8 @@ import { registerAssignedMcpGateway } from "../services/native-runtime/assigned-
 import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
 import { secretService } from "../services/secrets.js";
 import { issueService } from "../services/issues.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
@@ -789,9 +791,11 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           let markHostLocked!: (pid: number) => void;
           let releaseHeartbeat!: () => void;
           let markAdmissionStarted!: (pid: number) => void;
+          let markPrivacyWriterStarted!: (pid: number) => void;
           const hostLocked = new Promise<number>(resolve => { markHostLocked = resolve; });
           const heartbeatRelease = new Promise<void>(resolve => { releaseHeartbeat = resolve; });
           const admissionStarted = new Promise<number>(resolve => { markAdmissionStarted = resolve; });
+          const privacyWriterStarted = new Promise<number>(resolve => { markPrivacyWriterStarted = resolve; });
           const heartbeatTx = db.transaction(async tx => {
             const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
             await tx.select({ id: runtimeHosts.id }).from(runtimeHosts).where(eq(runtimeHosts.id, host!.id)).for("update");
@@ -809,12 +813,26 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           const admission = db.transaction(async tx => {
             const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
             markAdmissionStarted(Number(backend!.pid));
-            return executionSandboxService(tx as any, { runtimeSuspectSeconds: 90 }).assertTaskExecutionContext(tx as any, {
+            const source = await executionSandboxService(tx as any, { runtimeSuspectSeconds: 90 }).assertTaskExecutionContext(tx as any, {
               companyId: f.home, runId: run!.id, leaseId: lease!.id,
             });
+            const [privacyLocks] = await tx.execute<{ businessEvents: boolean; memory: boolean }>(sql`
+              select
+                exists(select 1 from pg_locks where pid=pg_backend_pid() and locktype='advisory'
+                  and mode='ShareLock' and granted and objsubid=1
+                  and classid=(((hashtextextended('business-events:' || ${f.home},0) >> 32) & 4294967295)::oid)
+                  and objid=((hashtextextended('business-events:' || ${f.home},0) & 4294967295)::oid)) as "businessEvents",
+                exists(select 1 from pg_locks where pid=pg_backend_pid() and locktype='advisory'
+                  and mode='ShareLock' and granted and objsubid=1
+                  and classid=(((hashtextextended('memory:privacy:' || ${f.home},0) >> 32) & 4294967295)::oid)
+                  and objid=((hashtextextended('memory:privacy:' || ${f.home},0) & 4294967295)::oid)) as memory
+            `);
+            expect(privacyLocks).toMatchObject({ businessEvents: true, memory: true });
+            return source;
           });
           const admissionOutcome = admission.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
           const admissionPid = await admissionStarted;
+          let privacyWriterOutcome: Promise<{ ok: true } | { ok: false; error: unknown }> | undefined;
           try {
             let waitingOnHost = false;
             const waitDeadline = Date.now() + 5000;
@@ -827,11 +845,31 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
               await new Promise(resolve => setTimeout(resolve, 20));
             }
             expect(waitingOnHost, "task admission must wait for the heartbeat's host lock").toBe(true);
+            const privacyWriter = db.transaction(async tx => {
+              const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+              markPrivacyWriterStarted(Number(backend!.pid));
+              await lockAnalyticalCompany(tx as any, f.home);
+              await lockMemoryPrivacy(tx as any, f.home);
+            });
+            privacyWriterOutcome = privacyWriter.then(() => ({ ok: true as const }), error => ({ ok: false as const, error }));
+            const privacyWriterPid = await privacyWriterStarted;
+            let waitingOnAdmission = false;
+            const writerDeadline = Date.now() + 5000;
+            while (Date.now() < writerDeadline) {
+              const [state] = await db.execute<{ waiting: boolean }>(sql`select exists(
+                select 1 from pg_stat_activity where pid=${privacyWriterPid}
+                  and ${admissionPid}::integer=any(pg_blocking_pids(pid)) and wait_event_type='Lock'
+              ) as waiting`);
+              if (state?.waiting) { waitingOnAdmission = true; break; }
+              await new Promise(resolve => setTimeout(resolve, 20));
+            }
+            expect(waitingOnAdmission, "source writer must wait for the admitted reader's shared privacy locks").toBe(true);
           } finally {
             releaseHeartbeat();
           }
           expect(await heartbeatOutcome).toMatchObject({ ok: true });
           const admissionResult = await admissionOutcome;
+          expect(await privacyWriterOutcome).toMatchObject({ ok: true });
           if (invalidateHost) {
             expect(admissionResult).toMatchObject({ ok: false, error: { status: 409 } });
             await db.update(runtimeHosts).set({ status: "READY" }).where(eq(runtimeHosts.id, host!.id));

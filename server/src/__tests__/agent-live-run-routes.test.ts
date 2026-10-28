@@ -34,6 +34,7 @@ const mockExecutionProjection = vi.hoisted(() => ({
 }));
 
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+const mockAnalyticalPayloadAccessBatch = vi.hoisted(() => vi.fn());
 
 const mockInstanceSettingsService = vi.hoisted(() => ({
   get: vi.fn(),
@@ -89,6 +90,7 @@ function registerModuleMocks() {
   // authority boundary is controlled explicitly; denial is checked below.
   vi.doMock("../services/analytical-context-authority.js", () => ({
     assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
+    assertAnalyticalContextPayloadAccessBatch: mockAnalyticalPayloadAccessBatch,
   }));
   vi.doMock("../services/execution-projection.js", () => mockExecutionProjection);
   vi.doMock("../routes/authz.js", async () =>
@@ -358,6 +360,7 @@ describe("agent live run routes", () => {
     registerModuleMocks();
     vi.clearAllMocks();
     mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
+    mockAnalyticalPayloadAccessBatch.mockReset().mockResolvedValue(undefined);
     mockChatRunRetries.prepareFailedChatRunRetry.mockReset();
     mockChatRunRetries.processFailedChatRunRetry.mockReset();
     mockAccessService.canUser.mockResolvedValue(true);
@@ -770,6 +773,32 @@ describe("agent live run routes", () => {
     expect(mockHeartbeatService.buildRunOutputSilence).toHaveBeenCalledTimes(
       50,
     );
+  });
+
+  it("keeps readable runs when a batched source review contains one unavailable run", async () => {
+    const { HttpError } = await vi.importActual<typeof import("../errors.js")>("../errors.js");
+    const rows = ["readable-before", "unavailable", "readable-after"].map(id => ({
+      id, companyId: "company-1", status: "running", invocationSource: "on_demand", triggerDetail: "manual",
+      startedAt: new Date("2026-04-10T09:30:00.000Z"), finishedAt: null,
+      createdAt: new Date("2026-04-10T09:30:00.000Z"), agentId: "agent-1", agentName: "Builder",
+      adapterType: "codex_local", logBytes: 0, livenessState: "healthy", livenessReason: null,
+      continuationAttempt: 0, lastUsefulActionAt: null, nextAction: null, lastOutputAt: null,
+      lastOutputSeq: null, lastOutputStream: null, lastOutputBytes: 0, processStartedAt: null, issueId: "issue-1",
+    }));
+    const { db } = createLiveRunsDbStub(rows);
+    mockAnalyticalPayloadAccessBatch.mockRejectedValueOnce(new HttpError(403, "One run source unavailable"));
+    mockAnalyticalPayloadAccess.mockImplementation(async (_db: unknown, _companyId: string, _actor: unknown, scope: { runId: string }) => {
+      if (scope.runId === "unavailable") throw new HttpError(403, "Run source unavailable");
+    });
+
+    const res = await requestApp(await createApp(db), baseUrl => request(baseUrl).get("/api/companies/company-1/live-runs"));
+
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.body.map((run: { id: string }) => run.id)).toEqual(["readable-before", "readable-after"]);
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledTimes(3);
+    expect(mockRunSecretRedactionRegistry.redactForRuns).toHaveBeenCalledWith("company-1",
+      expect.arrayContaining([expect.objectContaining({ id: "readable-before" }), expect.objectContaining({ id: "readable-after" })]));
+    expect(mockRunSecretRedactionRegistry.redactForRuns.mock.calls[0]?.[1]).toHaveLength(2);
   });
 
   it("treats explicit zero or invalid live run limit as the capped default", async () => {

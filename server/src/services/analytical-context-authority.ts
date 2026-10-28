@@ -4,7 +4,7 @@ import { PgTransaction } from "drizzle-orm/pg-core";
 import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,memoryRecords,agentExecutionManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,companyMemberships,authUsers,agents,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
-import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,issueReadSqlCondition,type AuthorizationActor} from "./authorization.js";
+import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadHeartbeatRunPrivacyBatch,isCurrentTaskPrivacyPrincipal,canActorReadIssuePrivacy,canActorReadIssuePrivacyBatch,issueReadSqlCondition,type AuthorizationActor} from "./authorization.js";
 import type {NativeReadScope} from "./analytical-reader.js";
 import {HttpError,conflict,forbidden,unprocessable} from "../errors.js";
 
@@ -149,7 +149,18 @@ export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,
  });
 }
 
-export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope):Promise<void> {
+export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,options:{privacyLockMode?:"read"|"write"}={}):Promise<void> {
+ if("issueId" in scope){
+  await assertAnalyticalContextPayloadAccessBatch(db,companyId,actor,[scope.issueId],readScope,{privacyLockMode:options.privacyLockMode});
+  return;
+ }
+ if(options.privacyLockMode==="read"){
+  if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccess(tx as unknown as Db,companyId,actor,scope,readScope,options));
+  const {lockAnalyticalCompany,markAnalyticalPrivacyReadLocked}=await import("./analytical-privacy.js");
+  const {lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
+  await lockAnalyticalCompany(db,companyId,"read");await lockMemoryPrivacy(db,companyId,"read");
+  markAnalyticalPrivacyReadLocked(db as object);
+ }
  return assertAnalyticalContextPayloadAccessInternal(db,companyId,actor,scope,readScope);
 }
 
@@ -286,36 +297,37 @@ async function nativeTaskPayloadSourceShape(db:Db,companyId:string,ids:string[],
 }
 
 export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:string,actor:AuthorizationActor|undefined,
- issueIds:string[],readScope?:NativeReadScope,options:{fastPathOnly?:boolean;runId?:string}={}):Promise<void|boolean> {
+ issueIds:string[],readScope?:NativeReadScope,options:{fastPathOnly?:boolean;runId?:string;directRunIds?:string[];privacyLockMode?:"read"|"write"}={}):Promise<void|boolean> {
  const ids=[...new Set(issueIds)];
- if(ids.length>256||ids.some(id=>!z.string().uuid().safeParse(id).success))
+ const directRunIds=[...new Set(options.directRunIds??[])];
+ if(ids.length+directRunIds.length>256||[...ids,...directRunIds].some(id=>!z.string().uuid().safeParse(id).success))
   throw new HttpError(403,"The complete analytical Task population is unavailable",{code:"analytical_source_access_lost"});
- if(!ids.length)return;
+ if(!ids.length&&!directRunIds.length)return;
  if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db,companyId,actor,ids,readScope,options));
  const {lockAnalyticalCompany}=await import("./analytical-privacy.js");
  const {lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
  let initialShape:Awaited<ReturnType<typeof nativeTaskPayloadSourceShape>>|null=null;
- // An unlocked probe only routes complex payloads to the original writer-lock
- // path. A simple result is re-proven after taking shared source-writer locks.
+ // An unlocked probe only routes complex payloads to the full source review.
+ // A source-free result is re-proven after acquiring the shared writer locks.
  if(options.fastPathOnly===true){
   initialShape=!actor||ids.length!==1?null:await nativeTaskPayloadSourceShape(db,companyId,ids,options.runId);
   if(!initialShape||initialShape.complex&&!initialShape.selfOwnedConversationComment){
    await lockAnalyticalCompany(db,companyId);await lockMemoryPrivacy(db,companyId);return false;
   }
  }
- // Read-only fast admission shares the exact ordered advisory boundaries as
- // source writers. Concurrent append checks can proceed together; retention,
- // projection, suppression, and erasure still take the exclusive writer locks.
- // A Task with a conversation Comment needs the unchanged deep reviewer. Keep
- // those checks on the original exclusive transaction boundary: when a
- // caller already owns this transaction the reviewer continues in that same
- // transaction and must not upgrade shared advisory locks under a peer reader.
- const lockMode=options.fastPathOnly===true&&!initialShape?.selfOwnedConversationComment?"read":"write";
+ // Native provider-event admission is a pure source review. It shares the
+ // ordered privacy boundaries with other readers; retention, projection,
+ // suppression, and erasure still take the exclusive writer locks. A caller
+ // performing a source mutation acquires those exclusive locks before review,
+ // so the shared acquisition here cannot introduce an upgrade in its effect.
+ // Deep retained-root checks use the same transaction and preserve every
+ // current reader/source recheck after any row or owner wait.
+ const lockMode=options.privacyLockMode??(options.fastPathOnly===true||directRunIds.length>0?"read":"write");
  await lockAnalyticalCompany(db,companyId,lockMode);await lockMemoryPrivacy(db,companyId,lockMode);
- if(options.fastPathOnly===true&&lockMode==="read"){const {markAnalyticalPrivacyReadLocked}=await import("./analytical-privacy.js");markAnalyticalPrivacyReadLocked(db as object);}
+ if(lockMode==="read"){const {markAnalyticalPrivacyReadLocked}=await import("./analytical-privacy.js");markAnalyticalPrivacyReadLocked(db as object);}
  // The unlocked shape probe is only a routing hint. If it sees a self-owned
- // conversation comment, force the original deep reviewer under exclusive
- // source-writer locks. Recomputing the broad shape query here adds no authority:
+ // conversation comment, force the original deep reviewer under shared
+ // source-reader locks. Recomputing the broad shape query here adds no authority:
  // the deep reviewer revalidates the exact current owner and every source before
  // admission. A stale positive can only select the slower deep path.
  if(options.fastPathOnly===true&&initialShape?.selfOwnedConversationComment){
@@ -328,7 +340,7 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
  // payload pin, privacy edge, or Context manifest attached to an analytical
  // root, then apply the same current Task ACL and erasure check in bulk. The
  // retained-root traversal below remains mandatory whenever such a root exists.
- if(actor&&(ids.length>1||options.fastPathOnly===true)){
+ if(actor&&!directRunIds.length&&(ids.length>1||options.fastPathOnly===true)){
   const selectedIds=sql.join(ids.map(id=>sql`${id}::uuid`),sql`, `);
   const candidateShape=await nativeTaskPayloadSourceShape(db,companyId,ids,options.runId);
   const candidateComplex=candidateShape.complex;
@@ -376,11 +388,17 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
    if(options.fastPathOnly===true)return false;
  }
   if(options.fastPathOnly===true)return false;
+ // The mixed reviewer defers full source ACLs to its final pinned phase, but
+ // still admits only a current Human/company/agent principal before discovery.
+ if(directRunIds.length&&(!actor||!await isCurrentTaskPrivacyPrincipal(db,actor,companyId)))
+  throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
  const worklist:AnalyticalPayloadWorklist={directSources:new Map(),sharedSources:new Map(),finalChecks:[],workflowRunIds:new Set()};
  for(const issueId of ids)
   await assertAnalyticalContextPayloadAccessInternal(db,companyId,actor,{issueId},readScope,worklist);
+ for(const runId of directRunIds)
+  await assertAnalyticalContextPayloadAccessInternal(db,companyId,actor,{runId},readScope,worklist);
  const sourceIssueIds=[...new Set([...ids,...[...worklist.sharedSources.values()].flatMap(source=>"issueId"in source?[source.issueId]:[])])];
- const sourceRunIds=[...new Set([...worklist.sharedSources.values()].flatMap(source=>"runId"in source?[source.runId]:[]))];
+ const sourceRunIds=[...new Set([...directRunIds,...[...worklist.sharedSources.values()].flatMap(source=>"runId"in source?[source.runId]:[])])];
  // Pin the exact lineage rows after all per-Task source discovery, before its
  // final current-owner checks. The caller's broader privacy transaction stays
  // open through the complete worklist and final checks below.
@@ -395,14 +413,44 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
  const finalize=async()=>{
   const directScopes=new Map([...worklist.directSources,...worklist.sharedSources]);
   await db.execute(sql`set local statement_timeout='8s'`);
-  for(const source of directScopes.values())await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,source,readScope,true);
+  for(const source of directScopes.values())await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,source,readScope,true,"issueId"in source||directRunIds.length>0);
   for(const check of worklist.finalChecks)await check();
+  // Recheck all Task readers after every source-owner wait, under this exact
+  // transaction and source-lock phase. The result cannot escape this callback.
+  const issueIds=[...directScopes.values()].flatMap(source=>"issueId"in source?[source.issueId]:[]);
+  if(issueIds.length){
+   if(!actor)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+   const readers=await canActorReadIssuePrivacyBatch(db,actor,companyId,issueIds);
+   if(issueIds.some(id=>readers.get(id)!==true))
+    throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+  }
+  const runIds=[...new Set([...directScopes.values()].flatMap(source=>"runId"in source?[source.runId]:[]))];
+  if(runIds.length){
+   if(!actor)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+   if(directRunIds.length){
+    const readers=await canActorReadHeartbeatRunPrivacyBatch(db,actor,companyId,runIds);
+    if(runIds.some(id=>readers.get(id)!==true))
+     throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+   }else for(const runId of runIds){
+    if(!await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id:runId}))
+     throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+   }
+  }
  };
  const workflowRunIds=[...worklist.workflowRunIds].sort();
  if(workflowRunIds.length){
   if(workflowRunIds.length>256||!actor)throw new HttpError(403,"Complete Workflow task source access is unavailable",{code:"analytical_source_access_lost"});
   await authorizationService(db).withReadWorkflowSources(companyId,actor,workflowRunIds,finalize);
  }else await finalize();
+}
+
+/** Reauthorize an exact set of current native run and Task owners in one
+ * physical reviewer transaction. It preserves the same source discovery,
+ * owner locks and final reader checks as the Task batch while admitting direct
+ * run scopes into that worklist. */
+export async function assertAnalyticalContextPayloadOwnersAccessBatch(db:Db,companyId:string,actor:AuthorizationActor|undefined,
+ owners:{issueIds:string[];runIds:string[]},readScope?:NativeReadScope):Promise<void> {
+ await assertAnalyticalContextPayloadAccessBatch(db,companyId,actor,owners.issueIds,readScope,{directRunIds:owners.runIds});
 }
 
 async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:string,actor:AuthorizationActor|undefined,
@@ -496,14 +544,14 @@ async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:stri
  return inspect();
 }
 
-async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,companyLocksHeld=false) {
+async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,companyLocksHeld=false,deferReaderAcl=false) {
  // Ordinary conversation prose has source privacy even without analytical
  // retention roots. Every actual ancestor goes through this same narrowing.
  let diagnosticStage="task_reader_acl";
  try {
- if(!actor || !("issueId" in scope
-   ? await canActorReadIssuePrivacy(db,actor,{companyId,id:scope.issueId})
-   : await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id:scope.runId})))
+ if(!actor || ("runId" in scope && !deferReaderAcl && !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id:scope.runId})) ||
+   ("issueId" in scope && companyLocksHeld && !deferReaderAcl &&
+     !await canActorReadIssuePrivacy(db,actor,{companyId,id:scope.issueId})))
    throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
  diagnosticStage="task_erasure_currentness";
  const [sourceReceipt]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid) as erased`);
@@ -538,7 +586,7 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   if(!companyLocksHeld){
    diagnosticStage="task_reader_acl_recheck";
    const canRead="issueId" in scope
-    ? await canActorReadIssuePrivacy(tx,currentActor,{companyId,id:scope.issueId})
+    ? deferReaderAcl || await canActorReadIssuePrivacy(tx,currentActor,{companyId,id:scope.issueId})
     : await canActorReadHeartbeatRunPrivacy(tx,currentActor,{companyId,id:scope.runId});
    if(!canRead){
     const denied=new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
@@ -644,7 +692,11 @@ export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:str
  const [run]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,runId))).limit(1);
  if(!run)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
  const actor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId,agentId:run.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
- if(run.nativeIssueId){
+ // Persisted conversation runs use the original full mixed-source reviewer.
+ // The marker only chooses the conservative route; it grants no source access.
+ const generation=run.contextSnapshot?.conversationSessionGeneration;
+ const conversationRun=typeof generation==="number"&&Number.isSafeInteger(generation)&&generation>=0;
+ if(run.nativeIssueId&&!conversationRun){
   const simple=await assertAnalyticalContextPayloadAccessBatch(db,companyId,actor,[run.nativeIssueId],"task",{fastPathOnly:true,runId:run.id});
   if(simple===true){
    // The batch admission above owns the company and Memory privacy locks for
@@ -662,5 +714,10 @@ export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:str
    return;
   }
  }
- await assertAnalyticalContextPayloadAccess(db,companyId,actor,{runId:run.id},"task");
+ await assertAnalyticalContextPayloadOwnersAccessBatch(db,companyId,actor,
+  {issueIds:run.nativeIssueId?[run.nativeIssueId]:[],runIds:[run.id]},"task");
+ const [current]=await db.select({agentId:heartbeatRuns.agentId,responsibleUserId:heartbeatRuns.responsibleUserId,nativeIssueId:heartbeatRuns.nativeIssueId})
+  .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,run.id))).for("share").limit(1);
+ if(!current||current.agentId!==run.agentId||current.responsibleUserId!==run.responsibleUserId||current.nativeIssueId!==run.nativeIssueId)
+  throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
 }

@@ -3652,7 +3652,7 @@ export function issueRoutes(
   });
   const runRedactions = createRunSecretRedactionRegistry(db);
   async function redactIssueResponse<T>(req:Request,companyId:string,issueId:string,value:T) {
-    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{issueId});
+    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{issueId},undefined,{privacyLockMode:req.method==="GET"||req.method==="HEAD"?"read":"write"});
     return runRedactions.redactForIssue(companyId,issueId,value);
   }
   const access = accessService(db);
@@ -5259,7 +5259,7 @@ export function issueRoutes(
   ) {
     const decision = await decideIssueAccess(req, issue, "issue:read");
     if (decision.allowed) {
-      await assertAnalyticalContextPayloadAccess(db,issue.companyId,req.actor,{issueId:issue.id});
+      await assertAnalyticalContextPayloadAccess(db,issue.companyId,req.actor,{issueId:issue.id},undefined,{privacyLockMode:req.method==="GET"||req.method==="HEAD"?"read":"write"});
       return true;
     }
     res

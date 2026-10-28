@@ -12,6 +12,7 @@ import {
   authSecurityEvents,
   authSessions,
   authUsers,
+  agents,
   companyMemberships,
   companyDeletionOperations,
   runtimeHosts,
@@ -48,6 +49,7 @@ import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-as
 import { supportCaseOperatorBodySchema, supportCaseOperatorReceiptSchema, supportCaseOperatorService } from "../services/saas/support-case-operator.js";
 import { executionSandboxService } from "../services/execution-sandbox/sandbox-service.js";
 import { openShellBackend } from "../services/execution-sandbox/openshell-backend.js";
+import { projectSaasModelDependencyInventory } from "../services/experience/model-dependency-inventory.js";
 
 export function saasRoutes(db: Db, platform: SaasPlatform) {
   const router = Router();
@@ -681,6 +683,14 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
     const snapshot = await operatorRead(req, async reader => {
+      const modelAgents = await reader.select({
+        id: agents.id, companyId: agents.companyId, adapterType: agents.adapterType, adapterConfig: agents.adapterConfig,
+      }).from(agents).where(eq(agents.adapterType, "paperclip_runner")).limit(10001);
+      if (modelAgents.length > 10000)
+        throw conflict("The bounded model dependency inventory is unavailable", {
+          code: "model_dependency_inventory_unavailable",
+          retryable: true,
+        });
       const [jobs, hosts, profiles, versions, support, deployments, queues] =
         await Promise.all([
           reader
@@ -768,6 +778,15 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         support,
         deployments,
         queues: Array.from(queues),
+        modelDependencies: projectSaasModelDependencyInventory({
+          agents: modelAgents,
+          workerProfiles: platform.config.workerModelProfiles ?? [],
+          readOnlyProfiles: platform.config.readOnlyModelProfiles ?? [],
+          supportProfiles: platform.config.firstPartySupportModelProfiles ?? [],
+          workerProfilesConfigured: Boolean(platform.config.workerModelProfiles),
+          readOnlyProfilesConfigured: Boolean(platform.config.readOnlyModelProfiles),
+          supportProfilesConfigured: Boolean(platform.config.firstPartySupportModelProfiles),
+        }),
       });
     });
     res.set("Cache-Control", "no-store").json(snapshot);

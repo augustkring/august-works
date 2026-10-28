@@ -117,11 +117,11 @@ export async function analyticalLiveEventForReader(db: Db, event: LiveEvent, act
       if (!await heartbeatMemoryPayloadRetained(db, event.companyId, runId)) {
         throw new HttpError(403, "Analytical source access is unavailable", { code: "analytical_source_access_lost" });
       }
-      await assertAnalyticalContextPayloadAccess(db, event.companyId, actor, { runId });
+      await assertAnalyticalContextPayloadAccess(db, event.companyId, actor, { runId }, undefined, { privacyLockMode: "read" });
     }
     // Review the whole conversation: later native turns can borrow prose from
     // an earlier turn before they have obtained their own analytical root.
-    for (const issueId of issueIds) await assertAnalyticalContextPayloadAccess(db, event.companyId, actor, { issueId });
+    for (const issueId of issueIds) await assertAnalyticalContextPayloadAccess(db, event.companyId, actor, { issueId }, undefined, { privacyLockMode: "read" });
     for (const id of projectIds) {
       if (!await canActorReadProjectPrivacy(db, actor, { companyId: event.companyId, id })) return null;
     }
