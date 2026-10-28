@@ -1,0 +1,14 @@
+✔ pinned §7 intake snapshot carries every source SHA without claiming source review (41.342938ms)
+✔ security entries cannot be demoted to ordinary queue review (33.430819ms)
+✔ admission is blocked without exact implementation, regression, source-review and provenance evidence (50.238583ms)
+✔ pinned source rows cannot be silently replaced or converted into automatic upstream admission (28.41919ms)
+✔ tree comparison preserves exact path, mode and blob identity (0.461457ms)
+✔ inventory refuses a moving upstream ref (53.781674ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 283.111957
