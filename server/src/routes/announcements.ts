@@ -2,14 +2,14 @@ import { Router } from "express";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { agents, companies, trustDocumentAcceptances, trustDocumentActionReceipts, type Db } from "@paperclipai/db";
-import { ANNOUNCEMENT_ANIMATION_CSP, announcementIdSchema, customerChangelogSchema, dismissAnnouncementSchema, trustAcceptanceNoticeListSchema, trustDocumentListQuerySchema } from "@paperclipai/shared";
+import { ANNOUNCEMENT_ANIMATION_CSP, announcementIdSchema, capabilityLifecycleNoticeListSchema, customerChangelogSchema, dismissAnnouncementSchema, trustAcceptanceNoticeListSchema, trustDocumentListQuerySchema } from "@paperclipai/shared";
 import { badRequest, conflict, forbidden, HttpError, notFound } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import { assertAuthenticated, assertBoard, assertCompanyAccess, hasCompanyAccess } from "./authz.js";
 import { announcementService } from "../services/announcements.js";
 import { announcementFeedService, type AnnouncementFeedOptions } from "../services/announcement-feed.js";
 import { resolveCurrentTrustMaterialChangeRequirements } from "../services/trust-documents.js";
-import { projectTrustAcceptanceNotices } from "../services/experience/product-notices.js";
+import { projectCapabilityLifecycleNotices, projectTrustAcceptanceNotices } from "../services/experience/product-notices.js";
 import { projectCurrentModelRetirementNotice } from "../services/experience/model-retirement-notices.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
 import { assertV5Authorization } from "../services/v5-authorization.js";
@@ -91,6 +91,14 @@ export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, fee
       return { configured: true, notices: projectTrustAcceptanceNotices(companyId, requirements, completed, canAdminAcknowledge), modelNotices };
     });
     res.json(trustAcceptanceNoticeListSchema.parse(result));
+  });
+  router.get("/companies/:companyId/notices/capability-lifecycle", (req, res) => {
+    assertAuthenticated(req);
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    assertCompanyAccess(req, companyId);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(capabilityLifecycleNoticeListSchema.parse(projectCapabilityLifecycleNotices()));
   });
   router.get("/announcements/:id/image", async (req, res) => {
     const id = announcementIdSchema.safeParse(req.params.id);

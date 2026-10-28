@@ -1,4 +1,5 @@
 import {
+  capabilityLifecycleNoticeListSchema,
   trustAcceptanceNoticeListSchema,
   trustDocumentAcceptanceReceiptSchema,
   trustDocumentActionReceiptSchema,
@@ -10,6 +11,10 @@ import { api } from "./client";
 type TrustDocumentContent = ReturnType<typeof trustDocumentContentSchema.parse>;
 
 export const productNoticesApi = {
+  async capabilityLifecycle(companyId: string, signal?: AbortSignal) {
+    const result = await api.get<unknown>(`/companies/${encodeURIComponent(companyId)}/notices/capability-lifecycle`, { signal, cache: "no-store" });
+    return capabilityLifecycleNoticeListSchema.parse(result);
+  },
   async actionRequired(companyId: string, expectedUserId: string, signal?: AbortSignal) {
     const query = new URLSearchParams({ expectedUserId });
     const result = await api.get<unknown>(`/companies/${encodeURIComponent(companyId)}/notices/action-required?${query}`, { signal, cache: "no-store" });

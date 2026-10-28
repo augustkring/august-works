@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  capabilityLifecycleNoticeListSchema,
   trustAcceptanceNoticeListSchema,
   trustDocumentAcceptanceCommandSchema, trustDocumentAcceptanceReceiptSchema, trustDocumentActionCommandSchema,
   trustDocumentActionReceiptSchema, trustDocumentContentSchema,
@@ -243,6 +244,7 @@ export const v9ApiPaths: V9ApiOperation[] = [
   read(`${company}/trust/documents`, "Read only explicitly public, current, reviewed, unexpired trust document metadata", trustDocumentRegistrySchema, trustDocumentListQuerySchema),
   { ...read(`${company}/trust/gated/documents`, "Read current gated metadata only for a current company administrator or the Human holding an exact unexpired gated grant; NDA-required rows remain unconfigured until a canonical binding owner exists", trustDocumentGatedRegistrySchema, trustDocumentListQuerySchema), cacheControl: "private, no-store" },
   { ...read(`${company}/notices/action-required`, "Read mandatory notices projected from current canonical owner state; optional announcement dismissal cannot hide or resolve them", trustAcceptanceNoticeListSchema, trustDocumentListQuerySchema), cacheControl: "no-store" },
+  { ...read(`${company}/notices/capability-lifecycle`, "Read informational lifecycle notices from declared feature catalog facts", capabilityLifecycleNoticeListSchema), cacheControl: "no-store" },
   read(`${company}/trust/documents/{registryEntryId}/content`, "Read the exact current canonical body only for an explicitly public, source-free, current document revision", trustDocumentContentSchema, trustDocumentListQuerySchema),
   { ...read(`${company}/trust/gated/documents/{registryEntryId}/content`, "Read a gated body only with the current Human's exact unexpired, unrevoked grant; current source privacy, revision, review, expiry and erasure are rechecked", trustDocumentGatedContentSchema, trustDocumentGatedContentQuerySchema), cacheControl: "private, no-store" },
   { ...write(`${company}/trust/documents`, "Register an exact current immutable document revision with owner-declared lifecycle metadata and material-change action", trustDocumentRegisterCommandSchema, trustDocumentRegistrationReceiptSchema, 201), query: z.strictObject({}) },

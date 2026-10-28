@@ -8,6 +8,7 @@ import { useOptionalToastActions, useOptionalToastState } from "@/context/ToastC
 import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { AnnouncementCard } from "./AnnouncementCard";
 import { MandatoryProductNotices } from "./MandatoryProductNotices";
+import { CapabilityLifecycleNotices } from "./CapabilityLifecycleNotices";
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "@/i18n";
 
@@ -50,6 +51,7 @@ export function AnnouncementWell({ health }: { health?: HealthStatus }) {
   if (!showMandatory && !showOptional) return null;
   return (
     <>
+      {showMandatory && <CapabilityLifecycleNotices companyId={selectedCompanyId} enabled={Boolean(mandatoryUserId)} />}
       {showMandatory && <MandatoryProductNotices companyId={selectedCompanyId} userId={mandatoryUserId} />}
       {showOptional && announcement && <aside aria-label={`${PRODUCT_IDENTITY.productName} announcements`} className="announcement-well shrink-0 border-t bg-background p-2 pb-(--announcement-mobile-bottom) md:px-3 md:pb-2">
         <details key={announcement.id} className="group">

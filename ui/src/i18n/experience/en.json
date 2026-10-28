@@ -2338,6 +2338,14 @@
   "loadingView": "Loading view…",
   "announcement": {
     "summary": "Product updates",
+    "lifecycle": {
+      "landmark": "Capability lifecycle information",
+      "title": "{{name}} lifecycle",
+      "deprecationDate": "Deprecation date: {{date}}",
+      "sunsetDate": "Sunset date: {{date}}",
+      "replacement": "Replacement capability: {{capability}}",
+      "migrationGuide": "Read the migration guide"
+    },
     "mandatory": {
       "landmark": "Required notices",
       "eyebrow": "Action required",
@@ -3380,7 +3388,7 @@
     "sourceReleaseSummary": "Exact package fingerprint {{fingerprint}}. This selection contains {{projectCount}} project(s) and {{taskCount}} task(s). Native sources are checked against current ownership and access; external files require your review that the content is open and yours to release."
   },
   "supportCases": {
-    "exportInclude": "Include support cases you can currently view, with their full customer-visible history. Internal notes, credentials and support-access grants are excluded. This archive cannot restore live cases.",
+    "exportInclude": "Include support cases you can currently view, with their full customer-visible history and any linked Issue reference you can currently read. Internal notes, credentials and support-access grants are excluded. This archive cannot restore live cases.",
     "exportAccountChanged": "Your account changed. Reload the export page.",
     "recoveringRequest": "Checking your previous submission…",
     "recoveredRequest": "Your previous submission has a saved receipt. Open the case to continue.",
@@ -3445,6 +3453,14 @@
     "latestCases": "Latest cases",
     "earlierCases": "Earlier cases",
     "backToWork": "Back to work",
+    "investigation": "Track the investigation",
+    "investigationPrivacy": "Link this case to an existing Issue to track the investigation there. The link shares only the reference; your support messages are not copied, and this does not decide a root cause or later outcome.",
+    "issueRef": "Issue ID or identifier",
+    "linkIssue": "Link Issue",
+    "linkingIssue": "Linking…",
+    "linkedIssue": "Linked Issue: {{issue}}",
+    "issueLinked": "The Issue link was saved.",
+    "issueLinkFailed": "Could not link that Issue. Check the reference and your current access.",
     "contextPage": "Page",
     "contextOperation": "Operation reference",
     "contextTime": "Reported time",

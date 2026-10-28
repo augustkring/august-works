@@ -1738,7 +1738,8 @@ function requiresBoardSession(method: string, path: string): boolean {
   return path.startsWith("/api/companies/{companyId}/trust/") ||
     path.startsWith("/api/companies/{companyId}/workflow-coverages") ||
     operationKey(method, path) === "POST /api/companies/{companyId}/members/{memberId}/security-suspend" ||
-    operationKey(method, path) === "GET /api/companies/{companyId}/notices/action-required";
+    operationKey(method, path) === "GET /api/companies/{companyId}/notices/action-required" ||
+    operationKey(method, path) === "GET /api/companies/{companyId}/notices/capability-lifecycle";
 }
 
 const INSTANCE_ADMIN_OPERATIONS = new Set([

@@ -202,6 +202,22 @@ export const trustAcceptanceNoticeListSchema = z.strictObject({
     actionPath: z.string().regex(/^\/agents\/[0-9a-f-]{36}$/),
   }).strict()).max(100).default([]),
 });
+/** Informational projection from owner-declared feature lifecycle metadata.
+ * It has no completion, deadline, or dismissal contract. */
+export const capabilityLifecycleNoticeListSchema = z.strictObject({
+  coverage: z.enum(["unknown", "incomplete", "complete"]),
+  deprecatedCapabilityCount: z.number().int().min(0).max(1000),
+  notices: z.array(z.strictObject({
+    capabilityKey: z.string().trim().min(1).max(128),
+    customerName: z.string().trim().min(1).max(200),
+    owner: z.string().trim().min(1).max(200),
+    deprecationAt: z.iso.datetime({ offset: true }),
+    sunsetAt: z.iso.datetime({ offset: true }).nullable(),
+    replacementCapability: z.string().trim().min(1).max(128),
+    migrationGuideSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  }).strict()).max(100),
+});
+export type CapabilityLifecycleNoticeList = z.infer<typeof capabilityLifecycleNoticeListSchema>;
 export type ModelRetirementNoticeProjection = z.infer<typeof trustAcceptanceNoticeListSchema>["modelNotices"][number];
 export type AnnouncementAction = z.infer<typeof announcementActionSchema>;
 export type Announcement = z.infer<typeof announcementSchema>;

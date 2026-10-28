@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { TrustDocument } from "@paperclipai/shared";
-import { projectTrustAcceptanceNotices } from "./product-notices.js";
+import { INSTANCE_FEATURE_CATALOG, type TrustDocument } from "@paperclipai/shared";
+import { projectCapabilityLifecycleNotices, projectTrustAcceptanceNotices } from "./product-notices.js";
 
 const companyId = "00000000-0000-4000-8000-000000000001";
 const document = {
@@ -61,5 +61,47 @@ describe("product notice projection", () => {
     expect(projectTrustAcceptanceNotices(companyId, [row], new Set([staleRevision]), true)).toHaveLength(1);
     const staleVersion = `${action}\u0000${row.id}\u0000${row.documentRevisionId}\u0000old`;
     expect(projectTrustAcceptanceNotices(companyId, [row], new Set([staleVersion]), true)).toHaveLength(1);
+  });
+});
+
+describe("capability lifecycle notice projection", () => {
+  it("projects only deprecated entries with complete, reviewed owner facts", () => {
+    const catalog = {
+      enableApps: {
+        ...INSTANCE_FEATURE_CATALOG.enableApps,
+        lifecycle: {
+          ...INSTANCE_FEATURE_CATALOG.enableApps.lifecycle,
+          customerName: "Apps",
+          owner: "Apps team",
+          supportLevel: "preview",
+          deprecationAt: "2026-11-01T00:00:00Z",
+          sunsetAt: "2027-02-01T00:00:00Z",
+          replacementCapability: "apps.connections",
+          migrationGuideRef: "docs/help/apps-and-connections.md",
+          lastReviewedAt: "2026-10-20T00:00:00Z",
+        },
+      },
+    } as unknown as typeof INSTANCE_FEATURE_CATALOG;
+    expect(projectCapabilityLifecycleNotices(catalog, Date.parse("2026-10-28T00:00:00Z"))).toEqual({
+      coverage: "complete",
+      deprecatedCapabilityCount: 1,
+      notices: [{ capabilityKey: "enableApps", customerName: "Apps", owner: "Apps team",
+        deprecationAt: "2026-11-01T00:00:00.000Z", sunsetAt: "2027-02-01T00:00:00.000Z",
+        replacementCapability: "apps.connections", migrationGuideSlug: "apps-and-connections" }],
+    });
+    expect(projectCapabilityLifecycleNotices(catalog, Date.parse("2026-10-19T00:00:00Z")).coverage).toBe("unknown");
+    const unqualified = { ...catalog, enableApps: { ...catalog.enableApps,
+      lifecycle: { ...catalog.enableApps.lifecycle, supportLevel: "unqualified" as const } } };
+    expect(projectCapabilityLifecycleNotices(unqualified, Date.parse("2026-10-28T00:00:00Z")).notices).toEqual([]);
+    const reversedSunset = { ...catalog, enableApps: { ...catalog.enableApps,
+      lifecycle: { ...catalog.enableApps.lifecycle, sunsetAt: "2026-10-31T00:00:00Z" } } };
+    expect(projectCapabilityLifecycleNotices(reversedSunset, Date.parse("2026-10-28T00:00:00Z")).notices).toEqual([]);
+  });
+
+  it("keeps production's unqualified deprecated catalog coverage explicitly unknown", () => {
+    const projection = projectCapabilityLifecycleNotices();
+    expect(projection.deprecatedCapabilityCount).toBeGreaterThan(0);
+    expect(projection.coverage).toBe("unknown");
+    expect(projection.notices).toEqual([]);
   });
 });

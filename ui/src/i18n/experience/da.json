@@ -2338,6 +2338,14 @@
   "loadingView": "Indlæser visning…",
   "announcement": {
     "summary": "Produktnyheder",
+    "lifecycle": {
+      "landmark": "Information om kapabiliteternes livscyklus",
+      "title": "Livscyklus for {{name}}",
+      "deprecationDate": "Udfasningsdato: {{date}}",
+      "sunsetDate": "Dato for ophør: {{date}}",
+      "replacement": "Erstatningskapabilitet: {{capability}}",
+      "migrationGuide": "Læs migrationsvejledningen"
+    },
     "mandatory": {
       "landmark": "Påkrævede meddelelser",
       "eyebrow": "Handling påkrævet",
@@ -3380,7 +3388,7 @@
     "sourceReleaseSummary": "Pakkens præcise fingeraftryk: {{fingerprint}}. Dette udvalg indeholder {{projectCount}} projekter og {{taskCount}} opgaver. Native-kilder kontrolleres mod aktuelt ejerskab og adgang; eksterne filer kræver din gennemgang af, at indholdet er åbent og må frigives af dig."
   },
   "supportCases": {
-    "exportInclude": "Medtag supportsager, du har adgang til nu, med hele den kundevendte historik. Interne noter, legitimationsoplysninger og supportadgang er udeladt. Arkivet kan ikke genskabe aktive sager.",
+    "exportInclude": "Medtag supportsager, du har adgang til nu, med hele den kundevendte historik og eventuelle Issue-referencer, du aktuelt kan læse. Interne noter, legitimationsoplysninger og supportadgang er udeladt. Arkivet kan ikke genskabe aktive sager.",
     "exportAccountChanged": "Din konto er ændret. Genindlæs eksportsiden.",
     "recoveringRequest": "Kontrollerer din tidligere indsendelse…",
     "recoveredRequest": "Din tidligere indsendelse har en gemt kvittering. Åbn sagen for at fortsætte.",
@@ -3445,6 +3453,14 @@
     "latestCases": "Seneste sager",
     "earlierCases": "Tidligere sager",
     "backToWork": "Tilbage til arbejdet",
+    "investigation": "Følg undersøgelsen",
+    "investigationPrivacy": "Knyt sagen til en eksisterende Issue for at følge undersøgelsen dér. Kun referencen deles; dine supportbeskeder kopieres ikke, og dette afgør ikke årsag eller senere resultat.",
+    "issueRef": "Issue-id eller identifikator",
+    "linkIssue": "Knyt Issue",
+    "linkingIssue": "Knytter…",
+    "linkedIssue": "Knyttet Issue: {{issue}}",
+    "issueLinked": "Issue-linket blev gemt.",
+    "issueLinkFailed": "Issue kunne ikke knyttes. Kontrollér referencen og din aktuelle adgang.",
     "contextPage": "Side",
     "contextOperation": "Operationsreference",
     "contextTime": "Rapporteret tidspunkt",
