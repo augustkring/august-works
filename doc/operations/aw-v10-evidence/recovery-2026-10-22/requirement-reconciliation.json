@@ -862,7 +862,7 @@
       "id": "V10-010",
       "sourceLine": 6776,
       "work": "`blentera.com` domain/OAuth/Slack/Teams/public-origin migration manifest + safe repository rename plan to `augustkring/blentera`.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "implemented_unqualified_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -918,7 +918,37 @@
             "observedWorktreeSha256": "3c88eb975b4ea5e949b333c3adfd401697648a2794299d4f4466ae23f5ecaea2"
           }
         ],
-        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification."
+        "reviewBasis": "Targeted source and document owner review in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time; they do not certify complete tests, external provider/domain operation, Human approval, or release qualification.",
+        "boundedFollowupReview": {
+          "review": "2026-10-28 bounded reconciliation",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/product-identity.ts",
+              "sha256": "525db6a5605e5b3e8ceb2d19c6206a0612ece2b5c1b09d58a794456b6b8ebdb0"
+            },
+            {
+              "path": "server/src/config.ts",
+              "sha256": "f9f81f20ea69a6b688ea86d7f016c2af1722512f544caa54376c1705efb0859c"
+            },
+            {
+              "path": "ui/src/lib/oauthHandoff.ts",
+              "sha256": "e53a8e759c8a72f77727f3f23079191c465af0d7852984a726dfa1e6cb911cc3"
+            },
+            {
+              "path": "server/src/services/connectors/slack-search-oauth.ts",
+              "sha256": "71c7253097029aeff277a4b21f1168b38853a4904fe7d648c1108cdcac445b4e"
+            },
+            {
+              "path": "doc/plans/2026-10-28-blentera-origin-and-repository-rename.md",
+              "sha256": "3c88eb975b4ea5e949b333c3adfd401697648a2794299d4f4466ae23f5ecaea2"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [],
+          "receiptFileCount": 0,
+          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
+          "classification": "implemented_unqualified_external_cutover_open",
+          "boundedResult": "Origin code and reversible migration plan exist; DNS/domain/provider/repository cutover and rollback remain operator acceptance."
+        }
       }
     },
     {
@@ -1160,7 +1190,7 @@
       "id": "V10-015",
       "sourceLine": 6787,
       "work": "capability maturity metadata.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "implemented_unqualified_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -1227,17 +1257,68 @@
           },
           {
             "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md",
-            "observedWorktreeSha256": "c3f9a72a35bdd6d84745a8f0136d6d6964c5e6b8a18f8501b50d960d61f79529"
+            "observedWorktreeSha256": "a782b9d02d4350e3d6e6b6e453d8db9c88921d45e03f2368aacbbdcb95872f31"
           }
         ],
-        "reviewBasis": "Current source/document inspection and focused owner proof in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time. No external Cloud consumer, deployment, or release adoption is asserted."
+        "reviewBasis": "Current source/document inspection and focused owner proof in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time. No external Cloud consumer, deployment, or release adoption is asserted.",
+        "boundedFollowupReview": {
+          "review": "2026-10-28 bounded reconciliation",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/feature-catalog.ts",
+              "sha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04"
+            },
+            {
+              "path": "packages/shared/src/feature-catalog.test.ts",
+              "sha256": "1c6f8b100e179bb5dbcc5f8fbf16165fb5d33732e84f82f5fc9608f3230945f2"
+            },
+            {
+              "path": "scripts/generate-feature-catalog.ts",
+              "sha256": "0e03be3ec22ad1c468a3d98e1d5e49ed389dab73f78d3c228b4ee45ddc740f77"
+            },
+            {
+              "path": "scripts/create-github-release.sh",
+              "sha256": "c94e593f1d714a088c4abcaac5bddc63d66167f047e01321b07f971822a68af7"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md",
+              "sha256": "a782b9d02d4350e3d6e6b6e453d8db9c88921d45e03f2368aacbbdcb95872f31"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md",
+              "sha256": "a782b9d02d4350e3d6e6b6e453d8db9c88921d45e03f2368aacbbdcb95872f31"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/feature-catalog.test.log",
+              "sha256": "ac457819f84e26f647a94b3f12d78e6f251449e14f1d800268c6fcfcb57fdd45"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/feature-catalog.test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/pretest-source-pins.sha256",
+              "sha256": "6ca99806bf8f45cd3709865643384c7e7fd645cae41fd54fa87119f7789a1f97"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/posttest-source-pins.sha256",
+              "sha256": "6ca99806bf8f45cd3709865643384c7e7fd645cae41fd54fa87119f7789a1f97"
+            }
+          ],
+          "receiptFileCount": 5,
+          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
+          "classification": "implemented_unqualified_external_consumer_open",
+          "boundedResult": "17/17 focused current catalog tests are reported by the pinned release-sidecar receipt; external Cloud consumer conformance remains unknown."
+        }
       }
     },
     {
       "id": "V10-016",
       "sourceLine": 6788,
       "work": "capability docs/support/evidence linkage.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -1324,7 +1405,7 @@
           },
           {
             "path": "docs/help/export-and-delete.md",
-            "observedWorktreeSha256": "00d5636f80a7fa5a88a36bd8fc0217545ea85f106dc98b50801d8a1d48fd1ab9"
+            "observedWorktreeSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91"
           },
           {
             "path": "doc/experience/v9/coverage.json",
@@ -1336,14 +1417,89 @@
           },
           {
             "path": "docs/help/change-review.json",
-            "observedWorktreeSha256": "b0e4ab136cf46577cbdde8621e85c06f9e4d0d9baf52746a72fb87631c5880ef"
+            "observedWorktreeSha256": "14ab585a3df0df9e9dc054b0b759f2dcd5e500b9a7a57432351b6ce3d27e8e7a"
           },
           {
             "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md",
-            "observedWorktreeSha256": "c3f9a72a35bdd6d84745a8f0136d6d6964c5e6b8a18f8501b50d960d61f79529"
+            "observedWorktreeSha256": "a782b9d02d4350e3d6e6b6e453d8db9c88921d45e03f2368aacbbdcb95872f31"
           }
         ],
-        "reviewBasis": "Current source/document inspection and focused owner proof in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time. No external Cloud consumer, deployment, or release adoption is asserted."
+        "reviewBasis": "Current source/document inspection and focused owner proof in the shared dirty worktree on 2026-10-28. Hashes identify observed bytes at review time. No external Cloud consumer, deployment, or release adoption is asserted.",
+        "boundedFollowupReview": {
+          "review": "2026-10-28 bounded reconciliation",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/feature-catalog.ts",
+              "sha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04"
+            },
+            {
+              "path": "packages/shared/src/feature-catalog.test.ts",
+              "sha256": "1c6f8b100e179bb5dbcc5f8fbf16165fb5d33732e84f82f5fc9608f3230945f2"
+            },
+            {
+              "path": "scripts/create-github-release.sh",
+              "sha256": "c94e593f1d714a088c4abcaac5bddc63d66167f047e01321b07f971822a68af7"
+            },
+            {
+              "path": "scripts/generate-feature-catalog.ts",
+              "sha256": "0e03be3ec22ad1c468a3d98e1d5e49ed389dab73f78d3c228b4ee45ddc740f77"
+            },
+            {
+              "path": "docs/help/workflows-preview.md",
+              "sha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384"
+            },
+            {
+              "path": "docs/help/apps-and-connections.md",
+              "sha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e"
+            },
+            {
+              "path": "docs/help/export-and-delete.md",
+              "sha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91"
+            },
+            {
+              "path": "doc/experience/v9/coverage.json",
+              "sha256": "fe9c9c4ae90b71667d1c4a9e300d2e966fee643363b6a5d68e651c4c808350ae"
+            },
+            {
+              "path": "packages/shared/src/experience.ts",
+              "sha256": "c3895614a481d92a10939263cb97581fd28c21aa0295f9a5cc8ff5664464829a"
+            },
+            {
+              "path": "docs/help/change-review.json",
+              "sha256": "14ab585a3df0df9e9dc054b0b759f2dcd5e500b9a7a57432351b6ce3d27e8e7a"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md",
+              "sha256": "a782b9d02d4350e3d6e6b6e453d8db9c88921d45e03f2368aacbbdcb95872f31"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md",
+              "sha256": "a782b9d02d4350e3d6e6b6e453d8db9c88921d45e03f2368aacbbdcb95872f31"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/feature-catalog.test.log",
+              "sha256": "ac457819f84e26f647a94b3f12d78e6f251449e14f1d800268c6fcfcb57fdd45"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/feature-catalog.test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/pretest-source-pins.sha256",
+              "sha256": "6ca99806bf8f45cd3709865643384c7e7fd645cae41fd54fa87119f7789a1f97"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/release-sidecar-r1/posttest-source-pins.sha256",
+              "sha256": "6ca99806bf8f45cd3709865643384c7e7fd645cae41fd54fa87119f7789a1f97"
+            }
+          ],
+          "receiptFileCount": 5,
+          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
+          "classification": "partial_implementation_open",
+          "boundedResult": "Four source-backed capability-to-Help/screen linkages are present; broader mappings remain explicitly unqualified."
+        }
       }
     },
     {
@@ -6577,46 +6733,31 @@
       "id": "V10-066",
       "sourceLine": 6862,
       "work": "connector lifecycle common contract.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "implemented_unqualified_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "66. `V10-066` connector lifecycle common contract.",
         "sourceOwners": [
-          "packages/db/src/schema/tool_access.ts",
-          "packages/shared/src/constants.ts",
-          "server/src/services/tool-access.ts",
-          "server/src/services/github-connection-events.ts"
+          "packages/shared/src/types/tool-access.ts",
+          "server/src/services/tool-connection-lifecycle.ts",
+          "server/src/services/tool-connection-lifecycle.test.ts",
+          "server/src/services/experience/connector-recovery.ts",
+          "server/src/__tests__/v9-connector-recovery.integration.test.ts"
         ],
-        "implementationFinding": "The repository has connector records, generic health enums, grant resolution, and GitHub-specific event handling, but these are separate mechanisms. No shared connector lifecycle contract maps the required normalized lifecycle states and adapter operations across providers.",
+        "implementationFinding": "A shared normalized `ToolConnectionLifecycle` contract and canonical projection now cover current state, grant/scope/access version, credential freshness, provider verification, webhook health, and safe actions. The projection deliberately reports subscription renewal, provider version/deprecation, and reconciliation as `not_reported` unless the provider owner supplies facts. The current projector has focused unit coverage and the retained connector recovery receipt covers 13 selected PostgreSQL integration cases; this does not establish provider-wide lifecycle operations.",
         "scopedEvidence": [
           {
-            "reference": "packages/db/src/schema/tool_access.ts",
-            "availability": "present",
-            "sourcePath": "packages/db/src/schema/tool_access.ts",
-            "currentWorktreeSha256": "4ce9be53c6f6b2661fe5cac3507d8c0d9ab17f1eef0769ad62c4ed15c6e7ba81",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "packages/shared/src/constants.ts",
-            "availability": "present",
-            "sourcePath": "packages/shared/src/constants.ts",
-            "currentWorktreeSha256": "596fc411c5c7096ec5708de28375323f24492fc44815347505f5c1e92fcf01e0",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/tool-access.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/tool-access.ts",
-            "currentWorktreeSha256": "f3d4244dc1ef21e13d1bfd88e86bad2ac9e568501e3b51d1c8e25d04e0876ad7",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/github-connection-events.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/github-connection-events.ts",
-            "currentWorktreeSha256": "db225b77599cc9bd84c3bd02d6038f4d10000bfecbca93bf964359da0f6175f8",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
+            "kind": "current_source_review",
+            "paths": [
+              "packages/shared/src/types/tool-access.ts",
+              "server/src/services/tool-connection-lifecycle.ts",
+              "server/src/services/tool-connection-lifecycle.test.ts",
+              "server/src/services/experience/connector-recovery.ts",
+              "server/src/__tests__/v9-connector-recovery.integration.test.ts"
+            ],
+            "finding": "A shared normalized `ToolConnectionLifecycle` contract and canonical projection now cover current state, grant/scope/access version, credential freshness, provider verification, webhook health, and safe actions. The projection deliberately reports subscription renewal, provider version/deprecation, and reconciliation as `not_reported` unless the provider owner supplies facts. The current projector has focused unit coverage and the retained connector recovery receipt covers 13 selected PostgreSQL integration cases; this does not establish provider-wide lifecycle operations.",
+            "verification": "read-only source review; provider-specific applicability and external operation remain unqualified"
           }
         ],
         "historicalPinComparison": {
@@ -6624,7 +6765,89 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Implement one shared lifecycle contract and adapters for health, scope/grant/version/freshness, refresh, subscription, sync, pause/revoke and deprecation; then migrate existing provider-specific mechanisms without changing their safety semantics."
+        "remainingWork": "Qualify the common contract against only the connector providers actually supported, preserving `not_reported` where no source owner exists. Do not claim every provider supports every lifecycle operation or change provider behavior from inferred facts.",
+        "implementationStatus": "normalized_connector_lifecycle_contract_implemented_provider_operations_unknown",
+        "sourceReviewFindings": [
+          {
+            "path": "packages/shared/src/types/tool-access.ts",
+            "observedWorktreeSha256": "4ccf9e9e0041f14bcc1d2798e84c353ce475463b6d18d600c10b750a15a4926d"
+          },
+          {
+            "path": "server/src/services/tool-connection-lifecycle.ts",
+            "observedWorktreeSha256": "bec0cc5285061b299e8b6159004e7cdce8a28a91443513db594cb88bda1d361c"
+          },
+          {
+            "path": "server/src/services/tool-connection-lifecycle.test.ts",
+            "observedWorktreeSha256": "7dcaf1281fb5be9b4713a7579d01d7ece6e2db1dc0da6c1c47753cb0ab0fab01"
+          },
+          {
+            "path": "server/src/services/experience/connector-recovery.ts",
+            "observedWorktreeSha256": "c155914bfc7d8f698159b9c06637c9ac8626146c90613dd94b1be897745360c9"
+          },
+          {
+            "path": "server/src/__tests__/v9-connector-recovery.integration.test.ts",
+            "observedWorktreeSha256": "e9939639be021a4b5f2a658870bb5ab6e37804905f94c22627d8f949ed03f82d"
+          }
+        ],
+        "boundedFollowupReview": {
+          "review": "2026-10-28 bounded reconciliation",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/types/tool-access.ts",
+              "sha256": "4ccf9e9e0041f14bcc1d2798e84c353ce475463b6d18d600c10b750a15a4926d"
+            },
+            {
+              "path": "server/src/services/tool-connection-lifecycle.ts",
+              "sha256": "bec0cc5285061b299e8b6159004e7cdce8a28a91443513db594cb88bda1d361c"
+            },
+            {
+              "path": "server/src/services/tool-connection-lifecycle.test.ts",
+              "sha256": "7dcaf1281fb5be9b4713a7579d01d7ece6e2db1dc0da6c1c47753cb0ab0fab01"
+            },
+            {
+              "path": "server/src/services/experience/connector-recovery.ts",
+              "sha256": "c155914bfc7d8f698159b9c06637c9ac8626146c90613dd94b1be897745360c9"
+            },
+            {
+              "path": "server/src/__tests__/v9-connector-recovery.integration.test.ts",
+              "sha256": "e9939639be021a4b5f2a658870bb5ab6e37804905f94c22627d8f949ed03f82d"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md",
+              "sha256": "9e8511e066e4db375a210a606df2b5c504e2a665f2369fa679edcda8a58dfa60"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/r3/server-test.log",
+              "sha256": "d22395c3196e54e62b6f5346bb710e9566fbd853de35faf8d8dcda6c1eb14582"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/r3/server-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/server-types-r5/unit.log",
+              "sha256": "6474f2f88cc201152019f79264182db4440d67bce62a17ea858e0c8503a5a01d"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/server-types-r5/unit.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/r3/source-pins.json",
+              "sha256": "6a95cf1f4b06527047e167883cfcebc2b50f72284531d902c5b1963b5d89bd15"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/server-types-r5/source-pins.json",
+              "sha256": "34bf1ad39bdaa1ada24843f457a617c27d9c73f294bf18be2739556b6bb69e35"
+            }
+          ],
+          "receiptFileCount": 7,
+          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
+          "classification": "implemented_unqualified_provider_contract_open",
+          "boundedResult": "Shared lifecycle projection exists. Retained receipts report 13/13 focused integration cases and 9/9 lifecycle units on their pinned snapshots; do not infer every provider operation."
+        }
       }
     },
     {
@@ -6669,38 +6892,31 @@
       "id": "V10-068",
       "sourceLine": 6864,
       "work": "webhook/subscription expiry/renewal engine.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "68. `V10-068` webhook/subscription expiry/renewal engine.",
         "sourceOwners": [
-          "packages/db/src/schema/tool_access.ts",
-          "server/src/services/tool-access.ts",
-          "server/src/services/github-connection-events.ts"
+          "packages/shared/src/types/tool-access.ts",
+          "server/src/services/tool-connection-lifecycle.ts",
+          "server/src/services/tool-connection-lifecycle.test.ts",
+          "server/src/services/experience/connector-recovery.ts",
+          "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md"
         ],
-        "implementationFinding": "OAuth access-token refresh exists in tool-access for supported OAuth grants. GitHub webhook health/access handling also exists. The inspected owners do not implement a general expiring webhook/subscription renewal scheduler and provider validation flow.",
+        "implementationFinding": "The normalized connection projection distinguishes OAuth credential freshness from provider subscription renewal and reports subscription state as `not_reported` unless the provider owner reports expiry/renewal facts. The inspected code therefore does not establish which supported integrations use expiring subscriptions; no specific missing renewal path is confirmed by the available provider facts.",
         "scopedEvidence": [
           {
-            "reference": "packages/db/src/schema/tool_access.ts",
-            "availability": "present",
-            "sourcePath": "packages/db/src/schema/tool_access.ts",
-            "currentWorktreeSha256": "4ce9be53c6f6b2661fe5cac3507d8c0d9ab17f1eef0769ad62c4ed15c6e7ba81",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/tool-access.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/tool-access.ts",
-            "currentWorktreeSha256": "f3d4244dc1ef21e13d1bfd88e86bad2ac9e568501e3b51d1c8e25d04e0876ad7",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/github-connection-events.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/github-connection-events.ts",
-            "currentWorktreeSha256": "db225b77599cc9bd84c3bd02d6038f4d10000bfecbca93bf964359da0f6175f8",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
+            "kind": "current_source_review",
+            "paths": [
+              "packages/shared/src/types/tool-access.ts",
+              "server/src/services/tool-connection-lifecycle.ts",
+              "server/src/services/tool-connection-lifecycle.test.ts",
+              "server/src/services/experience/connector-recovery.ts",
+              "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md"
+            ],
+            "finding": "The normalized connection projection distinguishes OAuth credential freshness from provider subscription renewal and reports subscription state as `not_reported` unless the provider owner reports expiry/renewal facts. The inspected code therefore does not establish which supported integrations use expiring subscriptions; no specific missing renewal path is confirmed by the available provider facts.",
+            "verification": "read-only source review; provider-specific applicability and external operation remain unqualified"
           }
         ],
         "historicalPinComparison": {
@@ -6708,7 +6924,89 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Add scheduled subscription-expiry discovery, renewal, provider validation, and re-auth/revocation transitions for subscribed connector providers; retain existing token refresh as a separate credential mechanism."
+        "remainingWork": "Inventory supported provider subscription mechanisms and their documented expiry/renewal semantics. Implement or qualify renewal only for providers whose authoritative contract says subscriptions expire; preserve unknown as `not_reported` and keep OAuth token refresh separate.",
+        "implementationStatus": "provider_subscription_expiry_applicability_unreported",
+        "sourceReviewFindings": [
+          {
+            "path": "packages/shared/src/types/tool-access.ts",
+            "observedWorktreeSha256": "4ccf9e9e0041f14bcc1d2798e84c353ce475463b6d18d600c10b750a15a4926d"
+          },
+          {
+            "path": "server/src/services/tool-connection-lifecycle.ts",
+            "observedWorktreeSha256": "bec0cc5285061b299e8b6159004e7cdce8a28a91443513db594cb88bda1d361c"
+          },
+          {
+            "path": "server/src/services/tool-connection-lifecycle.test.ts",
+            "observedWorktreeSha256": "7dcaf1281fb5be9b4713a7579d01d7ece6e2db1dc0da6c1c47753cb0ab0fab01"
+          },
+          {
+            "path": "server/src/services/experience/connector-recovery.ts",
+            "observedWorktreeSha256": "c155914bfc7d8f698159b9c06637c9ac8626146c90613dd94b1be897745360c9"
+          },
+          {
+            "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md",
+            "observedWorktreeSha256": "9e8511e066e4db375a210a606df2b5c504e2a665f2369fa679edcda8a58dfa60"
+          }
+        ],
+        "boundedFollowupReview": {
+          "review": "2026-10-28 bounded reconciliation",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/types/tool-access.ts",
+              "sha256": "4ccf9e9e0041f14bcc1d2798e84c353ce475463b6d18d600c10b750a15a4926d"
+            },
+            {
+              "path": "server/src/services/tool-connection-lifecycle.ts",
+              "sha256": "bec0cc5285061b299e8b6159004e7cdce8a28a91443513db594cb88bda1d361c"
+            },
+            {
+              "path": "server/src/services/tool-connection-lifecycle.test.ts",
+              "sha256": "7dcaf1281fb5be9b4713a7579d01d7ece6e2db1dc0da6c1c47753cb0ab0fab01"
+            },
+            {
+              "path": "server/src/services/experience/connector-recovery.ts",
+              "sha256": "c155914bfc7d8f698159b9c06637c9ac8626146c90613dd94b1be897745360c9"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md",
+              "sha256": "9e8511e066e4db375a210a606df2b5c504e2a665f2369fa679edcda8a58dfa60"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md",
+              "sha256": "9e8511e066e4db375a210a606df2b5c504e2a665f2369fa679edcda8a58dfa60"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/r3/server-test.log",
+              "sha256": "d22395c3196e54e62b6f5346bb710e9566fbd853de35faf8d8dcda6c1eb14582"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/r3/server-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/server-types-r5/unit.log",
+              "sha256": "6474f2f88cc201152019f79264182db4440d67bce62a17ea858e0c8503a5a01d"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/server-types-r5/unit.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/r3/source-pins.json",
+              "sha256": "6a95cf1f4b06527047e167883cfcebc2b50f72284531d902c5b1963b5d89bd15"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/server-types-r5/source-pins.json",
+              "sha256": "34bf1ad39bdaa1ada24843f457a617c27d9c73f294bf18be2739556b6bb69e35"
+            }
+          ],
+          "receiptFileCount": 7,
+          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
+          "classification": "provider_facts_unreported_open",
+          "boundedResult": "Current source preserves not_reported for provider subscription/deprecation facts; no provider-specific expiry/version behavior is inferred."
+        }
       }
     },
     {
@@ -6761,38 +7059,33 @@
       "id": "V10-070",
       "sourceLine": 6866,
       "work": "provider-deprecation lifecycle + notices.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "70. `V10-070` provider-deprecation lifecycle + notices.",
         "sourceOwners": [
-          "packages/shared/src/github-connectors.ts",
+          "packages/shared/src/types/tool-access.ts",
+          "server/src/services/tool-connection-lifecycle.ts",
+          "server/src/services/tool-connection-lifecycle.test.ts",
           "packages/shared/src/provider-capabilities.ts",
-          "server/src/services/tool-access.ts"
+          "packages/shared/src/feature-catalog.ts",
+          "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md"
         ],
-        "implementationFinding": "The inspected app/provider metadata and tool-access flows describe current setup and permission state; no provider/model deprecation lifecycle owner or deprecation notice state was found in these paths.",
+        "implementationFinding": "The normalized lifecycle contract reports provider version/deprecation as `not_reported` unless an authoritative provider owner supplies those facts. Existing capability lifecycle metadata covers source-backed product capabilities, not provider API deprecation facts. The current source review did not establish a supported provider deprecation event or notice that the product fails to handle.",
         "scopedEvidence": [
           {
-            "reference": "packages/shared/src/github-connectors.ts",
-            "availability": "present",
-            "sourcePath": "packages/shared/src/github-connectors.ts",
-            "currentWorktreeSha256": "1b0be1beeab44a3cea9e8d3074b9d4c4fa201e8ee6134761961cb78d013d4a8b",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "packages/shared/src/provider-capabilities.ts",
-            "availability": "present",
-            "sourcePath": "packages/shared/src/provider-capabilities.ts",
-            "currentWorktreeSha256": "7cfcd467f62b2b4eebb5c15e97b31da0893904556ce5192bc7c86a1bbb62e88a",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/tool-access.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/tool-access.ts",
-            "currentWorktreeSha256": "f3d4244dc1ef21e13d1bfd88e86bad2ac9e568501e3b51d1c8e25d04e0876ad7",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
+            "kind": "current_source_review",
+            "paths": [
+              "packages/shared/src/types/tool-access.ts",
+              "server/src/services/tool-connection-lifecycle.ts",
+              "server/src/services/tool-connection-lifecycle.test.ts",
+              "packages/shared/src/provider-capabilities.ts",
+              "packages/shared/src/feature-catalog.ts",
+              "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md"
+            ],
+            "finding": "The normalized lifecycle contract reports provider version/deprecation as `not_reported` unless an authoritative provider owner supplies those facts. Existing capability lifecycle metadata covers source-backed product capabilities, not provider API deprecation facts. The current source review did not establish a supported provider deprecation event or notice that the product fails to handle.",
+            "verification": "read-only source review; provider-specific applicability and external operation remain unqualified"
           }
         ],
         "historicalPinComparison": {
@@ -6800,7 +7093,97 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Add provider deprecation/sunset metadata, affected-connection discovery, customer/operator notice, migration and retirement transitions, and compatibility behavior for existing obligations."
+        "remainingWork": "Record provider version/deprecation facts only from an authoritative supported-provider owner; then map affected connections and any required customer notice or migration through existing connector and notice owners. Keep missing provider facts explicit and do not invent expiry/sunset dates.",
+        "implementationStatus": "provider_version_deprecation_facts_unreported",
+        "sourceReviewFindings": [
+          {
+            "path": "packages/shared/src/types/tool-access.ts",
+            "observedWorktreeSha256": "4ccf9e9e0041f14bcc1d2798e84c353ce475463b6d18d600c10b750a15a4926d"
+          },
+          {
+            "path": "server/src/services/tool-connection-lifecycle.ts",
+            "observedWorktreeSha256": "bec0cc5285061b299e8b6159004e7cdce8a28a91443513db594cb88bda1d361c"
+          },
+          {
+            "path": "server/src/services/tool-connection-lifecycle.test.ts",
+            "observedWorktreeSha256": "7dcaf1281fb5be9b4713a7579d01d7ece6e2db1dc0da6c1c47753cb0ab0fab01"
+          },
+          {
+            "path": "packages/shared/src/provider-capabilities.ts",
+            "observedWorktreeSha256": "7cfcd467f62b2b4eebb5c15e97b31da0893904556ce5192bc7c86a1bbb62e88a"
+          },
+          {
+            "path": "packages/shared/src/feature-catalog.ts",
+            "observedWorktreeSha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04"
+          },
+          {
+            "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md",
+            "observedWorktreeSha256": "9e8511e066e4db375a210a606df2b5c504e2a665f2369fa679edcda8a58dfa60"
+          }
+        ],
+        "boundedFollowupReview": {
+          "review": "2026-10-28 bounded reconciliation",
+          "sourcePins": [
+            {
+              "path": "packages/shared/src/types/tool-access.ts",
+              "sha256": "4ccf9e9e0041f14bcc1d2798e84c353ce475463b6d18d600c10b750a15a4926d"
+            },
+            {
+              "path": "server/src/services/tool-connection-lifecycle.ts",
+              "sha256": "bec0cc5285061b299e8b6159004e7cdce8a28a91443513db594cb88bda1d361c"
+            },
+            {
+              "path": "server/src/services/tool-connection-lifecycle.test.ts",
+              "sha256": "7dcaf1281fb5be9b4713a7579d01d7ece6e2db1dc0da6c1c47753cb0ab0fab01"
+            },
+            {
+              "path": "packages/shared/src/provider-capabilities.ts",
+              "sha256": "7cfcd467f62b2b4eebb5c15e97b31da0893904556ce5192bc7c86a1bbb62e88a"
+            },
+            {
+              "path": "packages/shared/src/feature-catalog.ts",
+              "sha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md",
+              "sha256": "9e8511e066e4db375a210a606df2b5c504e2a665f2369fa679edcda8a58dfa60"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md",
+              "sha256": "9e8511e066e4db375a210a606df2b5c504e2a665f2369fa679edcda8a58dfa60"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/r3/server-test.log",
+              "sha256": "d22395c3196e54e62b6f5346bb710e9566fbd853de35faf8d8dcda6c1eb14582"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/r3/server-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/server-types-r5/unit.log",
+              "sha256": "6474f2f88cc201152019f79264182db4440d67bce62a17ea858e0c8503a5a01d"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/server-types-r5/unit.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/r3/source-pins.json",
+              "sha256": "6a95cf1f4b06527047e167883cfcebc2b50f72284531d902c5b1963b5d89bd15"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/server-types-r5/source-pins.json",
+              "sha256": "34bf1ad39bdaa1ada24843f457a617c27d9c73f294bf18be2739556b6bb69e35"
+            }
+          ],
+          "receiptFileCount": 7,
+          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
+          "classification": "provider_facts_unreported_open",
+          "boundedResult": "Current source preserves not_reported for provider subscription/deprecation facts; no provider-specific expiry/version behavior is inferred."
+        }
       }
     },
     {
@@ -8608,46 +8991,43 @@
       "id": "V10-095",
       "sourceLine": 6903,
       "work": "support/feedback/incident → Issue/Learning/Decision bridge.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "95. `V10-095` support/feedback/incident → Issue/Learning/Decision bridge.",
         "sourceOwners": [
-          "server/src/services/customer-feedback.ts",
           "server/src/services/experience/support-cases.ts",
-          "server/src/services/learning/learning-service.ts",
-          "server/src/routes/learning.ts"
+          "server/src/routes/customer-support.ts",
+          "packages/db/src/schema/support_case_issue_links.ts",
+          "server/src/__tests__/v10-support-cases.integration.test.ts",
+          "ui/src/pages/CustomerSupportCases.tsx",
+          "ui/src/pages/CustomerSupportCases.test.tsx",
+          "server/src/services/decision-outcome-reviews.ts",
+          "server/src/services/learning/learning-service.ts"
         ],
-        "implementationFinding": "Feedback intake/triage, support case handling and learning cycles are separate owners. No supported workflow/receipt links a feedback/support case or incident to an Issue, Learning hypothesis and Decision while preserving source ownership/provenance.",
+        "implementationFinding": "The support improvement bridge now stores a company-scoped pointer from a private support case to an existing Issue without copying case text. The Support UI provides a guided Issue → Decisions/Learning handoff, while Decision outcome review and exact-review-to-Learning remain with their existing owners. This is a supported partial bridge; it does not silently convert complaints or provider incidents, and it does not prove a full feedback/incident-to-Decision/Learning journey.",
         "scopedEvidence": [
           {
-            "reference": "server/src/services/customer-feedback.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/customer-feedback.ts",
-            "currentWorktreeSha256": "60dd5584ad2db2c3872982a3b05aebec79093afd8be6c5bec4d58481b60fb289",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/experience/support-cases.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/experience/support-cases.ts",
-            "currentWorktreeSha256": "ded459c7ae516d5defa7c6e4e465857f579bf69175a2baca65876d48a49cbb90",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/learning/learning-service.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/learning/learning-service.ts",
-            "currentWorktreeSha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/routes/learning.ts",
-            "availability": "present",
-            "sourcePath": "server/src/routes/learning.ts",
-            "currentWorktreeSha256": "36cd76e37283297fd990cacfd4aee947928edc84257c8652b80a469840f35b73",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
+            "kind": "current_source_and_receipt_review",
+            "paths": [
+              "server/src/services/experience/support-cases.ts",
+              "server/src/routes/customer-support.ts",
+              "packages/db/src/schema/support_case_issue_links.ts",
+              "server/src/__tests__/v10-support-cases.integration.test.ts",
+              "ui/src/pages/CustomerSupportCases.tsx",
+              "ui/src/pages/CustomerSupportCases.test.tsx",
+              "server/src/services/decision-outcome-reviews.ts",
+              "server/src/services/learning/learning-service.ts",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/qualification.md",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.log",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.exit",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.log",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.exit",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256"
+            ],
+            "finding": "The support improvement bridge now stores a company-scoped pointer from a private support case to an existing Issue without copying case text. The Support UI provides a guided Issue → Decisions/Learning handoff, while Decision outcome review and exact-review-to-Learning remain with their existing owners. This is a supported partial bridge; it does not silently convert complaints or provider incidents, and it does not prove a full feedback/incident-to-Decision/Learning journey.",
+            "verification": "Selected bridge tests only: 3 server cases passed with 53 skipped; 24 UI cases passed. Decision/Learning complete workflows, provider operation, and full V10 journey were not rerun."
           }
         ],
         "historicalPinComparison": {
@@ -8655,45 +9035,146 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Implement an explicit human-governed bridge with source references, consent/privacy boundaries, issue/learning/decision links and closure/outcome receipts; do not silently convert support complaints into feedback."
+        "remainingWork": "Retain the bounded Support-to-Issue link and guided handoff. Qualify the complete Human-governed path, including which feedback/incident sources may be linked, provenance/consent boundaries, and original Decision/Learning receipts. Do not automatically convert support complaints or provider incident messages into formal feedback or Decisions.",
+        "implementationStatus": "support_issue_decision_learning_handoff_partial",
+        "sourceReviewFindings": [
+          {
+            "path": "server/src/services/experience/support-cases.ts",
+            "observedWorktreeSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+          },
+          {
+            "path": "server/src/routes/customer-support.ts",
+            "observedWorktreeSha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856"
+          },
+          {
+            "path": "packages/db/src/schema/support_case_issue_links.ts",
+            "observedWorktreeSha256": "ef17d7e9e3c256f1cdbdf3609fb19ad92464024a9efee18ee52b0c5701cfad22"
+          },
+          {
+            "path": "server/src/__tests__/v10-support-cases.integration.test.ts",
+            "observedWorktreeSha256": "09ee32fedd9f95f91e8e79e55b9415de973632a2447cf82bb63e8b7c06965e1b"
+          },
+          {
+            "path": "ui/src/pages/CustomerSupportCases.tsx",
+            "observedWorktreeSha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+          },
+          {
+            "path": "ui/src/pages/CustomerSupportCases.test.tsx",
+            "observedWorktreeSha256": "7d4afd79a39c52f26035bd130ae716d04b14316512f54e1683aa4b57da87f680"
+          },
+          {
+            "path": "server/src/services/decision-outcome-reviews.ts",
+            "observedWorktreeSha256": "492235ec735843792cf3963bf36138a3ded3271c2cf55552a13d985428825b7d"
+          },
+          {
+            "path": "server/src/services/learning/learning-service.ts",
+            "observedWorktreeSha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
+          }
+        ],
+        "boundedFollowupReview": {
+          "review": "2026-10-28 bounded reconciliation",
+          "sourcePins": [
+            {
+              "path": "server/src/services/experience/support-cases.ts",
+              "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+            },
+            {
+              "path": "server/src/routes/customer-support.ts",
+              "sha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856"
+            },
+            {
+              "path": "packages/db/src/schema/support_case_issue_links.ts",
+              "sha256": "ef17d7e9e3c256f1cdbdf3609fb19ad92464024a9efee18ee52b0c5701cfad22"
+            },
+            {
+              "path": "server/src/__tests__/v10-support-cases.integration.test.ts",
+              "sha256": "09ee32fedd9f95f91e8e79e55b9415de973632a2447cf82bb63e8b7c06965e1b"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.tsx",
+              "sha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.test.tsx",
+              "sha256": "7d4afd79a39c52f26035bd130ae716d04b14316512f54e1683aa4b57da87f680"
+            },
+            {
+              "path": "server/src/services/decision-outcome-reviews.ts",
+              "sha256": "492235ec735843792cf3963bf36138a3ded3271c2cf55552a13d985428825b7d"
+            },
+            {
+              "path": "server/src/services/learning/learning-service.ts",
+              "sha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/qualification.md",
+              "sha256": "02c420e4d6e6e0d04cb997f19591f4272021bb449be939aaa7221359d392e01a"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.log",
+              "sha256": "de5684696eaaad5e77907a34101592cd14d75fc1a8cb98913871402b05598444"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.log",
+              "sha256": "93aef8c94cc81346c320ee6f92b03eb79f0bb94549ea5acaa0093675a64cb0d7"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256",
+              "sha256": "b3f612b0b14921c84241cc83adbd4ca3312e937d39e51cc3a927f6465567b93a"
+            }
+          ],
+          "receiptFileCount": 6,
+          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
+          "classification": "partial_implementation_open",
+          "boundedResult": "Bridge receipt reports 3 selected server tests passed (53 skipped) and 24 UI tests passed; no full feedback/incident-to-Learning/Decision journey claim."
+        }
       }
     },
     {
       "id": "V10-096",
       "sourceLine": 6904,
       "work": "recurring-problem/root-cause review.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "96. `V10-096` recurring-problem/root-cause review.",
         "sourceOwners": [
           "server/src/services/experience/support-cases.ts",
+          "server/src/services/decision-outcome-reviews.ts",
           "server/src/services/learning/learning-service.ts",
-          "server/src/services/recovery/service.ts"
+          "server/src/services/recovery/service.ts",
+          "ui/src/pages/CustomerSupportCases.tsx",
+          "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+          "ui/src/pages/OrganizationalLearning.tsx"
         ],
-        "implementationFinding": "Support cases can retain customer exchanges; learning cycles require verified canonical task outcomes; recovery handles operational failures. The inspected owners do not provide a recurring-problem/root-cause review across customer evidence and operational incidents.",
+        "implementationFinding": "The support-to-Issue guided handoff exposes existing Human Decision outcome review and Learning review owners. The bridge receipt explicitly says it adds no recurring-problem aggregation or structured root-cause proposal. Thus review semantics exist, but recurring-problem aggregation/root-cause review remains partial; this is not evidence that the original Decision/Learning controls are missing.",
         "scopedEvidence": [
           {
-            "reference": "server/src/services/experience/support-cases.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/experience/support-cases.ts",
-            "currentWorktreeSha256": "ded459c7ae516d5defa7c6e4e465857f579bf69175a2baca65876d48a49cbb90",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/learning/learning-service.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/learning/learning-service.ts",
-            "currentWorktreeSha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/recovery/service.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/recovery/service.ts",
-            "currentWorktreeSha256": "77ca53661a7afb823d03c648b8b9b32b4f154e747891f7509d0d6013b43d5fef",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
+            "kind": "current_source_and_receipt_review",
+            "paths": [
+              "server/src/services/experience/support-cases.ts",
+              "server/src/services/decision-outcome-reviews.ts",
+              "server/src/services/learning/learning-service.ts",
+              "server/src/services/recovery/service.ts",
+              "ui/src/pages/CustomerSupportCases.tsx",
+              "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+              "ui/src/pages/OrganizationalLearning.tsx",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/qualification.md",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256"
+            ],
+            "finding": "The support-to-Issue guided handoff exposes existing Human Decision outcome review and Learning review owners. The bridge receipt explicitly says it adds no recurring-problem aggregation or structured root-cause proposal. Thus review semantics exist, but recurring-problem aggregation/root-cause review remains partial; this is not evidence that the original Decision/Learning controls are missing.",
+            "verification": "Existing Decision/Learning review owners were source-pinned; this bridge receipt did not rerun their complete workflows, recurring-problem aggregation, action-receipt collection, or recurrence tracking."
           }
         ],
         "historicalPinComparison": {
@@ -8701,7 +9182,85 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Add a recurring-problem review workflow that aggregates only authorized linked evidence, records human root-cause decisions and tracks actions without merging source records."
+        "remainingWork": "Keep canonical Decision and Learning as the review owners. Qualify their current linked-source journey. Any broader recurring-problem aggregation or structured root-cause proposal remains open only if the adopted quality process requires it; preserve source ownership and avoid inferring a cause from a complaint or Issue link.",
+        "implementationStatus": "decision_learning_review_exists_recurring_problem_review_partial",
+        "sourceReviewFindings": [
+          {
+            "path": "server/src/services/experience/support-cases.ts",
+            "observedWorktreeSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+          },
+          {
+            "path": "server/src/services/decision-outcome-reviews.ts",
+            "observedWorktreeSha256": "492235ec735843792cf3963bf36138a3ded3271c2cf55552a13d985428825b7d"
+          },
+          {
+            "path": "server/src/services/learning/learning-service.ts",
+            "observedWorktreeSha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
+          },
+          {
+            "path": "server/src/services/recovery/service.ts",
+            "observedWorktreeSha256": "77ca53661a7afb823d03c648b8b9b32b4f154e747891f7509d0d6013b43d5fef"
+          },
+          {
+            "path": "ui/src/pages/CustomerSupportCases.tsx",
+            "observedWorktreeSha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+          },
+          {
+            "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+            "observedWorktreeSha256": "310ddca9ec1e956258392c5793595056821ecbc684b906d219cdf42fae4a684f"
+          },
+          {
+            "path": "ui/src/pages/OrganizationalLearning.tsx",
+            "observedWorktreeSha256": "47414a79bb228e974f1b5aa6fa9646cccb0822493fbc364cc7b8b91a094b1cd5"
+          }
+        ],
+        "boundedFollowupReview": {
+          "review": "2026-10-28 bounded reconciliation",
+          "sourcePins": [
+            {
+              "path": "server/src/services/experience/support-cases.ts",
+              "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+            },
+            {
+              "path": "server/src/services/decision-outcome-reviews.ts",
+              "sha256": "492235ec735843792cf3963bf36138a3ded3271c2cf55552a13d985428825b7d"
+            },
+            {
+              "path": "server/src/services/learning/learning-service.ts",
+              "sha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
+            },
+            {
+              "path": "server/src/services/recovery/service.ts",
+              "sha256": "77ca53661a7afb823d03c648b8b9b32b4f154e747891f7509d0d6013b43d5fef"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.tsx",
+              "sha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+            },
+            {
+              "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+              "sha256": "310ddca9ec1e956258392c5793595056821ecbc684b906d219cdf42fae4a684f"
+            },
+            {
+              "path": "ui/src/pages/OrganizationalLearning.tsx",
+              "sha256": "47414a79bb228e974f1b5aa6fa9646cccb0822493fbc364cc7b8b91a094b1cd5"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/qualification.md",
+              "sha256": "02c420e4d6e6e0d04cb997f19591f4272021bb449be939aaa7221359d392e01a"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256",
+              "sha256": "b3f612b0b14921c84241cc83adbd4ca3312e937d39e51cc3a927f6465567b93a"
+            }
+          ],
+          "receiptFileCount": 2,
+          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
+          "classification": "partial_implementation_review_qualification_open",
+          "boundedResult": "Existing Decision/Learning semantics are source-pinned; bridge receipt says recurring aggregation/action receipts/recurrence workflows were not added or rerun."
+        }
       }
     },
     {
@@ -8762,38 +9321,35 @@
       "id": "V10-098",
       "sourceLine": 6906,
       "work": "improvement effectiveness/recurrence review.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "98. `V10-098` improvement effectiveness/recurrence review.",
         "sourceOwners": [
+          "server/src/services/decision-outcome-reviews.ts",
           "server/src/services/learning/learning-service.ts",
           "server/src/services/experience/support-cases.ts",
-          "server/src/services/experience/service-health.ts"
+          "server/src/services/experience/service-health.ts",
+          "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+          "ui/src/pages/OrganizationalLearning.tsx"
         ],
-        "implementationFinding": "Learning cycles record hypothesis evaluation and native promotion receipts; support cases record customer-visible exchanges; service health projects provider status. The inspected paths do not connect shipped changes to post-change customer outcomes, recurrence measurement and review.",
+        "implementationFinding": "Canonical Decision outcome review and Learning evaluation/promotion records provide existing Human review and outcome semantics, and support cases can link to Issues. The support-improvement-bridge receipt explicitly says it adds no action-receipt collection or recurrence tracking and did not rerun the complete Decision/Learning workflows. No claim of causal impact or recurrence effectiveness is supported by the bridge alone.",
         "scopedEvidence": [
           {
-            "reference": "server/src/services/learning/learning-service.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/learning/learning-service.ts",
-            "currentWorktreeSha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/experience/support-cases.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/experience/support-cases.ts",
-            "currentWorktreeSha256": "ded459c7ae516d5defa7c6e4e465857f579bf69175a2baca65876d48a49cbb90",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
-          },
-          {
-            "reference": "server/src/services/experience/service-health.ts",
-            "availability": "present",
-            "sourcePath": "server/src/services/experience/service-health.ts",
-            "currentWorktreeSha256": "e7d8481bcf4a2a5300ea5db7a953df380e45d1a13f4acadb6b6fc4498be006f0",
-            "scope": "Source inspected to determine the stated implementation subset and remaining gap. Source hash is a review pin, not qualification or release evidence."
+            "kind": "current_source_and_receipt_review",
+            "paths": [
+              "server/src/services/decision-outcome-reviews.ts",
+              "server/src/services/learning/learning-service.ts",
+              "server/src/services/experience/support-cases.ts",
+              "server/src/services/experience/service-health.ts",
+              "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+              "ui/src/pages/OrganizationalLearning.tsx",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/qualification.md",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256"
+            ],
+            "finding": "Canonical Decision outcome review and Learning evaluation/promotion records provide existing Human review and outcome semantics, and support cases can link to Issues. The support-improvement-bridge receipt explicitly says it adds no action-receipt collection or recurrence tracking and did not rerun the complete Decision/Learning workflows. No claim of causal impact or recurrence effectiveness is supported by the bridge alone.",
+            "verification": "Existing Decision/Learning review owners were source-pinned; this bridge receipt did not rerun their complete workflows, recurring-problem aggregation, action-receipt collection, or recurrence tracking."
           }
         ],
         "historicalPinComparison": {
@@ -8801,7 +9357,77 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Implement change-to-outcome/recurrence tracking and review, with source references and uncertainty; require human review before conclusions or rollout claims."
+        "remainingWork": "Qualify the existing Decision/Learning workflow for linked post-change evidence. Broader outcome collection and recurrence measurement remain open; require source references, uncertainty, and Human review before making effectiveness or rollout claims.",
+        "implementationStatus": "decision_learning_outcome_review_exists_recurrence_tracking_partial",
+        "sourceReviewFindings": [
+          {
+            "path": "server/src/services/decision-outcome-reviews.ts",
+            "observedWorktreeSha256": "492235ec735843792cf3963bf36138a3ded3271c2cf55552a13d985428825b7d"
+          },
+          {
+            "path": "server/src/services/learning/learning-service.ts",
+            "observedWorktreeSha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
+          },
+          {
+            "path": "server/src/services/experience/support-cases.ts",
+            "observedWorktreeSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+          },
+          {
+            "path": "server/src/services/experience/service-health.ts",
+            "observedWorktreeSha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+          },
+          {
+            "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+            "observedWorktreeSha256": "310ddca9ec1e956258392c5793595056821ecbc684b906d219cdf42fae4a684f"
+          },
+          {
+            "path": "ui/src/pages/OrganizationalLearning.tsx",
+            "observedWorktreeSha256": "47414a79bb228e974f1b5aa6fa9646cccb0822493fbc364cc7b8b91a094b1cd5"
+          }
+        ],
+        "boundedFollowupReview": {
+          "review": "2026-10-28 bounded reconciliation",
+          "sourcePins": [
+            {
+              "path": "server/src/services/decision-outcome-reviews.ts",
+              "sha256": "492235ec735843792cf3963bf36138a3ded3271c2cf55552a13d985428825b7d"
+            },
+            {
+              "path": "server/src/services/learning/learning-service.ts",
+              "sha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
+            },
+            {
+              "path": "server/src/services/experience/support-cases.ts",
+              "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+            },
+            {
+              "path": "server/src/services/experience/service-health.ts",
+              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            },
+            {
+              "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+              "sha256": "310ddca9ec1e956258392c5793595056821ecbc684b906d219cdf42fae4a684f"
+            },
+            {
+              "path": "ui/src/pages/OrganizationalLearning.tsx",
+              "sha256": "47414a79bb228e974f1b5aa6fa9646cccb0822493fbc364cc7b8b91a094b1cd5"
+            }
+          ],
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/qualification.md",
+              "sha256": "02c420e4d6e6e0d04cb997f19591f4272021bb449be939aaa7221359d392e01a"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256",
+              "sha256": "b3f612b0b14921c84241cc83adbd4ca3312e937d39e51cc3a927f6465567b93a"
+            }
+          ],
+          "receiptFileCount": 2,
+          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
+          "classification": "partial_implementation_review_qualification_open",
+          "boundedResult": "Existing Decision/Learning semantics are source-pinned; bridge receipt says recurring aggregation/action receipts/recurrence workflows were not added or rerun."
+        }
       }
     },
     {
@@ -9356,7 +9982,7 @@
       "id": "V10-107",
       "sourceLine": 6921,
       "work": "public incident + in-app status + recovery E2E.",
-      "reconciliation": "software_requirement_missing_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -9365,20 +9991,38 @@
           "server/src/routes/service-health.ts",
           "server/src/services/experience/service-health.ts",
           "packages/shared/src/service-health.ts",
-          "server/src/__tests__/service-health-routes.test.ts"
+          "server/src/__tests__/service-health-routes.test.ts",
+          "server/src/services/experience/service-health.test.ts",
+          "ui/src/components/ServiceHealth.tsx",
+          "ui/src/components/ServiceHealth.test.tsx",
+          "ui/src/components/Layout.tsx",
+          "ui/src/components/Layout.production.tsx",
+          "ui/src/pages/CustomerHelpCenter.tsx",
+          "ui/src/pages/CustomerSupportCases.tsx",
+          "doc/operations/service-health/README.md",
+          "doc/operations/service-health/qualification-2026-10-28/README.md"
         ],
-        "implementationFinding": "The source owner is a read-only public Statuspage projection with unavailable/expiry behavior. It does not author incidents, map affected companies, notify subscribers, or complete recovery.",
+        "implementationFinding": "The managed Statuspage provider is the canonical incident publisher and subscriber-consent owner under V10 §13.3; the product intentionally has no second local incident authority. The application reads the public provider projection at GET /api/service-status. Both Layout variants render the same active-status banner above routed content, and Help renders the full provider incident projection; the projection explicitly keeps account impact unknown. Human Support remains reachable and support-case creation remains available. No separate software incident-authoring or subscriber-delivery implementation is required by the brief’s managed-provider design. The remaining V10-107 work is a scoped publication-to-recovery journey and provider/operator evidence; the current source does not prove account-specific impact, provider publication/delivery, or post-incident action completion.",
         "scopedEvidence": [
           {
-            "kind": "source_review",
+            "kind": "current_source_review",
             "paths": [
               "server/src/routes/service-health.ts",
               "server/src/services/experience/service-health.ts",
               "packages/shared/src/service-health.ts",
-              "server/src/__tests__/service-health-routes.test.ts"
+              "server/src/__tests__/service-health-routes.test.ts",
+              "server/src/services/experience/service-health.test.ts",
+              "ui/src/components/ServiceHealth.tsx",
+              "ui/src/components/ServiceHealth.test.tsx",
+              "ui/src/components/Layout.tsx",
+              "ui/src/components/Layout.production.tsx",
+              "ui/src/pages/CustomerHelpCenter.tsx",
+              "ui/src/pages/CustomerSupportCases.tsx",
+              "doc/operations/service-health/README.md",
+              "doc/operations/service-health/qualification-2026-10-28/README.md"
             ],
-            "finding": "The current public service-health route reads a bounded Statuspage v2 projection with expiry/unavailable handling. It does not publish incidents, map affected customer tenants, deliver subscribers, or provide the complete incident-recovery journey requested by this item.",
-            "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+            "finding": "The app uses one public Statuspage read projection in both global layout variants and full Help status. `/company/support` is rendered beneath the global layout banner; the projection displays `customerImpact: unknown` and the support page retains the Human contact/case path. The provider README assigns incident authoring, audit, subscriber consent/delivery and history to the managed provider. No second local incident owner is needed for this clause.",
+            "verification": "read-only source and contract inspection; no tests run for this register update; provider/operator operation, tenant-specific impact, and end-to-end recovery remain unqualified"
           }
         ],
         "historicalPinComparison": {
@@ -9386,8 +10030,8 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Keep the read-only public adapter separate from incident authoring, tenant-impact projection, notifications, and recovery/runbook qualification; close only with their original owners and provider evidence.",
-        "implementationStatus": "software_missing",
+        "remainingWork": "Keep provider publication, least-privilege publisher roles, immutable audit/history, subscriber consent/delivery/unsubscribe, export/failover, and postmortem under the managed provider/operator owner. Retain one current journey from authorized publish through the public and in-app projection, Help/Human support, provider resolution, and post-incident action tracking. Do not add a local incident table, in-app publisher, or tenant targeting without a newly identified authoritative owner/source.",
+        "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
             "path": "server/src/routes/service-health.ts",
@@ -9395,22 +10039,58 @@
           },
           {
             "path": "server/src/services/experience/service-health.ts",
-            "observedWorktreeSha256": "e7d8481bcf4a2a5300ea5db7a953df380e45d1a13f4acadb6b6fc4498be006f0"
+            "observedWorktreeSha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
           },
           {
             "path": "packages/shared/src/service-health.ts",
-            "observedWorktreeSha256": "9a9d73481a32f1655cd2556f20043388cc3645cc41d47f275c9452071f59c177"
+            "observedWorktreeSha256": "7973fba774410d46126abe2aea133ecb4d91d56c6f87634dd7e233733a3b0e98"
           },
           {
             "path": "server/src/__tests__/service-health-routes.test.ts",
             "observedWorktreeSha256": "a34bffdd16907d9bc6850ecb2f25c684b04620aa4cc1e9b33d411ae1cecce9cf"
+          },
+          {
+            "path": "server/src/services/experience/service-health.test.ts",
+            "observedWorktreeSha256": "354595f68cb487d49fce62ca79a5a994fcfc35586cb8f589812dda13934f56b9"
+          },
+          {
+            "path": "ui/src/components/ServiceHealth.tsx",
+            "observedWorktreeSha256": "ebbbe90c5078d9d89e3dddd545cd7fb628579baa1768cd44e19739719f5072e9"
+          },
+          {
+            "path": "ui/src/components/ServiceHealth.test.tsx",
+            "observedWorktreeSha256": "2030b1f93652f9ad5860ade568a113863980bde212f3d1f49643739b7cfbad7a"
+          },
+          {
+            "path": "ui/src/components/Layout.tsx",
+            "observedWorktreeSha256": "653c364b4df2be1f2c0fee93e1d521f583a63de78c7f393aab4a9440258fbe5f"
+          },
+          {
+            "path": "ui/src/components/Layout.production.tsx",
+            "observedWorktreeSha256": "fc1a2571a7351c072142db85f01a9ac39a979177744e7c378347a147e9b8e02d"
+          },
+          {
+            "path": "ui/src/pages/CustomerHelpCenter.tsx",
+            "observedWorktreeSha256": "452e9880a47c77278e15807a73a966d7606d2a5f55e997deb302ee34dc5854d5"
+          },
+          {
+            "path": "ui/src/pages/CustomerSupportCases.tsx",
+            "observedWorktreeSha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+          },
+          {
+            "path": "doc/operations/service-health/README.md",
+            "observedWorktreeSha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+          },
+          {
+            "path": "doc/operations/service-health/qualification-2026-10-28/README.md",
+            "observedWorktreeSha256": "bdf16a941b22a13925136ac7eeed8d75541e2697a8c70ed46b2267ea132b5e8f"
           }
         ],
         "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance.",
         "boundedFollowupReview": {
-          "review": "lifecycle-review",
+          "review": "lifecycle-review-plus-brief-trace",
           "reviewDate": "2026-10-28",
-          "classification": "software_missing",
+          "classification": "partial_implementation_external_provider_qualification_open",
           "sourcePins": [
             {
               "path": "server/src/routes/service-health.ts",
@@ -9427,13 +10107,58 @@
             {
               "path": "server/src/__tests__/service-health-routes.test.ts",
               "sha256": "a34bffdd16907d9bc6850ecb2f25c684b04620aa4cc1e9b33d411ae1cecce9cf"
+            },
+            {
+              "path": "server/src/services/experience/service-health.test.ts",
+              "sha256": "354595f68cb487d49fce62ca79a5a994fcfc35586cb8f589812dda13934f56b9"
+            },
+            {
+              "path": "ui/src/components/ServiceHealth.tsx",
+              "sha256": "ebbbe90c5078d9d89e3dddd545cd7fb628579baa1768cd44e19739719f5072e9"
+            },
+            {
+              "path": "ui/src/components/ServiceHealth.test.tsx",
+              "sha256": "2030b1f93652f9ad5860ade568a113863980bde212f3d1f49643739b7cfbad7a"
+            },
+            {
+              "path": "ui/src/components/Layout.tsx",
+              "sha256": "653c364b4df2be1f2c0fee93e1d521f583a63de78c7f393aab4a9440258fbe5f"
+            },
+            {
+              "path": "ui/src/components/Layout.production.tsx",
+              "sha256": "fc1a2571a7351c072142db85f01a9ac39a979177744e7c378347a147e9b8e02d"
+            },
+            {
+              "path": "ui/src/pages/CustomerHelpCenter.tsx",
+              "sha256": "452e9880a47c77278e15807a73a966d7606d2a5f55e997deb302ee34dc5854d5"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.tsx",
+              "sha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+            },
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            },
+            {
+              "path": "doc/operations/service-health/qualification-2026-10-28/README.md",
+              "sha256": "bdf16a941b22a13925136ac7eeed8d75541e2697a8c70ed46b2267ea132b5e8f"
             }
           ],
-          "receiptFilesPresentAtIntegration": [],
-          "receiptFileCount": 0,
+          "receiptFilesPresentAtIntegration": [
+            {
+              "path": "doc/operations/service-health/README.md",
+              "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0"
+            },
+            {
+              "path": "doc/operations/service-health/qualification-2026-10-28/README.md",
+              "sha256": "bdf16a941b22a13925136ac7eeed8d75541e2697a8c70ed46b2267ea132b5e8f"
+            }
+          ],
+          "receiptFileCount": 2,
           "receiptReportedTestLines": [],
-          "qualificationBoundary": "Keep the read-only public adapter separate from incident authoring, tenant-impact projection, notifications, and recovery/runbook qualification; close only with their original owners and provider evidence.",
-          "limit": "Source review only; no test run or release qualification.",
+          "qualificationBoundary": "Provider publication, subscriber delivery, and recovery/postmortem remain external/operator and composed-journey evidence. The available software is a read-only status projection with an explicit unknown account-impact state; no local publisher/table is required.",
+          "limit": "Current source inspection only for this update. Existing README/checkpoint summaries are not provider operation or end-to-end qualification.",
           "reviewPath": "doc/operations/aw-v10-evidence/reconciliation-followup-2026-10-28/lifecycle-review.json",
           "boundedResult": "No receipt files were listed for this scoped review; no test result is inferred."
         }
