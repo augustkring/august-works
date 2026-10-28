@@ -3900,6 +3900,13 @@
       "when": 1793176800000,
       "tag": "0558_better_auth_issuer_compatibility",
       "breakpoints": true
+    },
+    {
+      "idx": 559,
+      "version": "7",
+      "when": 1793181407895,
+      "tag": "0559_big_valkyrie",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,45 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > supports an empty feed and a plain-text card 8ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > accepts bounded classified notice history while preserving current-only manifests 2ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsupported route /api/companies 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsupported route //evil.test 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsupported route /projects/../auth 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsupported route /company/settings?danger=yes 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsupported route /unknown 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsupported route javascript:alert(1) 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe external URL not a URL 1ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe external URL http://example.com 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe external URL javascript:alert(1) 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe external URL https://user:password@example.com 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe external URL https://example.com/release?token=secret 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe external URL https://example.com/release#fragment 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe image path ../secret.png 1ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe image path https://example.com/a.png 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe image path /assets/a.png 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unsafe image path assets/0000000000000000000000000000000000000000000000000000000000000000.svg 0ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > requires a content-addressed HTML animation and a static fallback 2ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unknown schema versions and oversized copy 1ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > rejects unknown fields throughout the remotely authored manifest 1ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > checks expiration and minimum versions numerically, including prereleases 1ms
+ ✓ |@paperclipai/shared| src/announcements.test.ts > announcement contract > requires canonical owner and explicit company targeting for action-required notices 2ms
+ ✓ |@paperclipai/ui| src/components/MandatoryProductNotices.test.tsx > mandatory product notices > shows the exact canonical text, requires an explicit accept action, then re-reads owner state 101ms
+ ✓ |@paperclipai/ui| src/components/MandatoryProductNotices.test.tsx > mandatory product notices > keeps acceptance disabled when the reviewed content is not the exact current owner version 56ms
+ ✓ |@paperclipai/ui| src/components/MandatoryProductNotices.test.tsx > mandatory product notices > requires an explicit action for a notice-mode receipt and does not complete an admin-only action for a member 113ms
+ ✓ |@paperclipai/server| src/services/experience/product-notices.test.ts > product notice projection > projects mandatory visibility only from an exact current canonical acceptance requirement 5ms
+ ✓ |@paperclipai/server| src/services/experience/product-notices.test.ts > product notice projection > omits a canonically accepted version and ignores non-required rows 1ms
+ ✓ |@paperclipai/server| src/services/experience/product-notices.test.ts > product notice projection > fails if generated content or acceptance links drift from canonical company scope 1ms
+ ✓ |@paperclipai/server| src/services/experience/product-notices.test.ts > product notice projection > uses the canonical completion owner and admin role for the other material-change actions 1ms
+ ✓ |@paperclipai/server| src/services/experience/product-notices.test.ts > product notice projection > resolves notice only from an exact revision/version receipt 2ms
+ ✓ |@paperclipai/server| src/services/experience/product-notices.test.ts > product notice projection > resolves reacceptance only from an exact revision/version receipt 1ms
+ ✓ |@paperclipai/server| src/services/experience/product-notices.test.ts > product notice projection > resolves customer_admin_acknowledgment only from an exact revision/version receipt 1ms
+
+ Test Files  3 passed (3)
+      Tests  33 passed (33)
+   Start at  09:59:46
+   Duration  6.64s (transform 3.41s, setup 114ms, import 5.36s, tests 310ms, environment 702ms)
+

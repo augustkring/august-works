@@ -38,6 +38,11 @@ describe("announcement routes and durable dismissals", () => {
     expect(response.body).toBeNull();
     expect(response.headers["cache-control"]).toBe("private, no-store");
   });
+  it("fails closed on required-notice projection without a current Human session", async () => {
+    const response = await request(app()).get(`/api/companies/${companyId}/notices/action-required`).query({ expectedUserId: "alice" });
+    expect(response.status).toBe(403);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+  });
   it("serves animation documents with a sandbox and network-denying CSP", async () => {
     const html = "<div>Team</div>";
     const path = `assets/${createHash("sha256").update(html).digest("hex")}.html`;

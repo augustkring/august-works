@@ -9,6 +9,7 @@ import { searchAuthorizedSupportHelp } from "./services/experience/support-assis
 import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
 import { experienceObservationRoutes } from "./routes/experience-observations.js";
 import { experienceMeasuresRoutes } from "./routes/experience-measures.js";
+import { trustDocumentRoutes } from "./routes/trust-documents.js";
 import { agentMonitorRoutes } from "./routes/agent-monitor.js";
 import { agentRetirementRoutes } from "./routes/agent-retirement.js";
 import { enterpriseRoutes } from "./routes/enterprise.js";
@@ -974,6 +975,7 @@ export async function createApp(
   api.use(agentRetirementRoutes(db));
   api.use(maintenanceHistoryRoutes(db));
   api.use(experienceMeasuresRoutes(db));
+  api.use(trustDocumentRoutes(db));
   api.use(experienceObservationRoutes(db));
   api.use(customerSupportRoutes(db, { assistant: opts.saasPlatform ? firstPartySupportModelGateway(db, {
     profiles: opts.saasPlatform.config.firstPartySupportModelProfiles ?? [],

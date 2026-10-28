@@ -1339,6 +1339,7 @@ type OpenApiAuthLevel =
   | "agent_run"
   | "runtime_tools"
   | "authenticated"
+  | "board_session"
   | "board"
   | "instance_admin";
 
@@ -1646,6 +1647,17 @@ const BOARD_ONLY_OPERATIONS = new Set([
   "GET /api/issues/{issueId}/chat-binding",
 ]);
 
+// Trust reads and acceptance require a current native Human session, not just a board key.
+const BOARD_SESSION_ONLY_OPERATIONS = new Set([
+  "GET /api/companies/{companyId}/notices/action-required",
+  "GET /api/companies/{companyId}/trust/documents",
+  "GET /api/companies/{companyId}/trust/documents/{registryEntryId}/content",
+  "POST /api/companies/{companyId}/trust/documents",
+  "POST /api/companies/{companyId}/trust/notices/read",
+  "POST /api/companies/{companyId}/trust/admin-acknowledgments",
+  "POST /api/companies/{companyId}/trust/acceptances",
+]);
+
 const INSTANCE_ADMIN_OPERATIONS = new Set([
   "DELETE /api/companies/{companyId}/business-events/sources/{sourceRef}",
   "POST /api/companies",
@@ -1750,6 +1762,7 @@ function resolveOperationAuthLevel(
 ): OpenApiAuthLevel {
   const key = operationKey(method, path);
   if (PUBLIC_OPERATIONS.has(key)) return "public";
+  if (BOARD_SESSION_ONLY_OPERATIONS.has(key)) return "board_session";
   if (key === "POST /runtime-tools/model/messages" || key === "POST /runtime-tools/model/anthropic-messages" || key === "POST /runtime-tools/model/v1/messages") return "worker_model";
   if (key === "POST /api/companies/{companyId}/workflow-authoring") return "agent_run";
   if (key === "POST /api/mcp/project-tools" || key === "POST /api/companies/{companyId}/slack/tasks/{issueId}/tools" ||
@@ -1842,6 +1855,8 @@ function applyDocumentFixups(document: any): any {
         operation.security = RUNTIME_TOOLS_SECURITY;
       } else if (authLevel === "authenticated") {
         operation.security = AUTHENTICATED_SECURITY;
+      } else if (authLevel === "board_session") {
+        operation.security = [securityRequirement(BOARD_SESSION_AUTH_SCHEME)];
       } else {
         operation.security = BOARD_SECURITY;
       }
@@ -1851,7 +1866,9 @@ function applyDocumentFixups(document: any): any {
           ? { actor: "board", instanceAdmin: true }
           : authLevel === "board"
             ? { actor: "board" }
-            : authLevel === "agent_run"
+            : authLevel === "board_session"
+              ? { actor: "board", humanSession: true }
+              : authLevel === "agent_run"
               ? { actor: "agent", heartbeatBound: true,
                   taskBound: !path.endsWith("/direct-result"),
                   ...(path.includes("/workflow-runs/") ? { workflowBound: true } : {}) }
@@ -1902,11 +1919,16 @@ function applyDocumentFixups(document: any): any {
   for (const contract of v9ApiPaths) {
     const operation = document.paths[contract.path]?.[contract.method];
     if (!operation) throw new Error(`Missing V9 API operation: ${contract.path}`);
-    operation.security = contract.auth === "public" ? [] : BOARD_SECURITY;
-    operation["x-paperclip-authorization"] = contract.auth === "public" ? { actor: "public" } : {
-      actor: "board", currentNativeAuthority: true, companyScoped: contract.path.includes("{companyId}"),
-      ...(contract.auth === "operator" ? { configuredOperator: true, noCompanyAdminBypass: true } : {}),
-    };
+    const sessionOnly = BOARD_SESSION_ONLY_OPERATIONS.has(operationKey(contract.method, contract.path));
+    operation.security = contract.auth === "public" ? [] : sessionOnly
+      ? [securityRequirement(BOARD_SESSION_AUTH_SCHEME)] : BOARD_SECURITY;
+    operation["x-paperclip-authorization"] = contract.auth === "public" ? { actor: "public" } : sessionOnly
+      ? { actor: "board", humanSession: true, currentNativeAuthority: true,
+          companyScoped: contract.path.includes("{companyId}") }
+      : {
+        actor: "board", currentNativeAuthority: true, companyScoped: contract.path.includes("{companyId}"),
+        ...(contract.auth === "operator" ? { configuredOperator: true, noCompanyAdminBypass: true } : {}),
+      };
     if (contract.auth === "public") {
       delete operation.responses["401"];
       delete operation.responses["403"];

@@ -32,6 +32,7 @@ export {
   type RunnerGoalActionAccepted,
 } from "./runner-goal.js";
 export { ADAPTER_AUTH_MISSING_CHECK_CODE } from "./adapter-auth-check-code.js";
+export * from "./trust-documents.js";
 export {
   CONNECTION_INTENT_AGENT_GUIDANCE,
   CONNECTION_REQUEST_TOOL_DESCRIPTION,

@@ -19,6 +19,8 @@ vi.mock("@/hooks/useAnnouncement", () => ({ useAnnouncement: (options: { enabled
   return { announcement: options.enabled ? announcementPreview : null, dismiss: state.dismiss };
 } }));
 vi.mock("./AnnouncementCard", () => ({ AnnouncementCard: ({ onDismiss }: { onDismiss: () => void }) => <button onClick={onDismiss}>Dismiss fixture</button> }));
+vi.mock("./MandatoryProductNotices", () => ({ MandatoryProductNotices: ({ companyId, userId }: { companyId: string | null; userId: string | null }) =>
+  companyId && userId ? <section data-testid="mandatory-notices">Required notice</section> : null }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("announcement placement gates", () => {
@@ -27,6 +29,7 @@ describe("announcement placement gates", () => {
   let health: HealthStatus;
   const render = async () => { await act(async () => root.render(<AnnouncementWell health={health} />)); };
   const visible = () => Boolean(container.querySelector('[aria-label="Blentera announcements"]'));
+  const mandatoryVisible = () => Boolean(container.querySelector('[data-testid="mandatory-notices"]'));
   beforeEach(() => {
     Object.assign(state, { userId: "alice", settled: true, companyId: "company", loading: false, onboardingOpen: false, toasts: [] });
     vi.clearAllMocks();
@@ -41,15 +44,18 @@ describe("announcement placement gates", () => {
     state.onboardingOpen = false; await render(); expect(visible()).toBe(true);
     state.userId = null; await render(); expect(visible()).toBe(false);
     health = { deploymentMode: "local_trusted" } as HealthStatus; await render(); expect(visible()).toBe(true);
+    expect(mandatoryVisible()).toBe(false);
     expect(state.hook).toHaveBeenLastCalledWith(expect.objectContaining({ userId: "local-board", enabled: true }));
   });
   it("yields to toasts and modal/command dialogs without dismissing", async () => {
     await render(); expect(visible()).toBe(true);
+    expect(mandatoryVisible()).toBe(true);
     state.toasts = [{}]; await render(); expect(visible()).toBe(false);
+    expect(mandatoryVisible()).toBe(true);
     state.toasts = []; await render(); expect(visible()).toBe(true);
     const dialog = document.createElement("div"); dialog.setAttribute("role", "dialog"); dialog.setAttribute("data-state", "open");
-    await act(async () => { document.body.append(dialog); }); expect(visible()).toBe(false);
-    await act(async () => { dialog.remove(); }); expect(visible()).toBe(true);
+    await act(async () => { document.body.append(dialog); }); expect(visible()).toBe(false); expect(mandatoryVisible()).toBe(true);
+    await act(async () => { dialog.remove(); }); expect(visible()).toBe(true); expect(mandatoryVisible()).toBe(true);
     expect(state.dismiss).not.toHaveBeenCalled();
   });
   it("waits for an explicit disclosure action and preserves the existing dismissal owner", async () => {

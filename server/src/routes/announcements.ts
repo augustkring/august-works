@@ -1,12 +1,15 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
-import { companies, type Db } from "@paperclipai/db";
-import { ANNOUNCEMENT_ANIMATION_CSP, announcementIdSchema, dismissAnnouncementSchema } from "@paperclipai/shared";
+import { z } from "zod";
+import { and, eq, inArray } from "drizzle-orm";
+import { companies, trustDocumentAcceptances, trustDocumentActionReceipts, type Db } from "@paperclipai/db";
+import { ANNOUNCEMENT_ANIMATION_CSP, announcementIdSchema, dismissAnnouncementSchema, trustAcceptanceNoticeListSchema, trustDocumentListQuerySchema } from "@paperclipai/shared";
 import { badRequest, forbidden, notFound } from "../errors.js";
 import { validate } from "../middleware/validate.js";
-import { assertAuthenticated, assertBoard, hasCompanyAccess } from "./authz.js";
+import { assertAuthenticated, assertBoard, assertCompanyAccess, hasCompanyAccess } from "./authz.js";
 import { announcementService } from "../services/announcements.js";
 import { announcementFeedService, type AnnouncementFeedOptions } from "../services/announcement-feed.js";
+import { resolveCurrentTrustMaterialChangeRequirements } from "../services/trust-documents.js";
+import { projectTrustAcceptanceNotices } from "../services/experience/product-notices.js";
 
 export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, feed = announcementFeedService(options)) {
   const router = Router();
@@ -22,6 +25,46 @@ export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, fee
     const announcement = await feed.current();
     if (announcement) await service.registerPublication(announcement.id);
     res.json(announcement && !await service.isDismissed(req.actor.userId!, announcement.id) ? announcement : null);
+  });
+  router.get("/companies/:companyId/notices/action-required", async (req, res) => {
+    assertAuthenticated(req);
+    assertBoard(req);
+    if (!req.actor.userId) throw forbidden("A current Human account is required");
+    const companyId = z.uuid().parse(req.params.companyId);
+    assertCompanyAccess(req, companyId);
+    const query = trustDocumentListQuerySchema.parse(req.query);
+    res.setHeader("Cache-Control", "private, no-store");
+    const result = await db.transaction(async raw => {
+      const tx = raw as unknown as Db;
+      const resolved = await resolveCurrentTrustMaterialChangeRequirements(tx, req.actor, companyId, query.expectedUserId);
+      const requirements = resolved.documents;
+      if (!requirements.length) return { configured: false, notices: [] };
+      const completed = new Set<string>();
+      const registryIds = requirements.map(document => document.id);
+      const acceptedRows = await tx.select({ registryEntryId: trustDocumentAcceptances.registryEntryId,
+        documentRevisionId: trustDocumentAcceptances.documentRevisionId,
+        documentVersion: trustDocumentAcceptances.documentVersion }).from(trustDocumentAcceptances).where(and(
+        eq(trustDocumentAcceptances.companyId, companyId),
+        eq(trustDocumentAcceptances.principalUserId, query.expectedUserId),
+        inArray(trustDocumentAcceptances.registryEntryId, registryIds),
+      ));
+      for (const row of acceptedRows) completed.add(`acceptance\u0000${row.registryEntryId}\u0000${row.documentRevisionId}\u0000${row.documentVersion}`);
+      const actionRows = await tx.select({ registryEntryId: trustDocumentActionReceipts.registryEntryId,
+        documentRevisionId: trustDocumentActionReceipts.documentRevisionId,
+        documentVersion: trustDocumentActionReceipts.documentVersion,
+        principalUserId: trustDocumentActionReceipts.principalUserId,
+        action: trustDocumentActionReceipts.action }).from(trustDocumentActionReceipts).where(and(
+        eq(trustDocumentActionReceipts.companyId, companyId),
+        inArray(trustDocumentActionReceipts.registryEntryId, registryIds),
+      ));
+      for (const row of actionRows) {
+        if (row.action === "customer_admin_acknowledgment" || row.principalUserId === query.expectedUserId)
+          completed.add(`${row.action}\u0000${row.registryEntryId}\u0000${row.documentRevisionId}\u0000${row.documentVersion}`);
+      }
+      const canAdminAcknowledge = resolved.membershipRole === "owner" || resolved.membershipRole === "admin";
+      return { configured: true, notices: projectTrustAcceptanceNotices(companyId, requirements, completed, canAdminAcknowledge) };
+    });
+    res.json(trustAcceptanceNoticeListSchema.parse(result));
   });
   router.get("/announcements/:id/image", async (req, res) => {
     const id = announcementIdSchema.safeParse(req.params.id);

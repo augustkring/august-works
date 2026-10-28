@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { announcementManifestSchema, announcementSchema, isAnnouncementEligible } from "./announcements.js";
+import { announcementManifestSchema, announcementSchema, isAnnouncementEligible, isAnnouncementTargetedTo } from "./announcements.js";
 
 const announcement = { id: "new-projects", eyebrow: "New", title: "Projects", description: "Organize your work.", primaryAction: { kind: "route", label: "Open", path: "/projects" } };
 describe("announcement contract", () => {
@@ -52,5 +52,22 @@ describe("announcement contract", () => {
     for (const version of ["2026.912.0", "2026.913.0-canary.1", "unknown"]) expect(isAnnouncementEligible(item, version, 0)).toBe(false);
     for (const version of ["2026.913.0", "2026.913.0+1.git.abc", "2026.1001.0"]) expect(isAnnouncementEligible(item, version, 0)).toBe(true);
     expect(isAnnouncementEligible(item, "2026.913.0", Date.parse(item.expiresAt!))).toBe(false);
+  });
+  it("requires canonical owner and explicit company targeting for action-required notices", () => {
+    const notice = { noticeCategory: "action_required", notice: {
+      affectedCapabilities: ["trust-center"], affectedCompanyIds: ["00000000-0000-4000-8000-000000000001"],
+      effectiveAt: "2026-10-28T00:00:00Z", customerImpact: "Review the current policy.", actionRequired: true,
+      resolution: { owner: "trust_document_acceptance", registryEntryId: "00000000-0000-4000-8000-000000000002",
+        documentRevisionId: "00000000-0000-4000-8000-000000000003", version: "7" },
+    } };
+    const parsed = announcementSchema.parse({ ...announcement, ...notice });
+    expect(isAnnouncementTargetedTo(parsed, "00000000-0000-4000-8000-000000000001", "local")).toBe(true);
+    expect(isAnnouncementTargetedTo(parsed, "00000000-0000-4000-8000-000000000003", "local")).toBe(false);
+    expect(announcementSchema.safeParse({ ...announcement, noticeCategory: "action_required", notice: {
+      effectiveAt: "2026-10-28T00:00:00Z", customerImpact: "Review the current policy.", actionRequired: true,
+    } }).success).toBe(false);
+    expect(announcementSchema.safeParse({ ...announcement, noticeCategory: "deprecation", notice: {
+      effectiveAt: "2026-10-28T00:00:00Z", customerImpact: "Move to the new route.", actionRequired: false,
+    } }).success).toBe(false);
   });
 });

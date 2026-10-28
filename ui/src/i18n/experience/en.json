@@ -2281,11 +2281,14 @@
       "landmark": "Required notices",
       "eyebrow": "Action required",
       "loading": "Loading the current document version…",
-      "contentUnavailable": "We could not verify the current document. Acceptance is unavailable; refresh to try again.",
+      "contentUnavailable": "We could not verify the current document. The required action is unavailable; refresh to try again.",
       "documentContent": "Current document content",
       "version": "Current version {{version}}",
       "accept": "I have reviewed and accept this version",
       "accepting": "Recording acceptance…",
+      "markRead": "I have reviewed this notice",
+      "adminAcknowledge": "Acknowledge for this company",
+      "completing": "Recording your action…",
       "acceptFailed": "Acceptance could not be recorded. Refresh to check the current status.",
       "unavailable": "We could not verify required notices for this company. Refresh to check again."
     }

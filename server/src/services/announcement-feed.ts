@@ -153,7 +153,7 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
   async function current() {
     if (!await ensureLoaded()) return null;
     const announcement = available ? manifest?.announcement : null;
-    return announcement && isAnnouncementEligible(announcement, options.version, now()) ? announcement : null;
+    return announcement && isOptionalUnscoped(announcement, now()) && isAnnouncementEligible(announcement, options.version, now()) ? announcement : null;
   }
 
   async function searchable(): Promise<AnnouncementSearchProjection> {
@@ -162,7 +162,7 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
     if (!await ensureLoaded()) return { state: "unavailable", items: [] };
     const items: SearchableAnnouncement[] = [];
     const currentAnnouncement = manifest?.announcement;
-    if (currentAnnouncement && isAnnouncementEligible(currentAnnouncement, options.version, now())) {
+    if (currentAnnouncement && isOptionalUnscoped(currentAnnouncement, now()) && isAnnouncementEligible(currentAnnouncement, options.version, now())) {
       items.push({ announcement: currentAnnouncement, historical: false });
     }
     for (const announcement of manifest?.history ?? []) {
@@ -170,7 +170,7 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
       // searchable as history, but never show them to versions below their
       // declared minimum.
       const { expiresAt: _expiresAt, ...versionedAnnouncement } = announcement;
-      if (isAnnouncementEligible(versionedAnnouncement, options.version, now())) {
+      if (isOptionalUnscoped(announcement, now()) && isAnnouncementEligible(versionedAnnouncement, options.version, now())) {
         items.push({ announcement, historical: true });
       }
     }
@@ -215,4 +215,9 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
   }
 
   return { current, searchable, image: (id: string) => asset(id, "image"), animation: (id: string) => asset(id, "animation") };
+}
+
+function isOptionalUnscoped(announcement: Announcement, currentTime: number) {
+  return announcement.notice?.actionRequired !== true && !announcement.notice?.affectedCompanyIds?.length &&
+    !announcement.notice?.affectedProfiles?.length && (!announcement.notice?.effectiveAt || Date.parse(announcement.notice.effectiveAt) <= currentTime);
 }

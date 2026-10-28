@@ -2281,11 +2281,14 @@
       "landmark": "Påkrævede meddelelser",
       "eyebrow": "Handling påkrævet",
       "loading": "Indlæser den gældende dokumentversion…",
-      "contentUnavailable": "Vi kunne ikke bekræfte det gældende dokument. Accept er ikke mulig. Opdater siden, og prøv igen.",
+      "contentUnavailable": "Vi kunne ikke bekræfte det gældende dokument. Den påkrævede handling er ikke mulig. Opdater siden, og prøv igen.",
       "documentContent": "Indholdet af det gældende dokument",
       "version": "Gældende version {{version}}",
       "accept": "Jeg har gennemgået og accepterer denne version",
       "accepting": "Registrerer accept…",
+      "markRead": "Jeg har gennemgået denne meddelelse",
+      "adminAcknowledge": "Bekræft for denne virksomhed",
+      "completing": "Registrerer din handling…",
       "acceptFailed": "Accepten kunne ikke registreres. Opdater siden for at kontrollere den aktuelle status.",
       "unavailable": "Vi kunne ikke bekræfte påkrævede meddelelser for denne virksomhed. Opdater siden for at kontrollere igen."
     }

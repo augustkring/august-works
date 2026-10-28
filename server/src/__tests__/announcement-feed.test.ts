@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { announcementFeedService, ANNOUNCEMENT_CACHE_MS, ANNOUNCEMENT_FAILURE_MS } from "../services/announcement-feed.js";
 import { logger } from "../middleware/logger.js";
 import { loadConfig } from "../config.js";
+import { announcementManifestSchema } from "@paperclipai/shared";
 
 const ownedFeed = { enabled: true, feedUrl: "https://notices.example.test/v1/current.json" };
 const item = { id: "new-projects", eyebrow: "New", title: "Projects", description: "Organize your work.", primaryAction: { kind: "route", label: "Open", path: "/projects" } };
@@ -149,6 +150,19 @@ describe("announcement feed", () => {
         { announcement: { id: "release-2026-10", kind: "release" }, historical: true },
       ],
     });
+  });
+  it("keeps scoped or action-required feed entries out of the generic dismissible/search projection", async () => {
+    const typedAction = { ...item, noticeCategory: "action_required", notice: {
+      affectedCapabilities: ["trust-center"], affectedCompanyIds: ["11111111-1111-4111-8111-111111111111"],
+      effectiveAt: "2026-10-27T00:00:00Z", customerImpact: "Review current policy.", actionRequired: true,
+      resolution: { owner: "trust_document_acceptance", registryEntryId: "22222222-2222-4222-8222-222222222222",
+        documentRevisionId: "33333333-3333-4333-8333-333333333333", version: "4" },
+    } };
+    const parsed = announcementManifestSchema.safeParse({ schemaVersion: 1, announcement: typedAction });
+    if (!parsed.success) throw new Error(parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join("; "));
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch: async () => json(typedAction) });
+    expect(await service.current()).toBeNull();
+    await expect(service.searchable()).resolves.toMatchObject({ state: "available", items: [] });
   });
   it("distinguishes an unconfigured feed from a configured but unavailable notice source", async () => {
     await expect(announcementFeedService({ version: "1.0.0" }).searchable()).resolves.toEqual({ state: "unconfigured", items: [] });

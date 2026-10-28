@@ -1,0 +1,41 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/components/MandatoryProductNotices.test.tsx (2 tests | 1 failed) 65ms
+     × shows the exact canonical text, requires an explicit accept action, then re-reads owner state 56ms
+[09:03:49] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[09:03:49] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[09:03:49] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[09:03:49] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[09:03:49] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/components/MandatoryProductNotices.test.tsx > mandatory product notices > shows the exact canonical text, requires an explicit accept action, then re-reads owner state
+AssertionError: expected undefined to be 'Exact current policy text.' // Object.is equality
+
+- Expected:
+"Exact current policy text."
+
++ Received:
+undefined
+
+ ❯ src/components/MandatoryProductNotices.test.tsx:52:83
+     50|     await act(async () => new Promise(resolve => setTimeout(resolve, 0…
+     51|     expect(container.querySelector('[role="alert"]')?.textContent).toC…
+     52|     expect(container.querySelector('[data-testid="document-body"]')?.t…
+       |                                                                                   ^
+     53|     const button = container.querySelector("button")!;
+     54|     expect(button.disabled).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 5 passed (6)
+      Tests  1 failed | 70 passed (71)
+   Start at  09:03:24
+   Duration  26.07s (transform 13.63s, setup 195ms, import 21.13s, tests 4.59s, environment 1.24s)
+

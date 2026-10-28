@@ -1,0 +1,41 @@
+{
+  "head": "50be6afe1be3582659290cfecf3337fd189c0548",
+  "dirtyWorktree": true,
+  "files": [
+    {
+      "path": "packages/shared/src/announcements.ts",
+      "sha256": "f8f1e90a94074d552409596364245b4a0b3d171f8645d6d43b9e3ddcec8656b6",
+      "bytes": 9850
+    },
+    {
+      "path": "packages/shared/src/trust-documents.ts",
+      "sha256": "5d185b48a9a63e4141e34b2c114c02ffb2ddbc77a805a6704b5c127c3fe49600",
+      "bytes": 4892
+    },
+    {
+      "path": "ui/src/api/product-notices.ts",
+      "sha256": "3127e4d494b622e2dcdefa7b06d4820c16aa44e965e2d25dd53c765cd15a5406",
+      "bytes": 3499
+    },
+    {
+      "path": "ui/src/components/MandatoryProductNotices.tsx",
+      "sha256": "774a2c40d357389c1ebb910d42bc51cb92579025345760a4602147f57e10ecb5",
+      "bytes": 4711
+    },
+    {
+      "path": "ui/src/components/MandatoryProductNotices.test.tsx",
+      "sha256": "377bbacb6752726d1da89fdf0570ac6e6e2c0115412fa444840f56befb6e4d1b",
+      "bytes": 6604
+    },
+    {
+      "path": "ui/src/i18n/experience/en.json",
+      "sha256": "af48c67b36ca7a16e1670526839528e1826107ee4094cd5d37245ce3e46d1e64",
+      "bytes": 235622
+    },
+    {
+      "path": "ui/src/i18n/experience/da.json",
+      "sha256": "4b5229693f2faaaed167b74afb3be088d8ca0838b434b4434001a57acf81ef7d",
+      "bytes": 252450
+    }
+  ]
+}
