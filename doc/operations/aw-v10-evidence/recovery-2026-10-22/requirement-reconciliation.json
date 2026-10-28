@@ -36,7 +36,7 @@
           "doc/reference/aw-v9/README.md",
           "doc/reference/blentera-v10/recovery.json"
         ],
-        "implementationFinding": "A current-source V10 reconciliation report and the V9/V8/V7 readiness and coverage records exist. The V10 register now reconciles all 169 clauses at a bounded level, but it does not yet close each inherited requirement, predecessor register, and §55 journey into a final cross-version report.",
+        "implementationFinding": "A current-source V10 reconciliation report and the V9/V8/V7 readiness and coverage records exist. The V10 register now reconciles all 169 clauses at a bounded level, but it does not yet close each inherited requirement, predecessor register, and \u00a755 journey into a final cross-version report.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -46,7 +46,7 @@
               "doc/reference/aw-v9/README.md",
               "doc/reference/blentera-v10/recovery.json"
             ],
-            "finding": "A current-source V10 reconciliation report and the V9/V8/V7 readiness and coverage records exist. The V10 register now reconciles all 169 clauses at a bounded level, but it does not yet close each inherited requirement, predecessor register, and §55 journey into a final cross-version report.",
+            "finding": "A current-source V10 reconciliation report and the V9/V8/V7 readiness and coverage records exist. The V10 register now reconciles all 169 clauses at a bounded level, but it does not yet close each inherited requirement, predecessor register, and \u00a755 journey into a final cross-version report.",
             "verification": "read-only source inspection; not a test or acceptance receipt"
           }
         ],
@@ -55,7 +55,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Complete the V6–V9 predecessor-register crosswalk and bind each retained V10 clause to its original acceptance journey and exact current source/evidence; assemble the final report only from verified owners and receipts.",
+        "remainingWork": "Complete the V6\u2013V9 predecessor-register crosswalk and bind each retained V10 clause to its original acceptance journey and exact current source/evidence; assemble the final report only from verified owners and receipts.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -173,7 +173,7 @@
           "doc/reference/blentera-v10/recovery.json",
           "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json"
         ],
-        "implementationFinding": "The V9 70-screen coverage manifest links source specification ranges to contracts/components and the release checker checks evidence kinds against an exact artifact identity and inherited V7/V8 readiness. The V10 source register holds scoped implementation receipts, but no complete V6–V10 launch-claim matrix joins every claim to current source, artifact, configuration, runtime, and external acceptance.",
+        "implementationFinding": "The V9 70-screen coverage manifest links source specification ranges to contracts/components and the release checker checks evidence kinds against an exact artifact identity and inherited V7/V8 readiness. The V10 source register holds scoped implementation receipts, but no complete V6\u2013V10 launch-claim matrix joins every claim to current source, artifact, configuration, runtime, and external acceptance.",
         "scopedEvidence": [
           {
             "reference": "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json",
@@ -244,7 +244,7 @@
               "doc/reference/blentera-v10/recovery.json",
               "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json"
             ],
-            "finding": "The V9 70-screen coverage manifest links source specification ranges to contracts/components and the release checker checks evidence kinds against an exact artifact identity and inherited V7/V8 readiness. The V10 source register holds scoped implementation receipts, but no complete V6–V10 launch-claim matrix joins every claim to current source, artifact, configuration, runtime, and external acceptance.",
+            "finding": "The V9 70-screen coverage manifest links source specification ranges to contracts/components and the release checker checks evidence kinds against an exact artifact identity and inherited V7/V8 readiness. The V10 source register holds scoped implementation receipts, but no complete V6\u2013V10 launch-claim matrix joins every claim to current source, artifact, configuration, runtime, and external acceptance.",
             "verification": "read-only source inspection; not a test or acceptance receipt"
           }
         ],
@@ -529,7 +529,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Extend or explicitly compose the gate with the scoped docs/CLI/email/announcement/public-asset surfaces and produce the brief’s complete token inventory/allow-list; retain legally required MIT/provenance and technical compatibility strings as classified exceptions.",
+        "remainingWork": "Extend or explicitly compose the gate with the scoped docs/CLI/email/announcement/public-asset surfaces and produce the brief\u2019s complete token inventory/allow-list; retain legally required MIT/provenance and technical compatibility strings as classified exceptions.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -1202,7 +1202,7 @@
           "scripts/create-github-release.sh",
           "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md"
         ],
-        "implementationFinding": "The schema-derived instance feature catalog carries the §8.2 maturity, version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA readiness and deprecation/sunset/replacement metadata; the original admin registry renders those fields. Stable-release automation now retains the existing tier-only feature-catalog.json schema v1 and adds feature-catalog-lifecycle.json schema v2, both generated from the clean exact tagged source. The v2 sidecar is an additive release asset; the external Cloud harness remains unqualified for it. Many flags remain intentionally experimental/unqualified, with no invented GA, support commitment, evidence, or dates.",
+        "implementationFinding": "The schema-derived instance feature catalog carries the \u00a78.2 maturity, version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA readiness and deprecation/sunset/replacement metadata; the original admin registry renders those fields. Stable-release automation now retains the existing tier-only feature-catalog.json schema v1 and adds feature-catalog-lifecycle.json schema v2, both generated from the clean exact tagged source. The v2 sidecar is an additive release asset; the external Cloud harness remains unqualified for it. Many flags remain intentionally experimental/unqualified, with no invented GA, support commitment, evidence, or dates.",
         "scopedEvidence": [
           {
             "kind": "current_source_review",
@@ -1213,7 +1213,7 @@
               "scripts/create-github-release.sh",
               "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md"
             ],
-            "finding": "The schema-derived instance feature catalog carries the §8.2 maturity, version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA readiness and deprecation/sunset/replacement metadata; the original admin registry renders those fields. Stable-release automation now retains the existing tier-only feature-catalog.json schema v1 and adds feature-catalog-lifecycle.json schema v2, both generated from the clean exact tagged source. The v2 sidecar is an additive release asset; the external Cloud harness remains unqualified for it. Many flags remain intentionally experimental/unqualified, with no invented GA, support commitment, evidence, or dates.",
+            "finding": "The schema-derived instance feature catalog carries the \u00a78.2 maturity, version, surfaces/profiles, entitlement, criticality, data/dependencies, docs/support/evidence, GA readiness and deprecation/sunset/replacement metadata; the original admin registry renders those fields. Stable-release automation now retains the existing tier-only feature-catalog.json schema v1 and adds feature-catalog-lifecycle.json schema v2, both generated from the clean exact tagged source. The v2 sidecar is an additive release asset; the external Cloud harness remains unqualified for it. Many flags remain intentionally experimental/unqualified, with no invented GA, support commitment, evidence, or dates.",
             "verification": "source inspection; release asset generation is wired but no release/GitHub publication was performed"
           },
           {
@@ -1336,7 +1336,7 @@
           "docs/help/change-review.json",
           "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md"
         ],
-        "implementationFinding": "The existing catalog now links four source-backed instance capability records to exact Help/support surfaces: workflow preview (enablePipelines and enableAiWorkflowAuthoring), Apps/connections (enableApps), and export/delete/offboarding (company_deletion_v6). The new deletion mapping follows the article’s V10-116/V10-159 references, SETTINGS-DATA-PRIVACY and SETTINGS-PEOPLE-ACCESS contracts, and linked SaaS lifecycle owners. Catalog fields with no source-backed fact remain null/empty/unqualified. Lifecycle mappings are included in the additive schema-v2 release sidecar; v1 remains unchanged and Cloud consumer support for v2 is unknown.",
+        "implementationFinding": "The existing catalog now links four source-backed instance capability records to exact Help/support surfaces: workflow preview (enablePipelines and enableAiWorkflowAuthoring), Apps/connections (enableApps), and export/delete/offboarding (company_deletion_v6). The new deletion mapping follows the article\u2019s V10-116/V10-159 references, SETTINGS-DATA-PRIVACY and SETTINGS-PEOPLE-ACCESS contracts, and linked SaaS lifecycle owners. Catalog fields with no source-backed fact remain null/empty/unqualified. Lifecycle mappings are included in the additive schema-v2 release sidecar; v1 remains unchanged and Cloud consumer support for v2 is unknown.",
         "scopedEvidence": [
           {
             "kind": "current_source_review",
@@ -1353,7 +1353,7 @@
               "docs/help/change-review.json",
               "doc/operations/aw-v10-evidence/capability-lifecycle-2026-10-28/README.md"
             ],
-            "finding": "The existing catalog now links four source-backed instance capability records to exact Help/support surfaces: workflow preview (enablePipelines and enableAiWorkflowAuthoring), Apps/connections (enableApps), and export/delete/offboarding (company_deletion_v6). The new deletion mapping follows the article’s V10-116/V10-159 references, SETTINGS-DATA-PRIVACY and SETTINGS-PEOPLE-ACCESS contracts, and linked SaaS lifecycle owners. Catalog fields with no source-backed fact remain null/empty/unqualified. Lifecycle mappings are included in the additive schema-v2 release sidecar; v1 remains unchanged and Cloud consumer support for v2 is unknown.",
+            "finding": "The existing catalog now links four source-backed instance capability records to exact Help/support surfaces: workflow preview (enablePipelines and enableAiWorkflowAuthoring), Apps/connections (enableApps), and export/delete/offboarding (company_deletion_v6). The new deletion mapping follows the article\u2019s V10-116/V10-159 references, SETTINGS-DATA-PRIVACY and SETTINGS-PEOPLE-ACCESS contracts, and linked SaaS lifecycle owners. Catalog fields with no source-backed fact remain null/empty/unqualified. Lifecycle mappings are included in the additive schema-v2 release sidecar; v1 remains unchanged and Cloud consumer support for v2 is unknown.",
             "verification": "read-only source/frontmatter/screen-contract review; no unsupported lifecycle, support, or release fact was filled"
           },
           {
@@ -1376,7 +1376,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Extend the same exact source-to-help/screen linkage for additional customer-facing capabilities only when Help frontmatter, screen contracts and domain owners provide an unambiguous mapping. Keep broader V5–V10 capability coverage explicitly open; do not map a V10 work-item reference to a flag by name similarity.",
+        "remainingWork": "Extend the same exact source-to-help/screen linkage for additional customer-facing capabilities only when Help frontmatter, screen contracts and domain owners provide an unambiguous mapping. Keep broader V5\u2013V10 capability coverage explicitly open; do not map a V10 work-item reference to a flag by name similarity.",
         "implementationStatus": "partially_implemented_four_verified_flag_linkages",
         "sourceReviewFindings": [
           {
@@ -1538,7 +1538,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Project canonical capability maturity to appropriate customer/admin surfaces, preserving the brief’s rule against exposing jargon when it does not aid a decision. Include retired/deprecated migration and support semantics rather than reusing Help-article maturity.",
+        "remainingWork": "Project canonical capability maturity to appropriate customer/admin surfaces, preserving the brief\u2019s rule against exposing jargon when it does not aid a decision. Include retired/deprecated migration and support semantics rather than reusing Help-article maturity.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -1785,7 +1785,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Finish the reusable projection/envelope contract and explicit lifecycle mapping without creating a second authorization/effect owner. Keep Company Import’s current implementation as one adapter and evaluate each other operation domain separately.",
+        "remainingWork": "Finish the reusable projection/envelope contract and explicit lifecycle mapping without creating a second authorization/effect owner. Keep Company Import\u2019s current implementation as one adapter and evaluate each other operation domain separately.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -3059,14 +3059,14 @@
     {
       "id": "V10-028",
       "sourceLine": 6806,
-      "work": "orphan scanner → Action needed.",
+      "work": "orphan scanner \u2192 Action needed.",
       "reconciliation": "historical_partial_evidence_open",
       "evidence": [
         "doc/operations/aw-v10-evidence/owner-continuity-2026-10-24/checkpoint.json"
       ],
       "oct22Reconciliation": "in_progress",
       "currentAssessment": {
-        "bindingClause": "28. `V10-028` orphan scanner → Action needed.",
+        "bindingClause": "28. `V10-028` orphan scanner \u2192 Action needed.",
         "sourceOwners": [
           "server/src/services/experience/routine-responsibility-attention.ts",
           "server/src/services/experience/service.ts",
@@ -3191,7 +3191,7 @@
           "server/src/services/access.ts",
           "server/src/services/stewards/core-stewards.ts"
         ],
-        "implementationFinding": "Current code has action-scoped readiness evidence and current Human workflow coverage for a different delegatee, exact published workflow revision, manual/task scope, bounded start/expiry/revocation, and current intersection of both Humans’ workflow and Task rights. Readiness still models authorized domain evidence generically, Core Steward findings are readiness/source reassessment findings, and last-owner protection is a separate membership invariant. The reviewed owners do not define a critical-contact/backup-owner registry or readiness rule per material object, nor tests proving dependent-only blocking and recovery actions.",
+        "implementationFinding": "Current code has action-scoped readiness evidence and current Human workflow coverage for a different delegatee, exact published workflow revision, manual/task scope, bounded start/expiry/revocation, and current intersection of both Humans\u2019 workflow and Task rights. Readiness still models authorized domain evidence generically, Core Steward findings are readiness/source reassessment findings, and last-owner protection is a separate membership invariant. The reviewed owners do not define a critical-contact/backup-owner registry or readiness rule per material object, nor tests proving dependent-only blocking and recovery actions.",
         "scopedEvidence": [
           {
             "kind": "current_source_review",
@@ -3201,7 +3201,7 @@
               "server/src/services/access.ts",
               "server/src/services/stewards/core-stewards.ts"
             ],
-            "finding": "Current code has action-scoped readiness evidence and current Human workflow coverage for a different delegatee, exact published workflow revision, manual/task scope, bounded start/expiry/revocation, and current intersection of both Humans’ workflow and Task rights. Readiness still models authorized domain evidence generically, Core Steward findings are readiness/source reassessment findings, and last-owner protection is a separate membership invariant. The reviewed owners do not define a critical-contact/backup-owner registry or readiness rule per material object, nor tests proving dependent-only blocking and recovery actions.",
+            "finding": "Current code has action-scoped readiness evidence and current Human workflow coverage for a different delegatee, exact published workflow revision, manual/task scope, bounded start/expiry/revocation, and current intersection of both Humans\u2019 workflow and Task rights. Readiness still models authorized domain evidence generically, Core Steward findings are readiness/source reassessment findings, and last-owner protection is a separate membership invariant. The reviewed owners do not define a critical-contact/backup-owner registry or readiness rule per material object, nor tests proving dependent-only blocking and recovery actions.",
             "verification": "current dirty-worktree source inspection only; source presence is not a test PASS, provider operation, or release qualification"
           }
         ],
@@ -3363,7 +3363,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Reconcile every membership, session, key, grant, support access and resource owner against the §17 order of operations; test security revocation separately from voluntary departure/continuity.",
+        "remainingWork": "Reconcile every membership, session, key, grant, support access and resource owner against the \u00a717 order of operations; test security revocation separately from voluntary departure/continuity.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -3627,7 +3627,7 @@
           "scripts/check-help-change-review.mjs",
           "scripts/check-help-change-review.test.mjs"
         ],
-        "implementationFinding": "Static metadata/link checks and changed-source→article review checks exist, with focused test source. No current execution result is asserted here.",
+        "implementationFinding": "Static metadata/link checks and changed-source\u2192article review checks exist, with focused test source. No current execution result is asserted here.",
         "scopedEvidence": [
           {
             "reference": "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json",
@@ -3696,7 +3696,7 @@
               "scripts/check-help-change-review.mjs",
               "scripts/check-help-change-review.test.mjs"
             ],
-            "finding": "Static metadata/link checks and changed-source→article review checks exist, with focused test source. No current execution result is asserted here.",
+            "finding": "Static metadata/link checks and changed-source\u2192article review checks exist, with focused test source. No current execution result is asserted here.",
             "verification": "current dirty-worktree source inspection only; source presence is not a test PASS or runtime qualification"
           }
         ],
@@ -3851,7 +3851,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Compare adapter inventory against §10.2 and verify each adapter's owner query, visibility filtering, result URL and failure contract.",
+        "remainingWork": "Compare adapter inventory against \u00a710.2 and verify each adapter's owner query, visibility filtering, result URL and failure contract.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -4470,12 +4470,12 @@
     {
       "id": "V10-043",
       "sourceLine": 6827,
-      "work": "support case → V6 support-session request flow.",
+      "work": "support case \u2192 V6 support-session request flow.",
       "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
-        "bindingClause": "43. `V10-043` support case → V6 support-session request flow.",
+        "bindingClause": "43. `V10-043` support case \u2192 V6 support-session request flow.",
         "sourceOwners": [
           "server/src/services/experience/support-cases.ts",
           "server/src/services/experience/customer-support.ts",
@@ -5336,7 +5336,7 @@
           "doc/operations/service-health/README.md",
           "server/src/services/experience/service-health.ts"
         ],
-        "implementationFinding": "The existing service-health operations owner contains customer update templates for investigating/identified, monitoring/resolved, scheduled maintenance, and postmortem communications. The README now also distinguishes provider-owned publication from the app’s read projection and gives privacy constraints and evidence handoff. Templates provide usable wording but no completed incident/postmortem, approval, publication, or customer-delivery evidence.",
+        "implementationFinding": "The existing service-health operations owner contains customer update templates for investigating/identified, monitoring/resolved, scheduled maintenance, and postmortem communications. The README now also distinguishes provider-owned publication from the app\u2019s read projection and gives privacy constraints and evidence handoff. Templates provide usable wording but no completed incident/postmortem, approval, publication, or customer-delivery evidence.",
         "scopedEvidence": [
           {
             "kind": "current_document_and_source_review",
@@ -5344,7 +5344,7 @@
               "doc/operations/service-health/README.md",
               "server/src/services/experience/service-health.ts"
             ],
-            "finding": "The existing service-health operations owner contains customer update templates for investigating/identified, monitoring/resolved, scheduled maintenance, and postmortem communications. The README now also distinguishes provider-owned publication from the app’s read projection and gives privacy constraints and evidence handoff. Templates provide usable wording but no completed incident/postmortem, approval, publication, or customer-delivery evidence.",
+            "finding": "The existing service-health operations owner contains customer update templates for investigating/identified, monitoring/resolved, scheduled maintenance, and postmortem communications. The README now also distinguishes provider-owned publication from the app\u2019s read projection and gives privacy constraints and evidence handoff. Templates provide usable wording but no completed incident/postmortem, approval, publication, or customer-delivery evidence.",
             "verification": "read-only source/doc inspection; no incident or customer communication was published"
           }
         ],
@@ -5482,7 +5482,7 @@
           "server/src/routes/trust-documents.ts",
           "server/src/__tests__/openapi-routes.test.ts"
         ],
-        "implementationFinding": "The optional announcement feed remains a distinct, dismissible communication surface. Mandatory notices now project only the canonical Trust material-change owner’s current public requirements. The mode is exact (`notice`, `reacceptance`, `customer_admin_acknowledgment`, or `no_action`): notice-read and reacceptance receipts are per principal, admin acknowledgment is company-wide after a current owner/admin receipt, and no_action is omitted. The projection links to the exact canonical body and calls only the mode’s completion endpoint; it does not treat a local hide or external feed entry as completion or security authority. Other canonical owner domains remain unprojected.",
+        "implementationFinding": "The optional announcement feed remains a distinct, dismissible communication surface. Mandatory notices now project only the canonical Trust material-change owner\u2019s current public requirements. The mode is exact (`notice`, `reacceptance`, `customer_admin_acknowledgment`, or `no_action`): notice-read and reacceptance receipts are per principal, admin acknowledgment is company-wide after a current owner/admin receipt, and no_action is omitted. The projection links to the exact canonical body and calls only the mode\u2019s completion endpoint; it does not treat a local hide or external feed entry as completion or security authority. Other canonical owner domains remain unprojected.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -8676,7 +8676,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "If a customer-facing webhook is supported, define that provider’s event identity/version, company/source, signature timestamp and replay window, retry/duplicate/order semantics and backfill scope, then add provider-specific delivery/replay tests. Current provider callbacks remain preview.",
+        "remainingWork": "If a customer-facing webhook is supported, define that provider\u2019s event identity/version, company/source, signature timestamp and replay window, retry/duplicate/order semantics and backfill scope, then add provider-specific delivery/replay tests. Current provider callbacks remain preview.",
         "sourceReviewFindings": [
           {
             "path": "server/src/routes/saas-webhooks.ts",
@@ -8798,7 +8798,7 @@
           "docs/api/authentication.md",
           "docs/api/routines.md"
         ],
-        "implementationFinding": "OpenAPI generation now exposes the classification manifest and contract metadata. Human-written API docs and a curl/JSON example document the sole stable operation’s auth, six-field response subset, company binding, quota, cache policy and compatibility boundary. Routine-trigger docs identify preview limitations. Docs/examples generation is not yet filtered from the larger OpenAPI document into a separate supported-public artifact, and other provider and MCP operations remain preview/internal.",
+        "implementationFinding": "OpenAPI generation now exposes the classification manifest and contract metadata. Human-written API docs and a curl/JSON example document the sole stable operation\u2019s auth, six-field response subset, company binding, quota, cache policy and compatibility boundary. Routine-trigger docs identify preview limitations. Docs/examples generation is not yet filtered from the larger OpenAPI document into a separate supported-public artifact, and other provider and MCP operations remain preview/internal.",
         "scopedEvidence": [
           {
             "reference": "server/src/routes/openapi.ts",
@@ -8990,12 +8990,12 @@
     {
       "id": "V10-095",
       "sourceLine": 6903,
-      "work": "support/feedback/incident → Issue/Learning/Decision bridge.",
+      "work": "support/feedback/incident \u2192 Issue/Learning/Decision bridge.",
       "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
-        "bindingClause": "95. `V10-095` support/feedback/incident → Issue/Learning/Decision bridge.",
+        "bindingClause": "95. `V10-095` support/feedback/incident \u2192 Issue/Learning/Decision bridge.",
         "sourceOwners": [
           "server/src/services/experience/support-cases.ts",
           "server/src/routes/customer-support.ts",
@@ -9006,7 +9006,7 @@
           "server/src/services/decision-outcome-reviews.ts",
           "server/src/services/learning/learning-service.ts"
         ],
-        "implementationFinding": "The support improvement bridge now stores a company-scoped pointer from a private support case to an existing Issue without copying case text. The Support UI provides a guided Issue → Decisions/Learning handoff, while Decision outcome review and exact-review-to-Learning remain with their existing owners. This is a supported partial bridge; it does not silently convert complaints or provider incidents, and it does not prove a full feedback/incident-to-Decision/Learning journey.",
+        "implementationFinding": "The support improvement bridge now stores a company-scoped pointer from a private support case to an existing Issue without copying case text. The Support UI provides a guided Issue \u2192 Decisions/Learning handoff, while Decision outcome review and exact-review-to-Learning remain with their existing owners. This is a supported partial bridge; it does not silently convert complaints or provider incidents, and it does not prove a full feedback/incident-to-Decision/Learning journey.",
         "scopedEvidence": [
           {
             "kind": "current_source_and_receipt_review",
@@ -9026,7 +9026,7 @@
               "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.exit",
               "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256"
             ],
-            "finding": "The support improvement bridge now stores a company-scoped pointer from a private support case to an existing Issue without copying case text. The Support UI provides a guided Issue → Decisions/Learning handoff, while Decision outcome review and exact-review-to-Learning remain with their existing owners. This is a supported partial bridge; it does not silently convert complaints or provider incidents, and it does not prove a full feedback/incident-to-Decision/Learning journey.",
+            "finding": "The support improvement bridge now stores a company-scoped pointer from a private support case to an existing Issue without copying case text. The Support UI provides a guided Issue \u2192 Decisions/Learning handoff, while Decision outcome review and exact-review-to-Learning remain with their existing owners. This is a supported partial bridge; it does not silently convert complaints or provider incidents, and it does not prove a full feedback/incident-to-Decision/Learning journey.",
             "verification": "Selected bridge tests only: 3 server cases passed with 53 skipped; 24 UI cases passed. Decision/Learning complete workflows, provider operation, and full V10 journey were not rerun."
           }
         ],
@@ -9150,31 +9150,46 @@
       "currentAssessment": {
         "bindingClause": "96. `V10-096` recurring-problem/root-cause review.",
         "sourceOwners": [
+          "packages/db/src/schema/support_case_issue_links.ts",
           "server/src/services/experience/support-cases.ts",
+          "server/src/routes/customer-support.ts",
+          "server/src/__tests__/v10-support-cases.integration.test.ts",
+          "ui/src/pages/CustomerSupportCases.tsx",
+          "ui/src/pages/CustomerSupportCases.test.tsx",
+          "packages/db/src/schema/decisions.ts",
           "server/src/services/decision-outcome-reviews.ts",
           "server/src/services/learning/learning-service.ts",
-          "server/src/services/recovery/service.ts",
-          "ui/src/pages/CustomerSupportCases.tsx",
-          "ui/src/components/DecisionOutcomeReviewPanel.tsx",
-          "ui/src/pages/OrganizationalLearning.tsx"
+          "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md"
         ],
-        "implementationFinding": "The support-to-Issue guided handoff exposes existing Human Decision outcome review and Learning review owners. The bridge receipt explicitly says it adds no recurring-problem aggregation or structured root-cause proposal. Thus review semantics exist, but recurring-problem aggregation/root-cause review remains partial; this is not evidence that the original Decision/Learning controls are missing.",
+        "implementationFinding": "Support cases can be Human-linked to an existing Issue; the relation is company-scoped, unique per case, and indexed by Issue, so multiple explicitly linked cases can be reviewed under one problem Issue without copied case text. Decisions can originate from or target that Issue, and the supported path exposes existing Decision and Learning owners. This gives a bounded Human-curated root-cause/action path. The current source does not automate recurring-pattern aggregation or create root cause from a complaint; those are not inferred.",
         "scopedEvidence": [
           {
-            "kind": "current_source_and_receipt_review",
+            "kind": "current_source_and_retained_receipt_review",
             "paths": [
+              "packages/db/src/schema/support_case_issue_links.ts",
               "server/src/services/experience/support-cases.ts",
+              "server/src/routes/customer-support.ts",
+              "server/src/__tests__/v10-support-cases.integration.test.ts",
+              "ui/src/pages/CustomerSupportCases.tsx",
+              "ui/src/pages/CustomerSupportCases.test.tsx",
+              "packages/db/src/schema/decisions.ts",
               "server/src/services/decision-outcome-reviews.ts",
               "server/src/services/learning/learning-service.ts",
-              "server/src/services/recovery/service.ts",
-              "ui/src/pages/CustomerSupportCases.tsx",
-              "ui/src/components/DecisionOutcomeReviewPanel.tsx",
-              "ui/src/pages/OrganizationalLearning.tsx",
+              "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
               "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/qualification.md",
-              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256"
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.log",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.exit",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.log",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.exit",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/qualification.md",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/source-pins.sha256",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/source-pins.json",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/server-focused-test.log",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/server-focused-test.exit"
             ],
-            "finding": "The support-to-Issue guided handoff exposes existing Human Decision outcome review and Learning review owners. The bridge receipt explicitly says it adds no recurring-problem aggregation or structured root-cause proposal. Thus review semantics exist, but recurring-problem aggregation/root-cause review remains partial; this is not evidence that the original Decision/Learning controls are missing.",
-            "verification": "Existing Decision/Learning review owners were source-pinned; this bridge receipt did not rerun their complete workflows, recurring-problem aggregation, action-receipt collection, or recurrence tracking."
+            "finding": "Support cases can be Human-linked to an existing Issue; the relation is company-scoped, unique per case, and indexed by Issue, so multiple explicitly linked cases can be reviewed under one problem Issue without copied case text. Decisions can originate from or target that Issue, and the supported path exposes existing Decision and Learning owners. This gives a bounded Human-curated root-cause/action path. The current source does not automate recurring-pattern aggregation or create root cause from a complaint; those are not inferred.",
+            "verification": "Locked current-source snapshot and syntax validation passed; the selected server integration case passed (1 passed, 55 filtered/skipped), proving two independently owned cases can link to one Issue without copying private descriptions. Complete Decision/Learning workflows, operator uptake, evidence-backed root-cause/action recording, and recurrence outcomes were not tested; V10-096 remains partial."
           }
         ],
         "historicalPinComparison": {
@@ -9182,12 +9197,36 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Keep canonical Decision and Learning as the review owners. Qualify their current linked-source journey. Any broader recurring-problem aggregation or structured root-cause proposal remains open only if the adopted quality process requires it; preserve source ownership and avoid inferring a cause from a complaint or Issue link.",
-        "implementationStatus": "decision_learning_review_exists_recurring_problem_review_partial",
+        "remainingWork": "Keep recurring case grouping Human-curated through the existing support-case-to-Issue link and preserve the Issue/Decision/Learning owners. Qualify that support operators can review the relevant linked cases and record an evidence-backed root-cause/action. Do not add automatic clustering, inferred causes, recurrence counts, or a second review store.",
+        "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
+          {
+            "path": "packages/db/src/schema/support_case_issue_links.ts",
+            "observedWorktreeSha256": "ef17d7e9e3c256f1cdbdf3609fb19ad92464024a9efee18ee52b0c5701cfad22"
+          },
           {
             "path": "server/src/services/experience/support-cases.ts",
             "observedWorktreeSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+          },
+          {
+            "path": "server/src/routes/customer-support.ts",
+            "observedWorktreeSha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856"
+          },
+          {
+            "path": "server/src/__tests__/v10-support-cases.integration.test.ts",
+            "observedWorktreeSha256": "991bf2e761627383c04813dbb427d61956a05aafdc192f42480b79137a16664d"
+          },
+          {
+            "path": "ui/src/pages/CustomerSupportCases.tsx",
+            "observedWorktreeSha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+          },
+          {
+            "path": "ui/src/pages/CustomerSupportCases.test.tsx",
+            "observedWorktreeSha256": "7d4afd79a39c52f26035bd130ae716d04b14316512f54e1683aa4b57da87f680"
+          },
+          {
+            "path": "packages/db/src/schema/decisions.ts",
+            "observedWorktreeSha256": "4dc7868a3ada88cd4c260525f2cc402b14f93588e08721859d1015a12978632c"
           },
           {
             "path": "server/src/services/decision-outcome-reviews.ts",
@@ -9198,28 +9237,40 @@
             "observedWorktreeSha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
           },
           {
-            "path": "server/src/services/recovery/service.ts",
-            "observedWorktreeSha256": "77ca53661a7afb823d03c648b8b9b32b4f154e747891f7509d0d6013b43d5fef"
-          },
-          {
-            "path": "ui/src/pages/CustomerSupportCases.tsx",
-            "observedWorktreeSha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
-          },
-          {
-            "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
-            "observedWorktreeSha256": "310ddca9ec1e956258392c5793595056821ecbc684b906d219cdf42fae4a684f"
-          },
-          {
-            "path": "ui/src/pages/OrganizationalLearning.tsx",
-            "observedWorktreeSha256": "47414a79bb228e974f1b5aa6fa9646cccb0822493fbc364cc7b8b91a094b1cd5"
+            "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+            "observedWorktreeSha256": "7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22"
           }
         ],
         "boundedFollowupReview": {
-          "review": "2026-10-28 bounded reconciliation",
+          "review": "brief-and-existing-owner-trace",
           "sourcePins": [
+            {
+              "path": "packages/db/src/schema/support_case_issue_links.ts",
+              "sha256": "ef17d7e9e3c256f1cdbdf3609fb19ad92464024a9efee18ee52b0c5701cfad22"
+            },
             {
               "path": "server/src/services/experience/support-cases.ts",
               "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+            },
+            {
+              "path": "server/src/routes/customer-support.ts",
+              "sha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856"
+            },
+            {
+              "path": "server/src/__tests__/v10-support-cases.integration.test.ts",
+              "sha256": "991bf2e761627383c04813dbb427d61956a05aafdc192f42480b79137a16664d"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.tsx",
+              "sha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
+            },
+            {
+              "path": "ui/src/pages/CustomerSupportCases.test.tsx",
+              "sha256": "7d4afd79a39c52f26035bd130ae716d04b14316512f54e1683aa4b57da87f680"
+            },
+            {
+              "path": "packages/db/src/schema/decisions.ts",
+              "sha256": "4dc7868a3ada88cd4c260525f2cc402b14f93588e08721859d1015a12978632c"
             },
             {
               "path": "server/src/services/decision-outcome-reviews.ts",
@@ -9230,20 +9281,8 @@
               "sha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
             },
             {
-              "path": "server/src/services/recovery/service.ts",
-              "sha256": "77ca53661a7afb823d03c648b8b9b32b4f154e747891f7509d0d6013b43d5fef"
-            },
-            {
-              "path": "ui/src/pages/CustomerSupportCases.tsx",
-              "sha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080"
-            },
-            {
-              "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
-              "sha256": "310ddca9ec1e956258392c5793595056821ecbc684b906d219cdf42fae4a684f"
-            },
-            {
-              "path": "ui/src/pages/OrganizationalLearning.tsx",
-              "sha256": "47414a79bb228e974f1b5aa6fa9646cccb0822493fbc364cc7b8b91a094b1cd5"
+              "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+              "sha256": "7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22"
             }
           ],
           "receiptFilesPresentAtIntegration": [
@@ -9254,12 +9293,63 @@
             {
               "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256",
               "sha256": "b3f612b0b14921c84241cc83adbd4ca3312e937d39e51cc3a927f6465567b93a"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.log",
+              "sha256": "de5684696eaaad5e77907a34101592cd14d75fc1a8cb98913871402b05598444"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.log",
+              "sha256": "93aef8c94cc81346c320ee6f92b03eb79f0bb94549ea5acaa0093675a64cb0d7"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/qualification.md",
+              "sha256": "832f41151f36831df41383daafd1df226a2d20407865e6473c03a76424937a7c"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/source-pins.sha256",
+              "sha256": "707bd77c0e9d767dcd2493e077da9743b5b6df549a6a5806d4d149e7484aacae"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/source-pins.json",
+              "sha256": "0a79ae85bc47cfe7ac961c58a1e3ca14ad03e08ee0496170f061bf04fa2ede89"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/server-focused-test.log",
+              "sha256": "7f9e9455eb5c9d08a474c8f2c3065ba498842eeaa858a529b050ecf6c81bec04"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/server-focused-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
             }
           ],
-          "receiptFileCount": 2,
-          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
-          "classification": "partial_implementation_review_qualification_open",
-          "boundedResult": "Existing Decision/Learning semantics are source-pinned; bridge receipt says recurring aggregation/action receipts/recurrence workflows were not added or rerun."
+          "receiptFileCount": 11,
+          "limit": "The selected bridge test proves only Human-curated multi-case Issue grouping and private-text non-copying. It does not establish complete current Decision/Learning workflows, support/operator adoption, evidence-backed root-cause/action recording, causal effect, or recurring outcomes.",
+          "classification": "partial_implementation",
+          "boundedResult": "Selected current-source integration test passed: two separate cases link to one existing Issue with no copied private description. Existing Decision/Learning semantics remain source-pinned; the selected receipt explicitly did not rerun their workflows or assert recurrence outcomes.",
+          "reviewDate": "2026-10-28",
+          "receiptReportedTestLines": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.log",
+              "reportedResult": "3 passed | 53 skipped (prior selected bridge integration run)"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.log",
+              "reportedResult": "24 passed"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/server-focused-test.log",
+              "reportedResult": "1 passed | 55 skipped (selected multi-case Issue-link integration case)"
+            }
+          ]
         }
       }
     },
@@ -9321,35 +9411,48 @@
       "id": "V10-098",
       "sourceLine": 6906,
       "work": "improvement effectiveness/recurrence review.",
-      "reconciliation": "partial_implementation_open",
+      "reconciliation": "implemented_unqualified_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "98. `V10-098` improvement effectiveness/recurrence review.",
         "sourceOwners": [
+          "packages/shared/src/decision-intelligence.ts",
+          "packages/shared/src/decision-outcome-reviews.ts",
+          "server/src/services/decision-intelligence.ts",
           "server/src/services/decision-outcome-reviews.ts",
-          "server/src/services/learning/learning-service.ts",
-          "server/src/services/experience/support-cases.ts",
-          "server/src/services/experience/service-health.ts",
+          "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
           "ui/src/components/DecisionOutcomeReviewPanel.tsx",
-          "ui/src/pages/OrganizationalLearning.tsx"
+          "ui/src/components/DecisionOutcomeReviewPanel.test.tsx",
+          "ui/src/pages/OrganizationalLearning.tsx",
+          "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md"
         ],
-        "implementationFinding": "Canonical Decision outcome review and Learning evaluation/promotion records provide existing Human review and outcome semantics, and support cases can link to Issues. The support-improvement-bridge receipt explicitly says it adds no action-receipt collection or recurrence tracking and did not rerun the complete Decision/Learning workflows. No claim of causal impact or recurrence effectiveness is supported by the bridge alone.",
+        "implementationFinding": "The existing Decision owner supports a Human-scheduled review at the frozen decision context and declared time horizon, requires actual metric or qualitative assessment for the chosen option, records assumptions/process/execution/outcome and explicit causal-confidence limitations in a durable receipt, and can start Learning from that exact review. A recurrence question can be declared as an expected qualitative outcome and assessed by a Human; no recurrence statistic or causal claim is inferred. The retained support-improvement bridge identifies these original Decision/Learning owners and says it did not rerun their complete workflows.",
         "scopedEvidence": [
           {
-            "kind": "current_source_and_receipt_review",
+            "kind": "current_source_and_retained_receipt_review",
             "paths": [
+              "packages/shared/src/decision-intelligence.ts",
+              "packages/shared/src/decision-outcome-reviews.ts",
+              "server/src/services/decision-intelligence.ts",
               "server/src/services/decision-outcome-reviews.ts",
-              "server/src/services/learning/learning-service.ts",
-              "server/src/services/experience/support-cases.ts",
-              "server/src/services/experience/service-health.ts",
+              "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
               "ui/src/components/DecisionOutcomeReviewPanel.tsx",
+              "ui/src/components/DecisionOutcomeReviewPanel.test.tsx",
               "ui/src/pages/OrganizationalLearning.tsx",
+              "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
               "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/qualification.md",
-              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256"
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.log",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.exit",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.log",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.exit",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/qualification.md",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/server-focused-test.log",
+              "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r2/server-focused-test.exit"
             ],
-            "finding": "Canonical Decision outcome review and Learning evaluation/promotion records provide existing Human review and outcome semantics, and support cases can link to Issues. The support-improvement-bridge receipt explicitly says it adds no action-receipt collection or recurrence tracking and did not rerun the complete Decision/Learning workflows. No claim of causal impact or recurrence effectiveness is supported by the bridge alone.",
-            "verification": "Existing Decision/Learning review owners were source-pinned; this bridge receipt did not rerun their complete workflows, recurring-problem aggregation, action-receipt collection, or recurrence tracking."
+            "finding": "The existing Decision owner supports a Human-scheduled review at the frozen decision context and declared time horizon, requires actual metric or qualitative assessment for the chosen option, records assumptions/process/execution/outcome and explicit causal-confidence limitations in a durable receipt, and can start Learning from that exact review. A recurrence question can be declared as an expected qualitative outcome and assessed by a Human; no recurrence statistic or causal claim is inferred. The retained support-improvement bridge identifies these original Decision/Learning owners and says it did not rerun their complete workflows.",
+            "verification": "The selected support bridge test passed (1 passed, 55 filtered/skipped) and the receipt states the Decision outcome-review and Learning handoff workflows were not run. Existing review implementation remains implemented but unqualified by this evidence; no recurrence/effectiveness outcome is claimed."
           }
         ],
         "historicalPinComparison": {
@@ -9357,60 +9460,84 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Qualify the existing Decision/Learning workflow for linked post-change evidence. Broader outcome collection and recurrence measurement remain open; require source references, uncertainty, and Human review before making effectiveness or rollout claims.",
-        "implementationStatus": "decision_learning_outcome_review_exists_recurrence_tracking_partial",
+        "remainingWork": "Keep the existing prospective Decision outcome review and Learning handoff as the effectiveness-review mechanism. Retain current Human/operator qualification showing a real linked improvement reviewed against its declared horizon and evidence; make no effectiveness or recurrence claim until that review exists. No parallel effectiveness store or automatic recurrence calculation is justified.",
+        "implementationStatus": "implemented_unqualified",
         "sourceReviewFindings": [
+          {
+            "path": "packages/shared/src/decision-intelligence.ts",
+            "observedWorktreeSha256": "42fd46941b2b3d792215c3b821e61cf94f19a003ef87662eb7a92780c254107c"
+          },
+          {
+            "path": "packages/shared/src/decision-outcome-reviews.ts",
+            "observedWorktreeSha256": "389568069505ffb4fdd7e6bb8082ba3d6448a25e50ade4ae439d39eb9da070d5"
+          },
+          {
+            "path": "server/src/services/decision-intelligence.ts",
+            "observedWorktreeSha256": "3a2a71fcbc3025f69193cf97714f0628e8da689c6b3006e381872c89f56ba039"
+          },
           {
             "path": "server/src/services/decision-outcome-reviews.ts",
             "observedWorktreeSha256": "492235ec735843792cf3963bf36138a3ded3271c2cf55552a13d985428825b7d"
           },
           {
-            "path": "server/src/services/learning/learning-service.ts",
-            "observedWorktreeSha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
-          },
-          {
-            "path": "server/src/services/experience/support-cases.ts",
-            "observedWorktreeSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
-          },
-          {
-            "path": "server/src/services/experience/service-health.ts",
-            "observedWorktreeSha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+            "path": "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
+            "observedWorktreeSha256": "2630434ce8195f63822393d8e3ffad39e603db08b4f52e4561cd2d44ad71a62f"
           },
           {
             "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
             "observedWorktreeSha256": "310ddca9ec1e956258392c5793595056821ecbc684b906d219cdf42fae4a684f"
           },
           {
+            "path": "ui/src/components/DecisionOutcomeReviewPanel.test.tsx",
+            "observedWorktreeSha256": "909dc5851399b04226cf6c26887cae4225e195f86d06cbf344dff67e88346b41"
+          },
+          {
             "path": "ui/src/pages/OrganizationalLearning.tsx",
             "observedWorktreeSha256": "47414a79bb228e974f1b5aa6fa9646cccb0822493fbc364cc7b8b91a094b1cd5"
+          },
+          {
+            "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+            "observedWorktreeSha256": "7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22"
           }
         ],
         "boundedFollowupReview": {
-          "review": "2026-10-28 bounded reconciliation",
+          "review": "brief-and-existing-owner-trace",
           "sourcePins": [
+            {
+              "path": "packages/shared/src/decision-intelligence.ts",
+              "sha256": "42fd46941b2b3d792215c3b821e61cf94f19a003ef87662eb7a92780c254107c"
+            },
+            {
+              "path": "packages/shared/src/decision-outcome-reviews.ts",
+              "sha256": "389568069505ffb4fdd7e6bb8082ba3d6448a25e50ade4ae439d39eb9da070d5"
+            },
+            {
+              "path": "server/src/services/decision-intelligence.ts",
+              "sha256": "3a2a71fcbc3025f69193cf97714f0628e8da689c6b3006e381872c89f56ba039"
+            },
             {
               "path": "server/src/services/decision-outcome-reviews.ts",
               "sha256": "492235ec735843792cf3963bf36138a3ded3271c2cf55552a13d985428825b7d"
             },
             {
-              "path": "server/src/services/learning/learning-service.ts",
-              "sha256": "cf757315d43d42221c48578fc91bfc8ac7d953d07dea038379e41e00f83f90fa"
-            },
-            {
-              "path": "server/src/services/experience/support-cases.ts",
-              "sha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
-            },
-            {
-              "path": "server/src/services/experience/service-health.ts",
-              "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+              "path": "server/src/__tests__/decision-outcome-reviews.integration.test.ts",
+              "sha256": "2630434ce8195f63822393d8e3ffad39e603db08b4f52e4561cd2d44ad71a62f"
             },
             {
               "path": "ui/src/components/DecisionOutcomeReviewPanel.tsx",
               "sha256": "310ddca9ec1e956258392c5793595056821ecbc684b906d219cdf42fae4a684f"
             },
             {
+              "path": "ui/src/components/DecisionOutcomeReviewPanel.test.tsx",
+              "sha256": "909dc5851399b04226cf6c26887cae4225e195f86d06cbf344dff67e88346b41"
+            },
+            {
               "path": "ui/src/pages/OrganizationalLearning.tsx",
               "sha256": "47414a79bb228e974f1b5aa6fa9646cccb0822493fbc364cc7b8b91a094b1cd5"
+            },
+            {
+              "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+              "sha256": "7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22"
             }
           ],
           "receiptFilesPresentAtIntegration": [
@@ -9421,12 +9548,39 @@
             {
               "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/source-pins.sha256",
               "sha256": "b3f612b0b14921c84241cc83adbd4ca3312e937d39e51cc3a927f6465567b93a"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.log",
+              "sha256": "de5684696eaaad5e77907a34101592cd14d75fc1a8cb98913871402b05598444"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.log",
+              "sha256": "93aef8c94cc81346c320ee6f92b03eb79f0bb94549ea5acaa0093675a64cb0d7"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.exit",
+              "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
             }
           ],
-          "receiptFileCount": 2,
-          "limit": "All work remains open. Existing bounded receipt counts do not establish the complete brief, external provider behavior, or release acceptance.",
-          "classification": "partial_implementation_review_qualification_open",
-          "boundedResult": "Existing Decision/Learning semantics are source-pinned; bridge receipt says recurring aggregation/action receipts/recurrence workflows were not added or rerun."
+          "receiptFileCount": 6,
+          "limit": "Source design and one selected bridge receipt do not establish complete current Decision/Learning workflows, support/operator adoption, causal effect, or recurring outcomes.",
+          "classification": "implemented_unqualified",
+          "boundedResult": "Existing Decision/Learning semantics are source-pinned; bridge receipt says recurring aggregation/action receipts/recurrence workflows were not added or rerun.",
+          "reviewDate": "2026-10-28",
+          "receiptReportedTestLines": [
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/server-focused-test.log",
+              "reportedResult": "3 passed | 53 skipped (selected integration run)"
+            },
+            {
+              "path": "doc/operations/aw-v10-evidence/support-improvement-bridge-2026-10-28/r1/ui-focused-test.log",
+              "reportedResult": "24 passed"
+            }
+          ]
         }
       }
     },
@@ -9527,7 +9681,7 @@
           "server/src/services/chat-channels.ts",
           "server/src/services/chat-provider-lifecycle.ts"
         ],
-        "implementationFinding": "The binding clause is deliberately scoped to adapter extraction “as V9 touches it.” `chat-provider-lifecycle.ts` centralizes lifecycle event effects while parsing provider-specific Slack, GitHub, Teams, Discord, Telegram and other shapes. Provider-specific parsing is expected at this seam; no faulty caller, missing guard, or concrete V9-touched lifecycle behavior was identified in the reviewed files. The earlier demand for a uniform provider-neutral adapter across existing providers overstates the clause.",
+        "implementationFinding": "The binding clause is deliberately scoped to adapter extraction \u201cas V9 touches it.\u201d `chat-provider-lifecycle.ts` centralizes lifecycle event effects while parsing provider-specific Slack, GitHub, Teams, Discord, Telegram and other shapes. Provider-specific parsing is expected at this seam; no faulty caller, missing guard, or concrete V9-touched lifecycle behavior was identified in the reviewed files. The earlier demand for a uniform provider-neutral adapter across existing providers overstates the clause.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -9699,7 +9853,7 @@
           "server/src/routes/inbox-agent-policy.ts",
           "server/src/services/inbox-dismissals.ts"
         ],
-        "implementationFinding": "The onboarding seed route documents transactional application and idempotent retry; `saas/onboarding.ts` serializes runs and controls staged first-agent/task creation. Inbox policy and dismissal have separate canonical owners. The review found no specific legacy route/caller that bypasses a canonical owner or a customer behavior regression; the prior “add a route/UI migration map” is inventory work, not proof of a missing implementation.",
+        "implementationFinding": "The onboarding seed route documents transactional application and idempotent retry; `saas/onboarding.ts` serializes runs and controls staged first-agent/task creation. Inbox policy and dismissal have separate canonical owners. The review found no specific legacy route/caller that bypasses a canonical owner or a customer behavior regression; the prior \u201cadd a route/UI migration map\u201d is inventory work, not proof of a missing implementation.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -10002,7 +10156,7 @@
           "doc/operations/service-health/README.md",
           "doc/operations/service-health/qualification-2026-10-28/README.md"
         ],
-        "implementationFinding": "The managed Statuspage provider is the canonical incident publisher and subscriber-consent owner under V10 §13.3; the product intentionally has no second local incident authority. The application reads the public provider projection at GET /api/service-status. Both Layout variants render the same active-status banner above routed content, and Help renders the full provider incident projection; the projection explicitly keeps account impact unknown. Human Support remains reachable and support-case creation remains available. No separate software incident-authoring or subscriber-delivery implementation is required by the brief’s managed-provider design. The remaining V10-107 work is a scoped publication-to-recovery journey and provider/operator evidence; the current source does not prove account-specific impact, provider publication/delivery, or post-incident action completion.",
+        "implementationFinding": "The managed Statuspage provider is the canonical incident publisher and subscriber-consent owner under V10 \u00a713.3; the product intentionally has no second local incident authority. The application reads the public provider projection at GET /api/service-status. Both Layout variants render the same active-status banner above routed content, and Help renders the full provider incident projection; the projection explicitly keeps account impact unknown. Human Support remains reachable and support-case creation remains available. No separate software incident-authoring or subscriber-delivery implementation is required by the brief\u2019s managed-provider design. The remaining V10-107 work is a scoped publication-to-recovery journey and provider/operator evidence; the current source does not prove account-specific impact, provider publication/delivery, or post-incident action completion.",
         "scopedEvidence": [
           {
             "kind": "current_source_review",
@@ -10477,7 +10631,7 @@
           "server/src/services/context/context-budget.ts",
           "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts"
         ],
-        "implementationFinding": "The budget owner stores company/Agent/project policies and computes hard-stop state from persisted cost events and model reservations; tests include budget enforcement and source-binding regressions. The operator model-cost receipt explicitly leaves complete cost attribution/shared-account allocation and real runtime qualification unknown. No tenant/fleet race or process-local bypass was reproduced, so “shared multi-process limit if enforcement is process-local” remains conditional rather than a code defect.",
+        "implementationFinding": "The budget owner stores company/Agent/project policies and computes hard-stop state from persisted cost events and model reservations; tests include budget enforcement and source-binding regressions. The operator model-cost receipt explicitly leaves complete cost attribution/shared-account allocation and real runtime qualification unknown. No tenant/fleet race or process-local bypass was reproduced, so \u201cshared multi-process limit if enforcement is process-local\u201d remains conditional rather than a code defect.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -10573,7 +10727,7 @@
           "doc/operations/v10-trust-document-registry.md",
           "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md"
         ],
-        "implementationFinding": "Trust registry, current Human/session/public-source resolution, exact-content review and immutable acceptance/receipt APIs are implemented in the worktree. Procurement-pack completeness, current legal material accuracy, independent document-owner confirmation, and external audit evidence remain open. The §16.4 Trust owner is adding four explicit material-change modes; the mandatory notice consumer must stay bound to that owner.",
+        "implementationFinding": "Trust registry, current Human/session/public-source resolution, exact-content review and immutable acceptance/receipt APIs are implemented in the worktree. Procurement-pack completeness, current legal material accuracy, independent document-owner confirmation, and external audit evidence remain open. The \u00a716.4 Trust owner is adding four explicit material-change modes; the mandatory notice consumer must stay bound to that owner.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -10583,7 +10737,7 @@
               "doc/operations/v10-trust-document-registry.md",
               "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md"
             ],
-            "finding": "Trust registry, current Human/session/public-source resolution, exact-content review and immutable acceptance/receipt APIs are implemented in the worktree. Procurement-pack completeness, current legal material accuracy, independent document-owner confirmation, and external audit evidence remain open. The §16.4 Trust owner is adding four explicit material-change modes; the mandatory notice consumer must stay bound to that owner.",
+            "finding": "Trust registry, current Human/session/public-source resolution, exact-content review and immutable acceptance/receipt APIs are implemented in the worktree. Procurement-pack completeness, current legal material accuracy, independent document-owner confirmation, and external audit evidence remain open. The \u00a716.4 Trust owner is adding four explicit material-change modes; the mandatory notice consumer must stay bound to that owner.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
           }
         ],
@@ -10948,19 +11102,19 @@
     {
       "id": "V10-119",
       "sourceLine": 6933,
-      "work": "final V6–V10 evidence reconciliation.",
+      "work": "final V6\u2013V10 evidence reconciliation.",
       "reconciliation": "no_scoped_evidence_located_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
-        "bindingClause": "119. `V10-119` final V6–V10 evidence reconciliation.",
+        "bindingClause": "119. `V10-119` final V6\u2013V10 evidence reconciliation.",
         "sourceOwners": [
           "doc/plans/2026-10-28-v10-current-reconciliation.md",
           "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
           "doc/reference/aw-v9/README.md",
           "doc/reference/blentera-v10/recovery.json"
         ],
-        "implementationFinding": "The V10 register now holds per-ID current findings, and a closeout plan records current priority gaps. The V6–V9 register crosswalks, original acceptance journeys, exact final candidate evidence, and predecessor prerequisite reconciliation are not complete.",
+        "implementationFinding": "The V10 register now holds per-ID current findings, and a closeout plan records current priority gaps. The V6\u2013V9 register crosswalks, original acceptance journeys, exact final candidate evidence, and predecessor prerequisite reconciliation are not complete.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -10970,7 +11124,7 @@
               "doc/reference/aw-v9/README.md",
               "doc/reference/blentera-v10/recovery.json"
             ],
-            "finding": "The V10 register now holds per-ID current findings, and a closeout plan records current priority gaps. The V6–V9 register crosswalks, original acceptance journeys, exact final candidate evidence, and predecessor prerequisite reconciliation are not complete.",
+            "finding": "The V10 register now holds per-ID current findings, and a closeout plan records current priority gaps. The V6\u2013V9 register crosswalks, original acceptance journeys, exact final candidate evidence, and predecessor prerequisite reconciliation are not complete.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
           }
         ],
@@ -11017,7 +11171,7 @@
           "evals/aw-v9/readiness.json",
           "doc/plans/2026-10-28-v10-current-reconciliation.md"
         ],
-        "implementationFinding": "Release prerequisite tooling validates V7–V9 readiness inputs and the current plan explicitly says V10 is not ready. There is no approved GA operating decision, exact beta profile, all-flags/legacy cleanup receipt, or live dossier in this source.",
+        "implementationFinding": "Release prerequisite tooling validates V7\u2013V9 readiness inputs and the current plan explicitly says V10 is not ready. There is no approved GA operating decision, exact beta profile, all-flags/legacy cleanup receipt, or live dossier in this source.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -11027,7 +11181,7 @@
               "evals/aw-v9/readiness.json",
               "doc/plans/2026-10-28-v10-current-reconciliation.md"
             ],
-            "finding": "Release prerequisite tooling validates V7–V9 readiness inputs and the current plan explicitly says V10 is not ready. There is no approved GA operating decision, exact beta profile, all-flags/legacy cleanup receipt, or live dossier in this source.",
+            "finding": "Release prerequisite tooling validates V7\u2013V9 readiness inputs and the current plan explicitly says V10 is not ready. There is no approved GA operating decision, exact beta profile, all-flags/legacy cleanup receipt, or live dossier in this source.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
           }
         ],
@@ -11130,7 +11284,7 @@
               "server/src/routes/work-signals.ts",
               "server/src/services/work-signals/work-signal-service.ts"
             ],
-            "finding": "The source-review worklist now contains 158 current client-method/route groups (252 callsites) in the readinessApi–workSignalsApi lexical slice. All 158 groups were reviewed at route guards and canonical owners. Findings include Agent-accessible readiness, routine, team install, workflow run, runtime execution, status-card and work-signal operations; board-only Human boundaries; explicit operator-only internal SaaS routes; and non-mutating POST previews/queries. Agent-capable workflow run/cancel/retry APIs lack matching manifest IDs; UI publish remains distinct from the Agent prepare-publication operation. This audit worklist is not merged as active inventory coverage.",
+            "finding": "The source-review worklist now contains 158 current client-method/route groups (252 callsites) in the readinessApi\u2013workSignalsApi lexical slice. All 158 groups were reviewed at route guards and canonical owners. Findings include Agent-accessible readiness, routine, team install, workflow run, runtime execution, status-card and work-signal operations; board-only Human boundaries; explicit operator-only internal SaaS routes; and non-mutating POST previews/queries. Agent-capable workflow run/cancel/retry APIs lack matching manifest IDs; UI publish remains distinct from the Agent prepare-publication operation. This audit worklist is not merged as active inventory coverage.",
             "verification": "read-only source inspection; no test claims behavior or release acceptance"
           },
           {
@@ -11898,12 +12052,12 @@
     {
       "id": "V10-132",
       "sourceLine": 6954,
-      "work": "canonical `skills/blentera-platform/SKILL.md` + focused references from §21B.",
+      "work": "canonical `skills/blentera-platform/SKILL.md` + focused references from \u00a721B.",
       "reconciliation": "no_scoped_evidence_located_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
-        "bindingClause": "132. `V10-132` canonical `skills/blentera-platform/SKILL.md` + focused references from §21B.",
+        "bindingClause": "132. `V10-132` canonical `skills/blentera-platform/SKILL.md` + focused references from \u00a721B.",
         "sourceOwners": [
           "skills/blentera-platform/SKILL.md",
           "skills-releases/blentera-platform/v1/SKILL.md",
@@ -14032,7 +14186,7 @@
               "DirectRun Context-erasure completeness/unknownhistorical provenance remains pending0506; dynamicgraph alone is insufficient after Context removal.",
               "Context Memory/Foundation derivatives, Learning, privateMemory intrinsicHuman snapshot, mixedwriter/rollback/startup admission and UI remain parentcoordinated incomplete work.",
               "Enumeration caps do not certify physical PostgreSQL plan work, statement-time budgets, large-tenant migration performance or DoS resistance.",
-              "No native lock-order/concurrency qualification from these graph fixtures; BusinessEvent→Memory→rows ordering requires separate original-owner proof.",
+              "No native lock-order/concurrency qualification from these graph fixtures; BusinessEvent\u2192Memory\u2192rows ordering requires separate original-owner proof.",
               "No wholeUP03/V10/portfolio/deployment completion claim."
             ],
             "sourcePinReview": {
@@ -14624,7 +14778,7 @@
           "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
           "evals/aw-v9/readiness.json"
         ],
-        "implementationFinding": "Current claim reconciliation exists for V10 IDs and the predecessor V9 readiness record is available. Exact per-claim linkage to V6–V9 acceptance IDs, current source pins, raw receipts and signed release profile is not complete.",
+        "implementationFinding": "Current claim reconciliation exists for V10 IDs and the predecessor V9 readiness record is available. Exact per-claim linkage to V6\u2013V9 acceptance IDs, current source pins, raw receipts and signed release profile is not complete.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -14633,7 +14787,7 @@
               "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
               "evals/aw-v9/readiness.json"
             ],
-            "finding": "Current claim reconciliation exists for V10 IDs and the predecessor V9 readiness record is available. Exact per-claim linkage to V6–V9 acceptance IDs, current source pins, raw receipts and signed release profile is not complete.",
+            "finding": "Current claim reconciliation exists for V10 IDs and the predecessor V9 readiness record is available. Exact per-claim linkage to V6\u2013V9 acceptance IDs, current source pins, raw receipts and signed release profile is not complete.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
           }
         ],
@@ -15489,13 +15643,13 @@
       "id": "V10-164",
       "sourceLine": 6981,
       "work": "Short activation composition over retained logical states",
-      "nativeOwnerOrContract": "UX-02/03 / ONB-01–12; C",
+      "nativeOwnerOrContract": "UX-02/03 / ONB-01\u201312; C",
       "requiredOutcome": "No fabricated skipped step, duplicate command, required project/website or technical first-run setup",
       "reconciliation": "current_bounded_work_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
-        "bindingClause": "| V10-164 | Short activation composition over retained logical states | UX-02/03 / ONB-01–12; C | No fabricated skipped step, duplicate command, required project/website or technical first-run setup |",
+        "bindingClause": "| V10-164 | Short activation composition over retained logical states | UX-02/03 / ONB-01\u201312; C | No fabricated skipped step, duplicate command, required project/website or technical first-run setup |",
         "sourceOwners": [
           "server/src/services/saas/activation.ts",
           "server/src/services/saas/activation-first-value.ts",
@@ -15595,7 +15749,7 @@
           "server/src/services/native-runtime/native-review-participant.ts",
           "server/src/services/saas/offboarding.ts"
         ],
-        "implementationFinding": "Human review/feedback, management review and offboarding/member authority have separate owners. The full result review/revision lifecycle—including member handoff, terminal plan revision, ownership and evidence preservation—is not established as a unified state machine.",
+        "implementationFinding": "Human review/feedback, management review and offboarding/member authority have separate owners. The full result review/revision lifecycle\u2014including member handoff, terminal plan revision, ownership and evidence preservation\u2014is not established as a unified state machine.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -15605,7 +15759,7 @@
               "server/src/services/native-runtime/native-review-participant.ts",
               "server/src/services/saas/offboarding.ts"
             ],
-            "finding": "Human review/feedback, management review and offboarding/member authority have separate owners. The full result review/revision lifecycle—including member handoff, terminal plan revision, ownership and evidence preservation—is not established as a unified state machine.",
+            "finding": "Human review/feedback, management review and offboarding/member authority have separate owners. The full result review/revision lifecycle\u2014including member handoff, terminal plan revision, ownership and evidence preservation\u2014is not established as a unified state machine.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
           }
         ],
@@ -16075,7 +16229,7 @@
       "id": "V10-167",
       "sourceLine": 6984,
       "work": "Complete paired copy and rendered state acceptance",
-      "nativeOwnerOrContract": "§35 / UX-01; C–H",
+      "nativeOwnerOrContract": "\u00a735 / UX-01; C\u2013H",
       "requiredOutcome": "Both locales preserve action, actor, cost, data and status meaning across all critical states",
       "reconciliation": "historical_partial_evidence_open",
       "evidence": [
@@ -16084,7 +16238,7 @@
       ],
       "oct22Reconciliation": "in_progress",
       "currentAssessment": {
-        "bindingClause": "| V10-167 | Complete paired copy and rendered state acceptance | §35 / UX-01; C–H | Both locales preserve action, actor, cost, data and status meaning across all critical states |",
+        "bindingClause": "| V10-167 | Complete paired copy and rendered state acceptance | \u00a735 / UX-01; C\u2013H | Both locales preserve action, actor, cost, data and status meaning across all critical states |",
         "sourceOwners": [
           "packages/db/src/migrations/0514_abandoned_hex.sql",
           "packages/db/src/migrations/meta/0514_snapshot.json",
@@ -16421,13 +16575,13 @@
       "id": "V10-168",
       "sourceLine": 6985,
       "work": "Mandatory beta profile and exact live evidence dossier",
-      "nativeOwnerOrContract": "§§47/55; H",
+      "nativeOwnerOrContract": "\u00a7\u00a747/55; H",
       "requiredOutcome": "No required capability hidden by narrowing claims; real source/runtime/human/operator evidence",
       "reconciliation": "no_scoped_evidence_located_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
-        "bindingClause": "| V10-168 | Mandatory beta profile and exact live evidence dossier | §§47/55; H | No required capability hidden by narrowing claims; real source/runtime/human/operator evidence |",
+        "bindingClause": "| V10-168 | Mandatory beta profile and exact live evidence dossier | \u00a7\u00a747/55; H | No required capability hidden by narrowing claims; real source/runtime/human/operator evidence |",
         "sourceOwners": [
           "doc/plans/2026-10-28-v10-current-reconciliation.md",
           "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
@@ -16480,7 +16634,7 @@
       "id": "V10-169",
       "sourceLine": 6986,
       "work": "Compatibility and migration phase reconciliation",
-      "nativeOwnerOrContract": "MIG-01–07 / §7; every affected wave",
+      "nativeOwnerOrContract": "MIG-01\u201307 / \u00a77; every affected wave",
       "requiredOutcome": "Current writer/state/recovery is defined for each phase and old/new combinations pass",
       "reconciliation": "historical_partial_evidence_open",
       "evidence": [
@@ -16489,7 +16643,7 @@
       ],
       "oct22Reconciliation": "in_progress",
       "currentAssessment": {
-        "bindingClause": "| V10-169 | Compatibility and migration phase reconciliation | MIG-01–07 / §7; every affected wave | Current writer/state/recovery is defined for each phase and old/new combinations pass |",
+        "bindingClause": "| V10-169 | Compatibility and migration phase reconciliation | MIG-01\u201307 / \u00a77; every affected wave | Current writer/state/recovery is defined for each phase and old/new combinations pass |",
         "sourceOwners": [
           "packages/db/src/migrations/0505_flippant_wendell_vaughn.sql",
           "packages/db/src/migrations/0506_wild_thanos.sql",
@@ -16524,7 +16678,7 @@
               "DirectRun Context-erasure completeness/unknownhistorical provenance remains pending0506; dynamicgraph alone is insufficient after Context removal.",
               "Context Memory/Foundation derivatives, Learning, privateMemory intrinsicHuman snapshot, mixedwriter/rollback/startup admission and UI remain parentcoordinated incomplete work.",
               "Enumeration caps do not certify physical PostgreSQL plan work, statement-time budgets, large-tenant migration performance or DoS resistance.",
-              "No native lock-order/concurrency qualification from these graph fixtures; BusinessEvent→Memory→rows ordering requires separate original-owner proof.",
+              "No native lock-order/concurrency qualification from these graph fixtures; BusinessEvent\u2192Memory\u2192rows ordering requires separate original-owner proof.",
               "No wholeUP03/V10/portfolio/deployment completion claim."
             ],
             "sourcePinReview": {
@@ -16661,7 +16815,7 @@
           "matchingCurrentWorktree": 3,
           "differentOrMissingCurrentWorktree": 17
         },
-        "remainingWork": "Build the MIG-01–07 matrix from actual writer/state/recovery combinations; cover add/backfill/cutover/rollback/restart/restore and unknown-provenance paths with native official generation and real database evidence.",
+        "remainingWork": "Build the MIG-01\u201307 matrix from actual writer/state/recovery combinations; cover add/backfill/cutover/rollback/restart/restore and unknown-provenance paths with native official generation and real database evidence.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -16796,6 +16950,6 @@
   "reviewedAt": "2026-10-28",
   "currentReleaseQualification": {
     "status": "open",
-    "statement": "No item disposition in this register constitutes release acceptance. V10 completeness is defined by the bound clauses, inherited registers, acceptance journeys, and §§47/50/55/56/57, not by the number of catalogue IDs. Current source, historical tests, hosted/runtime/provider, Human, and operator evidence remain distinct."
+    "statement": "No item disposition in this register constitutes release acceptance. V10 completeness is defined by the bound clauses, inherited registers, acceptance journeys, and \u00a7\u00a747/50/55/56/57, not by the number of catalogue IDs. Current source, historical tests, hosted/runtime/provider, Human, and operator evidence remain distinct."
   }
 }

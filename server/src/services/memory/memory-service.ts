@@ -568,15 +568,26 @@ async function visibleMemorySources(db:Db,companyId:string,rows:(typeof memoryRe
   }
   return visible;
 }
+type VisibleMemoryPageRevalidate = (rows: (typeof memoryRecords.$inferSelect)[]) => Promise<(typeof memoryRecords.$inferSelect)[]>;
+type VisibleMemoryPageFinalize<T> = (tx: Db, candidates: (typeof memoryRecords.$inferSelect)[], budget: MemoryReadBudget,
+  revalidate: VisibleMemoryPageRevalidate) => Promise<T>;
 // Apply the public result limit after source qualification. Stable batches
 // avoid loading the company's complete Memory merely to find its first match.
 async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActor,limit:number,
+  page:(db:Db,offset:number)=>Promise<(typeof memoryRecords.$inferSelect)[]>, budget?: MemoryReadBudget,
+  candidateFilter?: (record: typeof memoryRecords.$inferSelect) => boolean): Promise<(typeof memoryRecords.$inferSelect)[]>;
+async function visibleMemoryPage<T>(db:Db,companyId:string,actor:MemoryMutationActor,limit:number,
+  page:(db:Db,offset:number)=>Promise<(typeof memoryRecords.$inferSelect)[]>, budget: MemoryReadBudget,
+  candidateFilter: ((record: typeof memoryRecords.$inferSelect) => boolean) | undefined,
+  finalize: VisibleMemoryPageFinalize<T>): Promise<T>;
+async function visibleMemoryPage<T>(db:Db,companyId:string,actor:MemoryMutationActor,limit:number,
   page:(db:Db,offset:number)=>Promise<(typeof memoryRecords.$inferSelect)[]>, budget: MemoryReadBudget = {},
-  candidateFilter?: (record: typeof memoryRecords.$inferSelect) => boolean) {
+  candidateFilter?: (record: typeof memoryRecords.$inferSelect) => boolean,
+  finalize?: VisibleMemoryPageFinalize<T>): Promise<T | (typeof memoryRecords.$inferSelect)[]> {
   const profile = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
   const profileStartedAt = profile ? performance.now() : 0;
   const profileStats = { stage: "transaction", pageQueries: 0, scannedRows: 0, candidateRows: 0, initiallyVisibleRows: 0,
-    firstReviewMs: 0, secondReviewMs: 0, pageQueryMs: 0, transactionOrdinal: null as number | null };
+    firstReviewMs: 0, secondReviewMs: 0, detailFinalizeMs: 0, pageQueryMs: 0, transactionOrdinal: null as number | null };
   let profileResult = "error";
   let profileFailure: { errorName: string; status: number | null; code: string | null; referenceName?: string;
     frames: string[] } | null = null;
@@ -622,10 +633,19 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
       if (profile) profileStats.initiallyVisibleRows = visible.length;
       if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
       if(visible.length>=limit || rows.length<100){
+        const revalidate: VisibleMemoryPageRevalidate = candidates => visibleMemorySources(tx,companyId,candidates,actor,pageBudget);
+        if (finalize) {
+          profileStats.stage = "candidate_detail_materialization";
+          profileResult = "ok";
+          const finalizeStartedAt = profile ? performance.now() : 0;
+          const result = await finalize(tx, visible.slice(0, limit), pageBudget, revalidate);
+          if (profile) profileStats.detailFinalizeMs += performance.now() - finalizeStartedAt;
+          return result;
+        }
         // A later source may wait while an earlier reader grant is withdrawn.
         profileStats.stage = "candidate_source_revalidation";
         const secondReviewStartedAt = profile ? performance.now() : 0;
-        const current=await visibleMemorySources(tx,companyId,visible.slice(0,limit),actor,pageBudget);
+        const current=await revalidate(visible.slice(0,limit));
         if (profile) profileStats.secondReviewMs += performance.now() - secondReviewStartedAt;
         if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
         profileResult = "ok";
@@ -653,6 +673,110 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
         elapsedMs: Math.round(performance.now() - profileStartedAt), result: profileResult, ...(profileFailure ? { failure: profileFailure } : {}) }));
     }
   }
+}
+type EligibleMemoryListInput = {
+  scopeType?: "company" | "agent" | "project" | "subject";
+  scopeId?: string | null;
+  asOf?: Date;
+  limit?: number;
+  sensitivityCeiling?: EvidenceSensitivity;
+  signal?: AbortSignal;
+  deadlineAt?: number;
+  /** Internal retrieval prefilter; only matching candidates are source-checked and returned. */
+  candidateFilter?: (record: typeof memoryRecords.$inferSelect) => boolean;
+};
+type EligibleMemoryDetailSelection = {
+  limit: number;
+  score: (record: typeof memoryRecords.$inferSelect) => number;
+  isCurrent: (record: typeof memoryRecords.$inferSelect) => boolean;
+};
+type RetrievedMemoryDetail = { detail: MemoryRecordDetail; relevanceScore: number; rankScore: number };
+
+async function listEligibleMemoryPage(db: Db, companyId: string, input: EligibleMemoryListInput,
+  actor: MemoryMutationActor): Promise<(typeof memoryRecords.$inferSelect)[]>;
+async function listEligibleMemoryPage(db: Db, companyId: string, input: EligibleMemoryListInput,
+  actor: MemoryMutationActor, detailSelection: EligibleMemoryDetailSelection): Promise<RetrievedMemoryDetail[]>;
+async function listEligibleMemoryPage(db: Db, companyId: string, input: EligibleMemoryListInput,
+  actor: MemoryMutationActor, detailSelection?: EligibleMemoryDetailSelection): Promise<(typeof memoryRecords.$inferSelect)[] | RetrievedMemoryDetail[]> {
+  assertMemoryReadActive(input);
+  if (input.scopeId !== undefined && !input.scopeType) {
+    throw unprocessable("Memory scope id requires an explicit scope type");
+  }
+  if (input.scopeType === "agent" && !input.scopeId) {
+    throw unprocessable("Agent memory eligibility requires the owning agent id");
+  }
+  if (input.scopeType === "agent" && actor.principal.type !== "system" &&
+    !(actor.principal.type === "agent" && actor.principal.agentId === input.scopeId)) {
+    throw forbidden("Private agent memory can only be recalled by its owning agent", {
+      code: "private_memory_read_denied", scopeId: input.scopeId,
+    });
+  }
+
+  const asOf = input.asOf ?? new Date();
+  const limit = Math.min(100, Math.max(1, input.limit ?? 50));
+  const sensitivityLabels = input.sensitivityCeiling
+    ? (["public", "internal", "confidential", "restricted"] as const).slice(
+      0, (["public", "internal", "confidential", "restricted"] as const).indexOf(input.sensitivityCeiling) + 1,
+    ) : null;
+  const page = async (scopedDb: Db, offset: number) => scopedDb.select().from(memoryRecords).where(and(
+    eq(memoryRecords.companyId, companyId),
+    eq(memoryRecords.reviewState, "accepted"),
+    eq(memoryRecords.retentionState, "active"),
+    isNull(memoryRecords.revokedAt),
+    memoryPayloadVisible(),
+    isNull(memoryRecords.supersededByRecordId),
+    or(isNull(memoryRecords.validFrom), lte(memoryRecords.validFrom, asOf)),
+    or(isNull(memoryRecords.validUntil), gt(memoryRecords.validUntil, asOf)),
+    or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, asOf)),
+    ...(sensitivityLabels ? [inArray(memoryRecords.sensitivityLabel, sensitivityLabels)] : []),
+    ...(input.scopeType ? [eq(memoryRecords.scopeType, input.scopeType)] : [ne(memoryRecords.scopeType, "agent")]),
+    ...(input.scopeId !== undefined
+      ? input.scopeId === null ? [isNull(memoryRecords.scopeId)] : [eq(memoryRecords.scopeId, input.scopeId)]
+      : []),
+  )).orderBy(desc(memoryRecords.observedAt), memoryRecords.id).limit(100).offset(offset);
+
+  const finalize: VisibleMemoryPageFinalize<RetrievedMemoryDetail[]> | undefined = detailSelection
+    ? async (tx, candidates, budget, revalidate) => {
+      const ranked = candidates.map((record, index) => ({ record, score: detailSelection.score(record), index }))
+        .filter(item => Number.isFinite(item.score) && item.score > 0)
+        .sort((left, right) => right.score - left.score ||
+          right.record.observedAt.getTime() - left.record.observedAt.getTime() || left.index - right.index);
+      let result: Array<RetrievedMemoryDetail & { candidate: typeof memoryRecords.$inferSelect }> = [];
+      let cursor = 0;
+      while (cursor < ranked.length && result.length < detailSelection.limit) {
+        const batch = ranked.slice(cursor, cursor + detailSelection.limit - result.length);
+        cursor += batch.length;
+        const materialized: Array<{ candidate: typeof memoryRecords.$inferSelect; detail: MemoryRecordDetail; score: number }> = [];
+        for (const item of batch) {
+          assertMemoryReadActive(budget);
+          const detail = await getRecordDetail(tx, companyId, item.record.id, budget);
+          if (!detail || detail.record.id !== item.record.id ||
+            detail.record.updatedAt.getTime() !== item.record.updatedAt.getTime() ||
+            !detailSelection.isCurrent(detail.record)) continue;
+          assertPrivateMemoryReadAllowed(detail.record, actor);
+          materialized.push({ candidate: item.record, detail, score: item.score });
+        }
+
+        // Details and all evidence rows are materialized before the final
+        // live source-reader pass. If a selected row no longer qualifies, the
+        // ranked cursor advances to the next candidate and repeats both steps.
+        const proposed = [...result, ...materialized.map(item => ({ detail: item.detail,
+          relevanceScore: Number(item.score.toFixed(3)), rankScore: item.score,
+          candidate: item.candidate }))];
+        const current = await revalidate(proposed.map(item => item.candidate));
+        assertMemoryReadActive(budget);
+        const currentById = new Map(current.map(record => [record.id, record]));
+        result = proposed.filter(item => {
+          const latest = currentById.get(item.candidate.id);
+          return Boolean(latest && latest.updatedAt.getTime() === item.candidate.updatedAt.getTime() &&
+            item.detail.record.updatedAt.getTime() === latest.updatedAt.getTime() && detailSelection.isCurrent(latest));
+        });
+      }
+      return result.map(({ candidate: _candidate, ...item }) => item);
+    } : undefined;
+
+  if (finalize) return visibleMemoryPage(db, companyId, actor, limit, page, input, input.candidateFilter, finalize);
+  return visibleMemoryPage(db, companyId, actor, limit, page, input, input.candidateFilter);
 }
 async function assertMemorySourceAccess(db:Db,companyId:string,recordId:string,actor:MemoryMutationActor) {
   if(!await canActorReadMemorySources(db,companyId,memorySourceActor(companyId,actor),recordId))throw notFound("Memory record not found");
@@ -2514,77 +2638,9 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
       return recordDetail(revoked.record,revoked.evidence);
     },
 
-    listEligible: async (
-      companyId: string,
-      input: {
-        scopeType?: "company" | "agent" | "project" | "subject";
-        scopeId?: string | null;
-        asOf?: Date;
-        limit?: number;
-        sensitivityCeiling?: EvidenceSensitivity;
-        signal?: AbortSignal;
-        deadlineAt?: number;
-        /** Internal retrieval prefilter; only matching candidates are source-checked and returned. */
-        candidateFilter?: (record: typeof memoryRecords.$inferSelect) => boolean;
-      },
-      actor: MemoryMutationActor,
-    ) => {
-      assertMemoryReadActive(input);
-      if (input.scopeId !== undefined && !input.scopeType) {
-        throw unprocessable("Memory scope id requires an explicit scope type");
-      }
-      if (input.scopeType === "agent" && !input.scopeId) {
-        throw unprocessable("Agent memory eligibility requires the owning agent id");
-      }
-      if (
-        input.scopeType === "agent" &&
-        actor.principal.type !== "system" &&
-        !(
-          actor.principal.type === "agent" &&
-          actor.principal.agentId === input.scopeId
-        )
-      ) {
-        throw forbidden("Private agent memory can only be recalled by its owning agent", {
-          code: "private_memory_read_denied",
-          scopeId: input.scopeId,
-        });
-      }
-
-      const asOf = input.asOf ?? new Date();
-      const limit = Math.min(100, Math.max(1, input.limit ?? 50));
-      const sensitivityLabels = input.sensitivityCeiling
-        ? (["public", "internal", "confidential", "restricted"] as const).slice(
-            0,
-            (["public", "internal", "confidential", "restricted"] as const).indexOf(input.sensitivityCeiling) + 1,
-          )
-        : null;
-      return visibleMemoryPage(db,companyId,actor,limit,async (scopedDb,offset)=>scopedDb
-        .select()
-        .from(memoryRecords)
-        .where(
-          and(
-            eq(memoryRecords.companyId, companyId),
-            eq(memoryRecords.reviewState, "accepted"),
-            eq(memoryRecords.retentionState, "active"),
-            isNull(memoryRecords.revokedAt),
-            memoryPayloadVisible(),
-            isNull(memoryRecords.supersededByRecordId),
-            or(isNull(memoryRecords.validFrom), lte(memoryRecords.validFrom, asOf)),
-            or(isNull(memoryRecords.validUntil), gt(memoryRecords.validUntil, asOf)),
-            or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, asOf)),
-            ...(sensitivityLabels ? [inArray(memoryRecords.sensitivityLabel, sensitivityLabels)] : []),
-            ...(input.scopeType
-              ? [eq(memoryRecords.scopeType, input.scopeType)]
-              : [ne(memoryRecords.scopeType, "agent")]),
-            ...(input.scopeId !== undefined
-              ? input.scopeId === null
-                ? [isNull(memoryRecords.scopeId)]
-                : [eq(memoryRecords.scopeId, input.scopeId)]
-              : []),
-          ),
-        )
-        .orderBy(desc(memoryRecords.observedAt),memoryRecords.id)
-        .limit(100).offset(offset), input, input.candidateFilter);
-    },
+    listEligible: (companyId: string, input: EligibleMemoryListInput, actor: MemoryMutationActor) =>
+      listEligibleMemoryPage(db, companyId, input, actor),
+    listEligibleDetails: (companyId: string, input: EligibleMemoryListInput, actor: MemoryMutationActor,
+      selection: EligibleMemoryDetailSelection) => listEligibleMemoryPage(db, companyId, input, actor, selection),
   };
 }

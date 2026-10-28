@@ -192,9 +192,9 @@ export async function retrieveEligibleMemory(
   const topK = Math.min(50, Math.max(1, input.topK));
   const scopes = resolveMemoryRetrievalScopes(input);
 
-  const recordsById = new Map<string, MemoryRecord>();
+  const detailsById = new Map<string, RetrievedMemoryRecord & { rankScore: number }>();
   for (const scope of scopes) {
-    const rows = await service.listEligible(
+    const rows = await service.listEligibleDetails(
       input.companyId,
       {
         scopeType: scope.scopeType,
@@ -210,44 +210,21 @@ export async function retrieveEligibleMemory(
         candidateFilter: (record) => memoryRelevanceScore(record, input.query) > 0,
       },
       actor,
+      {
+        limit: topK,
+        score: (record) => memoryRelevanceScore(record, input.query),
+        isCurrent: (record) => recordStillEligible(record, asOf, input.sensitivityCeiling),
+      },
     );
     for (const row of rows) {
-      if (memorySensitivityAllowed(row, input.sensitivityCeiling)) {
-        recordsById.set(row.id, row);
-      }
+      detailsById.set(row.detail.record.id, row);
     }
   }
 
-  const ranked = [...recordsById.values()]
-    .map((record) => ({
-      record,
-      score: memoryRelevanceScore(record, input.query),
-    }))
-    .filter(({ score }) => score > 0)
-    .sort(
-      (left, right) =>
-        right.score - left.score ||
-        right.record.observedAt.getTime() - left.record.observedAt.getTime(),
-    )
-    .slice(0, topK);
-
-  const result: RetrievedMemoryRecord[] = [];
-  for (const { record, score } of ranked) {
-    if (input.signal?.aborted) throw input.signal.reason ?? new Error("Memory retrieval was cancelled");
-    const detail = await service.get(input.companyId, record.id, actor, {
-      ...(input.signal ? { signal: input.signal } : {}),
-      ...(input.deadlineAt ? { deadlineAt: input.deadlineAt } : {}),
-    });
-    if (
-      detail &&
-      recordStillEligible(detail.record, asOf, input.sensitivityCeiling)
-    ) {
-      result.push({
-        detail,
-        relevanceScore: Number(score.toFixed(3)),
-      });
-    }
-  }
-
-  return result;
+  if (input.signal?.aborted) throw input.signal.reason ?? new Error("Memory retrieval was cancelled");
+  return [...detailsById.values()]
+    .sort((left, right) => right.rankScore - left.rankScore ||
+      right.detail.record.observedAt.getTime() - left.detail.record.observedAt.getTime())
+    .slice(0, topK)
+    .map(({ detail, relevanceScore }) => ({ detail, relevanceScore }));
 }

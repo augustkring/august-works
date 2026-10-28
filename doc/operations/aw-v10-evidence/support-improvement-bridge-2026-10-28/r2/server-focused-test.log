@@ -1,0 +1,65 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > creates a local receipt with defaults and only the public customer projection
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > requires a fresh disclosure after processing changes, even with the same version: {"recipientName":"A different support recipient"}
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > requires a fresh disclosure after processing changes, even with the same version: {"privacyNoticeUrl":"https://example.test/new-privacy"}
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > requires a fresh disclosure after processing changes, even with the same version: {"retentionDays":60}
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > requires a fresh disclosure after processing changes, even with the same version: {"processingRegion":"another-region"}
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > exports only current visible cases with every timeline page and no private operation facts
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > rechecks support expiry after export construction instead of returning a stale archive
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (0)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (1)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (2)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (3)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (4)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (5)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (6)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (7)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (8)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (9)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (10)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (11)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (12)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (13)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (14)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (15)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (16)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (17)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (18)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (19)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (20)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (21)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (22)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (23)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (24)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (25)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (26)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (27)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (28)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (29)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (30)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (31)
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > limits member visibility to their own cases while current owner and admin can read company cases
+ ✓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > links a visible support case to a current readable Issue without copying private text 1067ms
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > turns a reply to RESOLVED into an investigation on the same case
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > closes through an idempotent customer command and preserves the closed message
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > keeps closed history and routes a later customer reply to a linked follow-up
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > permits local closure under its original policy while new intake is unavailable
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > shares the actual database request budget across route reconstruction
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > retains one quota window when another application clock is an hour ahead
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > starts a reply-derived follow-up from CLOSED and makes repeated replies idempotent
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > blocks new intake without operator policy while preserving receipts and separately gated approval history
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > hides pending-deletion principals and expired content from ordinary reads
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > refuses actual Agent and local implicit authority and stale account targets
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > turns expired delivery leases into unknown without retrying or changing other delivery states
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > skips a locked company root or case and transitions the expired lease after release
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > erases expired local content but preserves held and uncertain delivery without false completion
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > fences replay of an erased native request without blacklisting another person's scoped key
+ ↓ src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > refuses unstoreable private text before driver errors and accepts complete Unicode characters
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 55 skipped (56)
+   Start at  20:35:47
+   Duration  19.60s (transform 9.73s, setup 68ms, import 14.15s, tests 5.27s, environment 0ms)
+

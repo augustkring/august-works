@@ -267,7 +267,19 @@ const policy = {
       issue: { id: issueId, identifier: "SUPA01-42" } });
     const linkedCase = await detail(companyA, "opener", created.body.id);
     expect(linkedCase.body.relatedIssue).toEqual({ id: issueId, identifier: "SUPA01-42" });
-    expect(JSON.stringify(await db.select().from(supportCaseIssueLinks))).not.toContain(privateText);
+
+    const secondPrivateText = "A separate customer report of the same sign-in failure";
+    const secondCase = await create(companyA, "member", secondPrivateText);
+    const secondLink = await request(app).post(`${path(companyA)}/cases/${secondCase.body.id}/issue-links`).set(auth("member"))
+      .send({ expectedUserId: users.member, issueRef: "SUPA01-42" });
+    expect(secondLink.status, JSON.stringify(secondLink.body)).toBe(201);
+    expect(secondLink.body).toMatchObject({ caseId: secondCase.body.id, issue: { id: issueId, identifier: "SUPA01-42" } });
+    expect((await detail(companyA, "member", secondCase.body.id)).body.relatedIssue).toEqual({ id: issueId, identifier: "SUPA01-42" });
+
+    const groupedCases = await db.select().from(supportCaseIssueLinks).where(eq(supportCaseIssueLinks.issueId, issueId));
+    expect(groupedCases.map(row => row.caseId).sort()).toEqual([created.body.id, secondCase.body.id].sort());
+    expect(JSON.stringify(groupedCases)).not.toContain(privateText);
+    expect(JSON.stringify(groupedCases)).not.toContain(secondPrivateText);
     const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
     expect(issue!.description).toBe("Human-authored investigation and root-cause notes");
     expect((await request(app).post(`${path(companyA)}/cases/${created.body.id}/issue-links`).set(auth("member"))

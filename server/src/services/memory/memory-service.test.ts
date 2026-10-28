@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   activityLog,
   agents,
@@ -873,6 +873,64 @@ describePg("Memory Core service", () => {
         await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("rechecks Task reader authority after eligible detail evidence waits", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const content = "The Acme procurement review needs a current authorized Task reader.";
+    const source = await humanTaskSource(seeded, content);
+    const created = await svc.createCandidate(seeded.companyId,
+      candidate(b.id, { title: "Authorized Task reader", content, summary: null, evidence: source.evidence }),
+      await agentActor(seeded.agent.id, seeded.userId));
+    await svc.reviewCandidate(seeded.companyId, created.record.id, { decision: "accept" }, userActor(seeded.userId));
+
+    let releaseEvidenceLock!: () => void;
+    let evidenceLockReady!: () => void;
+    const evidenceLockAcquired = new Promise<void>(resolve => { evidenceLockReady = resolve; });
+    const evidenceLockRelease = new Promise<void>(resolve => { releaseEvidenceLock = resolve; });
+    const lockTransaction = db.transaction(async tx => {
+      await tx.execute(sql`LOCK TABLE memory_evidence IN ACCESS EXCLUSIVE MODE`);
+      evidenceLockReady();
+      await evidenceLockRelease;
+    });
+    await evidenceLockAcquired;
+
+    try {
+      const detailRead = svc.listEligibleDetails(seeded.companyId, {
+        scopeType: "company", scopeId: null, limit: 100, sensitivityCeiling: "internal",
+        asOf: new Date(), candidateFilter: record => record.id === created.record.id,
+      }, await agentActor(seeded.agent.id, seeded.userId), {
+        limit: 1, score: () => 1,
+        isCurrent: record => record.reviewState === "accepted" && record.retentionState === "active" &&
+          record.revokedAt === null && record.deletedAt === null && record.supersededByRecordId === null,
+      });
+
+      const blockedEvidenceQueryDeadline = Date.now() + 5_000;
+      let evidenceQueryBlocked = false;
+      while (Date.now() < blockedEvidenceQueryDeadline) {
+        const [activity] = await db.execute<{ blocked: boolean }>(sql`select exists (
+          select 1 from pg_stat_activity
+          where wait_event_type='Lock' and query ilike '%memory_evidence%' and pid<>pg_backend_pid()
+        ) as blocked`);
+        if (activity?.blocked) { evidenceQueryBlocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(evidenceQueryBlocked).toBe(true);
+
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(
+        eq(companyMemberships.companyId, seeded.companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, seeded.userId)));
+      releaseEvidenceLock();
+      await expect(detailRead).resolves.toEqual([]);
+    } finally {
+      releaseEvidenceLock();
+      await lockTransaction;
+      await db.update(companyMemberships).set({ status: "active" }).where(and(
+        eq(companyMemberships.companyId, seeded.companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, seeded.userId)));
+    }
   });
 
   it("denies private memory detail and recall to same-company non-owner principals", async () => {
