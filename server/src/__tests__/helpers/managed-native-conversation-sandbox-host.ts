@@ -660,7 +660,7 @@ export async function configureManagedConversationSandboxHost(input: {
     managedModelBrokerOriginPresent: boolean;
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
     nativePreparationPurpose: string | null; providerPackImageProbe: boolean;
-    exitCode: number | null; timedOut: boolean }> = [];
+    exitCode: number | null; timedOut: boolean; erasureFailureGuard: string | null }> = [];
   let runnerLaunchStderr = Buffer.alloc(0);
   let runnerDiagnosticTail = Buffer.alloc(0);
   relayHost.on("message", raw => {
@@ -715,7 +715,7 @@ export async function configureManagedConversationSandboxHost(input: {
       managedModelBrokerOriginPresent: requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin,
       assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
       nativePreparationPurpose, providerPackImageProbe,
-      exitCode: null as number | null, timedOut: false };
+      exitCode: null as number | null, timedOut: false, erasureFailureGuard: null as string | null };
     const captureRunnerLaunchStderr = nativePreparationPurpose === "native_session_start" &&
       argv[0] === "sh" && argv[1] === "-c" && argv[3] === "paperclip-runner-launch";
     const captureRunnerDiagnostic = nativePreparationPurpose === "native_harness_state" &&
@@ -734,6 +734,10 @@ export async function configureManagedConversationSandboxHost(input: {
       output.on("data", (chunk: Buffer) => {
         if (captureRunnerLaunchStderr && stream === "stderr")
           runnerLaunchStderr = Buffer.concat([runnerLaunchStderr, chunk]).subarray(-8192);
+        if (nativePreparationPurpose === "native_provider_data_erasure" && stream === "stderr") {
+          const match = /^remote_erasure_failed:([a-z_]{1,40}):([0-9]{1,3})\s*$/m.exec(chunk.toString("utf8"));
+          if (match) fact.erasureFailureGuard = `${match[1]}:${match[2]}`;
+        }
         if (captureRunnerDiagnostic && stream === "stdout")
           runnerDiagnosticTail = Buffer.concat([runnerDiagnosticTail, chunk]).subarray(-8192);
         relayHost.send(JSON.stringify({ type: "exec_output", channelId: message.channelId,

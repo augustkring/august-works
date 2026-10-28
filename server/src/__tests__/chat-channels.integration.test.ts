@@ -126,6 +126,7 @@ import type {
 import { createChatSdkEndpointRuntime } from "../services/chat-sdk-runtime.js";
 import type { TelegramDraftControl } from "../services/chat-telegram-draft-stop.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 
 // Opt-in private physical candidate; normal CI uses the staged pinned package.
@@ -1112,13 +1113,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         updatedAt: now,
       })
       .onConflictDoNothing();
-    await db.insert(companyMemberships).values({
-      companyId,
-      principalType: "user",
-      principalId: "owner-user",
-      status: "active",
-      membershipRole: "operator",
-    });
+    await seedCurrentHumanMembership(db, companyId, "owner-user", "operator");
     await db.insert(principalPermissionGrants).values({
       companyId,
       principalType: "user",
@@ -52798,6 +52793,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
           status: "running",
           runtimeMode: "native",
           nativeIssueId: conversation.issueId,
+          responsibleUserId: "owner-user",
           contextSnapshot: {
             ...contextSnapshot,
             paperclipHarnessCheckedOut: true,
@@ -52809,6 +52805,17 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
             },
           },
         });
+        const [{ preparePlatformSkillAdmission }, { blenteraPlatformContractHashes }] = await Promise.all([
+          import("../services/platform-skill-admission.js"),
+          import("../services/tool-gateway.js"),
+        ]);
+        await preparePlatformSkillAdmission(db, {
+          companyId: fixture.companyId,
+          agentId: fixture.assignedAgentId,
+          runId,
+          responsibleUserId: "owner-user",
+          requireExisting: false,
+        }, blenteraPlatformContractHashes());
         await db
           .update(issues)
           .set({ executionRunId: runId, status: "in_progress" })

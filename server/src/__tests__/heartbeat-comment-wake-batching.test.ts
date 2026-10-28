@@ -75,11 +75,12 @@ async function insertCompanyFixture(db: ReturnType<typeof createDb>, values: typ
   const rows = Array.isArray(values) ? values : [values];
   await db.insert(companies).values(values as typeof companies.$inferInsert | Array<typeof companies.$inferInsert>);
   for (const row of rows) {
+    if (!row.id) continue;
+    for (const userId of ["user-1", "local-cli-user", "local-board", "external-user", "hold-user"]) {
+      await seedHeartbeatResponsibleHuman(db, row.id, userId, "owner");
+    }
     if (row.id && row.defaultResponsibleUserId) {
       await seedHeartbeatResponsibleHuman(db, row.id, row.defaultResponsibleUserId, "owner");
-        // The historical interaction fixtures use this user as the authored
-        // Board actor while the company default is a separate Human.
-        await seedHeartbeatResponsibleHuman(db, row.id, "user-1", "owner");
     }
   }
 }

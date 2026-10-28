@@ -1,7 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { activityLog, companies, companyMemberships, instanceUserRoles, principalPermissionGrants } from "@paperclipai/db";
+import { activityLog, authUsers, companies, companyMemberships, instanceUserRoles, principalPermissionGrants } from "@paperclipai/db";
 import {
   actorMiddleware,
   humanizeCloudStackSlug,
@@ -38,6 +38,7 @@ function createTableSelectChain(
       const lockedResult = Promise.resolve(rowsForLock(table));
       const query = {
         where() { return query; },
+        limit() { return query; },
         for() { return lockedResult; },
         then(resolve: (value: unknown[]) => unknown, reject?: (reason: unknown) => unknown) {
           return result.then(resolve, reject);
@@ -197,12 +198,12 @@ describe("actorMiddleware authenticated session profile", () => {
     // authUsers, companies, companyMemberships, the role-default
     // principalPermissionGrants, and the lazily initialized instance setting.
     expect(inserts).toHaveLength(5);
-    expect(inserts[0]?.values).toMatchObject({
+    expect(inserts.find(insert => insert.table === authUsers)?.values).toMatchObject({
       id: "global-user-1",
       email: "owner@example.com",
       emailVerified: true,
     });
-    expect(inserts[1]?.values).toMatchObject({
+    expect(inserts.find(insert => insert.table === companies)?.values).toMatchObject({
       name: "Purple Rain",
     });
     expect(inserts.some((insert) => insert.table === principalPermissionGrants)).toBe(true);

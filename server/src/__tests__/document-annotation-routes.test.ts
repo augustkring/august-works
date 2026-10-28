@@ -289,7 +289,7 @@ describe("document annotation routes", () => {
     const response = await request(await createApp("agent"))
       .get(`/api/issues/${issueId}/documents/plan?includeAnnotationComments=true`);
     expect(response.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "agent", companyId }), { issueId });
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "agent", companyId }), { issueId }, undefined, { privacyLockMode: "read" });
     expect(mockDocumentService.getIssueDocumentByKey).not.toHaveBeenCalled();
     expect(mockAnnotationService.listThreadsForIssueDocument).not.toHaveBeenCalled();
   });

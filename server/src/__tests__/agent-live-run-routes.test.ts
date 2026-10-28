@@ -1879,7 +1879,11 @@ describe("agent live run routes", () => {
     const runId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const res = await requestApp(await createApp(), url => request(url)[method](`/api/heartbeat-runs/${runId}/${suffix}`));
     expect(res.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { runId });
+    const sourceArguments = [expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { runId }];
+    // Reading the trace takes a read privacy lock; reprojection keeps the
+    // mutation owner's default write lock.
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(...sourceArguments,
+      ...(method === "get" ? [undefined, { privacyLockMode: "read" }] : []));
     expect(mockProviderTraceStore.inspect).not.toHaveBeenCalled();
     expect(mockProviderTraceStore.getByRun).not.toHaveBeenCalled();
     expect(mockWorkspaceDiffReprojection.persist).not.toHaveBeenCalled();

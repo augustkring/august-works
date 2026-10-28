@@ -55,6 +55,8 @@ import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../heartbeat.js";
 import { ensureNativeCompletionContract } from "./completion-contracts.js";
 import { getNativeReviewAssignment } from "./native-review-participant.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 
 describe("PaperclipRunnerToolAuthority", () => {
   let temporary: Awaited<
@@ -75,8 +77,8 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
       membershipRole: "admin", status: "active" });
     await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
-    const human = payloadSourceProtocolVersion === 1
-      ? await seedCurrentHumanSourceActor(db, [companyId], userId) : null;
+    const currentHuman = await seedCurrentHumanSourceActor(db, [companyId], userId);
+    const human = payloadSourceProtocolVersion === 1 ? currentHuman : null;
     if (human) {
       const task = await issueService(db).create(companyId, {
         title: "Read document source", status: "todo", workMode: "standard",
@@ -97,6 +99,8 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.insert(contextManifests).values({ id: randomUUID(), companyId, runId, agentId, issueId,
       projectId: null, queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64), createdAt: new Date() });
     await db.update(issues).set({ status: "in_progress", executionRunId: runId }).where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId, responsibleUserId: userId,
+      requireExisting: false }, blenteraPlatformContractHashes());
     return { companyId, agentId, issueId, runId, human,
       authority: new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId }) };
   }

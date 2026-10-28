@@ -253,10 +253,10 @@
     {
       "source": "ui/src/api/saas.ts",
       "articleId": "billing-and-capacity",
-      "sourceSha256": "ac5c1a4a0aef10d0f10a1ff235b26f271831f8fe10f33a1af7e05a246116dc42",
+      "sourceSha256": "af5340674fbdb1747e3e3f64f3678614a0a1269fa2b6faaa4729953ca3b9c9f4",
       "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
       "decision": "no_change",
-      "rationale": "The added operator inventory and cost-source endpoints do not change customer billing controls, subscription state or payment-provider handoff."
+      "rationale": "The API change adds passwordless account-deletion proof to its request contract; billing endpoints and the subscription/payment workflow in this guide are unchanged."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -293,10 +293,10 @@
     {
       "source": "ui/src/api/saas.ts",
       "articleId": "billing-and-capacity-da",
-      "sourceSha256": "ac5c1a4a0aef10d0f10a1ff235b26f271831f8fe10f33a1af7e05a246116dc42",
+      "sourceSha256": "af5340674fbdb1747e3e3f64f3678614a0a1269fa2b6faaa4729953ca3b9c9f4",
       "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
       "decision": "no_change",
-      "rationale": "Danish counterpart checked against the same source behavior. The added operator inventory and cost-source endpoints do not change customer billing controls, subscription state or payment-provider handoff."
+      "rationale": "The API change adds passwordless account-deletion proof to its request contract; billing endpoints and the subscription/payment workflow in this guide are unchanged."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -662,161 +662,161 @@
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Memory routes keep private record actions scoped to the current company and actor; the article describes only the available owner review and deletion controls."
     },
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "c57d093d48cff4d261428d7db17cf0188e05e2584fb455abec2ebde1b4d705ac",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "Retained source checks distinguish the current reader and each owner source scope; private sharing still requires original-owner review and current source access."
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Source checks still require current access to each retained source; the article accurately says private shares can become unavailable when source access or state changes."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "4d7ca3af68e3dc870cd0357efe6ab64e1f1fec804ad1cb141d052bcd06c171f4",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "The added environment-gated page timing profile does not change Memory visibility, private sharing, retention or erasure semantics described in this article."
+      "sourceSha256": "93994bb832f3fa145bfa445bd41bf87e0a637918531f46a2cc5035be5fc958fb",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Selected Memory results revalidate current account and source access; the article already describes that check for original and added Task sources."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "0a044d44ab27bfde39c5c771e68f03f37582c93e8468c2e469a4888d629b208a",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
+      "sourceSha256": "16bdb6462bb8858d94ea74fcc32788a1b7d2fe4d530f7cb9bb58a25094171ae6",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "updated",
-      "rationale": "Pending account deletion now revokes and redacts temporary coverage before a retention hold; the article still distinguishes accepted requests, retention and final erasure."
+      "rationale": "Deletion validates the current password or a fresh company sign-in proof and still enforces any required native factor; the article now states that sequence explicitly."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "8c3e54b700044da4ce16a229a9fbb38bb28e7133561462aa39a151012e2d6077",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Company purge remains staged around unresolved provider outcomes and managed erasure; the article distinguishes accepted deletion from completed erasure."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "Offboarding injects the existing MemoryJob remote runtime erasure callback. The paired deletion article keeps the request, retention and verified physical cleanup separate and now explains pending managed-file removal."
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Offboarding waits for required managed runtime erasure jobs before purge advances; the article accurately describes cleanup as pending until verified."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "The export page labels support history as a separate customer-visible archive; the article accurately excludes internal notes and access grants."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "The Memory page exposes owner-controlled share review and Forget actions; the article matches their source-access and deletion effects."
     },
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "4ea9ace52188ed50a115c403b27341bdd50454245260e13d49d1e678e1832fe3",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
+      "sourceSha256": "ca34efc18949d873b4f26b87fb6c0e7b9ba9c7ce3f16bbd6396d5288671591d0",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "rationale": "Passwordless accounts may use company sign-in for deletion confirmation, followed by any required native factor; the article now makes clear that SSO does not bypass it."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "c10303000adfea5317b7cf3c75dd420eb1beee5771a749de17cec32d82a8161f",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "The deletion page presents staged offboarding and retention status; the article correctly says that acceptance is not proof of final erasure."
     },
     {
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Memory routes keep private record actions scoped to the current company and actor; the article describes only the available owner review and deletion controls."
     },
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "c57d093d48cff4d261428d7db17cf0188e05e2584fb455abec2ebde1b4d705ac",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Retained source checks distinguish the current reader and each owner source scope; private sharing still requires original-owner review and current source access."
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Source checks still require current access to each retained source; the article accurately says private shares can become unavailable when source access or state changes."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "4d7ca3af68e3dc870cd0357efe6ab64e1f1fec804ad1cb141d052bcd06c171f4",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The added environment-gated page timing profile does not change Memory visibility, private sharing, retention or erasure semantics described in this article."
+      "sourceSha256": "93994bb832f3fa145bfa445bd41bf87e0a637918531f46a2cc5035be5fc958fb",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Selected Memory results revalidate current account and source access; the article already describes that check for original and added Task sources."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "0a044d44ab27bfde39c5c771e68f03f37582c93e8468c2e469a4888d629b208a",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
+      "sourceSha256": "16bdb6462bb8858d94ea74fcc32788a1b7d2fe4d530f7cb9bb58a25094171ae6",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Pending account deletion now revokes and redacts temporary coverage before a retention hold; the article still distinguishes accepted requests, retention and final erasure."
+      "rationale": "Deletion validates the current password or a fresh company sign-in proof and still enforces any required native factor; the article now states that sequence explicitly."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "8c3e54b700044da4ce16a229a9fbb38bb28e7133561462aa39a151012e2d6077",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Company purge remains staged around unresolved provider outcomes and managed erasure; the article distinguishes accepted deletion from completed erasure."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Offboarding injects the existing MemoryJob remote runtime erasure callback. The paired deletion article keeps the request, retention and verified physical cleanup separate and now explains pending managed-file removal."
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Offboarding waits for required managed runtime erasure jobs before purge advances; the article accurately describes cleanup as pending until verified."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "The export page labels support history as a separate customer-visible archive; the article accurately excludes internal notes and access grants."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "The Memory page exposes owner-controlled share review and Forget actions; the article matches their source-access and deletion effects."
     },
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "4ea9ace52188ed50a115c403b27341bdd50454245260e13d49d1e678e1832fe3",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
+      "sourceSha256": "ca34efc18949d873b4f26b87fb6c0e7b9ba9c7ce3f16bbd6396d5288671591d0",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "rationale": "Passwordless accounts may use company sign-in for deletion confirmation, followed by any required native factor; the article now makes clear that SSO does not bypass it."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "c10303000adfea5317b7cf3c75dd420eb1beee5771a749de17cec32d82a8161f",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "The deletion page presents staged offboarding and retention status; the article correctly says that acceptance is not proof of final erasure."
     },
     {
       "source": "packages/shared/src/agent-packages.ts",
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "fc056f6505f7151b447da0dbc57ac37979ceb44586a1562675b1ceea4555fbfb",
+      "sourceSha256": "da1c6851b636a0477afe1d554ae5e2e0a38832b8154401822e5b941e491dd791",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "decision": "updated",
-      "rationale": "The generated Help search projection now includes the reviewed temporary workflow coverage explanation; the support article still describes authenticated search and the existing support channel."
+      "decision": "no_change",
+      "rationale": "The regenerated catalog includes the revised company sign-in and additional-factor wording; the Help overview’s search guidance remains accurate."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "fc056f6505f7151b447da0dbc57ac37979ceb44586a1562675b1ceea4555fbfb",
+      "sourceSha256": "da1c6851b636a0477afe1d554ae5e2e0a38832b8154401822e5b941e491dd791",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The generated Help search projection now includes the reviewed temporary workflow coverage explanation; the support article still describes authenticated search and the existing support channel."
+      "decision": "no_change",
+      "rationale": "The regenerated catalog includes the revised company sign-in and additional-factor wording; the Help overview’s search guidance remains accurate."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612",
+      "sourceSha256": "baa753bea3134e240da243e4d1f987fb5612c0309478ec4a2fd53d9f87aa260d",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Read-only source fences and current default-Human resolution preserve Stop, source refusal and recovery behavior described in the articles."
+      "rationale": "Remote process registration now verifies the current Native run and lease before recording identity; recovery guidance to inspect the original run and wait for status remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612",
+      "sourceSha256": "baa753bea3134e240da243e4d1f987fb5612c0309478ec4a2fd53d9f87aa260d",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Danish counterpart checked against the same source behavior. Read-only source fences and current default-Human resolution preserve Stop, source refusal and recovery behavior described in the articles."
+      "rationale": "Remote process registration now verifies the current Native run and lease before recording identity; recovery guidance to inspect the original run and wait for status remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2005,66 +2005,66 @@
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "2cbea94f019a29f613e77880e46c336aae9ee26c6bd3d8a40573d36382b55a90",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "Managed runtime erasure uses the exact claimed retention job and server-stamped locator, with durable command receipt recovery. The deletion article now explains that file cleanup remains pending until process and storage removal are verified."
+      "sourceSha256": "0bc8866531bebb47434748934f12d0015b59fdfe7c7cf9093e26a4ae69f1fc61",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Managed runtime-file cleanup remains a durable retention job with classified failures; the article accurately says cleanup stays pending until removal is verified."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "647faded7d37a9ccf778bdeb274f0ad6c8858143121f4efb5eb11a24fc9f685e",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "Remote locators bind exact session, Run and lease ownership. Unsupported or shared-owner cleanup stays pending rather than treating a terminal Run as physical erasure. The paired deletion article retains that distinction."
+      "sourceSha256": "4028b6ba47fdb594fd20529cf9d7f5d8c0c18de4e7ebf1d39f1f9e74a01ab4a3",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Remote erasure requires an exact run, lease, and stop receipt; the article makes no claim that unmanaged provider-held data is erased."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Local process identity is cleared only after a matching Native stop receipt; the article accurately says cleanup waits for stop confirmation."
     },
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "2cbea94f019a29f613e77880e46c336aae9ee26c6bd3d8a40573d36382b55a90",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Managed runtime erasure uses the exact claimed retention job and server-stamped locator, with durable command receipt recovery. The deletion article now explains that file cleanup remains pending until process and storage removal are verified."
+      "sourceSha256": "0bc8866531bebb47434748934f12d0015b59fdfe7c7cf9093e26a4ae69f1fc61",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Managed runtime-file cleanup remains a durable retention job with classified failures; the article accurately says cleanup stays pending until removal is verified."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "647faded7d37a9ccf778bdeb274f0ad6c8858143121f4efb5eb11a24fc9f685e",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Remote locators bind exact session, Run and lease ownership. Unsupported or shared-owner cleanup stays pending rather than treating a terminal Run as physical erasure. The paired deletion article retains that distinction."
+      "sourceSha256": "4028b6ba47fdb594fd20529cf9d7f5d8c0c18de4e7ebf1d39f1f9e74a01ab4a3",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Remote erasure requires an exact run, lease, and stop receipt; the article makes no claim that unmanaged provider-held data is erased."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Local process identity is cleared only after a matching Native stop receipt; the article accurately says cleanup waits for stop confirmation."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612",
-      "articleSha256": "6e2a9105f5810c0c1c3e23bd2caabcd0cbaada2196591b30e78378e0f65c8c91",
-      "decision": "updated",
-      "rationale": "Read-only source fences and current default-Human resolution preserve Stop, source refusal and recovery behavior described in the articles."
+      "sourceSha256": "baa753bea3134e240da243e4d1f987fb5612c0309478ec4a2fd53d9f87aa260d",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Remote process identity is accepted only against the current Native run and lease; the article’s stop-confirmation condition remains accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612",
-      "articleSha256": "dc0fb9e58504a808c2533f10cc956f43d32e9998419e2c03e31caa6cbe9ca4c8",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Read-only source fences and current default-Human resolution preserve Stop, source refusal and recovery behavior described in the articles."
+      "sourceSha256": "baa753bea3134e240da243e4d1f987fb5612c0309478ec4a2fd53d9f87aa260d",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Remote process identity is accepted only against the current Native run and lease; the article’s stop-confirmation condition remains accurate."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

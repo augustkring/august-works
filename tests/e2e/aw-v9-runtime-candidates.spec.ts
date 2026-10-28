@@ -39,7 +39,10 @@ test("saved runtime selection survives reload and an unknown qualification uses 
         return route.fulfill({ json: candidate });
       }
       if (path.endsWith("/runtime-candidates")) return route.fulfill({ json: { companyId: company.id, draftId: draft.id, version: draft.version,
-        agentId: id(2), identityId: id(5), choices: [{ modelProfileId: id(4), model: "Software fixture model", configurationHash: "a".repeat(64),
+        agentId: id(2), identityId: id(5), lifecycleInventory: { profileId: null, model: null, status: "untracked", owner: null,
+          retirementAt: null, replacementProfileId: null, regionOrRoutingProfile: null, dataUseProfile: null,
+          unresolvedProfileReference: false, publishedWorkflows: [] },
+        choices: [{ modelProfileId: id(4), model: "Software fixture model", configurationHash: "a".repeat(64),
           maxOutputTokens: 256, maximumMinorPerCall: 3, currency: "USD", requiresConformance: true, changesLive: false }] } });
       if (path.endsWith("/conformance-review")) return route.fulfill({ json: { companyId: company.id, draftId: draft.id, candidateId: id(3), version: draft.version,
         reviewHash: "b".repeat(64), canTest: true, blockers: [], maximumMinor: 12, currency: "USD", probeCount: 4, toolsGranted: false,

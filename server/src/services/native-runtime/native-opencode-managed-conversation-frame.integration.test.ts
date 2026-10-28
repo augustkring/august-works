@@ -385,6 +385,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                     failedChecks: Array.isArray(details.failedChecks)
                       ? details.failedChecks.filter((check): check is string => typeof check === "string" && [
                         "cell_current", "host_current", "binding_running", "manifest_current", "agent_present",
+                        "signed_start_binding_current", "start_manifest_hash_matches", "start_policy_hash_matches",
                         "capability_snapshot_valid", "capability_unexpired", "image_matches", "host_agent_version",
                         "qualification_matches", "policy_unexpired", "execution_authorization_present", "policy_manifest_matches",
                         "policy_capability_matches", "policy_has_no_credentials",
@@ -396,7 +397,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                   !Array.isArray(value) && value.nativePreparationPurpose === "native_provider_data_erasure"))
                 .slice(-4).map(value => ({ exitCode: typeof value.exitCode === "number" ? value.exitCode : null,
                   timedOut: value.timedOut === true, credentialEnvironmentAbsent: value.credentialEnvironmentAbsent === true,
-                  assignedMcpEnvironmentAbsent: value.assignedMcpEnvironmentAbsent === true })) : [];
+                  assignedMcpEnvironmentAbsent: value.assignedMcpEnvironmentAbsent === true,
+                  scriptFailureGuard: typeof value.erasureFailureGuard === "string" &&
+                    /^(?:target_arguments|target_directories|lock_acquire|state_files|state_binding|process_marker|process_stop|post_delete_check|receipt):[0-9]{1,3}$/.test(value.erasureFailureGuard)
+                    ? value.erasureFailureGuard : null })) : [];
               const erasureExecutionFailures = Array.isArray(hostRuntime.sandboxExecutionFailures) ? hostRuntime.sandboxExecutionFailures
                 .filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object" &&
                   !Array.isArray(value) && value.nativePreparationPurpose === "native_provider_data_erasure"))

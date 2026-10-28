@@ -43,7 +43,7 @@ function nativeFailure(error: unknown): never {
 export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema, operatorUserIds: readonly string[]) {
   const native = twoFactor({ issuer: "Blentera", skipVerificationOnEnable: false, allowPasswordless: true });
 
-  async function accountDeletionSsoFactorCarrier(tx: Pick<Db, "execute" | "select">, owner: FactorSnapshot) {
+  async function accountDeletionSsoFactorCarrier(tx: Pick<Db, "execute">, owner: FactorSnapshot) {
     if (!owner.sessionId || !owner.enabled || owner.phishingResistantRequired || operatorUserIds.includes(owner.userId)) return null;
     const [row] = await tx.execute<{ id: string; value: string; expiresAt: Date | string }>(sql`
       select ${authVerifications.id} as id,${authVerifications.value} as value,

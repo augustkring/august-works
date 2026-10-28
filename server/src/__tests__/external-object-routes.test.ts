@@ -227,7 +227,7 @@ describe("external object routes", () => {
     mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
     const res = await request(await createApp(boardActor())).get(`/api/issues/${issueId}/external-object-summary`);
     expect(res.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "board", userId: "board-user" }), { issueId });
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "board", userId: "board-user" }), { issueId }, undefined, { privacyLockMode: "read" });
     expect(mockExternalObjectsService.getIssueSummary).not.toHaveBeenCalled();
   });
 

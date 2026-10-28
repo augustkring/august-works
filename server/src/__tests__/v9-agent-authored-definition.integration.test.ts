@@ -95,8 +95,12 @@ const support = await getEmbeddedPostgresTestSupport();
   });
   it("blocks generic configuration and instruction writes before filesystem effects", async () => {
     const agent = await install(), svc = agentInstructionsService(db);
-    for (const patch of [{ runtimeConfig: {} }, { name: "Changed live" }, { permissions: { canCreateAgents: true } }, { adapterConfig: { promptTemplate: "Changed live" } }])
+    for (const patch of [{ runtimeConfig: {} }, { name: "Changed live" }, { permissions: { canCreateAgents: true } }])
       await expect(agentService(db).update(agent.id, patch)).rejects.toMatchObject({ status: 409, details: { code: "authored_agent_version_readonly" } });
+    // Replacing the adapter config also removes the pinned provider/model, so
+    // the routing-publication guard rejects it before the authored-version guard.
+    await expect(agentService(db).update(agent.id, { adapterConfig: { promptTemplate: "Changed live" } }))
+      .rejects.toMatchObject({ status: 409, details: { code: "model_migration_publication_required" } });
     await expect(svc.writeFile(agent, "AGENTS.md", "Changed live")).rejects.toMatchObject({ status: 409 });
     await expect(svc.writeFile(agent, "promptTemplate.legacy.md", "Changed live")).rejects.toMatchObject({ status: 409 });
     await expect(svc.updateBundle(agent, { mode: "managed" })).rejects.toMatchObject({ status: 409 });

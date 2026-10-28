@@ -83,7 +83,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
             revisionId: "10000000-0000-4000-8000-000000000033", revisionNumber: 7, title: "Approved Aster company facts",
             bodyHash: "a".repeat(64), sensitivity: "internal", validFrom: null, validUntil: null }], requiredProcedures: [{ name: "Required security procedure", skillId: "10000000-0000-4000-8000-000000000012", versionId: "10000000-0000-4000-8000-000000000013" }],
           requiredPlaybooks: [{ playbookId: "10000000-0000-4000-8000-000000000014", revisionId: "10000000-0000-4000-8000-000000000015", name: "Approved welcome procedure", bodyHash: "e".repeat(64) }],
-          maximumPerModelCallMinor: 3, currency: "USD", provider: "anthropic", model: "software-host-model", runtimeBindingId: runtimeId, reviewHash: "b".repeat(64),
+          maximumPerModelCallMinor: 3, currency: "USD", provider: "anthropic", model: "software-host-model",
+          modelMigration: { required: false, action: "none", stage: "single_agent" }, runtimeBindingId: runtimeId, reviewHash: "b".repeat(64),
           modelCalled: false, authorityGranted: false, executionStarted: false } });
         if (path.endsWith('/publications')) return route.fulfill({ json: receipt });
         if (receipt && path.endsWith(`/publications/${receipt.requestId}`)) return route.fulfill({ json: receipt });

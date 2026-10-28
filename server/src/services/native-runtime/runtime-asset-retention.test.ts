@@ -16,22 +16,23 @@ import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTI
   REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
 
 describe("remote Native runtime asset erasure binding", () => {
-  it("admits only a live cleanup lease or a successfully retired exact ephemeral lease", () => {
+  it("requires the exact signed session-start binding for retired-lease cleanup", () => {
     const now = new Date("2026-10-28T12:00:00.000Z");
     const futureExpiry = new Date(now.getTime() + 60_000);
     const releasedAt = new Date(now.getTime() - 1_000);
     const expiredEphemeral = { provider: "sandbox-fixture", status: "expired", leasePolicy: "ephemeral",
       releasedAt, cleanupStatus: "success", expiresAt: futureExpiry };
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent(expiredEphemeral, now)).toBe(true);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, cleanupStatus: "failed" }, now)).toBe(false);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "failed" }, now)).toBe(false);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "released" }, now)).toBe(false);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, releasedAt: null }, now)).toBe(false);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, leasePolicy: "reuse_by_environment" }, now)).toBe(false);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, expiresAt: null }, now)).toBe(false);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, expiresAt: now }, now)).toBe(false);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, provider: "local" }, now)).toBe(false);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, provider: null }, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent(expiredEphemeral, now)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent(expiredEphemeral, now, true)).toBe(true);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, cleanupStatus: "failed" }, now, true)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "failed" }, now, true)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "released" }, now, true)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, releasedAt: null }, now, true)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, leasePolicy: "reuse_by_environment" }, now, true)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, expiresAt: null }, now, true)).toBe(true);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, expiresAt: now }, now, true)).toBe(true);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, provider: "local" }, now, true)).toBe(false);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, provider: null }, now, true)).toBe(false);
     expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "active", releasedAt: null,
       cleanupStatus: null }, now)).toBe(true);
     expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "pending_cleanup", releasedAt: null,

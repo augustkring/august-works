@@ -88,6 +88,8 @@ import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/index.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 
 async function seedNativeRecoveryHuman(db: ReturnType<typeof createDb>, companyId: string, userId: string) {
   await db.insert(authUsers).values({ id: userId, name: "Native recovery owner",
@@ -975,6 +977,8 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         .update(issues)
         .set({ executionRunId: runId })
         .where(eq(issues.id, issueId));
+      await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+        responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
       await initializeRunIdentity(db, { companyId, runId, issueId, responsibleUserId, cause: "restart" });
       await db.insert(nativeRunFinalizations).values({
         runId,
