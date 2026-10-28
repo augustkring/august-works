@@ -10,6 +10,9 @@ import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY } from "@pap
 import { resolveAuthoringProcedures } from "../services/agents/authoring-procedures.js";
 import { assertAuthoredAgentManifestCurrent, compileAuthoredAgentDefinition } from "../services/agents/authored-definition.js";
 import { agentService } from "../services/agents.js";
+import { companySkillService } from "../services/company-skills.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 import { initializeRunIdentity } from "../services/run-identity.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
@@ -102,13 +105,25 @@ const support = await getEmbeddedPostgresTestSupport();
   });
   it("uses all default required procedures in a pinned Task-only runtime without executable capabilities", async () => {
     const f = await installed(), prepared = await agentRuntimeFabricService(db).prepare(f.execution);
-    expect(prepared!.manifest.skills.map(pin => pin.versionId).sort()).toEqual(f.pins.map(pin => pin.versionId).sort());
-    expect(prepared!.manifest.skills.every(pin => pin.selection === "required" && pin.loadPoint === "always")).toBe(true);
+    const platform = prepared!.manifest.skills.find(pin => pin.key === "blentera-platform")!;
+    expect(platform).toMatchObject({ selection: "required", loadPoint: "task_relevant" });
+    const authoredSkills = prepared!.manifest.skills.filter(pin => pin.key !== "blentera-platform");
+    expect(authoredSkills.map(pin => pin.versionId).sort()).toEqual(f.pins.map(pin => pin.versionId).sort());
+    expect(authoredSkills.every(pin => pin.selection === "required" && pin.loadPoint === "always")).toBe(true);
     expect(prepared!.manifest.rolePack?.systemKey).toBe("ops");
     expect(prepared!.manifest.playbooks).toEqual([]); expect(prepared!.manifest.capabilities).toEqual([]);
     expect(prepared!.contextMarkdown).toContain(f.task.description);
-    const context = await buildNativeRuntimeContext({ db, agent: f.agent, runId: f.run.id, runtimeConfig: f.config, runtimeSkillEntries: [] });
-    expect(context.mcp.bindingId).toBeNull(); expect(context.skills).toHaveLength(f.pins.length);
+    await preparePlatformSkillAdmission(db, { companyId: f.f.home, agentId: f.agent.id, runId: f.run.id,
+      responsibleUserId: f.f.userId, requireExisting: false }, blenteraPlatformContractHashes());
+    const runtimeSkillEntries = await companySkillService(db).listRuntimeSkillEntriesForCurrentExecution(f.f.home,
+      { type: "agent", source: "none", companyId: f.f.home, agentId: f.agent.id,
+        runId: f.run.id, onBehalfOfUserId: f.f.userId }, f.run.id);
+    const context = await buildNativeRuntimeContext({ db, agent: f.agent, runId: f.run.id, runtimeConfig: f.config, runtimeSkillEntries });
+    expect(context.mcp.bindingId).toBeNull(); expect(context.skills).toHaveLength(f.pins.length + 1);
+    const platformAsset = context.skills.find(skill => skill.versionId === platform.versionId)!;
+    const platformFiles = await readNativeRuntimeAssetText(platformAsset.bundle, 256000, { companyId: f.f.home, runId: f.run.id });
+    expect(platformFiles).toHaveLength(14);
+    expect(platformFiles.some(file => file.path === "SKILL.md")).toBe(true);
     for (const pin of f.pins) {
       const asset = context.skills.find(skill => skill.versionId === pin.versionId)!;
       expect(await readNativeRuntimeAssetText(asset.bundle, 32000, { companyId: f.f.home, runId: f.run.id }))
