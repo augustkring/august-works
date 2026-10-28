@@ -1,4 +1,23 @@
 {
+  "changelog": {
+    "title": "Product changes",
+    "coverage": "Recent customer release notes from the configured publication history. This is not a complete archive of every release.",
+    "signIn": "Sign in to read product changes.",
+    "loading": "Loading release notes…",
+    "unconfigured": "Release notes have not been configured on this instance.",
+    "unavailable": "Release notes are temporarily unavailable.",
+    "incomplete": "Some published releases have incomplete customer notes. The available notes appear below.",
+    "empty": "No customer release notes are published in this window.",
+    "language": "This release note is available in {{locale}}.",
+    "audience": "Who is affected:",
+    "action": "Action needed:",
+    "noAction": "No action required.",
+    "documentation": "Related documentation",
+    "rollback": "Rollback:",
+    "notProvided": "No rollback guidance is provided in this note.",
+    "limitations": "Known limitations",
+    "noneStated": "No limitations are stated in this note."
+  },
   "costPricing": {
       "unknown_one": "Price unknown for {{count}} usage event",
       "unknown_other": "Price unknown for {{count}} usage events",

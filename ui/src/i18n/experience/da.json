@@ -1,4 +1,23 @@
 {
+  "changelog": {
+    "title": "Produktændringer",
+    "coverage": "Seneste kundenoter fra den konfigurerede udgivelseshistorik. Dette er ikke et komplet arkiv over alle udgivelser.",
+    "signIn": "Log ind for at læse produktændringer.",
+    "loading": "Henter udgivelsesnoter…",
+    "unconfigured": "Udgivelsesnoter er ikke konfigureret på denne instans.",
+    "unavailable": "Udgivelsesnoter er midlertidigt utilgængelige.",
+    "incomplete": "Nogle udgivelser har ufuldstændige kundenoter. De tilgængelige noter vises nedenfor.",
+    "empty": "Der er ingen kundenoter i denne udgivelsesperiode.",
+    "language": "Denne udgivelsesnote findes på {{locale}}.",
+    "audience": "Hvem er berørt:",
+    "action": "Nødvendig handling:",
+    "noAction": "Ingen handling nødvendig.",
+    "documentation": "Relateret dokumentation",
+    "rollback": "Tilbagerulning:",
+    "notProvided": "Denne note indeholder ingen vejledning om tilbagerulning.",
+    "limitations": "Kendte begrænsninger",
+    "noneStated": "Der er ikke angivet begrænsninger i denne note."
+  },
   "costPricing": {
       "unknown_one": "Pris ukendt for {{count}} forbrugshændelse",
       "unknown_other": "Pris ukendt for {{count}} forbrugshændelser",

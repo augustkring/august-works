@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import {
   ANNOUNCEMENT_IMAGE_MAX_BYTES, ANNOUNCEMENT_MANIFEST_MAX_BYTES, ANNOUNCEMENT_ANIMATION_MAX_BYTES,
   announcementManifestSchema, isAnnouncementEligible,
-  type Announcement, type AnnouncementManifest,
+  type Announcement, type AnnouncementManifest, type CustomerChangelog,
 } from "@paperclipai/shared";
 import { guardedRemoteHttpFetch } from "./remote-http-fetch.js";
 import { validateAnnouncementAnimation } from "./announcement-animation.js";
@@ -177,6 +177,28 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
     return { state: "available", items };
   }
 
+  async function changelog(locale: "en" | "da"): Promise<CustomerChangelog> {
+    const empty = { coverage: "configured_publication_window" as const, entries: [] };
+    if (options.enabled !== true || !options.feedUrl?.trim()) return { ...empty, state: "unconfigured" };
+    if (!await ensureLoaded()) return { ...empty, state: "unavailable" };
+    const entries = new Map<string, CustomerChangelog["entries"][number]>();
+    let incomplete = false;
+    for (const item of [manifest?.announcement, ...(manifest?.history ?? [])]) {
+      if (!item || item.kind !== "release" || (item.notice?.affectedCompanyIds?.length || item.notice?.affectedProfiles?.length)) continue;
+      const { expiresAt: _expiresAt, ...historical } = item;
+      if (!isAnnouncementEligible(historical, options.version, now())) continue;
+      if (item.publishedAt && Date.parse(item.publishedAt) > now()) continue;
+      if (!item.releaseNote || !item.publishedAt) { incomplete = true; continue; }
+      const prior = entries.get(item.releaseNote.releaseId);
+      if (!prior || item.releaseNote.locale === locale && prior.releaseNote.locale !== locale) {
+        entries.set(item.releaseNote.releaseId, { id: item.id, title: item.title,
+          description: item.description, publishedAt: item.publishedAt, releaseNote: item.releaseNote });
+      }
+    }
+    return { coverage: "configured_publication_window", state: incomplete ? "incomplete" : "available",
+      entries: [...entries.values()].sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt) || a.id.localeCompare(b.id)) };
+  }
+
   async function asset(id: string, kind: "image" | "animation") {
     const announcement = await current();
     const media = announcement?.[kind];
@@ -214,7 +236,7 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
     finally { if (slot.pending === entry) slot.pending = null; }
   }
 
-  return { current, searchable, image: (id: string) => asset(id, "image"), animation: (id: string) => asset(id, "animation") };
+  return { current, searchable, changelog, image: (id: string) => asset(id, "image"), animation: (id: string) => asset(id, "animation") };
 }
 
 function isOptionalUnscoped(announcement: Announcement, currentTime: number) {

@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { insightExperimentSummarySchema, insightManagementSummarySchema, serviceHealthProjectionSchema } from "@paperclipai/shared";
 import { experimentalApiMetadata } from "./experimental-api-metadata.js";
 import { workflowAuthoringApiCommandSchema } from "@paperclipai/shared";
@@ -179,6 +180,7 @@ import {
   setPreferredCoworkerPreferenceSchema,
   preferredCoworkerPreferenceSchema,
   // Announcements
+  customerChangelogSchema,
   announcementIdSchema,
   announcementSchema,
   dismissAnnouncementSchema,
@@ -6671,6 +6673,19 @@ const announcementResponseHeaders = {
 
 registry.registerPath({
   method: "get",
+  path: "/api/announcements/releases",
+  tags: ["announcements"],
+  summary: "Read curated customer release notes",
+  description: "Configured publication window only. Includes expired release cards, independently of personal announcement dismissals; excludes company-scoped notices. Missing publication configuration or incomplete notes are explicit.",
+  request: { query: z.object({ locale: z.enum(["en", "da"]).default("en") }) },
+  responses: {
+    200: { ...r.ok(customerChangelogSchema), headers: announcementResponseHeaders },
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 500: r.serverError,
+  },
+});
+
+registry.registerPath({
+  method: "get",
   path: "/api/announcements/current",
   tags: ["announcements"],
   summary: "Get the current user's eligible announcement",
@@ -12282,9 +12297,9 @@ export function buildOpenApiDocument(): any {
   return applyDocumentFixups({
     openapi: "3.0.0",
     info: {
-      title: "Paperclip API",
+      title: `${PRODUCT_IDENTITY.productName} API`,
       version: "1.0.0",
-      description: "REST API for the Paperclip AI agent management platform",
+      description: `REST API for the ${PRODUCT_IDENTITY.productName} AI agent management platform`,
     },
     servers: [{ url: "/" }],
     "x-blentera-api-surface-manifest": registry.buildApiSurfaceManifest(),

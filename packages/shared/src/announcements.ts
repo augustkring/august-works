@@ -58,10 +58,26 @@ const noticeAudienceSchema = z.strictObject({
   }
 });
 
+/** Curated customer notes, published by the existing announcement owner. */
+export const customerReleaseNoteSchema = z.strictObject({
+  releaseId: z.string().trim().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/),
+  locale: z.enum(["en", "da"]),
+  changes: z.array(z.string().trim().min(1).max(600)).min(1).max(12),
+  affectedAudience: z.string().trim().min(1).max(600),
+  actionRequired: z.boolean(),
+  requiredAction: z.string().trim().min(1).max(600).nullable(),
+  documentation: z.array(z.strictObject({ label, url: httpsUrl })).min(1).max(8),
+  rollback: z.string().trim().min(1).max(600).nullable(),
+  knownLimitations: z.array(z.string().trim().min(1).max(600)).max(12),
+}).refine(note => note.actionRequired === (note.requiredAction !== null), {
+  message: "A required release action needs its explicit instruction", path: ["requiredAction"],
+});
+
 export const announcementSchema = z.object({
   id: announcementIdSchema,
   /** Optional classification for search/history; legacy feeds remain general announcements. */
   kind: z.enum(["announcement", "release", "deprecation"]).optional(),
+  releaseNote: customerReleaseNoteSchema.optional(),
   /** Action-required metadata is a publisher hint. The server projects it as
    * mandatory only while its canonical owner confirms the current state. */
   noticeCategory: productNoticeCategorySchema.optional(),
@@ -86,6 +102,9 @@ export const announcementSchema = z.object({
 }).strict().refine((value) => !value.animation || Boolean(value.image), {
   message: "An animation requires a static fallback image", path: ["image"],
 }).superRefine((value, context) => {
+  if (value.releaseNote && (value.kind !== "release" || !value.publishedAt)) {
+    context.addIssue({ code: "custom", path: ["releaseNote"], message: "Customer release notes need a published release identity" });
+  }
   if (value.noticeCategory && !value.notice) {
     context.addIssue({ code: "custom", path: ["notice"], message: "Typed notice categories need customer impact and effective date metadata" });
   }
@@ -107,13 +126,31 @@ export const announcementManifestSchema = z.object({
   history: z.array(announcementSchema).max(32).optional(),
 }).strict().superRefine((manifest, context) => {
   const ids = new Set<string>();
+  const releases = new Set<string>();
   for (const item of [manifest.announcement, ...(manifest.history ?? [])]) {
     if (!item) continue;
     if (ids.has(item.id)) context.addIssue({ code: "custom", message: "Announcement IDs must be unique within a manifest", path: ["history"] });
     ids.add(item.id);
+    if (item.releaseNote) {
+      const key = `${item.releaseNote.releaseId}:${item.releaseNote.locale}`;
+      if (releases.has(key)) context.addIssue({ code: "custom", message: "Release and locale must be unique within a manifest", path: ["history"] });
+      releases.add(key);
+    }
   }
 });
 export const dismissAnnouncementSchema = z.object({ companyId: z.string().uuid() }).strict();
+export const customerChangelogSchema = z.strictObject({
+  state: z.enum(["unconfigured", "unavailable", "available", "incomplete"]),
+  coverage: z.literal("configured_publication_window"),
+  entries: z.array(z.strictObject({
+    id: announcementIdSchema,
+    title: z.string().trim().min(1).max(100),
+    description: z.string().trim().min(1).max(400),
+    publishedAt: z.string().datetime({ offset: true }),
+    releaseNote: customerReleaseNoteSchema,
+  })).max(33),
+});
+export type CustomerChangelog = z.infer<typeof customerChangelogSchema>;
 /** Returned only after the matching canonical trust owner confirms this exact
  * current, reviewed acceptance requirement for the requesting company/user. */
 export const actionRequiredNoticeProjectionSchema = z.strictObject({

@@ -38,6 +38,22 @@ describe("announcement routes and durable dismissals", () => {
     expect(response.body).toBeNull();
     expect(response.headers["cache-control"]).toBe("private, no-store");
   });
+  it("keeps customer release history available after optional news dismissal and requires board access", async () => {
+    const release = { ...item, kind: "release", publishedAt: "2026-01-01T00:00:00Z", releaseNote: {
+      releaseId: "v10-test", locale: "en", changes: ["Customer change"], affectedAudience: "Members",
+      actionRequired: false, requiredAction: null, documentation: [{ label: "Help", url: "https://docs.example.test/help" }], rollback: null, knownLimitations: [],
+    } };
+    const server = app("alice", undefined, release);
+    await request(server).get("/api/announcements/current");
+    expect((await request(server).post(`/api/announcements/${item.id}/dismiss`).send({ companyId })).status).toBe(204);
+    expect((await request(server).get("/api/announcements/current")).body).toBeNull();
+    const response = await request(server).get("/api/announcements/releases?locale=da");
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.body.entries[0].releaseNote.locale).toBe("en");
+    expect((await request(server).get("/api/announcements/releases?locale=fr")).status).toBe(400);
+    expect((await request(app("", { type: "none" })).get("/api/announcements/releases")).status).toBe(401);
+  });
   it("fails closed on required-notice projection without a current Human session", async () => {
     const response = await request(app()).get(`/api/companies/${companyId}/notices/action-required`).query({ expectedUserId: "alice" });
     expect(response.status).toBe(403);

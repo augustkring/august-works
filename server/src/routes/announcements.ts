@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { agents, companies, trustDocumentAcceptances, trustDocumentActionReceipts, type Db } from "@paperclipai/db";
-import { ANNOUNCEMENT_ANIMATION_CSP, announcementIdSchema, dismissAnnouncementSchema, trustAcceptanceNoticeListSchema, trustDocumentListQuerySchema } from "@paperclipai/shared";
+import { ANNOUNCEMENT_ANIMATION_CSP, announcementIdSchema, customerChangelogSchema, dismissAnnouncementSchema, trustAcceptanceNoticeListSchema, trustDocumentListQuerySchema } from "@paperclipai/shared";
 import { badRequest, conflict, forbidden, HttpError, notFound } from "../errors.js";
 import { validate } from "../middleware/validate.js";
 import { assertAuthenticated, assertBoard, assertCompanyAccess, hasCompanyAccess } from "./authz.js";
@@ -29,6 +29,10 @@ export function announcementRoutes(db: Db, options: AnnouncementFeedOptions, fee
     const announcement = await feed.current();
     if (announcement) await service.registerPublication(announcement.id);
     res.json(announcement && !await service.isDismissed(req.actor.userId!, announcement.id) ? announcement : null);
+  });
+  router.get("/announcements/releases", async (req, res) => {
+    const locale = z.enum(["en", "da"]).default("en").parse(req.query.locale);
+    res.json(customerChangelogSchema.parse(await feed.changelog(locale)));
   });
   router.get("/companies/:companyId/notices/action-required", async (req, res) => {
     assertAuthenticated(req);

@@ -512,7 +512,7 @@ describe("openapi routes", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.openapi).toBe("3.0.0");
-    expect(res.body.info.title).toBe("Paperclip API");
+    expect(res.body.info.title).toBe("Blentera API");
     expect(res.body.paths["/api/openapi.json"].get.summary).toBe(
       "Get the generated OpenAPI document",
     );

@@ -221,3 +221,39 @@ describe("announcement feed", () => {
   });
 
 });
+
+
+describe("customer changelog", () => {
+  const note = { releaseId: "v10-test", locale: "en", changes: ["A customer-visible change"],
+    affectedAudience: "Organization members", actionRequired: false, requiredAction: null,
+    documentation: [{ label: "Help", url: "https://docs.example.test/help" }], rollback: null, knownLimitations: [] };
+  const release = { ...item, kind: "release", publishedAt: "2026-01-01T00:00:00Z", releaseNote: note };
+  it("retains expired releases, chooses the requested translation and excludes private, future and incompatible notes", async () => {
+    const manifest = { schemaVersion: 1, announcement: { ...release, expiresAt: "2026-01-02T00:00:00Z" }, history: [
+      { ...release, id: "translated", releaseNote: { ...note, locale: "da", changes: ["En kundeændring"] } },
+      { ...release, id: "private", releaseNote: { ...note, releaseId: "private" }, notice: { affectedCompanyIds: ["11111111-1111-4111-8111-111111111111"], effectiveAt: release.publishedAt, customerImpact: "Private" } },
+      { ...release, id: "profile-private", releaseNote: { ...note, releaseId: "profile-private" }, notice: { affectedProfiles: ["local"], effectiveAt: release.publishedAt, customerImpact: "Profile-specific" } },
+      { ...release, id: "future", publishedAt: "2099-01-01T00:00:00Z", releaseNote: { ...note, releaseId: "future" } },
+      { ...release, id: "incompatible", minimumPaperclipVersion: "99.0.0", releaseNote: { ...note, releaseId: "incompatible" } },
+      { ...item, id: "legacy", kind: "release", publishedAt: release.publishedAt },
+    ] };
+    const fetch = vi.fn(async () => new Response(JSON.stringify(manifest), { headers: { "Content-Type": "application/json" } }));
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", now: () => Date.parse("2026-02-01"), fetch });
+    expect(await service.changelog("da")).toEqual({ state: "incomplete", coverage: "configured_publication_window", entries: [
+      { id: "translated", title: item.title, description: item.description, publishedAt: release.publishedAt,
+        releaseNote: { ...note, locale: "da", changes: ["En kundeændring"] } },
+    ] });
+    expect((await service.changelog("en")).entries[0].id).toBe(item.id);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it("reports configuration and fetch failure without inventing release history", async () => {
+    expect((await announcementFeedService({ version: "1.0.0" }).changelog("en")).state).toBe("unconfigured");
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch: async () => { throw new Error("offline"); } });
+    expect(await service.changelog("en")).toMatchObject({ state: "unavailable", entries: [] });
+  });
+  it("rejects duplicate translations, missing action instructions and release notes without a publication date", () => {
+    expect(announcementManifestSchema.safeParse({ schemaVersion: 1, announcement: release, history: [{ ...release, id: "duplicate" }] }).success).toBe(false);
+    expect(announcementManifestSchema.safeParse({ schemaVersion: 1, announcement: { ...release, releaseNote: { ...note, actionRequired: true } } }).success).toBe(false);
+    expect(announcementManifestSchema.safeParse({ schemaVersion: 1, announcement: { ...release, publishedAt: undefined } }).success).toBe(false);
+  });
+});
