@@ -10,6 +10,9 @@ test.use({ trace: "retain-on-failure" });
 // qualified separately by migrated-PG tests. No provider action is sent here.
 for (const locale of ["en", "da"] as const) test(`a customer reviews a pending workflow action in ${locale} without Advanced or replay after a lost reply`, async ({ page, request }) => {
   const original = await json(await request.get("/api/instance/settings/experimental"));
+  const session = await json(await request.get("/api/auth/get-session"));
+  const currentUserId = session.user.id as string;
+  expect(session.session.localImplicit).toBe(false);
   const company = await json(await request.post("/api/companies", { data: { name: `Disposable decision journey ${locale}` } }));
   const runId = randomUUID(), workflowId = randomUUID(), requestId = randomUUID(), approvalId = randomUUID();
   let decisions = 0, checkpointDecisions = 0, checkpointStatus = "pending", failed = false;
@@ -35,18 +38,18 @@ for (const locale of ["en", "da"] as const) test(`a customer reviews a pending w
     await page.route(`**/api/companies/${company.id}/workflow-runs/${runId}/experience?**`, route => route.fulfill({ json: view }));
     await page.route(`**/api/approvals/${approvalId}**`, async route => {
       const req = route.request(), url = new URL(req.url());
-      expect(url.searchParams.get("expectedUserId")).toBe("local-board");
+      expect(url.searchParams.get("expectedUserId")).toBe(currentUserId);
       if (req.method() === "POST") { expect(url.pathname.endsWith("/approve")).toBe(true); expect(req.postDataJSON()).toEqual({ expectedReviewHash: "a".repeat(64) }); checkpointDecisions++; checkpointStatus = "approved"; }
       else expect(req.method()).toBe("GET");
       return route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: { id: approvalId, companyId: company.id,
-        type: "workflow_step_approval", status: checkpointStatus, reviewHash: "a".repeat(64), requestedByAgentId: null, requestedByUserId: "local-board", decisionNote: null,
-        decidedByUserId: checkpointStatus === "approved" ? "local-board" : null, decidedAt: null, createdAt: view.updatedAt, updatedAt: view.updatedAt,
+        type: "workflow_step_approval", status: checkpointStatus, reviewHash: "a".repeat(64), requestedByAgentId: null, requestedByUserId: currentUserId, decisionNote: null,
+        decidedByUserId: checkpointStatus === "approved" ? currentUserId : null, decidedAt: null, createdAt: view.updatedAt, updatedAt: view.updatedAt,
         payload: { workflowNodeId: "human-checkpoint", workflowId, workflowRunId: runId, workflowRevisionId: view.revisionId, summary: "PRIVATE exact checkpoint",
           consequence: "Continue this reviewed revision only", privateKey: "SECRET excluded checkpoint payload" } } });
     });
     await page.route(`**/api/companies/${company.id}/workflow-runs/${runId}/tool-reviews**`, async route => {
       const req = route.request(), url = new URL(req.url());
-      expect(url.searchParams.get("expectedUserId")).toBe("local-board");
+      expect(url.searchParams.get("expectedUserId")).toBe(currentUserId);
       if (req.method() === "POST") {
         expect(url.pathname.endsWith(`/${requestId}/approve`)).toBe(true);
         expect(req.postDataJSON()).toEqual({}); decisions++;
