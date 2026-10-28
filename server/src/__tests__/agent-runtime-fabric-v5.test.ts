@@ -317,7 +317,12 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
     const writeName = available.result.find(tool => tool.risk === "write")!.name;
     await expect(actions.execute(reader.actor, f.home, reader.run.id, { action: "tool.invoke", companyId: f.guest, tool: writeName, parameters: {}, idempotencyKey: "read-scope-write" })).rejects.toMatchObject({ status: 403 });
     await expect(actions.execute(writer.actor, f.home, writer.run.id, { action: "tool.invoke", companyId: f.guest, tool: writeName, parameters: {} })).rejects.toMatchObject({ status: 422 });
+    await db.insert(toolPolicies).values({ companyId: f.guest, name: "Current guest catalog block", policyType: "block", priority: 1,
+      selectors: { catalogEntryId: catalog[1]!.id } });
+    await expect(actions.execute(writer.actor, f.home, writer.run.id, { action: "tool.invoke", companyId: f.guest, tool: writeName,
+      parameters: {}, idempotencyKey: "current-guest-block" })).rejects.toMatchObject({ status: 403 });
     expect(remote).toHaveBeenCalledTimes(1);
+    await db.delete(toolPolicies).where(eq(toolPolicies.companyId, f.guest));
     const command = { action: "tool.invoke" as const, companyId: f.guest, tool: writeName, parameters: {}, idempotencyKey: "guest-write-once" };
     const written = await actions.execute(writer.actor, f.home, writer.run.id, command) as { result: { result: unknown } };
     const replayed = await actions.execute(writer.actor, f.home, writer.run.id, command) as typeof written;
@@ -333,6 +338,12 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
     await expect(actions.execute(writer.actor, f.home, writer.run.id, failedCommand)).rejects.toMatchObject({ status: 403 });
     await db.insert(companyMemberships).values({ companyId: f.guest, principalType: "user", principalId: f.userId, status: "active", membershipRole: "owner" });
     revokeDuringResponse = false;
+    await db.update(toolCatalogEntries).set({ versionHash: randomUUID() }).where(eq(toolCatalogEntries.id, catalog[0]!.id));
+    await expect(actions.execute(writer.actor, f.home, writer.run.id, { action: "tool.invoke", companyId: f.guest,
+      tool: readName, parameters: {}, idempotencyKey: "guest-catalog-drift" })).rejects.toMatchObject({
+      status: 409, message: "Pinned tool catalog changed; reconcile and start a newly admitted execution",
+    });
+    expect(remote).toHaveBeenCalledTimes(4);
     await expect(actions.execute(writer.actor, f.home, writer.run.id, failedCommand)).rejects.toMatchObject({ status: 409 });
     expect(remote).toHaveBeenCalledTimes(4); expect(catalog).toHaveLength(2);
   });
@@ -351,8 +362,6 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
     const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
       status: "running", issueId: task.id, contextSnapshot: { issueId: task.id, projectId: project.id } }).returning();
     await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, task.id));
-    await fabric.prepare({ companyId: f.home, agentId: f.presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task.id, query: task.title });
-
     const [application] = await db.insert(toolApplications).values({ companyId: f.home, applicationKey: "scoped-task-profile", name: "Task profile fixture", type: "mcp_http", status: "active" }).returning();
     const [connection] = await db.insert(toolConnections).values({ companyId: f.home, applicationId: application!.id, name: "Task profile fixture", uid: `fixture/${randomUUID()}`, transport: "mcp_remote", status: "active", enabled: true, healthStatus: "ok", config: { url: "https://task-profile.example.test/mcp" }, transportConfig: { url: "https://task-profile.example.test/mcp" }, credentialRefs: [], credentialSecretRefs: [] }).returning();
     await db.insert(connectionGrants).values({ companyId: f.home, connectionId: connection!.id, kind: "organization", status: "active", isDefault: true, credentialSecretRefs: [] });
@@ -374,6 +383,7 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
     const deniedName = `mcp.${application!.applicationKey}-${connection!.id.replace(/-/g, "").slice(0, 8)}:denied-tool`;
     const [block] = await db.insert(toolPolicies).values({ companyId: f.home, name: "Deny selected tool on current Task", policyType: "block", priority: 1,
       selectors: { issueId: task.id, catalogEntryId: denied!.id } }).returning();
+    await fabric.prepare({ companyId: f.home, agentId: f.presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task.id, query: task.title });
 
     const remote = vi.fn(async (_url, init) => {
       const request = JSON.parse(String(init.body));
@@ -420,14 +430,14 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
       const [application] = await db.insert(toolApplications).values({ companyId: f.home, applicationKey: "role-pack-catalog-fixture", name: "Role Pack catalog fixture", type: "mcp_http", status: "active" }).returning();
       const [connection] = await db.insert(toolConnections).values({ companyId: f.home, applicationId: application!.id, name: "Role Pack catalog fixture", uid: `fixture/${randomUUID()}`, transport: "mcp_remote", status: "active", enabled: true, healthStatus: "ok", config: { url: "https://role-pack.example.test/mcp" }, transportConfig: { url: "https://role-pack.example.test/mcp" }, credentialRefs: [], credentialSecretRefs: [] }).returning();
       await db.insert(connectionGrants).values({ companyId: f.home, connectionId: connection!.id, kind: "organization", status: "active", isDefault: true, credentialSecretRefs: [] });
-      const catalog = await db.insert(toolCatalogEntries).values(["acme_supplier_lookup", "acme_supplier_update"].map((toolName, index) => ({
+      const catalog = await db.insert(toolCatalogEntries).values(["acme_supplier_lookup", "acme_supplier_update", "acme_supplier_export"].map((toolName, index) => ({
         companyId: f.home, applicationId: application!.id, connectionId: connection!.id, entryKind: "tool" as const,
         name: toolName, toolName, title: toolName, description: "Review acme supplier account", inputSchema: { type: "object", additionalProperties: false },
-        annotations: { readOnlyHint: index === 0 }, riskLevel: (index === 0 ? "read" : "write") as "read" | "write",
-        isReadOnly: index === 0, isWrite: index === 1, isDestructive: false, status: "active" as const,
+        annotations: { readOnlyHint: false }, riskLevel: "write" as const,
+        isReadOnly: false, isWrite: true, isDestructive: false, status: "active" as const,
         versionHash: index === 0 ? "a".repeat(64) : "c".repeat(64),
       }))).returning();
-      const [allowed, taskBlocked] = catalog;
+      const [allowed, taskBlocked, undisclosedButAllowed] = catalog;
       const [profile] = await db.insert(toolProfiles).values({ companyId: f.home, profileKey: randomUUID(), name: "Role Pack catalog allow profile", defaultAction: "allow" }).returning();
       await db.insert(toolProfileBindings).values({ companyId: f.home, profileId: profile!.id, targetType: "agent", targetId: f.presence.id });
 
@@ -457,6 +467,45 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
         .toEqual([`tool:${allowed!.id}`]);
       expect(prepared!.manifest.capabilities.find(capability => capability.ref === `tool:${allowed!.id}`)?.versionHash).toBe("a".repeat(64));
       expect(selected.block).toBeDefined();
+      const [discoveredAfterAdmission] = await db.insert(toolCatalogEntries).values({
+        companyId: f.home, applicationId: application!.id, connectionId: connection!.id, entryKind: "tool",
+        name: "acme_supplier_approve", toolName: "acme_supplier_approve", title: "acme_supplier_approve",
+        description: "Review acme supplier account", inputSchema: { type: "object", additionalProperties: false },
+        annotations: { readOnlyHint: false }, riskLevel: "write", isReadOnly: false, isWrite: true,
+        isDestructive: false, status: "active", versionHash: "d".repeat(64),
+      }).returning();
+      const remote = vi.fn(async (_url, init) => {
+        const request = JSON.parse(String(init.body));
+        return Response.json({ jsonrpc: "2.0", id: request.id, result: { content: [{ type: "text", text: "synthetic authorized invocation" }] } });
+      });
+      const gateway = createToolGatewayService(db, { remoteHttpRequest: remote, toolActionSigningSecret: "role-pack-catalog-list-only" });
+      const actions = scopedRuntimeActionService(db, gateway);
+      const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: f.home, agentId: f.presence.id,
+        runId: selected.run.id, onBehalfOfUserId: f.userId };
+      const taskBlockedName = `mcp.role-pack-catalog-fixture-${connection!.id.replace(/-/g, "").slice(0, 8)}:acme-supplier-update`;
+      await expect(actions.execute(actor, f.home, selected.run.id, { action: "tool.invoke", companyId: f.home,
+        tool: taskBlockedName, parameters: {}, idempotencyKey: "invoke-task-blocked-tool" })).rejects.toMatchObject({ status: 403 });
+      const [blockedInvocation] = await db.select().from(toolCallEvents).where(and(
+        eq(toolCallEvents.companyId, f.home), eq(toolCallEvents.issueId, selected.task.id),
+        eq(toolCallEvents.runId, selected.run.id), eq(toolCallEvents.catalogEntryId, taskBlocked!.id),
+      ));
+      expect(blockedInvocation).toMatchObject({ matchedPolicyIds: [selected.block.id], outcome: "denied" });
+      const listed = await actions.execute(actor, f.home, selected.run.id, { action: "tool.list", companyId: f.home }) as { result: { catalogEntryId: string }[] };
+      expect(listed.result.map(tool => tool.catalogEntryId)).toEqual([allowed!.id]);
+      expect(listed.result.some(tool => tool.catalogEntryId === discoveredAfterAdmission!.id)).toBe(false);
+      const newlyVisibleName = `mcp.role-pack-catalog-fixture-${connection!.id.replace(/-/g, "").slice(0, 8)}:acme-supplier-approve`;
+      await expect(actions.execute(actor, f.home, selected.run.id, { action: "tool.invoke", companyId: f.home,
+        tool: newlyVisibleName, parameters: {}, idempotencyKey: "invoke-newly-visible-tool" }))
+        .rejects.toMatchObject({ status: 403, message: "Connected tool is outside the pinned execution manifest" });
+      const undisclosedName = `mcp.role-pack-catalog-fixture-${connection!.id.replace(/-/g, "").slice(0, 8)}:acme-supplier-export`;
+      await expect(actions.execute(actor, f.home, selected.run.id, { action: "tool.invoke", companyId: f.home,
+        tool: undisclosedName, parameters: {}, idempotencyKey: "invoke-not-disclosed" }))
+        .rejects.toMatchObject({ status: 403, message: "Connected tool is outside the pinned execution manifest" });
+      await expect(actions.execute(actor, f.home, selected.run.id, { action: "tool.invoke", companyId: f.home,
+        tool: `mcp.role-pack-catalog-fixture-${connection!.id.replace(/-/g, "").slice(0, 8)}:acme-supplier-lookup`,
+        parameters: {}, idempotencyKey: "invoke-pinned-tool" })).resolves.toMatchObject({ result: expect.any(Object) });
+      expect(remote).toHaveBeenCalledTimes(1);
+      expect(undisclosedButAllowed).toBeDefined();
 
       await makePack("role-pack-task-blocked-tool", taskBlocked!.id);
       const blocked = await makeRun("Review acme supplier account");
@@ -466,6 +515,10 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
 
       await makePack("role-pack-selected-tool-again", allowed!.id);
       await db.update(toolCatalogEntries).set({ versionHash: "b".repeat(64) }).where(eq(toolCatalogEntries.id, allowed!.id));
+      await expect(actions.execute(actor, f.home, selected.run.id, { action: "tool.invoke", companyId: f.home,
+        tool: listed.result[0]!.name, parameters: {}, idempotencyKey: "invoke-drifted-tool" }))
+        .rejects.toMatchObject({ status: 409, message: "Pinned tool catalog changed; reconcile and start a newly admitted execution" });
+      expect(remote).toHaveBeenCalledTimes(1);
       await expect(fabric.prepare(selectedInput)).rejects.toMatchObject({ status: 403, message: "A pinned execution capability is no longer authorized/available" });
     } finally {
       await db.update(instanceSettings).set({ experimental: originalFlags }).where(eq(instanceSettings.singletonKey, "default"));

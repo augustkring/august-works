@@ -4788,21 +4788,43 @@
       "currentAssessment": {
         "bindingClause": "57. `V10-057` deprecation/sunset/migration notice.",
         "sourceOwners": [
-          "packages/shared/src/announcements.ts",
           "packages/shared/src/feature-catalog.ts",
-          "server/src/services/announcement-feed.ts"
+          "packages/shared/src/announcements.ts",
+          "server/src/services/experience/product-notices.ts",
+          "server/src/routes/announcements.ts",
+          "server/src/routes/v9-api-paths.ts",
+          "server/src/routes/openapi.ts",
+          "ui/src/api/product-notices.ts",
+          "ui/src/components/CapabilityLifecycleNotices.tsx",
+          "ui/src/components/AnnouncementWell.tsx"
         ],
-        "implementationFinding": "The feature catalog has lifecycle/deprecation metadata, and the notice contract requires migration/replacement references for deprecation class. There is not yet a customer notice projection from the canonical feature lifecycle catalog, so no deprecation/sunset card is generated automatically.",
+        "implementationFinding": "A read-only company-scoped lifecycle projection now reads the canonical feature catalog and emits informational cards only for deprecated entries with current reviewed dates, owner, replacement, a policy-clean lifecycle record, qualified support level, and a safe docs/help guide slug. It is separate from action-required notices and has no completion, dismissal, or deadline path. Current production catalog facts contain two deprecated compatibility flags but no qualified records: the API reports coverage=unknown, deprecatedCapabilityCount=2, notices=[], and the customer UI shows no permanent coverage warning or lifecycle announcement. No date or replacement is invented. A fully declared fixture exercises the projection and the customer card.",
         "scopedEvidence": [
           {
             "kind": "source_review",
             "paths": [
-              "packages/shared/src/announcements.ts",
               "packages/shared/src/feature-catalog.ts",
-              "server/src/services/announcement-feed.ts"
+              "packages/shared/src/announcements.ts",
+              "server/src/services/experience/product-notices.ts",
+              "server/src/routes/announcements.ts",
+              "server/src/routes/v9-api-paths.ts",
+              "server/src/routes/openapi.ts",
+              "ui/src/api/product-notices.ts",
+              "ui/src/components/CapabilityLifecycleNotices.tsx",
+              "ui/src/components/AnnouncementWell.tsx"
             ],
-            "finding": "The feature catalog has lifecycle/deprecation metadata, and the notice contract requires migration/replacement references for deprecation class. There is not yet a customer notice projection from the canonical feature lifecycle catalog, so no deprecation/sunset card is generated automatically.",
-            "verification": "current dirty-worktree source inspection only; not a test, hosted deployment, external provider fact, or acceptance receipt"
+            "finding": "The current-source snapshot hashes the new schema, projection, route, API, and UI owners. Projection filters use the existing lifecycle policy helper plus qualified support level, reject future review dates and sunset-before-deprecation, and map only `docs/help/<safe-slug>.md` references to PRODUCT_IDENTITY.docsOrigin. Current catalog has no complete deprecated row; unknown coverage is retained in the typed API and no customer message is shown.",
+            "verification": "source pins and syntax receipt: doc/operations/aw-v10-evidence/capability-lifecycle-notices-2026-10-28/r1/source-pins.json, snapshot.log, syntax.log"
+          },
+          {
+            "kind": "test_run",
+            "paths": [
+              "server/src/services/experience/product-notices.test.ts",
+              "ui/src/components/CapabilityLifecycleNotices.test.tsx",
+              "doc/operations/aw-v10-evidence/capability-lifecycle-notices-2026-10-28/r1/vitest.stdout.txt"
+            ],
+            "finding": "The service tests retain the existing trust-notice coverage and verify complete fixture facts, production unknown coverage, support-level rejection, future-review rejection, and sunset ordering. The UI test verifies unknown coverage stays silent and a qualified notice shows a localized date and safe docs.blentera.com guide URL. Two focused suites passed: 10 tests.",
+            "verification": "exact streamed output transcription plus source pins: doc/operations/aw-v10-evidence/capability-lifecycle-notices-2026-10-28/r1/README.md and vitest.stdout.txt"
           }
         ],
         "historicalPinComparison": {
@@ -4810,23 +4832,35 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Project lifecycle notices from the feature catalog with exact sunset and migration/replacement links, preserving the catalog as sole lifecycle owner; test current, future, replaced, and withdrawn behavior.",
+        "remainingWork": "Final qualification remains pending: name an accountable lifecycle owner and populate current, reviewed deprecation/sunset (where applicable), replacement, supported support level, and safe migration-guide facts for each customer capability before any customer card can appear; then qualify the rendered EN/DA company journey on the final candidate. The current two deprecated compatibility flags are not customer lifecycle announcements.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
             "path": "packages/shared/src/announcements.ts",
-            "observedWorktreeSha256": "b4a671ceb3946e23f37ffb846b94e15cb3eda356d3172febf18e05569d13d0bb"
+            "observedWorktreeSha256": "d82062cd1a9f8aaa4bac186794af8ec6c8ae52e04be34e8db359c14150fd5119"
           },
           {
             "path": "packages/shared/src/feature-catalog.ts",
-            "observedWorktreeSha256": "e885bcf6a536eb7e975958177d8f90b3cfd19b94a5370fe1fc90ab771c018c48"
+            "observedWorktreeSha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04"
           },
           {
-            "path": "server/src/services/announcement-feed.ts",
-            "observedWorktreeSha256": "e1121342392e154272f7dc6f8ab80cb3947af522805f21eec1f2074ab15a0428"
+            "path": "server/src/services/experience/product-notices.ts",
+            "observedWorktreeSha256": "5f4d32d54289c70e45dc03ad6d5ab92fad94884d8cb6b87c53a6985c01846a5a"
+          },
+          {
+            "path": "server/src/routes/announcements.ts",
+            "observedWorktreeSha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767"
+          },
+          {
+            "path": "ui/src/components/CapabilityLifecycleNotices.tsx",
+            "observedWorktreeSha256": "06216b34e2a77fdec0a186dc0bf2c44c5b8e80e98c876aafcce3db1dc631dc4f"
+          },
+          {
+            "path": "ui/src/components/AnnouncementWell.tsx",
+            "observedWorktreeSha256": "b3bd0f0ca7b9da6fe28bcbf29fcd30fe544f4064bc144c6f479e1e1f2362885f"
           }
         ],
-        "reviewBasis": "Current source owner inspection at recorded repository HEAD plus dirty worktree. Runtime evidence is separately scoped to the exact linked captured attempt. Source observations do not establish full V10 behavior, hosted deployment, customer/provider operation, or release acceptance."
+        "reviewBasis": "Current dirty-worktree source owners and a current-source test snapshot are recorded in the linked receipt. This confirms conditional software projection behavior only. No production catalog lifecycle fact, hosted deployment, customer/provider fact, actual deprecation date, or release qualification is asserted."
       },
       "implementationStatus": "partial_implementation"
     },
@@ -9572,27 +9606,55 @@
       "id": "V10-128",
       "sourceLine": 6947,
       "work": "progressive tool-catalog resolution by identity/task/Role Pack/policy.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "128. `V10-128` progressive tool-catalog resolution by identity/task/Role Pack/policy.",
         "sourceOwners": [
+          "server/src/services/agent-runtime-fabric.ts",
+          "server/src/services/capability-resolver.ts",
+          "server/src/services/workflows/workflow-capability-resolver.ts",
+          "server/src/services/scoped-runtime-actions.ts",
           "server/src/services/tool-gateway.ts",
           "server/src/services/agent-native-operation-manifest.ts",
           "server/src/services/platform-skill-admission.ts"
         ],
-        "implementationFinding": "Tool Gateway builds the current resolved catalog from registered first-party operations, profile/feature gates, policy and admission. The manifest is not yet a demonstrated progressive graph keyed by exact identity, task, Role Pack, policy and current capability with measured minimal exposure and invalidation.",
+        "implementationFinding": "Runtime preparation resolves task-relevant capabilities through current identity visibility and tool policy, selects exact Role Pack `tool:<catalogEntryUUID>` entries by UUID, and deterministically limits no-match fallback. Each explicitly claimed delegated scope resolves a bounded task-purpose tool subset under its local identity/company and pins only UUIDs rechecked against that company's active catalog. Scoped tool.list and invoke require a matching execution-manifest pin and current catalog SHA; normal current policy BLOCK is evaluated before the manifest guard, and late transport checks preserve material drift as a conflict. The focused PostgreSQL integration passed for both primary Role Pack and delegated guest paths. Broader full-gate, hosted release, and representative Human acceptance remain unqualified.",
         "scopedEvidence": [
           {
             "kind": "source_review",
             "paths": [
+              "server/src/services/agent-runtime-fabric.ts",
+              "server/src/services/capability-resolver.ts",
+              "server/src/services/workflows/workflow-capability-resolver.ts",
+              "server/src/services/scoped-runtime-actions.ts",
               "server/src/services/tool-gateway.ts",
               "server/src/services/agent-native-operation-manifest.ts",
               "server/src/services/platform-skill-admission.ts"
             ],
-            "finding": "Tool Gateway builds the current resolved catalog from registered first-party operations, profile/feature gates, policy and admission. The manifest is not yet a demonstrated progressive graph keyed by exact identity, task, Role Pack, policy and current capability with measured minimal exposure and invalidation.",
-            "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+            "finding": "Current source implements exact Role Pack tool UUID selection, current identity/task/policy filtering, bounded delegated-company tool pins, manifest-constrained list/invoke and catalog SHA drift checks.",
+            "verification": "dirty-worktree source review plus focused unit PASS; current PostgreSQL integration attempt is archived but failed during required Platform Skill admission before reaching the Role Pack assertions"
+          },
+          {
+            "kind": "qualification_attempt",
+            "paths": [
+              "doc/operations/aw-v10-evidence/role-pack-tool-selection-2026-10-28/r1/qualification.md",
+              "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+              "server/src/services/capability-resolver.test.ts"
+            ],
+            "finding": "Focused capability resolver tests pass (2/2). The recorded PostgreSQL run failed before fixture setup because the required Platform Skill release's operation-manifest and tool-catalog hashes did not match current contracts; therefore the current end-to-end Role Pack, guest pin, BLOCK, revocation, list/invoke and SHA-drift assertions are not yet qualified.",
+            "verification": "Exact commands and actual output transcription are recorded in the linked qualification.md; no raw log is claimed where the runner streamed output only"
+          },
+          {
+            "kind": "focused_postgres_qualification",
+            "paths": [
+              "doc/operations/aw-v10-evidence/role-pack-tool-selection-2026-10-28/r1/qualification.md",
+              "doc/operations/aw-v10-evidence/role-pack-tool-selection-2026-10-28/r1/source-pins.json",
+              "server/src/__tests__/agent-runtime-fabric-v5.test.ts"
+            ],
+            "finding": "Two selected PostgreSQL tests passed: exact Role Pack selection, current Task BLOCK before manifest checks, no disclosure or invocation of a catalog entry added after admission despite an allow profile, pinned invocation, blocked required capability, primary SHA drift/resume invalidation, bounded delegated guest discovery/invocation, guest BLOCK, revoked result disclosure, and guest SHA drift with no dispatch.",
+            "verification": "Actual output transcription, exact command, current source pins, runtime, and fixture details are in qualification.md and source-pins.json; 2 selected tests passed and 6 tests were skipped by the filter"
           }
         ],
         "historicalPinComparison": {
@@ -9600,20 +9662,44 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Add exact identity/task/Role Pack capability resolution receipts, prove excluded operations are absent and server-denied, and revalidate after task, policy, role, skill or grant changes.",
+        "remainingWork": "Run the existing compiler gate and current final unchanged-head workspace acceptance, then qualify hosted release and representative Human journey evidence. The focused PostgreSQL tests establish the selected primary/delegated runtime behaviors only. No hosted/provider or Human acceptance is claimed.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
+            "path": "server/src/services/agent-runtime-fabric.ts",
+            "observedWorktreeSha256": "2da600741aae49e0381b1b4b36abb5525599df169778f4f183ecaa02f406faef"
+          },
+          {
+            "path": "server/src/services/capability-resolver.ts",
+            "observedWorktreeSha256": "014ccda5e9ab9a56e77cc63c2302af0be8f852350c93e35251d2512b0c027ec1"
+          },
+          {
+            "path": "server/src/services/workflows/workflow-capability-resolver.ts",
+            "observedWorktreeSha256": "725ced7faa550f754cc828d53fb4e67d22624d0c5efa8095a79bef3186f7936c"
+          },
+          {
+            "path": "server/src/services/scoped-runtime-actions.ts",
+            "observedWorktreeSha256": "6f7f9ae6eae9a47ee4d0cf1328c780bbb35ba29276301935a4ca0c3c45b91616"
+          },
+          {
             "path": "server/src/services/tool-gateway.ts",
-            "observedWorktreeSha256": "edc8ee1efc39771f2d1df5b19294daf2150802f19bdef8dee6d3ac2c0cfffa2d"
+            "observedWorktreeSha256": "42ff20943120f7033354b7ccfdee841e4d0d18cf476d2b0dc248328781f4f180"
           },
           {
             "path": "server/src/services/agent-native-operation-manifest.ts",
-            "observedWorktreeSha256": "db036b733a5e76ed2b19bc1fbdb48d2b8345401f2b2b54d2e75cfaf2068ae40a"
+            "observedWorktreeSha256": "8bfc90d76744eebd938c7f90348495b641119ba056b6beb1e78d6008098b59cc"
           },
           {
             "path": "server/src/services/platform-skill-admission.ts",
-            "observedWorktreeSha256": "fe736b7aeef9dea7bf090e7b74eeaa6498d8719e6a810efc38dbec4b4ef12c24"
+            "observedWorktreeSha256": "7ec9732ddaa461401f3213d8d72e24a0433de92d0e966d487d27bbfd04623db8"
+          },
+          {
+            "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+            "observedWorktreeSha256": "aa7d101850d7d64206595fff0040187c9ed78b2d1220c4b0b2379bc44d3d5f76"
+          },
+          {
+            "path": "server/src/services/capability-resolver.test.ts",
+            "observedWorktreeSha256": "aad4ac76ab91bfabf469a8199b312c73a8b41336c05aea7d347c90e9371f089b"
           }
         ],
         "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."

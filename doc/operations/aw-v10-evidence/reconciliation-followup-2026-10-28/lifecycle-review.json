@@ -1,0 +1,1949 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-10-28",
+  "sourceRegister": "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+  "bindingBrief": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md; §§39.1/40 catalogue definitions for V10-101..120 and final-revision table for V10-149..168",
+  "scope": [
+    "V10-101..120",
+    "V10-149..168"
+  ],
+  "method": "Re-read the binding catalogue clauses and each existing currentAssessment; inspected the named current source owners for the asserted behavior and opened retained README/checkpoint/receipt artifacts for scoped outcomes. The JSON preserves existing owner lists and adds a small current SHA-256 identity sample. Older receipts are deliberately not upgraded to current-source or release proof.",
+  "items": [
+    {
+      "id": "V10-101",
+      "bindingClause": "101. `V10-101` chat-channel policy/adapter extraction as V9 touches it.",
+      "classification": "unqualified_no_specific_software_defect_found",
+      "currentSourceFinding": "The binding clause is deliberately scoped to adapter extraction “as V9 touches it.” `chat-provider-lifecycle.ts` centralizes lifecycle event effects while parsing provider-specific Slack, GitHub, Teams, Discord, Telegram and other shapes. Provider-specific parsing is expected at this seam; no faulty caller, missing guard, or concrete V9-touched lifecycle behavior was identified in the reviewed files. The earlier demand for a uniform provider-neutral adapter across existing providers overstates the clause.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/routes/chat-channels.ts",
+        "server/src/services/chat-channels.ts",
+        "server/src/services/chat-provider-lifecycle.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/routes/chat-channels.ts",
+          "exists": true,
+          "currentSha256": "48610de76e75af45e2b31725bdee3b72900fb7cbf4e33c3d8ff5feede2805500"
+        },
+        {
+          "path": "server/src/services/chat-channels.ts",
+          "exists": true,
+          "currentSha256": "f167ce1ed44dd346e6d6b8d70e43595c45d61af985f8ff2929319e8b9e031bf8"
+        },
+        {
+          "path": "server/src/services/chat-provider-lifecycle.ts",
+          "exists": true,
+          "currentSha256": "6baa60b8117162912531e9ac1ee07be6336d04188963f12551e7b0568674816e"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/chat-channel-publication-authorization-2026-10-26/README.md",
+        "The chat publication receipt proves selected authorization changes only; it neither proves nor disproves an abstract adapter refactor."
+      ],
+      "qualificationBoundary": "Retain as an incremental maintainability review when a concrete V9 change touches a provider. Only extract a shared operation/policy contract if that change demonstrates duplicated or inconsistent behavior.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-102",
+      "bindingClause": "102. `V10-102` heartbeat/tool-access/tool-gateway seam review.",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Heartbeat, connector authorization and Tool Gateway remain distinct owners. The current Tool Gateway source imports the operation manifest/hash and current Skill/Gateway admission owners, so the stale claim of no shared contract is too broad. The remaining question is complete path-by-path proof that each heartbeat-originated tool call uses those current checks and invalidation boundaries.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/heartbeat.ts",
+        "server/src/services/tool-access.ts",
+        "server/src/services/tool-gateway.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/heartbeat.ts",
+          "exists": true,
+          "currentSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612"
+        },
+        {
+          "path": "server/src/services/tool-access.ts",
+          "exists": true,
+          "currentSha256": "48f91d7dea0ab177bfd34705ed4d8e08eb980d820bb20e7df50152c71f452f0d"
+        },
+        {
+          "path": "server/src/services/tool-gateway.ts",
+          "exists": true,
+          "currentSha256": "6d9f06a18321233e8672acc87f489ee4de2b9afb17546b1f5163ea47edfea552"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "No software gap is confirmed by this source review. Complete the path-to-execution seam matrix and add only the regression(s) for a concrete uncovered path."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/agent-platform-boundary-2026-10-28/r2/README.md"
+      ],
+      "qualificationBoundary": "Inventory each heartbeat-to-tool path and prove current principal, grant, policy, operation manifest, cancellation, retry, and stale-result checks at the original execution owner.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-103",
+      "bindingClause": "103. `V10-103` onboarding/Agent/Inbox legacy convergence completion.",
+      "classification": "unqualified_no_specific_software_defect_found",
+      "currentSourceFinding": "The onboarding seed route documents transactional application and idempotent retry; `saas/onboarding.ts` serializes runs and controls staged first-agent/task creation. Inbox policy and dismissal have separate canonical owners. The review found no specific legacy route/caller that bypasses a canonical owner or a customer behavior regression; the prior “add a route/UI migration map” is inventory work, not proof of a missing implementation.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/routes/onboarding-seed.ts",
+        "server/src/services/saas/onboarding.ts",
+        "server/src/routes/inbox-agent-policy.ts",
+        "server/src/services/inbox-dismissals.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/routes/onboarding-seed.ts",
+          "exists": true,
+          "currentSha256": "4e2acc3ab4907e29599c3f1e19668e41167c503109930e8b0db0bf4a793ca21d"
+        },
+        {
+          "path": "server/src/services/saas/onboarding.ts",
+          "exists": true,
+          "currentSha256": "f29f6b9226e5bd22ce63db8bbe27a5e219294d7947447bd4abb2845b257a9911"
+        },
+        {
+          "path": "server/src/routes/inbox-agent-policy.ts",
+          "exists": true,
+          "currentSha256": "046cac4288a37355c0c5b058591a96ab7eb6975eed4622f69b75e5760a435837"
+        },
+        {
+          "path": "server/src/services/inbox-dismissals.ts",
+          "exists": true,
+          "currentSha256": "e9c2ed1932ff99491d838f8ffa1e14c7475ac73b21ebe732563cb12f09d8b95b"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "Current focused onboarding and inbox receipts were not found in this matrix; source inspection alone does not establish a completed convergence drill."
+      ],
+      "qualificationBoundary": "Keep open for a route/UI inventory and scoped acceptance. Do not remove compatibility paths or add a convergence layer until a specific duplicate or bypassing caller is named.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-104",
+      "bindingClause": "104. `V10-104` module-boundary regression expansion.",
+      "classification": "implemented_unqualified_no_specific_software_defect_found",
+      "currentSourceFinding": "The source includes `scripts/check-module-boundaries.mjs` with boundary regression tests and a package command, plus the V10 exact mounted-UI/API-operation inventory checker (`scripts/check-aw-v10-operation-coverage.mjs`) with fail-closed tests wired into `.github/workflows/aw-v9-coverage.yml`. This covers the concrete gate previously claimed absent. The review found no failing import, mounted call, or uncovered UI-only action to justify another manifest or gate.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "scripts/check-module-boundaries.mjs",
+        "scripts/check-module-boundaries.test.mjs",
+        "scripts/check-aw-v10-operation-coverage.mjs",
+        "scripts/aw-v10-operation-coverage.mjs",
+        "scripts/check-aw-v10-operation-coverage.test.mjs",
+        ".github/workflows/aw-v9-coverage.yml"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "scripts/check-module-boundaries.mjs",
+          "exists": true,
+          "currentSha256": "08014b58d6158a0374f25a20ff689edb3678a3743971a1bc9d3e89d03e1f9e05"
+        },
+        {
+          "path": "scripts/check-module-boundaries.test.mjs",
+          "exists": true,
+          "currentSha256": "0c59c40365284d3d80ef5900b91b778d41281d1cbef443361a171f830caa9f58"
+        },
+        {
+          "path": "scripts/check-aw-v10-operation-coverage.mjs",
+          "exists": true,
+          "currentSha256": "ab86888bda39eb356b097d34204654396336a01f85705b59aa3748f920ffc189"
+        },
+        {
+          "path": "scripts/aw-v10-operation-coverage.mjs",
+          "exists": true,
+          "currentSha256": "42b8cb297994d112ce9be6ec66da6f4086b7f44e6c2c0e0b855008426c5860c9"
+        },
+        {
+          "path": "scripts/check-aw-v10-operation-coverage.test.mjs",
+          "exists": true,
+          "currentSha256": "79d2b7faa5c9be968dfef42964e3f0fe59b1753662662c4f5ce56d5cb540650e"
+        },
+        {
+          "path": ".github/workflows/aw-v9-coverage.yml",
+          "exists": true,
+          "currentSha256": "b4c2ef6f027d75eafd06c4aa310a8afe0c6515a154ac72f0aee02599afe4eafc"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/agent-platform-boundary-2026-10-28/r1/README.md",
+        "The current lane and existing owner code are present; retained agent-platform receipts are scoped component tests, not a full V10 build."
+      ],
+      "qualificationBoundary": "Retain the existing CI lanes and add a check only when a reproduced boundary violation escapes them. Module-layer coverage is scoped to declared server modules; this source review does not claim universal architecture conformance.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-105",
+      "bindingClause": "105. `V10-105` remove dead customer-facing Paperclip/legacy code after migration.",
+      "classification": "partially_implemented",
+      "currentSourceFinding": "Central ProductIdentity and paired experience dictionaries exist. The actual customer identity gate covers UI source/message catalogs only and records 29 compatibility literals with reasons; it does not audit the full server/CLI/static/history surface.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "packages/shared/src/product-identity.ts",
+        "ui/src/i18n/experience/en.json",
+        "ui/src/i18n/experience/da.json",
+        "doc/operations/blentera-outbound-processors.md"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "packages/shared/src/product-identity.ts",
+          "exists": true,
+          "currentSha256": "525db6a5605e5b3e8ceb2d19c6206a0612ece2b5c1b09d58a794456b6b8ebdb0"
+        },
+        {
+          "path": "ui/src/i18n/experience/en.json",
+          "exists": true,
+          "currentSha256": "250a3d13856c9e2377a0e57b575605b4987a8ddd47523325a324a610360b1d53"
+        },
+        {
+          "path": "ui/src/i18n/experience/da.json",
+          "exists": true,
+          "currentSha256": "14e29d79604f17df1c3eaab6b10e6ec9962080f0d2cf2e401b0d55c785122c01"
+        },
+        {
+          "path": "doc/operations/blentera-outbound-processors.md",
+          "exists": true,
+          "currentSha256": "668d50b1d7e598b116de08228e570f19f7b8556feb73e466b84fe7844b719a88"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Finish a full public-surface old-name/URL/config inventory and remove only dead surfaces after compatibility migration receipts."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/customer-identity-2026-10-27/r1/README.md"
+      ],
+      "qualificationBoundary": "Finish the customer-visible old-name/URL/config/telemetry inventory, distinguish supported compatibility from dead content, and remove only after migration plus route/auth behavior is verified.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-106",
+      "bindingClause": "106. `V10-106` support escalation + support-session E2E.",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Durable support cases, delivery leases and a disabled-by-default HTTP relay are implemented and have local/fake-transport tests. The retained gateway receipt explicitly says no external provider or hosted escalation qualification.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/routes/customer-support.ts",
+        "server/src/services/experience/support-cases.ts",
+        "server/src/services/experience/support-case-delivery.ts",
+        "server/src/services/experience/support-case-http-gateway.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/routes/customer-support.ts",
+          "exists": true,
+          "currentSha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856"
+        },
+        {
+          "path": "server/src/services/experience/support-cases.ts",
+          "exists": true,
+          "currentSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9"
+        },
+        {
+          "path": "server/src/services/experience/support-case-delivery.ts",
+          "exists": true,
+          "currentSha256": "56b422fc04257950bd7217feb902388aa10b7879d1a286e039d3bca0587cf97e"
+        },
+        {
+          "path": "server/src/services/experience/support-case-http-gateway.ts",
+          "exists": true,
+          "currentSha256": "804d1bc6376d2f4267b55eb4a2397e03845d8a70bfc879da44136bf3ffb9b547"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Qualify a real staffed recipient/provider, retry and unknown-outcome reconciliation, operator handoff, and end-to-end customer-to-Human session."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/checkpoint.json",
+        "doc/operations/aw-v10-evidence/support-outbound-gateway-2026-10-25/receipts.json"
+      ],
+      "qualificationBoundary": "Complete retry/unknown-outcome and operator handoff contracts; record real staffed recipient/provider and customer-session evidence separately from the source-backed case API.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-107",
+      "bindingClause": "107. `V10-107` public incident + in-app status + recovery E2E.",
+      "classification": "software_missing",
+      "currentSourceFinding": "The source owner is a read-only public Statuspage projection with unavailable/expiry behavior. It does not author incidents, map affected companies, notify subscribers, or complete recovery.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/routes/service-health.ts",
+        "server/src/services/experience/service-health.ts",
+        "packages/shared/src/service-health.ts",
+        "server/src/__tests__/service-health-routes.test.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/routes/service-health.ts",
+          "exists": true,
+          "currentSha256": "bdf5a7eef496817669c1f21a67637636534d3eef548f44676a0f9c91b982cf82"
+        },
+        {
+          "path": "server/src/services/experience/service-health.ts",
+          "exists": true,
+          "currentSha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+        },
+        {
+          "path": "packages/shared/src/service-health.ts",
+          "exists": true,
+          "currentSha256": "7973fba774410d46126abe2aea133ecb4d91d56c6f87634dd7e233733a3b0e98"
+        },
+        {
+          "path": "server/src/__tests__/service-health-routes.test.ts",
+          "exists": true,
+          "currentSha256": "a34bffdd16907d9bc6850ecb2f25c684b04620aa4cc1e9b33d411ae1cecce9cf"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Implement status-component/customer targeting, audited incident and maintenance publication, subscriber delivery and recovery/postmortem handoff on canonical status owners."
+      ],
+      "retainedReceiptsReviewed": [],
+      "qualificationBoundary": "Keep the read-only public adapter separate from incident authoring, tenant-impact projection, notifications, and recovery/runbook qualification; close only with their original owners and provider evidence.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-108",
+      "bindingClause": "108. `V10-108` model retirement drill.",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Model lifecycle owner code supports explicit profile facts, rejects retired selections, and uses Human-reviewed single-Agent migration/rollback. Retained current-fixture tests cover selected current-authority regressions only; they do not execute a full tenant/caller retirement drill.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/orchestration/worker-model-profiles.ts",
+        "server/src/services/adapter-models-env.ts",
+        "server/src/__tests__/adapter-models.test.ts",
+        "packages/shared/src/model-broker.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/orchestration/worker-model-profiles.ts",
+          "exists": true,
+          "currentSha256": "f5ab82dd2055a21e13c9f5151927846a88ed47fa7c79e1570d752bb678c3289d"
+        },
+        {
+          "path": "server/src/services/adapter-models-env.ts",
+          "exists": true,
+          "currentSha256": "2eddf199b1b3dfb0d3889b4715d07460b5d024dbf0b58554d3a3fc3743cfae5a"
+        },
+        {
+          "path": "server/src/__tests__/adapter-models.test.ts",
+          "exists": true,
+          "currentSha256": "654d6b7d0535ba1a002b593531b2ace01a0e9071d5092184e4d17f98e199dc7f"
+        },
+        {
+          "path": "packages/shared/src/model-broker.ts",
+          "exists": true,
+          "currentSha256": "b70407f288a41e4614e0d55093be7a2cb12e1ab8ebc172459f942d6eea29a012"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Run the full saved-consumer/provider dispatch retirement, safe fallback, cost and rollback drill on a pinned current candidate; add software only for uncovered consumer classes found by that inventory."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/model-lifecycle-2026-10-28/README.md",
+        "doc/operations/aw-v10-evidence/model-offboarding-current-fixtures-2026-10-28/README.md"
+      ],
+      "qualificationBoundary": "Add an owner-driven retirement path for saved profiles and verify impacted tenant/caller inventories, blocked dispatch, safe fallback, cost accounting, and rollback on actual model call paths.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-109",
+      "bindingClause": "109. `V10-109` connector token/subscription expiry + missed-event drill.",
+      "classification": "partially_implemented",
+      "currentSourceFinding": "Connection lifecycle projection and Slack OAuth/retry owners exist. The 13-case current recovery receipt is bounded; it explicitly leaves absent expiry/deprecation/sync facts unreported and does not qualify subscription expiry or missed-event repair across providers.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/chat-provider-lifecycle.ts",
+        "server/src/services/connectors/slack-retry.ts",
+        "server/src/services/connectors/slack-search-oauth.ts",
+        "server/src/services/chat-provider-inventory.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/chat-provider-lifecycle.ts",
+          "exists": true,
+          "currentSha256": "6baa60b8117162912531e9ac1ee07be6336d04188963f12551e7b0568674816e"
+        },
+        {
+          "path": "server/src/services/connectors/slack-retry.ts",
+          "exists": true,
+          "currentSha256": "f6a64b678971b5083bad2fc9ef18deb5ca1cc86a8e0fd8c8a6cabfd50de6f607"
+        },
+        {
+          "path": "server/src/services/connectors/slack-search-oauth.ts",
+          "exists": true,
+          "currentSha256": "71c7253097029aeff277a4b21f1168b38853a4904fe7d648c1108cdcac445b4e"
+        },
+        {
+          "path": "server/src/services/chat-provider-inventory.ts",
+          "exists": true,
+          "currentSha256": "d85538b6ef8c70e1bf3398c0325d26ea8bc54deaf7a7314a6a485d74d8643af0"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Close provider-by-provider subscription expiry, delta/full reconciliation, and duplicate/late/revoked event recovery for each enabled consumer."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/connector-lifecycle-2026-10-28/README.md"
+      ],
+      "qualificationBoundary": "Enumerate expiry and subscription sources by provider; prove missed, duplicate, late, and revoked events reconcile without restoring credentials or silently leaving stale delivery active.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-110",
+      "bindingClause": "110. `V10-110` user offboarding/orphan/coverage drill.",
+      "classification": "unqualified_no_specific_software_defect_found",
+      "currentSourceFinding": "The responsibility projection explicitly detects active/paused routines whose responsible Human is absent or inactive, returns an authorized manager-only action, and its PostgreSQL test verifies visibility and disappearance after assignment/revocation. Company offboarding separately refuses deletion while a shared Agent remains outside its home company. These are concrete scoped controls. No specific orphan object with an expected-but-missing caller/guard was proven by the reviewed receipt.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/saas/offboarding.ts",
+        "server/src/services/experience/routine-responsibility-attention.ts",
+        "server/src/__tests__/routine-responsibility-attention.integration.test.ts",
+        "server/src/services/agent-runtime-owner-assignments.ts",
+        "server/src/services/authorization.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/saas/offboarding.ts",
+          "exists": true,
+          "currentSha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b"
+        },
+        {
+          "path": "server/src/services/experience/routine-responsibility-attention.ts",
+          "exists": true,
+          "currentSha256": "94249bed80769a4c1486cfa493574d550c5a359c4e35100b0cb16a81049f42b3"
+        },
+        {
+          "path": "server/src/__tests__/routine-responsibility-attention.integration.test.ts",
+          "exists": true,
+          "currentSha256": "fec812ab1ad3cd0306295dc3f3527df37c0100743c665e10ae2ba018e5f87ee5"
+        },
+        {
+          "path": "server/src/services/agent-runtime-owner-assignments.ts",
+          "exists": true,
+          "currentSha256": "e045e3d8b82bac60d7f779b400972fb4c044a101fd167585fdb8d202035e8f95"
+        },
+        {
+          "path": "server/src/services/authorization.ts",
+          "exists": true,
+          "currentSha256": "2f0ba90b062583d9f1f77052e86cd84345bc6412414062bdbfc9aa3f51ad41c7"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/continuity-security-2026-10-28/README.md",
+        "`routine-responsibility-attention.integration.test.ts` is current source coverage for routine ownership attention; `continuity-security-2026-10-28/README.md` is scoped owner/route evidence, not an all-object orphan drill."
+      ],
+      "qualificationBoundary": "The register item names an offboarding/orphan/coverage drill. Broader coverage across all owner-bearing object types, transfers, and delayed jobs remains unqualified until a defined object inventory identifies a concrete uncovered path.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-111",
+      "bindingClause": "111. `V10-111` process-kill durable import/operation drill.",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Durable Company Import process recovery now has an exact current-source r5 PostgreSQL route test: child death before receipt, original succeeded receipt after worker death during settlement, and Human recheck before subsequent writes all passed 3/3. This covers the named import path, not every accepted-operation producer or crash boundary.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/routes/company-import-paths.ts",
+        "server/src/services/company-import-jobs.ts",
+        "server/src/services/native-runtime/native-run-finalizer.ts",
+        "server/src/__tests__/scheduled-work-server-restart.integration.test.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/routes/company-import-paths.ts",
+          "exists": true,
+          "currentSha256": "91f11b27a570d9c826e7d145c186847ee96fbe759a0e044f7090e3047eda658e"
+        },
+        {
+          "path": "server/src/services/company-import-jobs.ts",
+          "exists": true,
+          "currentSha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-run-finalizer.ts",
+          "exists": true,
+          "currentSha256": "78ede5d9248a6af1554dfe010b1075722ffaf3950834bd13a878791e5c66b73b"
+        },
+        {
+          "path": "server/src/__tests__/scheduled-work-server-restart.integration.test.ts",
+          "exists": true,
+          "currentSha256": "ad1e9279436897e9f293f64e7afc01681927443ceb10d266e99e897cf24e7394"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Extend exact receipt/replay crash tests to remaining accepted-operation producers and unknown provider outcomes; preserve no-duplicate and no-false-success assertions."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/test.log",
+        "doc/operations/aw-v10-evidence/company-import-route-crash-2026-10-28/r5/test.exit"
+      ],
+      "qualificationBoundary": "Run owner-specific process termination after commit/dispatch/unknown provider outcomes and verify replay returns the original receipt, with no duplicate effect, cross-company leakage, or false completion.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-112",
+      "bindingClause": "112. `V10-112` noisy-neighbor / denial-of-wallet drill.",
+      "classification": "conditional_unqualified_no_specific_software_defect_found",
+      "currentSourceFinding": "The budget owner stores company/Agent/project policies and computes hard-stop state from persisted cost events and model reservations; tests include budget enforcement and source-binding regressions. The operator model-cost receipt explicitly leaves complete cost attribution/shared-account allocation and real runtime qualification unknown. No tenant/fleet race or process-local bypass was reproduced, so “shared multi-process limit if enforcement is process-local” remains conditional rather than a code defect.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/budgets.ts",
+        "server/src/services/quota-windows.ts",
+        "server/src/services/context/context-budget.ts",
+        "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/budgets.ts",
+          "exists": true,
+          "currentSha256": "34574e4024d270f10c584339fd28e2156af7cf23f576975b99b512a8877e6153"
+        },
+        {
+          "path": "server/src/services/quota-windows.ts",
+          "exists": true,
+          "currentSha256": "41bc0481b1ae5d010045c51a502a5781949354298fe48e3e3ea5a8a7c14e7e0f"
+        },
+        {
+          "path": "server/src/services/context/context-budget.ts",
+          "exists": true,
+          "currentSha256": "1abbd871cefe55a65932fb9fef845959543b42cf15b78c37644cea5361b2cb7b"
+        },
+        {
+          "path": "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts",
+          "exists": true,
+          "currentSha256": "60ef184146c6ca40d1de0f05d5446e6c9daaa54ec902fbc6cda98c03cebf9302"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/operator-model-cost-2026-10-28/README.md",
+        "`operator-model-cost-2026-10-28/README.md` records current bounded software checks and explicit unknowns; it does not claim fleet fairness."
+      ],
+      "qualificationBoundary": "Run the noisy-neighbor/denial-of-wallet drill against the supported topology and cost model. File a software gap only if a specific concurrent admission path bypasses a persisted policy or exceeds a bounded limit.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-113",
+      "bindingClause": "113. `V10-113` Trust Center/procurement evidence audit.",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Trust registry/routes enforce current source, visibility, exact content and immutable receipts; r2 registry and r4 selected route tests are actual scoped software evidence. Legal correctness, independent document-owner confirmation and procurement pack remain non-source gates.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/routes/trust-documents.ts",
+        "server/src/services/trust-documents.ts",
+        "doc/operations/v10-trust-document-registry.md",
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/routes/trust-documents.ts",
+          "exists": true,
+          "currentSha256": "49d3fb08619000446da59dd0a44666f1c0deef0433501267610eb5f57e3ee3eb"
+        },
+        {
+          "path": "server/src/services/trust-documents.ts",
+          "exists": true,
+          "currentSha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257"
+        },
+        {
+          "path": "doc/operations/v10-trust-document-registry.md",
+          "exists": true,
+          "currentSha256": "4d95a0387185bd7607ef79c752c55492229d48ccfc18c024c1a546f5f2bc273b"
+        },
+        {
+          "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+          "exists": true,
+          "currentSha256": "7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Complete current public evidence set, provenance review and independent legal/security owner confirmation; do not infer audit certification from registry code."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/trust-document-registry-r2-2026-10-28/tests.log",
+        "doc/operations/aw-v10-evidence/trust-document-routes-r4-2026-10-28/tests.log"
+      ],
+      "qualificationBoundary": "Finish the canonical mode/receipt integration, source/provenance review, procurement evidence package, and independent legal/security accuracy review; do not mark customer/provider qualification from source presence.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-114",
+      "bindingClause": "114. `V10-114` full brand/public-surface leakage audit.",
+      "classification": "partially_implemented",
+      "currentSourceFinding": "ProductIdentity and a tested UI-copy/token gate exist. The retained brand receipt explicitly limits coverage to UI strings/JSX/message catalogs and leaves server/CLI/static assets/provider/OAuth and deployed surfaces outside it.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "packages/shared/src/product-identity.ts",
+        "server/src/routes/openapi.ts",
+        "ui/src/i18n/experience/en.json",
+        "ui/src/i18n/experience/da.json"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "packages/shared/src/product-identity.ts",
+          "exists": true,
+          "currentSha256": "525db6a5605e5b3e8ceb2d19c6206a0612ece2b5c1b09d58a794456b6b8ebdb0"
+        },
+        {
+          "path": "server/src/routes/openapi.ts",
+          "exists": true,
+          "currentSha256": "7b6a5b7490701023928ea6a0c7376d8800ca9ecb4cafdf930eb136ef82b8b91d"
+        },
+        {
+          "path": "ui/src/i18n/experience/en.json",
+          "exists": true,
+          "currentSha256": "250a3d13856c9e2377a0e57b575605b4987a8ddd47523325a324a610360b1d53"
+        },
+        {
+          "path": "ui/src/i18n/experience/da.json",
+          "exists": true,
+          "currentSha256": "14e29d79604f17df1c3eaab6b10e6ec9962080f0d2cf2e401b0d55c785122c01"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Extend deterministic leakage checks and route migration review across server, CLI, mail, build artifacts, provider/OAuth labels and old public destinations."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/customer-identity-2026-10-27/r1/README.md"
+      ],
+      "qualificationBoundary": "Run a complete build/public-route/artifact search and route old destinations through explicit migration semantics; keep provider-owned names distinct from product identity.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-115",
+      "bindingClause": "115. `V10-115` Universal Find/help/support representative usability.",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Current company search service has a 34/34 source-pinned suite over privacy-before-counts, partial owner failures, current edits/deletion and bilingual checked Help. That README expressly excludes complete browser journeys and Human/assistive-technology acceptance.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/routes/issues.ts",
+        "server/src/services/company-search.ts",
+        "ui/src/api/search.ts",
+        "ui/src/components/CommandPalette.tsx",
+        "ui/src/components/ExperienceCommandPalette.tsx"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/routes/issues.ts",
+          "exists": true,
+          "currentSha256": "5894aef8323493c7b15903850f995886e1b1f6a5f057fa430f6dc9c98a8202ff"
+        },
+        {
+          "path": "server/src/services/company-search.ts",
+          "exists": true,
+          "currentSha256": "72a0916cfbe31bbfe3fef6dec1d8a16ad46aa65365006463176c89d546424cff"
+        },
+        {
+          "path": "ui/src/api/search.ts",
+          "exists": true,
+          "currentSha256": "e8b757cf2b15085045352319082476a9369f746cc855f3c566b5ea38b1cc6382"
+        },
+        {
+          "path": "ui/src/components/CommandPalette.tsx",
+          "exists": true,
+          "currentSha256": "bf6fae3bcb83d24849775ecab779344512220cf041381089f6e913beed8bd000"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Close remaining route/API failure coverage and perform representative keyboard/screen-reader and bilingual Help/Find/Support usability sessions."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/universal-find-service-2026-10-28/README.md"
+      ],
+      "qualificationBoundary": "Finish current adapter authorization/failure coverage and conduct representative Human usability plus keyboard/screen-reader sessions with exact paired locale and partial-result states.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-116",
+      "bindingClause": "116. `V10-116` export/delete/offboarding journey.",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Export fidelity, business-event export, offboarding and durable purge owners exist. Portability receipts show 48/48 route cases and 12 selected repair cases, while the larger 136/148 attempt was not followed by a single complete 148-case pass; no end-to-end export/erase/recovery receipt exists.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/business-event-export.ts",
+        "server/src/services/export-fidelity.ts",
+        "server/src/services/saas/offboarding.ts",
+        "server/src/services/saas/company-purge.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/business-event-export.ts",
+          "exists": true,
+          "currentSha256": "8a3ce9264d3c23c1d8913d581e539f357b18cec7b6c42f88a81ece50a5fff681"
+        },
+        {
+          "path": "server/src/services/export-fidelity.ts",
+          "exists": true,
+          "currentSha256": "44fab40bfecc3c011d2b09c9d0ed2afef848ceb09f8599ee905378ea8dac471a"
+        },
+        {
+          "path": "server/src/services/saas/offboarding.ts",
+          "exists": true,
+          "currentSha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b"
+        },
+        {
+          "path": "server/src/services/saas/company-purge.ts",
+          "exists": true,
+          "currentSha256": "8c3e54b700044da4ce16a229a9fbb38bb28e7133561462aa39a151012e2d6077"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Run one current same-company export acknowledgment through deletion, restart, retained-exception review, revocation and independently checked erasure/non-resurrection."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/company-portability-fixture-repair-2026-10-28/README.md"
+      ],
+      "qualificationBoundary": "Complete a same-company export/delete/offboarding journey with data inventory, retained legal exceptions, actor/account revocation, retry/restore behavior and independently inspected erasure receipt.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-117",
+      "bindingClause": "117. `V10-117` upstream intake/security-patch rehearsal.",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "The exact pinned upstream inventory is available; all 10,713 blobs are readable and scoped P0 source-owner review is recorded. Those receipts expressly say no fork parity, regression execution, admission, deployment or release proof.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "scripts/upstream-intake.mjs",
+        "scripts/upstream-intake.test.mjs",
+        "doc/operations/upstream-intake.json",
+        "doc/operations/UPSTREAM-INTAKE.md"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "scripts/upstream-intake.mjs",
+          "exists": true,
+          "currentSha256": "8c0a23521e7f255fde6fa125286905afa96d1e5bc1db7304cb0b705d1af5e1e3"
+        },
+        {
+          "path": "scripts/upstream-intake.test.mjs",
+          "exists": true,
+          "currentSha256": "b66da9d4be2c2864f440e5dbea08909cb4f14e6a92e840b827699104cf88668f"
+        },
+        {
+          "path": "doc/operations/upstream-intake.json",
+          "exists": true,
+          "currentSha256": "261dfe646702c85aaf7fa262cdce19383eb9c78fbd47bd2221b06d19c60a0509"
+        },
+        {
+          "path": "doc/operations/UPSTREAM-INTAKE.md",
+          "exists": true,
+          "currentSha256": "f1f991cc5c7c4bfb03a185814e9fd5d89324c988f588ce0f5e3e456d0d8ed12a"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Rehearse one applicable security fast path from upstream delta through fork comparison, owner disposition, regression receipt and release provenance without automatic admission."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/upstream-intake-2026-10-28/source-availability-update.json",
+        "doc/operations/aw-v10-evidence/upstream-intake-2026-10-28/security-source-review-r1.json"
+      ],
+      "qualificationBoundary": "For each applicable P0 disposition, compare the pinned owner behavior to the original fork owner, attach exact fork implementation provenance and affected regression receipts, and keep the record in security_fast_path until an owner makes a supported adapt/defer/reject decision. Preserve the no-automatic-merge/admission boundary.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-118",
+      "bindingClause": "118. `V10-118` integrated managed-customer golden journey.",
+      "classification": "software_missing_and_unqualified",
+      "currentSourceFinding": "First-task, activation, native-auth and other journeys are separate suites. No single managed-customer golden path composes actual provider connection, staffed support, incident, export/delete, billing and operator evidence.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "tests/e2e/aw-v9-first-task.spec.ts",
+        "tests/e2e/aw-v9-activation-connections.spec.ts",
+        "tests/e2e/aw-v10-native-auth.spec.ts",
+        "doc/plans/2026-10-28-v10-current-reconciliation.md"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "tests/e2e/aw-v9-first-task.spec.ts",
+          "exists": true,
+          "currentSha256": "b5afe22aeb2d87b382c15c6fb0ef6cea2dcf08d75b9a0569907ab513a9ac7bb0"
+        },
+        {
+          "path": "tests/e2e/aw-v9-activation-connections.spec.ts",
+          "exists": true,
+          "currentSha256": "8599cdd27c2107016347211717af022f58a69a5ffd90ea607ce5d4107c7c9492"
+        },
+        {
+          "path": "tests/e2e/aw-v10-native-auth.spec.ts",
+          "exists": true,
+          "currentSha256": "6483e96b8f24a9403dab9e0de87a82657ad0799fb03e55c3501b52511e58a79b"
+        },
+        {
+          "path": "doc/plans/2026-10-28-v10-current-reconciliation.md",
+          "exists": true,
+          "currentSha256": "38b1707cf04e57e760a31683e0e1b81a26ffcb17ac687b31456049e7dd0c776f"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Build the integrated journey harness and bind it to one supported profile after the individual owners are frozen; retain real provider/operator/Human results as external qualification."
+      ],
+      "retainedReceiptsReviewed": [],
+      "qualificationBoundary": "Assemble the exact supported managed-customer path after individual owners freeze; retain missing provider/operator/Human receipts as explicit external gates.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-119",
+      "bindingClause": "119. `V10-119` final V6–V10 evidence reconciliation.",
+      "classification": "artifact_missing",
+      "currentSourceFinding": "A V10 per-ID register and current closeout plan exist, but no V6–V9 predecessor-register crosswalk plus original acceptance journey and final-candidate receipt join is present.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "doc/plans/2026-10-28-v10-current-reconciliation.md",
+        "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+        "doc/reference/aw-v9/README.md",
+        "doc/reference/blentera-v10/recovery.json"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "doc/plans/2026-10-28-v10-current-reconciliation.md",
+          "exists": true,
+          "currentSha256": "38b1707cf04e57e760a31683e0e1b81a26ffcb17ac687b31456049e7dd0c776f"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+          "exists": true,
+          "currentSha256": "285a3931040379277306246d21d9316896335b8739fa1c765c2f5550f65f733a"
+        },
+        {
+          "path": "doc/reference/aw-v9/README.md",
+          "exists": true,
+          "currentSha256": "10c47a0a5b2d9d0780569b01688a483ade49ffae6dbbaa0874f72b58ac0eff8f"
+        },
+        {
+          "path": "doc/reference/blentera-v10/recovery.json",
+          "exists": true,
+          "currentSha256": "15ebb8aaeaa536655cc63595acca28975f6ca38188ef8168e03018cb1ac674cc"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Produce the cross-version clause-to-journey-to-current-receipt matrix on an immutable candidate; preserve source/runtime/provider/operator/Human evidence distinctions."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+        "doc/plans/2026-10-28-v10-current-reconciliation.md"
+      ],
+      "qualificationBoundary": "Finish predecessor-register crosswalks and per-journey proof on one immutable candidate, retaining historical receipts and separating source, runtime, provider, operator and Human acceptance.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-120",
+      "bindingClause": "120. `V10-120` GA operating-readiness decision + temporary flag/legacy cleanup.",
+      "classification": "non_software_release_gate",
+      "currentSourceFinding": "Prerequisite tooling checks V7–V9 inputs and the current plan says V10 is not ready. No approved GA decision, exact beta profile, complete flag cleanup receipt or live dossier is in source.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "scripts/check-aw-v9-coverage.mjs",
+        "scripts/aw-v9-release-prerequisites.mjs",
+        "evals/aw-v9/readiness.json",
+        "doc/plans/2026-10-28-v10-current-reconciliation.md"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "scripts/check-aw-v9-coverage.mjs",
+          "exists": true,
+          "currentSha256": "af23ed99288e175187625d427e3855903df924c1f1c69d7b1409afad94f4ec9a"
+        },
+        {
+          "path": "scripts/aw-v9-release-prerequisites.mjs",
+          "exists": true,
+          "currentSha256": "07f50046f72576574b5dd98d28af6e21aa75d2f4ee2f30d9230ecb7d89978cd4"
+        },
+        {
+          "path": "evals/aw-v9/readiness.json",
+          "exists": true,
+          "currentSha256": "1fe7129c842c8dc7f5e4f09a49bbb933fd9017d25da7594d9c0aa628b893337d"
+        },
+        {
+          "path": "doc/plans/2026-10-28-v10-current-reconciliation.md",
+          "exists": true,
+          "currentSha256": "38b1707cf04e57e760a31683e0e1b81a26ffcb17ac687b31456049e7dd0c776f"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Finish prerequisite and artifact gates, then obtain named operator GA decision and record exact temporary-flag/legacy cleanup against the accepted final candidate."
+      ],
+      "retainedReceiptsReviewed": [
+        "scripts/aw-v9-release-prerequisites.mjs",
+        "doc/plans/2026-10-28-v10-current-reconciliation.md"
+      ],
+      "qualificationBoundary": "Complete required current-head and production-artifact gates, close the V10 prerequisite matrix, then record a named operator decision and exact temporary flag/legacy cleanup against the final candidate.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-149",
+      "bindingClause": "| V10-149 | Inherited execution-blocker closure | V7 sandbox/model/runtime owners | All three implementation groups actually enforced and qualified |",
+      "classification": "non_software_blocker_gate",
+      "currentSourceFinding": "The recovery plan and prereq checker aggregate inherited blocker records; they do not close the original V7 sandbox/model/runtime owners.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "doc/plans/2026-10-22-blentera-v10-recovery.md",
+        "evals/aw-v9/readiness.json",
+        "scripts/aw-v9-release-prerequisites.mjs"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "doc/plans/2026-10-22-blentera-v10-recovery.md",
+          "exists": true,
+          "currentSha256": "2c166a25761afbfae827b0cf37fb4b1d1559d8065069dc826628cd69e36dda6c"
+        },
+        {
+          "path": "evals/aw-v9/readiness.json",
+          "exists": true,
+          "currentSha256": "1fe7129c842c8dc7f5e4f09a49bbb933fd9017d25da7594d9c0aa628b893337d"
+        },
+        {
+          "path": "scripts/aw-v9-release-prerequisites.mjs",
+          "exists": true,
+          "currentSha256": "07f50046f72576574b5dd98d28af6e21aa75d2f4ee2f30d9230ecb7d89978cd4"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Close each inherited blocker at its original owner with current source/runtime/provider receipt and update prerequisite truth; no code aggregate can substitute."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/plans/2026-10-22-blentera-v10-recovery.md",
+        "evals/aw-v9/readiness.json"
+      ],
+      "qualificationBoundary": "Close every inherited blocker at its original owner with exact current evidence and migrate the prerequisite register; do not infer closure from a summary or empty search.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-150",
+      "bindingClause": "| V10-150 | Qualified starter/default experience profile | V6 activation + V7 packages + V9 activation | A usable account reaches real first value without technical setup decisions |",
+      "classification": "artifact_missing_no_specific_software_defect_found",
+      "currentSourceFinding": "Both default and CEO onboarding assets exist, as do the canonical activation service and first-Agent owner. The open gap is the versioned, owner-reviewed starter/default profile artifact plus first-value evidence across offered install types. No missing runtime function or defective activation caller was identified in this source review.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/onboarding-assets/default/AGENTS.md",
+        "server/src/onboarding-assets/ceo/AGENTS.md",
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-agent.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/onboarding-assets/default/AGENTS.md",
+          "exists": true,
+          "currentSha256": "dd9b13ce54b7e1e0a5707cc3b5da22907f42b6ccdbf0086612bd5a73bdd7985a"
+        },
+        {
+          "path": "server/src/onboarding-assets/ceo/AGENTS.md",
+          "exists": true,
+          "currentSha256": "044051009fd0947608bcaab2bb550472b57b3e03c9067be7109cc4714a0f209f"
+        },
+        {
+          "path": "server/src/services/saas/activation.ts",
+          "exists": true,
+          "currentSha256": "4dbe56416e4ee80b9e8abb4a426cb994f05f97e54101bee4fb609fd0585730a7"
+        },
+        {
+          "path": "server/src/services/saas/activation-first-agent.ts",
+          "exists": true,
+          "currentSha256": "2a4eb4d46fabdaf033f47555bcf3ee076371478ad6ca9aaa4f01d91db8f195d9"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "Source assets exist; no profile-owner review or all-install-type first-value receipt was present in the retained evidence inspected."
+      ],
+      "qualificationBoundary": "Produce/qualify the profile artifact and actual first-value journey. Treat as artifact and release evidence work unless a specific setup decision currently blocks the promised no-technical-setup path.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-151",
+      "bindingClause": "| V10-151 | Bilingual terminology and boundary states | Existing i18n/components/semantic cards | Paired editorial, structural and real-state browser acceptance |",
+      "classification": "unqualified_no_specific_software_defect_found",
+      "currentSourceFinding": "Paired EN/DA experience dictionaries, locale validation, auth-mail copy, and existing semantic UI components are present. Retained UI triage addressed stale copy expectations without changing production behavior. The remaining clause calls for paired editorial, structural, and real-state browser acceptance; no unlocalized current customer state or incorrect translation path was isolated here.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "ui/src/i18n/experience/en.json",
+        "ui/src/i18n/experience/da.json",
+        "ui/src/i18n/locale-validation.ts",
+        "packages/shared/src/auth-mail-copy.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "ui/src/i18n/experience/en.json",
+          "exists": true,
+          "currentSha256": "250a3d13856c9e2377a0e57b575605b4987a8ddd47523325a324a610360b1d53"
+        },
+        {
+          "path": "ui/src/i18n/experience/da.json",
+          "exists": true,
+          "currentSha256": "14e29d79604f17df1c3eaab6b10e6ec9962080f0d2cf2e401b0d55c785122c01"
+        },
+        {
+          "path": "ui/src/i18n/locale-validation.ts",
+          "exists": true,
+          "currentSha256": "e7d79720860f6beb836b093a2c23a615f1806445f642dc212b88dd88ba357752"
+        },
+        {
+          "path": "packages/shared/src/auth-mail-copy.ts",
+          "exists": true,
+          "currentSha256": "23dba75031e4d9f8d0ed0a877b19abc441768ac51329fd49ded5fa92041e311c"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/general-workspaces-a-copy-refresh-2026-10-28/README.md",
+        "`general-workspaces-a-copy-refresh-2026-10-28/README.md` records five focused copy-test files/88 tests after initial broad shard failures; it explicitly does not claim a full shard or product-state acceptance."
+      ],
+      "qualificationBoundary": "Complete rendered EN/DA desktop/mobile/accessibility review and disposition any observed state-specific defect at its current owner.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-152",
+      "bindingClause": "| V10-152 | Progressive workflow authoring completion | Original workflow author/revision/test/publish owners | Intent becomes a real reviewed, testable graph; drafts remain truthfully labeled |",
+      "classification": "unqualified_no_specific_software_defect_found",
+      "currentSourceFinding": "Workflow routes and the original authoring authority are implemented; the authority distinguishes conversation-created drafts and keeps saved routine configuration/enablement with a Human. The retained current-source V9 route/lifecycle suites passed their documented scoped counts. The broad catalogue phrase “progressive workflow authoring completion” does not identify a missing graph mutation or unguarded caller, and no such failing path was established by this review.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/routes/experience.ts",
+        "server/src/services/routine-authoring-authority.ts",
+        "server/src/services/agent-native-operation-manifest.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/routes/experience.ts",
+          "exists": true,
+          "currentSha256": "754e4057af1a32364ae25adce655a411f6c41a713a2215a182e886c5ca278950"
+        },
+        {
+          "path": "server/src/services/routine-authoring-authority.ts",
+          "exists": true,
+          "currentSha256": "00c2488f4676395ee5437b266eb34abab4f7d47cc1e71d2a5e786213572f90da"
+        },
+        {
+          "path": "server/src/services/agent-native-operation-manifest.ts",
+          "exists": true,
+          "currentSha256": "8bfc90d76744eebd938c7f90348495b641119ba056b6beb1e78d6008098b59cc"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/v9-workflow-current-2026-10-26/README.md",
+        "`v9-workflow-current-2026-10-26/README.md` records selected lifecycle and full route/lifecycle suite passes; hashes must be rechecked before claiming current-head proof."
+      ],
+      "qualificationBoundary": "Compare current UI/API/native/channel entry points against the required author/revision/test/publish behaviors. Add code only for a named unsupported capability or permission/version-fence counterexample.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-153",
+      "bindingClause": "| V10-153 | Upstream private-task propagation | Existing privacy/source/domain owners | No private data leaks into any enabled derivative/notification/export path |",
+      "classification": "implemented_partial_unqualified",
+      "currentSourceFinding": "A current source-pinned private-source matrix passed 79 DB-backed cases across Task sources, payloads, live events, Memory and activity; two local mocked Slack/Teams regressions passed. Receipt explicitly excludes temporal suite and real provider qualification; other derivative/export/runtime/restore paths still require a complete graph.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "packages/db/src/migrations/0505_flippant_wendell_vaughn.sql",
+        "packages/db/src/migrations/0506_wild_thanos.sql",
+        "packages/db/src/schema/heartbeat_runs.ts",
+        "packages/db/src/schema/memory.ts",
+        "packages/db/src/schema/projects.ts",
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+        "server/src/__tests__/authorization-service.test.ts",
+        "server/src/__tests__/business-metrics.integration.test.ts",
+        "server/src/__tests__/foundation-read-source-authority.integration.test.ts",
+        "server/src/__tests__/learning-private-sources.integration.test.ts",
+        "server/src/__tests__/live-events-ws.test.ts",
+        "server/src/__tests__/memory-resolver-private-lineage.integration.test.ts",
+        "server/src/__tests__/strategy-execution.integration.test.ts",
+        "server/src/__tests__/v10-private-live-events.integration.test.ts",
+        "server/src/__tests__/v10-private-payload.integration.test.ts",
+        "server/src/realtime/live-events-ws.ts",
+        "server/src/services/analytical-context-authority.ts",
+        "server/src/services/analytical-live-events.ts",
+        "server/src/services/authorization.ts",
+        "server/src/services/context/context-manifest.test.ts",
+        "server/src/services/context/context-manifest.ts",
+        "server/src/services/learning/learning-analytical-sources.ts",
+        "server/src/services/memory/derived-memory.ts",
+        "server/src/services/memory/memory-jobs.ts",
+        "server/src/services/memory/memory-maintenance.test.ts",
+        "server/src/services/memory/memory-maintenance.ts",
+        "server/src/services/memory/memory-privacy.ts",
+        "server/src/services/memory/memory-resolution.ts",
+        "server/src/services/memory/memory-service.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "packages/db/src/migrations/0505_flippant_wendell_vaughn.sql",
+          "exists": true,
+          "currentSha256": "34beeda1e394168ff37884c5e7504f65b8730bfbb68c4d0e1c89d2f33f3128d4"
+        },
+        {
+          "path": "packages/db/src/migrations/0506_wild_thanos.sql",
+          "exists": true,
+          "currentSha256": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+        },
+        {
+          "path": "packages/db/src/schema/heartbeat_runs.ts",
+          "exists": true,
+          "currentSha256": "5a02915c8bbac47a0f05a749a924cdfa9c17e3e026a9af665d5bac1eeb6f5c12"
+        },
+        {
+          "path": "packages/db/src/schema/memory.ts",
+          "exists": true,
+          "currentSha256": "d1ecce3ad7beb9cd8c49ce6af411d7ee61135e3fc9697c276d2575122ae890fd"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Close the remaining derivative/source-eraser graph including temporal output, workspace/runtime snapshots, analytics/export and restore; run exact current-source matrix after fixes."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/private-source-cross-channel-audit-2026-10-26/current2-receipt.json"
+      ],
+      "qualificationBoundary": "Close the full private-task propagation graph including unknown/erased provenance; prove every consumer drops private derivatives immediately and never resurrects after restore.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-154",
+      "bindingClause": "| V10-154 | Provider-independent decision substrate | Existing connection/secret/accounting/governance | Disabled/unconfigured core works; optional qualified consumer can be admitted |",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Jev decision routes/provider are present; current setup receipt proves immutable company-purpose admission against a controlled wire and seven HTTP boundary cases including usage, idempotency, unknown charge, revocation and profile expiry. No paid provider was called.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/jev-decision-provider.ts",
+        "server/src/routes/jev-decisions.ts",
+        "server/src/services/decision-retention.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/jev-decision-provider.ts",
+          "exists": true,
+          "currentSha256": "8d38b1c2f07a7784c3404dd73c5733bcf1693795741ab431fdc98e1ab115da35"
+        },
+        {
+          "path": "server/src/routes/jev-decisions.ts",
+          "exists": true,
+          "currentSha256": "67c33e243b5fe0b68661b811b7840024bbb844b4f201dd5460bc561e102bde6c"
+        },
+        {
+          "path": "server/src/services/decision-retention.ts",
+          "exists": true,
+          "currentSha256": "68b53afceca5c2da927ff8b405c52d378ad9c51b8e6dde89fe0335d5a754fbda"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Keep core functional without optional provider; measure/qualify exact consumer policies and retention through final operation lifecycle before candidate promotion."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/jev-setup-wire-receipt-2026-10-28/README.md"
+      ],
+      "qualificationBoundary": "Complete exact decision provider interface, provenance, policy, outcome and migration checks; keep candidate/shadow output non-authoritative until separately reviewed.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-155",
+      "bindingClause": "| V10-155 | Jev shadow/candidate qualification | One registered suggestion consumer | Measured bilingual net benefit and safe fallback; otherwise keep native baseline |",
+      "classification": "unqualified_no_software_gap_established",
+      "currentSourceFinding": "Decision and suggestion code has a bounded shadow/candidate substrate, but there is no representative bilingual net-benefit, negative-control or approved-data/cost evaluation receipt. No production promotion is authorized by source presence.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/jev-decision-provider.ts",
+        "server/src/services/jev-skill-suggestions.ts",
+        "server/src/routes/jev-decisions.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/jev-decision-provider.ts",
+          "exists": true,
+          "currentSha256": "8d38b1c2f07a7784c3404dd73c5733bcf1693795741ab431fdc98e1ab115da35"
+        },
+        {
+          "path": "server/src/services/jev-skill-suggestions.ts",
+          "exists": true,
+          "currentSha256": "7474213a4f42f6af67158e19584dfde2f1c8ad7ba43a1902e8d61f28aa9e33d2"
+        },
+        {
+          "path": "server/src/routes/jev-decisions.ts",
+          "exists": true,
+          "currentSha256": "67c33e243b5fe0b68661b811b7840024bbb844b4f201dd5460bc561e102bde6c"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Keep optional suggestion shadow-only until declared metrics, representative human review, permissions, cost/data envelope and reversal pass; do not add provider integration ahead of that gate."
+      ],
+      "retainedReceiptsReviewed": [],
+      "qualificationBoundary": "Keep shadow/suggestion-only until declared metrics, negative controls, representative review, permission fences and rollback are pinned to the exact candidate.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-156",
+      "bindingClause": "| V10-156 | Deadline-driven scheduled work | Existing coordinator/routine/monitor owners | Commit/restart/Stop/standby/multi-worker tests pass |",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Scheduled-work service and deadline tests cover durable Postgres work, monitor/drain, calendar and native denial; retained receipt has distinct runs and an earlier 156/158 mixed result plus a later full Routine 158 rerun. The evidence is split across source snapshots and does not show one current all-lifecycle pass.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/scheduled-work.ts",
+        "server/src/routes/routines.ts",
+        "server/src/__tests__/scheduled-work-postgres.test.ts",
+        "server/src/__tests__/routine-cron-deadlines.test.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/scheduled-work.ts",
+          "exists": true,
+          "currentSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490"
+        },
+        {
+          "path": "server/src/routes/routines.ts",
+          "exists": true,
+          "currentSha256": "c3e22c02288f8c585965787a4027f29b8c475749c1055e03c50ff9456ba52ced"
+        },
+        {
+          "path": "server/src/__tests__/scheduled-work-postgres.test.ts",
+          "exists": true,
+          "currentSha256": "c6d61f74219a62ee1b4a609daa886a46b8116d34a66f2796389383b7feeba5c1"
+        },
+        {
+          "path": "server/src/__tests__/routine-cron-deadlines.test.ts",
+          "exists": true,
+          "currentSha256": "82df3d48fefc282021bec7e5264ab4b8a04c4d93b3c263ddd8cad58fcea1db28"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Bind due/timezone/DST/missed-run/Stop/restart/unknown effect outcomes across routine and workflow producers on the final source snapshot; retain exact source pins for one end-to-end run."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/scheduled-deadlines-2026-10-25/receipts.json",
+        "doc/operations/aw-v10-evidence/scheduled-deadlines-current-rerun-2026-10-25/receipts.json"
+      ],
+      "qualificationBoundary": "Finish exact timezone/deadline, restart, skip/catch-up and unknown-effect receipts through each scheduled owner; keep unsafely recoverable work paused.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-157",
+      "bindingClause": "| V10-157 | Exact release/claim reconciliation | Existing V4/V7/V8/V9/V10 registers | No historical/source-only/fixture evidence silently becomes hosted acceptance |",
+      "classification": "artifact_missing",
+      "currentSourceFinding": "The V10 current reconciliation and V9 readiness exist, but no exact V6–V9 clause crosswalk ties each retained release claim to final candidate source, config, migration, runtime and signed owner receipt.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "doc/plans/2026-10-28-v10-current-reconciliation.md",
+        "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+        "evals/aw-v9/readiness.json"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "doc/plans/2026-10-28-v10-current-reconciliation.md",
+          "exists": true,
+          "currentSha256": "38b1707cf04e57e760a31683e0e1b81a26ffcb17ac687b31456049e7dd0c776f"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+          "exists": true,
+          "currentSha256": "285a3931040379277306246d21d9316896335b8739fa1c765c2f5550f65f733a"
+        },
+        {
+          "path": "evals/aw-v9/readiness.json",
+          "exists": true,
+          "currentSha256": "1fe7129c842c8dc7f5e4f09a49bbb933fd9017d25da7594d9c0aa628b893337d"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Build the final clause-to-claim crosswalk and reject historical/source-only evidence as hosted acceptance."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/plans/2026-10-28-v10-current-reconciliation.md",
+        "evals/aw-v9/readiness.json"
+      ],
+      "qualificationBoundary": "Crosswalk each retained claim to the original clause and final candidate evidence, and remove or narrow claims that lack exact owner receipts.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-158",
+      "bindingClause": "| V10-158 | Atomic Board CLI consent and honest token scope | UP-02 / CE-05; A | Current membership, approval/cancel/replay races and key/audit atomicity pass |",
+      "classification": "partially_implemented",
+      "currentSourceFinding": "Board CLI consent/auth routes, one-time credentials, membership checks and client token-scope code/tests exist. No current single atomic PostgreSQL race receipt was found that covers approval/cancel/replay, key/audit commit and company deletion before receipt lookup.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "cli/src/__tests__/board-auth.test.ts",
+        "cli/src/client/board-auth.ts",
+        "cli/src/client/command-label.ts",
+        "doc/CLI.md",
+        "packages/db/src/migrations/0502_swift_maria_hill.sql",
+        "packages/db/src/migrations/meta/0502_snapshot.json",
+        "packages/db/src/migrations/meta/_journal.json",
+        "packages/db/src/schema/saas_lifecycle.ts",
+        "server/src/__tests__/cli-auth-routes.test.ts",
+        "server/src/__tests__/server-startup-feedback-export.test.ts",
+        "server/src/app.ts",
+        "server/src/index.ts",
+        "server/src/routes/access.ts",
+        "server/src/services/board-auth.test.ts",
+        "server/src/services/board-auth.ts",
+        "server/src/services/saas/auth-delivery.ts",
+        "server/src/services/saas/platform.ts",
+        "ui/src/i18n/experience/da.json",
+        "ui/src/i18n/experience/en.json",
+        "ui/src/pages/Auth.test.tsx",
+        "ui/src/pages/CliAuth.tsx"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "cli/src/__tests__/board-auth.test.ts",
+          "exists": true,
+          "currentSha256": "be73f82c41b93d8ee297d1fc897a4065370715312cf02a679f6c0f3b67a8b32b"
+        },
+        {
+          "path": "cli/src/client/board-auth.ts",
+          "exists": true,
+          "currentSha256": "9a4f22a1669ae7b48cfdd58dc87ea85c0457fe22dbaeca03283bbe368fc897ee"
+        },
+        {
+          "path": "cli/src/client/command-label.ts",
+          "exists": true,
+          "currentSha256": "797bfce9390c447c467f4c05d66ee6e93e7c8c15479d690b1013a4025331c163"
+        },
+        {
+          "path": "doc/CLI.md",
+          "exists": true,
+          "currentSha256": "511baab93893cd53a9fd3e889a33b9034751fd7093affcc34a4ba84ab3984d97"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Re-run the atomic Board CLI consent race suite on one exact current source snapshot; repair any split commit/audit or replay gap found at the original owner."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/better-auth-1.7.7-2026-10-28/README.md"
+      ],
+      "qualificationBoundary": "Recheck authorization, cancellation/replay, key creation/revocation and audit in one atomic real-current-snapshot path, including durability if the company is deleted before audit receipt lookup.",
+      "missingListedSourceOwners": [
+        "packages/db/src/migrations/meta/0502_snapshot.json"
+      ]
+    },
+    {
+      "id": "V10-159",
+      "bindingClause": "| V10-159 | Immediate scoped offboarding and no identity resurrection | CE-06 / OWNER-01; A/E | Revoked company access cannot return through stale headers, grants, jobs or restore |",
+      "classification": "partially_implemented",
+      "currentSourceFinding": "Offboarding archives company state, pauses agents, revokes company keys/sessions and starts durable runtime/purge work. Current owner-continuity and privacy tests cover slices; no single cross-path test proves stale grants, jobs, restore and identity caches cannot recreate access.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "packages/db/src/migrations/0504_conscious_sleepwalker.sql",
+        "packages/db/src/schema/memory.ts",
+        "packages/db/src/schema/projects.ts",
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+        "server/src/__tests__/authorization-service.test.ts",
+        "server/src/__tests__/v10-private-live-events.integration.test.ts",
+        "server/src/realtime/live-events-ws.ts",
+        "server/src/services/analytical-live-events.ts",
+        "server/src/services/authorization.ts",
+        "server/src/services/memory/memory-service.ts",
+        "server/src/services/saas/offboarding.ts",
+        "server/src/services/saas/company-purge.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "packages/db/src/migrations/0504_conscious_sleepwalker.sql",
+          "exists": true,
+          "currentSha256": "5a9e21fac154e2ff5bfb3dd8be9c5d200b7e2eca48e3f67924d5377bf38f6b6a"
+        },
+        {
+          "path": "packages/db/src/schema/memory.ts",
+          "exists": true,
+          "currentSha256": "d1ecce3ad7beb9cd8c49ce6af411d7ee61135e3fc9697c276d2575122ae890fd"
+        },
+        {
+          "path": "packages/db/src/schema/projects.ts",
+          "exists": true,
+          "currentSha256": "ad636d4bb217f29f94c20982ee4766879c198865c2856596550e65db35c8b9f8"
+        },
+        {
+          "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+          "exists": true,
+          "currentSha256": "1742b61f835d22b37abdc26e562bba6b9d58105f0473d20537364cbd8f2ac0f4"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Close the read/event/restore/queue/connector grant identity graph with immediate revocation and no-resurrection tests at the authoritative owners."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/continuity-security-2026-10-28/README.md",
+        "doc/operations/aw-v10-evidence/company-portability-fixture-repair-2026-10-28/README.md"
+      ],
+      "qualificationBoundary": "Close immediate revocation across current request/event/restore paths and prove no stale key, connector grant, queue message, cache or archive restoration revives company identity.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-160",
+      "bindingClause": "| V10-160 | Durable runtime/Skill/assignment synchronization | UP-04; B | Committed revision eventually applies once semantically, with stale fencing and real session topology |",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Current source implements commit-ordered plugin lifecycle outbox, per-resource delivery/acks, exact-event callback validation and runtime snapshot re-reads with revision/run/Human fences. This is stronger than the old finding. The code receipt still treats plugin ACK as the external assertion, not proof of semantic apply-once at the consumer.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/agent-runtime-owner-assignments.ts",
+        "server/src/services/runtime-skill-selections.ts",
+        "server/src/services/native-runtime/native-workspace-sync.ts",
+        "server/src/services/heartbeat.ts",
+        "server/src/services/plugin-lifecycle-delivery.ts",
+        "server/src/services/plugin-lifecycle-inbox.ts",
+        "server/src/services/plugin-agent-runtime-state.ts",
+        "server/src/services/resource-lifecycle-events.ts",
+        "server/src/services/company-skills.ts",
+        "packages/db/src/schema/resource_lifecycle_events.ts",
+        "packages/db/src/migrations/0538_durable_plugin_lifecycle.sql",
+        "packages/plugins/sdk/src/define-plugin.ts",
+        "packages/plugins/sdk/src/types.ts",
+        "packages/plugins/sdk/src/protocol.ts",
+        "packages/plugins/sdk/src/host-client-factory.ts",
+        "packages/plugins/sdk/src/worker-rpc-host.ts",
+        "packages/plugins/sdk/tests/worker-rpc-host.test.ts",
+        "server/src/__tests__/plugin-lifecycle-delivery.test.ts",
+        "server/src/__tests__/plugin-agent-runtime-state.integration.test.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/agent-runtime-owner-assignments.ts",
+          "exists": true,
+          "currentSha256": "e045e3d8b82bac60d7f779b400972fb4c044a101fd167585fdb8d202035e8f95"
+        },
+        {
+          "path": "server/src/services/runtime-skill-selections.ts",
+          "exists": true,
+          "currentSha256": "d7e6e7d9df54aa7139c408515a7e323e0d938c8e04e4670f935847799c9f0e2f"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-workspace-sync.ts",
+          "exists": true,
+          "currentSha256": "55a77ab0afaae05c71823f6ef3d22728bac4a594312debc1527248c8a1b87e3a"
+        },
+        {
+          "path": "server/src/services/heartbeat.ts",
+          "exists": true,
+          "currentSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Qualify supported live plugin consumer and real runtime session topology across duplicate delivery, process restart, owner change and callback retry; change host code only if this uncovers a missing host-owned invariant."
+      ],
+      "retainedReceiptsReviewed": [
+        "server/src/services/plugin-lifecycle-delivery.ts",
+        "server/src/services/plugin-agent-runtime-state.ts",
+        "server/src/__tests__/plugin-lifecycle-delivery.test.ts"
+      ],
+      "qualificationBoundary": "Qualify representative supported plugin consumers and real runtime session topology across duplicate delivery, process restart, owner change, and callback retry; verify that the callback ACK contract satisfies the required semantic apply-once outcome. If that qualification shows a missing host-owned invariant, add the smallest receipt at the actual destination owner. Do not infer independent proof from an external plugin ACK or claim external-consumer qualification from source code alone.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-161",
+      "bindingClause": "| V10-161 | Accepted-message and run-finalization recovery | UP-05/07; B | Paused/stranded work, Stop and unknown effects recover truthfully without duplication |",
+      "classification": "partially_implemented_unqualified",
+      "currentSourceFinding": "Native finalization, continuation, chat state and wake-queue recovery owners exist. Retained attempt 139 failed before Stop because authorized native progress was not visible within the 20-second predicate; later full eight-case success is absent.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/native-runtime/native-run-finalizer.ts",
+        "server/src/services/native-runtime/native-continuation.ts",
+        "server/src/services/chat-slack-sessions.ts",
+        "server/src/modules/wake-queue/adapters/postgres.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/native-runtime/native-run-finalizer.ts",
+          "exists": true,
+          "currentSha256": "78ede5d9248a6af1554dfe010b1075722ffaf3950834bd13a878791e5c66b73b"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-continuation.ts",
+          "exists": true,
+          "currentSha256": "20ebe84062b2d829bb9a3b8a6090ea876757f9635faae4f1461db7099458ba13"
+        },
+        {
+          "path": "server/src/services/chat-slack-sessions.ts",
+          "exists": true,
+          "currentSha256": "50660965ae5cb74f8c373472e977a42a5c0ff45c3fdccf416535a9742a430ec5"
+        },
+        {
+          "path": "server/src/modules/wake-queue/adapters/postgres.ts",
+          "exists": true,
+          "currentSha256": "ba6e11325691602410c955e05cb173464c18d3e12df729379c17ed0712104184"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Close current-source message/effect/finalizer crash boundaries and the case-7 progress visibility lag without duplicate provider effects; require whole relevant matrix before release."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/native-retained-run-resume-2026-10-26/attempt-139/README.md"
+      ],
+      "qualificationBoundary": "Close each accepted message, stop, wake, provider dispatch and finalizer crash boundary against durable original receipts, including unknown provider acceptance and recovery without duplicate dispatch.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-162",
+      "bindingClause": "| V10-162 | Preserve exact workspace sources and bounded reconstruction | UP-06; B | No unique-work deletion, actual restore and explicit loss/reconstruction semantics |",
+      "classification": "partially_implemented_unqualified",
+      "currentSourceFinding": "Git/worktree recovery and company purge have source and 78 passing local software tests; the receipt explicitly says this is not provider runtime stop/kill or full V10 qualification and separate V7 package tests have 40 unresolved failures.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/native-runtime/native-workspace-finalizer.ts",
+        "server/src/services/native-runtime/native-workspace-sync.ts",
+        "server/src/services/git-workspace-restoration.ts",
+        "server/src/services/saas/company-purge.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/native-runtime/native-workspace-finalizer.ts",
+          "exists": true,
+          "currentSha256": "13edd0eee69ae0820794d8663c893ba714ac37f98e61b89032c5aee9eea41662"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-workspace-sync.ts",
+          "exists": true,
+          "currentSha256": "55a77ab0afaae05c71823f6ef3d22728bac4a594312debc1527248c8a1b87e3a"
+        },
+        {
+          "path": "server/src/services/git-workspace-restoration.ts",
+          "exists": true,
+          "currentSha256": "744795ef3717ee160661382f17a1e886d559c837395ebb2d50c65f799807cb31"
+        },
+        {
+          "path": "server/src/services/saas/company-purge.ts",
+          "exists": true,
+          "currentSha256": "8c3e54b700044da4ce16a229a9fbb38bb28e7133561462aa39a151012e2d6077"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Bind workspace retention/restoration to exact source/privacy/delete receipts and add the bounded reconstruction/loss manifest; qualify actual stop/restore topology."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/workspace-recovery-2026-10-24/receipts.json"
+      ],
+      "qualificationBoundary": "Bind actual workspace exports/restores to exact source identity and privacy/deletion receipts; fail closed on missing provenance and label irrecoverable data loss instead of fabricating successful reconstruction.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-163",
+      "bindingClause": "| V10-163 | Qualified production bundle and bounded performance changes | UP-10 / PERF / REL; B/H | Actual artifact boots, runs and stops; measured improvement preserves current rights |",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "A locked offline Runner release build and fmt pass, with the original codex_provider unit module 23/23 and before/after hashes. Receipt limits this to local software, not physical isolation or full Rust test suite.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "Dockerfile"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "Dockerfile",
+          "exists": true,
+          "currentSha256": "97f508c1e42850e4f7917994f75c98ec2d5230a0a0f8401c06e53e5cebaebeb0"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Qualify the exact production artifact on a pinned host with start/work/stop, kill/revoke/egress, measured performance, rollback and provider/model billing evidence."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/current-rust-release-2026-10-26/r1/README.md"
+      ],
+      "qualificationBoundary": "Qualify the exact production bundle on a pinned host/runtime with actual start/work/stop, denial/revocation, resource/performance, rollback and provider/model billing receipts.",
+      "missingListedSourceOwners": []
+    },
+    {
+      "id": "V10-164",
+      "bindingClause": "| V10-164 | Short activation composition over retained logical states | UX-02/03 / ONB-01–12; C | No fabricated skipped step, duplicate command, required project/website or technical first-run setup |",
+      "classification": "unqualified_no_specific_software_defect_found",
+      "currentSourceFinding": "Activation has a retained staged state, first-Agent/task preparation, verified first-value receipt, completion revalidation, and a UI that exposes resume/current-stage behavior. Its code expressly represents optional website as `not_requested`. The retained 012 browser attempt passed the first-value test and failed the separate password-reset selector; it is not evidence of an activation product defect. No missing transition/duplicate command was reproduced.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-value.ts",
+        "ui/src/pages/Activation.tsx",
+        "ui/src/pages/SaasWelcome.tsx"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/saas/activation.ts",
+          "exists": true,
+          "currentSha256": "4dbe56416e4ee80b9e8abb4a426cb994f05f97e54101bee4fb609fd0585730a7"
+        },
+        {
+          "path": "server/src/services/saas/activation-first-value.ts",
+          "exists": true,
+          "currentSha256": "8de5d8219dc779816aa3b6c26f10bec165b7027ed51284be73ec160eefa53312"
+        },
+        {
+          "path": "ui/src/pages/Activation.tsx",
+          "exists": true,
+          "currentSha256": "e62bddf303170a0d7f9cc21f4973eaff934e97b91afa7f26e5f2dbeeef57fb52"
+        },
+        {
+          "path": "ui/src/pages/SaasWelcome.tsx",
+          "exists": true,
+          "currentSha256": "c0c2f29263f80cf2ab97a9a255fc1f0d361733eb134c40ff70232c421ed50954"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/firstvalue-password-locale-rerun-012-2026-10-26/README.md",
+        "`firstvalue-password-locale-rerun-012-2026-10-26/README.md` states exactly one of two selected tests passed; current activation service tests exist but this matrix does not claim they were run on the final candidate."
+      ],
+      "qualificationBoundary": "Qualify one supported profile end-to-end, including resume, skip/failure, and real first-value. Treat the failed password-reset selector as test evidence only unless current UI behavior is independently shown incorrect.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-165",
+      "bindingClause": "| V10-165 | Real human result-review and revision lifecycle | ONB-11R / MEM-03; C/D | Owner/admin review is explicit; member handoff and terminal-plan revision preserve authority and evidence |",
+      "classification": "unqualified_no_specific_software_defect_found",
+      "currentSourceFinding": "Routine management review is Human-delegation gated, and native review participant logic verifies current company/issue/run/decision binding, applied state, reviewer context, and in-review issue state. The native accountability receipt records 82 final route cases passing and 74 native control/safe-replacement cases at an earlier checkpoint. This is substantial owner behavior; the remaining catalogue asks a broader result-review/revise/handoff lifecycle. No specific missing transition or authority bypass was proven in this review.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "server/src/services/management-reviews/routine.ts",
+        "server/src/services/native-runtime/native-deliverable-feedback.ts",
+        "server/src/services/native-runtime/native-review-participant.ts",
+        "server/src/services/saas/offboarding.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "server/src/services/management-reviews/routine.ts",
+          "exists": true,
+          "currentSha256": "9f5098cbedb75d161314db6085d46147b224c20222722e7cfebf2b019e343926"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-deliverable-feedback.ts",
+          "exists": true,
+          "currentSha256": "c045c6cba2f272b643cf786a7e339d4beb679684230c74835da4fb739523ed6a"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-review-participant.ts",
+          "exists": true,
+          "currentSha256": "b1b18da7d1dc946a8da344edbc37e605df8fbd9c129c1dd60d2595bfa5207a17"
+        },
+        {
+          "path": "server/src/services/saas/offboarding.ts",
+          "exists": true,
+          "currentSha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/human-workflow-coverage-2026-10-28/attempt-9/README.md",
+        "doc/operations/aw-v10-evidence/native-review-accountability-2026-10-24/checkpoint.json",
+        "`human-workflow-coverage-2026-10-28/attempt-9/README.md` and `native-review-accountability-2026-10-24/checkpoint.json` are scoped route/native evidence, not a full result-review lifecycle acceptance."
+      ],
+      "qualificationBoundary": "Map the complete result/plan lifecycle and qualify successor handoff and terminal-plan revision at their original owners. Add implementation only for a concrete missing state transition or authority check.",
+      "missingListedSourceOwners": [],
+      "specificSoftwareGap": null,
+      "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
+    },
+    {
+      "id": "V10-166",
+      "bindingClause": "| V10-166 | Complete auth/recovery/reauthentication and bilingual mail | CE-03 / AUTH; A/C | Every offered login method has a secure usable lifecycle and EN/DA delivery |",
+      "classification": "implemented_unqualified",
+      "currentSourceFinding": "Current auth includes credential, passkey and recovery routes, paired mail copy and Better Auth 1.7.7 security/migration work. A pinned six-suite receipt passes 71/71 plus DB typecheck/migration, but its README records server TS diagnostics and missing production DB preflight/deployment/SSO qualification.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "packages/db/src/migrations/0514_abandoned_hex.sql",
+        "packages/db/src/migrations/meta/0514_snapshot.json",
+        "packages/db/src/migrations/meta/_journal.json",
+        "packages/db/src/schema/auth.ts",
+        "packages/shared/src/auth-mail-copy.ts",
+        "packages/shared/src/index.ts",
+        "packages/shared/src/local-password-policy.ts",
+        "packages/shared/src/validators/access.ts",
+        "server/src/__tests__/auth-routes.test.ts",
+        "server/src/__tests__/better-auth-credential-signup.integration.test.ts",
+        "server/src/__tests__/v6-saas-auth.integration.test.ts",
+        "server/src/auth/better-auth.ts",
+        "server/src/auth/common-passwords.ts",
+        "server/src/auth/local-password-policy.ts",
+        "server/src/routes/auth.ts",
+        "server/src/services/saas/auth-delivery.test.ts",
+        "server/src/services/saas/auth-delivery.ts",
+        "ui/src/api/auth.test.ts",
+        "ui/src/api/auth.ts",
+        "ui/src/api/saas-auth.test.ts",
+        "ui/src/api/saas.ts",
+        "ui/src/components/AccountExperienceLanguageSelect.test.tsx",
+        "ui/src/components/AccountExperienceLanguageSelect.tsx",
+        "ui/src/components/ExperienceLanguageSelect.tsx",
+        "ui/src/components/ExperienceUtilities.tsx",
+        "ui/src/hooks/useUserPreferences.ts",
+        "ui/src/i18n/experience-locale-preference.test.ts",
+        "ui/src/i18n/experience-locale-preference.ts",
+        "ui/src/i18n/experience/da.json",
+        "ui/src/i18n/experience/en.json",
+        "ui/src/i18n/index.ts",
+        "ui/src/pages/Activation.tsx",
+        "ui/src/pages/Auth.test.tsx",
+        "ui/src/pages/Auth.tsx",
+        "ui/src/pages/InviteLanding.test.tsx",
+        "ui/src/pages/InviteLanding.tsx",
+        "ui/src/pages/SaasPasswordReset.test.tsx",
+        "ui/src/pages/SaasPasswordReset.tsx",
+        "ui/src/pages/SaasWelcome.test.tsx",
+        "ui/src/pages/SaasWelcome.tsx"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "packages/db/src/migrations/0514_abandoned_hex.sql",
+          "exists": true,
+          "currentSha256": "9165b31400c351ff521a39a024d29793e189174d2fb9436f8186a64a63a9eff4"
+        },
+        {
+          "path": "packages/db/src/migrations/meta/0514_snapshot.json",
+          "exists": false,
+          "currentSha256": null
+        },
+        {
+          "path": "packages/db/src/migrations/meta/_journal.json",
+          "exists": true,
+          "currentSha256": "e2d3833916ac2061671eddba93c19e6d269278aa680cd158e2c2bfaa804f88bb"
+        },
+        {
+          "path": "packages/db/src/schema/auth.ts",
+          "exists": true,
+          "currentSha256": "fbe46707e4ee359caba5acf1f4f8e0407267090c97fef2f488afdbc93b098843"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Inventory actually offered login methods, finish any missing recovery/reauth/MFA paths, then qualify mail deliverability, enterprise identity, production migration preflight and current-source whole server checks."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/better-auth-1.7.7-2026-10-28/README.md",
+        "doc/operations/aw-v10-evidence/native-passkeys-2026-10-24/checkpoint.json"
+      ],
+      "qualificationBoundary": "Complete each actually offered login method from enrollment through recovery, reset, reauthentication and revoke; verify canonical domains, deliverability, anti-enumeration, MFA races and EN/DA text.",
+      "missingListedSourceOwners": [
+        "packages/db/src/migrations/meta/0514_snapshot.json"
+      ]
+    },
+    {
+      "id": "V10-167",
+      "bindingClause": "| V10-167 | Complete paired copy and rendered state acceptance | §35 / UX-01; C–H | Both locales preserve action, actor, cost, data and status meaning across all critical states |",
+      "classification": "partially_implemented_unqualified",
+      "currentSourceFinding": "EN/DA catalogs, locale selection and paired UI copy checks exist, but no complete source-derived critical-state matrix and rendered acceptance across all V10 flows is retained. Recent shard evidence documents one unpassed Apps credential-expiry assertion.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "packages/db/src/migrations/0514_abandoned_hex.sql",
+        "packages/db/src/migrations/meta/0514_snapshot.json",
+        "packages/db/src/migrations/meta/_journal.json",
+        "packages/db/src/schema/auth.ts",
+        "packages/shared/src/auth-mail-copy.ts",
+        "packages/shared/src/index.ts",
+        "packages/shared/src/validators/access.ts",
+        "server/src/__tests__/auth-routes.test.ts",
+        "server/src/__tests__/v6-saas-auth.integration.test.ts",
+        "server/src/auth/better-auth.ts",
+        "server/src/routes/auth.ts",
+        "server/src/services/saas/auth-delivery.test.ts",
+        "server/src/services/saas/auth-delivery.ts",
+        "ui/src/api/auth.test.ts",
+        "ui/src/api/auth.ts",
+        "ui/src/api/saas-auth.test.ts",
+        "ui/src/api/saas.ts",
+        "ui/src/components/AccountExperienceLanguageSelect.test.tsx",
+        "ui/src/components/AccountExperienceLanguageSelect.tsx",
+        "ui/src/components/ExperienceLanguageSelect.tsx",
+        "ui/src/components/ExperienceUtilities.tsx",
+        "ui/src/hooks/useUserPreferences.ts",
+        "ui/src/i18n/experience-locale-preference.test.ts",
+        "ui/src/i18n/experience-locale-preference.ts",
+        "ui/src/i18n/experience/da.json",
+        "ui/src/i18n/experience/en.json",
+        "ui/src/i18n/index.ts",
+        "ui/src/pages/Activation.tsx",
+        "ui/src/pages/SaasPasswordReset.test.tsx",
+        "ui/src/pages/SaasPasswordReset.tsx",
+        "ui/src/pages/SaasWelcome.test.tsx",
+        "ui/src/pages/SaasWelcome.tsx",
+        "tests/e2e/aw-v9-language.spec.ts",
+        "tests/e2e/aw-v9-auth-language.spec.ts"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "packages/db/src/migrations/0514_abandoned_hex.sql",
+          "exists": true,
+          "currentSha256": "9165b31400c351ff521a39a024d29793e189174d2fb9436f8186a64a63a9eff4"
+        },
+        {
+          "path": "packages/db/src/migrations/meta/0514_snapshot.json",
+          "exists": false,
+          "currentSha256": null
+        },
+        {
+          "path": "packages/db/src/migrations/meta/_journal.json",
+          "exists": true,
+          "currentSha256": "e2d3833916ac2061671eddba93c19e6d269278aa680cd158e2c2bfaa804f88bb"
+        },
+        {
+          "path": "packages/db/src/schema/auth.ts",
+          "exists": true,
+          "currentSha256": "fbe46707e4ee359caba5acf1f4f8e0407267090c97fef2f488afdbc93b098843"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Complete paired critical-state catalog and review desktop/mobile/accessibility output for every exposed state in both locales on exact current sources."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/general-workspaces-a-copy-refresh-2026-10-28/README.md",
+        "doc/operations/aw-v10-evidence/firstvalue-password-locale-rerun-012-2026-10-26/README.md"
+      ],
+      "qualificationBoundary": "Complete a source-derived list of critical states, verify parity and rendered screenshots/accessibility, and rerun against the frozen current source after copy changes.",
+      "missingListedSourceOwners": [
+        "packages/db/src/migrations/meta/0514_snapshot.json"
+      ]
+    },
+    {
+      "id": "V10-168",
+      "bindingClause": "| V10-168 | Mandatory beta profile and exact live evidence dossier | §§47/55; H | No required capability hidden by narrowing claims; real source/runtime/human/operator evidence |",
+      "classification": "non_software_release_gate",
+      "currentSourceFinding": "No claim-complete mandatory beta profile or signed source/artifact/migration/host/provider/operator/Human dossier is present. Narrowing claims would violate the required outcome.",
+      "currentImplementationStatusFromRegister": "partial_implementation",
+      "sourceOwners": [
+        "doc/plans/2026-10-28-v10-current-reconciliation.md",
+        "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+        "evals/aw-v9/readiness.json",
+        "doc/reference/blentera-v10/recovery.json"
+      ],
+      "currentSourceIdentitySample": [
+        {
+          "path": "doc/plans/2026-10-28-v10-current-reconciliation.md",
+          "exists": true,
+          "currentSha256": "38b1707cf04e57e760a31683e0e1b81a26ffcb17ac687b31456049e7dd0c776f"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+          "exists": true,
+          "currentSha256": "285a3931040379277306246d21d9316896335b8739fa1c765c2f5550f65f733a"
+        },
+        {
+          "path": "evals/aw-v9/readiness.json",
+          "exists": true,
+          "currentSha256": "1fe7129c842c8dc7f5e4f09a49bbb933fd9017d25da7594d9c0aa628b893337d"
+        },
+        {
+          "path": "doc/reference/blentera-v10/recovery.json",
+          "exists": true,
+          "currentSha256": "15ebb8aaeaa536655cc63595acca28975f6ca38188ef8168e03018cb1ac674cc"
+        }
+      ],
+      "confirmedSoftwareMissingOrRecheck": [
+        "Define the required profile from the full capability set and gather the exact final candidate evidence; record owner decisions without converting source/tests into runtime or Human acceptance."
+      ],
+      "retainedReceiptsReviewed": [
+        "doc/plans/2026-10-28-v10-current-reconciliation.md",
+        "evals/aw-v9/readiness.json",
+        "doc/reference/blentera-v10/recovery.json"
+      ],
+      "qualificationBoundary": "Define the minimum claim-complete beta profile and assemble exact source/artifact/migration/host/provider/operator/Human receipts; do not hide required capabilities by narrowing marketing claims.",
+      "missingListedSourceOwners": []
+    }
+  ],
+  "summary": {
+    "confirmedSoftwareGaps": [
+      {
+        "id": "V10-107",
+        "gap": "The current public-health owner is read-only; incident authoring, tenant impact, subscriber notices, and recovery handoff are absent."
+      },
+      {
+        "id": "V10-109",
+        "gap": "Expiry and missed-event reconciliation remain incomplete across enabled connector providers; existing facts are provider-bounded."
+      },
+      {
+        "id": "V10-118",
+        "gap": "There is no composed managed-customer golden-journey harness bound to a frozen supported profile."
+      },
+      {
+        "id": "V10-153",
+        "gap": "The derivative/source-erasure graph still lacks verified coverage for temporal outputs, workspace/runtime snapshots, analytics/export, and restore paths."
+      },
+      {
+        "id": "V10-159",
+        "gap": "No-resurrection behavior remains incomplete across stale grants, queued jobs, archives, restore, and identity caches."
+      },
+      {
+        "id": "V10-161",
+        "gap": "Current-source crash recovery at message/effect/finalizer boundaries and case-7 progress visibility remain unresolved."
+      },
+      {
+        "id": "V10-162",
+        "gap": "An exact retained-source manifest and bounded reconstruction/loss contract are still absent."
+      }
+    ],
+    "recheckBeforeCallingSoftwareMissing": [
+      {
+        "id": "V10-102",
+        "reason": "Current Tool Gateway imports the shared operation manifest/hash; remaining work is path-to-execution/invalidation proof, and this review found no specific missing software case."
+      },
+      {
+        "id": "V10-105",
+        "reason": "The known compatibility gate covers UI/catalog literals; finish the broad surface inventory before deciding which remaining work is code versus migration evidence."
+      },
+      {
+        "id": "V10-114",
+        "reason": "Finish leakage checks and migration review across the listed channels before treating unscoped findings as software defects."
+      },
+      {
+        "id": "V10-101",
+        "reason": "The clause says adapter extraction as V9 touches each provider; current provider-specific parsers are not by themselves a defect. No faulty caller or concrete inconsistent behavior identified."
+      },
+      {
+        "id": "V10-103",
+        "reason": "Transactional/idempotent onboarding and canonical inbox owners exist; no bypassing legacy route was identified. Requires route/UI inventory, not assumed code."
+      },
+      {
+        "id": "V10-104",
+        "reason": "Current module-boundary and V10 operation-coverage gates exist and are wired into their CI lanes; add only on a reproduced escaped violation."
+      },
+      {
+        "id": "V10-110",
+        "reason": "Routine responsibility attention and shared-Agent deletion guard exist. Broader object inventory/drill is unqualified; no specific uncovered object path proven."
+      },
+      {
+        "id": "V10-112",
+        "reason": "Shared/fleet fairness is conditional on a demonstrated process-local enforcement path; no denial-of-wallet counterexample was reproduced."
+      },
+      {
+        "id": "V10-151",
+        "reason": "EN/DA catalogs and locale validation exist; outstanding work is rendered state/accessibility acceptance unless review identifies a concrete incorrect state."
+      },
+      {
+        "id": "V10-152",
+        "reason": "Authoring routes/authority and scoped route/lifecycle tests exist; inventory entry-point parity before claiming a code defect."
+      },
+      {
+        "id": "V10-164",
+        "reason": "Activation/first-value implementation exists; the retained browser failure was a password-reset selector, not an activation failure. First-value candidate qualification remains open."
+      },
+      {
+        "id": "V10-165",
+        "reason": "Current Human/native review authority paths and scoped passing receipts exist; map missing lifecycle transitions before coding."
+      }
+    ],
+    "artifactGaps": [
+      {
+        "id": "V10-119",
+        "gap": "Cross-version clause-to-journey-to-current-receipt matrix on an immutable candidate."
+      },
+      {
+        "id": "V10-157",
+        "gap": "Final clause-to-claim crosswalk."
+      },
+      {
+        "id": "V10-150",
+        "gap": "Versioned, owner-reviewed starter/default experience profile and first-value acceptance across each offered install type; source assets exist."
+      }
+    ],
+    "nonSoftwareQualificationOrGovernanceGates": [
+      "V10-106 staffed real support provider/session; V10-108 actual saved-consumer retirement drill; V10-113 independent legal/security evidence review; V10-115 representative Human/assistive-technology study; V10-116 completed same-company export/delete/erasure; V10-117 security intake rehearsal and owner dispositions; V10-120 named GA decision; V10-149 original blocker closures; V10-151 rendered EN/DA/accessibility review; V10-154 provider policy/consumer qualification; V10-155 shadow evaluation; V10-156 exact integrated schedule lifecycle; V10-158 atomic consent race on an exact snapshot; V10-160 external semantic apply-once/runtime topology; V10-163 pinned host artifact; V10-166 production/SSO/mailer acceptance; V10-167 rendered EN/DA review; V10-168 beta profile and signed dossier."
+    ],
+    "interpretation": "This review identified no concrete software defect among V10-101, 103, 104, 110, 112, 151, 152, 164, or 165; V10-150 is a profile/evidence artifact gap. The remaining items are conditional review or qualification work unless a source path, missing guard, and trigger can be named. Other confirmed gaps in this matrix remain tied to concrete current-source findings. A retained receipt proves only its exact source snapshot, suite, environment, and outcomes; hashes identify the sampled current files and do not upgrade older receipts to current-source proof."
+  }
+}
