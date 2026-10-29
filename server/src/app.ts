@@ -995,7 +995,13 @@ export async function createApp(
   api.use(sidebarPreferenceRoutes(db));
   const announcementOptions = { ...opts.announcements, version: opts.hostVersion ?? serverVersion };
   const announcementFeed = announcementFeedService(announcementOptions);
-  api.use(announcementRoutes(db, announcementOptions, announcementFeed, opts.saasPlatform?.config.workerModelProfiles ?? []));
+  api.use(announcementRoutes(db, announcementOptions, announcementFeed, opts.saasPlatform?.config.workerModelProfiles ?? [], {
+    readOnly: opts.saasPlatform?.config.readOnlyModelProfiles ?? [],
+    support: opts.saasPlatform?.config.firstPartySupportModelProfiles ?? [],
+    jev: opts.saasPlatform?.config.jevSkillSuggestionProfiles ?? [],
+    sourceSha: opts.saasPlatform?.config.deployment.sourceSha,
+    protectedEvidenceOrigin: opts.saasPlatform?.config.objects.endpoint,
+  }));
   api.use(resourceMembershipRoutes(db));
   api.use(inboxDismissalRoutes(db));
   api.use(instanceSettingsRoutes(db, {

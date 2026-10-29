@@ -12,14 +12,14 @@ export interface SaasModelDependencyInventory {
   truncated: boolean;
   unresolvedAgentBindings: number;
   coverage: {
-    dependency: "agent_runtime" | "worker_qualification_profile" | "read_only_verifier" | "first_party_support";
+    dependency: "agent_runtime" | "worker_qualification_profile" | "read_only_verifier" | "first_party_support" | "jev_skill_suggestion";
     configuration: "database_inventory" | "configured" | "unconfigured";
     entries: number;
     untracked: number;
     unresolved: number;
   }[];
   entries: {
-    dependency: "agent_runtime" | "worker_qualification_profile" | "read_only_verifier" | "first_party_support";
+    dependency: "agent_runtime" | "worker_qualification_profile" | "read_only_verifier" | "first_party_support" | "jev_skill_suggestion";
     companyId: string;
     agentId: string | null;
     runtimeAdapter: string | null;
@@ -34,7 +34,7 @@ export interface SaasModelDependencyInventory {
     dataUseProfile: string | null;
     supportedInputOutput: ("text" | "image" | "audio" | "video")[] | null;
     toolUseCapability: boolean | null;
-    contextLimits: { inputTokensUpperBound: number; maxOutputTokens: number; maximumEnvelopeBytes: number } | null;
+    contextLimits: { inputTokensUpperBound: number; maxOutputTokens: number; maximumEnvelopeBytes: number | null } | null;
     costProfile: {
       currency: string;
       model: string;

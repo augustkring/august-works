@@ -3,7 +3,7 @@ help_article_id: working-with-coworkers
 title: Work with Co-workers
 summary: Add a Co-worker, check its status, and control when it can receive work
 audience: company-administrators
-product_capability_refs: [V10-075, V10-078, V10-103]
+product_capability_refs: [V10-074, V10-075, V10-078, V10-103, V10-108]
 screen_contract_refs: [SETTINGS-AGENTS-AI, AGENT-MONITOR, AGENT-CHANGE]
 owner: augustkring/august-works
 maturity: preview
@@ -34,5 +34,7 @@ For company members and their access, see [People and company access](/guides/bo
 ## Review a model change
 
 If Action Needed says that a current Agent model needs migration, open that Agent and review a replacement through its draft and qualified runtime candidate. Publishing a model change requires a Human review of the exact candidate and retained test evidence. A rollback also requires a currently qualified candidate and review. Blentera does not silently replace a retired model. If qualification or baseline evidence is missing, ask your administrator to resolve the block before publishing.
+
+If Action Needed concerns another company model dependency, open its support action. Ask an administrator to arrange a qualified replacement.
 
 After publishing, start a fresh draft from the current Agent version. Run each saved scenario again and have its result independently reviewed. In **Post-publication model check**, the person who published the change can record the current review once every scenario has been reviewed. A failed reviewed scenario produces a hold; missing or changed evidence requires another check. Recording the review leaves the current model routing in place. Use the separate pause control if work must stop, and review a qualified replacement or rollback before publishing another model change.

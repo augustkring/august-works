@@ -38,7 +38,9 @@ const support = () => ({
 }) as unknown as FirstPartySupportModelProfile;
 const empty = () => ({
   agents: [], workerProfiles: [], readOnlyProfiles: [], supportProfiles: [],
+  jevProfiles: [], jevSettings: [],
   workerProfilesConfigured: false, readOnlyProfilesConfigured: false, supportProfilesConfigured: false,
+  jevProfilesConfigured: false,
 });
 
 describe("operator model dependency inventory projection", () => {
@@ -129,5 +131,37 @@ describe("operator model dependency inventory projection", () => {
       expect.objectContaining({ dependency: "read_only_verifier", configuration: "unconfigured", entries: 0 }),
       expect.objectContaining({ dependency: "first_party_support", configuration: "unconfigured", entries: 0 }),
     ]));
+  });
+
+  it("projects only each Jev profile under its configured company and never exposes account or profile references", () => {
+    const otherCompanyId = "00000000-0000-4000-8000-000000000009";
+    const base = {
+      connectionId: "private-connection", grantId: "private-grant", profileId: "private-profile",
+      credentialBindingHash: "a".repeat(64), sourceSha: "b".repeat(40), qualificationHash: "c".repeat(64),
+      processor: "openrouter" as const, processorTermsHash: "d".repeat(64), retentionPolicyHash: "e".repeat(64), retentionDays: 0,
+      testedAt: "2026-10-28T00:00:00.000Z", expiresAt: "2026-10-29T00:00:00.000Z", processingRegion: "us" as const,
+      setupCostCapMinor: 5, setupMaxCalls: 3, inputTokensUpperBound: 100, maxOutputTokens: 20,
+      tariff: { provider: "openrouter" as const, model: "typesafe/jev-1.13", currency: "USD" as const,
+        inputMinorPerMillion: 100, outputMinorPerMillion: 200, fixedMinor: 0,
+        qualificationHash: "c".repeat(64), sourceSha: "b".repeat(40), testedAt: "2026-10-28T00:00:00.000Z", expiresAt: "2026-10-29T00:00:00.000Z" },
+    };
+    const lifecycle = { status: "active" as const, owner: "Jev operator", retirementAt: null, replacementProfileId: null,
+      regionOrRoutingProfile: "us", dataUseProfile: "terms-hash", supportedInputOutput: ["text"] as ("text" | "image" | "audio" | "video")[],
+      toolUseCapability: false, rateLimits: { requestsPerMinute: 10, tokensPerMinute: 1000 } };
+    const result = projectSaasModelDependencyInventory({ ...empty(), jevProfilesConfigured: true,
+      jevProfiles: [
+        { ...base, companyId, lifecycle } as unknown as import("../jev-skill-suggestions.js").JevSkillSuggestionProfile,
+        { ...base, companyId: otherCompanyId, connectionId: "other-private-connection", grantId: "other-private-grant", lifecycle: undefined } as unknown as import("../jev-skill-suggestions.js").JevSkillSuggestionProfile,
+      ],
+      jevSettings: [{ companyId, mode: "shadow", allowBackground: true, connectionId: base.connectionId, grantId: base.grantId }],
+    });
+    expect(result.entries.filter(entry => entry.dependency === "jev_skill_suggestion")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ companyId, provider: "openrouter", model: "typesafe/jev-1.13", lifecycleStatus: "active",
+        regionOrRoutingProfile: "us", dataUseProfile: "terms-hash", bindingState: "configured_profile" }),
+      expect.objectContaining({ companyId: otherCompanyId, lifecycleStatus: "untracked", bindingState: "configured_not_current_agent_runtime" }),
+    ]));
+    expect(JSON.stringify(result)).not.toContain("private-connection");
+    expect(JSON.stringify(result)).not.toContain("private-grant");
+    expect(JSON.stringify(result)).not.toContain("private-profile");
   });
 });

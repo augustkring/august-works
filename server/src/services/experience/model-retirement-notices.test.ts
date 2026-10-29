@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WorkerModelProfile } from "../orchestration/worker-model-profiles.js";
-import { projectCurrentModelRetirementNotice } from "./model-retirement-notices.js";
+import { projectCurrentModelRetirementNotice, projectOperatorModelRetirementNotice } from "./model-retirement-notices.js";
 
 const companyId = "00000000-0000-4000-8000-000000000001";
 const agentId = "00000000-0000-4000-8000-000000000002";
@@ -32,5 +32,36 @@ describe("canonical model retirement notice projection", () => {
     expect(projectCurrentModelRetirementNotice(companyId, agent, [profile({ lifecycle: undefined })])).toBeNull();
     expect(projectCurrentModelRetirementNotice(companyId, agent, [profile({ companyId: "00000000-0000-4000-8000-000000000099" })])).toBeNull();
     expect(projectCurrentModelRetirementNotice(companyId, agent, [profile({ tariff: { model: "different-model" } })])).toBeNull();
+  });
+
+  it("projects a blocked lifecycle for the currently selected Agent model", () => {
+    expect(projectCurrentModelRetirementNotice(companyId, agent, [profile({ lifecycle: {
+      ...profile().lifecycle!, status: "blocked", retirementAt: null,
+    } })])).toMatchObject({
+      affectedCompanyId: companyId, affectedAgentId: agentId, effectiveAt: null,
+      completionOwner: "current_agent_model_selection",
+    });
+  });
+
+  it("projects only the selected tenant dependency as a sanitized Human operator action", () => {
+    const lifecycle = { status: "migration_required", owner: "private owner", retirementAt: "2026-11-01T00:00:00Z",
+      replacementProfileId: "private replacement", regionOrRoutingProfile: "private region", dataUseProfile: "private terms",
+      supportedInputOutput: ["text"] as ("text" | "image" | "audio" | "video")[], toolUseCapability: false,
+      rateLimits: { requestsPerMinute: 10, tokensPerMinute: 1000 } };
+    const notice = projectOperatorModelRetirementNotice(companyId, "jev_skill_suggestion", lifecycle, Date.parse("2026-10-28T00:00:00Z"));
+    expect(notice).toEqual({
+      id: expect.any(String), category: "action_required",
+      title: "A company model dependency needs operator review",
+      summary: "An enabled model dependency is blocked or nearing retirement. Contact support to review its migration.",
+      affectedCompanyId: companyId, dependency: "jev_skill_suggestion", effectiveAt: lifecycle.retirementAt,
+      actionRequired: true, mandatoryVisibility: true, completionOwner: "operator_model_dependency", actionPath: "/company/help",
+    });
+    expect(JSON.stringify(notice)).not.toContain("private");
+    expect(projectOperatorModelRetirementNotice(companyId, "read_only_verifier", undefined)).toBeNull();
+    expect(projectOperatorModelRetirementNotice("00000000-0000-4000-8000-000000000099", "read_only_verifier", lifecycle)).not.toMatchObject({
+      affectedCompanyId: companyId,
+    });
+    expect(projectOperatorModelRetirementNotice(companyId, "jev_skill_suggestion", { ...lifecycle, status: "blocked" }))
+      .toMatchObject({ affectedCompanyId: companyId, completionOwner: "operator_model_dependency", actionPath: "/company/help" });
   });
 });

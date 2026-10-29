@@ -2,6 +2,7 @@ import type { SaasModelDependencyInventory } from "@paperclipai/shared";
 import type { WorkerModelProfile } from "../orchestration/worker-model-profiles.js";
 import type { ReadOnlyModelProfile } from "../orchestration/read-only-model-profiles.js";
 import type { FirstPartySupportModelProfile } from "../orchestration/first-party-support-model-profiles.js";
+import type { JevSkillSuggestionProfile } from "../jev-skill-suggestions.js";
 import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 
 type AgentModelBinding = { id: string; companyId: string; adapterType: string; adapterConfig: unknown; runtimeConfig: unknown };
@@ -30,9 +31,12 @@ export function projectSaasModelDependencyInventory(input: {
   workerProfiles: readonly WorkerModelProfile[];
   readOnlyProfiles: readonly ReadOnlyModelProfile[];
   supportProfiles: readonly FirstPartySupportModelProfile[];
+  jevProfiles: readonly JevSkillSuggestionProfile[];
+  jevSettings: readonly { companyId: string; mode: string; allowBackground: boolean; connectionId: string | null; grantId: string | null }[];
   workerProfilesConfigured: boolean;
   readOnlyProfilesConfigured: boolean;
   supportProfilesConfigured: boolean;
+  jevProfilesConfigured: boolean;
 }): SaasModelDependencyInventory {
   const entries: SaasModelDependencyInventory["entries"] = [];
   const workerProfileUse = new Set<string>();
@@ -223,6 +227,36 @@ export function projectSaasModelDependencyInventory(input: {
     });
   }
 
+  for (const profile of input.jevProfiles) {
+    const setting = input.jevSettings.find(value => value.companyId === profile.companyId && value.connectionId === profile.connectionId &&
+      value.grantId === profile.grantId);
+    const selectedForBackground = setting?.mode === "shadow" && setting.allowBackground;
+    entries.push({
+      dependency: "jev_skill_suggestion",
+      companyId: profile.companyId,
+      agentId: null,
+      runtimeAdapter: null,
+      provider: profile.tariff.provider,
+      model: profile.tariff.model,
+      modelVersionOrReleaseIdentity: profile.tariff.model,
+      lifecycleStatus: profile.lifecycle?.status ?? "untracked",
+      lifecycleOwner: profile.lifecycle?.owner ?? null,
+      retirementAt: profile.lifecycle?.retirementAt ?? null,
+      qualificationHash: profile.qualificationHash,
+      regionOrRoutingProfile: profile.lifecycle?.regionOrRoutingProfile ?? profile.processingRegion,
+      dataUseProfile: profile.lifecycle?.dataUseProfile ?? null,
+      supportedInputOutput: profile.lifecycle?.supportedInputOutput ?? ["text"],
+      toolUseCapability: profile.lifecycle?.toolUseCapability ?? false,
+      contextLimits: { inputTokensUpperBound: profile.inputTokensUpperBound, maxOutputTokens: profile.maxOutputTokens, maximumEnvelopeBytes: null },
+      costProfile: { currency: profile.tariff.currency, model: profile.tariff.model,
+        inputMinorPerMillion: profile.tariff.inputMinorPerMillion, outputMinorPerMillion: profile.tariff.outputMinorPerMillion,
+        fixedMinor: profile.tariff.fixedMinor, expiresAt: profile.tariff.expiresAt },
+      rateLimits: profile.lifecycle?.rateLimits ?? null,
+      runtimeAvailability: "not_assessed",
+      bindingState: selectedForBackground ? "configured_profile" : "configured_not_current_agent_runtime",
+    });
+  }
+
   for (const profile of input.workerProfiles) {
     if (workerProfileUse.has(profile.id)) continue;
     const lifecycle = profile.lifecycle;
@@ -260,8 +294,9 @@ export function projectSaasModelDependencyInventory(input: {
       dependency,
       configuration: dependency === "agent_runtime" ? "database_inventory" as const :
         dependency === "worker_qualification_profile" ? input.workerProfilesConfigured ? "configured" as const : "unconfigured" as const :
-          dependency === "read_only_verifier" ? input.readOnlyProfilesConfigured ? "configured" as const : "unconfigured" as const :
-            input.supportProfilesConfigured ? "configured" as const : "unconfigured" as const,
+      dependency === "read_only_verifier" ? input.readOnlyProfilesConfigured ? "configured" as const : "unconfigured" as const :
+            dependency === "first_party_support" ? input.supportProfilesConfigured ? "configured" as const : "unconfigured" as const :
+              input.jevProfilesConfigured ? "configured" as const : "unconfigured" as const,
       entries: relevant.length,
       untracked: relevant.filter(entry => entry.lifecycleStatus === "untracked").length,
       unresolved: relevant.filter(entry => entry.bindingState === "unresolved" ||
@@ -269,7 +304,7 @@ export function projectSaasModelDependencyInventory(input: {
     };
   };
   const dependencies: SaasModelDependencyInventory["coverage"][number]["dependency"][] =
-    ["agent_runtime", "worker_qualification_profile", "read_only_verifier", "first_party_support"];
+    ["agent_runtime", "worker_qualification_profile", "read_only_verifier", "first_party_support", "jev_skill_suggestion"];
   entries.sort((left, right) =>
     left.dependency.localeCompare(right.dependency) ||
     left.companyId.localeCompare(right.companyId) ||

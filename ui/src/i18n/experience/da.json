@@ -2391,6 +2391,9 @@
       "modelMigrationSummary": "Gennemgå den berørte Agent, og offentliggør en aktuelt kvalificeret erstatningsmodel.",
       "modelMigrationDeadline": "Ejerangivet udfasningsdato: {{date}}",
       "reviewAgent": "Gennemgå Agent",
+      "modelDependencyTitle": "En modelafhængighed kræver operatørens gennemgang",
+      "modelDependencySummary": "En aktiveret modelafhængighed er blokeret eller nærmer sig udfasning. Kontakt support for at gennemgå migreringen.",
+      "contactSupport": "Kontakt support",
       "unavailable": "Vi kunne ikke bekræfte påkrævede meddelelser for denne virksomhed. Opdater siden for at kontrollere igen."
     }
   },

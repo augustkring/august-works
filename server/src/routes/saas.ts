@@ -21,6 +21,7 @@ import {
   runtimeVersionCatalog,
   runtimeSandboxBindings,
   supportSessions,
+  jevDecisionSettings,
   deploymentRecords,
   platformSchedulerLeases,
   platformAdminAudit,
@@ -709,6 +710,14 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           code: "model_dependency_inventory_unavailable",
           retryable: true,
         });
+      const jevSettings = await reader.select({ companyId: jevDecisionSettings.companyId, mode: jevDecisionSettings.mode,
+        allowBackground: jevDecisionSettings.allowBackground, connectionId: jevDecisionSettings.connectionId, grantId: jevDecisionSettings.grantId })
+        .from(jevDecisionSettings).limit(10001);
+      if (jevSettings.length > 10000)
+        throw new HttpError(503, "The bounded model dependency inventory is unavailable", {
+          code: "model_dependency_inventory_unavailable",
+          retryable: true,
+        });
       const [jobs, hosts, profiles, versions, support, deployments, queues] =
         await Promise.all([
           reader
@@ -801,9 +810,12 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           workerProfiles: platform.config.workerModelProfiles ?? [],
           readOnlyProfiles: platform.config.readOnlyModelProfiles ?? [],
           supportProfiles: platform.config.firstPartySupportModelProfiles ?? [],
+          jevProfiles: platform.config.jevSkillSuggestionProfiles ?? [],
+          jevSettings,
           workerProfilesConfigured: Boolean(platform.config.workerModelProfiles?.length),
           readOnlyProfilesConfigured: Boolean(platform.config.readOnlyModelProfiles?.length),
           supportProfilesConfigured: Boolean(platform.config.firstPartySupportModelProfiles?.length),
+          jevProfilesConfigured: Boolean(platform.config.jevSkillSuggestionProfiles?.length),
         }),
       });
     });

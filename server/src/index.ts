@@ -61,7 +61,6 @@ import {
 } from "@paperclipai/db";
 import detectPort from "detect-port";
 import { createApp } from "./app.js";
-import { configuredJevSkillSuggestionProfiles } from "./services/jev-skill-suggestions.js";
 import { loadConfig } from "./config.js";
 import { logger } from "./middleware/logger.js";
 import { setStartupRecoveryPhase } from "./startup-recovery-state.js";
@@ -934,7 +933,7 @@ async function startServerWithDatabaseTeardown(
   // self-hosted: createApp falls back to its built-in kubernetes-only default.
   const managedPluginAutoInstall = config.deploymentProfile === "saas" ? [] : managedConfig?.plugins.autoInstall ?? null;
   const supportCaseGateway = configuredSupportCaseGateway(process.env);
-  const jevProfiles = platform ? configuredJevSkillSuggestionProfiles(process.env.BLENTERA_JEV_SKILL_PROFILES_JSON, platform.config.deployment.sourceSha) : [];
+  const jevProfiles = platform?.config.jevSkillSuggestionProfiles ?? [];
   const supportCaseDelivery = supportCaseGateway ? supportCaseDeliveryService(db as any, supportCaseGateway) : null;
   const app = await createApp(db as any, {
     uiMode,

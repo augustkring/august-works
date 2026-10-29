@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { agentExecutionManifests, enterpriseIdentityPolicies, heartbeatRuns, issues, jevDecisionSettings, orchestrationPlans, type Db } from "@paperclipai/db";
 import type { AuthorizationActor } from "./authorization.js";
-import { jevSkillSuggestionService } from "./jev-skill-suggestions.js";
+import { configuredJevSkillSuggestionProfiles, jevProfileCurrent, jevSkillSuggestionService,
+  projectCurrentJevSkillSuggestionRetirementNotice } from "./jev-skill-suggestions.js";
 import { runJevDecision } from "./jev-decision-provider.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { hashContextPolicySnapshot } from "./context/context-manifest.js";
@@ -35,6 +36,51 @@ describe("Jev Skill shadow admission", () => {
     mocks.claimForDispatch.mockReset().mockResolvedValue({ id: "reservation-1" }); mocks.recordOutcome.mockReset();
   });
 
+  it("retains schema-valid lifecycle-blocked deployment rows for inventory while profile-hash changes invalidate admission", () => {
+    const now = new Date(), sourceSha = "b".repeat(40), qualificationHash = "c".repeat(64), testedAt = new Date(now.getTime() - 1_000).toISOString();
+    const expiresAt = new Date(now.getTime() + 60_000).toISOString();
+    const profileBody = { companyId: "52000000-0000-4000-8000-000000000001", connectionId: "52000000-0000-4000-8000-000000000002",
+      grantId: "52000000-0000-4000-8000-000000000003", profileId: "inventory-jev", credentialBindingHash: qualificationHash,
+      sourceSha, qualificationHash, processor: "openrouter" as const, processorTermsHash: qualificationHash, retentionPolicyHash: "d".repeat(64),
+      retentionDays: 0, testedAt, expiresAt, processingRegion: "us" as const, setupCostCapMinor: 5, setupMaxCalls: 3,
+      tariff: { provider: "openrouter" as const, model: "typesafe/jev-1.13", currency: "USD" as const, inputMinorPerMillion: 1,
+        outputMinorPerMillion: 1, fixedMinor: 0, qualificationHash, sourceSha, testedAt, expiresAt },
+      inputTokensUpperBound: 100, maxOutputTokens: 20,
+      lifecycle: { status: "retired" as const, owner: "fixture owner", retirementAt: null, replacementProfileId: null,
+        regionOrRoutingProfile: "us", dataUseProfile: "fixture terms", supportedInputOutput: ["text"] as ("text" | "image" | "audio" | "video")[],
+        toolUseCapability: false, rateLimits: { requestsPerMinute: 10, tokensPerMinute: 1000 } },
+    };
+    const profile = { ...profileBody, profileHash: nativeSha256(profileBody) };
+    const loaded = configuredJevSkillSuggestionProfiles(JSON.stringify([profile]), sourceSha);
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]?.lifecycle?.status).toBe("retired");
+    expect(jevProfileCurrent(loaded[0]!, { companyId: profile.companyId, connectionId: profile.connectionId, grantId: profile.grantId, sourceSha }, now)).toBe(false);
+    const selectedSettings = { mode: "shadow", allowBackground: true, connectionId: profile.connectionId, grantId: profile.grantId };
+    expect(projectCurrentJevSkillSuggestionRetirementNotice(profile.companyId, selectedSettings, loaded, sourceSha, now))
+      .toMatchObject({ affectedCompanyId: profile.companyId, dependency: "jev_skill_suggestion", completionOwner: "operator_model_dependency" });
+    const blockedBody = { ...profileBody, lifecycle: { ...profileBody.lifecycle, status: "blocked" as const } };
+    const blockedProfile = { ...blockedBody, profileHash: nativeSha256(blockedBody) };
+    expect(projectCurrentJevSkillSuggestionRetirementNotice(profile.companyId, selectedSettings, [blockedProfile], sourceSha, now))
+      .toMatchObject({ affectedCompanyId: profile.companyId, dependency: "jev_skill_suggestion", completionOwner: "operator_model_dependency" });
+    const pastDateBody = { ...profileBody, lifecycle: { ...profileBody.lifecycle, status: "deprecated" as const,
+      retirementAt: new Date(now.getTime() - 1_000).toISOString() } };
+    const pastDateProfile = { ...pastDateBody, profileHash: nativeSha256(pastDateBody) };
+    expect(projectCurrentJevSkillSuggestionRetirementNotice(profile.companyId, selectedSettings, [pastDateProfile], sourceSha, now))
+      .toMatchObject({ affectedCompanyId: profile.companyId, dependency: "jev_skill_suggestion", completionOwner: "operator_model_dependency" });
+    expect(projectCurrentJevSkillSuggestionRetirementNotice(profile.companyId, { ...selectedSettings, mode: "off" }, loaded, sourceSha, now)).toBeNull();
+    expect(projectCurrentJevSkillSuggestionRetirementNotice(profile.companyId,
+      { ...selectedSettings, connectionId: "52000000-0000-4000-8000-000000000099" }, loaded, sourceSha, now)).toBeNull();
+    expect(projectCurrentJevSkillSuggestionRetirementNotice("52000000-0000-4000-8000-000000000099", selectedSettings, loaded, sourceSha, now)).toBeNull();
+    expect(projectCurrentJevSkillSuggestionRetirementNotice(profile.companyId, selectedSettings,
+      [{ ...loaded[0]!, companyId: "52000000-0000-4000-8000-000000000099" }], sourceSha, now)).toBeNull();
+    expect(projectCurrentJevSkillSuggestionRetirementNotice(profile.companyId, selectedSettings, [...loaded, ...loaded], sourceSha, now)).toBeNull();
+    const activeBody = { ...profileBody, lifecycle: { ...profileBody.lifecycle, status: "active" as const } };
+    const activeProfile = { ...activeBody, profileHash: nativeSha256(activeBody) };
+    expect(projectCurrentJevSkillSuggestionRetirementNotice(profile.companyId, selectedSettings, [activeProfile], sourceSha, now)).toBeNull();
+    const staleHash = { ...profile, lifecycle: { ...profile.lifecycle!, owner: "changed owner" } };
+    expect(jevProfileCurrent(staleHash, { companyId: profile.companyId, connectionId: profile.connectionId, grantId: profile.grantId, sourceSha }, now)).toBe(false);
+  });
+
   it("does not dispatch when the opt-in is on but no operator-qualified profile exists", async () => {
     const run = { companyId: "company-1", id: "run-1", agentId: "agent-1", status: "running", responsibleUserId: "human-1",
       nativeIssueId: "task-1", contextSnapshot: {}, activeIdentityContextId: null };
@@ -58,6 +104,42 @@ describe("Jev Skill shadow admission", () => {
       query: "review evidence", requirements: [], baselineSkillIds: [], manifestHash: manifest.hash }))
       .resolves.toEqual({ dispatched: false, reason: "unqualified_profile" });
     expect(provider).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["retired status", { status: "retired" as const, retirementAt: null }],
+    ["elapsed retirement date", { status: "deprecated" as const, retirementAt: new Date(Date.now() - 60_000).toISOString() }],
+  ])("does not schedule Jev shadow dispatch with %s", async (_name, state) => {
+    const now = new Date(), companyId = "51000000-0000-4000-8000-000000000001", agentId = "51000000-0000-4000-8000-000000000002";
+    const runId = "51000000-0000-4000-8000-000000000003", taskId = "51000000-0000-4000-8000-000000000004";
+    const connectionId = "51000000-0000-4000-8000-000000000005", grantId = "51000000-0000-4000-8000-000000000006";
+    const sourceSha = "a".repeat(40), qualificationHash = "b".repeat(64), testedAt = new Date(now.getTime() - 1_000).toISOString();
+    const expiresAt = new Date(now.getTime() + 60_000).toISOString();
+    const lifecycle = { status: state.status, owner: "fixture operator", retirementAt: state.retirementAt, replacementProfileId: null,
+      regionOrRoutingProfile: "fixture-us", dataUseProfile: "fixture-terms", supportedInputOutput: ["text"] as ("text" | "image" | "audio" | "video")[],
+      toolUseCapability: false, rateLimits: { requestsPerMinute: 10, tokensPerMinute: 1000 } };
+    const profileBody = { companyId, connectionId, grantId, profileId: "retired-jev", credentialBindingHash: createHash("sha256").update("test-key").digest("hex"),
+      sourceSha, qualificationHash, processor: "openrouter" as const, processorTermsHash: qualificationHash, retentionPolicyHash: "c".repeat(64), retentionDays: 0,
+      setupCostCapMinor: 5, setupMaxCalls: 3, testedAt, expiresAt, processingRegion: "us" as const, lifecycle,
+      tariff: { provider: "openrouter" as const, model: "typesafe/jev-1.13", currency: "USD" as const, inputMinorPerMillion: 1, outputMinorPerMillion: 1,
+        fixedMinor: 0, qualificationHash, sourceSha, testedAt, expiresAt }, inputTokensUpperBound: 100, maxOutputTokens: 20 };
+    const profile = { ...profileBody, profileHash: nativeSha256(profileBody) };
+    const run = { companyId, id: runId, agentId, status: "running", responsibleUserId: "human-1", nativeIssueId: taskId,
+      executionControlDeadlineAt: new Date(now.getTime() + 60_000), contextSnapshot: {}, activeIdentityContextId: null };
+    const task = { companyId, id: taskId, status: "open", projectId: "project-1", parentId: null, assigneeAgentId: agentId, assigneeUserId: null };
+    const settings = { companyId, mode: "shadow", allowBackground: true, connectionId, grantId };
+    const manifestBody = { runId, agentId, skills: [] };
+    const manifest = { companyId, runId, hash: hashContextPolicySnapshot(manifestBody), manifest: manifestBody };
+    const data = new Map<unknown, unknown[]>([[heartbeatRuns, [run]], [issues, [task]], [agentExecutionManifests, [manifest]], [jevDecisionSettings, [settings]]]);
+    const db = { select: () => ({ from: (table: unknown) => ({ where: async () => data.get(table) ?? [] }) }) } as unknown as Db;
+    const provider = vi.fn<typeof runJevDecision>();
+    const service = jevSkillSuggestionService(db, { sourceSha, profiles: [profile], provider });
+    const actor: AuthorizationActor = { type: "agent", source: "none", companyId, agentId, runId, onBehalfOfUserId: "human-1" };
+    await expect(service.shadow(actor, { companyId, agentId, runId, issueId: taskId, query: "review evidence", requirements: [],
+      baselineSkillIds: [], manifestHash: manifest.hash })).resolves.toEqual({ dispatched: false, reason: "unqualified_profile" });
+    expect(provider).not.toHaveBeenCalled();
+    expect(mocks.selectDecision).not.toHaveBeenCalled();
+    expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
   it("fails closed when a valid server profile exists but the company processing policy is absent", async () => {

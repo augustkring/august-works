@@ -34,7 +34,7 @@ const pg = await getEmbeddedPostgresTestSupport();
   let wire: ReturnType<typeof vi.fn<typeof fetch>>;
   let app: express.Express;
 
-  function profileFor(expiresAt = new Date(Date.now() + 60_000).toISOString()): JevSkillSuggestionProfile {
+  function profileFor(expiresAt = new Date(Date.now() + 60_000).toISOString(), lifecycle?: JevSkillSuggestionProfile["lifecycle"]): JevSkillSuggestionProfile {
     const testedAt = new Date(Date.now() - 1_000).toISOString(), qualificationHash = "b".repeat(64);
     const base = {
       companyId: f.home, connectionId, grantId, profileId: `jev-route-${f.home.slice(0, 8)}`,
@@ -43,6 +43,7 @@ const pg = await getEmbeddedPostgresTestSupport();
       testedAt, expiresAt, processingRegion: "us" as const, setupCostCapMinor: 5, setupMaxCalls: 3,
       tariff: { provider: "openrouter" as const, model: "typesafe/jev-1.13", currency: "USD" as const,
         inputMinorPerMillion: 1000, outputMinorPerMillion: 1000, fixedMinor: 0, qualificationHash, sourceSha, testedAt, expiresAt },
+      ...(lifecycle ? { lifecycle } : {}),
       inputTokensUpperBound: 100, maxOutputTokens: 16,
     };
     return { ...base, profileHash: nativeSha256(base) };
@@ -118,6 +119,23 @@ const pg = await getEmbeddedPostgresTestSupport();
     expect(budget).toMatchObject({ purpose: "decision_skill_suggestion", funder: "company_connection", reservedCalls: 1, maxCalls: 3 });
     const receipt = await db.select().from(activityLog).where(eq(activityLog.action, "orchestration.company_purpose_model_outcome_recorded"));
     expect(receipt[0]?.details).toMatchObject({ purpose: "decision_skill_suggestion", actualCostAmount: "0.0005166", costStatus: "reported", debitRetained: true });
+  });
+
+  it.each([
+    ["retired status", { status: "retired" as const, retirementAt: null }],
+    ["elapsed retirement date", { status: "deprecated" as const, retirementAt: new Date(Date.now() - 60_000).toISOString() }],
+  ])("rejects the disclosed setup test before provider egress when Jev lifecycle has %s", async (_name, state) => {
+    const base = profileFor();
+    const lifecycle = { status: state.status, owner: "fixture operator", retirementAt: state.retirementAt, replacementProfileId: null,
+      regionOrRoutingProfile: "fixture-us", dataUseProfile: "fixture-terms", supportedInputOutput: ["text"] as ("text" | "image" | "audio" | "video")[],
+      toolUseCapability: false, rateLimits: { requestsPerMinute: 10, tokensPerMinute: 1000 } };
+    Object.assign(profile, profileFor(new Date(Date.now() + 60_000).toISOString(), lifecycle));
+    await request(app).post(path()).send(body()).expect(409);
+    expect(wire).not.toHaveBeenCalled();
+    expect(connectionMocks.credential).not.toHaveBeenCalled();
+    const reservations = await db.select().from(orchestrationCompanyPurposeReservations).where(eq(orchestrationCompanyPurposeReservations.companyId, f.home));
+    expect(reservations).toHaveLength(0);
+    expect(base.lifecycle).toBeUndefined();
   });
 
   it("rejects missing consent, caller-supplied principal, unsaved account, and mismatched profile before any provider request", async () => {

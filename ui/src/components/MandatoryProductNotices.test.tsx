@@ -84,6 +84,22 @@ describe("mandatory product notices", () => {
     expect(api.complete).not.toHaveBeenCalled();
   });
 
+  it("shows operator-managed model retirement as a Human support action, not an Agent action", async () => {
+    const modelNotice = { id: "00000000-0000-4000-8000-000000000011", category: "action_required" as const,
+      title: "A company model dependency needs operator review" as const,
+      summary: "An enabled model dependency is blocked or nearing retirement. Contact support to review its migration." as const,
+      affectedCompanyId: companyId, dependency: "jev_skill_suggestion" as const, effectiveAt: null,
+      actionRequired: true as const, mandatoryVisibility: true as const,
+      completionOwner: "operator_model_dependency" as const, actionPath: "/company/help" as const };
+    api.actionRequired.mockReset().mockResolvedValue({ configured: true, notices: [], modelNotices: [modelNotice] });
+    await render();
+    await act(async () => { await vi.waitFor(() => expect(container.querySelector("a")).not.toBeNull()); });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("announcement.mandatory.modelDependencyTitle");
+    expect(container.querySelector("a")?.getAttribute("href")).toBe("/company/help");
+    expect(container.querySelector("a")?.textContent).toContain("announcement.mandatory.contactSupport");
+    expect(container.querySelector("a")?.textContent).not.toContain("reviewAgent");
+  });
+
   it("requires an explicit action for a notice-mode receipt and does not complete an admin-only action for a member", async () => {
     const readNotice: TrustAcceptanceNoticeProjection = { ...notice,
       summary: "Review the current version (4) and mark the notice as read.",

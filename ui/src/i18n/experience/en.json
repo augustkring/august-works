@@ -2391,6 +2391,9 @@
       "modelMigrationSummary": "Review the affected Agent and publish a currently qualified replacement model.",
       "modelMigrationDeadline": "Owner-declared retirement date: {{date}}",
       "reviewAgent": "Review Agent",
+      "modelDependencyTitle": "A company model dependency needs operator review",
+      "modelDependencySummary": "An enabled model dependency is blocked or nearing retirement. Contact support to review its migration.",
+      "contactSupport": "Contact support",
       "unavailable": "We could not verify required notices for this company. Refresh to check again."
     }
   },

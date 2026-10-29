@@ -2,6 +2,7 @@ import { z } from "zod";
 import { loadReadOnlyModelProfiles, type ReadOnlyModelProfile } from "./services/orchestration/read-only-model-profiles.js";
 import { loadWorkerModelProfiles, type WorkerModelProfile } from "./services/orchestration/worker-model-profiles.js";
 import { loadFirstPartySupportModelProfiles, type FirstPartySupportModelProfile } from "./services/orchestration/first-party-support-model-profiles.js";
+import { configuredJevSkillSuggestionProfiles } from "./services/jev-skill-suggestions.js";
 
 const required = z.string().trim().min(1);
 const secret = z.string().min(32);
@@ -119,6 +120,7 @@ export type SaasPlatformConfig = {
   readOnlyModelProfiles?: ReadOnlyModelProfile[];
   workerModelProfiles?: WorkerModelProfile[];
   firstPartySupportModelProfiles?: FirstPartySupportModelProfile[];
+  jevSkillSuggestionProfiles?: import("./services/jev-skill-suggestions.js").JevSkillSuggestionProfile[];
   environment: "staging" | "production";
   databaseUrl: string;
   runLogs?: {
@@ -347,6 +349,10 @@ export function loadSaasPlatformConfig(
     ...(v.AW_READ_ONLY_MODEL_PROFILES_PATH || v.AW_READ_ONLY_MODEL_PROFILES_SHA256 ? {
       readOnlyModelProfiles: loadReadOnlyModelProfiles(v.AW_READ_ONLY_MODEL_PROFILES_PATH, v.AW_READ_ONLY_MODEL_PROFILES_SHA256?.toLowerCase()),
     } : {}),
+    ...(() => {
+      const profiles = configuredJevSkillSuggestionProfiles(env.BLENTERA_JEV_SKILL_PROFILES_JSON, v.AW_DEPLOYMENT_SOURCE_SHA);
+      return profiles.length ? { jevSkillSuggestionProfiles: profiles } : {};
+    })(),
     deployment: {
       imageDigest: v.AW_DEPLOYMENT_IMAGE_DIGEST,
       sourceSha: v.AW_DEPLOYMENT_SOURCE_SHA,

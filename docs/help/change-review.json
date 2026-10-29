@@ -54,7 +54,7 @@
       "source": "packages/shared/src/app-definitions/slack.json",
       "articleId": "apps-and-connections",
       "sourceSha256": "09b6ea84fbed511ce5d7dd8c8b8254a6b28b381c2f3a1f48ea268f509acea26c",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
       "rationale": "The paired article describes the reviewed Slack OAuth scope set, personal-account default, explicit organization sharing, and the separate bot-app setup."
     },
@@ -62,23 +62,23 @@
       "source": "server/src/routes/jev-decisions.ts",
       "articleId": "apps-and-connections",
       "sourceSha256": "67c33e243b5fe0b68661b811b7840024bbb844b4f201dd5460bc561e102bde6c",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "no_change",
       "rationale": "The setup route now records company-purpose wire admission before provider dispatch; the existing article already covers per-test consent, reserved charge and retaining an unknown result."
     },
     {
       "source": "server/src/services/jev-skill-suggestions.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "7474213a4f42f6af67158e19584dfde2f1c8ad7ba43a1902e8d61f28aa9e33d2",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "sourceSha256": "f7b2cce3216d1fd4c5a7e45e82b37643a5ea19b9cf8d5e4867badb3b9b937e01",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
-      "rationale": "The current flow records the provider dispatch receipt before calling OpenRouter; the article already explains explicit per-test consent, reserved cost, and not retrying an unknown result."
+      "rationale": "Reviewed the current exact-profile lifecycle admission and selected-profile notices. The EN/DA Jev section now explains blocked or retired models, Action Needed, and operator qualification of a replacement."
     },
     {
       "source": "server/src/services/paperclip-cloud-connector.ts",
       "articleId": "apps-and-connections",
       "sourceSha256": "0aef1927ff92e2753ff662b91c2d5f19dbbc4732f49795ae262245514bbb32f1",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
       "rationale": "The EN/DA article limits the standard setup claim to an operator-configured managed Slack method; missing app credentials leave the advanced route available."
     },
@@ -86,7 +86,7 @@
       "source": "server/src/services/tool-access.ts",
       "articleId": "apps-and-connections",
       "sourceSha256": "b374907ced2d9212e852b38abb07702ade2e56b3f4cddb422226d008abac92d3",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "no_change",
       "rationale": "Project creation now rechecks the exact repository connection and grant witness under database locks, so a repository grant revoked after discovery cannot authorize creation. The connection article already requires reviewing current account/scope and following the displayed repair action."
     },
@@ -94,7 +94,7 @@
       "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "78a47504f8b19d7fd7ef9f25be4593789dcc2b3617e3196ef61c511186437218",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
       "rationale": "The optional Jev section matches the settings UI: off by default, a separate background-check control, and a disclosed fixed-sample test that does not qualify suggestions."
     },
@@ -102,7 +102,7 @@
       "source": "ui/src/features/connections/ConnectionSetupFlow.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "a713ebc7f63f3d85dcbaf959ca6fa09b5cf9177291e6d52415a42a35f751e35d",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
       "rationale": "Current connection setup changes product labels to Blentera and retains the same-session OAuth callback; the paired guidance names the current brand and explains restarting sign-in in the original session."
     },
@@ -110,7 +110,7 @@
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "6bd3df903c2b8b91aaaf964a0c3c7ca6a07b842359b6d68242464a946527fb44",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
       "rationale": "The paired article reflects the permission boundary: a connection alone does not enable every action, and action settings must be reviewed separately."
     },
@@ -118,7 +118,7 @@
       "source": "ui/src/pages/apps/AppDetail.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "65a5c92be80774317f076327c4057bf243c5385a2de188603f79341f5b849a1c",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
       "rationale": "Connection health guidance now describes provider-reported expiry and the current repair action shown in the connection detail."
     },
@@ -126,7 +126,7 @@
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
       "rationale": "The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
@@ -134,7 +134,7 @@
       "source": "ui/src/pages/apps/Connections.tsx",
       "articleId": "apps-and-connections",
       "sourceSha256": "684171dfe488923bfd48fcef60a203a0bdb06d5839ef3452abf2744374544815",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
       "rationale": "Current connection labels identify Blentera and legacy Paperclip Cloud; the article covers the managed sign-in boundary without promising cloud enrollment."
     },
@@ -142,7 +142,7 @@
       "source": "packages/shared/src/app-definitions/slack.json",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "09b6ea84fbed511ce5d7dd8c8b8254a6b28b381c2f3a1f48ea268f509acea26c",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
       "rationale": "Danish version checked against the same current behavior: The paired article describes the reviewed Slack OAuth scope set, personal-account default, explicit organization sharing, and the separate bot-app setup."
     },
@@ -150,23 +150,23 @@
       "source": "server/src/routes/jev-decisions.ts",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "67c33e243b5fe0b68661b811b7840024bbb844b4f201dd5460bc561e102bde6c",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "no_change",
       "rationale": "Danish guidance checked against the same source behavior. The setup route now records company-purpose wire admission before provider dispatch; the existing article already covers per-test consent, reserved charge and retaining an unknown result."
     },
     {
       "source": "server/src/services/jev-skill-suggestions.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "7474213a4f42f6af67158e19584dfde2f1c8ad7ba43a1902e8d61f28aa9e33d2",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "sourceSha256": "f7b2cce3216d1fd4c5a7e45e82b37643a5ea19b9cf8d5e4867badb3b9b937e01",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: the current flow records the provider dispatch receipt before calling OpenRouter; the article already explains explicit per-test consent, reserved cost, and not retrying an unknown result."
+      "rationale": "Reviewed the current exact-profile lifecycle admission and selected-profile notices. The EN/DA Jev section now explains blocked or retired models, Action Needed, and operator qualification of a replacement."
     },
     {
       "source": "server/src/services/paperclip-cloud-connector.ts",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "0aef1927ff92e2753ff662b91c2d5f19dbbc4732f49795ae262245514bbb32f1",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
       "rationale": "Danish version checked against the same current behavior: The EN/DA article limits the standard setup claim to an operator-configured managed Slack method; missing app credentials leave the advanced route available."
     },
@@ -174,7 +174,7 @@
       "source": "server/src/services/tool-access.ts",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "b374907ced2d9212e852b38abb07702ade2e56b3f4cddb422226d008abac92d3",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "no_change",
       "rationale": "Project creation now rechecks the exact repository connection and grant witness under database locks, so a repository grant revoked after discovery cannot authorize creation. The connection article already requires reviewing current account/scope and following the displayed repair action."
     },
@@ -182,7 +182,7 @@
       "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "78a47504f8b19d7fd7ef9f25be4593789dcc2b3617e3196ef61c511186437218",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The optional Jev section matches the settings UI: off by default, a separate background-check control, and a disclosed fixed-sample test that does not qualify suggestions."
     },
@@ -190,7 +190,7 @@
       "source": "ui/src/features/connections/ConnectionSetupFlow.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "a713ebc7f63f3d85dcbaf959ca6fa09b5cf9177291e6d52415a42a35f751e35d",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
       "rationale": "Danish version checked against the same source delta: current connection setup changes product labels to Blentera and retains the same-session OAuth callback; the paired guidance names the current brand and explains restarting sign-in in the original session."
     },
@@ -198,7 +198,7 @@
       "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "6bd3df903c2b8b91aaaf964a0c3c7ca6a07b842359b6d68242464a946527fb44",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The paired article reflects the permission boundary: a connection alone does not enable every action, and action settings must be reviewed separately."
     },
@@ -206,7 +206,7 @@
       "source": "ui/src/pages/apps/AppDetail.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "65a5c92be80774317f076327c4057bf243c5385a2de188603f79341f5b849a1c",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
       "rationale": "Danish guidance checked against the same source behavior. Connection health guidance now describes provider-reported expiry and the current repair action shown in the connection detail."
     },
@@ -214,7 +214,7 @@
       "source": "ui/src/pages/apps/AppNotConnected.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
       "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
@@ -222,17 +222,17 @@
       "source": "ui/src/pages/apps/Connections.tsx",
       "articleId": "apps-and-connections-da",
       "sourceSha256": "684171dfe488923bfd48fcef60a203a0bdb06d5839ef3452abf2744374544815",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
       "rationale": "Danish version checked against the same source delta: current connection labels identify Blentera and legacy Paperclip Cloud; the article covers the managed sign-in boundary without promising cloud enrollment."
     },
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity",
-      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
+      "sourceSha256": "ea227910254e759231517fb9db43eee3382cdfcc213f800b3146eb90ca1a6c45",
       "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
       "decision": "no_change",
-      "rationale": "Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
+      "rationale": "Reviewed the bounded operator-only Jev model inventory and its fail-closed overflow response. The billing/capacity and Help articles continue to describe their current customer actions."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -269,10 +269,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity-da",
-      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
+      "sourceSha256": "ea227910254e759231517fb9db43eee3382cdfcc213f800b3146eb90ca1a6c45",
       "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
       "decision": "no_change",
-      "rationale": "Danish counterpart checked against the same source behavior. Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
+      "rationale": "Reviewed the bounded operator-only Jev model inventory and its fail-closed overflow response. The billing/capacity and Help articles continue to describe their current customer actions."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -885,10 +885,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "468ccdc6688defd12edab8be823fe011757a513bf4300927462d978ea7088b85",
+      "sourceSha256": "cf1bedc73cfc5c846953817ab0987a2206559c325a181fbe767c11c73269dc50",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The server change injects the existing heartbeat instance into tool-action delivery for composed fixtures; it does not change Help, support intake, or user-visible controls. The English article remains accurate."
+      "rationale": "Reviewed the canonical configured-profile wiring for company notices. Help continues to offer the existing company support case and direct human-contact actions described in this article."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -909,18 +909,18 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
+      "sourceSha256": "ea227910254e759231517fb9db43eee3382cdfcc213f800b3146eb90ca1a6c45",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "decision": "updated",
-      "rationale": "Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
+      "decision": "no_change",
+      "rationale": "Reviewed the bounded operator-only Jev model inventory and its fail-closed overflow response. The billing/capacity and Help articles continue to describe their current customer actions."
     },
     {
       "source": "server/src/saas-platform-config.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "a952ed1fb5a8bd29c6a9c6934ccba09b2d6dcf7db9cfc2f8b9d07bfa58328f6b",
+      "sourceSha256": "0c3ec5e88dd4005342a732f949a9efb75c31c9581fa0dba3862635dff5c5ca51",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "decision": "no_change",
+      "rationale": "Reviewed the canonical operator Jev profile configuration shared by admission and inventory. Existing Help guidance already explains qualified model availability and direct human support."
     },
     {
       "source": "server/src/services/agent-packages/execution-gate.ts",
@@ -1197,10 +1197,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "468ccdc6688defd12edab8be823fe011757a513bf4300927462d978ea7088b85",
+      "sourceSha256": "cf1bedc73cfc5c846953817ab0987a2206559c325a181fbe767c11c73269dc50",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "The server change injects the existing heartbeat instance into tool-action delivery for composed fixtures; it does not change Hjælp, support intake, or user-visible controls. The Danish article remains accurate."
+      "rationale": "Reviewed the canonical configured-profile wiring for company notices. Help continues to offer the existing company support case and direct human-contact actions described in this article."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1221,18 +1221,18 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
+      "sourceSha256": "ea227910254e759231517fb9db43eee3382cdfcc213f800b3146eb90ca1a6c45",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
+      "decision": "no_change",
+      "rationale": "Reviewed the bounded operator-only Jev model inventory and its fail-closed overflow response. The billing/capacity and Help articles continue to describe their current customer actions."
     },
     {
       "source": "server/src/saas-platform-config.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "a952ed1fb5a8bd29c6a9c6934ccba09b2d6dcf7db9cfc2f8b9d07bfa58328f6b",
+      "sourceSha256": "0c3ec5e88dd4005342a732f949a9efb75c31c9581fa0dba3862635dff5c5ca51",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "decision": "no_change",
+      "rationale": "Reviewed the canonical operator Jev profile configuration shared by admission and inventory. Existing Help guidance already explains qualified model availability and direct human support."
     },
     {
       "source": "server/src/services/agent-packages/execution-gate.ts",
@@ -1958,7 +1958,7 @@
       "source": "server/src/services/agents.ts",
       "articleId": "working-with-coworkers",
       "sourceSha256": "105a744ff385b3e34921f13331ae87bf10adeea163ed5d41e8b0b7ae4f743918",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
       "decision": "updated",
       "rationale": "Managed model routing changes now require qualified candidate publication; the article explains exact Human review, rollback and blocked baseline evidence."
     },
@@ -1966,7 +1966,7 @@
       "source": "ui/src/pages/AgentDetail.tsx",
       "articleId": "working-with-coworkers",
       "sourceSha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
       "decision": "updated",
       "rationale": "The agent detail page changes Paperclip labels to Blentera; the setup, run, and pause behavior described in the article is unchanged."
     },
@@ -1974,7 +1974,7 @@
       "source": "ui/src/pages/Agents.tsx",
       "articleId": "working-with-coworkers",
       "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
       "decision": "updated",
       "rationale": "The agents list changes Paperclip labels to Blentera; the article’s current team setup and activation guidance remains accurate."
     },
@@ -1982,7 +1982,7 @@
       "source": "server/src/services/agents.ts",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "105a744ff385b3e34921f13331ae87bf10adeea163ed5d41e8b0b7ae4f743918",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
       "decision": "updated",
       "rationale": "Danish guidance checked against the same source behavior. Managed model routing changes now require qualified candidate publication; the article explains exact Human review, rollback and blocked baseline evidence."
     },
@@ -1990,7 +1990,7 @@
       "source": "ui/src/pages/AgentDetail.tsx",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
       "decision": "updated",
       "rationale": "Danish version checked against the same source delta: the agent detail page changes Paperclip labels to Blentera; the setup, run, and pause behavior described in the article is unchanged."
     },
@@ -1998,7 +1998,7 @@
       "source": "ui/src/pages/Agents.tsx",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
       "decision": "updated",
       "rationale": "Danish version checked against the same source delta: the agents list changes Paperclip labels to Blentera; the article’s current team setup and activation guidance remains accurate."
     },
@@ -2165,7 +2165,7 @@
     {
       "source": "server/src/services/tool-connection-lifecycle.ts",
       "articleId": "apps-and-connections",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "sourceSha256": "3124e06a45d28d7d38e580d1ac93d558a3bd171121976678d75507e3a239b789",
       "decision": "no_change",
       "rationale": "The lifecycle projection now reports the existing GitHub repository full-snapshot reconciliation and its successful refresh time. The article already requires a current repository-access check and following the displayed repair action; it makes no claim of provider event completeness."
@@ -2173,7 +2173,7 @@
     {
       "source": "server/src/services/experience/connector-recovery.ts",
       "articleId": "apps-and-connections",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "sourceSha256": "c155914bfc7d8f698159b9c06637c9ac8626146c90613dd94b1be897745360c9",
       "decision": "updated",
       "rationale": "The article tells the current connection owner to follow the current repair action and confirms it withdraws after repair."
@@ -2181,7 +2181,7 @@
     {
       "source": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
       "articleId": "apps-and-connections",
-      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "sourceSha256": "8135e45e26c50140f42890bbbc80b984f902c5a9c21fac9e9cdc57db2aca729c",
       "decision": "updated",
       "rationale": "The article explains the expiry and lifecycle labels shown with the selected authorized connection identity."
@@ -2221,7 +2221,7 @@
     {
       "source": "server/src/services/agents/authoring-publication.ts",
       "articleId": "working-with-coworkers",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
       "sourceSha256": "2e61e2cc1ba07f81cf78853b37ff5aca9c1931e3441443501513da81c09316cb",
       "decision": "updated",
       "rationale": "The article retains model migration and rollback qualification requirements and adds the post-publication monitoring step indicated by the publication receipt."
@@ -2229,15 +2229,15 @@
     {
       "source": "server/src/services/experience/model-retirement-notices.ts",
       "articleId": "working-with-coworkers",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
-      "sourceSha256": "cb7641b73de971cd6cf7e1d617ad6ea32c49dece713162323f9ccc011796dbe4",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
+      "sourceSha256": "9643ad324b6efa179dac7a89925f51a417e8029f31ec6701e141ae3070485cf9",
       "decision": "updated",
-      "rationale": "The article explains the sanitized Action Needed model-migration notice and opening the affected Agent for a qualified replacement."
+      "rationale": "Reviewed the existing Agent notice and enabled company dependency projection. The paired guide now directs other company model dependency notices to their support action and an administrator for a qualified replacement."
     },
     {
       "source": "ui/src/components/AgentRuntimeCandidates.tsx",
       "articleId": "working-with-coworkers",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
       "sourceSha256": "79d1c44d8f92c557b96064d35abf5ea27bc2d652de22aa274acc36d8bb89d0f2",
       "decision": "updated",
       "rationale": "The article directs administrators through the draft and qualified runtime candidate rather than changing managed routing directly."
@@ -2245,7 +2245,7 @@
     {
       "source": "ui/src/components/AgentDraftPublication.tsx",
       "articleId": "working-with-coworkers",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
       "sourceSha256": "6999b1fa7da407c295d56015cde178c91ed3393620ccf3d3f8bbd2853765c3b9",
       "decision": "updated",
       "rationale": "The article explains Human-reviewed publication and that missing baseline or qualification evidence blocks model migration."
@@ -2253,15 +2253,15 @@
     {
       "source": "ui/src/components/MandatoryProductNotices.tsx",
       "articleId": "working-with-coworkers",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
-      "sourceSha256": "7892239a803fc42a1a4007e41b3bd79714eebcda3bcfc48fce159be8a869909c",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
+      "sourceSha256": "cb82bfd7eb0a0a88331bce55f740ac2530dae9654a512413bfb3bef29a5c2618",
       "decision": "updated",
-      "rationale": "The article explains the current Agent model migration notice; current permissions still govern the linked Agent."
+      "rationale": "Reviewed the localized mandatory notice actions: selected Agent models open the Agent, and operator-owned company dependencies use the existing Help support action. The EN/DA guide explains both destinations."
     },
     {
       "source": "server/src/services/tool-connection-lifecycle.ts",
       "articleId": "apps-and-connections-da",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "sourceSha256": "3124e06a45d28d7d38e580d1ac93d558a3bd171121976678d75507e3a239b789",
       "decision": "no_change",
       "rationale": "The lifecycle projection now reports the existing GitHub repository full-snapshot reconciliation and its successful refresh time. The article already requires a current repository-access check and following the displayed repair action; it makes no claim of provider event completeness."
@@ -2269,7 +2269,7 @@
     {
       "source": "server/src/services/experience/connector-recovery.ts",
       "articleId": "apps-and-connections-da",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "sourceSha256": "c155914bfc7d8f698159b9c06637c9ac8626146c90613dd94b1be897745360c9",
       "decision": "updated",
       "rationale": "Danish guidance checked against the same source behavior. The article tells the current connection owner to follow the current repair action and confirms it withdraws after repair."
@@ -2277,7 +2277,7 @@
     {
       "source": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
       "articleId": "apps-and-connections-da",
-      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "sourceSha256": "8135e45e26c50140f42890bbbc80b984f902c5a9c21fac9e9cdc57db2aca729c",
       "decision": "updated",
       "rationale": "Danish guidance checked against the same source behavior. The article explains the expiry and lifecycle labels shown with the selected authorized connection identity."
@@ -2317,7 +2317,7 @@
     {
       "source": "server/src/services/agents/authoring-publication.ts",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
       "sourceSha256": "2e61e2cc1ba07f81cf78853b37ff5aca9c1931e3441443501513da81c09316cb",
       "decision": "updated",
       "rationale": "The article retains model migration and rollback qualification requirements and adds the post-publication monitoring step indicated by the publication receipt."
@@ -2325,15 +2325,15 @@
     {
       "source": "server/src/services/experience/model-retirement-notices.ts",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
-      "sourceSha256": "cb7641b73de971cd6cf7e1d617ad6ea32c49dece713162323f9ccc011796dbe4",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
+      "sourceSha256": "9643ad324b6efa179dac7a89925f51a417e8029f31ec6701e141ae3070485cf9",
       "decision": "updated",
-      "rationale": "Danish guidance checked against the same source behavior. The article explains the sanitized Action Needed model-migration notice and opening the affected Agent for a qualified replacement."
+      "rationale": "Reviewed the existing Agent notice and enabled company dependency projection. The paired guide now directs other company model dependency notices to their support action and an administrator for a qualified replacement."
     },
     {
       "source": "ui/src/components/AgentRuntimeCandidates.tsx",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
       "sourceSha256": "79d1c44d8f92c557b96064d35abf5ea27bc2d652de22aa274acc36d8bb89d0f2",
       "decision": "updated",
       "rationale": "Danish guidance checked against the same source behavior. The article directs administrators through the draft and qualified runtime candidate rather than changing managed routing directly."
@@ -2341,7 +2341,7 @@
     {
       "source": "ui/src/components/AgentDraftPublication.tsx",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
       "sourceSha256": "6999b1fa7da407c295d56015cde178c91ed3393620ccf3d3f8bbd2853765c3b9",
       "decision": "updated",
       "rationale": "Danish guidance checked against the same source behavior. The article explains Human-reviewed publication and that missing baseline or qualification evidence blocks model migration."
@@ -2349,10 +2349,10 @@
     {
       "source": "ui/src/components/MandatoryProductNotices.tsx",
       "articleId": "working-with-coworkers-da",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
-      "sourceSha256": "7892239a803fc42a1a4007e41b3bd79714eebcda3bcfc48fce159be8a869909c",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
+      "sourceSha256": "cb82bfd7eb0a0a88331bce55f740ac2530dae9654a512413bfb3bef29a5c2618",
       "decision": "updated",
-      "rationale": "Danish guidance checked against the same source behavior. The article explains the current Agent model migration notice; current permissions still govern the linked Agent."
+      "rationale": "Reviewed the localized mandatory notice actions: selected Agent models open the Agent, and operator-owned company dependencies use the existing Help support action. The EN/DA guide explains both destinations."
     },
     {
       "source": "ui/src/components/CustomerChangelog.tsx",
@@ -2374,9 +2374,9 @@
       "source": "server/src/routes/announcements.ts",
       "articleId": "help-and-human-support",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "sourceSha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767",
-      "decision": "updated",
-      "rationale": "A separate read-only informational lifecycle route projects qualified feature facts. Mandatory Trust/model notices and the customer changelog retain their original completion and publication owners."
+      "sourceSha256": "9ccbaaed32ae26f22e2e730353db10c18e7b615060f0ece723814e626246fc92",
+      "decision": "no_change",
+      "rationale": "Reviewed current-company access, actual enabled model selections, duplicate-family aggregation and earliest retirement deadlines. The existing Help article already explains the direct company support action used by these notices."
     },
     {
       "source": "server/src/services/announcement-feed.ts",
@@ -2390,9 +2390,9 @@
       "source": "packages/shared/src/announcements.ts",
       "articleId": "help-and-human-support",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "sourceSha256": "d82062cd1a9f8aaa4bac186794af8ec6c8ae52e04be34e8db359c14150fd5119",
-      "decision": "updated",
-      "rationale": "The separate informational lifecycle schema has no mandatory action, completion or dismissal effect; existing customer changelog and Trust action semantics described in Help remain intact."
+      "sourceSha256": "b3ef66c3bb1dfa1fe89d48e170aadf3735ca1af2b99b6505bb547849d05257d9",
+      "decision": "no_change",
+      "rationale": "Reviewed the sanitized company model-dependency notice contract and its existing Help destination. The support guide already explains company support cases and direct human contact."
     },
     {
       "source": "ui/src/components/CustomerChangelog.tsx",
@@ -2414,9 +2414,9 @@
       "source": "server/src/routes/announcements.ts",
       "articleId": "help-and-human-support-da",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "sourceSha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. A separate read-only informational lifecycle route projects qualified feature facts. Mandatory Trust/model notices and the customer changelog retain their original completion and publication owners."
+      "sourceSha256": "9ccbaaed32ae26f22e2e730353db10c18e7b615060f0ece723814e626246fc92",
+      "decision": "no_change",
+      "rationale": "Reviewed current-company access, actual enabled model selections, duplicate-family aggregation and earliest retirement deadlines. The existing Help article already explains the direct company support action used by these notices."
     },
     {
       "source": "server/src/services/announcement-feed.ts",
@@ -2430,9 +2430,9 @@
       "source": "packages/shared/src/announcements.ts",
       "articleId": "help-and-human-support-da",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "sourceSha256": "d82062cd1a9f8aaa4bac186794af8ec6c8ae52e04be34e8db359c14150fd5119",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The separate informational lifecycle schema has no mandatory action, completion or dismissal effect; existing customer changelog and Trust action semantics described in Help remain intact."
+      "sourceSha256": "b3ef66c3bb1dfa1fe89d48e170aadf3735ca1af2b99b6505bb547849d05257d9",
+      "decision": "no_change",
+      "rationale": "Reviewed the sanitized company model-dependency notice contract and its existing Help destination. The support guide already explains company support cases and direct human contact."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
@@ -2613,16 +2613,16 @@
     {
       "source": "ui/src/components/AgentModelMigrationMonitor.tsx",
       "articleId": "working-with-coworkers",
-      "sourceSha256": "42e8b125e1b0fafa348dbde920ae530404a37be2e10721e3f081807ffda70c55",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
-      "decision": "updated",
-      "rationale": "The article now explains the post-publication review control, healthy versus hold records, and the separate pause action shown in the current Agent monitor."
+      "sourceSha256": "e1f66b8a2a038a649bcdce8614473cca4cd1e044ed481c89e6682fe3db4261de",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
+      "decision": "no_change",
+      "rationale": "Reviewed the exact current model monitor UI, including its explicit empty-review guard. The guide already requires the current draft, all saved scenarios and independent review before recording the post-publication check."
     },
     {
       "source": "server/src/services/agents/authoring-model-migration-monitor.ts",
       "articleId": "working-with-coworkers",
       "sourceSha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
       "decision": "updated",
       "rationale": "The article now requires a fresh current-baseline draft, post-publication scenarios and independent Human review, with the publishing Human recording the exact qualified migration evidence."
     },
@@ -2630,23 +2630,23 @@
       "source": "server/src/services/agents/authoring-tests.ts",
       "articleId": "working-with-coworkers",
       "sourceSha256": "354f070591cb38393ed5aeb061710b4b49ed4500174a29cf63f52688eb029b3a",
-      "articleSha256": "ffc741ef1c198aea037a84deb2d581ccf9d24760823a5425401494c44c13d142",
+      "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
       "decision": "updated",
       "rationale": "The article now describes rerunning each saved scenario and independent review; evidence is read through the existing transaction and original runtime qualification owner."
     },
     {
       "source": "ui/src/components/AgentModelMigrationMonitor.tsx",
       "articleId": "working-with-coworkers-da",
-      "sourceSha256": "42e8b125e1b0fafa348dbde920ae530404a37be2e10721e3f081807ffda70c55",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The article now explains the post-publication review control, healthy versus hold records, and the separate pause action shown in the current Agent monitor."
+      "sourceSha256": "e1f66b8a2a038a649bcdce8614473cca4cd1e044ed481c89e6682fe3db4261de",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
+      "decision": "no_change",
+      "rationale": "Reviewed the exact current model monitor UI, including its explicit empty-review guard. The guide already requires the current draft, all saved scenarios and independent review before recording the post-publication check."
     },
     {
       "source": "server/src/services/agents/authoring-model-migration-monitor.ts",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The article now requires a fresh current-baseline draft, post-publication scenarios and independent Human review, with the publishing Human recording the exact qualified migration evidence."
     },
@@ -2654,7 +2654,7 @@
       "source": "server/src/services/agents/authoring-tests.ts",
       "articleId": "working-with-coworkers-da",
       "sourceSha256": "354f070591cb38393ed5aeb061710b4b49ed4500174a29cf63f52688eb029b3a",
-      "articleSha256": "d2f2723e46e15e88d4287c3336bd71db235bd3048025843f47e6bf7160619f16",
+      "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The article now describes rerunning each saved scenario and independent review; evidence is read through the existing transaction and original runtime qualification owner."
     }

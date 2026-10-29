@@ -64,15 +64,16 @@ function MandatoryTrustNotice({ notice, userId }: { notice: TrustAcceptanceNotic
 
 function MandatoryModelMigrationNotice({ notice }: { notice: ModelRetirementNoticeProjection }) {
   const { t } = useTranslation("experience");
+  const agentNotice = "affectedAgentId" in notice;
   return <Card role="alert" aria-labelledby={`mandatory-model-notice-${notice.id}`} className="border-amber-600/50 bg-amber-50/50 dark:bg-amber-950/20">
     <CardHeader className="pb-2">
       <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">{t("announcement.mandatory.eyebrow")}</p>
-      <CardTitle id={`mandatory-model-notice-${notice.id}`} className="text-base">{t("announcement.mandatory.modelMigrationTitle")}</CardTitle>
-      <p className="text-sm text-muted-foreground">{t("announcement.mandatory.modelMigrationSummary")}</p>
+      <CardTitle id={`mandatory-model-notice-${notice.id}`} className="text-base">{t(agentNotice ? "announcement.mandatory.modelMigrationTitle" : "announcement.mandatory.modelDependencyTitle")}</CardTitle>
+      <p className="text-sm text-muted-foreground">{t(agentNotice ? "announcement.mandatory.modelMigrationSummary" : "announcement.mandatory.modelDependencySummary")}</p>
     </CardHeader>
     <CardContent className="space-y-3">
       {notice.effectiveAt && <p className="text-xs text-muted-foreground">{t("announcement.mandatory.modelMigrationDeadline", { date: new Date(notice.effectiveAt).toLocaleDateString() })}</p>}
-      <Button asChild><a href={notice.actionPath}>{t("announcement.mandatory.reviewAgent")}</a></Button>
+      <Button asChild><a href={notice.actionPath}>{t(agentNotice ? "announcement.mandatory.reviewAgent" : "announcement.mandatory.contactSupport")}</a></Button>
     </CardContent>
   </Card>;
 }

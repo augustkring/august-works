@@ -188,7 +188,7 @@ export const trustAcceptanceNoticeProjectionSchema = z.strictObject({
 export const trustAcceptanceNoticeListSchema = z.strictObject({
   configured: z.boolean(),
   notices: z.array(trustAcceptanceNoticeProjectionSchema).max(100),
-  modelNotices: z.array(z.strictObject({
+  modelNotices: z.array(z.union([z.strictObject({
     id: z.string().uuid(),
     category: z.literal("action_required"),
     title: z.literal("A current Agent model needs migration"),
@@ -200,7 +200,19 @@ export const trustAcceptanceNoticeListSchema = z.strictObject({
     mandatoryVisibility: z.literal(true),
     completionOwner: z.literal("current_agent_model_selection"),
     actionPath: z.string().regex(/^\/agents\/[0-9a-f-]{36}$/),
-  }).strict()).max(100).default([]),
+  }).strict(), z.strictObject({
+    id: z.string().uuid(),
+    category: z.literal("action_required"),
+    title: z.literal("A company model dependency needs operator review"),
+    summary: z.literal("An enabled model dependency is blocked or nearing retirement. Contact support to review its migration."),
+    affectedCompanyId: z.string().uuid(),
+    dependency: z.enum(["read_only_verifier", "first_party_support", "jev_skill_suggestion"]),
+    effectiveAt: z.iso.datetime().nullable(),
+    actionRequired: z.literal(true),
+    mandatoryVisibility: z.literal(true),
+    completionOwner: z.literal("operator_model_dependency"),
+    actionPath: z.literal("/company/help"),
+  }).strict()])).max(100).default([]),
 });
 /** Informational projection from owner-declared feature lifecycle metadata.
  * It has no completion, deadline, or dismissal contract. */

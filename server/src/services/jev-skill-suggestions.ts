@@ -1,7 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { agentExecutionManifests, heartbeatRuns, issues, jevDecisionSettings, enterpriseIdentityPolicies, orchestrationPlans, orchestrationWorkerAttempts, orchestrationWorkers, type Db } from "@paperclipai/db";
-import { JEV_DECISION_MODEL, jevDecisionRequestSchema, modelTariffCeilingSchema, type JevDecisionMode } from "@paperclipai/shared";
+import { JEV_DECISION_MODEL, jevDecisionRequestSchema, modelLifecycleMetadataSchema, modelTariffCeilingSchema, type JevDecisionMode } from "@paperclipai/shared";
 import { z } from "zod";
 import { conflict, forbidden } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -12,6 +12,8 @@ import { skillResolverService } from "./skill-resolver.js";
 import { runJevDecision } from "./jev-decision-provider.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { hashContextPolicySnapshot } from "./context/context-manifest.js";
+import { assertModelLifecycleAdmission } from "./orchestration/read-only-model-profiles.js";
+import { projectOperatorModelRetirementNotice } from "./experience/model-retirement-notices.js";
 
 const profileSchema = z.object({
   companyId: z.string().uuid(), connectionId: z.string().uuid(), grantId: z.string().uuid(), profileId: z.string().min(1).max(120),
@@ -20,12 +22,14 @@ const profileSchema = z.object({
   retentionPolicyHash: z.string().regex(/^[a-f0-9]{64}$/), retentionDays: z.number().int().min(0).max(365),
   testedAt: z.iso.datetime(), expiresAt: z.iso.datetime(), processingRegion: z.literal("us"),
   setupCostCapMinor: z.number().int().min(1).max(1000), setupMaxCalls: z.number().int().min(1).max(100),
-  tariff: modelTariffCeilingSchema, inputTokensUpperBound: z.number().int().min(1).max(32_000), maxOutputTokens: z.number().int().min(1).max(2048),
+  tariff: modelTariffCeilingSchema, lifecycle: modelLifecycleMetadataSchema.optional(),
+  inputTokensUpperBound: z.number().int().min(1).max(32_000), maxOutputTokens: z.number().int().min(1).max(2048),
 }).strict();
 export type JevSkillSuggestionProfile = z.infer<typeof profileSchema>;
 export function jevCredentialBindingHash(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function hmacInput(key: string, value: unknown) { return createHmac("sha256", key).update(JSON.stringify(value)).digest("hex"); }
-export function jevProfileCurrent(profile: JevSkillSuggestionProfile, input: { companyId: string; connectionId: string; grantId: string; sourceSha: string }, now: Date) {
+export function jevProfileQualificationCurrent(profile: JevSkillSuggestionProfile,
+  input: { companyId: string; connectionId: string; grantId: string; sourceSha: string }, now: Date) {
   const parsed = profileSchema.safeParse(profile);
   if (!parsed.success) return false;
   const p = parsed.data;
@@ -35,16 +39,38 @@ export function jevProfileCurrent(profile: JevSkillSuggestionProfile, input: { c
     p.tariff.qualificationHash === p.qualificationHash && Date.parse(p.testedAt) <= now.getTime() && Date.parse(p.expiresAt) > now.getTime() &&
     Date.parse(p.expiresAt) - Date.parse(p.testedAt) <= 7 * 86_400_000 && profileHash === nativeSha256(contract);
 }
-/** Operator-owned deployment profile input. Invalid or stale rows fail closed
- * as unavailable; request data can never create or update these profiles. */
-export function configuredJevSkillSuggestionProfiles(raw: string | undefined, sourceSha: string, now = new Date()): JevSkillSuggestionProfile[] {
+export function jevProfileCurrent(profile: JevSkillSuggestionProfile,
+  input: { companyId: string; connectionId: string; grantId: string; sourceSha: string }, now: Date) {
+  if (!jevProfileQualificationCurrent(profile, input, now)) return false;
+  try { assertModelLifecycleAdmission(profile.lifecycle, "runtime", now); } catch { return false; }
+  return true;
+}
+/** Operator-owned deployment profile input. Retain schema-valid rows for
+ * operator inventory; request data cannot create or update profiles. Runtime
+ * and setup-test admission recheck source, expiry, and lifecycle each time. */
+export function configuredJevSkillSuggestionProfiles(raw: string | undefined, _sourceSha: string, _now = new Date()): JevSkillSuggestionProfile[] {
   if (!raw) return [];
   let decoded: unknown;
   try { decoded = JSON.parse(raw); } catch { return []; }
   const parsed = z.array(profileSchema).safeParse(decoded);
-  return parsed.success ? parsed.data.filter(profile => jevProfileCurrent(profile, {
-    companyId: profile.companyId, connectionId: profile.connectionId, grantId: profile.grantId, sourceSha,
-  }, now)) : [];
+  // Keep schema-valid configured rows visible to the operator inventory even
+  // when expired or lifecycle-blocked. Every dispatch path independently
+  // rechecks the source pin, expiry, and lifecycle immediately before use.
+  return parsed.success ? parsed.data : [];
+}
+/** Project a Human support action only for one currently selected Jev profile.
+ * Disabled, stale, duplicate, or cross-company deployment rows are not tenant
+ * dependencies and therefore do not create Action Needed notices. */
+export function projectCurrentJevSkillSuggestionRetirementNotice(companyId: string,
+  settings: { mode: string; allowBackground: boolean; connectionId: string | null; grantId: string | null } | undefined,
+  profiles: readonly JevSkillSuggestionProfile[], sourceSha: string | undefined, now = new Date()) {
+  if (settings?.mode !== "shadow" || !settings.allowBackground || !settings.connectionId || !settings.grantId || !sourceSha) return null;
+  const matches = profiles.filter(profile => profile.companyId === companyId && profile.connectionId === settings.connectionId &&
+    profile.grantId === settings.grantId);
+  if (matches.length !== 1 || !jevProfileQualificationCurrent(matches[0]!, {
+    companyId, connectionId: settings.connectionId, grantId: settings.grantId, sourceSha,
+  }, now)) return null;
+  return projectOperatorModelRetirementNotice(companyId, "jev_skill_suggestion", matches[0]!.lifecycle, now.getTime());
 }
 function currentMode(row: typeof jevDecisionSettings.$inferSelect | undefined): JevDecisionMode { return row?.mode ?? "off"; }
 async function allowsProcessingRegion(db: Db, companyId: string, region: string, sourceSha: string, now = new Date()) {

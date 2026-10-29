@@ -3,7 +3,7 @@ help_article_id: working-with-coworkers-da
 title: Arbejd med Co-workers
 summary: Tilføj en Co-worker, kontrollér dens status, og styr hvornår den kan modtage arbejde
 audience: company-administrators
-product_capability_refs: [V10-075, V10-078, V10-103]
+product_capability_refs: [V10-074, V10-075, V10-078, V10-103, V10-108]
 screen_contract_refs: [SETTINGS-AGENTS-AI, AGENT-MONITOR, AGENT-CHANGE]
 owner: augustkring/august-works
 maturity: preview
@@ -34,5 +34,7 @@ Se [Personer og virksomhedsadgang](/da/guides/board-operator/org-structure) for 
 ## Gennemgå et modelskift
 
 Hvis Action Needed viser, at en aktuel Agent-model skal migreres, skal du åbne agenten og gennemgå en erstatning via dens kladde og kvalificerede runtime-kandidat. Udgivelse af et modelskift kræver en persons gennemgang af den præcise kandidat og det bevarede testgrundlag. Tilbagerulning kræver også en aktuelt kvalificeret kandidat og gennemgang. Blentera erstatter ikke en udfaset model automatisk. Hvis kvalifikation eller det oprindelige testgrundlag mangler, skal en administrator afklare blokeringen før udgivelse.
+
+Hvis Action Needed vedrører en anden modelafhængighed i virksomheden, skal du åbne meddelelsens supporthandling. Bed en administrator om at få en kvalificeret erstatning på plads.
 
 Start en ny kladde fra den aktuelle Agent-version efter publiceringen. Kør hvert gemt scenarie igen, og få resultatet gennemgået uafhængigt. Under **Modelkontrol efter publicering** kan den person, der publicerede ændringen, registrere den aktuelle gennemgang, når alle scenarier er gennemgået. Et gennemgået scenarie, som ikke består, giver en hold-markering. Manglende eller ændret testgrundlag kræver en ny kontrol. Registreringen lader den aktuelle modelrouting fortsætte. Brug den separate pausefunktion, hvis arbejdet skal stoppe, og gennemgå en kvalificeret erstatning eller tilbagerulning, før du publicerer endnu et modelskift.
