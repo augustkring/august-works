@@ -120,9 +120,25 @@ export const sandboxHostRequestSchema = z
       })
       .strict()
       .optional(),
+    /** Server-owned cleanup-only refresh. This is never accepted by the
+     * operator bridge; the host may only return its protected report or one
+     * controller-selected fixed boundary probe for the active erasure job. */
+    cleanupAttestation: z
+      .object({
+        version: z.literal(1),
+        jobId: z.string().uuid(),
+        jobKey: z.string().min(1).max(300),
+        attemptNumber: z.number().int().positive(),
+        executionOwnerId: z.string().min(1).max(300),
+        locatorDigest: hash,
+        companyPurgeOperationId: z.string().uuid().nullable(),
+        startBindingDigest: hash,
+      })
+      .strict()
+      .optional(),
     hostEpoch: z.number().int().positive(),
     imageDigest: digest,
-    requesterUserId: z.string().min(1).max(200),
+    requesterUserId: z.string().min(1).max(200).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -130,7 +146,10 @@ export const sandboxHostRequestSchema = z
       value.scope.sandboxRef !== `aw-v7-${value.scope.bindingId}` ||
       (value.action === "probe") !== Boolean(value.probe) ||
       (value.action === "apply") !== Boolean(value.admission) ||
-      (value.action === "start") !== Boolean(value.start)
+      (value.action === "start") !== Boolean(value.start) ||
+      (Boolean(value.cleanupAttestation) &&
+        (!['capabilities', 'probe'].includes(value.action) || value.requesterUserId !== undefined)) ||
+      (!value.cleanupAttestation && !value.requesterUserId)
     )
       ctx.addIssue({
         code: "custom",
@@ -195,6 +214,7 @@ export const sandboxHostReplySchema = z.discriminatedUnion("action", [
       verdict: z.enum(["pass", "fail", "unsupported"]),
       observationHash: hash.nullable(),
       contractHash: hash,
+      targetQualificationHash: hash.optional(),
     })
     .strict(),
   z

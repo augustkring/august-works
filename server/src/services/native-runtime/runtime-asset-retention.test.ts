@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -29,7 +29,9 @@ describe("remote Native runtime asset erasure binding", () => {
     expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, status: "released" }, now, true)).toBe(false);
     expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, releasedAt: null }, now, true)).toBe(false);
     expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, leasePolicy: "reuse_by_environment" }, now, true)).toBe(false);
-    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, expiresAt: null }, now, true)).toBe(true);
+    expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, expiresAt: null }, now, true)).toBe(false);
+    // A recorded expired TTL can enter cleanup-attestation refresh only; the
+    // actual RuntimeControl dispatch additionally requires fresh host proof.
     expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, expiresAt: now }, now, true)).toBe(true);
     expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, provider: "local" }, now, true)).toBe(false);
     expect(remoteRuntimeAssetErasureLeaseIsCurrent({ ...expiredEphemeral, provider: null }, now, true)).toBe(false);
@@ -155,6 +157,19 @@ describe("remote Native runtime asset erasure binding", () => {
       await mkdir(runnerRoot, { recursive: true, mode: 0o700 });
       await mkdir(neighborRoot, { recursive: true, mode: 0o700 });
       await writeFile(join(neighborRoot, "keep.txt"), "neighbor remains\n", { mode: 0o600 });
+      const outsideRoot = join(root, "outside-session-target");
+      await mkdir(outsideRoot, { mode: 0o700 });
+      await writeFile(join(outsideRoot, "keep.txt"), "outside remains\n", { mode: 0o600 });
+      const skillRoot = join(sessionRoot, "filesystem", "context", "skills");
+      const skillDirectory = join(skillRoot, "0-immutable-skill");
+      const referencesDirectory = join(skillDirectory, "references");
+      await mkdir(referencesDirectory, { recursive: true, mode: 0o700 });
+      await writeFile(join(skillDirectory, "SKILL.md"), "immutable skill\n", { mode: 0o444 });
+      await writeFile(join(referencesDirectory, "guide.md"), "immutable reference\n", { mode: 0o444 });
+      await symlink(outsideRoot, join(skillRoot, "outside-link"));
+      await chmod(referencesDirectory, 0o555);
+      await chmod(skillDirectory, 0o555);
+      await chmod(skillRoot, 0o555);
       const statText = await readFile(`/proc/${runner.pid}/stat`, "utf8");
       const statEnd = statText.lastIndexOf(") ");
       const processTicks = statText.slice(statEnd + 2).trim().split(/\s+/)[19];
@@ -233,6 +248,8 @@ describe("remote Native runtime asset erasure binding", () => {
       expect(erased.stdout.trim().split("\n")).toHaveLength(7);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(false);
       expect(await readFile(join(neighborRoot, "keep.txt"), "utf8")).toBe("neighbor remains\n");
+      expect(await readFile(join(outsideRoot, "keep.txt"), "utf8")).toBe("outside remains\n");
+      expect((await stat(outsideRoot)).mode & 0o777).toBe(0o700);
       expect((await stat(sessionsRoot)).isDirectory()).toBe(true);
       expect(await access(join(sessionsRoot, `.${digest}.lock`)).then(() => true, () => false)).toBe(false);
       if (runner.exitCode === null && runner.signalCode === null) {
@@ -278,6 +295,10 @@ describe("remote Native runtime asset erasure binding", () => {
       if (runner.exitCode === null && runner.signalCode === null) {
         try { process.kill(-runner.pid!, "SIGKILL"); } catch { /* runner already stopped */ }
       }
+      for (const directory of [join(sessionRoot, "filesystem", "context", "skills"),
+        join(sessionRoot, "filesystem", "context", "skills", "0-immutable-skill"),
+        join(sessionRoot, "filesystem", "context", "skills", "0-immutable-skill", "references")])
+        await chmod(directory, 0o700).catch(() => undefined);
       await rm(root, { recursive: true, force: true });
     }
   });

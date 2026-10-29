@@ -36,7 +36,6 @@ import { open as unseal } from "../../services/saas/crypto.js";
 import { nativeSha256 } from "../../services/native-runtime/canonical.js";
 import { compileSandboxPolicy } from "../../services/execution-sandbox/policy-compiler.js";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
-import { redactSensitiveText } from "../../redaction.js";
 
 const imageDigest = `fixture.invalid/openshell@sha256:${"a".repeat(64)}`;
 
@@ -223,16 +222,22 @@ export async function configureManagedConversationSandboxHost(input: {
   const state = new Map<string, "stopped" | "ready" | "running">();
   const policies = new Map<string, string>();
   const capabilityTestedAt = new Date(Date.now() - 1000).toISOString();
-  const capabilityExpiresAt = new Date(Date.now() + 86_400_000).toISOString();
-  const capabilities = () => ({ ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])),
-    backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "controlled-software-host",
-    sandboxImageDigest: imageDigest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true,
-    dynamicNetworkPolicy: true, policyProverBoundaryCheck: true, policyProverCoverage: [...SANDBOX_CONTROLS],
-    credentialBindingDimensions: ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"],
-    credentialBrokerProviderProfile: { id: "conversation-broker", hash: "d".repeat(64) },
-    modelBrokerProviderProfile: { id: "conversation-model-broker", hash: "e".repeat(64) },
-    testedAt: capabilityTestedAt, expiresAt: capabilityExpiresAt,
-    qualificationHash: "f".repeat(64), evidenceKind: "protected_host_report" });
+  // Keep the admitted protected report short-lived so the managed erasure
+  // integration test can observe natural expiry after its real provider turn.
+  const capabilityExpiresAt = new Date(Date.now() + 150_000).toISOString();
+  const capabilities = (fresh = false) => {
+    const now = Date.now();
+    return { ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])),
+      backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "controlled-software-host",
+      sandboxImageDigest: imageDigest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true,
+      dynamicNetworkPolicy: true, policyProverBoundaryCheck: true, policyProverCoverage: [...SANDBOX_CONTROLS],
+      credentialBindingDimensions: ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"],
+      credentialBrokerProviderProfile: { id: "conversation-broker", hash: "d".repeat(64) },
+      modelBrokerProviderProfile: { id: "conversation-model-broker", hash: "e".repeat(64) },
+      testedAt: fresh ? new Date(now - 1000).toISOString() : capabilityTestedAt,
+      expiresAt: fresh ? new Date(now + 86_400_000).toISOString() : capabilityExpiresAt,
+      qualificationHash: "f".repeat(64), evidenceKind: "protected_host_report" };
+  };
   const service = executionSandboxService(db, { operatorUserIds: [actor.userId!], credentialBrokerOrigin: brokerOrigin,
     assertRuntimeStartAdmission: (tx, start) => runtime.assertSandboxStartAdmission(tx, start),
     recordRuntimeWorkloadState: (tx, stateChange) => runtime.recordSandboxWorkloadState(tx, stateChange),
@@ -295,12 +300,12 @@ export async function configureManagedConversationSandboxHost(input: {
         oaepLabel: Buffer.from("aw-runtime-command-v6") }, Buffer.from(claim.envelope.encryptedKey, "base64url"));
       const command = unseal<Record<string, any>>(claim.envelope.ciphertext, secret.toString("hex"), `command:${claim.id}:${host.id}:1`);
       const action = command.action as string;
-      const snapshot = capabilities();
+      const snapshot = capabilities(Boolean(command.cleanupAttestation));
       const common = { generation: command.scope.cellGeneration, imageDigest: command.imageDigest };
       const policyHash = typeof command.admission?.policyHash === "string" ? command.admission.policyHash : "";
       const reply = action === "capabilities" ? { action, capabilities: snapshot }
         : action === "prepare" ? { action, backendVersion: "0.1.2", imageDigest }
-        : action === "probe" ? { action, verdict: "pass", observationHash: createHash("sha256").update(`software:${command.probe?.case?.caseId ?? command.probe?.caseId ?? "probe"}`).digest("hex"), contractHash: command.probe?.contractHash }
+        : action === "probe" ? { action, verdict: "pass", observationHash: createHash("sha256").update(`software:${command.probe?.case?.caseId ?? command.probe?.caseId ?? "probe"}`).digest("hex"), contractHash: command.probe?.contractHash, targetQualificationHash: capabilities().qualificationHash }
         : action === "inspect" ? { action, ...common, state: workloadStates.get(command.scope.cellId) ?? "stopped", policyHash: workloadPolicies.get(command.scope.cellId) ?? null, controlsHealthy: true }
         : action === "apply" ? (workloadStates.set(command.scope.cellId, "ready"), workloadPolicies.set(command.scope.cellId, command.admission.policyHash), { action, applied: true, requiresRecreate: false, policyHash: command.admission.policyHash, effectivePolicyHash: command.admission.policyHash })
         : action === "start" ? (workloadStates.set(command.scope.cellId, "running"), workloadPolicies.set(command.scope.cellId, command.start.policyHash), { action, started: true, operationId: claim.id, sandboxId: command.scope.bindingId, containerId: "b".repeat(64), imageDigest, policyHash: command.start.policyHash, effectivePolicyHash: command.start.policyHash })
@@ -661,8 +666,6 @@ export async function configureManagedConversationSandboxHost(input: {
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
     nativePreparationPurpose: string | null; providerPackImageProbe: boolean;
     exitCode: number | null; timedOut: boolean; erasureFailureGuard: string | null }> = [];
-  let runnerLaunchStderr = Buffer.alloc(0);
-  let runnerDiagnosticTail = Buffer.alloc(0);
   relayHost.on("message", raw => {
     let message: Record<string, any>;
     try { message = JSON.parse(raw.toString()) as Record<string, any>; } catch { return; }
@@ -716,10 +719,6 @@ export async function configureManagedConversationSandboxHost(input: {
       assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
       nativePreparationPurpose, providerPackImageProbe,
       exitCode: null as number | null, timedOut: false, erasureFailureGuard: null as string | null };
-    const captureRunnerLaunchStderr = nativePreparationPurpose === "native_session_start" &&
-      argv[0] === "sh" && argv[1] === "-c" && argv[3] === "paperclip-runner-launch";
-    const captureRunnerDiagnostic = nativePreparationPurpose === "native_harness_state" &&
-      argv[0] === "sh" && argv[1] === "-c" && argv[3] === "paperclip-runner-diagnostics";
     execFacts.push(fact);
     const child = spawn(argv[0]!, argv.slice(1), { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     // Startup failures can terminate the remote shell before its one-way stdin
@@ -732,21 +731,22 @@ export async function configureManagedConversationSandboxHost(input: {
     if (typeof request.stdinBase64 === "string") child.stdin.end(Buffer.from(request.stdinBase64, "base64")); else child.stdin.end();
     for (const [stream, output] of [["stdout", child.stdout], ["stderr", child.stderr]] as const)
       output.on("data", (chunk: Buffer) => {
-        if (captureRunnerLaunchStderr && stream === "stderr")
-          runnerLaunchStderr = Buffer.concat([runnerLaunchStderr, chunk]).subarray(-8192);
         if (nativePreparationPurpose === "native_provider_data_erasure" && stream === "stderr") {
-          const match = /^remote_erasure_failed:([a-z_]{1,40}):([0-9]{1,3})\s*$/m.exec(chunk.toString("utf8"));
-          if (match) fact.erasureFailureGuard = `${match[1]}:${match[2]}`;
+          const text = chunk.toString("utf8");
+          const identityCleanup = /^remote_identity_cleanup_failed:([a-z_]{1,40}):([0-9]{1,3})\s*$/m.exec(text);
+          const erasure = /^remote_erasure_failed:([a-z_]{1,40}):([0-9]{1,3})\s*$/m.exec(text);
+          if (identityCleanup) fact.erasureFailureGuard = `process_stop/${identityCleanup[1]}:${identityCleanup[2]}`;
+          else if (erasure) fact.erasureFailureGuard = `${erasure[1]}:${erasure[2]}`;
         }
-        if (captureRunnerDiagnostic && stream === "stdout")
-          runnerDiagnosticTail = Buffer.concat([runnerDiagnosticTail, chunk]).subarray(-8192);
         relayHost.send(JSON.stringify({ type: "exec_output", channelId: message.channelId,
           stream, base64: chunk.toString("base64") }));
       });
     child.on("error", () => { fact.exitCode = 127; relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId, exitCode: 127, timedOut: false })); });
-    child.on("close", (code, signal) => { fact.exitCode = code ?? (signal ? 128 : 1);
+    child.on("close", (code, signal) => {
+      fact.exitCode = code ?? (signal ? 128 : 1);
       relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId,
-      exitCode: fact.exitCode, timedOut: false })); });
+        exitCode: fact.exitCode, timedOut: false }));
+    });
   });
 
   const beforeNativeExecution = async ({ runId, issueId }: { runId: string; issueId: string | null }) => {
@@ -892,7 +892,10 @@ export async function configureManagedConversationSandboxHost(input: {
 
   return {
     sandboxExec: runtime.executeSandboxTask,
-    eraseRemoteNativeRuntimeAsset: runtime.eraseRemoteNativeRuntimeAsset,
+    eraseRemoteNativeRuntimeAsset: (
+      locator: Parameters<typeof runtime.eraseRemoteNativeRuntimeAsset>[0],
+      input: Parameters<typeof runtime.eraseRemoteNativeRuntimeAsset>[1],
+    ) => driveHost(runtime.eraseRemoteNativeRuntimeAsset(locator, input)),
     environmentRuntime,
     beforeNativeExecution,
     facts: () => {
@@ -924,8 +927,6 @@ export async function configureManagedConversationSandboxHost(input: {
       negativeControls: { wrongRunDenied: true, wrongLeaseDenied: true, wrongCwdDenied: true, wrongPolicyDenied: true },
       negativeNativeSessionStartControls,
       nativeSessionStartCredentialNegativeControls,
-      runnerLaunchStderr: redactSensitiveText(runnerLaunchStderr.toString("utf8")).slice(-8192),
-      runnerDiagnosticTail: redactSensitiveText(runnerDiagnosticTail.toString("utf8")).slice(-8192),
       executableNames: [...new Set(execFacts.map(fact => fact.executable.split("/").pop() ?? ""))] };
     },
     close: async () => { clearInterval(hostHeartbeatTimer); if (postgresLockProbeTimer) clearInterval(postgresLockProbeTimer);

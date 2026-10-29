@@ -315,6 +315,16 @@ export function openShellHostEngine({
     const effective = await policy(request.scope, deadlineAt);
     if (detail.phase !== "Ready")
       return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    if (!["process_nonprivileged", "filesystem_allow", "filesystem_deny"].includes(probe.caseId))
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    const workload = await container(request.scope, detail, request.imageDigest, deadlineAt);
+    const targetQualificationHash = hash(JSON.stringify(canonical({
+      backend: "openshell", backendVersion: "0.1.2", sandboxId: detail.id,
+      containerId: workload.Id, imageDigest: request.imageDigest, policyHash: effective.hash,
+      policyVersion: effective.version, configRevision: effective.config_revision, phase: detail.phase,
+    })));
+    const probeReply = (verdict, observationHash) => ({ action: "probe", verdict, observationHash,
+      contractHash: probe.contractHash, targetQualificationHash });
     const policyDeniedFor = async (needle) => {
       try {
         const logs = await cli(["logs", request.scope.sandboxRef, "--since", "1m", "--source", "sandbox"], deadlineAt, false, {}, 4500);
@@ -325,42 +335,42 @@ export function openShellHostEngine({
     if (probe.caseId === "process_nonprivileged") {
       const user = effective.policy?.process?.run_as_user;
       if (!/^[1-9][0-9]{0,8}$/.test(user ?? ""))
-        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+        return probeReply("unsupported", null);
       const result = await sandboxExec(request.scope, ["/usr/bin/id", "-u"], deadlineAt);
       if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
-        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+        return probeReply("unsupported", null);
       if (result.exitCode !== 0 || result.stdout.trim() !== user)
-        return { action: "probe", verdict: "fail", observationHash: null, contractHash: probe.contractHash };
+        return probeReply("fail", null);
       observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, observedUid: Number(user) };
     } else if (probe.caseId === "filesystem_allow") {
       const allowed = effective.policy?.filesystem_policy?.read_only ?? [];
       if (!allowed.some(value => value === "/etc" || value === "/" || value.startsWith("/etc/")))
-        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+        return probeReply("unsupported", null);
       const result = await sandboxExec(request.scope, ["/bin/sh", "-c", "test -r /etc/os-release"], deadlineAt);
       if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
-        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+        return probeReply("unsupported", null);
       if (result.exitCode !== 0)
-        return { action: "probe", verdict: "fail", observationHash: null, contractHash: probe.contractHash };
+        return probeReply("fail", null);
       observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, operation: "read_os_release" };
     } else if (probe.caseId === "filesystem_deny") {
       const allowed = [...(effective.policy?.filesystem_policy?.read_only ?? []), ...(effective.policy?.filesystem_policy?.read_write ?? [])];
       const target = "/etc/os-release";
       if (allowed.some(value => value === "/" || target === value || target.startsWith(value.endsWith("/") ? value : `${value}/`)))
-        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+        return probeReply("unsupported", null);
       // test(1) reads metadata only. A pass requires OpenShell's own denial
       // event for this exact path, so DAC errors or a missing file cannot pass.
       const result = await sandboxExec(request.scope, ["/bin/sh", "-c", "test -r /etc/os-release"], deadlineAt);
       if (result.exitCode === 0)
-        return { action: "probe", verdict: "fail", observationHash: null, contractHash: probe.contractHash };
+        return probeReply("fail", null);
       if (result.exitCode === null || !(await policyDeniedFor("/etc/os-release")))
-        return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+        return probeReply("unsupported", null);
       observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, denial: "policy_denied:/etc/os-release" };
     } else {
       // No other v0.1.2 probe is reported as passing without its dedicated
       // runtime assertion (including a policy_denied observation for denies).
-      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+      return probeReply("unsupported", null);
     }
-    return { action: "probe", verdict: "pass", observationHash: hash(JSON.stringify(canonical(observation))), contractHash: probe.contractHash };
+    return probeReply("pass", hash(JSON.stringify(canonical(observation))));
   }
   async function observed(scope, deadlineAt) {
     const detail = await cli(
@@ -1092,8 +1102,8 @@ export function openShellHostEngine({
           !/^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/.test(
             request.imageDigest ?? "",
           ) ||
-          typeof request.requesterUserId !== "string" ||
-          request.requesterUserId.length > 200 ||
+          (!request.cleanupAttestation && (typeof request.requesterUserId !== "string" ||
+            request.requesterUserId.length < 1 || request.requesterUserId.length > 200)) ||
           !Number.isFinite(new Date(deadlineAt).getTime()) ||
           new Date(deadlineAt) <= new Date()
         )
@@ -1102,6 +1112,27 @@ export function openShellHostEngine({
           (request.action === "probe") !== Boolean(request.probe) ||
           (request.action === "apply") !== Boolean(request.admission) ||
           (request.action === "start") !== Boolean(request.start) ||
+          (Boolean(request.cleanupAttestation) &&
+            (!['capabilities', 'probe'].includes(request.action) ||
+              request.requesterUserId !== undefined ||
+              Object.keys(request.cleanupAttestation).length !== 8 ||
+              Object.keys(request.cleanupAttestation).some(key => ![
+                "version", "jobId", "jobKey", "attemptNumber", "executionOwnerId",
+                "locatorDigest", "companyPurgeOperationId", "startBindingDigest",
+              ].includes(key)) ||
+              request.cleanupAttestation.version !== 1 ||
+              !uuid.test(request.cleanupAttestation.jobId ?? "") ||
+              typeof request.cleanupAttestation.jobKey !== "string" ||
+              request.cleanupAttestation.jobKey.length < 1 || request.cleanupAttestation.jobKey.length > 300 ||
+              !Number.isSafeInteger(request.cleanupAttestation.attemptNumber) ||
+              request.cleanupAttestation.attemptNumber < 1 ||
+              typeof request.cleanupAttestation.executionOwnerId !== "string" ||
+              request.cleanupAttestation.executionOwnerId.length < 1 ||
+              request.cleanupAttestation.executionOwnerId.length > 300 ||
+              !/^[a-f0-9]{64}$/.test(request.cleanupAttestation.locatorDigest ?? "") ||
+              !(request.cleanupAttestation.companyPurgeOperationId === null ||
+                uuid.test(request.cleanupAttestation.companyPurgeOperationId ?? "")) ||
+              !/^[a-f0-9]{64}$/.test(request.cleanupAttestation.startBindingDigest ?? ""))) ||
           Object.keys(request).some(
             (key) =>
               ![
@@ -1114,6 +1145,7 @@ export function openShellHostEngine({
                 "probe",
                 "admission",
                 "start",
+                "cleanupAttestation",
                 "claimToken",
               ].includes(key),
           )

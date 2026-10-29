@@ -25138,6 +25138,10 @@ export function heartbeatService(
                             ? meta.processGroupId
                             : null,
                         startedAt: meta.startedAt,
+                        ...(meta.identitySource === "remote_marker" ? {
+                          identitySource: meta.identitySource,
+                          remoteRunnerInstanceId: meta.remoteRunnerInstanceId,
+                        } : {}),
                       });
                     },
                     authToken: authToken ?? undefined,

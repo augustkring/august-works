@@ -74,23 +74,45 @@ type RemoteRuntimeAssetErasureLeaseSnapshot = {
   expiresAt: Date | null;
 };
 
+export type RemoteNativeSessionStartBinding = {
+  schema: "paperclip.remote-native-session-start-binding.v1";
+  locatorDigest: string;
+  runnerInstanceId: string;
+  environmentLeaseId: string;
+  provider: string;
+  providerLeaseId: string;
+  normalizedSessionIdDigest: string;
+  hostId: string;
+  hostEpoch: number;
+  cellId: string;
+  cellGeneration: string;
+  bindingId: string;
+  manifestId: string;
+  manifestHash: string;
+  policySnapshotId: string;
+  policyHash: string;
+};
+
 /**
  * The environment execution lease may already be retired when a terminal-run
- * retention job executes. Permit that cleanup-only case only when the
- * provider's exact ephemeral lease was released successfully and its
- * provider-attested deadline is still live. RuntimeControl separately checks
- * the current host/cell/binding, provider lease identity, and process
+ * retention job executes. A retired ephemeral lease with a recorded provider
+ * TTL can reach cleanup-attestation refresh only when its exact signed start
+ * is available; RuntimeControl still requires a fresh attestation to dispatch.
+ * RuntimeControl separately checks the current protected host capability,
+ * host/cell/binding generation, provider lease identity, and process
  * generation before it signs the fixed erasure command.
  */
 export function remoteRuntimeAssetErasureLeaseIsCurrent(
   lease: RemoteRuntimeAssetErasureLeaseSnapshot,
   now = new Date(),
+  hasExactSessionStartBinding = false,
 ) {
-  if (!lease.provider?.trim() || lease.provider === "local" || !lease.expiresAt || lease.expiresAt <= now) return false;
+  if (!lease.provider?.trim() || lease.provider === "local") return false;
   if (["active", "pending_cleanup"].includes(lease.status))
-    return lease.releasedAt === null && lease.cleanupStatus !== "success";
+    return Boolean(lease.expiresAt && lease.expiresAt > now && lease.releasedAt === null && lease.cleanupStatus !== "success");
   return lease.status === "expired" && lease.leasePolicy === "ephemeral" &&
-    lease.releasedAt !== null && lease.cleanupStatus === "success";
+    lease.releasedAt !== null && lease.cleanupStatus === "success" &&
+    lease.expiresAt !== null && Number.isFinite(lease.expiresAt.getTime()) && hasExactSessionStartBinding;
 }
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -110,6 +132,65 @@ export function remoteRuntimeAssetLocatorDigest(locator: RemoteRuntimeAssetLocat
     locator.environmentLeaseId, locator.provider, locator.providerLeaseId, locator.runnerInstanceId,
     locator.normalizedSessionIdDigest, locator.remoteCwdDigest, locator.relativePath, locator.pathDigest,
   ].join("\0"));
+}
+
+/** Resolve the server's successful signed session-start claim that authorized
+ * this exact remote locator. This links a future cleanup-only command to the
+ * original run, provider lease, runner generation and protected sandbox
+ * generation; a purpose string or terminal Run alone is not authority. */
+export async function readRemoteNativeSessionStartBinding(
+  db: Db,
+  locator: RemoteRuntimeAssetLocator,
+): Promise<RemoteNativeSessionStartBinding | null> {
+  const rows = await db.select({ runtimeHostId: runtimeHostCommands.runtimeHostId,
+    runtimeCellId: runtimeHostCommands.runtimeCellId, cellGeneration: runtimeHostCommands.cellGeneration,
+    idempotencyKey: runtimeHostCommands.idempotencyKey, payload: runtimeHostCommands.payload,
+    safeResult: runtimeHostCommands.safeResult, completedAt: runtimeHostCommands.completedAt })
+    .from(runtimeHostCommands).where(and(
+      eq(runtimeHostCommands.companyId, locator.companyId),
+      eq(runtimeHostCommands.commandType, "sandbox_exec"),
+      eq(runtimeHostCommands.status, "SUCCEEDED"),
+      sql`${runtimeHostCommands.payload}->>'nativePreparationPurpose' = 'native_session_start'`,
+      sql`${runtimeHostCommands.payload}->>'runId' = ${locator.runId}`,
+      sql`${runtimeHostCommands.payload}->>'leaseId' = ${locator.environmentLeaseId}`,
+    )).orderBy(desc(runtimeHostCommands.completedAt));
+  const locatorDigest = remoteRuntimeAssetLocatorDigest(locator);
+  for (const row of rows) {
+    const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+      ? row.payload as Record<string, unknown> : {};
+    const candidate = payload.remoteNativeSessionStartBinding &&
+      typeof payload.remoteNativeSessionStartBinding === "object" && !Array.isArray(payload.remoteNativeSessionStartBinding)
+      ? payload.remoteNativeSessionStartBinding as Record<string, unknown> : {};
+    const safeResult = row.safeResult && typeof row.safeResult === "object" && !Array.isArray(row.safeResult)
+      ? row.safeResult as Record<string, unknown> : {};
+    const expectedKeys = ["schema", "locatorDigest", "runnerInstanceId", "environmentLeaseId", "provider",
+      "providerLeaseId", "normalizedSessionIdDigest", "hostId", "hostEpoch", "cellId", "cellGeneration",
+      "bindingId", "manifestId", "manifestHash", "policySnapshotId", "policyHash"];
+    if (row.cellGeneration === null || Object.keys(candidate).length !== expectedKeys.length || expectedKeys.some(key => !Object.hasOwn(candidate, key)) ||
+      candidate.schema !== "paperclip.remote-native-session-start-binding.v1" ||
+      candidate.locatorDigest !== locatorDigest || candidate.runnerInstanceId !== locator.runnerInstanceId ||
+      candidate.environmentLeaseId !== locator.environmentLeaseId || candidate.provider !== locator.provider ||
+      candidate.providerLeaseId !== locator.providerLeaseId ||
+      candidate.normalizedSessionIdDigest !== locator.normalizedSessionIdDigest ||
+      candidate.hostId !== row.runtimeHostId || candidate.cellId !== row.runtimeCellId ||
+      candidate.hostId !== payload.hostId || candidate.cellId !== payload.cellId ||
+      candidate.cellGeneration !== row.cellGeneration.toString() ||
+      candidate.cellGeneration !== payload.generation ||
+      candidate.bindingId !== payload.bindingId || candidate.manifestId !== payload.manifestId ||
+      candidate.manifestHash !== payload.manifestHash || candidate.policySnapshotId !== payload.policySnapshotId ||
+      candidate.policyHash !== payload.policyHash || candidate.hostEpoch !== payload.hostEpoch ||
+      !Number.isSafeInteger(candidate.hostEpoch) ||
+      ![candidate.hostId, candidate.cellId, candidate.bindingId, candidate.manifestId, candidate.policySnapshotId]
+        .every(value => typeof value === "string" && uuidPattern.test(value)) ||
+      ![candidate.manifestHash, candidate.policyHash].every(value => typeof value === "string" && digestPattern.test(value)) ||
+      typeof payload.requestId !== "string" || !uuidPattern.test(payload.requestId) || payload.requestId !== row.idempotencyKey ||
+      payload.runId !== locator.runId || payload.leaseId !== locator.environmentLeaseId ||
+      safeResult.exitCode !== 0 || safeResult.timedOut !== false || !row.completedAt ||
+      !Number.isSafeInteger(candidate.hostEpoch) || typeof candidate.cellGeneration !== "string" ||
+      !/^[1-9][0-9]*$/.test(candidate.cellGeneration)) continue;
+    return candidate as unknown as RemoteNativeSessionStartBinding;
+  }
+  return null;
 }
 
 export function createRemoteRuntimeAssetLocator(input: {
@@ -265,6 +346,7 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
   const [run] = await db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, locator.companyId), eq(heartbeatRuns.id, locator.runId)));
   const exactStopReceipt = run ? await hasExactRemoteRuntimeAssetStopReceipt(db, locator, companyPurgeOperationId) : null;
+  const exactStartBinding = await readRemoteNativeSessionStartBinding(db, locator);
   const processOwnerBoundToRemoteLocator = Boolean(run && run.processPid !== null &&
     Number.isSafeInteger(run.processPid) && run.processPid > 1 && run.processStartedAt !== null &&
     run.runnerInstanceId === locator.runnerInstanceId &&
@@ -273,6 +355,10 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
     (run.processPid === null && run.processStartedAt === null ||
       (run.processPid === exactStopReceipt.stopProof.pid &&
         run.processStartedAt?.toISOString() === exactStopReceipt.stopProof.startedAt)));
+  if (!exactStartBinding)
+    throw conflict("Managed remote OpenCode erasure has no successful exact signed session-start command", {
+      code: REMOTE_ASSET_ERASURE_ERRORS.target,
+    });
   if (!run || run.runtimeMode !== "native" || run.driverKind !== "opencode_server" ||
     !["succeeded", "interrupted", "failed", "cancelled", "timed_out"].includes(run.status) ||
     (!processOwnerBoundToRemoteLocator && !exactStopReceipt) || (exactStopReceipt && !currentProcessMatchesReceipt) ||
@@ -312,7 +398,8 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
   const remoteLeases = await db.select().from(environmentLeases).where(and(
     eq(environmentLeases.companyId, locator.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
     eq(environmentLeases.heartbeatRunId, locator.runId)));
-  if (remoteLeases.length !== 1 || remoteLeases.some(lease => !remoteRuntimeAssetErasureLeaseIsCurrent(lease)))
+  if (remoteLeases.length !== 1 || remoteLeases.some(lease =>
+    !remoteRuntimeAssetErasureLeaseIsCurrent(lease, new Date(), exactStartBinding !== null)))
     throw conflict("Managed remote OpenCode data erasure awaits its exact current cleanup lease", { code: REMOTE_ASSET_ERASURE_ERRORS.lease });
   const coOwners = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, locator.companyId),
@@ -321,7 +408,7 @@ export async function assertRemoteRuntimeAssetErasureReady(db: Db, locator: Remo
   const otherOwners = coOwners.filter(owner => owner.id !== run.id);
   if (otherOwners.length)
     throw conflict("Managed remote OpenCode session has another retained Run owner", { code: REMOTE_ASSET_ERASURE_ERRORS.coOwner });
-  return { run, finalization, remoteLeases, coOwnerRunIds: [run.id] };
+  return { run, finalization, remoteLeases, coOwnerRunIds: [run.id], startBinding: exactStartBinding };
 }
 
 async function hasNativeRuntimeAssetStop(db: Db, companyId: string, runId: string) {
@@ -385,7 +472,7 @@ function legacyProfileDigests(profile: unknown) {
   return result;
 }
 
-function runtimeAssetJobKey(runId: string, digests: string[]) {
+export function runtimeAssetJobKey(runId: string, digests: string[]) {
   return `runtime-asset-erasure:v1:${runId}${digests.length
     ? `:${createHash("sha256").update([...new Set(digests)].sort().join(",")).digest("hex")}` : ""}`;
 }

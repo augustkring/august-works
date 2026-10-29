@@ -311,36 +311,32 @@ test("CLI fixtures cannot earn complete physical capabilities or forced-stop pro
         .reply,
       { action: "capabilities", capabilities: null },
     );
-    assert.deepEqual(
-      (
-        await engine.execute(
-          randomUUID(),
-          {
-            ...input("probe"),
-            probe: {
-              caseId: "force_stop",
-              control: "forceStop",
-              expected: "observe",
-              contractHash: "a".repeat(64),
-            },
-          },
-          deadline(),
-        )
-      ).reply,
+    const forcedStopProbe = await engine.execute(randomUUID(), {
+      ...input("probe"),
+      probe: {
+        caseId: "force_stop",
+        control: "forceStop",
+        expected: "observe",
+        contractHash: "a".repeat(64),
+      },
+    }, deadline());
+    assert.deepEqual(forcedStopProbe.reply,
       { action: "probe", verdict: "unsupported", observationHash: null, contractHash: "a".repeat(64) },
-    );
+      JSON.stringify({ errorCode: forcedStopProbe.errorCode, reply: forcedStopProbe.reply }));
     assert.ok(calls.length > 0);
     assert.ok(calls.every(({ args }) => !args.includes("start") && !args.includes("stop")));
     assert.ok(calls.every(({ args }) => !args.includes("exec")));
   }));
 test("policy-bound process probe executes the pinned OpenShell command and hashes only its assertion", async () =>
   fixture(async ({ engine, calls }) => {
+    const capabilityReply = await engine.execute(randomUUID(), input("capabilities"), deadline());
     const reply = await engine.execute(randomUUID(), {
       ...input("probe"),
       probe: { caseId: "process_nonprivileged", control: "processPrivilegePolicy", expected: "observe", contractHash: "c".repeat(64) },
     }, deadline());
     assert.equal(reply.reply.verdict, "pass");
     assert.match(reply.reply.observationHash, /^[a-f0-9]{64}$/);
+    assert.equal(reply.reply.targetQualificationHash, capabilityReply.reply.capabilities.qualificationHash);
     const execCall = calls.find(({ args }) => args.includes("exec"));
     assert.ok(execCall);
     assert.ok(execCall.args.includes("--no-login-shell"));
@@ -399,6 +395,35 @@ test("prepare returns only an observed exact stopped sandbox image and rejects d
     }, hooks);
   }
 });
+
+test("host rejects malformed cleanup attestations and never accepts them for execution actions", async () =>
+  fixture(async ({ engine }) => {
+    const cleanupAttestation = {
+      version: 1, jobId: randomUUID(), jobKey: `runtime-asset-erasure:v1:${randomUUID()}`,
+      attemptNumber: 1, executionOwnerId: "retention-worker", locatorDigest: "a".repeat(64),
+      companyPurgeOperationId: null, startBindingDigest: "b".repeat(64),
+    };
+    const cleanupCapabilities = input("capabilities");
+    delete cleanupCapabilities.requesterUserId;
+    const cleanupStart = input("start");
+    delete cleanupStart.requesterUserId;
+    await assert.rejects(engine.execute(randomUUID(), {
+      ...cleanupCapabilities,
+      cleanupAttestation: { ...cleanupAttestation, unexpected: true },
+    }, deadline()));
+    await assert.rejects(engine.execute(randomUUID(), {
+      ...cleanupStart, start: {
+        policyHash, expiresAt: deadline(), idempotencyKey: randomUUID(),
+      }, cleanupAttestation,
+    }, deadline()));
+    await assert.rejects(engine.execute(randomUUID(), {
+      ...cleanupCapabilities,
+      cleanupAttestation: { ...cleanupAttestation, locatorDigest: "bad" },
+    }, deadline()));
+    await assert.rejects(engine.execute(randomUUID(), {
+      ...input("capabilities"), requesterUserId: "fixture-owner", cleanupAttestation,
+    }, deadline()), /sandbox_scope_changed/);
+  }));
 test("Stop checks immutable scope, targets one sandbox and persists a restart receipt", async () =>
   fixture(async ({ engine, config, calls, root, run }) => {
     const id = randomUUID(),

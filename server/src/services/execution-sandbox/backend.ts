@@ -6,7 +6,7 @@ export interface PreparedSandbox extends SandboxIdentity { backendVersion: strin
 export interface PolicyApplyResult { applied: boolean; requiresRecreate: boolean; observedPolicyHash: string | null; unsupportedFeatures: string[] }
 export interface SandboxObservation { state: "ready" | "running" | "stopped" | "failed" | "unknown"; policyHash: string | null; imageDigest: string | null; generation: string; controlsHealthy: boolean }
 export interface SandboxProbeCase { caseId: string; control: string; expected: "allow" | "deny" | "observe"; contractHash: string }
-export interface SandboxProbeResult { verdict: "pass" | "fail" | "unsupported"; observationHash: string | null; contractHash: string }
+export interface SandboxProbeResult { verdict: "pass" | "fail" | "unsupported"; observationHash: string | null; contractHash: string; targetQualificationHash?: string }
 
 /** A backend adapter cannot grant company permission. Every call receives a
  * controller-pinned identity and an already-authorized policy projection. */
