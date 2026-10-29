@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "requirement": "V10-004",
+  "scope": "One bounded material transition: historical CompanyImport lease initialization in migration 0554 and its current bounded recovery owner. This is not the complete V10 change register; unrelated and unreviewed working-tree changes are out of scope.",
+  "sourceManifest": "doc/operations/v10-safe-change-graph.source.json",
+  "changes": [
+    {
+      "changeId": "SCR-V10-0554-company-import-lease-budget",
+      "requirements": ["V10-004", "V10-021", "V10-022"],
+      "canonicalOwner": "packages/db/src/client.ts + server/src/services/company-import-jobs.ts",
+      "ownerDisposition": "source_owners_identified_release_operator_owner_unknown",
+      "sourceBefore": {
+        "commitSha": "d53236bb50f800275794fb955683e6256b192a4b",
+        "path": "packages/db/src/client.ts",
+        "sha256": "50f0b2cfdbc99cc76c71593b30728488edc83d3020ea1910957c10a39974d546"
+      },
+      "preservedHistoricalMigration": {
+        "commitSha": "d41c6dabddbf43928d7782ce08720bde76d4e880",
+        "path": "packages/db/src/migrations/0554_company_import_fenced_effects.sql",
+        "sha256": "2fd20017f85b28aea1c23e2ff93f8237545ebe3f62b312d5e4053679b53567d8"
+      },
+      "decisionOwner": null,
+      "decisionOwnerDisposition": "unknown_until_the_database_release_owner_is_named",
+      "changeClass": "M3",
+      "state": "implemented_pending_external_qualification",
+      "reasonNow": "Historical 0554 remains byte-identical. The migration runner now applies a 0554-specific lock budget, row-count admission cap, statement timeout, rollback, and retry guidance in the existing transaction. Four embedded-Postgres tests pass on pinned source; production population and lock profile remain unmeasured.",
+      "protectedInvariants": [
+        "Preserve 0554 historical SQL bytes and prior migration ordering.",
+        "Never replay an import effect based only on an expired lease; retain needs_reconciliation for unknown outcomes.",
+        "Do not write the migration journal entry unless every migration statement commits."
+      ],
+      "dependencies": ["0554_company_import_fenced_effects.sql", "0556_customer_operation_expired_lease_recovery.sql"],
+      "sourcePaths": [
+        "packages/db/src/client.ts",
+        "packages/db/src/migrations/0554_company_import_fenced_effects.sql",
+        "packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql",
+        "server/src/services/company-import-jobs.ts",
+        "packages/db/src/migration-transaction-budget.test.ts"
+      ],
+      "migrationPhases": [
+        {
+          "phase": "bounded-attempt",
+          "authority": "Existing migration runner transaction; no change to historical SQL or operation authority.",
+          "preconditions": "The table is present at the expected legacy schema. The migration runner holds its normal per-file transaction.",
+          "allowedVersions": "No mixed-version allowlist is established by source; release operator must drain CompanyImport writers and keep application traffic drained through the migration.",
+          "action": "Inside the existing transaction, set lock_timeout=5000ms and preflight statement_timeout=5000ms, acquire ACCESS EXCLUSIVE on customer_operations (the first ALTER already requires this lock), count running CompanyImport rows, and refuse more than 10,000. If admitted, apply statement_timeout=120000ms before the unchanged 0554 statements.",
+          "stopCondition": "Lock/preflight statement timeout, migration statement timeout, or a preflight count above 10,000.",
+          "expectedState": "On success, unchanged 0554 statements and journal entry commit together. On any failure, the whole migration transaction rolls back and no journal row is written.",
+          "verification": "A representative 10,000-row fixture completes and commits; a 10,001-row fixture refuses before DDL; a blocked table lock times out and rolls back without a journal row.",
+          "recovery": "Keep application traffic drained, inspect blockers and the running CompanyImport population, resolve the blocker, and retry the identical migration; if the measured population cannot fit the budget, prepare a separately reviewed bounded procedure before retry."
+        },
+        {
+          "phase": "post-migration-reconciliation",
+          "authority": "Existing companyImportJobService.recoverInterrupted owner, ordered bounded batch with SKIP LOCKED.",
+          "action": "Move expired running attempts to needs_reconciliation without replaying effects.",
+          "stopCondition": "Unknown or inconsistent durable effect checkpoint.",
+          "expectedState": "The original operation receipt and effect checkpoint remain inspectable; unresolved outcomes stay inconclusive.",
+          "recovery": "Use the existing explicit reconciliation owner for consequential outcomes; do not infer success from an empty runtime queue."
+        }
+      ],
+      "currentFacts": {
+        "migrationRunnerTransaction": "Each migration file runs in its own BEGIN/COMMIT transaction.",
+        "migrationRunnerTimeoutsBeforeChange": "No migration-specific lock_timeout or statement_timeout was found.",
+        "implementedRunnerBudget": "0554 only: 5,000 ms lock_timeout, 5,000 ms preflight statement_timeout, 10,000 running-row admission limit, 120,000 ms migration statement_timeout; all SET LOCAL in the existing transaction.",
+        "existingForwardIndex": "0556 adds customer_operations_expired_lease_idx(operation_type,status,lease_expires_at).",
+        "existingRuntimeRecoveryBatchLimit": 100,
+        "populationCount": null,
+        "hostedLockBudgetEvidence": null
+      },
+      "qualification": {
+        "sourceTestResult": "4/4 embedded-Postgres tests passed on snapshot 0e049391f2eff16670e49085b344840c0f6d8d0e; source file pins and receipt are in doc/operations/aw-v10-evidence/v10-product-artifacts-2026-10-29/migration-0554-budget/.",
+        "exactSourceIdentity": "packages/db/src/client.ts sha256 294af0069583236454c5b445e3218950d85634dd17a93c4cd8e73bd0004d52d4; packages/db/src/migration-transaction-budget.test.ts sha256 1fba3bd96c2cb6f52ecb64f4016c471c0ea18bb23ce4c7d921981d51ad77d953; 0554 SHA256 2fd20017f85b28aea1c23e2ff93f8237545ebe3f62b312d5e4053679b53567d8.",
+        "externalQualification": "not available from repository source",
+        "remaining": "Measure the applicable database population and lock profile before calling this budget production-qualified; external database release ownership remains unknown."
+      },
+      "irreversibleBoundaries": [],
+      "evidenceRefs": [
+        "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md#56.8",
+        "doc/plans/2026-10-28-v10-current-reconciliation.md#MIG-04",
+        "doc/operations/aw-v10-evidence/v10-product-artifacts-2026-10-29/migration-0554-budget/README.md"
+      ]
+    }
+  ]
+}

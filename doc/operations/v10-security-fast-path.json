@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "requirement": "V10-013",
+  "status": "source_selector_map; not release evidence",
+  "sourceAssurance": "doc/experience/v9/security-assurance-map.md",
+  "sourceAssuranceSha256": "a06324bda00a0899c7af1eef6ab7bbb79434ede09b4f5d2627b44d0906e7c2ae",
+  "selectorRunner": "Vitest JSON reporter with scripts/check-v10-security-regression-execution.mjs",
+  "qualificationBoundary": "A mapped Vitest file or owner directory is a regression selector only. The CI execution guard requires at least one passed or failed assertion from every selected file/directory; other assertions may be skipped. This map does not assert full owner coverage or hosted/provider/physical evidence. The job reference identifies the repository workflow that invokes the selector; it is not a pass receipt.",
+  "sensitiveSourcePrefixes": [
+    "server/src/middleware/auth.ts",
+    "server/src/agent-auth-jwt.ts",
+    "server/src/auth/",
+    "server/src/routes/",
+    "server/src/services/authorization.ts",
+    "server/src/services/analytical-context-authority.ts",
+    "server/src/services/memory/",
+    "server/src/services/workflows/",
+    "server/src/services/saas/",
+    "server/src/services/native-runtime/",
+    "server/src/services/runtime/",
+    "packages/shared/src/",
+    "packages/db/src/"
+  ],
+  "sourceFallbacks": [
+    {
+      "prefix": "server/src/auth/",
+      "canonicalOwner": "Existing authentication domain owners",
+      "ownerDisposition": "directory_fallback_to_owner_regressions",
+      "trigger": "any source change under this owner prefix",
+      "selectors": ["server/src/__tests__/better-auth-credential-signup.integration.test.ts", "server/src/__tests__/account-deletion-sso-reauth.integration.test.ts", "server/src/__tests__/auth-routes.test.ts"]
+    },
+    {
+      "prefix": "server/src/routes/",
+      "canonicalOwner": "Existing native route authorization and domain service owners",
+      "ownerDisposition": "route_fallback_to_cross_tenant_and_existence_denial_regressions",
+      "trigger": "any source change under this owner prefix",
+      "selectors": ["server/src/__tests__/authz-company-access.test.ts", "server/src/__tests__/agent-cross-tenant-authz-routes.test.ts", "server/src/__tests__/companies-route-cross-company-authz.test.ts", "server/src/__tests__/authz-existence-oracle-guard.test.ts"]
+    },
+    {
+      "prefix": "server/src/services/memory/",
+      "canonicalOwner": "Existing Memory and source privacy owners",
+      "ownerDisposition": "directory_fallback_to_owner_regressions",
+      "trigger": "any source change under this owner prefix",
+      "selectors": ["server/src/services/memory/", "server/src/__tests__/analytical-context-privacy.integration.test.ts", "server/src/__tests__/memory-job-read-authority.integration.test.ts", "server/src/__tests__/v9-customer-feedback.integration.test.ts"]
+    },
+    {
+      "prefix": "server/src/services/workflows/",
+      "canonicalOwner": "Existing workflow authoring and execution owners",
+      "ownerDisposition": "directory_fallback_to_owner_regressions",
+      "trigger": "any source change under this owner prefix",
+      "selectors": ["server/src/services/workflows/", "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts", "server/src/__tests__/v9-workflow-authoring-api.integration.test.ts"]
+    },
+    {
+      "prefix": "server/src/services/saas/",
+      "canonicalOwner": "Existing SaaS account, membership and deletion owners",
+      "ownerDisposition": "directory_fallback_to_owner_regressions",
+      "trigger": "any source change under this owner prefix",
+      "selectors": ["server/src/services/saas/", "server/src/__tests__/account-deletion-sso-reauth.integration.test.ts", "server/src/__tests__/v6-saas-auth.integration.test.ts"]
+    },
+    {
+      "prefix": "server/src/services/native-runtime/",
+      "canonicalOwner": "Existing native runtime, source and run-authority owners",
+      "ownerDisposition": "directory_fallback_to_owner_regressions",
+      "trigger": "any source change under this owner prefix",
+      "selectors": ["server/src/services/native-runtime/", "server/src/__tests__/native-session-resumption.test.ts", "server/src/__tests__/heartbeat-process-recovery.test.ts", "server/src/__tests__/analytical-context-privacy.integration.test.ts"]
+    },
+    {
+      "prefix": "server/src/services/runtime/",
+      "canonicalOwner": "Existing runtime and host-boundary owners",
+      "ownerDisposition": "runtime_fallback_to_host_and_authorization_regressions",
+      "trigger": "any source change under this owner prefix",
+      "selectors": ["server/src/services/runtime/", "server/src/__tests__/v6-runtime-host-auth.integration.test.ts", "server/src/__tests__/workspace-runtime-service-authz.test.ts"]
+    },
+    {
+      "prefix": "packages/shared/src/",
+      "canonicalOwner": "@paperclipai/shared typed authority and domain contracts",
+      "ownerDisposition": "package_fallback_to_shared_owner_regressions",
+      "trigger": "any source change under this package prefix",
+      "selectors": ["packages/shared/src/"]
+    },
+    {
+      "prefix": "packages/db/src/",
+      "canonicalOwner": "@paperclipai/db migration and persistence owners",
+      "ownerDisposition": "directory_fallback_to_owner_regressions",
+      "trigger": "any source change under this package prefix",
+      "selectors": ["packages/db/src/"]
+    }
+  ],
+  "ciOwner": {
+    "workflow": ".github/workflows/aw-v4-verification.yml",
+    "jobId": "security-evals",
+    "jobName": "Security hard gates"
+  },
+  "regressions": [
+    {
+      "id": "AUTH-CURRENT-COMPANY",
+      "failureBoundary": "Foreign company, stale membership, current authority",
+      "canonicalOwner": "server/src/services/authorization.ts",
+      "ownerDisposition": "declared_by_assurance_map_source_owner",
+      "protectedPaths": [
+        "server/src/middleware/auth.ts",
+        "server/src/services/authorization.ts"
+      ],
+      "triggers": ["source change to a protected path"],
+      "selectors": [
+        "server/src/__tests__/authz-company-access.test.ts",
+        "server/src/__tests__/v9-experience.integration.test.ts"
+      ],
+      "ciJob": "security-evals",
+      "ciWorkflow": ".github/workflows/aw-v4-verification.yml"
+    },
+    {
+      "id": "PRIVACY-CURRENT-SOURCE",
+      "failureBoundary": "Private source admission, derived context, erasure and revocation",
+      "canonicalOwner": "server/src/services/analytical-context-authority.ts",
+      "ownerDisposition": "declared_by_current_source",
+      "protectedPaths": [
+        "server/src/services/analytical-context-authority.ts",
+        "server/src/services/memory/memory-privacy.ts"
+      ],
+      "triggers": ["source change to a protected path"],
+      "selectors": [
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+        "server/src/__tests__/memory-job-read-authority.integration.test.ts"
+      ],
+      "ciJob": "security-evals",
+      "ciWorkflow": ".github/workflows/aw-v4-verification.yml"
+    },
+    {
+      "id": "WORKFLOW-PRIVATE-RECOVERY",
+      "failureBoundary": "Private workflow source, run authority and interrupted recovery",
+      "canonicalOwner": "server/src/services/workflows/workflow-executor.ts",
+      "ownerDisposition": "declared_by_current_source",
+      "protectedPaths": [
+        "server/src/services/workflows/workflow-executor.ts",
+        "server/src/services/workflows/workflow-service.ts"
+      ],
+      "triggers": ["source change to a protected path"],
+      "selectors": [
+        "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts",
+        "server/src/__tests__/v9-workflow-authoring-api.integration.test.ts"
+      ],
+      "ciJob": "security-evals",
+      "ciWorkflow": ".github/workflows/aw-v4-verification.yml"
+    },
+    {
+      "id": "AUTH-SESSION-RECOVERY",
+      "failureBoundary": "Credential/session recovery and account security",
+      "canonicalOwner": "server/src/auth/better-auth.ts",
+      "ownerDisposition": "declared_by_current_source",
+      "protectedPaths": [
+        "server/src/auth/better-auth.ts",
+        "server/src/services/saas/account-deletion.ts"
+      ],
+      "triggers": ["source change to a protected path"],
+      "selectors": [
+        "server/src/__tests__/better-auth-credential-signup.integration.test.ts",
+        "server/src/__tests__/account-deletion-sso-reauth.integration.test.ts"
+      ],
+      "ciJob": "security-evals",
+      "ciWorkflow": ".github/workflows/aw-v4-verification.yml"
+    },
+    {
+      "id": "IMPORT-LEASE-REPLAY",
+      "failureBoundary": "Durable import lease, effect replay and process recovery",
+      "canonicalOwner": "server/src/services/company-import-jobs.ts",
+      "ownerDisposition": "declared_by_current_source",
+      "protectedPaths": [
+        "server/src/services/company-import-jobs.ts",
+        "packages/db/src/client.ts"
+      ],
+      "triggers": ["source change to a protected path"],
+      "selectors": [
+        "server/src/__tests__/company-import-jobs.integration.test.ts",
+        "server/src/__tests__/company-import-process-recovery.integration.test.ts"
+      ],
+      "ciJob": "security-evals",
+      "ciWorkflow": ".github/workflows/aw-v4-verification.yml"
+    },
+    {
+      "id": "AGENT-RUN-AUTHORITY",
+      "failureBoundary": "Agent credential, exact run identity and authorization denial",
+      "canonicalOwner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "ownerDisposition": "declared_by_current_source",
+      "protectedPaths": [
+        "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+        "server/src/agent-auth-jwt.ts"
+      ],
+      "triggers": ["source change to a protected path"],
+      "selectors": [
+        "server/src/__tests__/agent-auth-jwt.test.ts",
+        "server/src/__tests__/agent-auth-middleware.test.ts"
+      ],
+      "ciJob": "security-evals",
+      "ciWorkflow": ".github/workflows/aw-v4-verification.yml"
+    },
+    {
+      "id": "NATIVE-SESSION-RECOVERY",
+      "failureBoundary": "Native session dispatch, retained-run authority and authenticated resumption",
+      "canonicalOwner": "server/src/services/native-runtime/native-session-executor.ts",
+      "ownerDisposition": "declared_by_current_source",
+      "protectedPaths": [
+        "server/src/services/native-runtime/native-session-executor.ts"
+      ],
+      "triggers": ["source change to a protected path"],
+      "selectors": [
+        "server/src/services/native-runtime/native-session-executor.test.ts",
+        "server/src/services/native-runtime/native-session-resume.test.ts"
+      ],
+      "ciJob": "security-evals",
+      "ciWorkflow": ".github/workflows/aw-v4-verification.yml"
+    },
+    {
+      "id": "AGENT-PUBLICATION-MIGRATION-RECEIPT",
+      "failureBoundary": "Immutable company-scoped migration monitor receipt and Human review provenance",
+      "canonicalOwner": "packages/db/src/migrations/0563_wise_yellow_claw.sql",
+      "ownerDisposition": "declared_by_current_migration_source",
+      "protectedPaths": [
+        "packages/db/src/migrations/0563_wise_yellow_claw.sql",
+        "packages/db/src/migrations/meta/0563_snapshot.json",
+        "packages/db/src/migrations/meta/_journal.json"
+      ],
+      "triggers": ["migration SQL, snapshot, or journal source change"],
+      "selectors": [
+        "server/src/__tests__/v9-agent-publication.integration.test.ts"
+      ],
+      "ciJob": "security-evals",
+      "ciWorkflow": ".github/workflows/aw-v4-verification.yml"
+    }
+  ]
+}

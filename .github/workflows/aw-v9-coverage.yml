@@ -5,7 +5,13 @@ on:
       - 'doc/experience/v9/**'
       - 'evals/aw-v9/**'
       - 'packages/shared/src/**'
+      - 'packages/teams-catalog/generated/catalog.json'
+      - 'packages/skills-catalog/generated/catalog.json'
+      - 'packages/db/src/client.ts'
+      - 'packages/db/src/migrations/0554_company_import_fenced_effects.sql'
+      - 'packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql'
       - 'server/src/**'
+      - 'server/src/services/company-import-jobs.ts'
       - 'ui/src/**'
       - 'doc/reference/aw-v9/brief/**'
       - 'scripts/check-aw-v9-coverage.mjs'
@@ -13,6 +19,20 @@ on:
       - 'scripts/aw-v10-operation-coverage.mjs'
       - 'scripts/check-aw-v10-operation-coverage.test.mjs'
       - 'doc/operations/agent-native-ui-operation-coverage.json'
+      - 'doc/operations/v10-capability-projection.json'
+      - 'doc/operations/v10-security-fast-path.json'
+      - 'doc/operations/v10-safe-change-graph.json'
+      - 'doc/operations/v10-safe-change-graph.source.json'
+      - 'scripts/generate-v10-capability-projection.ts'
+      - 'scripts/check-v10-capability-projection.mjs'
+      - 'scripts/check-v10-security-fast-path.mjs'
+      - 'scripts/check-v10-security-fast-path.test.mjs'
+      - 'scripts/check-v10-security-regression-execution.mjs'
+      - 'scripts/check-v10-security-regression-execution.test.mjs'
+      - 'scripts/generate-v10-safe-change-graph.mjs'
+      - 'scripts/check-v10-safe-change-graph.mjs'
+      - 'scripts/v10-product-artifacts.test.mjs'
+      - 'packages/db/src/migration-transaction-budget.test.ts'
       - 'server/src/services/agent-native-operation-manifest.ts'
       - 'scripts/aw-v9-release-prerequisites.mjs'
       - 'scripts/__tests__/aw-v9-release-prerequisites.test.mjs'
@@ -52,6 +72,16 @@ jobs:
       - run: node scripts/check-aw-v9-coverage.mjs
       - name: Test fail-closed V10 coverage inventory
         run: node --test scripts/check-aw-v10-operation-coverage.test.mjs
+      - name: Verify generated V10 capability projection
+        run: node scripts/check-v10-capability-projection.mjs
+      - name: Verify V10 security fast-path selectors
+        run: node scripts/check-v10-security-fast-path.mjs
+      - name: Test V10 security selector execution guard
+        run: node --test scripts/check-v10-security-regression-execution.test.mjs
+      - name: Verify V10 Safe Change graph
+        run: node scripts/check-v10-safe-change-graph.mjs
+      - name: Test V10 security and product artifacts
+        run: node --test scripts/check-v10-security-fast-path.test.mjs scripts/v10-product-artifacts.test.mjs
       - name: Verify inherited release blockers cannot be bypassed
         run: node --test scripts/__tests__/aw-v9-release-prerequisites.test.mjs
       - name: Check frozen pilot and attention samples with private artifact validation

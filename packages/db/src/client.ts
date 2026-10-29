@@ -357,9 +357,70 @@ async function orderMigrationsByJournal(migrationFiles: string[]): Promise<strin
 
 type SqlExecutor = Pick<ReturnType<typeof postgres>, "unsafe">;
 
-async function runInTransaction(sql: SqlExecutor, action: () => Promise<void>): Promise<void> {
+export const MIGRATION_EXECUTION_BUDGETS = {
+  "0554_company_import_fenced_effects.sql": {
+    lockTimeoutMs: 5_000,
+    preflightStatementTimeoutMs: 5_000,
+    statementTimeoutMs: 120_000,
+    maximumOneShotRows: 10_000,
+    rationale: "Bound the CompanyImport whole-population lease initialization and DDL lock wait without imposing a timeout on unrelated historical migrations.",
+  },
+} as const;
+
+function postgresErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  const { code } = error;
+  return typeof code === "string" ? code : undefined;
+}
+
+function migrationBudgetFailure(
+  migrationFile: string,
+  budget: (typeof MIGRATION_EXECUTION_BUDGETS)[keyof typeof MIGRATION_EXECUTION_BUDGETS],
+  error: unknown,
+  population: string | null,
+): Error {
+  const causeCode = postgresErrorCode(error);
+  const reason = causeCode === "55P03" ? "lock wait exceeded" : "statement execution exceeded";
+  return new Error(
+    `Migration ${migrationFile} stopped because its ${reason} budget was exceeded ` +
+    `(lock ${budget.lockTimeoutMs} ms; preflight statement ${budget.preflightStatementTimeoutMs} ms; migration statement ${budget.statementTimeoutMs} ms). ` +
+    `The migration transaction was rolled back and its journal entry was not written. Running CompanyImport rows at preflight: ${population ?? "unknown (preflight did not complete)"}. Keep application traffic drained, run ` +
+    "SELECT count(*) AS affected_rows FROM public.customer_operations WHERE operation_type = 'company_import' AND status = 'running'; " +
+    "Inspect blockers with SELECT pid, pg_blocking_pids(pid), state, wait_event_type, wait_event FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0; " +
+    "After the active blocker is resolved, retry the same migration. Do not edit historical SQL or manually change operation status. If the measured population cannot fit this budget, stop and prepare a reviewed bounded migration procedure before retrying.",
+    { cause: error },
+  );
+}
+
+export async function runMigrationTransaction(
+  sql: SqlExecutor,
+  migrationFile: string,
+  action: () => Promise<void>,
+): Promise<void> {
+  const budget = MIGRATION_EXECUTION_BUDGETS[migrationFile as keyof typeof MIGRATION_EXECUTION_BUDGETS];
+  let population: string | null = null;
   await sql.unsafe("BEGIN");
   try {
+    if (budget) {
+      await sql.unsafe(`SET LOCAL lock_timeout = '${budget.lockTimeoutMs}ms'`);
+      await sql.unsafe(`SET LOCAL statement_timeout = '${budget.preflightStatementTimeoutMs}ms'`);
+      // The migration's first ALTER TABLE needs this same lock. Acquiring it
+      // before counting freezes the selected population across preflight and
+      // the existing whole-file transaction.
+      await sql.unsafe('LOCK TABLE "customer_operations" IN ACCESS EXCLUSIVE MODE');
+      const [count] = await sql.unsafe<{ affected_rows: string }[]>(`SELECT count(*)::text AS affected_rows
+        FROM public.customer_operations WHERE operation_type = 'company_import' AND status = 'running'`);
+      population = count?.affected_rows ?? "0";
+      if (BigInt(population) > BigInt(budget.maximumOneShotRows)) {
+        throw new Error(
+          `Migration ${migrationFile} preflight found ${population} running CompanyImport rows; ` +
+          `the one-shot limit is ${budget.maximumOneShotRows}. No migration statements or journal entry were written. ` +
+          "Keep CompanyImport writers drained; capture this count and inspect active PostgreSQL blockers. Leave operation rows unchanged; no pre-0554 runtime recovery path owns their effect state. " +
+          "Prepare a separately reviewed batched forward migration that preserves the expired-lease initialization, then let the current bounded reconciler retain unknown outcomes as needs_reconciliation. Do not edit historical SQL, manually change status, or replay effects.",
+        );
+      }
+      await sql.unsafe(`SET LOCAL statement_timeout = '${budget.statementTimeoutMs}ms'`);
+    }
     await action();
     await sql.unsafe("COMMIT");
   } catch (error) {
@@ -367,6 +428,9 @@ async function runInTransaction(sql: SqlExecutor, action: () => Promise<void>): 
       await sql.unsafe("ROLLBACK");
     } catch {
       // Ignore rollback failures and surface the original error.
+    }
+    if (budget && ["55P03", "57014"].includes(postgresErrorCode(error) ?? "")) {
+      throw migrationBudgetFailure(migrationFile, budget, error, population);
     }
     throw error;
   }
@@ -490,7 +554,7 @@ async function applyPendingMigrationsManually(
       );
       if (existingEntry) continue;
 
-      await runInTransaction(sql, async () => {
+      await runMigrationTransaction(sql, migrationFile, async () => {
         for (const statement of splitMigrationStatements(migrationContent)) {
           // PostgreSQL checks pending deferred trigger events before treating
           // CREATE INDEX IF NOT EXISTS as a no-op. During journal repair, a

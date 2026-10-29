@@ -137,6 +137,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -158,6 +160,33 @@ jobs:
 
       - name: Prepare workspace build dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+
+      - name: Validate V10 security regression selectors
+        run: |
+          node scripts/check-v10-security-fast-path.mjs
+          node --test scripts/check-v10-security-fast-path.test.mjs
+
+      - name: Run change-triggered V10 security regressions
+        shell: bash
+        env:
+          CHANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CHANGE_BASE}" ] || [[ "${CHANGE_BASE}" =~ ^0+$ ]]; then
+            selectors="$(node scripts/check-v10-security-fast-path.mjs --all)"
+          else
+            selectors="$(node scripts/check-v10-security-fast-path.mjs --base "${CHANGE_BASE}")"
+          fi
+          if [ -z "${selectors}" ]; then
+            echo "No protected V10 source path changed."
+            exit 0
+          fi
+          mapfile -t selected_tests <<< "${selectors}"
+          pnpm run preflight:workspace-links
+          execution_report="$(mktemp --suffix=.json "${RUNNER_TEMP}/v10-security-vitest-XXXXXX")"
+          trap 'rm -f "${execution_report}"' EXIT
+          pnpm exec vitest run "${selected_tests[@]}" --maxWorkers=1 --no-file-parallelism --reporter=json --outputFile "${execution_report}"
+          node scripts/check-v10-security-regression-execution.mjs "${execution_report}" "${selected_tests[@]}"
 
       - name: Prepare generated-code sandbox
         shell: bash

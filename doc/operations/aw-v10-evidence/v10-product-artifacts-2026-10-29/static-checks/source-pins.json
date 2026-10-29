@@ -1,0 +1,83 @@
+{
+  "result": {
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0
+  },
+  "checks": [
+    "capability projection --check",
+    "security map validation",
+    "Safe Change graph --check"
+  ],
+  "files": [
+    {
+      "path": ".github/workflows/aw-v4-verification.yml",
+      "sha256": "ea77a5fde892cca8e693f65c0114207b467b99b0400125bcc8a77d0dda98fba1"
+    },
+    {
+      "path": ".github/workflows/aw-v9-coverage.yml",
+      "sha256": "76f35f8326604f743ce685ae9da6653624c54c9c26ae3ed36312fe66855d59f3"
+    },
+    {
+      "path": "packages/db/src/client.ts",
+      "sha256": "294af0069583236454c5b445e3218950d85634dd17a93c4cd8e73bd0004d52d4"
+    },
+    {
+      "path": "packages/db/src/migration-transaction-budget.test.ts",
+      "sha256": "1fba3bd96c2cb6f52ecb64f4016c471c0ea18bb23ce4c7d921981d51ad77d953"
+    },
+    {
+      "path": "doc/operations/v10-capability-projection.json",
+      "sha256": "109c4b5011160676099c0f5a01ca826fa37ac8c028f7c2b6bace0f13d48ef40e"
+    },
+    {
+      "path": "doc/operations/v10-safe-change-graph.json",
+      "sha256": "4bd06f6322c20678d46400b23f834c88f72f9a7c48827bccb09d0c6a7d5c8468"
+    },
+    {
+      "path": "doc/operations/v10-safe-change-graph.source.json",
+      "sha256": "d134fc792d81e3f35acdf3fe7fd98811911cb076595f571faece09a05f5e07b3"
+    },
+    {
+      "path": "doc/operations/v10-security-fast-path.json",
+      "sha256": "bfc68197dd5e2e3291584491e030b706c2688104103f4e517179cd2196cd590d"
+    },
+    {
+      "path": "scripts/check-v10-capability-projection.mjs",
+      "sha256": "0b7e774554d869c54d51a2f5002b67136e57f294e4ea5ad9b2ddfc45cbd93037"
+    },
+    {
+      "path": "scripts/generate-v10-capability-projection.ts",
+      "sha256": "095f65f026af01a1106b191546225b6d5267c2edb4942cd28f0d1950dbf62b34"
+    },
+    {
+      "path": "scripts/check-v10-safe-change-graph.mjs",
+      "sha256": "0c93876cf28beb6652bea5e40ac69105361145d6550b911c24585abfdd6eaea9"
+    },
+    {
+      "path": "scripts/generate-v10-safe-change-graph.mjs",
+      "sha256": "7d1bb6d95186752ab987ba0642f6d45eb845227c8eb70d0c54da071aa9629946"
+    },
+    {
+      "path": "scripts/check-v10-security-fast-path.mjs",
+      "sha256": "b2157241cdc6850df5e65eb7850e9107b265b956543182da47367efa19742cd6"
+    },
+    {
+      "path": "scripts/check-v10-security-fast-path.test.mjs",
+      "sha256": "b53ca0fc3f375d1f4ae81fe05389415b6c8ac6325632eb7329bcd4a1e3ea84c2"
+    },
+    {
+      "path": "scripts/check-v10-security-regression-execution.mjs",
+      "sha256": "159a2a6302609ceee0890da94713d7477918e77d9ee1070ee12fba9924a0a721"
+    },
+    {
+      "path": "scripts/check-v10-security-regression-execution.test.mjs",
+      "sha256": "5e90801b1ae9f66ee33d3085088c747af6475f2fe6e7cb934d5aac67af7f02e4"
+    },
+    {
+      "path": "scripts/v10-product-artifacts.test.mjs",
+      "sha256": "1ce7e3768820aa4486ba841e423747152608dc58cf99d2a859be965613bbefcf"
+    }
+  ],
+  "scope": "Tooling, scoped migration budget and catalog projection. The one-change graph is explicitly incomplete; a full material-change inventory remains in progress. Broader selected security suites and final unchanged-head gates are pending."
+}
