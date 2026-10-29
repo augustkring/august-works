@@ -3104,6 +3104,17 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
   if (references > 256 || snapshot.inputs.length > 256)
     throw forbidden("The frozen Native Task source closure exceeds its bound");
   if (references === 0) return;
+  if (snapshot.inputs.length === 0 && await isAuditedManualRelatedSnapshot(db, companyId, issueId, snapshot)) {
+    const key = `manual-child:${companyId}:${issueId}`;
+    if (scope.active.has(key)) throw forbidden("The manual child privacy graph contains a cycle");
+    scope.active.add(key);
+    try {
+      await assertManualRelatedPrivacyCurrent(db, companyId, actor, {
+        parentId: snapshot.policy.issueIds[0] ?? null, projectId: snapshot.policy.projectIds[0] ?? null,
+      });
+    } finally { scope.active.delete(key); }
+    return;
+  }
   const dispatches = snapshot.inputs.flatMap((source, index) =>
     source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch" ? [{ source, index }] : []);
   const last = dispatches.at(-1);
@@ -3401,17 +3412,6 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
     const match = /^issue:\/\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
     if (!match) throw forbidden("A Native Context Task source changed or was erased");
     return match[1]!;
-  if (snapshot.inputs.length === 0 && await isAuditedManualRelatedSnapshot(db, companyId, issueId, snapshot)) {
-    const key = `manual-child:${companyId}:${issueId}`;
-    if (scope.active.has(key)) throw forbidden("The manual child privacy graph contains a cycle");
-    scope.active.add(key);
-    try {
-      await assertManualRelatedPrivacyCurrent(db, companyId, actor, {
-        parentId: snapshot.policy.issueIds[0] ?? null, projectId: snapshot.policy.projectIds[0] ?? null,
-      });
-    } finally { scope.active.delete(key); }
-    return;
-  }
   });
   const taskIssueIds = [...new Set(taskIds)];
   const taskOwners = taskIssueIds.length ? await db.select({ id: issues.id,
