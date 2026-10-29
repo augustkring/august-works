@@ -11,7 +11,9 @@ import {
   agentRuntimeState,
   agentWakeupRequests,
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   companySkills,
   createDb,
   documentRevisions,
@@ -47,6 +49,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const seededAgentIds = new Set<string>();
+  const seededResponsibleUserIds = new Set<string>();
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-issue-monitor-");
@@ -162,7 +165,12 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     await db.delete(agentRuntimeState);
     await db.delete(agents);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
     await db.delete(companies);
+    for (const userId of seededResponsibleUserIds) {
+      await db.delete(authUsers).where(eq(authUsers.id, userId));
+    }
+    seededResponsibleUserIds.clear();
   }
 
   afterEach(async () => {
@@ -203,6 +211,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     const companyId = randomUUID();
     const agentId = randomUUID();
     const issueId = randomUUID();
+    const responsibleUserId = randomUUID();
     const nextCheckAt = new Date("2026-04-11T12:30:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
@@ -219,8 +228,14 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       name: "Paperclip",
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
     });
+
+    await db.insert(authUsers).values({ id: responsibleUserId, name: "Monitor owner",
+      email: `${responsibleUserId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    seededResponsibleUserIds.add(responsibleUserId);
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: responsibleUserId,
+      status: "active", membershipRole: "owner" });
 
     await db.insert(agents).values({
       id: agentId,
@@ -242,6 +257,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       },
       permissions: {},
     });
+    await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agentId,
+      status: "active", membershipRole: "member" });
     seededAgentIds.add(agentId);
 
     await db.insert(issues).values({
@@ -251,6 +268,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       status: input?.issueStatus ?? "in_progress",
       priority: "medium",
       assigneeAgentId: agentId,
+      responsibleUserId,
+      createdByUserId: responsibleUserId,
       issueNumber: 1,
       identifier: `${issuePrefix}-1`,
       executionPolicy: {

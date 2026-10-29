@@ -52,8 +52,11 @@ import {
 import { instanceSettingsService } from "../services/instance-settings.ts";
 import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/index.js";
-import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import {
+  installHeartbeatApiUrlFixture,
+  seedHeartbeatResponsibleHuman,
+} from "./helpers/heartbeat-runtime-fixtures.js";
 
 // Exercise the real SSH lease and heartbeat paths without connecting to a host.
 vi.mock("@paperclipai/adapter-utils/ssh", async (importOriginal) => ({
@@ -97,6 +100,7 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
   let heartbeat!: ReturnType<typeof heartbeatService>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   let workspaceCwd!: string;
+  let restoreApiUrl: (() => void) | null = null;
   const executedRunIds: string[] = [];
   const executedInputs = new Map<string, AdapterExecutionContext>();
 
@@ -104,6 +108,7 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-workspace-busy-");
     db = createDb(tempDb.connectionString);
     heartbeat = heartbeatService(db);
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     workspaceCwd = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-workspace-busy-"));
     registerServerAdapter({
       type: WORKSPACE_BUSY_TEST_ADAPTER,
@@ -143,6 +148,7 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
 
   afterAll(async () => {
     unregisterServerAdapter(WORKSPACE_BUSY_TEST_ADAPTER);
+    restoreApiUrl?.();
     if (workspaceCwd) await fs.rm(workspaceCwd, { recursive: true, force: true });
     await tempDb?.cleanup();
   });
@@ -222,11 +228,7 @@ describeEmbeddedPostgres("shared-workspace run serialization", () => {
   async function seedNativeHuman(companyId: string, userId: string) {
     await db.insert(authUsers).values({ id: userId, name: "Workspace busy owner",
       email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
-      status: "active", membershipRole: "owner" });
-    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
-      companyId, principalType: "user" as const, principalId: userId, ...grant,
-    })));
+    await seedHeartbeatResponsibleHuman(db, companyId, userId, "owner");
     return seedNativePasskeySession(db, userId);
   }
 

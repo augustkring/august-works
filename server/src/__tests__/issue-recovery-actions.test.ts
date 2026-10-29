@@ -1785,6 +1785,16 @@ describeEmbeddedPostgres("issue recovery actions", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    // A configured default is current only while its Human has active company
+    // membership. Recovery wake admission intentionally fails closed on a
+    // stale or unqualified default owner.
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: responsibleUserId,
+      membershipRole: "member",
+      status: "active",
+    });
     await db
       .update(companies)
       .set({ defaultResponsibleUserId: responsibleUserId })
