@@ -685,10 +685,10 @@
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "16bdb6462bb8858d94ea74fcc32788a1b7d2fe4d530f7cb9bb58a25094171ae6",
+      "sourceSha256": "ddeacb2a914b0a6d3cbe40a5228910b979d702caaffef2b4b4a96765e38fd6ba",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "updated",
-      "rationale": "Deletion validates the current password or a fresh company sign-in proof and still enforces any required native factor; the article now states that sequence explicitly."
+      "rationale": "Deletion verifies the account-selected native factor and may require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; password confirmation remains required when a password exists. The article directs readers to follow the sign-in and factor prompts and says SSO does not replace a required factor."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
@@ -725,10 +725,10 @@
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "ca34efc18949d873b4f26b87fb6c0e7b9ba9c7ce3f16bbd6396d5288671591d0",
+      "sourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "updated",
-      "rationale": "Passwordless accounts may use company sign-in for deletion confirmation, followed by any required native factor; the article now makes clear that SSO does not bypass it."
+      "rationale": "The page requires the current password when present and can also require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; phishing-resistant accounts use the passkey confirmation path. The article directs readers to follow any displayed sign-in and factor prompts and says SSO does not replace a required factor."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
@@ -765,10 +765,10 @@
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "16bdb6462bb8858d94ea74fcc32788a1b7d2fe4d530f7cb9bb58a25094171ae6",
+      "sourceSha256": "ddeacb2a914b0a6d3cbe40a5228910b979d702caaffef2b4b4a96765e38fd6ba",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "updated",
-      "rationale": "Deletion validates the current password or a fresh company sign-in proof and still enforces any required native factor; the article now states that sequence explicitly."
+      "rationale": "Deletion verifies the account-selected native factor and may require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; password confirmation remains required when a password exists. The article directs readers to follow the sign-in and factor prompts and says SSO does not replace a required factor."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
@@ -805,10 +805,10 @@
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "ca34efc18949d873b4f26b87fb6c0e7b9ba9c7ce3f16bbd6396d5288671591d0",
+      "sourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "updated",
-      "rationale": "Passwordless accounts may use company sign-in for deletion confirmation, followed by any required native factor; the article now makes clear that SSO does not bypass it."
+      "rationale": "The page requires the current password when present and can also require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; phishing-resistant accounts use the passkey confirmation path. The article directs readers to follow any displayed sign-in and factor prompts and says SSO does not replace a required factor."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "baa753bea3134e240da243e4d1f987fb5612c0309478ec4a2fd53d9f87aa260d",
+      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Remote process registration now verifies the current Native run and lease before recording identity; recovery guidance to inspect the original run and wait for status remains accurate."
+      "rationale": "The heartbeat path now preserves the remote-marker provenance pair when forwarding a process observation to cleanup. Recovery guidance still directs the user to the original run and to wait for its status update."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "baa753bea3134e240da243e4d1f987fb5612c0309478ec4a2fd53d9f87aa260d",
+      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Remote process registration now verifies the current Native run and lease before recording identity; recovery guidance to inspect the original run and wait for status remains accurate."
+      "rationale": "Heartbeat now preserves the remote-marker provenance pair when forwarding a process observation to cleanup. Recovery guidance still directs the user to the original run and to wait for its status update."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2013,10 +2013,10 @@
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "4028b6ba47fdb594fd20529cf9d7f5d8c0c18de4e7ebf1d39f1f9e74a01ab4a3",
+      "sourceSha256": "0fa6958320ef6066b7d32ec75ad9001c93cf8888b71d1a796674f11a592ad941",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Remote erasure requires an exact run, lease, and stop receipt; the article makes no claim that unmanaged provider-held data is erased."
+      "rationale": "Remote cleanup now also requires the exact successful signed session-start binding for the run, lease, runner, host/cell generation, manifest, and policy. The article accurately says cleanup waits for confirmed stop and storage removal, and excludes provider-held data."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
@@ -2037,10 +2037,10 @@
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "4028b6ba47fdb594fd20529cf9d7f5d8c0c18de4e7ebf1d39f1f9e74a01ab4a3",
+      "sourceSha256": "0fa6958320ef6066b7d32ec75ad9001c93cf8888b71d1a796674f11a592ad941",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Remote erasure requires an exact run, lease, and stop receipt; the article makes no claim that unmanaged provider-held data is erased."
+      "rationale": "Remote cleanup now also requires the exact successful signed session-start binding for the run, lease, runner, host/cell generation, manifest, and policy. The article accurately says cleanup waits for confirmed stop and storage removal, and excludes provider-held data."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "baa753bea3134e240da243e4d1f987fb5612c0309478ec4a2fd53d9f87aa260d",
+      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Remote process identity is accepted only against the current Native run and lease; the article’s stop-confirmation condition remains accurate."
+      "rationale": "Heartbeat forwards the remote-marker provenance pair into cleanup, which continues to require current Native run and lease identity. The article promises only that managed cleanup waits for confirmed stop and storage removal."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "baa753bea3134e240da243e4d1f987fb5612c0309478ec4a2fd53d9f87aa260d",
+      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Remote process identity is accepted only against the current Native run and lease; the article’s stop-confirmation condition remains accurate."
+      "rationale": "Heartbeat forwards the remote-marker provenance pair into cleanup, which continues to require current Native run and lease identity. The article promises only that managed cleanup waits for confirmed stop and storage removal."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

@@ -1,0 +1,2477 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "base": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "head": "4d6f5aec49a9bd90505b9d6b0a95458774a804ca",
+  "snapshot": "4d6f5aec49a9bd90505b9d6b0a95458774a804ca",
+  "coverage": "Ten Help Center groups with fourteen source-linked V10 preview articles available in English and Danish (28 locale-specific entries); this map does not claim independent human review or GA readiness.",
+  "errors": [],
+  "reviewed": [
+    {
+      "source": "cli/src/index.ts",
+      "sourceSha256": "d41fa52f77eede589e65890f8810ef8a87b2012d0a5f8a9abf4989b41a73bf75",
+      "articleId": "developer-and-advanced",
+      "article": "docs/help/developer-and-advanced.md",
+      "articleSha256": "7e3f602d0174f483880b0c5b4656888a27e45894aad13ab36d00911a27727161",
+      "decision": "updated",
+      "rationale": "Paired Help guidance now names the canonical blentera command, the same-implementation paperclipai compatibility entry, stderr deprecation, and the migration guide without claiming publication or changing stored state and authority."
+    },
+    {
+      "source": "cli/src/index.ts",
+      "sourceSha256": "d41fa52f77eede589e65890f8810ef8a87b2012d0a5f8a9abf4989b41a73bf75",
+      "articleId": "developer-and-advanced-da",
+      "article": "docs/da/help/developer-and-advanced.md",
+      "articleSha256": "2075f5ee10f13c7bf13eeaad37fe0e3e2c6d302bf343d6f6c23b7df2891f6efd",
+      "decision": "updated",
+      "rationale": "Paired Help guidance now names the canonical blentera command, the same-implementation paperclipai compatibility entry, stderr deprecation, and the migration guide without claiming publication or changing stored state and authority."
+    },
+    {
+      "source": "packages/db/src/schema/customer_operations.ts",
+      "sourceSha256": "220479f1d5cc046f310e38606c40cf74c1257b9fe0388c87f36620501f6197b6",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "updated",
+      "rationale": "The schema now stores durable import lease and checkpoint state; the article explains operation history, restart recovery, and unknown outcomes without treating cached detail as authority."
+    },
+    {
+      "source": "packages/db/src/schema/customer_operations.ts",
+      "sourceSha256": "220479f1d5cc046f310e38606c40cf74c1257b9fe0388c87f36620501f6197b6",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: the schema now stores durable import lease and checkpoint state; the article explains operation history, restart recovery, and unknown outcomes without treating cached detail as authority."
+    },
+    {
+      "source": "packages/db/src/schema/workflows.ts",
+      "sourceSha256": "6cb14b07252bdb21ec10da98e0d0a6d093cf2c2857bcff51ada7da5ae2e36dfc",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "The workflow article describes the persisted exact-version coverage and actual starting Human; it does not imply a copied role or new permission grant."
+    },
+    {
+      "source": "packages/db/src/schema/workflows.ts",
+      "sourceSha256": "6cb14b07252bdb21ec10da98e0d0a6d093cf2c2857bcff51ada7da5ae2e36dfc",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The workflow article describes the persisted exact-version coverage and actual starting Human; it does not imply a copied role or new permission grant."
+    },
+    {
+      "source": "packages/shared/src/agent-packages.ts",
+      "sourceSha256": "c324ead925446b3bd4876b1d74cb48c9e084e6c83fa1ef41ebbcb6428b0072f2",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/agent-packages.ts",
+      "sourceSha256": "c324ead925446b3bd4876b1d74cb48c9e084e6c83fa1ef41ebbcb6428b0072f2",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/announcements.ts",
+      "sourceSha256": "d82062cd1a9f8aaa4bac186794af8ec6c8ae52e04be34e8db359c14150fd5119",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The separate informational lifecycle schema has no mandatory action, completion or dismissal effect; existing customer changelog and Trust action semantics described in Help remain intact."
+    },
+    {
+      "source": "packages/shared/src/announcements.ts",
+      "sourceSha256": "d82062cd1a9f8aaa4bac186794af8ec6c8ae52e04be34e8db359c14150fd5119",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The separate informational lifecycle schema has no mandatory action, completion or dismissal effect; existing customer changelog and Trust action semantics described in Help remain intact."
+    },
+    {
+      "source": "packages/shared/src/app-definitions/slack.json",
+      "sourceSha256": "09b6ea84fbed511ce5d7dd8c8b8254a6b28b381c2f3a1f48ea268f509acea26c",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "The paired article describes the reviewed Slack OAuth scope set, personal-account default, explicit organization sharing, and the separate bot-app setup."
+    },
+    {
+      "source": "packages/shared/src/app-definitions/slack.json",
+      "sourceSha256": "09b6ea84fbed511ce5d7dd8c8b8254a6b28b381c2f3a1f48ea268f509acea26c",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current behavior: The paired article describes the reviewed Slack OAuth scope set, personal-account default, explicit organization sharing, and the separate bot-app setup."
+    },
+    {
+      "source": "packages/shared/src/company-import-transfer.ts",
+      "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "no_change",
+      "rationale": "Reviewed company-import-transfer.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
+    },
+    {
+      "source": "packages/shared/src/company-import-transfer.ts",
+      "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+    },
+    {
+      "source": "packages/shared/src/customer-feedback.ts",
+      "sourceSha256": "0f49bdcaf851b08f3dab373ba79b49d0809072d47fa5d88f7aeae1f2315804c7",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/customer-feedback.ts",
+      "sourceSha256": "0f49bdcaf851b08f3dab373ba79b49d0809072d47fa5d88f7aeae1f2315804c7",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/customer-operations.ts",
+      "sourceSha256": "29ce914bb8ed7ec869cefa628b642fccd938de8b2d7d6b686df4efdf698e9b33",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "no_change",
+      "rationale": "Reviewed customer-operations.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
+    },
+    {
+      "source": "packages/shared/src/customer-operations.ts",
+      "sourceSha256": "29ce914bb8ed7ec869cefa628b642fccd938de8b2d7d6b686df4efdf698e9b33",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+    },
+    {
+      "source": "packages/shared/src/customer-support.ts",
+      "sourceSha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The shared Support detail now carries the authorized related Issue pointer; the article describes the link and existing review handoff without implying copied support content."
+    },
+    {
+      "source": "packages/shared/src/customer-support.ts",
+      "sourceSha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The shared Support detail now carries the authorized related Issue pointer; the article describes the link and existing review handoff without implying copied support content."
+    },
+    {
+      "source": "packages/shared/src/feature-catalog.ts",
+      "sourceSha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04",
+      "articleId": "preview-and-known-limits",
+      "article": "docs/guides/board-operator/experimental-features.md",
+      "articleSha256": "66127d42d3d1407db3b798b12a52c38e8834f8da9d0c2b047101ff0ef49d425c",
+      "decision": "updated",
+      "rationale": "Source-backed workflow and Apps documentation links enrich existing lifecycle metadata; the release keeps the compatible tier catalog and adds a separate lifecycle artifact without changing feature availability or claiming external consumer support."
+    },
+    {
+      "source": "packages/shared/src/feature-catalog.ts",
+      "sourceSha256": "00650dcdad084aeab8eef6c439d66d59a46e5e879f0122e55980e9b57d4bda04",
+      "articleId": "preview-and-known-limits-da",
+      "article": "docs/da/guides/board-operator/experimental-features.md",
+      "articleSha256": "6d8adb5081cf9d7cb51949320f6d6c97bc06de1b45c3ce9f8bf5eaf7a4fc4e01",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Source-backed workflow and Apps documentation links enrich existing lifecycle metadata; the release keeps the compatible tier catalog and adds a separate lifecycle artifact without changing feature availability or claiming external consumer support."
+    },
+    {
+      "source": "packages/shared/src/model-broker.ts",
+      "sourceSha256": "b70407f288a41e4614e0d55093be7a2cb12e1ab8ebc172459f942d6eea29a012",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/model-broker.ts",
+      "sourceSha256": "b70407f288a41e4614e0d55093be7a2cb12e1ab8ebc172459f942d6eea29a012",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/product-identity.ts",
+      "sourceSha256": "525db6a5605e5b3e8ceb2d19c6206a0612ece2b5c1b09d58a794456b6b8ebdb0",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/product-identity.ts",
+      "sourceSha256": "525db6a5605e5b3e8ceb2d19c6206a0612ece2b5c1b09d58a794456b6b8ebdb0",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/service-health.ts",
+      "sourceSha256": "7973fba774410d46126abe2aea133ecb4d91d56c6f87634dd7e233733a3b0e98",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The shared status contract reports customerImpact unknown because no authoritative account audience mapping is present; the Help article does not assert account-specific impact."
+    },
+    {
+      "source": "packages/shared/src/service-health.ts",
+      "sourceSha256": "7973fba774410d46126abe2aea133ecb4d91d56c6f87634dd7e233733a3b0e98",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The shared status contract reports customerImpact unknown because no authoritative account audience mapping is present; the Help article does not assert account-specific impact."
+    },
+    {
+      "source": "packages/shared/src/trust-documents.ts",
+      "sourceSha256": "dbdb78de26cff51c484d95cf88b30e4dc7a6f6d5a60ab4551e1aa6b312a68d9c",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/trust-documents.ts",
+      "sourceSha256": "dbdb78de26cff51c484d95cf88b30e4dc7a6f6d5a60ab4551e1aa6b312a68d9c",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/types/company-portability.ts",
+      "sourceSha256": "36116b7f941b2b01a77653de504c50aa953cd0a182cdb6aa7cd4c63293dfad52",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "packages/shared/src/types/company-portability.ts",
+      "sourceSha256": "36116b7f941b2b01a77653de504c50aa953cd0a182cdb6aa7cd4c63293dfad52",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "packages/shared/src/types/search.ts",
+      "sourceSha256": "edd6927c8ce5a8ad26a9d78231359890849149f4302af46f22241885eea6b83b",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/types/search.ts",
+      "sourceSha256": "edd6927c8ce5a8ad26a9d78231359890849149f4302af46f22241885eea6b83b",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/validators/access.ts",
+      "sourceSha256": "a18c6b7145eb5ac15664f7f7ac61fe70f42769f976106f7fea12707422e3fb65",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "The workflow article matches the bounded coverage window, required reason, exact revision and manual or visible Task trigger choices."
+    },
+    {
+      "source": "packages/shared/src/validators/access.ts",
+      "sourceSha256": "a18c6b7145eb5ac15664f7f7ac61fe70f42769f976106f7fea12707422e3fb65",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The workflow article matches the bounded coverage window, required reason, exact revision and manual or visible Task trigger choices."
+    },
+    {
+      "source": "packages/shared/src/validators/company-portability.ts",
+      "sourceSha256": "fc6b9ea92e68affd56d649be89d31aecd922c219a2213766dcdfe5612119ff87",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "packages/shared/src/validators/company-portability.ts",
+      "sourceSha256": "fc6b9ea92e68affd56d649be89d31aecd922c219a2213766dcdfe5612119ff87",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "packages/shared/src/validators/search.ts",
+      "sourceSha256": "a8aadc55d9ec277dc3a8a1b87d5d2f9085b3bb7993413aa71184da21c116b6ea",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "packages/shared/src/validators/search.ts",
+      "sourceSha256": "a8aadc55d9ec277dc3a8a1b87d5d2f9085b3bb7993413aa71184da21c116b6ea",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/app.ts",
+      "sourceSha256": "e79f6abd23f47fc45faa4413b46963eb9e097b0db92ddf8273193e9a57126871",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/app.ts",
+      "sourceSha256": "e79f6abd23f47fc45faa4413b46963eb9e097b0db92ddf8273193e9a57126871",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/errors.ts",
+      "sourceSha256": "ca1aa21e985ea9ae479038441040be65916af3fe4d3fcf533fd8cdeae2e56fca",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "updated",
+      "rationale": "Reviewed native preflight error identity: the guide distinguishes verified rejection before effects from an unknown import outcome after effects may have started."
+    },
+    {
+      "source": "server/src/errors.ts",
+      "sourceSha256": "ca1aa21e985ea9ae479038441040be65916af3fe4d3fcf533fd8cdeae2e56fca",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+    },
+    {
+      "source": "server/src/routes/access.ts",
+      "sourceSha256": "a279232cd4603363ef4c3f8a1177745d73deb5154614964f3d403aeaed74030d",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "The workflow article describes the authenticated coverage controls and explicit revocation; existing member access remains separate."
+    },
+    {
+      "source": "server/src/routes/access.ts",
+      "sourceSha256": "a279232cd4603363ef4c3f8a1177745d73deb5154614964f3d403aeaed74030d",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The workflow article describes the authenticated coverage controls and explicit revocation; existing member access remains separate."
+    },
+    {
+      "source": "server/src/routes/announcements.ts",
+      "sourceSha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "A separate read-only informational lifecycle route projects qualified feature facts. Mandatory Trust/model notices and the customer changelog retain their original completion and publication owners."
+    },
+    {
+      "source": "server/src/routes/announcements.ts",
+      "sourceSha256": "ad241e6b46ab6cce71b1d263be23a309d6c5ec4e22b27a894e10249a4ae33767",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. A separate read-only informational lifecycle route projects qualified feature facts. Mandatory Trust/model notices and the customer changelog retain their original completion and publication owners."
+    },
+    {
+      "source": "server/src/routes/companies.ts",
+      "sourceSha256": "b4ee7289e09e3f9e88bdc50c6beee244ac62c5260de7017ffc9415b6bef12e44",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "updated",
+      "rationale": "The route now reads durable requester-bound operation records and applies current authorization at history and cancellation boundaries; the article describes requester-only receipts, retained access checks, and reconciliation limits."
+    },
+    {
+      "source": "server/src/routes/companies.ts",
+      "sourceSha256": "b4ee7289e09e3f9e88bdc50c6beee244ac62c5260de7017ffc9415b6bef12e44",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: the route now reads durable requester-bound operation records and applies current authorization at history and cancellation boundaries; the article describes requester-only receipts, retained access checks, and reconciliation limits."
+    },
+    {
+      "source": "server/src/routes/customer-support.ts",
+      "sourceSha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The authenticated Support case Issue-link routes require current account and original case/Task authorization. The paired article describes access to both records and the pointer-only handoff."
+    },
+    {
+      "source": "server/src/routes/customer-support.ts",
+      "sourceSha256": "8c11fb33b4fc8e45a02c7eb7ca3d90a68b1ed839ed51bde3337f0de13323e856",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The authenticated Support case Issue-link routes require current account and original case/Task authorization. The paired article describes access to both records and the pointer-only handoff."
+    },
+    {
+      "source": "server/src/routes/issues.ts",
+      "sourceSha256": "5894aef8323493c7b15903850f995886e1b1f6a5f057fa430f6dc9c98a8202ff",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/routes/issues.ts",
+      "sourceSha256": "5894aef8323493c7b15903850f995886e1b1f6a5f057fa430f6dc9c98a8202ff",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/routes/issues.ts",
+      "sourceSha256": "5894aef8323493c7b15903850f995886e1b1f6a5f057fa430f6dc9c98a8202ff",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "The source change selects shared privacy locks only for GET/HEAD redaction reads; current private-source checks and the customer recovery/support instructions remain unchanged."
+    },
+    {
+      "source": "server/src/routes/issues.ts",
+      "sourceSha256": "5894aef8323493c7b15903850f995886e1b1f6a5f057fa430f6dc9c98a8202ff",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Danish guidance checked against the same source behavior. The source change selects shared privacy locks only for GET/HEAD redaction reads; current private-source checks and the customer recovery/support instructions remain unchanged."
+    },
+    {
+      "source": "server/src/routes/jev-decisions.ts",
+      "sourceSha256": "67c33e243b5fe0b68661b811b7840024bbb844b4f201dd5460bc561e102bde6c",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "no_change",
+      "rationale": "The setup route now records company-purpose wire admission before provider dispatch; the existing article already covers per-test consent, reserved charge and retaining an unknown result."
+    },
+    {
+      "source": "server/src/routes/jev-decisions.ts",
+      "sourceSha256": "67c33e243b5fe0b68661b811b7840024bbb844b4f201dd5460bc561e102bde6c",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "no_change",
+      "rationale": "Danish guidance checked against the same source behavior. The setup route now records company-purpose wire admission before provider dispatch; the existing article already covers per-test consent, reserved charge and retaining an unknown result."
+    },
+    {
+      "source": "server/src/routes/memory.ts",
+      "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Memory routes keep private record actions scoped to the current company and actor; the article describes only the available owner review and deletion controls."
+    },
+    {
+      "source": "server/src/routes/memory.ts",
+      "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Memory routes keep private record actions scoped to the current company and actor; the article describes only the available owner review and deletion controls."
+    },
+    {
+      "source": "server/src/routes/openapi.ts",
+      "sourceSha256": "7b6a5b7490701023928ea6a0c7376d8800ca9ecb4cafdf930eb136ef82b8b91d",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "no_change",
+      "rationale": "The API registry adds coverage, release history and operator views while preserving the documented requirement to check API classification and current authorization."
+    },
+    {
+      "source": "server/src/routes/openapi.ts",
+      "sourceSha256": "7b6a5b7490701023928ea6a0c7376d8800ca9ecb4cafdf930eb136ef82b8b91d",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. The API registry adds coverage, release history and operator views while preserving the documented requirement to check API classification and current authorization."
+    },
+    {
+      "source": "server/src/routes/openapi.ts",
+      "sourceSha256": "7b6a5b7490701023928ea6a0c7376d8800ca9ecb4cafdf930eb136ef82b8b91d",
+      "articleId": "developer-and-advanced",
+      "article": "docs/help/developer-and-advanced.md",
+      "articleSha256": "7e3f602d0174f483880b0c5b4656888a27e45894aad13ab36d00911a27727161",
+      "decision": "no_change",
+      "rationale": "The API registry adds coverage, release history and operator views while preserving the documented requirement to check API classification and current authorization."
+    },
+    {
+      "source": "server/src/routes/openapi.ts",
+      "sourceSha256": "7b6a5b7490701023928ea6a0c7376d8800ca9ecb4cafdf930eb136ef82b8b91d",
+      "articleId": "developer-and-advanced-da",
+      "article": "docs/da/help/developer-and-advanced.md",
+      "articleSha256": "2075f5ee10f13c7bf13eeaad37fe0e3e2c6d302bf343d6f6c23b7df2891f6efd",
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. The API registry adds coverage, release history and operator views while preserving the documented requirement to check API classification and current authorization."
+    },
+    {
+      "source": "server/src/routes/saas.ts",
+      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
+      "articleId": "billing-and-capacity",
+      "article": "docs/guides/board-operator/costs-and-budgets.md",
+      "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
+      "decision": "no_change",
+      "rationale": "Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
+    },
+    {
+      "source": "server/src/routes/saas.ts",
+      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
+      "articleId": "billing-and-capacity-da",
+      "article": "docs/da/guides/board-operator/costs-and-budgets.md",
+      "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
+    },
+    {
+      "source": "server/src/routes/saas.ts",
+      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
+    },
+    {
+      "source": "server/src/routes/saas.ts",
+      "sourceSha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Additional operator-only model and cost views preserve customer billing and support contracts; current authorization and source completeness remain explicit."
+    },
+    {
+      "source": "server/src/routes/workflows.ts",
+      "sourceSha256": "45117a317a22c78441b7a3f1b0a44104e463f89234329a62a669a5d8a4e63705",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Workflow starts validate optional coverage against the current Human and exact published revision; the paired workflow article describes the checks and queued admission."
+    },
+    {
+      "source": "server/src/routes/workflows.ts",
+      "sourceSha256": "45117a317a22c78441b7a3f1b0a44104e463f89234329a62a669a5d8a4e63705",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Workflow starts validate optional coverage against the current Human and exact published revision; the paired workflow article describes the checks and queued admission."
+    },
+    {
+      "source": "server/src/saas-platform-config.ts",
+      "sourceSha256": "a952ed1fb5a8bd29c6a9c6934ccba09b2d6dcf7db9cfc2f8b9d07bfa58328f6b",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/saas-platform-config.ts",
+      "sourceSha256": "a952ed1fb5a8bd29c6a9c6934ccba09b2d6dcf7db9cfc2f8b9d07bfa58328f6b",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/access.ts",
+      "sourceSha256": "1db330169f2492f12baf454114298c556a01a761baea72b9e0f68f2fd13c2d9e",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Coverage validates both current Humans and source access; required permission withdrawal permanently revokes the arrangement rather than reviving it on later regrant."
+    },
+    {
+      "source": "server/src/services/access.ts",
+      "sourceSha256": "1db330169f2492f12baf454114298c556a01a761baea72b9e0f68f2fd13c2d9e",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Coverage validates both current Humans and source access; required permission withdrawal permanently revokes the arrangement rather than reviving it on later regrant."
+    },
+    {
+      "source": "server/src/services/agent-packages/execution-gate.ts",
+      "sourceSha256": "f2d28fdb1d562eb5612624da73a5ba734b00bf79724022bbfecc194951e858a9",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/agent-packages/execution-gate.ts",
+      "sourceSha256": "f2d28fdb1d562eb5612624da73a5ba734b00bf79724022bbfecc194951e858a9",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/agent-packages/package-policy.ts",
+      "sourceSha256": "bf540133a118d28a8c51ea24bdc0ac6241a27f5272d3dc002747277725dca16f",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/agent-packages/package-policy.ts",
+      "sourceSha256": "bf540133a118d28a8c51ea24bdc0ac6241a27f5272d3dc002747277725dca16f",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/agent-packages/package-service.ts",
+      "sourceSha256": "3d9a9af661d46269d88bbfc5fa3bf4c96557db9c9aab0851efec67e8471dcaea",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/agent-packages/package-service.ts",
+      "sourceSha256": "3d9a9af661d46269d88bbfc5fa3bf4c96557db9c9aab0851efec67e8471dcaea",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/agents.ts",
+      "sourceSha256": "105a744ff385b3e34921f13331ae87bf10adeea163ed5d41e8b0b7ae4f743918",
+      "articleId": "working-with-coworkers",
+      "article": "docs/guides/board-operator/managing-agents.md",
+      "articleSha256": "42049ea24873c7aaa87d0c761669e7cf76b85534d5377901b61506cfc180c3b2",
+      "decision": "updated",
+      "rationale": "Managed model routing changes now require qualified candidate publication; the article explains exact Human review, rollback and blocked baseline evidence."
+    },
+    {
+      "source": "server/src/services/agents.ts",
+      "sourceSha256": "105a744ff385b3e34921f13331ae87bf10adeea163ed5d41e8b0b7ae4f743918",
+      "articleId": "working-with-coworkers-da",
+      "article": "docs/da/guides/board-operator/managing-agents.md",
+      "articleSha256": "e51c5c599a9081849eaf94fd88fd745c468044f3a32e6082994d6ca50474662f",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. Managed model routing changes now require qualified candidate publication; the article explains exact Human review, rollback and blocked baseline evidence."
+    },
+    {
+      "source": "server/src/services/agents/authoring-publication.ts",
+      "sourceSha256": "4c6ed4757e8d4c02f920eb112699af1316b1ef36f885c469dab49c27984d40a9",
+      "articleId": "working-with-coworkers",
+      "article": "docs/guides/board-operator/managing-agents.md",
+      "articleSha256": "42049ea24873c7aaa87d0c761669e7cf76b85534d5377901b61506cfc180c3b2",
+      "decision": "updated",
+      "rationale": "The article describes the existing candidate qualification, exact Human review and retained baseline required for model migration and rollback."
+    },
+    {
+      "source": "server/src/services/agents/authoring-publication.ts",
+      "sourceSha256": "4c6ed4757e8d4c02f920eb112699af1316b1ef36f885c469dab49c27984d40a9",
+      "articleId": "working-with-coworkers-da",
+      "article": "docs/da/guides/board-operator/managing-agents.md",
+      "articleSha256": "e51c5c599a9081849eaf94fd88fd745c468044f3a32e6082994d6ca50474662f",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. The article describes the existing candidate qualification, exact Human review and retained baseline required for model migration and rollback."
+    },
+    {
+      "source": "server/src/services/announcement-feed.ts",
+      "sourceSha256": "b4a4547fdb525d9bf15010aa4f39788d88c9053a5f96b419ba2798672f4ee7e5",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/announcement-feed.ts",
+      "sourceSha256": "b4a4547fdb525d9bf15010aa4f39788d88c9053a5f96b419ba2798672f4ee7e5",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/company-export-readme.ts",
+      "sourceSha256": "b3f4465c7764012b3bdd1d806b49ee51946d8e935e1c2634e08bb749f5fb9432",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "updated",
+      "rationale": "Server-generated package guidance now uses Blentera identity and the canonical blentera import command; both import/export articles show that command and the temporary alias migration link."
+    },
+    {
+      "source": "server/src/services/company-export-readme.ts",
+      "sourceSha256": "b3f4465c7764012b3bdd1d806b49ee51946d8e935e1c2634e08bb749f5fb9432",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. Server-generated package guidance now uses Blentera identity and the canonical blentera import command; both import/export articles show that command and the temporary alias migration link."
+    },
+    {
+      "source": "server/src/services/company-import-jobs.ts",
+      "sourceSha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "updated",
+      "rationale": "The job service persists checkpoints, leases, cancellation, and reconciliation state; the article distinguishes confirmed pre-effect cancellation from uncertain post-effect outcomes and disallows automatic replay."
+    },
+    {
+      "source": "server/src/services/company-import-jobs.ts",
+      "sourceSha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: the job service persists checkpoints, leases, cancellation, and reconciliation state; the article distinguishes confirmed pre-effect cancellation from uncertain post-effect outcomes and disallows automatic replay."
+    },
+    {
+      "source": "server/src/services/company-portability.ts",
+      "sourceSha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "no_change",
+      "rationale": "The portability path rechecks native source access, ownership, privacy, and target authority, and records effect checkpoints; the article describes those checks and the external-package fingerprint attestation."
+    },
+    {
+      "source": "server/src/services/company-portability.ts",
+      "sourceSha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same source delta: the portability path rechecks native source access, ownership, privacy, and target authority, and records effect checkpoints; the article describes those checks and the external-package fingerprint attestation."
+    },
+    {
+      "source": "server/src/services/company-search-help.generated.ts",
+      "sourceSha256": "da1c6851b636a0477afe1d554ae5e2e0a38832b8154401822e5b941e491dd791",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "no_change",
+      "rationale": "The regenerated catalog includes the revised company sign-in and additional-factor wording; the Help overview’s search guidance remains accurate."
+    },
+    {
+      "source": "server/src/services/company-search-help.generated.ts",
+      "sourceSha256": "da1c6851b636a0477afe1d554ae5e2e0a38832b8154401822e5b941e491dd791",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "no_change",
+      "rationale": "The regenerated catalog includes the revised company sign-in and additional-factor wording; the Help overview’s search guidance remains accurate."
+    },
+    {
+      "source": "server/src/services/company-search.ts",
+      "sourceSha256": "72a0916cfbe31bbfe3fef6dec1d8a16ad46aa65365006463176c89d546424cff",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/company-search.ts",
+      "sourceSha256": "72a0916cfbe31bbfe3fef6dec1d8a16ad46aa65365006463176c89d546424cff",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/enterprise/identity-policy.ts",
+      "sourceSha256": "66ab09946d66b5d5bd1d0e98f97355658e070e2a712fa805df8bb669d0332747",
+      "articleId": "people-and-company-access",
+      "article": "docs/guides/board-operator/org-structure.md",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "decision": "updated",
+      "rationale": "Identity-policy suspension retains current membership enforcement and revokes temporary workflow coverage; the article retains the separate identity activation qualification caveat."
+    },
+    {
+      "source": "server/src/services/enterprise/identity-policy.ts",
+      "sourceSha256": "66ab09946d66b5d5bd1d0e98f97355658e070e2a712fa805df8bb669d0332747",
+      "articleId": "people-and-company-access-da",
+      "article": "docs/da/guides/board-operator/org-structure.md",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Identity-policy suspension retains current membership enforcement and revokes temporary workflow coverage; the article retains the separate identity activation qualification caveat."
+    },
+    {
+      "source": "server/src/services/execution-workspaces.ts",
+      "sourceSha256": "a1a0c7f8344dbc3cfe68bb79c01c3cb41e95d344b2d519b72db110bea31f4b70",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "updated",
+      "rationale": "Workspace reopen and cleanup preserve source identity and customer files unless exact restoration is verified; the guide tells owners to check access and review preserved files before cleanup."
+    },
+    {
+      "source": "server/src/services/execution-workspaces.ts",
+      "sourceSha256": "a1a0c7f8344dbc3cfe68bb79c01c3cb41e95d344b2d519b72db110bea31f4b70",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: Workspace reopen and cleanup preserve source identity and customer files unless exact restoration is verified; the guide tells owners to check access and review preserved files before cleanup."
+    },
+    {
+      "source": "server/src/services/experience/connector-recovery.ts",
+      "sourceSha256": "c155914bfc7d8f698159b9c06637c9ac8626146c90613dd94b1be897745360c9",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "The article tells the current connection owner to follow the current repair action and confirms it withdraws after repair."
+    },
+    {
+      "source": "server/src/services/experience/connector-recovery.ts",
+      "sourceSha256": "c155914bfc7d8f698159b9c06637c9ac8626146c90613dd94b1be897745360c9",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. The article tells the current connection owner to follow the current repair action and confirms it withdraws after repair."
+    },
+    {
+      "source": "server/src/services/experience/model-retirement-notices.ts",
+      "sourceSha256": "cb7641b73de971cd6cf7e1d617ad6ea32c49dece713162323f9ccc011796dbe4",
+      "articleId": "working-with-coworkers",
+      "article": "docs/guides/board-operator/managing-agents.md",
+      "articleSha256": "42049ea24873c7aaa87d0c761669e7cf76b85534d5377901b61506cfc180c3b2",
+      "decision": "updated",
+      "rationale": "The article explains the sanitized Action Needed model-migration notice and opening the affected Agent for a qualified replacement."
+    },
+    {
+      "source": "server/src/services/experience/model-retirement-notices.ts",
+      "sourceSha256": "cb7641b73de971cd6cf7e1d617ad6ea32c49dece713162323f9ccc011796dbe4",
+      "articleId": "working-with-coworkers-da",
+      "article": "docs/da/guides/board-operator/managing-agents.md",
+      "articleSha256": "e51c5c599a9081849eaf94fd88fd745c468044f3a32e6082994d6ca50474662f",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. The article explains the sanitized Action Needed model-migration notice and opening the affected Agent for a qualified replacement."
+    },
+    {
+      "source": "server/src/services/experience/service-health.ts",
+      "sourceSha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The provider projection reports global provider facts and unknown customer impact, matching the Help article and its human-support route."
+    },
+    {
+      "source": "server/src/services/experience/service-health.ts",
+      "sourceSha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The provider projection reports global provider facts and unknown customer impact, matching the Help article and its human-support route."
+    },
+    {
+      "source": "server/src/services/experience/support-assistant-grounding.ts",
+      "sourceSha256": "e7e4ed4fdd8aece0215d3ab1c849de790b48f09817e4c88edfe5edeca543806f",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/experience/support-assistant-grounding.ts",
+      "sourceSha256": "e7e4ed4fdd8aece0215d3ab1c849de790b48f09817e4c88edfe5edeca543806f",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/experience/support-case-configuration.ts",
+      "sourceSha256": "f69d0e55c3958d5a82a076ce20391b2e3d53b6623ce3bb91acf36199de27f523",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/experience/support-case-configuration.ts",
+      "sourceSha256": "f69d0e55c3958d5a82a076ce20391b2e3d53b6623ce3bb91acf36199de27f523",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/experience/support-case-delivery.ts",
+      "sourceSha256": "56b422fc04257950bd7217feb902388aa10b7879d1a286e039d3bca0587cf97e",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/experience/support-case-delivery.ts",
+      "sourceSha256": "56b422fc04257950bd7217feb902388aa10b7879d1a286e039d3bca0587cf97e",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/experience/support-case-http-gateway.ts",
+      "sourceSha256": "804d1bc6376d2f4267b55eb4a2397e03845d8a70bfc879da44136bf3ffb9b547",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/experience/support-case-http-gateway.ts",
+      "sourceSha256": "804d1bc6376d2f4267b55eb4a2397e03845d8a70bfc879da44136bf3ffb9b547",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/experience/support-cases.ts",
+      "sourceSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The original Support owner validates current private case and Task access, includes authorized pointers in export, and removes links with original retention/deletion owners. The article explains that support messages remain in the case."
+    },
+    {
+      "source": "server/src/services/experience/support-cases.ts",
+      "sourceSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The original Support owner validates current private case and Task access, includes authorized pointers in export, and removes links with original retention/deletion owners. The article explains that support messages remain in the case."
+    },
+    {
+      "source": "server/src/services/git-credentials.ts",
+      "sourceSha256": "87e3715036da6bb070b75b4d9bef539ff93a199aa47254652b98669c4cb999a7",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "updated",
+      "rationale": "Repository credential access is rechecked for the current task owner; the guide says to restore the saved source connection before retrying workspace recovery."
+    },
+    {
+      "source": "server/src/services/git-credentials.ts",
+      "sourceSha256": "87e3715036da6bb070b75b4d9bef539ff93a199aa47254652b98669c4cb999a7",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: Repository credential access is rechecked for the current task owner; the guide says to restore the saved source connection before retrying workspace recovery."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Heartbeat forwards the remote-marker provenance pair into cleanup, which continues to require current Native run and lease identity. The article promises only that managed cleanup waits for confirmed stop and storage removal."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Heartbeat forwards the remote-marker provenance pair into cleanup, which continues to require current Native run and lease identity. The article promises only that managed cleanup waits for confirmed stop and storage removal."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "The heartbeat path now preserves the remote-marker provenance pair when forwarding a process observation to cleanup. Recovery guidance still directs the user to the original run and to wait for its status update."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Heartbeat now preserves the remote-marker provenance pair when forwarding a process observation to cleanup. Recovery guidance still directs the user to the original run and to wait for its status update."
+    },
+    {
+      "source": "server/src/services/issue-recovery-actions.ts",
+      "sourceSha256": "23704492b2cc2f801c60e72f2a1b3e4770cf907b5e00e86318bed76f9da6d131",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "The change removes an internal workspace-reader identifier from the public recovery-action projection; it does not change recovery choices or task guidance."
+    },
+    {
+      "source": "server/src/services/issue-recovery-actions.ts",
+      "sourceSha256": "23704492b2cc2f801c60e72f2a1b3e4770cf907b5e00e86318bed76f9da6d131",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same current source behavior: The change removes an internal workspace-reader identifier from the public recovery-action projection; it does not change recovery choices or task guidance."
+    },
+    {
+      "source": "server/src/services/issues.ts",
+      "sourceSha256": "9fde6c1ca4b69b6b2a7d8040864ad3d23818e57d55e37e6d87b578d69f3fe678",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "Read-only privacy-tree locks retain the same source-access decisions; Task refusal, retained data and recovery semantics described by the article remain unchanged."
+    },
+    {
+      "source": "server/src/services/issues.ts",
+      "sourceSha256": "9fde6c1ca4b69b6b2a7d8040864ad3d23818e57d55e37e6d87b578d69f3fe678",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. Read-only privacy-tree locks retain the same source-access decisions; Task refusal, retained data and recovery semantics described by the article remain unchanged."
+    },
+    {
+      "source": "server/src/services/jev-skill-suggestions.ts",
+      "sourceSha256": "7474213a4f42f6af67158e19584dfde2f1c8ad7ba43a1902e8d61f28aa9e33d2",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "The current flow records the provider dispatch receipt before calling OpenRouter; the article already explains explicit per-test consent, reserved cost, and not retrying an unknown result."
+    },
+    {
+      "source": "server/src/services/jev-skill-suggestions.ts",
+      "sourceSha256": "7474213a4f42f6af67158e19584dfde2f1c8ad7ba43a1902e8d61f28aa9e33d2",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: the current flow records the provider dispatch receipt before calling OpenRouter; the article already explains explicit per-test consent, reserved cost, and not retrying an unknown result."
+    },
+    {
+      "source": "server/src/services/managed-repository-checkout.ts",
+      "sourceSha256": "a1a541ddfd891aa3e4fcea7748403c8c4c65d4cfebf3fac78ac2d8879eb7feda",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "updated",
+      "rationale": "The checkout owner verifies the saved repository source before reopening work; the guide directs readers to check that source and its current connection."
+    },
+    {
+      "source": "server/src/services/managed-repository-checkout.ts",
+      "sourceSha256": "a1a541ddfd891aa3e4fcea7748403c8c4c65d4cfebf3fac78ac2d8879eb7feda",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: The checkout owner verifies the saved repository source before reopening work; the guide directs readers to check that source and its current connection."
+    },
+    {
+      "source": "server/src/services/memory/memory-jobs.ts",
+      "sourceSha256": "0bc8866531bebb47434748934f12d0015b59fdfe7c7cf9093e26a4ae69f1fc61",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Managed runtime-file cleanup remains a durable retention job with classified failures; the article accurately says cleanup stays pending until removal is verified."
+    },
+    {
+      "source": "server/src/services/memory/memory-jobs.ts",
+      "sourceSha256": "0bc8866531bebb47434748934f12d0015b59fdfe7c7cf9093e26a4ae69f1fc61",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Managed runtime-file cleanup remains a durable retention job with classified failures; the article accurately says cleanup stays pending until removal is verified."
+    },
+    {
+      "source": "server/src/services/memory/memory-privacy.ts",
+      "sourceSha256": "c57d093d48cff4d261428d7db17cf0188e05e2584fb455abec2ebde1b4d705ac",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Source checks still require current access to each retained source; the article accurately says private shares can become unavailable when source access or state changes."
+    },
+    {
+      "source": "server/src/services/memory/memory-privacy.ts",
+      "sourceSha256": "c57d093d48cff4d261428d7db17cf0188e05e2584fb455abec2ebde1b4d705ac",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Source checks still require current access to each retained source; the article accurately says private shares can become unavailable when source access or state changes."
+    },
+    {
+      "source": "server/src/services/memory/memory-service.ts",
+      "sourceSha256": "93994bb832f3fa145bfa445bd41bf87e0a637918531f46a2cc5035be5fc958fb",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Selected Memory results revalidate current account and source access; the article already describes that check for original and added Task sources."
+    },
+    {
+      "source": "server/src/services/memory/memory-service.ts",
+      "sourceSha256": "93994bb832f3fa145bfa445bd41bf87e0a637918531f46a2cc5035be5fc958fb",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Selected Memory results revalidate current account and source access; the article already describes that check for original and added Task sources."
+    },
+    {
+      "source": "server/src/services/native-local-process-stop.ts",
+      "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Local process identity is cleared only after a matching Native stop receipt; the article accurately says cleanup waits for stop confirmation."
+    },
+    {
+      "source": "server/src/services/native-local-process-stop.ts",
+      "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Local process identity is cleared only after a matching Native stop receipt; the article accurately says cleanup waits for stop confirmation."
+    },
+    {
+      "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
+      "sourceSha256": "0fa6958320ef6066b7d32ec75ad9001c93cf8888b71d1a796674f11a592ad941",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Remote cleanup now also requires the exact successful signed session-start binding for the run, lease, runner, host/cell generation, manifest, and policy. The article accurately says cleanup waits for confirmed stop and storage removal, and excludes provider-held data."
+    },
+    {
+      "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
+      "sourceSha256": "0fa6958320ef6066b7d32ec75ad9001c93cf8888b71d1a796674f11a592ad941",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Remote cleanup now also requires the exact successful signed session-start binding for the run, lease, runner, host/cell generation, manifest, and policy. The article accurately says cleanup waits for confirmed stop and storage removal, and excludes provider-held data."
+    },
+    {
+      "source": "server/src/services/orchestration/first-party-support-model-gateway.ts",
+      "sourceSha256": "a5f6c27b95ec9799bf9b77c65ab8abfd22248be5f13b27e5367349838ca7a827",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/orchestration/first-party-support-model-gateway.ts",
+      "sourceSha256": "a5f6c27b95ec9799bf9b77c65ab8abfd22248be5f13b27e5367349838ca7a827",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/orchestration/first-party-support-model-profiles.ts",
+      "sourceSha256": "8a478c492e9e28f509e6fba2b37ad62089d3c0c72dbb3d97ccc44822de59bace",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/orchestration/first-party-support-model-profiles.ts",
+      "sourceSha256": "8a478c492e9e28f509e6fba2b37ad62089d3c0c72dbb3d97ccc44822de59bace",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/orchestration/model-reservations.ts",
+      "sourceSha256": "c1f8beb88fc3a43e615909270634c6dfc3b3aafa2b0220b5f6fc0f359ca57cd9",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/orchestration/model-reservations.ts",
+      "sourceSha256": "c1f8beb88fc3a43e615909270634c6dfc3b3aafa2b0220b5f6fc0f359ca57cd9",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/orchestration/read-only-model-transport.ts",
+      "sourceSha256": "1db2bc7895df0532dab4a3b779c5af022c742982c35ba80be4640394406b006c",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/orchestration/read-only-model-transport.ts",
+      "sourceSha256": "1db2bc7895df0532dab4a3b779c5af022c742982c35ba80be4640394406b006c",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/paperclip-cloud-connector.ts",
+      "sourceSha256": "0aef1927ff92e2753ff662b91c2d5f19dbbc4732f49795ae262245514bbb32f1",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "The EN/DA article limits the standard setup claim to an operator-configured managed Slack method; missing app credentials leave the advanced route available."
+    },
+    {
+      "source": "server/src/services/paperclip-cloud-connector.ts",
+      "sourceSha256": "0aef1927ff92e2753ff662b91c2d5f19dbbc4732f49795ae262245514bbb32f1",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current behavior: The EN/DA article limits the standard setup claim to an operator-configured managed Slack method; missing app credentials leave the advanced route available."
+    },
+    {
+      "source": "server/src/services/routines.ts",
+      "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
+      "articleId": "people-and-company-access",
+      "article": "docs/guides/board-operator/org-structure.md",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "decision": "updated",
+      "rationale": "Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
+    },
+    {
+      "source": "server/src/services/routines.ts",
+      "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
+      "articleId": "people-and-company-access-da",
+      "article": "docs/da/guides/board-operator/org-structure.md",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
+    },
+    {
+      "source": "server/src/services/routines.ts",
+      "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
+    },
+    {
+      "source": "server/src/services/routines.ts",
+      "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
+    },
+    {
+      "source": "server/src/services/saas/account-deletion.ts",
+      "sourceSha256": "ddeacb2a914b0a6d3cbe40a5228910b979d702caaffef2b4b4a96765e38fd6ba",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "updated",
+      "rationale": "Deletion verifies the account-selected native factor and may require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; password confirmation remains required when a password exists. The article directs readers to follow the sign-in and factor prompts and says SSO does not replace a required factor."
+    },
+    {
+      "source": "server/src/services/saas/account-deletion.ts",
+      "sourceSha256": "ddeacb2a914b0a6d3cbe40a5228910b979d702caaffef2b4b4a96765e38fd6ba",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "updated",
+      "rationale": "Deletion verifies the account-selected native factor and may require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; password confirmation remains required when a password exists. The article directs readers to follow the sign-in and factor prompts and says SSO does not replace a required factor."
+    },
+    {
+      "source": "server/src/services/saas/company-purge.ts",
+      "sourceSha256": "8c3e54b700044da4ce16a229a9fbb38bb28e7133561462aa39a151012e2d6077",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Company purge remains staged around unresolved provider outcomes and managed erasure; the article distinguishes accepted deletion from completed erasure."
+    },
+    {
+      "source": "server/src/services/saas/company-purge.ts",
+      "sourceSha256": "8c3e54b700044da4ce16a229a9fbb38bb28e7133561462aa39a151012e2d6077",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Company purge remains staged around unresolved provider outcomes and managed erasure; the article distinguishes accepted deletion from completed erasure."
+    },
+    {
+      "source": "server/src/services/saas/offboarding.ts",
+      "sourceSha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "Offboarding waits for required managed runtime erasure jobs before purge advances; the article accurately describes cleanup as pending until verified."
+    },
+    {
+      "source": "server/src/services/saas/offboarding.ts",
+      "sourceSha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "Offboarding waits for required managed runtime erasure jobs before purge advances; the article accurately describes cleanup as pending until verified."
+    },
+    {
+      "source": "server/src/services/saas/support-case-operator.ts",
+      "sourceSha256": "7dc8e6d5c1f8258eec865025c98e27b8cccb7e09b4bc1c07d6366507ac289b95",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/saas/support-case-operator.ts",
+      "sourceSha256": "7dc8e6d5c1f8258eec865025c98e27b8cccb7e09b4bc1c07d6366507ac289b95",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/scheduled-work.ts",
+      "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "The scheduler restores persisted due times after work and recovery; it does not change the retry or recovery actions shown to a task owner."
+    },
+    {
+      "source": "server/src/services/scheduled-work.ts",
+      "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Danish version checked against the same current source behavior: The scheduler restores persisted due times after work and recovery; it does not change the retry or recovery actions shown to a task owner."
+    },
+    {
+      "source": "server/src/services/tool-access.ts",
+      "sourceSha256": "48f91d7dea0ab177bfd34705ed4d8e08eb980d820bb20e7df50152c71f452f0d",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "The authorized personal reconnect projection now includes safe lifecycle facts; guidance distinguishes reported expiry, repair and unknown provider facts."
+    },
+    {
+      "source": "server/src/services/tool-access.ts",
+      "sourceSha256": "48f91d7dea0ab177bfd34705ed4d8e08eb980d820bb20e7df50152c71f452f0d",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. The authorized personal reconnect projection now includes safe lifecycle facts; guidance distinguishes reported expiry, repair and unknown provider facts."
+    },
+    {
+      "source": "server/src/services/tool-connection-lifecycle.ts",
+      "sourceSha256": "bec0cc5285061b299e8b6159004e7cdce8a28a91443513db594cb88bda1d361c",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "no_change",
+      "rationale": "The connection projection now distinguishes supported pause/revoke, provider-dependent credential refresh and unknown or non-applicable subscription/deprecation operations. The Apps article still promises only configured current connection behavior, not a renewal service or invented provider dates."
+    },
+    {
+      "source": "server/src/services/tool-connection-lifecycle.ts",
+      "sourceSha256": "bec0cc5285061b299e8b6159004e7cdce8a28a91443513db594cb88bda1d361c",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. The connection projection now distinguishes supported pause/revoke, provider-dependent credential refresh and unknown or non-applicable subscription/deprecation operations. The Apps article still promises only configured current connection behavior, not a renewal service or invented provider dates."
+    },
+    {
+      "source": "server/src/services/trust-documents.ts",
+      "sourceSha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/trust-documents.ts",
+      "sourceSha256": "76f0cec023ae7781f45b7938871a8c24f5d2c35f944b1ce1a46dc203cc5d0257",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-executor.ts",
+      "sourceSha256": "bf38aec5d5610d4ea6d127c22d0b2e3f89cebbcabf4afb934184a777fc7f9471",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Queued workflow claims recheck persisted coverage and current source access; the workflow article explicitly describes that second check."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-executor.ts",
+      "sourceSha256": "bf38aec5d5610d4ea6d127c22d0b2e3f89cebbcabf4afb934184a777fc7f9471",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Queued workflow claims recheck persisted coverage and current source access; the workflow article explicitly describes that second check."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-node-registry.ts",
+      "sourceSha256": "214ce3d5a536155ba2fd0709834c92ce718c35803b67cdcfb8bed3f961216723",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-node-registry.ts",
+      "sourceSha256": "214ce3d5a536155ba2fd0709834c92ce718c35803b67cdcfb8bed3f961216723",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-service.ts",
+      "sourceSha256": "542b1dd3c6581c5ada29220856a64a99aa6f0a62578ffb3f247e8b246e4378f5",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-service.ts",
+      "sourceSha256": "542b1dd3c6581c5ada29220856a64a99aa6f0a62578ffb3f247e8b246e4378f5",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
+    },
+    {
+      "source": "server/src/services/workspace-runtime.ts",
+      "sourceSha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "updated",
+      "rationale": "Cleanup keeps Git workspaces without exact restoration proof and avoids removing non-empty local workspaces; the article tells owners to review files reported as kept."
+    },
+    {
+      "source": "server/src/services/workspace-runtime.ts",
+      "sourceSha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: Cleanup keeps Git workspaces without exact restoration proof and avoids removing non-empty local workspaces; the article tells owners to review files reported as kept."
+    },
+    {
+      "source": "ui/src/api/announcements.ts",
+      "sourceSha256": "b45bf8a59879f5dca26eaa7b1ece56ca347dc8df2d11748092af9fa4a28bd061",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/api/announcements.ts",
+      "sourceSha256": "b45bf8a59879f5dca26eaa7b1ece56ca347dc8df2d11748092af9fa4a28bd061",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/api/saas.ts",
+      "sourceSha256": "af5340674fbdb1747e3e3f64f3678614a0a1269fa2b6faaa4729953ca3b9c9f4",
+      "articleId": "billing-and-capacity",
+      "article": "docs/guides/board-operator/costs-and-budgets.md",
+      "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
+      "decision": "no_change",
+      "rationale": "The API change adds passwordless account-deletion proof to its request contract; billing endpoints and the subscription/payment workflow in this guide are unchanged."
+    },
+    {
+      "source": "ui/src/api/saas.ts",
+      "sourceSha256": "af5340674fbdb1747e3e3f64f3678614a0a1269fa2b6faaa4729953ca3b9c9f4",
+      "articleId": "billing-and-capacity-da",
+      "article": "docs/da/guides/board-operator/costs-and-budgets.md",
+      "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
+      "decision": "no_change",
+      "rationale": "The API change adds passwordless account-deletion proof to its request contract; billing endpoints and the subscription/payment workflow in this guide are unchanged."
+    },
+    {
+      "source": "ui/src/api/search.ts",
+      "sourceSha256": "e8b757cf2b15085045352319082476a9369f746cc855f3c566b5ea38b1cc6382",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/api/search.ts",
+      "sourceSha256": "e8b757cf2b15085045352319082476a9369f746cc855f3c566b5ea38b1cc6382",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/App.tsx",
+      "sourceSha256": "1716e9619c28aec2529902c201a8b45cd641c7327705bf005bcc0ecb2b7589c8",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "no_change",
+      "rationale": "Current routing exposes the company import/export settings pages described in the article; the route changes add no different import authority or recovery behavior."
+    },
+    {
+      "source": "ui/src/App.tsx",
+      "sourceSha256": "1716e9619c28aec2529902c201a8b45cd641c7327705bf005bcc0ecb2b7589c8",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: current routing exposes the company import/export settings pages described in the article; the route changes add no different import authority or recovery behavior."
+    },
+    {
+      "source": "ui/src/App.tsx",
+      "sourceSha256": "1716e9619c28aec2529902c201a8b45cd641c7327705bf005bcc0ecb2b7589c8",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/App.tsx",
+      "sourceSha256": "1716e9619c28aec2529902c201a8b45cd641c7327705bf005bcc0ecb2b7589c8",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/access/InvitesSection.tsx",
+      "sourceSha256": "35b22bd6cb76c56137d54bb454d75b1589927530f3f0ee9f9e7f082b1003e4f9",
+      "articleId": "people-and-company-access",
+      "article": "docs/guides/board-operator/org-structure.md",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "decision": "updated",
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/components/access/InvitesSection.tsx",
+      "sourceSha256": "35b22bd6cb76c56137d54bb454d75b1589927530f3f0ee9f9e7f082b1003e4f9",
+      "articleId": "people-and-company-access-da",
+      "article": "docs/da/guides/board-operator/org-structure.md",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
+      "sourceSha256": "c092cbd38652b71157cc39e706140bfbe7a4e463d5c4897369842d399be8c1e3",
+      "articleId": "people-and-company-access",
+      "article": "docs/guides/board-operator/org-structure.md",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "decision": "updated",
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
+      "sourceSha256": "c092cbd38652b71157cc39e706140bfbe7a4e463d5c4897369842d399be8c1e3",
+      "articleId": "people-and-company-access-da",
+      "article": "docs/da/guides/board-operator/org-structure.md",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/components/AgentDraftPublication.tsx",
+      "sourceSha256": "6999b1fa7da407c295d56015cde178c91ed3393620ccf3d3f8bbd2853765c3b9",
+      "articleId": "working-with-coworkers",
+      "article": "docs/guides/board-operator/managing-agents.md",
+      "articleSha256": "42049ea24873c7aaa87d0c761669e7cf76b85534d5377901b61506cfc180c3b2",
+      "decision": "updated",
+      "rationale": "The article explains Human-reviewed publication and that missing baseline or qualification evidence blocks model migration."
+    },
+    {
+      "source": "ui/src/components/AgentDraftPublication.tsx",
+      "sourceSha256": "6999b1fa7da407c295d56015cde178c91ed3393620ccf3d3f8bbd2853765c3b9",
+      "articleId": "working-with-coworkers-da",
+      "article": "docs/da/guides/board-operator/managing-agents.md",
+      "articleSha256": "e51c5c599a9081849eaf94fd88fd745c468044f3a32e6082994d6ca50474662f",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. The article explains Human-reviewed publication and that missing baseline or qualification evidence blocks model migration."
+    },
+    {
+      "source": "ui/src/components/AgentRuntimeCandidates.tsx",
+      "sourceSha256": "79d1c44d8f92c557b96064d35abf5ea27bc2d652de22aa274acc36d8bb89d0f2",
+      "articleId": "working-with-coworkers",
+      "article": "docs/guides/board-operator/managing-agents.md",
+      "articleSha256": "42049ea24873c7aaa87d0c761669e7cf76b85534d5377901b61506cfc180c3b2",
+      "decision": "updated",
+      "rationale": "The article directs administrators through the draft and qualified runtime candidate rather than changing managed routing directly."
+    },
+    {
+      "source": "ui/src/components/AgentRuntimeCandidates.tsx",
+      "sourceSha256": "79d1c44d8f92c557b96064d35abf5ea27bc2d652de22aa274acc36d8bb89d0f2",
+      "articleId": "working-with-coworkers-da",
+      "article": "docs/da/guides/board-operator/managing-agents.md",
+      "articleSha256": "e51c5c599a9081849eaf94fd88fd745c468044f3a32e6082994d6ca50474662f",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. The article directs administrators through the draft and qualified runtime candidate rather than changing managed routing directly."
+    },
+    {
+      "source": "ui/src/components/CustomerChangelog.tsx",
+      "sourceSha256": "7659706311411e7660f2ee1328db951956fe89ab8c3911b8de8e104ea1341cea",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/CustomerChangelog.tsx",
+      "sourceSha256": "7659706311411e7660f2ee1328db951956fe89ab8c3911b8de8e104ea1341cea",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/CustomerSupportAssistant.test.tsx",
+      "sourceSha256": "d520cb78941f6a86507318978286d049516cc78c5b662e69dc20fb711b35337c",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/CustomerSupportAssistant.test.tsx",
+      "sourceSha256": "d520cb78941f6a86507318978286d049516cc78c5b662e69dc20fb711b35337c",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/CustomerSupportAssistant.tsx",
+      "sourceSha256": "04e9d79c1d80d837ed5229483bc83a6c61d3fd726e90207304300dea7ccd0029",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/CustomerSupportAssistant.tsx",
+      "sourceSha256": "04e9d79c1d80d837ed5229483bc83a6c61d3fd726e90207304300dea7ccd0029",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/ExperienceCommandPalette.tsx",
+      "sourceSha256": "9e7e3c752e70a3acdd79bb54c9dbfa8efcc56b9dc65645689ff287c3b2578ef1",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/ExperienceCommandPalette.tsx",
+      "sourceSha256": "9e7e3c752e70a3acdd79bb54c9dbfa8efcc56b9dc65645689ff287c3b2578ef1",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/ExperienceUtilities.tsx",
+      "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/ExperienceUtilities.tsx",
+      "sourceSha256": "3f407de9eae33be8153e390c27b71ce81388ab807becfc8ecc2ce502cb747127",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/IssueBlockedNotice.tsx",
+      "sourceSha256": "086106438a168ffb3a1ea34f01a9674ff4cfc00b889e9af97a49488d9061e53b",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "updated",
+      "rationale": "Blocked-task notice wording now uses the Blentera brand; its recovery action and the article’s instructions are unchanged."
+    },
+    {
+      "source": "ui/src/components/IssueBlockedNotice.tsx",
+      "sourceSha256": "086106438a168ffb3a1ea34f01a9674ff4cfc00b889e9af97a49488d9061e53b",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: blocked-task notice wording now uses the Blentera brand; its recovery action and the article’s instructions are unchanged."
+    },
+    {
+      "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
+      "sourceSha256": "78a47504f8b19d7fd7ef9f25be4593789dcc2b3617e3196ef61c511186437218",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "The optional Jev section matches the settings UI: off by default, a separate background-check control, and a disclosed fixed-sample test that does not qualify suggestions."
+    },
+    {
+      "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
+      "sourceSha256": "78a47504f8b19d7fd7ef9f25be4593789dcc2b3617e3196ef61c511186437218",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: The optional Jev section matches the settings UI: off by default, a separate background-check control, and a disclosed fixed-sample test that does not qualify suggestions."
+    },
+    {
+      "source": "ui/src/components/MandatoryProductNotices.tsx",
+      "sourceSha256": "7892239a803fc42a1a4007e41b3bd79714eebcda3bcfc48fce159be8a869909c",
+      "articleId": "working-with-coworkers",
+      "article": "docs/guides/board-operator/managing-agents.md",
+      "articleSha256": "42049ea24873c7aaa87d0c761669e7cf76b85534d5377901b61506cfc180c3b2",
+      "decision": "updated",
+      "rationale": "The article explains the current Agent model migration notice; current permissions still govern the linked Agent."
+    },
+    {
+      "source": "ui/src/components/MandatoryProductNotices.tsx",
+      "sourceSha256": "7892239a803fc42a1a4007e41b3bd79714eebcda3bcfc48fce159be8a869909c",
+      "articleId": "working-with-coworkers-da",
+      "article": "docs/da/guides/board-operator/managing-agents.md",
+      "articleSha256": "e51c5c599a9081849eaf94fd88fd745c468044f3a32e6082994d6ca50474662f",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. The article explains the current Agent model migration notice; current permissions still govern the linked Agent."
+    },
+    {
+      "source": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
+      "sourceSha256": "851e6d36f19e1e2fcc4e414dccdb4b5e230f57b86c7fab44c7f32ee77c84a800",
+      "articleId": "people-and-company-access",
+      "article": "docs/guides/board-operator/org-structure.md",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "decision": "updated",
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
+      "sourceSha256": "851e6d36f19e1e2fcc4e414dccdb4b5e230f57b86c7fab44c7f32ee77c84a800",
+      "articleId": "people-and-company-access-da",
+      "article": "docs/da/guides/board-operator/org-structure.md",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/components/ServiceHealth.tsx",
+      "sourceSha256": "ebbbe90c5078d9d89e3dddd545cd7fb628579baa1768cd44e19739719f5072e9",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The status banner labels provider incident information while account-specific impact stays unconfirmed; the paired Help article explicitly directs account-specific questions to human support."
+    },
+    {
+      "source": "ui/src/components/ServiceHealth.tsx",
+      "sourceSha256": "ebbbe90c5078d9d89e3dddd545cd7fb628579baa1768cd44e19739719f5072e9",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The status banner labels provider incident information while account-specific impact stays unconfirmed; the paired Help article explicitly directs account-specific questions to human support."
+    },
+    {
+      "source": "ui/src/components/TrustGatedEvidence.tsx",
+      "sourceSha256": "01d6646e907588c8e59002a13ce5caf83fb7d7d0bd9607b85fd0fad52688a140",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/components/TrustGatedEvidence.tsx",
+      "sourceSha256": "01d6646e907588c8e59002a13ce5caf83fb7d7d0bd9607b85fd0fad52688a140",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+      "sourceSha256": "a713ebc7f63f3d85dcbaf959ca6fa09b5cf9177291e6d52415a42a35f751e35d",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "Current connection setup changes product labels to Blentera and retains the same-session OAuth callback; the paired guidance names the current brand and explains restarting sign-in in the original session."
+    },
+    {
+      "source": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+      "sourceSha256": "a713ebc7f63f3d85dcbaf959ca6fa09b5cf9177291e6d52415a42a35f751e35d",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: current connection setup changes product labels to Blentera and retains the same-session OAuth callback; the paired guidance names the current brand and explains restarting sign-in in the original session."
+    },
+    {
+      "source": "ui/src/lib/help-navigation.ts",
+      "sourceSha256": "132369ced166ef7e7b15204f09b42fe1cb7551d67d1436006b35448108155a2b",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/lib/help-navigation.ts",
+      "sourceSha256": "132369ced166ef7e7b15204f09b42fe1cb7551d67d1436006b35448108155a2b",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/pages/Activation.tsx",
+      "sourceSha256": "e62bddf303170a0d7f9cc21f4973eaff934e97b91afa7f26e5f2dbeeef57fb52",
+      "articleId": "start-and-first-result",
+      "article": "docs/guides/board-operator/creating-a-company.md",
+      "articleSha256": "7a0f6911e596e02e212fae1d400a07d178380163dbf8be42eb4c221e0a655613",
+      "decision": "updated",
+      "rationale": "Replaced the old autonomous-company tutorial with bounded steps grounded in guided activation, first Co-worker setup, first-task start, and result review."
+    },
+    {
+      "source": "ui/src/pages/Activation.tsx",
+      "sourceSha256": "e62bddf303170a0d7f9cc21f4973eaff934e97b91afa7f26e5f2dbeeef57fb52",
+      "articleId": "start-and-first-result-da",
+      "article": "docs/da/guides/board-operator/creating-a-company.md",
+      "articleSha256": "0fe2ed3f3a0ab78fa404729e29dedc25548dd4ff7c9d9f1e0b40c7d6df026eaf",
+      "decision": "updated",
+      "rationale": "Danish translation of start-and-first-result: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+    },
+    {
+      "source": "ui/src/pages/AgentDetail.tsx",
+      "sourceSha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875",
+      "articleId": "working-with-coworkers",
+      "article": "docs/guides/board-operator/managing-agents.md",
+      "articleSha256": "42049ea24873c7aaa87d0c761669e7cf76b85534d5377901b61506cfc180c3b2",
+      "decision": "updated",
+      "rationale": "The agent detail page changes Paperclip labels to Blentera; the setup, run, and pause behavior described in the article is unchanged."
+    },
+    {
+      "source": "ui/src/pages/AgentDetail.tsx",
+      "sourceSha256": "3bcc511b3687adb04671e7c8b5287fffff6d3aec3b6cef33f77c084a2fa6a875",
+      "articleId": "working-with-coworkers-da",
+      "article": "docs/da/guides/board-operator/managing-agents.md",
+      "articleSha256": "e51c5c599a9081849eaf94fd88fd745c468044f3a32e6082994d6ca50474662f",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: the agent detail page changes Paperclip labels to Blentera; the setup, run, and pause behavior described in the article is unchanged."
+    },
+    {
+      "source": "ui/src/pages/Agents.tsx",
+      "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
+      "articleId": "working-with-coworkers",
+      "article": "docs/guides/board-operator/managing-agents.md",
+      "articleSha256": "42049ea24873c7aaa87d0c761669e7cf76b85534d5377901b61506cfc180c3b2",
+      "decision": "updated",
+      "rationale": "The agents list changes Paperclip labels to Blentera; the article’s current team setup and activation guidance remains accurate."
+    },
+    {
+      "source": "ui/src/pages/Agents.tsx",
+      "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
+      "articleId": "working-with-coworkers-da",
+      "article": "docs/da/guides/board-operator/managing-agents.md",
+      "articleSha256": "e51c5c599a9081849eaf94fd88fd745c468044f3a32e6082994d6ca50474662f",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: the agents list changes Paperclip labels to Blentera; the article’s current team setup and activation guidance remains accurate."
+    },
+    {
+      "source": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+      "sourceSha256": "8135e45e26c50140f42890bbbc80b984f902c5a9c21fac9e9cdc57db2aca729c",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "The article explains the expiry and lifecycle labels shown with the selected authorized connection identity."
+    },
+    {
+      "source": "ui/src/pages/apps/app-detail/IdentitiesSection.tsx",
+      "sourceSha256": "8135e45e26c50140f42890bbbc80b984f902c5a9c21fac9e9cdc57db2aca729c",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. The article explains the expiry and lifecycle labels shown with the selected authorized connection identity."
+    },
+    {
+      "source": "ui/src/pages/apps/AppDetail.tsx",
+      "sourceSha256": "65a5c92be80774317f076327c4057bf243c5385a2de188603f79341f5b849a1c",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "Connection health guidance now describes provider-reported expiry and the current repair action shown in the connection detail."
+    },
+    {
+      "source": "ui/src/pages/apps/AppDetail.tsx",
+      "sourceSha256": "65a5c92be80774317f076327c4057bf243c5385a2de188603f79341f5b849a1c",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish guidance checked against the same source behavior. Connection health guidance now describes provider-reported expiry and the current repair action shown in the connection detail."
+    },
+    {
+      "source": "ui/src/pages/apps/Connections.tsx",
+      "sourceSha256": "684171dfe488923bfd48fcef60a203a0bdb06d5839ef3452abf2744374544815",
+      "articleId": "apps-and-connections",
+      "article": "docs/help/apps-and-connections.md",
+      "articleSha256": "9d0a0c41b9d0848c5acbe26386d472fcdf448ef84604421f292483679230042e",
+      "decision": "updated",
+      "rationale": "Current connection labels identify Blentera and legacy Paperclip Cloud; the article covers the managed sign-in boundary without promising cloud enrollment."
+    },
+    {
+      "source": "ui/src/pages/apps/Connections.tsx",
+      "sourceSha256": "684171dfe488923bfd48fcef60a203a0bdb06d5839ef3452abf2744374544815",
+      "articleId": "apps-and-connections-da",
+      "article": "docs/da/help/apps-and-connections.md",
+      "articleSha256": "5d3effcc02c97c2f6b605068fd7d7a9824db9b8a795866096f8a047a68694ac4",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same source delta: current connection labels identify Blentera and legacy Paperclip Cloud; the article covers the managed sign-in boundary without promising cloud enrollment."
+    },
+    {
+      "source": "ui/src/pages/CompanyAccess.tsx",
+      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "articleId": "people-and-company-access",
+      "article": "docs/guides/board-operator/org-structure.md",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "decision": "updated",
+      "rationale": "Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+    },
+    {
+      "source": "ui/src/pages/CompanyAccess.tsx",
+      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "articleId": "people-and-company-access-da",
+      "article": "docs/da/guides/board-operator/org-structure.md",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+    },
+    {
+      "source": "ui/src/pages/CompanyAccess.tsx",
+      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+    },
+    {
+      "source": "ui/src/pages/CompanyAccess.tsx",
+      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+    },
+    {
+      "source": "ui/src/pages/CompanyExport.tsx",
+      "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "The export page labels support history as a separate customer-visible archive; the article accurately excludes internal notes and access grants."
+    },
+    {
+      "source": "ui/src/pages/CompanyExport.tsx",
+      "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "The export page labels support history as a separate customer-visible archive; the article accurately excludes internal notes and access grants."
+    },
+    {
+      "source": "ui/src/pages/CompanyImport.tsx",
+      "sourceSha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "ui/src/pages/CompanyImport.tsx",
+      "sourceSha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "ui/src/pages/CompanyImportHistory.tsx",
+      "sourceSha256": "9906b3d6e9b78b5f3ee0a73232532e83f55cb3df54b14eca2eeafbcea6d06803",
+      "articleId": "company-import-export",
+      "article": "docs/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "decision": "updated",
+      "rationale": "The guide matches saved history receipts and explains confirmed pre-effect cancellation versus unknown outcomes requiring reconciliation."
+    },
+    {
+      "source": "ui/src/pages/CompanyImportHistory.tsx",
+      "sourceSha256": "9906b3d6e9b78b5f3ee0a73232532e83f55cb3df54b14eca2eeafbcea6d06803",
+      "articleId": "company-import-export-da",
+      "article": "docs/da/guides/board-operator/importing-and-exporting.md",
+      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "decision": "updated",
+      "rationale": "Danish guide reviewed against the current implementation. The guide matches saved history receipts and explains confirmed pre-effect cancellation versus unknown outcomes requiring reconciliation."
+    },
+    {
+      "source": "ui/src/pages/CompanySettings.tsx",
+      "sourceSha256": "3063818fca9d6c7fad491f6134ff8c08a96323252bf2eb904cfc188c373609a6",
+      "articleId": "people-and-company-access",
+      "article": "docs/guides/board-operator/org-structure.md",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "decision": "updated",
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/pages/CompanySettings.tsx",
+      "sourceSha256": "3063818fca9d6c7fad491f6134ff8c08a96323252bf2eb904cfc188c373609a6",
+      "articleId": "people-and-company-access-da",
+      "article": "docs/da/guides/board-operator/org-structure.md",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/pages/CustomerHelpCenter.tsx",
+      "sourceSha256": "452e9880a47c77278e15807a73a966d7606d2a5f55e997deb302ee34dc5854d5",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/pages/CustomerHelpCenter.tsx",
+      "sourceSha256": "452e9880a47c77278e15807a73a966d7606d2a5f55e997deb302ee34dc5854d5",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/pages/CustomerSupportCases.tsx",
+      "sourceSha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article now explains the authorized Support-case to Task pointer and existing Decision review/Learning handoff. The form copies no support messages into a Task."
+    },
+    {
+      "source": "ui/src/pages/CustomerSupportCases.tsx",
+      "sourceSha256": "26dcb46390992f02cbbf47ddc4e202fe71d91757b93a06a4a1bae531b6901080",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article now explains the authorized Support-case to Task pointer and existing Decision review/Learning handoff. The form copies no support messages into a Task."
+    },
+    {
+      "source": "ui/src/pages/Enterprise.tsx",
+      "sourceSha256": "667e64f241169d7bef3ba8d886a12b70ced778af2bf57dcf34c94b4d2111576f",
+      "articleId": "people-and-company-access",
+      "article": "docs/guides/board-operator/org-structure.md",
+      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "decision": "updated",
+      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/pages/Enterprise.tsx",
+      "sourceSha256": "667e64f241169d7bef3ba8d886a12b70ced778af2bf57dcf34c94b4d2111576f",
+      "articleId": "people-and-company-access-da",
+      "article": "docs/da/guides/board-operator/org-structure.md",
+      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+    },
+    {
+      "source": "ui/src/pages/ExperienceWork.tsx",
+      "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
+      "articleId": "create-and-track-work",
+      "article": "docs/guides/board-operator/managing-tasks.md",
+      "articleSha256": "130e016c8eadf5e4e209d8bff86e4f48d3e1a861e40516e10fb75cb217ed4552",
+      "decision": "updated",
+      "rationale": "The Work-page Ask Blentera action now opens the preferred Co-worker chat or the Co-worker picker; both language versions now say this beside the task workflow."
+    },
+    {
+      "source": "ui/src/pages/ExperienceWork.tsx",
+      "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
+      "articleId": "create-and-track-work-da",
+      "article": "docs/da/guides/board-operator/managing-tasks.md",
+      "articleSha256": "64dca34d586395422ea0fe867346e45c448fba6655558721f606c9c76d20b8af",
+      "decision": "updated",
+      "rationale": "Danish version checked against the same current source behavior: The Work-page Ask Blentera action now opens the preferred Co-worker chat or the Co-worker picker; both language versions now say this beside the task workflow."
+    },
+    {
+      "source": "ui/src/pages/InstanceExperimentalSettings.tsx",
+      "sourceSha256": "9f9928a8c385f406be46594335fc2d697eb0ba4c7c1149c7e2299e6384b5d48f",
+      "articleId": "preview-and-known-limits",
+      "article": "docs/guides/board-operator/experimental-features.md",
+      "articleSha256": "66127d42d3d1407db3b798b12a52c38e8834f8da9d0c2b047101ff0ef49d425c",
+      "decision": "updated",
+      "rationale": "The paired article now points to the configured bounded Product changes history and its language fallback; this source and its feature availability behavior are unchanged."
+    },
+    {
+      "source": "ui/src/pages/InstanceExperimentalSettings.tsx",
+      "sourceSha256": "9f9928a8c385f406be46594335fc2d697eb0ba4c7c1149c7e2299e6384b5d48f",
+      "articleId": "preview-and-known-limits-da",
+      "article": "docs/da/guides/board-operator/experimental-features.md",
+      "articleSha256": "6d8adb5081cf9d7cb51949320f6d6c97bc06de1b45c3ce9f8bf5eaf7a4fc4e01",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article now points to the configured bounded Product changes history and its language fallback; this source and its feature availability behavior are unchanged."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleId": "approvals-and-stop",
+      "article": "docs/guides/board-operator/approvals.md",
+      "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
+      "decision": "no_change",
+      "rationale": "Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleId": "approvals-and-stop-da",
+      "article": "docs/da/guides/board-operator/approvals.md",
+      "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleId": "create-and-track-work",
+      "article": "docs/guides/board-operator/managing-tasks.md",
+      "articleSha256": "130e016c8eadf5e4e209d8bff86e4f48d3e1a861e40516e10fb75cb217ed4552",
+      "decision": "no_change",
+      "rationale": "Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleId": "create-and-track-work-da",
+      "article": "docs/da/guides/board-operator/managing-tasks.md",
+      "articleSha256": "64dca34d586395422ea0fe867346e45c448fba6655558721f606c9c76d20b8af",
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleId": "recovering-work",
+      "article": "docs/help/recovering-work.md",
+      "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+      "decision": "no_change",
+      "rationale": "Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleId": "recovering-work-da",
+      "article": "docs/da/help/recovering-work.md",
+      "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+      "decision": "no_change",
+      "rationale": "Danish counterpart checked against the same source behavior. Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
+    },
+    {
+      "source": "ui/src/pages/Memory.tsx",
+      "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "no_change",
+      "rationale": "The Memory page exposes owner-controlled share review and Forget actions; the article matches their source-access and deletion effects."
+    },
+    {
+      "source": "ui/src/pages/Memory.tsx",
+      "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "no_change",
+      "rationale": "The Memory page exposes owner-controlled share review and Forget actions; the article matches their source-access and deletion effects."
+    },
+    {
+      "source": "ui/src/pages/SaasAccount.tsx",
+      "sourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
+      "articleId": "export-and-delete",
+      "article": "docs/help/export-and-delete.md",
+      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "decision": "updated",
+      "rationale": "The page requires the current password when present and can also require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; phishing-resistant accounts use the passkey confirmation path. The article directs readers to follow any displayed sign-in and factor prompts and says SSO does not replace a required factor."
+    },
+    {
+      "source": "ui/src/pages/SaasAccount.tsx",
+      "sourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
+      "articleId": "export-and-delete-da",
+      "article": "docs/da/help/export-and-delete.md",
+      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "decision": "updated",
+      "rationale": "The page requires the current password when present and can also require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; phishing-resistant accounts use the passkey confirmation path. The article directs readers to follow any displayed sign-in and factor prompts and says SSO does not replace a required factor."
+    },
+    {
+      "source": "ui/src/pages/SaasBilling.tsx",
+      "sourceSha256": "c3032499911b693f8a985f328f42b75e51488ade1f651b468d6be0e161bd6e1e",
+      "articleId": "billing-and-capacity",
+      "article": "docs/guides/board-operator/costs-and-budgets.md",
+      "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
+      "decision": "updated",
+      "rationale": "Replaced token-cost promises with current subscription, portal, provider billing, access-state, and capacity wording."
+    },
+    {
+      "source": "ui/src/pages/SaasBilling.tsx",
+      "sourceSha256": "c3032499911b693f8a985f328f42b75e51488ade1f651b468d6be0e161bd6e1e",
+      "articleId": "billing-and-capacity-da",
+      "article": "docs/da/guides/board-operator/costs-and-budgets.md",
+      "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
+      "decision": "updated",
+      "rationale": "Danish translation of billing-and-capacity: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+    },
+    {
+      "source": "ui/src/pages/Search.tsx",
+      "sourceSha256": "fdf159f6d29222f194596f4bcc63a7561eb00cd1b242c3465c38d9a207e26bd5",
+      "articleId": "help-and-human-support",
+      "article": "docs/help/index.md",
+      "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
+      "decision": "updated",
+      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/pages/Search.tsx",
+      "sourceSha256": "fdf159f6d29222f194596f4bcc63a7561eb00cd1b242c3465c38d9a207e26bd5",
+      "articleId": "help-and-human-support-da",
+      "article": "docs/da/help/index.md",
+      "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+    },
+    {
+      "source": "ui/src/pages/WorkflowBuilder.tsx",
+      "sourceSha256": "7bffb0d5109a85fb043bbee1604de2518ea8fce4abe65dde11bb3dd22f143bf8",
+      "articleId": "workflows-preview",
+      "article": "docs/help/workflows-preview.md",
+      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "decision": "updated",
+      "rationale": "The paired workflow article now explains the exact published version, current permissions, actual starting Human, coverage expiry and revocation."
+    },
+    {
+      "source": "ui/src/pages/WorkflowBuilder.tsx",
+      "sourceSha256": "7bffb0d5109a85fb043bbee1604de2518ea8fce4abe65dde11bb3dd22f143bf8",
+      "articleId": "workflows-preview-da",
+      "article": "docs/da/help/workflows-preview.md",
+      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "decision": "updated",
+      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article now explains the exact published version, current permissions, actual starting Human, coverage expiry and revocation."
+    }
+  ]
+}
