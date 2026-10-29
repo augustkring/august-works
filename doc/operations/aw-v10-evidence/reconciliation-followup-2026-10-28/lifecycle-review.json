@@ -273,8 +273,8 @@
     {
       "id": "V10-107",
       "bindingClause": "107. `V10-107` public incident + in-app status + recovery E2E.",
-      "classification": "software_missing",
-      "currentSourceFinding": "The source owner is a read-only public Statuspage projection with unavailable/expiry behavior. It does not author incidents, map affected companies, notify subscribers, or complete recovery.",
+      "classification": "implemented_provider_qualification_open",
+      "currentSourceFinding": "The narrow read-only Statuspage projection and contextual Help UI follow the managed-provider boundary in brief \u00a7\u00a713.2\u201313.3 and 13.8\u201313.9. Incident lifecycle, subscriber notifications and public communication authority belong to the managed status-page provider; their absence from the application is not a confirmed missing application function. The adapter preserves unavailable/expiry behavior and does not invent tenant impact. Actual provider configuration and customer communication/recovery qualification remain open.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
         "server/src/routes/service-health.ts",
@@ -305,10 +305,10 @@
         }
       ],
       "confirmedSoftwareMissingOrRecheck": [
-        "Implement status-component/customer targeting, audited incident and maintenance publication, subscriber delivery and recovery/postmortem handoff on canonical status owners."
+        "Qualify the actual managed provider configuration, incident/update content, subscriber notifications, customer-impact mapping and support/contact journey; no separate application incident-authoring platform is required by this scoped review."
       ],
       "retainedReceiptsReviewed": [],
-      "qualificationBoundary": "Keep the read-only public adapter separate from incident authoring, tenant-impact projection, notifications, and recovery/runbook qualification; close only with their original owners and provider evidence.",
+      "qualificationBoundary": "This source review confirms the intended application/provider responsibility boundary only. It does not establish a configured provider, subscriber delivery, customer incident communication, or operator recovery drill.",
       "missingListedSourceOwners": []
     },
     {
@@ -1867,10 +1867,6 @@
   ],
   "summary": {
     "confirmedSoftwareGaps": [
-      {
-        "id": "V10-107",
-        "gap": "The current public-health owner is read-only; incident authoring, tenant impact, subscriber notices, and recovery handoff are absent."
-      },
       {
         "id": "V10-109",
         "gap": "Expiry and missed-event reconciliation remain incomplete across enabled connector providers; existing facts are provider-bounded."
