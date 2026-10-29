@@ -1,0 +1,18 @@
+{
+  "attempt": "temporal-auth88-current-cleanup-r2-20261029",
+  "result": {
+    "passed": 88,
+    "failed": 0,
+    "skipped": 0,
+    "exit": 0
+  },
+  "sourceHead": "12e35003eb9fd4578bb734562fe218f233679f04",
+  "sourceFile": {
+    "path": "server/src/services/authorization.ts",
+    "sha256": "cd6234f018c35ac8a54f6677c0efb9276d6e7cce3487a2bd4d21536268d7c6aa"
+  },
+  "scopedHunks": 5,
+  "scopedPatchSha256": "4ada2f9c63008fe2b3897e87aaf939480fdd8638611dfd9ff0dc61f19f4eeb39",
+  "archiveSha256": "575f7ab0d9f4cefa1d5fdb84ad647487a7fdf4ab5e7e0f320d5489b5de90e524",
+  "scope": "Fresh same-actor active Agent membership joins and typed readActorEvidence; no authorization cache or relaxed principal condition. Remaining Temporal structural/profile cleanup hunks in full source reconstruction are separately pending."
+}

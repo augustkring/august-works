@@ -2315,7 +2315,10 @@ type NativeTaskDecisionMemo = {
   responsibleUsers: Map<string, Promise<ResponsibleUserSnapshot>>;
   runPolicies: Map<string, Promise<{ companyId: string; executionPolicy: Record<string, unknown> } | null>>;
   instanceAdmins: Map<string, Promise<boolean>>;
-  readActorEvidence: Map<string, Promise<{ agent: AgentAuthorizationRow | null; run: { companyId: string; executionPolicy: Record<string, unknown> } | null }>>;
+  readActorEvidence: Map<string, Promise<{ agent: AgentAuthorizationRow | null;
+    membership?: Pick<typeof companyMemberships.$inferSelect,
+      "id" | "companyId" | "principalType" | "principalId" | "membershipRole" | "status"> | null;
+    run: { companyId: string; executionPolicy: Record<string, unknown> } | null }>>;
 };
 const nativeRoutineReadScopes = new WeakMap<object, ReadSourceRows>();
 const nativeWorkflowReadScopes = new WeakMap<object, ReadSourceRows>();
@@ -3336,8 +3339,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     action: AuthorizationAction;
     permissionKey: PermissionKey;
     scope?: Record<string, unknown> | null;
+    currentMembership?: Pick<typeof companyMemberships.$inferSelect,
+      "id" | "companyId" | "principalType" | "principalId" | "membershipRole" | "status"> | null;
   }): Promise<PrincipalGrantDecision> {
-    const membership = await getActiveMembership(input.companyId, input.principalType, input.principalId);
+    const membership = input.currentMembership !== undefined
+      ? input.currentMembership
+      : await getActiveMembership(input.companyId, input.principalType, input.principalId);
     if (!membership) {
       return deny({
         action: input.action,
@@ -3434,8 +3441,18 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         id: agents.id, companyId: agents.companyId, role: agents.role,
         status: agents.status, reportsTo: agents.reportsTo, permissions: agents.permissions,
       },
+      membership: {
+        id: companyMemberships.id, companyId: companyMemberships.companyId,
+        principalType: companyMemberships.principalType, principalId: companyMemberships.principalId,
+        membershipRole: companyMemberships.membershipRole, status: companyMemberships.status,
+      },
       run: { companyId: heartbeatRuns.companyId, contextSnapshot: heartbeatRuns.contextSnapshot },
-    }).from(agents).leftJoin(heartbeatRuns, and(
+    }).from(agents).leftJoin(companyMemberships, and(
+      eq(companyMemberships.companyId, sql.placeholder("companyId")),
+      eq(companyMemberships.principalType, "agent"),
+      sql`${companyMemberships.principalId} = ${agents.id}::text`,
+      eq(companyMemberships.status, "active"),
+    )).leftJoin(heartbeatRuns, and(
       eq(heartbeatRuns.id, sql.placeholder("runId")),
       eq(heartbeatRuns.companyId, sql.placeholder("companyId")),
       eq(heartbeatRuns.agentId, agents.id),
@@ -3446,12 +3463,14 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     if (sourceAuthorityPins) return memoized(taskDecisionMemo()?.readActorEvidence,
       `${companyId}:${actor.agentId ?? ""}:${actor.runId ?? ""}`, async () => ({
         agent: await loadAgent(actor.agentId!), run: await loadRunPolicy(actor.runId, companyId, actor.agentId!),
+        membership: undefined,
       }));
     readActorQuery ??= prepareReadActorEvidence();
     const [row] = await readActorQuery.execute({ runId: actor.runId!, companyId, agentId: actor.agentId! });
     const context = isPlainRecord(row?.run?.contextSnapshot) ? row.run.contextSnapshot : null;
     return {
       agent: row?.agent ?? null,
+      membership: row?.membership ?? null,
       run: isPlainRecord(context?.executionPolicy)
         ? { companyId: row!.run!.companyId, executionPolicy: context.executionPolicy }
         : null,
@@ -4997,6 +5016,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         action: input.action,
         permissionKey,
         scope: input.scope,
+        ...(readActorEvidence && readActorEvidence.membership !== undefined
+          ? { currentMembership: readActorEvidence.membership } : {}),
       });
       if (grantDecision.allowed) return grantDecision;
     }
