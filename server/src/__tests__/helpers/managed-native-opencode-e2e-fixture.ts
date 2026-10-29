@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, writeFile } from "node:fs/promises";
@@ -227,9 +229,14 @@ function valueCategory(value: unknown): string {
   return typeof value;
 }
 
-function qualifiedOpenCodeBinary(): string {
+export function qualifiedOpenCodeBinary(): string {
   const configured = process.env.PAPERCLIP_QUALIFIED_OPENCODE_BINARY?.trim();
   if (configured) return configured;
+  // Frozen workspace installs already contain the pinned provider package;
+  // its binary need not be on the server workspace's PATH. The caller still
+  // verifies the exact release version and bytes before execution.
+  const installed = fileURLToPath(new URL("../../../../packages/paperclip-runner/node_modules/opencode-ai/bin/opencode.exe", import.meta.url));
+  if (existsSync(installed)) return installed;
   try { return execFileSync("which", ["opencode"], { encoding: "utf8" }).trim(); }
   catch { throw new Error("Set PAPERCLIP_QUALIFIED_OPENCODE_BINARY or install the qualified OpenCode binary on PATH."); }
 }

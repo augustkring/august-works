@@ -918,11 +918,13 @@ describe("remote runner process supervision", () => {
         timeoutMs: 20_000,
       });
       expect(cleanup?.args?.[1]).toContain('test "$nonce" = "$expected_nonce"');
-      expect(cleanup?.args?.[1]).toContain('grep -Fqx -- "--runner-id"');
-      expect(cleanup?.args?.[1]).toContain('kill -TERM -- "$signal_target"');
-      expect(cleanup?.args?.[1]).toContain('kill -KILL -- "$signal_target"');
+      expect(cleanup?.args?.[6]).toContain('grep -Fqx -- "--runner-id"');
+      expect(cleanup?.args?.[1]).toContain('sh -c "$identity_check"');
+      expect(cleanup?.args?.[1]).toContain('"$pid" require-fingerprint');
+      expect(cleanup?.args?.[1]).toContain('kill -TERM "-$pid"');
+      expect(cleanup?.args?.[1]).toContain('kill -KILL "-$pid"');
       expect(cleanup?.args?.[1]?.indexOf("rm -f --")).toBeGreaterThan(
-        cleanup?.args?.[1]?.indexOf('kill -0 "$pid" 2>/dev/null && exit 5') ??
+        cleanup?.args?.[1]?.indexOf('test -z "$group_live" || exit 5') ??
           Number.MAX_SAFE_INTEGER,
       );
     } finally {
@@ -10926,7 +10928,7 @@ describe("runnerd provider runtime wiring", () => {
     if (scenario === "existing_state") await mkdir(sessionRoot, { recursive: true });
     if (scenario === "symlink_parent") await symlink(isolatedStateDirectory, join(runtimeRoot, "sessions"));
     const syncIn = vi.fn(async () => undefined);
-    const remoteExecute = vi.fn(async (command: { command: string; args?: string[] }) => {
+    const remoteExecute = vi.fn(async (command: { command: string; args?: string[]; stdin?: string; nativePreparationPurpose?: string; bypassSession?: boolean }) => {
       if (command.args?.[2] === "paperclip-runner-claim-unstarted-session") {
         let exitCode = 1;
         if (scenario !== "remote_probe_failed") {
@@ -10948,12 +10950,15 @@ describe("runnerd provider runtime wiring", () => {
       if (command.args?.[2] === "paperclip-runner-launch") {
         throw new Error("fixture_stop_after_launch_staging");
       }
-      if (command.args?.[1]?.includes("base64")) return {
+      if (command.args?.[1]?.includes("base64 <")) return {
         exitCode: 1, timedOut: false, stdout: "", stderr: "",
       };
       return { exitCode: 0, timedOut: false, stdout: "", stderr: "" };
     });
-    const runtimeContext = nativeRuntimeContextFixture();
+    const bundleRoot = join(isolatedStateDirectory, "runtime-context-fixture");
+    await mkdir(bundleRoot, { recursive: true });
+    await writeFile(join(bundleRoot, "AGENTS.md"), "Fixture instructions\n");
+    const runtimeContext = nativeRuntimeContextFixture(bundleRoot);
     const executionWithContext = { ...execution, runtimeContext };
     const backend = await createRunnerdBackend({
       db: leaseDb(execution), execution: executionWithContext, runnerInstanceId: "runner-new-in-retained-workspace",
@@ -11011,11 +11016,24 @@ describe("runnerd provider runtime wiring", () => {
           files: [expect.objectContaining({ sourcePath: join(home, name), kind: "file", mode: 0o600 })],
         })]);
       }
+      // Source-pinned context uses the governed execute relay. Provider
+      // syncIn cannot prove its run/profile/private-target binding.
+      const contextStaging = remoteExecute.mock.calls.map(([command]) => command)
+        .filter(command => command.nativePreparationPurpose === "native_runtime_context_prepare");
+      expect(contextStaging).toHaveLength(2);
+      for (const command of contextStaging) expect(command).toMatchObject({
+        command: "sh", bypassSession: true, stdin: expect.any(String),
+        args: ["-c", expect.stringContaining("base64 -d")],
+      });
+      const archiveCommand = contextStaging.find(command => command.args?.[1]?.includes("tar -xzf"))!;
+      expect(execFileSync("tar", ["-tzf", "-"], { input: Buffer.from(archiveCommand.stdin!, "base64"), encoding: "utf8" }))
+        .toContain("./AGENTS.md");
+      const contextCommand = contextStaging.find(command => command.args?.[1]?.includes("runtime-context.json"))!;
+      const stagedContext = JSON.parse(Buffer.from(contextCommand.stdin!, "base64").toString("utf8"));
+      expect(stagedContext).toMatchObject({ prompt: runtimeContext.prompt,
+        instructions: { entryPath: "AGENTS.md", bundle: { digest: runtimeContext.instructions.bundle.digest } } });
       expect(syncIn.mock.calls.flat(2).flatMap((entry: { files: Array<{ sourcePath: string }> }) => entry.files)
-        .filter((file: { sourcePath: string }) => file.sourcePath === runtimeContext.instructions.bundle.rootPath)).toHaveLength(1);
-      expect(syncIn).toHaveBeenCalledWith([expect.objectContaining({
-        files: [expect.objectContaining({ sourcePath: join(options.stateDirectory!, "runtime-context.json"), kind: "file" })],
-      })]);
+        .filter(file => file.sourcePath === bundleRoot || file.sourcePath.endsWith("/runtime-context.json"))).toHaveLength(0);
       expect(remoteExecute.mock.calls.filter(([command]) => command.args?.[2] === "paperclip-runner-claim-unstarted-session")).toHaveLength(1);
     } else {
       await expect(options.prepareExternalRunnerState()).rejects.toThrow("runner_harness_state_mismatch");

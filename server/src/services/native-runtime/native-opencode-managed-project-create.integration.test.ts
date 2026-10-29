@@ -1,6 +1,5 @@
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { chmod, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -9,7 +8,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { activityLog, completionContracts, createDb, orchestrationPlans, projectWorkspaces, projects } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { enableV5ForTest } from "../../__tests__/helpers/v5-fixtures.js";
-import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
+import { makeFixtureTreeWritable, qualifiedOpenCodeBinary, runManagedNativeOpenCodeFixture } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { activityService } from "../activity.js";
 import { canActorReadProjectPrivacy } from "../authorization.js";
@@ -21,10 +20,21 @@ const QUALIFIED_OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5ab
 
 function hasPinnedOpenCodeProfile(): boolean {
   if (process.platform !== "linux") return false;
-  if (process.env.PAPERCLIP_QUALIFIED_OPENCODE_BINARY?.trim()) return true;
-  try { return Boolean(execFileSync("which", ["opencode"], { encoding: "utf8" }).trim()); }
+  try { return Boolean(qualifiedOpenCodeBinary()); }
   catch { return false; }
 }
+
+it.skipIf(process.platform !== "linux" || process.arch !== "x64")("resolves the locked OpenCode binary without a server PATH entry", async () => {
+  vi.stubEnv("PAPERCLIP_QUALIFIED_OPENCODE_BINARY", "");
+  vi.stubEnv("PATH", "");
+  try {
+    const binary = qualifiedOpenCodeBinary();
+    expect(binary).toContain("/packages/paperclip-runner/node_modules/opencode-ai/bin/opencode.exe");
+    expect(createHash("sha256").update(await readFile(binary)).digest("hex")).toBe(QUALIFIED_OPENCODE_SHA256);
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
 
 describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode private Project creation", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
