@@ -20,6 +20,7 @@ import { companySearchQuerySchema } from "@paperclipai/shared";
 import { companySearchService } from "../services/company-search.js";
 import { recoveryService } from "../services/recovery/service.js";
 import { issueService } from "../services/issues.js";
+import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)("Slack conversation idle lifecycle", () => {
@@ -48,6 +49,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const connectionId = randomUUID();
     const start = new Date(Date.now() - 10000);
     await db.insert(companies).values({ id: companyId, name: "Slack", issuePrefix: companyId.slice(0, 8) });
+    await seedCurrentHumanMembership(db, companyId, "local-board", "owner");
     await db.insert(agents).values({ id: agentId, companyId, name: "Carl", role: "general", adapterType: "codex_local" });
     await db.insert(issues).values({ id: issueId, companyId, title: "you there?", status: "in_progress", assigneeAgentId: agentId, originKind: "chat_channel" });
     await db.insert(toolApplications).values({ id: applicationId, companyId, name: "Slack", type: "native" });

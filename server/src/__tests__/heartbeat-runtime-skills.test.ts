@@ -26,6 +26,7 @@ import { companySkillService } from "../services/company-skills.ts";
 import { heartbeatService } from "../services/heartbeat.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
 import { registerServerAdapter, unregisterServerAdapter } from "../adapters/index.ts";
+import { seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -165,6 +166,7 @@ describeEmbeddedPostgres("heartbeat runtime skill version pins", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user");
     await fs.writeFile(path.join(skillDir, "SKILL.md"), "# Runtime Coach\n\nVersion one.\n", "utf8");
     await db.insert(companySkills).values({
       id: skillId,
@@ -340,6 +342,7 @@ describeEmbeddedPostgres("heartbeat runtime skill version pins", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user");
     await db.insert(agents).values({
       id: agentId,
       companyId,
