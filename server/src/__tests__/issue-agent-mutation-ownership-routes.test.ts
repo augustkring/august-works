@@ -1094,7 +1094,7 @@ describe("agent issue mutation checkout ownership", () => {
     mockAnalyticalPayloadAccess.mockRejectedValue(new CurrentHttpError(403, "Analytical Source unavailable"));
     const res = await request(createApp(peerActor())).get(`/api/issues/${issueId}/comments`);
     expect(res.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ agentId: peerAgentId }), { issueId });
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ agentId: peerAgentId }), { issueId }, undefined, { privacyLockMode: "read" });
     expect(mockIssueService.listComments).not.toHaveBeenCalled();
   });
 

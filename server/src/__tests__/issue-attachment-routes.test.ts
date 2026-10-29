@@ -540,7 +540,7 @@ describe("issue attachment routes", () => {
     mockIssueService.getAttachmentById.mockResolvedValue(attachment);
     const res = await request(await createApp(storage)).get("/api/attachments/attachment-1/content");
     expect(res.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: attachment.issueId });
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: attachment.issueId }, undefined, { privacyLockMode: "read" });
     expect(storage.getObject).not.toHaveBeenCalled();
   });
 

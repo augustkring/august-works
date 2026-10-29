@@ -30,6 +30,7 @@ import { issueRoutes } from "../routes/issues.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { issueService } from "../services/issues.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { remoteTerminationReceipt } from "../services/remote-execution-termination.js";
 import { initializeRunIdentity, reconcileSteeredIdentity } from "../services/run-identity.js";
 import {
@@ -114,23 +115,16 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
     const wakeId = randomUUID();
     const commentIds = [randomUUID(), randomUUID()];
     const now = new Date();
-    const ownerSessionId = randomUUID();
-    const otherSessionId = randomUUID();
-    humanSessionIds.set("queue-owner", ownerSessionId);
-    humanSessionIds.set("other-operator", otherSessionId);
     await db.insert(authUsers).values([
-      { id: "queue-owner", name: "Queue owner", email: "queue-owner@example.test", createdAt: now, updatedAt: now },
-      { id: "other-operator", name: "Other operator", email: "other-operator@example.test", createdAt: now, updatedAt: now },
+      { id: "queue-owner", name: "Queue owner", email: "queue-owner@example.test", emailVerified: true, createdAt: now, updatedAt: now },
+      { id: "other-operator", name: "Other operator", email: "other-operator@example.test", emailVerified: true, createdAt: now, updatedAt: now },
     ]);
-    await db.insert(authSessions).values([
-      { id: ownerSessionId, userId: "queue-owner", token: randomUUID(), createdAt: now, updatedAt: now,
-        expiresAt: new Date(now.getTime() + 60 * 60_000) },
-      { id: otherSessionId, userId: "other-operator", token: randomUUID(), createdAt: now, updatedAt: now,
-        expiresAt: new Date(now.getTime() + 60 * 60_000) },
-    ]);
+    humanSessionIds.set("queue-owner", await seedNativePasskeySession(db, "queue-owner"));
+    humanSessionIds.set("other-operator", await seedNativePasskeySession(db, "other-operator"));
     await db.insert(companies).values({
       id: companyId,
       name: "Queue Test Company",
+      defaultResponsibleUserId: "queue-owner",
       issuePrefix: "QUE",
       requireBoardApprovalForNewAgents: false,
     });
@@ -192,16 +186,15 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
       startedAt: new Date("2026-08-22T15:00:00.000Z"),
       contextSnapshot: { issueId },
     });
-    await db.insert(issues).values({
-      id: issueId,
-      companyId,
-      identifier: "QUE-1",
-      title: "Queued steering",
-      status: "in_progress",
-      priority: "medium",
-      assigneeAgentId: agentId,
-      executionRunId: runId,
-    });
+    // Capture only the actual Human task input through the original owner.
+    // Operational run/checkout state does not manufacture payload provenance.
+    await issueService(db).create(companyId, {
+      id: issueId, title: "Queued steering", status: "todo", priority: "medium",
+      assigneeAgentId: agentId, responsibleUserId: "queue-owner", createdByUserId: "queue-owner",
+    }, db, undefined, { manualInputActor: { type: "board", source: "session", userId: "queue-owner",
+      sessionId: humanSessionIds.get("queue-owner"), companyIds: [companyId],
+      memberships: [{ companyId, status: "active", membershipRole: "operator" }] } });
+    await db.update(issues).set({ status: "in_progress", executionRunId: runId }).where(eq(issues.id, issueId));
     await db.insert(issueComments).values(commentIds.map((id, index) => ({
       id,
       companyId,
@@ -916,6 +909,7 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
       triggerDetail: "queue route promotion test",
       status: "queued",
       runtimeMode: "native",
+      responsibleUserId: "queue-owner",
       wakeupRequestId: seeded.wakeId,
       contextSnapshot: {
         issueId: seeded.issueId,
