@@ -14,6 +14,7 @@ import { runLocalGit, setExpensiveWorkspaceGitExecutor } from "@paperclipai/adap
 import { WorkspaceGitScanError } from "../services/workspace-git-operation-scheduler.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { heartbeatService } from "../services/heartbeat.ts";
+import { issueService } from "../services/issues.js";
 import { instanceSettingsService } from "../services/instance-settings.ts";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
 import { projectRoutes } from "../routes/projects.js";
@@ -36,6 +37,9 @@ suite("task project repository provisioning", () => {
   let root: string;
   let heartbeat: ReturnType<typeof heartbeatService>;
   beforeAll(async () => {
+    // This suite uses a mocked adapter; advertise its managed runtime origin
+    // without claiming a live MCP/provider transport.
+    if (!process.env.PAPERCLIP_API_URL?.trim()) vi.stubEnv("PAPERCLIP_API_URL", "http://127.0.0.1:3100/api");
     root = await mkdtemp(path.join(os.tmpdir(), "paperclip-project-repos-"));
     vi.stubEnv("PAPERCLIP_HOME", path.join(root, "home"));
     vi.stubEnv("PAPERCLIP_MULTI_PROJECT_WORKSPACE_SYNC", "false");
@@ -174,7 +178,13 @@ suite("task project repository provisioning", () => {
       { id: randomUUID(), companyId, projectId, name: "Source copy", sourceType: "git_repo", repoUrl: pathToFileURL(source).href, cwd: source, isPrimary: false },
     ]);
     await db.insert(agents).values({ id: agentId, companyId, name: "Test", role: "engineer", status: "idle", adapterType: "codex_local", adapterConfig: mockedCodexAdapterConfig, runtimeConfig: {}, permissions: {} });
-    await db.insert(issues).values({ id: issueId, companyId, projectId, title: "Recover startup and use existing work", status: "todo", assigneeAgentId: agentId });
+    const sourceActor = { type: "board" as const, source: "session" as const, userId: responsibleUserId,
+      sessionId, companyIds: [companyId] };
+    await issueService(db).create(companyId, { id: issueId, projectId,
+      title: "Recover startup and use existing work", status: "todo", assigneeAgentId: agentId,
+      createdByUserId: responsibleUserId, responsibleUserId }, db, undefined, {
+      manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor,
+    });
     let inject = true;
     const canonicalSource = await realpath(source);
     setExpensiveWorkspaceGitExecutor(async (input) => {
@@ -193,6 +203,11 @@ suite("task project repository provisioning", () => {
       expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0]?.status).toBe("blocked");
       return;
     }
+    const [retainedSource] = await db.select({ protocol: issues.payloadSourceProtocolVersion,
+      invalidated: issues.payloadSourceSnapshotInvalidated, snapshot: issues.payloadSourceSnapshot })
+      .from(issues).where(eq(issues.id, issueId));
+    expect({ protocol: retainedSource?.protocol, invalidated: retainedSource?.invalidated,
+      hasSnapshot: retainedSource?.snapshot != null }).toEqual({ protocol: 1, invalidated: false, hasSnapshot: true });
     let retry: typeof heartbeatRuns.$inferSelect;
     await vi.waitFor(async () => {
       const rows = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.retryOfRunId, run!.id));
@@ -201,6 +216,7 @@ suite("task project repository provisioning", () => {
       expect(retry.status).toBe("scheduled_retry");
       expect(retry.scheduledRetryAttempt).toBe(1);
     });
+    expect((await db.select({ status: agents.status }).from(agents).where(eq(agents.id, agentId)))[0]?.status).toBe("error");
     // Recreate the service as on restart; durable scheduling must not need the old closure.
     await heartbeat.drainActiveRunExecutions();
     heartbeat = heartbeatService(db);
@@ -216,7 +232,8 @@ suite("task project repository provisioning", () => {
     }
     if (scenario === "exhausted") {
       await heartbeat.drainActiveRunExecutions();
-      expect((await heartbeat.getRun(retry!.id))?.errorCode).toBe(code);
+      const latestRetry = await heartbeat.getRun(retry!.id);
+      expect(latestRetry?.errorCode, latestRetry?.error ?? undefined).toBe(code);
       const [last] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.retryOfRunId, retry!.id));
       expect(last).toMatchObject({ status: "scheduled_retry", scheduledRetryAttempt: 2 });
       await db.update(heartbeatRuns).set({ scheduledRetryAt: new Date(Date.now() - 1000) }).where(eq(heartbeatRuns.id, last!.id));
@@ -229,7 +246,11 @@ suite("task project repository provisioning", () => {
       expect(execute.mock.calls.filter(([input]) => input.agent.id === agentId)).toHaveLength(0);
       return;
     }
-    await vi.waitFor(async () => expect((await heartbeat.getRun(retry!.id))?.status).toBe("succeeded"), { timeout: 15_000 });
+    await vi.waitFor(async () => {
+      const latestRetry = await heartbeat.getRun(retry!.id);
+      expect({ status: latestRetry?.status, errorCode: latestRetry?.errorCode, error: latestRetry?.error })
+        .toEqual({ status: "succeeded", errorCode: null, error: null });
+    }, { timeout: 15_000 });
     expect(execute.mock.calls.filter(([input]) => input.runId === retry!.id)).toHaveLength(1);
     const [task] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId)));
     expect(task).toMatchObject({ status: "done", assigneeAgentId: agentId });

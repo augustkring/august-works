@@ -17835,6 +17835,17 @@ export function heartbeatService(
         });
     if (!claimed) return null;
 
+    // An admitted claim replaces the previous failure before startup reads
+    // its sources. Leaving the Agent in error until adapter dispatch makes a
+    // legitimate retry fail the current-principal gate during preparation.
+    // The conditional write cannot resume a paused/terminated Agent or clear
+    // the previous failure for an already cancelled Run.
+    await db.update(agents).set({ status: "running", statusReason: null, updatedAt: claimedAt })
+      .where(and(eq(agents.id, claimed.agentId), eq(agents.companyId, claimed.companyId),
+        eq(agents.status, "error"), exists(db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.id, claimed.id), eq(heartbeatRuns.companyId, claimed.companyId),
+            eq(heartbeatRuns.agentId, claimed.agentId), eq(heartbeatRuns.status, "running"))))));
+
     publishLiveEvent({
       companyId: claimed.companyId,
       type: "heartbeat.run.status",
