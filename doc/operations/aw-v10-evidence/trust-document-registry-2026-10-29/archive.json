@@ -1,0 +1,90 @@
+{
+  "archiveSha256": "78d9a713e634908e60068e06c6aeff571c4c427761d71e4f3595e92d470a62fc",
+  "members": [
+    {
+      "file": "current-r1/README.md",
+      "sha256": "346b08885d6b1f4c62d6e68fc272d726cc8f83da01d2661a9eb38aa9306064f0",
+      "bytes": 1168
+    },
+    {
+      "file": "current-r1/SHA256SUMS",
+      "sha256": "91717ab06c239d24fc6772ba477e7f6ddfd1035c9a812baf9c1567843b168080",
+      "bytes": 1493
+    },
+    {
+      "file": "current-r1/binary.sha256",
+      "sha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "bytes": 65
+    },
+    {
+      "file": "current-r1/qualification-source.zip",
+      "sha256": "c4bff4e9716b325768a59b784d862ad37795f499b02d35acba48c55f0a3f676e",
+      "bytes": 345987
+    },
+    {
+      "file": "current-r1/runner.txt",
+      "sha256": "aa8b9e4995dc59ecca2c57f8121cf94291e1724406f64cfe9cc391c23d591ca8",
+      "bytes": 142
+    },
+    {
+      "file": "current-r1/snapshot.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "file": "current-r1/snapshot.log",
+      "sha256": "90d5bba371f141db23c5b92a168b30a76e052b74e00d733792aa9d93546739b8",
+      "bytes": 38
+    },
+    {
+      "file": "current-r1/source/packages/db/src/migrations/0557_dear_forgotten_one.sql",
+      "sha256": "458f7d83d22566bceb9280c45b03b172995016dc648c438f7b9ad3a2911b5a80",
+      "bytes": 4618
+    },
+    {
+      "file": "current-r1/source/packages/db/src/migrations/0559_big_valkyrie.sql",
+      "sha256": "ae9ae4bb134769e5de5c80a93cc86d8b4d8c9bf8f92707a41970453350094ae9",
+      "bytes": 4146
+    },
+    {
+      "file": "current-r1/source/packages/db/src/migrations/0560_thin_terror.sql",
+      "sha256": "8bb3246cf1bb806e3bf7ce79d34f83ea94dc8ec0874c757618f11c4227bf87a3",
+      "bytes": 4832
+    },
+    {
+      "file": "current-r1/source/packages/db/src/schema/trust_documents.ts",
+      "sha256": "8a0295e4b91963e813b0b444858b80ac62d14e5361cdbe23202fbad977ef5959",
+      "bytes": 9659
+    },
+    {
+      "file": "current-r1/source/server/src/__tests__/trust-document-registry-postgres.test.ts",
+      "sha256": "9c0490351d3d22daecfca221f7cab7130f7869268cd8c111634e97241ce23e49",
+      "bytes": 7385
+    },
+    {
+      "file": "current-r1/source-pins.json",
+      "sha256": "044b65e28963f92eb1d35f6b50a82b47ee4f2dda5079b9583b33515cd413c509",
+      "bytes": 181771
+    },
+    {
+      "file": "current-r1/syntax.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "file": "current-r1/syntax.log",
+      "sha256": "58255a1472173cd49d936775bbaf7a837dc3f726d1bbfb5aa7e74dee21a60a04",
+      "bytes": 61
+    },
+    {
+      "file": "current-r1/test.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "file": "current-r1/test.log",
+      "sha256": "bd70b48e92f3489de09451cca3fa5fae95e1e6151570c18e4ea9a6f3893ffbf7",
+      "bytes": 797
+    }
+  ]
+}
