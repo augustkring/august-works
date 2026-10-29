@@ -575,13 +575,10 @@ test("disabling the experiment lets an active turn settle and keeps idle history
   page,
   request,
 }) => {
-  const original = await json(
-    await request.get("/api/instance/settings/experimental"),
-  );
-  expect(original.enableAgentChat).toBe(false);
   const f = await setup(request, page);
   request = f.request;
   try {
+    expect(f.initialAgentChatEnabled).toBe(false);
     await page.goto(f.route);
     await send(page, { action: "delayed" });
     await expect(

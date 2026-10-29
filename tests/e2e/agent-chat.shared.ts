@@ -137,6 +137,7 @@ export async function setup(request: APIRequestContext, page?: Page) {
     agent,
     chatPath,
     route,
+    initialAgentChatEnabled: original.enableAgentChat,
     restore: async (options?: { collectState?: boolean }) => {
       const safeCleanup = async (action: () => Promise<unknown>) => {
         try { await action(); }
