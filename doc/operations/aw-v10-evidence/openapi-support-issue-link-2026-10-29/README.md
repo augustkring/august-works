@@ -7,3 +7,5 @@ The V9 operation-coverage checker completed with exit 0: 70 surfaces verified, 7
 Changed source is limited to `server/src/routes/v6-api-paths.ts`, `server/src/__tests__/openapi-routes.test.ts`, and `doc/operations/agent-native-ui-operation-coverage.json`. The inventory entry corrects the current SaasDeletion callsite and documents the existing destructive Human-only offboarding effects; it does not waive coverage.
 
 The focused OpenAPI run executed 2 tests (30 skipped), exit 0. This evidence does not qualify the whole API, all customer surfaces, or release readiness.
+
+Raw logs and reconstruction patches are preserved losslessly as `.gz` artifacts.
