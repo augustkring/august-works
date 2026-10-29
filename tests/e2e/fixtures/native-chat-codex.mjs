@@ -15,6 +15,8 @@ function note(event) {
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.appendFileSync(destination, `${JSON.stringify({
       ...event,
+      observedAt: new Date().toISOString(),
+      monotonicMs: performance.now(),
       processId: process.pid,
       parentProcessId: process.ppid,
     })}\n`, { mode: 0o600 });

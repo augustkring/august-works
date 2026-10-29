@@ -270,6 +270,7 @@ export async function idle(
   request: APIRequestContext,
   chatPath: string,
   minimumReplies = 1,
+  timeout = 60_000,
 ) {
   let issue: any;
   let lastDiagnostic = "not polled";
@@ -301,7 +302,7 @@ export async function idle(
           replies.filter((c: any) => c.authorAgentId).length >= minimumReplies
         );
       },
-      { timeout: 60_000, intervals: [100, 250, 500] },
+      { timeout, intervals: [100, 250, 500] },
       )
       .toBe(true);
   } catch (error) {

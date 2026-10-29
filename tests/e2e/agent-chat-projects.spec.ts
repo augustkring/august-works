@@ -537,12 +537,16 @@ test("shared history loads older messages without replacing the latest turn", as
   page,
   request,
 }) => {
+  test.setTimeout(180_000);
   const f = await setup(request, page);
   request = f.request;
   try {
     await page.goto(f.route);
     await send(page, { action: "history" });
-    await idle(request, f.chatPath, 65);
+    // This pagination fixture performs 65 sequential, authenticated writes.
+    // The Native lane measured about 1.25s per write; wait for the complete
+    // history before checking pagination rather than stopping its live run.
+    await idle(request, f.chatPath, 65, 120_000);
     await page.reload();
     await expect(
       page.getByText("History message 64", { exact: true }),
