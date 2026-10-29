@@ -35,6 +35,7 @@ import { issueRoutes } from "../routes/issues.js";
 import { companySearchService } from "../services/company-search.js";
 import type { NativeCommentSourceCapture } from "../services/agent-conversations.js";
 import { buildPaperclipWakePayload } from "../services/heartbeat.js";
+import { nativeCommentProjectionHash } from "../services/native-runtime/canonical.js";
 import { issueReferenceService } from "../services/issue-references.js";
 import { issueService } from "../services/issues.js";
 import { buildLowTrustSourceTrust, LOW_TRUST_QUARANTINED_BODY } from "../services/source-trust.js";
@@ -181,7 +182,7 @@ describeEmbeddedPostgres("deleted issue comment redaction", () => {
     for (const [index, capture] of captures.entries()) {
       const comment = payload.comments.find(comment => comment.id === capture.input.commentId)!;
       expect(capture).toEqual({ input: { kind: "comment", issueId, commentId: comment.id, sourceVersion: byId.get(String(comment.id)),
-        contentHash: createHash("sha256").update(JSON.stringify({ body: comment.body, presentation: comment.presentation, metadata: comment.metadata })).digest("hex") },
+        contentHash: nativeCommentProjectionHash({ body: comment.body, presentation: comment.presentation, metadata: comment.metadata }) },
         payloadSourceSnapshot: index === 0 ? sealed!.snapshot : null });
       expect(comment).not.toHaveProperty("payloadSourceSnapshot");
       expect(comment).not.toHaveProperty("sourceVersion");
