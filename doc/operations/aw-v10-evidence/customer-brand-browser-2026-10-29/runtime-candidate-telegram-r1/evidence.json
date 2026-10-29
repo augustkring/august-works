@@ -1,0 +1,23 @@
+{
+  "record": "sanitized-browser-run-evidence-v1",
+  "run": "runtime-candidate-telegram-r1",
+  "sourceHead": "0de39c2c17cb5ce713ecea4e20845ae825a562be",
+  "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "sourceReconstructionFormat": "temporary-source-head-index-v2",
+  "qualificationWorkspace": "/workspace/v10-dep-qualification",
+  "copiedSourceFileCount": 994,
+  "untrackedSourceFiles": [],
+  "sourcePinsSha256": "d1f596b7f4002711ecd89025beb565ce3cd5b3751299f059c2fdeb6bb31bfaad",
+  "sourcePatchSha256": "5a24e750ab0ed9f3301c1db57486b55fbc5bb768f2ed81a7087508f5ad3781c9",
+  "rawBrowserLogSha256": "1a5176b72d1ac9140110554b5cbfcbd16694b3fbf214f00a53360ca3ce82ecf8",
+  "rawBrowserLogRetainedOutsideRepository": true,
+  "rawBrowserLogPath": "/workspace/v10-preparation/brand-root-browser-help-r2-20261029/browser.log",
+  "sanitizedBrowserLog": "browser.log.sanitized",
+  "sanitizedBrowserLogSha256": "ee46cf712b70048b1a4d91b4af9e82507cacd2f46d14d115e7c8a9502f47ef9a",
+  "invitePathOccurrences": 2,
+  "distinctOpaqueInviteSegmentsRedacted": 2,
+  "opaqueTokenOccurrencesRedacted": 2,
+  "expectedPassedCases": 2,
+  "browserExit": "0",
+  "note": "This run is a separate source snapshot. Raw browser output contains temporary bootstrap invite credentials and is not copied into this evidence directory."
+}
