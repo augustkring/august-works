@@ -113,6 +113,32 @@ describe("Blentera platform contract hashes", () => {
     );
   });
 
+  it("pins V1, V2, and V3 procedure-contract releases without repinning old Runs", () => {
+    const releaseRegistry = JSON.parse(readFileSync(new URL("../../../skills-releases/blentera-platform/releases.json", import.meta.url), "utf8")) as Array<Record<string, unknown>>;
+    expect(releaseRegistry.map(release => release.id)).toEqual(["v1", "v2", "v3"]);
+    expect(releaseRegistry[0]).toMatchObject({
+      operationManifestHash: "22c7ebc0014d5df6b5716751b41838d8a5c786515b35e86f019bae7023df3a69",
+      toolCatalogContractHash: "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+    });
+    expect(releaseRegistry[1]).toMatchObject({
+      operationManifestHash: "24b568c81d493c84218a55e8efdea6c9cce5b77b5107b5a1c62e7322fce198b8",
+      toolCatalogContractHash: "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+    });
+    expect(releaseRegistry[2]).toMatchObject({
+      id: "v3",
+      supersedes: "v2",
+      operationManifestHash: "52fe608c583066221d3cee9562cd2216e17abdb9d0860ba74d9b9adf33e50e20",
+      toolCatalogContractHash: "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+      sourceSha: releaseRegistry[1].sourceSha,
+      contentDigest: releaseRegistry[1].contentDigest,
+      files: releaseRegistry[1].files,
+    });
+    expect(blenteraPlatformContractHashes()).toMatchObject({
+      operationManifestHash: releaseRegistry[2].operationManifestHash,
+      toolCatalogContractHash: releaseRegistry[2].toolCatalogContractHash,
+    });
+  });
+
   it("keeps Task progress replay routed by its canonical manifest alias and owner", () => {
     expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.task.comment.add"))
       .toMatchObject({ domain: "Work", canonicalService: "PaperclipRunnerToolAuthority.report_progress",

@@ -21,12 +21,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/acknowledge-drift. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":108,\"declaration\":\"acknowledgeDriftSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2368,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2370 `res.json(await svc.acknowledgeDrift({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:caseId\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1918,\"resourceOverlap\":4}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -96,12 +96,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "workflows:run"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/workflow-runs/${runId}/cancel. Owner: server/src/services/workflows/workflow-executor.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertWorkflowsEnabled();; await assertPermission(req, companyId, \"workflows:run\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"runId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/workflow.ts\",\"line\":345,\"declaration\":\"cancelWorkflowRunSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/workflows.ts\",\"line\":691,\"claim\":\"await assertWorkflowsEnabled();\"},{\"path\":\"server/src/routes/workflows.ts\",\"line\":693,\"claim\":\"await assertPermission(req, companyId, \\\"workflows:run\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/workflows.ts:700 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/workflow-runs/:runId\",\"path\":\"server/src/routes/workflows.ts\",\"line\":675,\"resourceOverlap\":8}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -167,12 +167,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/issues. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId);; if (await assertLowTrustControlPlaneDenied(req, res, companyId, null)); assertNoAgentHostWorkspaceCommandMutation(; !(await assertIssueWriteInfluenceAllowed(req, res, createParent)); !(await assertTaskWatchdogCreateIssueAllowed(; await assertNoAgentDelegationCycle({; await assertTaskBridgeCreateAllowed(; await assertCanAssignTasks(req, companyId, createAssignmentScope);; await assertIssueEnvironmentSelection(; await assertCanManageIssueMonitor( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":793,\"declaration\":\"createIssueSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":12283,\"claim\":\"assertCompanyAccess(req, companyId);\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12301,\"claim\":\"if (await assertLowTrustControlPlaneDenied(req, res, companyId, null))\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12303,\"claim\":\"assertNoAgentHostWorkspaceCommandMutation(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12387,\"claim\":\"!(await assertIssueWriteInfluenceAllowed(req, res, createParent))\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12393,\"claim\":\"!(await assertTaskWatchdogCreateIssueAllowed(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12407,\"claim\":\"await assertNoAgentDelegationCycle({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12499,\"claim\":\"await assertTaskBridgeCreateAllowed(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12505,\"claim\":\"await assertCanAssignTasks(req, companyId, createAssignmentScope);\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12507,\"claim\":\"await assertIssueEnvironmentSelection(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12516,\"claim\":\"await assertCanManageIssueMonitor(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:12580 `res.status(200).json({`; server/src/routes/issues.ts:12765 `res.status(201).json({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/issues\",\"path\":\"server/src/routes/issues.ts\",\"line\":8201,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":12285,\"claim\":\"res.status(403).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12372,\"claim\":\"res.status(403).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12382,\"claim\":\"res.status(404).json({ error: \\\"Parent issue not found\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12580,\"claim\":\"res.status(200).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":12765,\"claim\":\"res.status(201).json({\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -275,12 +275,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "pipelines:write"
     ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/pipelines/${pipelineId}. Owner: server/src/routes/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertPipelineAccess(db, req, pipelineId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"pipelineId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":42,\"declaration\":\"updatePipelineSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1508,\"claim\":\"const companyId = await assertPipelineAccess(db, req, pipelineId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1509,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1521 `res.json(updated);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/pipelines/:pipelineId\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1244,\"resourceOverlap\":24}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -350,7 +350,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "saveInstructionsFile through the mounted client for /api/instructions-bundle/file",
     "canonicalService": "server/src/services/agents.ts",
     "webSurface": "ui/src/pages/AgentDetail.tsx",
-    "apiOperation": "PUT /api/instructions-bundle/file",
+    "apiOperation": "PUT /api/agents/:id/instructions-bundle/file",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -364,12 +364,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PUT /api/instructions-bundle/file. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanManageInstructionsPath(req, existing);; assertExternalInstructionsAdmin(req, existing); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Agent can directly write an instruction file only with direct agent_config:update change grant and required consent. This mutation has no proposal state. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":35,\"declaration\":\"upsertAgentInstructionsFileSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":5195,\"claim\":\"await assertCanManageInstructionsPath(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5196,\"claim\":\"assertExternalInstructionsAdmin(req, existing);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:5236 `res.json(result.file);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/agents/:id/instructions-bundle/file\",\"path\":\"server/src/routes/agents.ts\",\"line\":5175,\"resourceOverlap\":28}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -505,12 +505,12 @@ const entries: AgentNativeApiOperationContract[] = [
       "decision_queue:manage",
       "decision_triage:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/decision-queues/${encodeURIComponent(key)}/items. Owner: server/src/services/decision-queues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertDecisionAccess(db, req, companyId, \"decision_queue:manage\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Route helper assertDecisionAccess first requires Board-or-Agent and same-company scope, then calls authorizationService.decide for decision_queue:manage or decision_triage:manage. The current standard-scope policy explicitly allows active company Agents for these actions; each mutation persists actor/run attribution. It is direct queue/triage work, not a proposal or Human confirmation. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/decision-queue.ts\",\"line\":25,\"declaration\":\"addDecisionQueueItemSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":118,\"claim\":\"await assertDecisionAccess(db, req, companyId, \\\"decision_queue:manage\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/decision-queues.ts:127 `res.status(result.created ? 201 : 200).json(result.item);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/decision-queues/:key/items\",\"path\":\"server/src/routes/decision-queues.ts\",\"line\":107,\"resourceOverlap\":30}],\"routeErrors\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":127,\"claim\":\"res.status(result.created ? 201 : 200).json(result.item);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -597,12 +597,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "ordinary",
     "sourceMateriality": "nonmaterial",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/issues/external-object-summaries. Owner: server/src/services/external-objects.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":419,\"declaration\":\"externalObjectSummariesSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":10330,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:10359 `res.json({ summaries: Object.fromEntries(summaries) });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -659,12 +659,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${idOrIdentifier}/documents/${encodeURIComponent(key)}/lock. Owner: server/src/routes/cases.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!link) throw notFound(\"Case document not found\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":1034,\"claim\":\"if (!link) throw notFound(\\\"Case document not found\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/cases.ts:1046 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:id/documents/:key\",\"path\":\"server/src/routes/cases.ts\",\"line\":736,\"resourceOverlap\":8},{\"method\":\"GET\",\"route\":\"/api/cases/:id\",\"path\":\"server/src/routes/cases.ts\",\"line\":1402,\"resourceOverlap\":4}],\"routeErrors\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":1034,\"claim\":\"if (!link) throw notFound(\\\"Case document not found\\\");\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -786,12 +786,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PUT /api/issues/${id}/watchdog. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertIssueReadAllowed(req, res, issue))) return;; if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;; await assertLowTrustControlPlaneDenied(req, res, issue.companyId, issue) Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":802,\"declaration\":\"upsertIssueWatchdogSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":9498,\"claim\":\"if (!(await assertIssueReadAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9499,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9502,\"claim\":\"await assertLowTrustControlPlaneDenied(req, res, issue.companyId, issue)\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:9544 `res.json(watchdog);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/watchdog\",\"path\":\"server/src/routes/issues.ts\",\"line\":9471,\"resourceOverlap\":26}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -868,12 +868,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/issues/${id}/documents/${key}/annotations/${threadId}. Owner: server/src/services/document-annotations.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return; Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\",\"threadId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/document-annotation.ts\",\"line\":58,\"declaration\":\"updateDocumentAnnotationThreadSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":10763,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:10805 `res.json(thread);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/documents/:key/annotations/:threadId\",\"path\":\"server/src/routes/issues.ts\",\"line\":10636,\"resourceOverlap\":32}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":10770,\"claim\":\"res.status(400).json({\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -935,12 +935,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/routine-triggers/${id}. Owner: server/src/services/routines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const routine = await assertCanManageExistingRoutine(req, trigger.routineId);; await assertBoardCanAssignTasks(req, routine.companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/routine.ts\",\"line\":218,\"declaration\":\"updateRoutineTriggerSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":550,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, trigger.routineId);\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":555,\"claim\":\"await assertBoardCanAssignTasks(req, routine.companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:584 `res.json(updated?.trigger ?? null);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":547,\"claim\":\"res.status(404).json({ error: \\\"Routine trigger not found\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":552,\"claim\":\"res.status(404).json({ error: \\\"Routine trigger not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -1049,12 +1049,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/automation/current-stage/rerun. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId);; await assertCurrentStageAutomationTargetWriteAccess(db, req, { access, companyId, caseId });; if (!row) throw notFound(\"Pipeline case not found\");; async function assertStageAutomationTargetWriteAccess(; if (!stage) throw notFound(\"Pipeline stage not found\");; await assertPipelineWriteAccess(req, {; async function assertCurrentStageAutomationTargetWriteAccess(; function parsePermissionPreflightFingerprint(fingerprint: string | null) {; const permissionKey = parts.slice(parts.length - 2).join(\":\");; if (!caseId || !stageId || !automationId || !targetPipelineId || !principalId || !permissionKey) return null;; return { caseId, stageId, automationId, targetPipelineId, principalId, permissionKey };; const fingerprint = latestAutomation.error?.startsWith(\"permission_preflight_failed:\"); ? latestAutomation.error.slice(\"permission_preflight_failed:\".length); const parsedFingerprint = parsePermissionPreflightFingerprint(fingerprint);; if (parsedFingerprint?.permissionKey === \"pipelines:write\") {; message: \"Pipeline automation permission has been restored; retry the failed automation ledger.\",; reason: fingerprint ? \"permission_preflight_failed\" : \"automation_failed\", Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2710,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2711,\"claim\":\"await assertCurrentStageAutomationTargetWriteAccess(db, req, { access, companyId, caseId });\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2728,\"claim\":\"if (!row) throw notFound(\\\"Pipeline case not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2933,\"claim\":\"async function assertStageAutomationTargetWriteAccess(\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2948,\"claim\":\"if (!stage) throw notFound(\\\"Pipeline stage not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2951,\"claim\":\"await assertPipelineWriteAccess(req, {\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2958,\"claim\":\"async function assertCurrentStageAutomationTargetWriteAccess(\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2975,\"claim\":\"if (!row) throw notFound(\\\"Pipeline case not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2983,\"claim\":\"await assertPipelineWriteAccess(req, {\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2990,\"claim\":\"function parsePermissionPreflightFingerprint(fingerprint: string | null) {\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2998,\"claim\":\"const permissionKey = parts.slice(parts.length - 2).join(\\\":\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":3000,\"claim\":\"if (!caseId || !stageId || !automationId || !targetPipelineId || !principalId || !permissionKey) return null;\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":3001,\"claim\":\"return { caseId, stageId, automationId, targetPipelineId, principalId, permissionKey };\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":3219,\"claim\":\"const fingerprint = latestAutomation.error?.startsWith(\\\"permission_preflight_failed:\\\")\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":3220,\"claim\":\"? latestAutomation.error.slice(\\\"permission_preflight_failed:\\\".length)\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":3222,\"claim\":\"const parsedFingerprint = parsePermissionPreflightFingerprint(fingerprint);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":3223,\"claim\":\"if (parsedFingerprint?.permissionKey === \\\"pipelines:write\\\") {\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":3239,\"claim\":\"message: \\\"Pipeline automation permission has been restored; retry the failed automation ledger.\\\",\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":3255,\"claim\":\"reason: fingerprint ? \\\"permission_preflight_failed\\\" : \\\"automation_failed\\\",\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2713 `res.json(await svc.rerunCurrentStageAutomation({ companyId, caseId, actor, privacyActor: req.actor }));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:caseId\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1918,\"resourceOverlap\":4}],\"routeErrors\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2728,\"claim\":\"if (!row) throw notFound(\\\"Pipeline case not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2948,\"claim\":\"if (!stage) throw notFound(\\\"Pipeline stage not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2975,\"claim\":\"if (!row) throw notFound(\\\"Pipeline case not found\\\");\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -1112,7 +1112,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -1120,15 +1121,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "launchcritical",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route PATCH /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}; authenticated same-company access. Company skill policy action skills.edit is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1104 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":353,\"resourceOverlap\":28}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -1183,43 +1182,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1083,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.edit\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 429,
-        "claim": "router.patch("
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -1233,7 +1212,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.edit against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -1246,7 +1225,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -1254,15 +1234,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "ordinary",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/scan-projects. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/scan-projects; authenticated same-company access. Company skill policy action skills.import is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1295 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -1317,48 +1295,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1268,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.import\", { sourceType: \"workspace\" });"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 1263,
-        "claim": "router.post("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 225,
-        "claim": "scanProjects"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -1396,7 +1349,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.import against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -1409,7 +1362,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -1417,15 +1371,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "ordinary",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/companies/${encodeURIComponent(companyId)}/skill-test-run-templates/${encodeURIComponent(templateId)}. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route PATCH /api/companies/${encodeURIComponent(companyId)}/skill-test-run-templates/${encodeURIComponent(templateId)}; authenticated same-company access. Company skill policy action skills.edit is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:540 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":524,\"claim\":\"res.status(404).json({ error: \\\"Test run template not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -1480,48 +1432,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 521,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.edit\");"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 515,
-        "claim": "router.patch("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 115,
-        "claim": "updateTestRunTemplate"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -1535,7 +1462,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.edit against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -1557,12 +1484,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/issues/${issueId}/attachments. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId);; throw notFound(\"Agent Chat is disabled\");; throw forbidden(\"Only the conversation owner can upload attachments\");; if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;; !(await assertDeliverableMutationAllowedByRunContext(req, res, issue)) Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"issueId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":19343,\"declaration\":null},{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":2129,\"declaration\":\"createIssueAttachmentMetadataSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":19287,\"claim\":\"assertCompanyAccess(req, companyId);\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19298,\"claim\":\"throw notFound(\\\"Agent Chat is disabled\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19301,\"claim\":\"throw forbidden(\\\"Only the conversation owner can upload attachments\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19303,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19305,\"claim\":\"!(await assertDeliverableMutationAllowedByRunContext(req, res, issue))\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:19442 `res.status(201).json(withContentPath(attachmentResponse));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":19290,\"claim\":\"res.status(404).json({ error: \\\"Issue not found\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19294,\"claim\":\"res.status(422).json({ error: \\\"Issue does not belong to company\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19298,\"claim\":\"throw notFound(\\\"Agent Chat is disabled\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19301,\"claim\":\"throw forbidden(\\\"Only the conversation owner can upload attachments\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19314,\"claim\":\"res.status(422).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19319,\"claim\":\"res.status(400).json({ error: err.message });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19331,\"claim\":\"res.status(400).json({ error: \\\"Missing file field 'file'\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19339,\"claim\":\"res.status(422).json({ error: \\\"Attachment is empty\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19347,\"claim\":\"res.status(400).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19442,\"claim\":\"res.status(201).json(withContentPath(attachmentResponse));\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -1671,12 +1598,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "issue:mutate"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/recovery-actions/resolve. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertIssueReadAllowed(req, res, existing))) return;; await assertLowTrustControlPlaneDenied(; !(await assertCrossIssueInfluenceWithinRunCap(; assertBoard(req);; throw forbidden(\"An administrator must reconcile incomplete external-effect evidence before reconstruction.\");; throw conflict(\"A selected saved file is no longer available on this task.\");; throw conflict(req.actor.type === \"board\" && req.actor.source === \"board_key\"; if (selectedBytes > 64 * 1024 * 1024) throw conflict(\"Selected saved files exceed the reconstruction size limit.\");; if (!lockedIssue) throw notFound(\"Issue not found\");; throw conflict(\"This reconstruction request already has a receipt with different sources or decisions.\", {; throw conflict(; throw notFound(\"Active recovery action not found\");; // recorded owner, never permission to reopen a stopped/completed task or; throw conflict(\"Resolve the task’s blockers before retrying.\", { code: \"disposition_recovery_retry_blocked\" });; await assertSafeRecoveryHandBackGates({; await assertIssueReviewVerdictActorAllowed(tx as unknown as Db, {; await assertInReviewReviewPath({; if (!updatedIssue) throw notFound(\"Issue not found\");; if (!recoveryAction) throw notFound(\"Active recovery action not found\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":557,\"declaration\":\"resolveIssueRecoveryActionSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":9666,\"claim\":\"if (!(await assertIssueReadAllowed(req, res, existing))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9668,\"claim\":\"await assertLowTrustControlPlaneDenied(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9693,\"claim\":\"!(await assertCrossIssueInfluenceWithinRunCap(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9733,\"claim\":\"assertBoard(req);\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9735,\"claim\":\"throw forbidden(\\\"An administrator must reconcile incomplete external-effect evidence before reconstruction.\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9742,\"claim\":\"throw conflict(\\\"A selected saved file is no longer available on this task.\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9745,\"claim\":\"throw conflict(req.actor.type === \\\"board\\\" && req.actor.source === \\\"board_key\\\"\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9749,\"claim\":\"if (selectedBytes > 64 * 1024 * 1024) throw conflict(\\\"Selected saved files exceed the reconstruction size limit.\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9757,\"claim\":\"assertBoard(req);\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9776,\"claim\":\"if (!lockedIssue) throw notFound(\\\"Issue not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9810,\"claim\":\"throw conflict(\\\"This reconstruction request already has a receipt with different sources or decisions.\\\", {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9817,\"claim\":\"assertBoard(req);\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9823,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9846,\"claim\":\"throw notFound(\\\"Active recovery action not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9856,\"claim\":\"// recorded owner, never permission to reopen a stopped/completed task or\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9871,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9885,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9892,\"claim\":\"throw conflict(\\\"Resolve the task\\u2019s blockers before retrying.\\\", { code: \\\"disposition_recovery_retry_blocked\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9907,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9918,\"claim\":\"assertBoard(req);\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9931,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9963,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10032,\"claim\":\"await assertSafeRecoveryHandBackGates({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10048,\"claim\":\"await assertIssueReviewVerdictActorAllowed(tx as unknown as Db, {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10058,\"claim\":\"await assertInReviewReviewPath({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10134,\"claim\":\"if (!updatedIssue) throw notFound(\\\"Issue not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10159,\"claim\":\"if (!recoveryAction) throw notFound(\\\"Active recovery action not found\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:10164 `res.json({`; server/src/routes/issues.ts:10271 `res.json({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/recovery-actions\",\"path\":\"server/src/routes/issues.ts\",\"line\":9597,\"resourceOverlap\":6},{\"method\":\"GET\",\"route\":\"/api/issues/:id\",\"path\":\"server/src/routes/issues.ts\",\"line\":9352,\"resourceOverlap\":4}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":9735,\"claim\":\"throw forbidden(\\\"An administrator must reconcile incomplete external-effect evidence before reconstruction.\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9742,\"claim\":\"throw conflict(\\\"A selected saved file is no longer available on this task.\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9745,\"claim\":\"throw conflict(req.actor.type === \\\"board\\\" && req.actor.source === \\\"board_key\\\"\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9749,\"claim\":\"if (selectedBytes > 64 * 1024 * 1024) throw conflict(\\\"Selected saved files exceed the reconstruction size limit.\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9776,\"claim\":\"if (!lockedIssue) throw notFound(\\\"Issue not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9810,\"claim\":\"throw conflict(\\\"This reconstruction request already has a receipt with different sources or decisions.\\\", {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9823,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9846,\"claim\":\"throw notFound(\\\"Active recovery action not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9871,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9885,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9892,\"claim\":\"throw conflict(\\\"Resolve the task’s blockers before retrying.\\\", { code: \\\"disposition_recovery_retry_blocked\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9907,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9931,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9963,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10134,\"claim\":\"if (!updatedIssue) throw notFound(\\\"Issue not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10159,\"claim\":\"if (!recoveryAction) throw notFound(\\\"Active recovery action not found\\\");\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -1778,7 +1705,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -1787,12 +1715,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/star. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "resourceScope": "Current source route DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/star; authenticated same-company access is checked by assertCompanyAccess. No skills.* policy action is asserted by this route.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:837 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":353,\"resourceOverlap\":8},{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":322,\"resourceOverlap\":6}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -1847,43 +1775,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 798,
-        "claim": "and 819-829 call assertCompanyAccess, pass skillActor(req) to starSkill/unstarSkill; company-scope auth admits same-company Agent actors."
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
         "line": 822,
         "claim": "assertCompanyAccess(req, companyId);"
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 819,
-        "claim": "router.delete(\"/companies/:companyId/skills/:skillId/star\", async (req, res) => {"
+        "line": 208,
+        "claim": "async function assertCanMutateCompanySkills("
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
+      },
+      {
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -1897,7 +1805,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler requires current same-company access and passes the authenticated actor through skillActor(req) to the per-user favorite mutation. Same-company Agents are admitted by company-scope auth; this is direct favorite/unfavorite work, not a proposal.",
+    "authorizationRationale": "The matched handler calls assertCompanyAccess for the authenticated actor and company. The source does not show a skills.* policy action or separate tasks:assign check on this route; no broader permission is inferred. Qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -1906,7 +1814,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "invoke through the mounted client for /api/heartbeat/invoke",
     "canonicalService": "server/src/services/agents.ts",
     "webSurface": "ui/src/components/AgentActionButtons.tsx",
-    "apiOperation": "POST /api/heartbeat/invoke",
+    "apiOperation": "POST /api/agents/:id/heartbeat/invoke",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -1922,12 +1830,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agent:wake"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/heartbeat/invoke. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertBoardCanWakeAgent(req, agent);; assertInstanceAdmin(req); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":228,\"declaration\":\"wakeAgentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":6083,\"claim\":\"await assertBoardCanWakeAgent(req, agent);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":6087,\"claim\":\"assertInstanceAdmin(req);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:6143 `res.status(202).json({ status: \"skipped\" });`; server/src/routes/agents.ts:6177 `res.status(202).json(publicRun(run));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":6071,\"claim\":\"throw badRequest(\\\"Use the wakeup endpoint to retry an exact failed run.\\\");\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":6079,\"claim\":\"res.status(403).json({ error: \\\"Agent can only invoke itself\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":6090,\"claim\":\"res.status(409).json({\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":6143,\"claim\":\"res.status(202).json({ status: \\\"skipped\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":6177,\"claim\":\"res.status(202).json(publicRun(run));\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -2059,7 +1967,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "rollbackConfigRevision through the mounted client for /api/config-revisions/${revisionId}/rollback",
     "canonicalService": "server/src/services/agents.ts",
     "webSurface": "ui/src/pages/AgentDetail.tsx",
-    "apiOperation": "POST /api/config-revisions/${revisionId}/rollback",
+    "apiOperation": "POST /api/agents/:id/config-revisions/:revisionId/rollback",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -2075,12 +1983,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agent_config:update"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/config-revisions/${revisionId}/rollback. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanUpdateAgent(req, existing);; assertProviderTraceSettingTransition(; const rollbackAdapterType = assertKnownAdapterType(; await assertSelectableAdapterType(rollbackAdapterType);; assertExternalInstructionsAdmin(req, existing);; assertExternalInstructionsAdmin(req, {; await assertFreshPaperclipRunnerProvider( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"revisionId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":4359,\"claim\":\"await assertCanUpdateAgent(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4370,\"claim\":\"assertProviderTraceSettingTransition(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4375,\"claim\":\"const rollbackAdapterType = assertKnownAdapterType(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4381,\"claim\":\"await assertSelectableAdapterType(rollbackAdapterType);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4384,\"claim\":\"assertExternalInstructionsAdmin(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4385,\"claim\":\"assertExternalInstructionsAdmin(req, {\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4393,\"claim\":\"await assertFreshPaperclipRunnerProvider(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:4423 `res.json(redactAgentRowForResponse(updated));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":4363,\"claim\":\"res.status(404).json({ error: \\\"Revision not found\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4406,\"claim\":\"res.status(404).json({ error: \\\"Revision not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -2199,7 +2107,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "removeWorkspace through the mounted client for /api/workspaces/${encodeURIComponent(workspaceId)}",
     "canonicalService": "server/src/routes/projects.ts",
     "webSurface": "ui/src/components/LegacyProjectRepository.tsx, ui/src/components/ProjectProperties.tsx",
-    "apiOperation": "DELETE /api/workspaces/${encodeURIComponent(workspaceId)}",
+    "apiOperation": "DELETE /api/projects/:id/workspaces/:workspaceId",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -2214,12 +2122,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "project:read"
     ],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/workspaces/${encodeURIComponent(workspaceId)}. Owner: server/src/routes/projects.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: getReadableProject applies project:read authorization; workspace deletion handler; deletes workspace after project access check; api.use(projectRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"workspaceId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/projects.ts:1043 `res.json(workspace);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/projects.ts\",\"line\":1024,\"claim\":\"res.status(404).json({ error: \\\"Project workspace not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -2295,7 +2203,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -2303,15 +2212,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "ordinary",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-inputs/${encodeURIComponent(inputId)}. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route PATCH /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-inputs/${encodeURIComponent(inputId)}; authenticated same-company access. Company skill policy action skills.edit is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:455 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":439,\"claim\":\"res.status(404).json({ error: \\\"Test input not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -2366,48 +2273,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 436,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.edit\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 429,
-        "claim": "router.patch("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 91,
-        "claim": "updateTestInput"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -2421,7 +2303,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.edit against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -2434,7 +2316,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -2442,15 +2325,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "ordinary",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/companies/${encodeURIComponent(companyId)}/skill-test-run-templates/${encodeURIComponent(templateId)}. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route DELETE /api/companies/${encodeURIComponent(companyId)}/skill-test-run-templates/${encodeURIComponent(templateId)}; authenticated same-company access. Company skill policy action skills.edit is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:566 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":550,\"claim\":\"res.status(404).json({ error: \\\"Test run template not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -2505,48 +2386,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 547,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.edit\");"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 544,
-        "claim": "router.delete(\"/companies/:companyId/skill-test-run-templates/:templateId\", async (req, res) => {"
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 120,
-        "claim": "deleteTestRunTemplate"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -2560,7 +2416,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.edit against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -2582,12 +2438,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PUT /api/cases/${idOrIdentifier}/documents/${encodeURIComponent(key)}. Owner: server/src/routes/cases.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: throw conflict(\"Document is locked\", {; throw conflict(\"Case document update requires baseRevisionId\", {; throw conflict(\"Case document was updated by someone else\", {; throw conflict(\"Case document does not exist yet\", { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/cases-schemas.ts\",\"line\":58,\"declaration\":\"upsertCaseDocumentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":908,\"claim\":\"throw conflict(\\\"Document is locked\\\", {\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":915,\"claim\":\"throw conflict(\\\"Case document update requires baseRevisionId\\\", {\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":922,\"claim\":\"throw conflict(\\\"Case document was updated by someone else\\\", {\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":930,\"claim\":\"throw conflict(\\\"Case document does not exist yet\\\", {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/cases.ts:1023 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:id/documents/:key\",\"path\":\"server/src/routes/cases.ts\",\"line\":736,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":908,\"claim\":\"throw conflict(\\\"Document is locked\\\", {\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":915,\"claim\":\"throw conflict(\\\"Case document update requires baseRevisionId\\\", {\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":922,\"claim\":\"throw conflict(\\\"Case document was updated by someone else\\\", {\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":930,\"claim\":\"throw conflict(\\\"Case document does not exist yet\\\", {\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -2700,7 +2556,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -2711,12 +2568,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "tasks:assign"
     ],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-runs/${encodeURIComponent(runId)}. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "resourceScope": "Current source route DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-runs/${encodeURIComponent(runId)}; authenticated same-company access. Company skill policy action skills.test is checked on the current resource. Test-harness operations additionally check tasks:assign against the resolved issue/assignee scope.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:766 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId/test-runs/:runId\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":579,\"resourceOverlap\":32}],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":750,\"claim\":\"res.status(404).json({ error: \\\"Test run not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -2771,48 +2628,33 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 735,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.test\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 736,
+        "claim": "await assertCanOrchestrateSkillTestHarness(req, companyId, await loadSkillTestRunAssignmentScope(companyId, skillId, runId));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
+      },
+      {
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       },
       {
         "path": "server/src/routes/company-skills.ts",
         "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 731,
-        "claim": "router.delete(\"/companies/:companyId/skills/:skillId/test-runs/:runId\", async (req, res) => {"
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 147,
-        "claim": "deleteTestRun"
+        "claim": "async function assertCanOrchestrateSkillTestHarness("
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -2826,7 +2668,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.test against the resolved resource. This route also requires tasks:assign for the resolved test-run issue/assignee scope. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -2848,12 +2690,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/issues/${id}/watchdog. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertIssueReadAllowed(req, res, issue))) return;; if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;; await assertLowTrustControlPlaneDenied(req, res, issue.companyId, issue) Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":9557,\"claim\":\"if (!(await assertIssueReadAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9558,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":9561,\"claim\":\"await assertLowTrustControlPlaneDenied(req, res, issue.companyId, issue)\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:9594 `res.json({ ok: true });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/watchdog\",\"path\":\"server/src/routes/issues.ts\",\"line\":9471,\"resourceOverlap\":26}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -2932,12 +2774,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "inbox:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/inbox-archive. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: inbox archive endpoint; target resolver admits Agent only after inbox:manage decision; api.use(issueRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":413,\"declaration\":\"inboxArchiveBodySchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:12139 `res.json(archiveState);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3028,12 +2870,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/status-cards/${id}/refresh. Owner: server/src/services/status-cards.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertStatusCardsEnabled();; await assertCanManageCard(req, card); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/status-card.ts\",\"line\":169,\"declaration\":\"refreshStatusCardSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/status-cards.ts\",\"line\":237,\"claim\":\"await assertStatusCardsEnabled();\"},{\"path\":\"server/src/routes/status-cards.ts\",\"line\":240,\"claim\":\"await assertCanManageCard(req, card);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/status-cards.ts:248 `res.status(result.enqueued && !result.alreadyGenerating ? 202 : 200).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/status-cards/:id\",\"path\":\"server/src/routes/status-cards.ts\",\"line\":170,\"resourceOverlap\":4}],\"routeErrors\":[{\"path\":\"server/src/routes/status-cards.ts\",\"line\":248,\"claim\":\"res.status(result.enqueued && !result.alreadyGenerating ? 202 : 200).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3108,12 +2950,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/pipelines/${pipelineId}/cases/batch. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertPipelineAccess(db, req, pipelineId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"pipelineId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":74,\"declaration\":\"batchIngestSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1828,\"claim\":\"const companyId = await assertPipelineAccess(db, req, pipelineId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1829,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1831 `res.json(await svc.ingestCases({ companyId, pipelineId, items: req.body.items, actor }));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3181,12 +3023,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/routines/${id}/revisions/${revisionId}/restore. Owner: server/src/services/routines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const routine = await assertCanManageExistingRoutine(req, req.params.id as string);; await assertBoardCanAssignTasks(req, routine.companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"revisionId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":466,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, req.params.id as string);\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":471,\"claim\":\"await assertBoardCanAssignTasks(req, routine.companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:497 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/routines/:id/revisions\",\"path\":\"server/src/routes/routines.ts\",\"line\":226,\"resourceOverlap\":6},{\"method\":\"GET\",\"route\":\"/api/routines/:id\",\"path\":\"server/src/routes/routines.ts\",\"line\":220,\"resourceOverlap\":4}],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":468,\"claim\":\"res.status(404).json({ error: \\\"Routine not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3247,12 +3089,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/routines/${id}/description/annotations/${threadId}/comments. Owner: server/src/services/document-annotations.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const routine = await assertCanManageExistingRoutine(req, req.params.id as string); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"threadId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/document-annotation.ts\",\"line\":53,\"declaration\":\"createDocumentAnnotationCommentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":313,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, req.params.id as string);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:344 `res.status(201).json(comment);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":315,\"claim\":\"res.status(404).json({ error: \\\"Routine not found\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":344,\"claim\":\"res.status(201).json(comment);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3300,7 +3142,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "resume through the mounted client for /api/resume",
     "canonicalService": "server/src/services/agents.ts",
     "webSurface": "ui/src/components/AgentActionButtons.tsx, ui/src/components/SidebarAgents.production.tsx, ui/src/components/SidebarAgents.tsx, ui/src/components/SummarySlotCard.tsx, ui/src/pages/CompanyImport.tsx, ui/src/pages/Dashboard.tsx, ui/src/pages/IssueDetail.tsx",
-    "apiOperation": "POST /api/resume",
+    "apiOperation": "POST /api/agents/:id/resume",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -3316,12 +3158,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agent_config:update"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/resume. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanResumeAgent(req, existing); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The route admits an Agent only through agent_config:update with requiresChangeGrant for the target; policy must explicitly grant direct config-change authority. Otherwise denied. This is direct lifecycle action, not proposal creation. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":5520,\"claim\":\"await assertCanResumeAgent(req, existing);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:5546 `res.json(redactAgentRowForResponse(agent));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":5522,\"claim\":\"res.status(409).json({\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5529,\"claim\":\"res.status(404).json({ error: \\\"Agent not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3488,12 +3330,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "pipelines:write"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/pipelines/${pipelineId}/documents/${encodeURIComponent(key)}/revisions/${revisionId}/restore. Owner: server/src/routes/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertPipelineAccess(db, req, pipelineId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId });; if (!existing) throw notFound(\"Pipeline document not found\");; if (!sourceRevision) throw notFound(\"Pipeline document revision not found\");; throw conflict(\"Selected revision is already the latest revision\", { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"pipelineId\",\"key\",\"revisionId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1748,\"claim\":\"const companyId = await assertPipelineAccess(db, req, pipelineId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1749,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1761,\"claim\":\"if (!existing) throw notFound(\\\"Pipeline document not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1769,\"claim\":\"if (!sourceRevision) throw notFound(\\\"Pipeline document revision not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1772,\"claim\":\"throw conflict(\\\"Selected revision is already the latest revision\\\", {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1814 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/pipelines/:pipelineId/documents/:key/revisions\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1736,\"resourceOverlap\":10},{\"method\":\"GET\",\"route\":\"/api/pipelines/:pipelineId/documents/:key\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1626,\"resourceOverlap\":8}],\"routeErrors\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1761,\"claim\":\"if (!existing) throw notFound(\\\"Pipeline document not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1769,\"claim\":\"if (!sourceRevision) throw notFound(\\\"Pipeline document revision not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1772,\"claim\":\"throw conflict(\\\"Selected revision is already the latest revision\\\", {\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3560,12 +3402,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/projects/${projectId}/roadmap/proposals. Owner: server/src/services/project-control.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: proposal route calls projectControlService.propose; service accepts Agent and may auto-apply only when explicit policy allows low-risk schedule updates, otherwise creates a pending proposal.; This is an existing Agent-capable planning API, but it is not always proposal-only because the service can auto-apply under policy. No exact manifest operation match was verified.; api.use(projectControlRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "This is an existing Agent-capable planning API, but it is not always proposal-only because the service can auto-apply under policy. No exact manifest operation match was verified. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"projectId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/project-control.ts\",\"line\":10,\"declaration\":\"roadmapProposalSchema\"},{\"path\":\"packages/shared/src/project-control.ts\",\"line\":9,\"declaration\":\"roadmapChangeSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/project-control.ts:36 `router.post(`${base}/proposals`, validate(roadmapProposalSchema), async (req, res) => { res.status(201).json(await svc.propose(req.actor, req.params.companyId as string, req.params.projectId as string, req.body)); });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/project-control.ts\",\"line\":36,\"claim\":\"router.post(`${base}/proposals`, validate(roadmapProposalSchema), async (req, res) => { res.status(201).json(await svc.propose(req.actor, req.params.companyId as string, req.params.projectId as string, req.body)); });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3634,12 +3476,12 @@ const entries: AgentNativeApiOperationContract[] = [
       "decision_queue:manage",
       "decision_triage:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/decision-queues. Owner: server/src/services/decision-queues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertDecisionAccess(db, req, companyId, \"decision_queue:manage\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Route helper assertDecisionAccess first requires Board-or-Agent and same-company scope, then calls authorizationService.decide for decision_queue:manage or decision_triage:manage. The current standard-scope policy explicitly allows active company Agents for these actions; each mutation persists actor/run attribution. It is direct queue/triage work, not a proposal or Human confirmation. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/decision-queue.ts\",\"line\":11,\"declaration\":\"createDecisionQueueSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":85,\"claim\":\"await assertDecisionAccess(db, req, companyId, \\\"decision_queue:manage\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/decision-queues.ts:92 `res.status(result.created ? 201 : 200).json(result.queue);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/decision-queues\",\"path\":\"server/src/routes/decision-queues.ts\",\"line\":77,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":92,\"claim\":\"res.status(result.created ? 201 : 200).json(result.queue);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3730,12 +3572,12 @@ const entries: AgentNativeApiOperationContract[] = [
       "decision_queue:manage",
       "decision_triage:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/companies/${companyId}/decision-retention/${encodeURIComponent(sourceKind)}/${encodeURIComponent(sourceId)}. Owner: server/src/services/decision-queues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertDecisionAccess(db, req, companyId, \"decision_triage:manage\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Route helper assertDecisionAccess first requires Board-or-Agent and same-company scope, then calls authorizationService.decide for decision_queue:manage or decision_triage:manage. The current standard-scope policy explicitly allows active company Agents for these actions; each mutation persists actor/run attribution. It is direct queue/triage work, not a proposal or Human confirmation. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"sourceKind\",\"sourceId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/decision-queue.ts\",\"line\":49,\"declaration\":\"updateDecisionRetentionSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":190,\"claim\":\"await assertDecisionAccess(db, req, companyId, \\\"decision_triage:manage\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/decision-queues.ts:196 `res.json(await retention.setKeep({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":193,\"claim\":\"res.status(400).json({ error: \\\"Invalid attention source identity\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -3825,12 +3667,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "joins:approve"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/join-requests/${requestId}/reject. Owner: server/src/routes/access.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCompanyPermission(req, companyId, \"joins:approve\");; if (!existing) throw notFound(\"Join request not found\");; throw conflict(\"Join request is not pending\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The route checks joins:approve via assertCompanyPermission, whose Agent branch explicitly checks the current Agent principal grant. An Agent with that grant can reject pending join requests; no Human-only guard is present. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"requestId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/access.ts\",\"line\":4330,\"claim\":\"await assertCompanyPermission(req, companyId, \\\"joins:approve\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4342,\"claim\":\"if (!existing) throw notFound(\\\"Join request not found\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4344,\"claim\":\"throw conflict(\\\"Join request is not pending\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/access.ts:4369 `res.json(toJoinRequestResponse(rejected));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/join-requests\",\"path\":\"server/src/routes/access.ts\",\"line\":4161,\"resourceOverlap\":6}],\"routeErrors\":[{\"path\":\"server/src/routes/access.ts\",\"line\":4342,\"claim\":\"if (!existing) throw notFound(\\\"Join request not found\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4344,\"claim\":\"throw conflict(\\\"Join request is not pending\\\");\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4004,12 +3846,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "runtime:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/monitor/check-now. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanManageIssueMonitor( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":13292,\"claim\":\"await assertCanManageIssueMonitor(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:13308 `res.json({ ok: true });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id\",\"path\":\"server/src/routes/issues.ts\",\"line\":9352,\"resourceOverlap\":4},{\"method\":\"GET\",\"route\":\"/api/issues\",\"path\":\"server/src/routes/issues.ts\",\"line\":8090,\"resourceOverlap\":2}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4063,7 +3905,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "controlWorkspaceCommands through the mounted client for /api/workspaces/${encodeURIComponent(workspaceId)}/runtime-commands/${action}",
     "canonicalService": "server/src/routes/projects.ts",
     "webSurface": "ui/src/pages/ProjectWorkspaceDetail.tsx",
-    "apiOperation": "POST /api/workspaces/${encodeURIComponent(workspaceId)}/runtime-commands/${action}",
+    "apiOperation": "POST /api/projects/:id/workspaces/:workspaceId/runtime-commands/:action",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -4078,12 +3920,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "runtime:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/workspaces/${encodeURIComponent(workspaceId)}/runtime-commands/${action}. Owner: server/src/routes/projects.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: workspace command handler; requires runtime:manage authorization; applies workspace runtime control authorization; api.use(projectRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"workspaceId\",\"action\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/execution-workspace.ts\",\"line\":49,\"declaration\":\"workspaceRuntimeControlTargetSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: no exact success response was established in the reviewed handler span; no durable effect or result is claimed.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4162,12 +4004,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "pipelines:write"
     ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/pipelines/${pipelineId}/stages/${stageId}/automation-env. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertPipelineAccess(db, req, pipelineId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"pipelineId\",\"stageId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":62,\"declaration\":\"updateStageAutomationEnvSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1574,\"claim\":\"const companyId = await assertPipelineAccess(db, req, pipelineId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1575,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1577 `res.json(await svc.updateStageAutomationEnv({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4236,12 +4078,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "pipelines:write"
     ],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/pipelines/${pipelineId}/stages/${stageId}${qs ? . Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertPipelineAccess(db, req, pipelineId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"pipelineId\",\"stageId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1590,\"claim\":\"const companyId = await assertPipelineAccess(db, req, pipelineId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1591,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1600 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4311,12 +4153,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "workflows:run"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/workflow-runs/${runId}/retry. Owner: server/src/services/workflows/workflow-executor.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertWorkflowsEnabled();; await assertPermission(req, companyId, \"workflows:run\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"runId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/workflow.ts\",\"line\":353,\"declaration\":\"retryWorkflowRunSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/workflows.ts\",\"line\":707,\"claim\":\"await assertWorkflowsEnabled();\"},{\"path\":\"server/src/routes/workflows.ts\",\"line\":709,\"claim\":\"await assertPermission(req, companyId, \\\"workflows:run\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/workflows.ts:723 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/workflow-runs/:runId\",\"path\":\"server/src/routes/workflows.ts\",\"line\":675,\"resourceOverlap\":8}],\"routeErrors\":[{\"path\":\"server/src/routes/workflows.ts\",\"line\":723,\"claim\":\"res.status(201).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4382,12 +4224,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/goals/${id}. Owner: server/src/services/goals.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: current company access then Goal service mutation; api.use(goalRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The existing Goal create/update route uses current company resource access and goalService, with actor attribution; it has no Board-only guard. This review does not claim a registered gateway tool or Native parity receipt. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/goal.ts\",\"line\":15,\"declaration\":\"updateGoalSchema\"},{\"path\":\"packages/shared/src/validators/goal.ts\",\"line\":4,\"declaration\":\"createGoalSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/goals.ts:72 `res.json(goal);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/goals/:id\",\"path\":\"server/src/routes/goals.ts\",\"line\":21,\"resourceOverlap\":24}],\"routeErrors\":[{\"path\":\"server/src/routes/goals.ts\",\"line\":56,\"claim\":\"res.status(404).json({ error: \\\"Goal not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4444,12 +4286,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PUT /api/issues/${id}/documents/${encodeURIComponent(key)}. Owner: server/src/services/documents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;; !(await assertDeliverableMutationAllowedByRunContext(req, res, issue)) Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":2140,\"declaration\":\"upsertIssueDocumentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":10821,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10823,\"claim\":\"!(await assertDeliverableMutationAllowedByRunContext(req, res, issue))\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:10976 `res.status(result.created ? 201 : 200).json(doc);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/documents/:key\",\"path\":\"server/src/routes/issues.ts\",\"line\":10420,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":10832,\"claim\":\"res.status(400).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10976,\"claim\":\"res.status(result.created ? 201 : 200).json(doc);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4533,7 +4375,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -4544,12 +4387,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "tasks:assign"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-runs. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-runs; authenticated same-company access. Company skill policy action skills.test is checked on the current resource. Test-harness operations additionally check tasks:assign against the resolved issue/assignee scope.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:684 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId/test-runs\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":569,\"resourceOverlap\":30}],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":684,\"claim\":\"res.status(201).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4604,48 +4447,33 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 598,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.test\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 599,
+        "claim": "await assertCanOrchestrateSkillTestHarness(req, companyId, {"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
+      },
+      {
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       },
       {
         "path": "server/src/routes/company-skills.ts",
         "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 592,
-        "claim": "router.post("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 137,
-        "claim": "createTestRun"
+        "claim": "async function assertCanOrchestrateSkillTestHarness("
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -4675,7 +4503,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.test against the resolved resource. This route also requires tasks:assign for the resolved test-run issue/assignee scope. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -4697,12 +4525,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/cases/${idOrIdentifier}/documents/${encodeURIComponent(key)}. Owner: server/src/routes/cases.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: throw conflict(\"Document is locked\", { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":1173,\"claim\":\"throw conflict(\\\"Document is locked\\\", {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/cases.ts:1183 `res.json({ ok: true });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:id/documents/:key\",\"path\":\"server/src/routes/cases.ts\",\"line\":736,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":1173,\"claim\":\"throw conflict(\\\"Document is locked\\\", {\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4824,12 +4652,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/documents/${encodeURIComponent(key)}/revisions/${revisionId}/restore. Owner: server/src/routes/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId });; if (!existing) throw notFound(\"Pipeline case document not found\");; if (!sourceRevision) throw notFound(\"Pipeline case document revision not found\");; throw conflict(\"Selected revision is already the latest revision\", { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\",\"key\",\"revisionId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2162,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2164,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2180,\"claim\":\"if (!existing) throw notFound(\\\"Pipeline case document not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2188,\"claim\":\"if (!sourceRevision) throw notFound(\\\"Pipeline case document revision not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2190,\"claim\":\"throw conflict(\\\"Selected revision is already the latest revision\\\", {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2262 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:caseId/documents/:key/revisions\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":2150,\"resourceOverlap\":10},{\"method\":\"GET\",\"route\":\"/api/cases/:caseId/documents/:key\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1943,\"resourceOverlap\":8}],\"routeErrors\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2180,\"claim\":\"if (!existing) throw notFound(\\\"Pipeline case document not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2188,\"claim\":\"if (!sourceRevision) throw notFound(\\\"Pipeline case document revision not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2190,\"claim\":\"throw conflict(\\\"Selected revision is already the latest revision\\\", {\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4898,12 +4726,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "pipelines:write"
     ],
-    "resourceScope": "Unqualified source inventory. Route: PUT /api/pipelines/${pipelineId}/transitions. Owner: server/src/routes/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertPipelineAccess(db, req, pipelineId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"pipelineId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":66,\"declaration\":\"replaceTransitionsSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1605,\"claim\":\"const companyId = await assertPipelineAccess(db, req, pipelineId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1606,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1623 `res.json({ transitions: result });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -4978,12 +4806,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/assets/images. Owner: server/src/routes/assets.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The exact upload handler calls assertCompanyAccess and then persists a company asset with actor agent/user attribution. This guard enforces same-company access but adds no Human-only or per-action permission gate; the endpoint therefore admits a same-company Agent directly. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/asset.ts\",\"line\":40,\"declaration\":\"createAssetImageMetadataSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/assets.ts\",\"line\":117,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/assets.ts:207 `res.status(201).json({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/assets.ts\",\"line\":124,\"claim\":\"res.status(422).json({\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":129,\"claim\":\"res.status(400).json({ error: err.message });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":137,\"claim\":\"res.status(400).json({ error: \\\"Missing file field 'file'\\\" });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":143,\"claim\":\"res.status(400).json({\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":153,\"claim\":\"res.status(422).json({ error: `Unsupported file type: ${contentType || \\\"unknown\\\"}` });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":160,\"claim\":\"res.status(422).json({ error: \\\"SVG could not be sanitized\\\" });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":166,\"claim\":\"res.status(422).json({ error: \\\"Image is empty\\\" });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":207,\"claim\":\"res.status(201).json({\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -5099,7 +4927,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -5107,15 +4936,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "launchcritical",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/import. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/import; authenticated same-company access. Company skill policy action skills.import is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1212 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":1212,\"claim\":\"res.status(201).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -5170,48 +4997,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1181,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.import\", () => skillImportPolicyResource(source));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 1175,
-        "claim": "router.post("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 215,
-        "claim": "importFromSource"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -5225,7 +5027,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.import against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -5250,12 +5052,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agents:create"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/built-in-agents/${key}/provision. Owner: server/src/services/built-in-agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertBuiltInAgentsEnabled();; await assertCanProvisionBuiltInAgents(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The route checks agents:create for req.actor and accepts an authorized same-company Agent. The service branches on company.requireBoardApprovalForNewAgents: when enabled a new agent is created pending_approval with an approval record; when disabled it ensures/provisions directly. With the policy enabled, setup of an incomplete existing row can be applied directly, while changing an already-configured adapter is rejected pending Board approval. Classification is therefore direct Agent-accessible behavior with the exact company policy conditions described here. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":120,\"declaration\":\"builtInAgentProvisionSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/built-in-agents.ts\",\"line\":186,\"claim\":\"await assertBuiltInAgentsEnabled();\"},{\"path\":\"server/src/routes/built-in-agents.ts\",\"line\":187,\"claim\":\"await assertCanProvisionBuiltInAgents(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/built-in-agents.ts:211 `res.status(approval ? 202 : 200).json(redactBuiltInAgentListState({ ...state, approval }));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/built-in-agents.ts\",\"line\":211,\"claim\":\"res.status(approval ? 202 : 200).json(redactBuiltInAgentListState({ ...state, approval }));\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -5402,12 +5204,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/interactions/${interactionId}/respond. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!authorizedResolution) return; Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"interactionId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":2081,\"declaration\":\"respondIssueThreadInteractionSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":17189,\"claim\":\"if (!authorizedResolution) return;\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:17250 `res.json(interaction);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -5512,12 +5314,12 @@ const entries: AgentNativeApiOperationContract[] = [
       "issue:mutate",
       "workflows:run"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/issues/${issueId}/workflows/${workflowId}/run. Owner: server/src/services/workflows/workflow-executor.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertWorkflowsEnabled();; await assertPermission(req, companyId, \"workflows:run\");; const issue = await assertTaskWorkflowInvocationAllowed( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"issueId\",\"workflowId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/workflow.ts\",\"line\":336,\"declaration\":\"startWorkflowRunSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/workflows.ts\",\"line\":480,\"claim\":\"await assertWorkflowsEnabled();\"},{\"path\":\"server/src/routes/workflows.ts\",\"line\":482,\"claim\":\"await assertPermission(req, companyId, \\\"workflows:run\\\");\"},{\"path\":\"server/src/routes/workflows.ts\",\"line\":483,\"claim\":\"const issue = await assertTaskWorkflowInvocationAllowed(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/workflows.ts:509 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/workflows.ts\",\"line\":509,\"claim\":\"res.status(201).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -5574,7 +5376,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -5582,15 +5385,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "ordinary",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skill-test-run-templates. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skill-test-run-templates; authenticated same-company access. Company skill policy action skills.edit is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:511 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skill-test-run-templates\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":485,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":511,\"claim\":\"res.status(201).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -5645,48 +5446,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 496,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.edit\");"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 491,
-        "claim": "router.post("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 110,
-        "claim": "createTestRunTemplate"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -5700,7 +5476,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.edit against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -5722,12 +5498,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/labels. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":838,\"declaration\":\"createIssueLabelSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":8740,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:8755 `res.status(201).json(label);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/labels\",\"path\":\"server/src/routes/issues.ts\",\"line\":8728,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":8755,\"claim\":\"res.status(201).json(label);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -5803,12 +5579,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/routines/${id}${expectedUserId ? . Owner: server/src/services/routines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (req.query.expectedUserId !== undefined && (typeof req.query.expectedUserId !== \"string\" || req.actor.type !== \"board\" || req.actor.userId !== req.query.expectedUserId)) throw conflict(\"Account changed; reload this page\", { code: \"ACCOUNT_CHANGED\" });; const routine = await assertCanManageExistingRoutine(req, req.params.id as string);; await assertBoardCanAssignTasks(req, routine.companyId);; throw forbidden(\"Agents cannot assign routines to workflows\");; throw forbidden(\"Agents can only assign routines to themselves\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/routine.ts\",\"line\":136,\"declaration\":\"updateRoutineSchema\"},{\"path\":\"packages/shared/src/validators/routine.ts\",\"line\":78,\"declaration\":\"routineCreateObjectSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":390,\"claim\":\"if (req.query.expectedUserId !== undefined && (typeof req.query.expectedUserId !== \\\"string\\\" || req.actor.type !== \\\"board\\\" || req.actor.userId !== req.query.expectedUserId)) throw conflict(\\\"Account changed; reload this page\\\", { code: \\\"ACCOUNT_CHANGED\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":391,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, req.params.id as string);\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":402,\"claim\":\"await assertBoardCanAssignTasks(req, routine.companyId);\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":409,\"claim\":\"await assertBoardCanAssignTasks(req, routine.companyId);\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":413,\"claim\":\"throw forbidden(\\\"Agents cannot assign routines to workflows\\\");\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":424,\"claim\":\"throw forbidden(\\\"Agents can only assign routines to themselves\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:462 `res.json(updated);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/routines/:id\",\"path\":\"server/src/routes/routines.ts\",\"line\":220,\"resourceOverlap\":24}],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":390,\"claim\":\"if (req.query.expectedUserId !== undefined && (typeof req.query.expectedUserId !== \\\"string\\\" || req.actor.type !== \\\"board\\\" || req.actor.userId !== req.query.expectedUserId)) throw conflict(\\\"Account changed; reload this page\\\", { code: \\\"ACCOUNT_CHANGED\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":393,\"claim\":\"res.status(404).json({ error: \\\"Routine not found\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":413,\"claim\":\"throw forbidden(\\\"Agents cannot assign routines to workflows\\\");\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":424,\"claim\":\"throw forbidden(\\\"Agents can only assign routines to themselves\\\");\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -5925,12 +5701,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PUT /api/cases/${caseId}/documents/${encodeURIComponent(key)}. Owner: server/src/routes/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId });; throw conflict(\"Pipeline case document update requires baseRevisionId\", {; throw conflict(\"Pipeline case document was updated by someone else\", {; throw conflict(\"Pipeline case document does not exist yet\", { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":142,\"declaration\":\"upsertPipelineCaseDocumentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1972,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1974,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1993,\"claim\":\"throw conflict(\\\"Pipeline case document update requires baseRevisionId\\\", {\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2000,\"claim\":\"throw conflict(\\\"Pipeline case document was updated by someone else\\\", {\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2017,\"claim\":\"throw conflict(\\\"Pipeline case document does not exist yet\\\", {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2147 `res.json({ document: result.document, revision: result.revision });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:caseId/documents/:key\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1943,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1993,\"claim\":\"throw conflict(\\\"Pipeline case document update requires baseRevisionId\\\", {\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2000,\"claim\":\"throw conflict(\\\"Pipeline case document was updated by someone else\\\", {\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2017,\"claim\":\"throw conflict(\\\"Pipeline case document does not exist yet\\\", {\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -5999,12 +5775,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agent:wake"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/agents/${agentId}/runtime/execute. Owner: server/src/services/agent-runtime-fabric.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"agentId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/execution-manifest.ts\",\"line\":27,\"declaration\":\"createExecutionScopeRequestSchema\"},{\"path\":\"packages/shared/src/cross-company-context.ts\",\"line\":11,\"declaration\":\"agentExecutionScopeSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agent-runtime-fabric.ts\",\"line\":20,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agent-runtime-fabric.ts:23 `res.status(202).json({ scopeRequestId: request.id, run });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/agent-runtime-fabric.ts\",\"line\":23,\"claim\":\"res.status(202).json({ scopeRequestId: request.id, run });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -6068,12 +5844,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agents:create"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/built-in-agents/${key}/reset. Owner: server/src/services/built-in-agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertBuiltInAgentsEnabled();; await assertCanProvisionBuiltInAgents(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":132,\"declaration\":\"builtInAgentResetSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/built-in-agents.ts\",\"line\":218,\"claim\":\"await assertBuiltInAgentsEnabled();\"},{\"path\":\"server/src/routes/built-in-agents.ts\",\"line\":219,\"claim\":\"await assertCanProvisionBuiltInAgents(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/built-in-agents.ts:228 `res.json(redactBuiltInAgentListState(state));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -6195,7 +5971,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "updatePermissions through the mounted client for /api/permissions",
     "canonicalService": "server/src/services/agents.ts",
     "webSurface": "ui/src/pages/AgentDetail.tsx, ui/src/pages/apps/chat/EmailEndpointSetup.tsx",
-    "apiOperation": "PATCH /api/permissions",
+    "apiOperation": "PATCH /api/agents/:id/permissions",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -6209,12 +5985,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/permissions. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: router.patch(\"/agents/:id/permissions\", validate(updateAgentPermissionsSchema), async (req, res) => {; res.status(403).json({ error: \"Forbidden\" });; res.status(403).json({ error: \"Only CEO can manage permissions\" });; await assertBoardCanManageAgentsForCompany(req, existing.companyId);; const agent = await svc.updatePermissions(id, req.body);; agent.role === \"ceo\" || Boolean(agent.permissions?.canCreateAgents) || req.body.canAssignTasks;; await access.setPrincipalPermission(; action: \"agent.permissions_updated\",; canCreateAgents: agent.permissions?.canCreateAgents ?? false,; canCreateSkills: agent.permissions?.canCreateSkills ?? true,; trustPreset: agent.permissions?.trustPreset ?? \"standard\", Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Current source explicitly admits a same-company CEO Agent to update Agent permissions and records actor attribution. This is direct-agent authority as implemented; it intersects the brief invariant that an Agent must not approve its own authority expansion and should be reviewed as a policy risk. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":291,\"declaration\":\"updateAgentPermissionsSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":4977,\"claim\":\"router.patch(\\\"/agents/:id/permissions\\\", validate(updateAgentPermissionsSchema), async (req, res) => {\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4985,\"claim\":\"res.status(403).json({ error: \\\"Forbidden\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4989,\"claim\":\"res.status(403).json({ error: \\\"Only CEO can manage permissions\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4993,\"claim\":\"await assertBoardCanManageAgentsForCompany(req, existing.companyId);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4996,\"claim\":\"const agent = await svc.updatePermissions(id, req.body);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5003,\"claim\":\"agent.role === \\\"ceo\\\" || Boolean(agent.permissions?.canCreateAgents) || req.body.canAssignTasks;\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5005,\"claim\":\"await access.setPrincipalPermission(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5022,\"claim\":\"action: \\\"agent.permissions_updated\\\",\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5026,\"claim\":\"canCreateAgents: agent.permissions?.canCreateAgents ?? false,\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5027,\"claim\":\"canCreateSkills: agent.permissions?.canCreateSkills ?? true,\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5029,\"claim\":\"trustPreset: agent.permissions?.trustPreset ?? \\\"standard\\\",\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:5033 `res.json(await buildAgentDetail(agent));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":4985,\"claim\":\"res.status(403).json({ error: \\\"Forbidden\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4989,\"claim\":\"res.status(403).json({ error: \\\"Only CEO can manage permissions\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4998,\"claim\":\"res.status(404).json({ error: \\\"Agent not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -6354,12 +6130,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/projects/${projectId}?companyId=${companyId}. Owner: server/src/services/projects.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertNoAgentHostWorkspaceCommandMutation(; await assertProjectEnvironmentSelection( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/project.ts\",\"line\":129,\"declaration\":\"updateProjectSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/projects.ts\",\"line\":519,\"claim\":\"assertNoAgentHostWorkspaceCommandMutation(\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":523,\"claim\":\"await assertProjectEnvironmentSelection(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/projects.ts:569 `res.json(publicNativePayloadRow(project));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/projects/:id\",\"path\":\"server/src/routes/projects.ts\",\"line\":305,\"resourceOverlap\":24}],\"routeErrors\":[{\"path\":\"server/src/routes/projects.ts\",\"line\":538,\"claim\":\"res.status(404).json({ error: \\\"Project not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -6456,12 +6232,12 @@ const entries: AgentNativeApiOperationContract[] = [
       "decision_queue:manage",
       "decision_triage:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/companies/${companyId}/decision-queues/${encodeURIComponent(key)}. Owner: server/src/services/decision-queues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertDecisionAccess(db, req, companyId, \"decision_queue:manage\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Route helper assertDecisionAccess first requires Board-or-Agent and same-company scope, then calls authorizationService.decide for decision_queue:manage or decision_triage:manage. The current standard-scope policy explicitly allows active company Agents for these actions; each mutation persists actor/run attribution. It is direct queue/triage work, not a proposal or Human confirmation. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/decision-queue.ts\",\"line\":18,\"declaration\":\"updateDecisionQueueSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":97,\"claim\":\"await assertDecisionAccess(db, req, companyId, \\\"decision_queue:manage\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/decision-queues.ts:98 `res.json(await svc.update({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -6549,12 +6325,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/routines/${id}/triggers. Owner: server/src/services/routines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const routine = await assertCanManageExistingRoutine(req, req.params.id as string);; await assertBoardCanAssignTasks(req, routine.companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/routine.ts\",\"line\":197,\"declaration\":\"createRoutineTriggerSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":509,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, req.params.id as string);\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":514,\"claim\":\"await assertBoardCanAssignTasks(req, routine.companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:541 `res.status(201).json(created);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":511,\"claim\":\"res.status(404).json({ error: \\\"Routine not found\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":541,\"claim\":\"res.status(201).json(created);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -6642,12 +6418,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agents:create"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/adapters/${type}/test-environment. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const type = assertKnownAdapterType(req.params.type as string);; await assertCanCreateAgentsForCompany(req, companyId);; if (aiBinding && req.body.testCredentials && Object.keys(req.body.testCredentials).length) throw unprocessable(\"A managed connection test cannot override its credentials\");; if (savedAgent.companyId !== companyId) throw notFound(\"Agent not found\");; await assertCanUpdateAgent(req, savedAgent);; await assertAdapterTestEnvironmentForCompany(companyId, requestedEnvironmentId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"type\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":259,\"declaration\":\"testAdapterEnvironmentSchema\"},{\"path\":\"packages/shared/src/ai-connections.ts\",\"line\":40,\"declaration\":\"aiConnectionBindingSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":3423,\"claim\":\"const type = assertKnownAdapterType(req.params.type as string);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":3424,\"claim\":\"await assertCanCreateAgentsForCompany(req, companyId);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":3429,\"claim\":\"if (aiBinding && req.body.testCredentials && Object.keys(req.body.testCredentials).length) throw unprocessable(\\\"A managed connection test cannot override its credentials\\\");\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":3437,\"claim\":\"if (savedAgent.companyId !== companyId) throw notFound(\\\"Agent not found\\\");\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":3438,\"claim\":\"await assertCanUpdateAgent(req, savedAgent);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":3451,\"claim\":\"await assertAdapterTestEnvironmentForCompany(companyId, requestedEnvironmentId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:3582 `res.json(synthesized);`; server/src/routes/agents.ts:3615 `res.json({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":3437,\"claim\":\"if (savedAgent.companyId !== companyId) throw notFound(\\\"Agent not found\\\");\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -6826,12 +6602,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "joins:approve"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/join-requests/${requestId}/approve. Owner: server/src/routes/access.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCompanyPermission(req, companyId, \"joins:approve\");; if (!existing) throw notFound(\"Join request not found\");; throw conflict(\"Join request is not pending\");; if (!invite) throw notFound(\"Invite not found\");; throw conflict(\"Join request missing user identity\");; assertLegacyAgentInviteAdapterType(existing.adapterType);; throw conflict(; permissions: {}, Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The route checks joins:approve via assertCompanyPermission; its Agent branch explicitly checks the current Agent principal grant. If granted, the Agent may approve the request, including granting the membership requested, as implemented. The resulting authority expansion is real and should remain visible in policy review; no Human-only check is present. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"requestId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/access.ts\",\"line\":4180,\"claim\":\"await assertCompanyPermission(req, companyId, \\\"joins:approve\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4192,\"claim\":\"if (!existing) throw notFound(\\\"Join request not found\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4194,\"claim\":\"throw conflict(\\\"Join request is not pending\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4201,\"claim\":\"if (!invite) throw notFound(\\\"Invite not found\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4206,\"claim\":\"throw conflict(\\\"Join request missing user identity\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4229,\"claim\":\"assertLegacyAgentInviteAdapterType(existing.adapterType);\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4233,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4263,\"claim\":\"permissions: {},\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/access.ts:4321 `res.json(toJoinRequestResponse(approved));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/join-requests\",\"path\":\"server/src/routes/access.ts\",\"line\":4161,\"resourceOverlap\":6}],\"routeErrors\":[{\"path\":\"server/src/routes/access.ts\",\"line\":4192,\"claim\":\"if (!existing) throw notFound(\\\"Join request not found\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4194,\"claim\":\"throw conflict(\\\"Join request is not pending\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4201,\"claim\":\"if (!invite) throw notFound(\\\"Invite not found\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4206,\"claim\":\"throw conflict(\\\"Join request missing user identity\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4233,\"claim\":\"throw conflict(\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -6994,7 +6770,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -7002,15 +6779,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "launchcritical",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills; authenticated same-company access. Company skill policy action skills.create is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1045 `res.status(201).json(skill);`; server/src/routes/company-skills.ts:1073 `res.status(result.duplicate ? 200 : 201).json(result.skill);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":322,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":1045,\"claim\":\"res.status(201).json(skill);\"},{\"path\":\"server/src/routes/company-skills.ts\",\"line\":1061,\"claim\":\"if (prior.details?.fingerprint !== fingerprint) throw conflict(\\\"Skill idempotency key was used with different inputs\\\");\"},{\"path\":\"server/src/routes/company-skills.ts\",\"line\":1063,\"claim\":\"if (!skill) throw conflict(\\\"Previously created skill is no longer available\\\");\"},{\"path\":\"server/src/routes/company-skills.ts\",\"line\":1073,\"claim\":\"res.status(result.duplicate ? 200 : 201).json(result.skill);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -7065,43 +6840,33 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1028,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.create\", {"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 1061,
+        "claim": "if (prior.details?.fingerprint !== fingerprint) throw conflict(\"Skill idempotency key was used with different inputs\");"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 1063,
+        "claim": "if (!skill) throw conflict(\"Previously created skill is no longer available\");"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 404,
-        "claim": "router.post("
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -7123,7 +6888,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.create against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -7136,7 +6901,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -7145,12 +6911,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/star. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/star; authenticated same-company access is checked by assertCompanyAccess. No skills.* policy action is asserted by this route.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:816 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":353,\"resourceOverlap\":8},{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":322,\"resourceOverlap\":6}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -7205,43 +6971,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 798,
-        "claim": "and 819-829 call assertCompanyAccess, pass skillActor(req) to starSkill/unstarSkill; company-scope auth admits same-company Agent actors."
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
         "line": 801,
         "claim": "assertCompanyAccess(req, companyId);"
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 798,
-        "claim": "router.post(\"/companies/:companyId/skills/:skillId/star\", async (req, res) => {"
+        "line": 208,
+        "claim": "async function assertCanMutateCompanySkills("
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
+      },
+      {
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -7255,7 +7001,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler requires current same-company access and passes the authenticated actor through skillActor(req) to the per-user favorite mutation. Same-company Agents are admitted by company-scope auth; this is direct favorite/unfavorite work, not a proposal.",
+    "authorizationRationale": "The matched handler calls assertCompanyAccess for the authenticated actor and company. The source does not show a skills.* policy action or separate tasks:assign check on this route; no broader permission is inferred. Qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -7264,7 +7010,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "updateInstructionsBundle through the mounted client for /api/instructions-bundle",
     "canonicalService": "server/src/services/agents.ts",
     "webSurface": "ui/src/pages/AgentDetail.tsx",
-    "apiOperation": "PATCH /api/instructions-bundle",
+    "apiOperation": "PATCH /api/agents/:id/instructions-bundle",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -7278,12 +7024,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/instructions-bundle. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanManageInstructionsPath(req, existing);; assertExternalInstructionsAdmin(req, existing);; if (req.body.mode === \"external\") assertInstanceAdmin(req); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Agent can directly update instructions only with direct agent_config:update change grant and required consent; external instruction mode has a stricter operator-only submode. This handler creates no proposal. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":26,\"declaration\":\"updateAgentInstructionsBundleSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":5131,\"claim\":\"await assertCanManageInstructionsPath(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5132,\"claim\":\"assertExternalInstructionsAdmin(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5133,\"claim\":\"if (req.body.mode === \\\"external\\\") assertInstanceAdmin(req);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:5172 `res.json(bundle);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/agents/:id/instructions-bundle\",\"path\":\"server/src/routes/agents.ts\",\"line\":5118,\"resourceOverlap\":26}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -7425,12 +7171,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/attachments/${id}. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;; if (!(await assertDeliverableMutationAllowedByRunContext(req, res, issue))) Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"attachmentId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":19554,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19555,\"claim\":\"if (!(await assertDeliverableMutationAllowedByRunContext(req, res, issue)))\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:19589 `res.json({ ok: true });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":19551,\"claim\":\"res.status(404).json({ error: \\\"Issue not found\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19569,\"claim\":\"res.status(404).json({ error: \\\"Attachment not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -7507,12 +7253,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/documents/${key}/annotations. Owner: server/src/services/document-annotations.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: !(await assertAgentIssueMutationAllowed(req, res, issue, { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/document-annotation.ts\",\"line\":45,\"declaration\":\"createDocumentAnnotationThreadSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":10563,\"claim\":\"!(await assertAgentIssueMutationAllowed(req, res, issue, {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:10632 `res.status(201).json(thread);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/documents/:key/annotations\",\"path\":\"server/src/routes/issues.ts\",\"line\":10511,\"resourceOverlap\":30}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":10574,\"claim\":\"res.status(400).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10632,\"claim\":\"res.status(201).json(thread);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -7573,12 +7319,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/open-conversation. Owner: server/src/routes/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId);; throw notFound(\"Pipeline case conversation not found\");; if (privacySources.length > 256) throw forbidden(\"Conversation source history is too large to retain safely.\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2394,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2399,\"claim\":\"throw notFound(\\\"Pipeline case conversation not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2413,\"claim\":\"throw notFound(\\\"Pipeline case conversation not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2445,\"claim\":\"if (privacySources.length > 256) throw forbidden(\\\"Conversation source history is too large to retain safely.\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2400 `res.json({ issue: conversationSource.issue, created: false });`; server/src/routes/pipelines.ts:2468 `res.status(result.created ? 201 : 200).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2399,\"claim\":\"throw notFound(\\\"Pipeline case conversation not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2413,\"claim\":\"throw notFound(\\\"Pipeline case conversation not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2445,\"claim\":\"if (privacySources.length > 256) throw forbidden(\\\"Conversation source history is too large to retain safely.\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2468,\"claim\":\"res.status(result.created ? 201 : 200).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -7659,12 +7405,12 @@ const entries: AgentNativeApiOperationContract[] = [
       "decision_queue:manage",
       "decision_triage:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: PUT /api/companies/${companyId}/decision-triage/${encodeURIComponent(sourceKind)}/${encodeURIComponent(sourceId)}. Owner: server/src/services/decision-queues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertDecisionAccess(db, req, companyId, \"decision_triage:manage\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Route helper assertDecisionAccess first requires Board-or-Agent and same-company scope, then calls authorizationService.decide for decision_queue:manage or decision_triage:manage. The current standard-scope policy explicitly allows active company Agents for these actions; each mutation persists actor/run attribution. It is direct queue/triage work, not a proposal or Human confirmation. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"sourceKind\",\"sourceId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/decision-queue.ts\",\"line\":44,\"declaration\":\"updateDecisionTriageSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":169,\"claim\":\"await assertDecisionAccess(db, req, companyId, \\\"decision_triage:manage\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/decision-queues.ts:175 `res.json(await svc.updateTriage({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/decision-triage/:sourceKind/:sourceId\",\"path\":\"server/src/routes/decision-queues.ts\",\"line\":153,\"resourceOverlap\":30}],\"routeErrors\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":172,\"claim\":\"res.status(400).json({ error: \\\"Invalid attention source identity\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -7755,12 +7501,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/smoke-lab/runs. Owner: server/src/services/smoke-lab.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertBoardOrAgent(req);; assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/smoke-lab.ts\",\"line\":13,\"declaration\":\"createSmokeRunSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/smoke-lab.ts\",\"line\":199,\"claim\":\"assertBoardOrAgent(req);\"},{\"path\":\"server/src/routes/smoke-lab.ts\",\"line\":201,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/smoke-lab.ts:216 `res.status(201).json({ run });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/smoke-lab/runs\",\"path\":\"server/src/routes/smoke-lab.ts\",\"line\":191,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/smoke-lab.ts\",\"line\":216,\"claim\":\"res.status(201).json({ run });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -7825,12 +7571,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/interactions/${interactionId}/accept. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!authorizedResolution) return;; ? await assertSuggestedTaskEffectsAllowed(; if (!suggestedTaskEffectsAuthorized) return;; \"Remembered permission is only supported for tool reviews\",; throw notFound(\"Secret proposal not found\");; assertCanResolve: (lockedProposal, txDb) =>; assertCanResolveProposal({ Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Resolution is admitted only after current issue/run containment and the interaction’s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"interactionId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":2007,\"declaration\":\"acceptIssueThreadInteractionSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":16750,\"claim\":\"if (!authorizedResolution) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":16760,\"claim\":\"? await assertSuggestedTaskEffectsAllowed(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":16768,\"claim\":\"if (!suggestedTaskEffectsAuthorized) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":16793,\"claim\":\"\\\"Remembered permission is only supported for tool reviews\\\",\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":16887,\"claim\":\"throw notFound(\\\"Secret proposal not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":16891,\"claim\":\"assertCanResolve: (lockedProposal, txDb) =>\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":16892,\"claim\":\"assertCanResolveProposal({\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:16788 `res.json(await interactionSvc.getById(current.id));`; server/src/routes/issues.ts:17054 `res.json(continuationInteraction);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":16887,\"claim\":\"throw notFound(\\\"Secret proposal not found\\\");\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -7940,12 +7686,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/companies/${encodeURIComponent(companyId)}/folders/${encodeURIComponent(folderId)}. Owner: server/src/services/folders.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"folderId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/folders.ts\",\"line\":152,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/folders.ts:171 `res.json({ deleted });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/folders.ts\",\"line\":155,\"claim\":\"res.status(404).json({ error: \\\"Folder not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8009,7 +7755,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -8017,15 +7764,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "launchcritical",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/files. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/files; authenticated same-company access. Company skill policy action skills.edit is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1171 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId/files\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":1010,\"resourceOverlap\":30}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8075,38 +7820,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1150,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.edit\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -8120,7 +7850,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.edit against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -8129,7 +7859,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "controlWorkspaceRuntimeServices through the mounted client for /api/workspaces/${encodeURIComponent(workspaceId)}/runtime-services/${action}",
     "canonicalService": "server/src/routes/projects.ts",
     "webSurface": "ui/src/components/ProjectWorkspacesContent.tsx",
-    "apiOperation": "POST /api/workspaces/${encodeURIComponent(workspaceId)}/runtime-services/${action}",
+    "apiOperation": "POST /api/projects/:id/workspaces/:workspaceId/runtime-services/:action",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -8144,12 +7874,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "runtime:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/workspaces/${encodeURIComponent(workspaceId)}/runtime-services/${action}. Owner: server/src/routes/projects.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: workspace runtime control handler; requires runtime:manage authorization; applies workspace runtime control authorization; api.use(projectRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"workspaceId\",\"action\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/execution-workspace.ts\",\"line\":49,\"declaration\":\"workspaceRuntimeControlTargetSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: no exact success response was established in the reviewed handler span; no durable effect or result is claimed.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8227,12 +7957,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/routine-triggers/${id}. Owner: server/src/services/routines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const routine = await assertCanManageExistingRoutine(req, trigger.routineId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":593,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, trigger.routineId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:626 `res.status(204).end();`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":590,\"claim\":\"res.status(404).json({ error: \\\"Routine trigger not found\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":595,\"claim\":\"res.status(404).json({ error: \\\"Routine trigger not found\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":626,\"claim\":\"res.status(204).end();\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8302,12 +8032,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/skills/${skillId}/lifecycle/promote. Owner: server/src/services/skill-lifecycle.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: Shared-runtime acknowledgement route is mounted at this handler.; Route checks company access.; Acknowledgement binds identity through v5HumanActorId.; Promotion route passes actor and expected promotion input to canonical lifecycle service.; Agent promotion requires explicit enabled feature, local owner match, allowAutonomousPromotion and no required Human review.; Promotion compares expected active version; subsequent checks require a passed paired evaluation, configured suites, safety/process/outcome/cost thresholds, retained traces, and current dependencies.; Discovery route checks company access and calls provider discovery.; discover binds the actor to v5HumanActorId.; discover requires agents:configure.; Revalidation route checks company access and dispatches service revalidate.; revalidate requires v5HumanActorId and agents:configure.; Creation route checks company access and dispatches service create.; create requires v5HumanActorId.; create requires agents:configure for the local Agent.; Conformance route checks company access and dispatches provider conformance.; Conformance derives userId from v5HumanActorId.; Conformance requires agents:configure.; Portfolio capability routes check company access.; Portfolio service checks the feature and company scope.; Mutations require v5HumanActorId, users:manage_permissions and portfolio.use.; Assistant answer route asserts Board access and company scope.; Expected user identity is bound to current Human actor.; Agent lifecycle authorization only permits skills.propose apart from explicitly gated promotion.; Governed draft requires skills.propose and creates candidate proposal.; Candidate proposal requires skills.propose and records author/limits.; Triage route asserts Board identity and invokes canonical service.; operator() calls configured operator authentication.; triage requires recent verified operator authentication and rechecks the record version.; Relationship transition route checks company access and dispatches transition.; All relationship writes require v5HumanActorId and users:manage_permissions.; Role Pack routes apply company scope.; configurable() requires v5HumanActorId and agents:configure.; Role Pack version route is company-scoped and dispatches to createVersion.; Evaluation routes apply company scope.; Mutating evaluation operations require v5HumanActorId and users:manage_permissions.; Overlap review route dispatches to reviewOverlap.; reviewOverlap requires skills.approve and records reviewedByUserId.; Lifecycle transition route dispatches to transition.; transition authorizes skills.deprecate; Agent authorization only allows proposal and explicit autonomous promotion.; Portfolio route boundary applies company scope.; Retention mutation route asserts Board identity.; Retention writes reject local implicit sessions and call verified operator guard.; Erasure mutation route calls identity() which asserts Board.; Retention owner boundary rejects local implicit sessions.; Retention owner boundary validates configured operator authentication.; Erasure execution uses the verified internal retention receipt boundary.; Support case create route asserts Board and company access.; Canonical support case service is invoked with current Board actor.; Support case reply/close route asserts Board and company access.; api.use(skillLifecycleRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"skillId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/skill-lifecycle.ts\",\"line\":11,\"declaration\":\"skillPromotionInputSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/skill-lifecycle.ts:18 `router.post(`${base}/promote`, validate(skillPromotionInputSchema), async (req, res) => { res.json(await svc.promote(req.actor, req.params.companyId as string, req.params.skillId as string, req.body)); });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8384,12 +8114,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/automations/${automationId}/retry. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId);; await assertCurrentStageAutomationTargetWriteAccess(db, req, { access, companyId, caseId, automationId }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\",\"automationId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2702,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2703,\"claim\":\"await assertCurrentStageAutomationTargetWriteAccess(db, req, { access, companyId, caseId, automationId });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2705 `res.json(await svc.retryAutomation({ companyId, caseId, automationId, actor, privacyActor: req.actor }));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:caseId\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1918,\"resourceOverlap\":4}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8456,12 +8186,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/work-products/${workProductId}/review-document. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;; !(await assertDeliverableMutationAllowedByRunContext(req, res, issue)) Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Materializing a work-product review document applies issue mutation and deliverable run-context guards, then checks that the product belongs to the issue/company. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"workProductId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":11617,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":11619,\"claim\":\"!(await assertDeliverableMutationAllowedByRunContext(req, res, issue))\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:11637 `res.status(result.created ? 201 : 200).json(result.document);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":11628,\"claim\":\"res.status(404).json({ error: \\\"Work product not found\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":11637,\"claim\":\"res.status(result.created ? 201 : 200).json(result.document);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8525,7 +8255,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "deleteInstructionsFile through the mounted client for /api/instructions-bundle/file?path=${encodeURIComponent(relativePath)}",
     "canonicalService": "server/src/services/agents.ts",
     "webSurface": "ui/src/pages/AgentDetail.tsx",
-    "apiOperation": "DELETE /api/instructions-bundle/file?path=${encodeURIComponent(relativePath)}",
+    "apiOperation": "DELETE /api/agents/:id/instructions-bundle/file?path=${encodeURIComponent(relativePath)}",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -8539,12 +8269,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/instructions-bundle/file?path=${encodeURIComponent(relativePath)}. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanManageInstructionsPath(req, existing);; assertExternalInstructionsAdmin(req, existing); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Agent can directly delete an instruction file only with direct agent_config:update change grant and required consent. This mutation has no proposal state. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":5243,\"claim\":\"await assertCanManageInstructionsPath(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5244,\"claim\":\"assertExternalInstructionsAdmin(req, existing);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:5269 `res.json(result.bundle);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/agents/:id/instructions-bundle/file\",\"path\":\"server/src/routes/agents.ts\",\"line\":5175,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":5248,\"claim\":\"res.status(422).json({ error: \\\"Query parameter 'path' is required\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8667,7 +8397,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -8675,15 +8406,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "ordinary",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-inputs/${encodeURIComponent(inputId)}. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-inputs/${encodeURIComponent(inputId)}; authenticated same-company access. Company skill policy action skills.edit is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:482 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":466,\"claim\":\"res.status(404).json({ error: \\\"Test input not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8738,48 +8467,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 463,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.edit\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 459,
-        "claim": "router.delete(\"/companies/:companyId/skills/:skillId/test-inputs/:inputId\", async (req, res) => {"
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 101,
-        "claim": "deleteTestInput"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -8793,7 +8497,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.edit against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -8815,12 +8519,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/review-cases/bulk. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertPipelineCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":134,\"declaration\":\"bulkReviewSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1218,\"claim\":\"assertPipelineCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1241 `res.json({ results });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -8880,12 +8584,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agents:create"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/agents. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanCreateAgentsForCompany(req, companyId);; throw conflict(; createInput.adapterType = await assertSelectableAdapterType(createInput.adapterType);; assertProviderTraceSettingTransition(req, createInput.runtimeConfig);; await assertFreshPaperclipRunnerProvider(; assertNoNewAgentLegacyPromptTemplate(; assertNoAgentAdapterConfigMutation(req, rawCreateAdapterConfig);; assertExternalInstructionsAdmin(req, {; await assertAgentEnvironmentSelection(companyId, createInput.adapterType, createInput.defaultEnvironmentId);; await assertAgentDefaultEnvironmentSelection(companyId, createInput.defaultEnvironmentId, { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The direct create route calls assertCanCreateAgentsForCompany, which authorizes req.actor through the agents:create decision and confirms an Agent actor belongs to the same company. This operation is denied when requireBoardApprovalForNewAgents is true (it directs callers to agent-hires); when policy is off it creates an idle Agent immediately. This direct operation therefore has a clear company-policy precondition, not an implicit proposal contract. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":78,\"declaration\":\"createAgentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":4809,\"claim\":\"await assertCanCreateAgentsForCompany(req, companyId);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4821,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4841,\"claim\":\"createInput.adapterType = await assertSelectableAdapterType(createInput.adapterType);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4843,\"claim\":\"assertProviderTraceSettingTransition(req, createInput.runtimeConfig);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4844,\"claim\":\"await assertFreshPaperclipRunnerProvider(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4849,\"claim\":\"assertNoNewAgentLegacyPromptTemplate(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4853,\"claim\":\"assertNoAgentAdapterConfigMutation(req, rawCreateAdapterConfig);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4864,\"claim\":\"assertExternalInstructionsAdmin(req, {\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4890,\"claim\":\"await assertAgentEnvironmentSelection(companyId, createInput.adapterType, createInput.defaultEnvironmentId);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4891,\"claim\":\"await assertAgentDefaultEnvironmentSelection(companyId, createInput.defaultEnvironmentId, {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:4974 `res.status(201).json(redactAgentRowForResponse(agent));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/agents\",\"path\":\"server/src/routes/agents.ts\",\"line\":4052,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":4817,\"claim\":\"res.status(404).json({ error: \\\"Company not found\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4821,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4974,\"claim\":\"res.status(201).json(redactAgentRowForResponse(agent));\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -9022,12 +8726,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/status-cards/${id}/recompile. Owner: server/src/services/status-cards.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertStatusCardsEnabled();; await assertCanManageCard(req, card); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/status-cards.ts\",\"line\":224,\"claim\":\"await assertStatusCardsEnabled();\"},{\"path\":\"server/src/routes/status-cards.ts\",\"line\":227,\"claim\":\"await assertCanManageCard(req, card);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/status-cards.ts:233 `res.status(result.alreadyGenerating ? 200 : 202).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/status-cards/:id\",\"path\":\"server/src/routes/status-cards.ts\",\"line\":170,\"resourceOverlap\":4}],\"routeErrors\":[{\"path\":\"server/src/routes/status-cards.ts\",\"line\":233,\"claim\":\"res.status(result.alreadyGenerating ? 200 : 202).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -9102,12 +8806,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${id}/documents/${key}/annotations. Owner: server/src/services/document-annotations.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: createForTarget; The validated target union permits exactly issue, case, and routine document targets; targetBasePath dispatches only those route families.; api.use(caseRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/document-annotation.ts\",\"line\":45,\"declaration\":\"createDocumentAnnotationThreadSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/cases.ts:805 `res.status(201).json(thread);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:id/documents/:key/annotations\",\"path\":\"server/src/routes/cases.ts\",\"line\":745,\"resourceOverlap\":30}],\"routeErrors\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":805,\"claim\":\"res.status(201).json(thread);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -9172,12 +8876,12 @@ const entries: AgentNativeApiOperationContract[] = [
       "decision_queue:manage",
       "decision_triage:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/companies/${companyId}/decision-queues/${encodeURIComponent(key)}/items/${encodeURIComponent(sourceKind)}/${encodeURIComponent(sourceId)}. Owner: server/src/services/decision-queues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertDecisionAccess(db, req, companyId, \"decision_queue:manage\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Route helper assertDecisionAccess first requires Board-or-Agent and same-company scope, then calls authorizationService.decide for decision_queue:manage or decision_triage:manage. The current standard-scope policy explicitly allows active company Agents for these actions; each mutation persists actor/run attribution. It is direct queue/triage work, not a proposal or Human confirmation. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"key\",\"sourceKind\",\"sourceId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/decision-queue.ts\",\"line\":30,\"declaration\":\"removeDecisionQueueItemSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":136,\"claim\":\"await assertDecisionAccess(db, req, companyId, \\\"decision_queue:manage\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/decision-queues.ts:142 `res.json(await svc.removeItem({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/decision-queues.ts\",\"line\":139,\"claim\":\"res.status(400).json({ error: \\\"Invalid attention source identity\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -9272,12 +8976,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/cases/${idOrIdentifier}. Owner: server/src/routes/cases.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertProjectBelongsToCompany(tx, { companyId: caseRow.companyId, projectId: body.projectId ?? null });; await assertParentCaseBelongsToCompany(tx, {; if (nextLabelIds) await assertLabelsBelongToCompany(tx, caseRow.companyId, nextLabelIds); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/cases-schemas.ts\",\"line\":38,\"declaration\":\"patchCaseSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":1416,\"claim\":\"await assertProjectBelongsToCompany(tx, { companyId: caseRow.companyId, projectId: body.projectId ?? null });\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":1417,\"claim\":\"await assertParentCaseBelongsToCompany(tx, {\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":1422,\"claim\":\"if (nextLabelIds) await assertLabelsBelongToCompany(tx, caseRow.companyId, nextLabelIds);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/cases.ts:1490 `res.json(await loadCaseDetail(db, updated));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:id\",\"path\":\"server/src/routes/cases.ts\",\"line\":1402,\"resourceOverlap\":24}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -9412,12 +9116,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/cases/${id}/documents/${key}/annotations/${threadId}. Owner: server/src/services/document-annotations.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: updateStatusForTarget; The validated target union permits exactly issue, case, and routine document targets; targetBasePath dispatches only those route families.; api.use(caseRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\",\"threadId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/document-annotation.ts\",\"line\":58,\"declaration\":\"updateDocumentAnnotationThreadSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/cases.ts:881 `res.json(thread);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:id/documents/:key/annotations/:threadId\",\"path\":\"server/src/routes/cases.ts\",\"line\":757,\"resourceOverlap\":32}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -9481,12 +9185,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "runtime:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/execution-workspaces/${id}. Owner: server/src/services/execution-workspaces.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertRuntimeManageAllowed(req, res, existing.companyId))) return;; assertNoAgentHostWorkspaceCommandMutation( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The handler resolves the workspace and checks authorizationService runtime:manage for req.actor; runtime command routes additionally call assertCanManageExecutionWorkspaceRuntimeServices with the exact workspace/source issue. Current Agent runtime policy admits only authorized runtime control; request execution is persisted with agent/run identity. It is direct, gated runtime control, not a proposal. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/execution-workspace.ts\",\"line\":146,\"declaration\":\"updateExecutionWorkspaceSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/execution-workspaces.ts\",\"line\":1143,\"claim\":\"if (!(await assertRuntimeManageAllowed(req, res, existing.companyId))) return;\"},{\"path\":\"server/src/routes/execution-workspaces.ts\",\"line\":1144,\"claim\":\"assertNoAgentHostWorkspaceCommandMutation(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/execution-workspaces.ts:1386 `res.json(workspace);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/execution-workspaces/:id\",\"path\":\"server/src/routes/execution-workspaces.ts\",\"line\":156,\"resourceOverlap\":24}],\"routeErrors\":[{\"path\":\"server/src/routes/execution-workspaces.ts\",\"line\":1181,\"claim\":\"res.status(404).json({ error: \\\"Execution workspace not found\\\" });\"},{\"path\":\"server/src/routes/execution-workspaces.ts\",\"line\":1186,\"claim\":\"res.status(409).json({\"},{\"path\":\"server/src/routes/execution-workspaces.ts\",\"line\":1206,\"claim\":\"res.status(404).json({ error: \\\"Execution workspace not found\\\" });\"},{\"path\":\"server/src/routes/execution-workspaces.ts\",\"line\":1215,\"claim\":\"res.status(409).json({\"},{\"path\":\"server/src/routes/execution-workspaces.ts\",\"line\":1357,\"claim\":\"res.status(500).json({\"},{\"path\":\"server/src/routes/execution-workspaces.ts\",\"line\":1365,\"claim\":\"res.status(404).json({ error: \\\"Execution workspace not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -9652,7 +9356,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -9660,15 +9365,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "launchcritical",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route DELETE /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}; authenticated same-company access. Company skill policy action skills.remove is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1326 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":353,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":1305,\"claim\":\"res.status(404).json({ error: \\\"Skill not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -9723,43 +9426,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1302,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.remove\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 459,
-        "claim": "router.delete(\"/companies/:companyId/skills/:skillId/test-inputs/:inputId\", async (req, res) => {"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -9773,7 +9456,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.remove against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -9786,7 +9469,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -9794,15 +9478,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "launchcritical",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/install-update. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/install-update; authenticated same-company access. Company skill policy action skills.update is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1402 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":353,\"resourceOverlap\":8},{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":322,\"resourceOverlap\":6}],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":1375,\"claim\":\"res.status(404).json({ error: \\\"Skill not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -9857,48 +9539,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1371,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.update\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 1365,
-        "claim": "router.post("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 230,
-        "claim": "installUpdate"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -9912,7 +9569,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.update against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -9934,12 +9591,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${id}/documents/${key}/annotations/${threadId}/comments. Owner: server/src/services/document-annotations.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: addCommentForTarget; The validated target union permits exactly issue, case, and routine document targets; targetBasePath dispatches only those route families.; api.use(caseRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\",\"threadId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/document-annotation.ts\",\"line\":53,\"declaration\":\"createDocumentAnnotationCommentSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/cases.ts:842 `res.status(201).json(comment);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":842,\"claim\":\"res.status(201).json(comment);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -10002,12 +9659,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "inbox:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/issues/${id}/inbox-archive. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: inbox unarchive endpoint; target resolver admits Agent only after inbox:manage decision; api.use(issueRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":413,\"declaration\":\"inboxArchiveBodySchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:12178 `res.json(removed ?? { ok: true, userId: target.userId });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -10098,12 +9755,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/issues/${id}/comments/${commentId}?mode=cancel. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return; Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"commentId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":17648,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:17760 `res.json(removed);`; server/src/routes/issues.ts:17772 `res.json(publicNativePayloadRow(comment));`; server/src/routes/issues.ts:17858 `res.json(deleted);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/comments/:commentId\",\"path\":\"server/src/routes/issues.ts\",\"line\":17617,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":17652,\"claim\":\"res.status(404).json({ error: \\\"Comment not found\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":17705,\"claim\":\"res.status(403).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":17731,\"claim\":\"res.status(409).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":17829,\"claim\":\"res.status(404).json({ error: \\\"Comment not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -10204,12 +9861,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/status-cards. Owner: server/src/services/status-cards.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertStatusCardsEnabled();; await assertCanMutate(req, companyId);; assertAgentPromptLimit(req, req.body.interestPrompt); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/status-card.ts\",\"line\":150,\"declaration\":\"createStatusCardSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/status-cards.ts\",\"line\":152,\"claim\":\"await assertStatusCardsEnabled();\"},{\"path\":\"server/src/routes/status-cards.ts\",\"line\":153,\"claim\":\"await assertCanMutate(req, companyId);\"},{\"path\":\"server/src/routes/status-cards.ts\",\"line\":154,\"claim\":\"assertAgentPromptLimit(req, req.body.interestPrompt);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/status-cards.ts:163 `res.status(201).json(compile.card);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/status-cards\",\"path\":\"server/src/routes/status-cards.ts\",\"line\":142,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/status-cards.ts\",\"line\":163,\"claim\":\"res.status(201).json(compile.card);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -10276,12 +9933,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/interactions/${interactionId}/reject. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!authorizedResolution) return; Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"interactionId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":2053,\"declaration\":\"rejectIssueThreadInteractionSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":17078,\"claim\":\"if (!authorizedResolution) return;\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:17105 `res.json(await interactionSvc.getById(current.id));`; server/src/routes/issues.ts:17165 `res.json(interaction);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/interactions\",\"path\":\"server/src/routes/issues.ts\",\"line\":16549,\"resourceOverlap\":6},{\"method\":\"GET\",\"route\":\"/api/issues/:id\",\"path\":\"server/src/routes/issues.ts\",\"line\":9352,\"resourceOverlap\":4}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -10391,12 +10048,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/agents/${id}?companyId=${companyId}. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (hasOwn(req.body as object, \"permissions\")) {; res.status(422).json({ error: \"Use /api/agents/:id/permissions for permission changes\" });; assertNoAgentAdapterConfigMutation(req, adapterConfig);; await assertCanManageInstructionsPath(req, existing);; ? assertKnownAdapterType(patchData.adapterType as string | null | undefined); : await assertSelectableAdapterType(nextAdapterType);; assertProviderTraceSettingTransition(; assertExternalInstructionsAdmin(req, existing);; await assertFreshPaperclipRunnerProvider(; assertExternalInstructionsAdmin(req, {; await assertCanUpdateAgent(req, existing);; await assertAgentDefaultEnvironmentSelection(; await assertCanApplyAgentProfileChange(req, existing); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Authenticated Agent can update an Agent resource only when authorization permits agent_config:update; protected profile/instruction fields additionally require direct change grant and consent. Route persists the change directly with revision attribution; no proposal is created. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":148,\"declaration\":\"updateAgentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":5277,\"claim\":\"if (hasOwn(req.body as object, \\\"permissions\\\")) {\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5278,\"claim\":\"res.status(422).json({ error: \\\"Use /api/agents/:id/permissions for permission changes\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5296,\"claim\":\"assertNoAgentAdapterConfigMutation(req, adapterConfig);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5299,\"claim\":\"await assertCanManageInstructionsPath(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5309,\"claim\":\"? assertKnownAdapterType(patchData.adapterType as string | null | undefined)\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5313,\"claim\":\": await assertSelectableAdapterType(nextAdapterType);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5321,\"claim\":\"assertProviderTraceSettingTransition(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5332,\"claim\":\"assertExternalInstructionsAdmin(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5346,\"claim\":\"await assertCanManageInstructionsPath(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5388,\"claim\":\"await assertFreshPaperclipRunnerProvider(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5409,\"claim\":\"assertExternalInstructionsAdmin(req, {\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5417,\"claim\":\"await assertCanUpdateAgent(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5425,\"claim\":\"await assertAgentDefaultEnvironmentSelection(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5441,\"claim\":\"await assertCanApplyAgentProfileChange(req, existing);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5443,\"claim\":\"await assertCanUpdateAgent(req, existing);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:5479 `res.json(redactAgentRowForResponse(agent));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/agents/:id\",\"path\":\"server/src/routes/agents.ts\",\"line\":4287,\"resourceOverlap\":24}],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":5278,\"claim\":\"res.status(422).json({ error: \\\"Use /api/agents/:id/permissions for permission changes\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5293,\"claim\":\"res.status(422).json({ error: \\\"adapterConfig must be an object\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5318,\"claim\":\"res.status(422).json({ error: \\\"runtimeConfig must be an object\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":5462,\"claim\":\"res.status(404).json({ error: \\\"Agent not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -10544,12 +10201,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/folders/${encodeURIComponent(folderId)}/move. Owner: server/src/services/folders.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"folderId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/folder.ts\",\"line\":53,\"declaration\":\"moveFolderSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/folders.ts\",\"line\":127,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/folders.ts:146 `res.json(updated);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/folders.ts\",\"line\":130,\"claim\":\"res.status(404).json({ error: \\\"Folder not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -10593,7 +10250,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "updateWorkspace through the mounted client for /api/workspaces/${encodeURIComponent(workspaceId)}",
     "canonicalService": "server/src/routes/projects.ts",
     "webSurface": "ui/src/components/LegacyProjectRepository.tsx, ui/src/components/ProjectProperties.tsx, ui/src/pages/ProjectWorkspaceDetail.tsx",
-    "apiOperation": "PATCH /api/workspaces/${encodeURIComponent(workspaceId)}",
+    "apiOperation": "PATCH /api/projects/:id/workspaces/:workspaceId",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -10606,12 +10263,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/workspaces/${encodeURIComponent(workspaceId)}. Owner: server/src/routes/projects.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertNoAgentHostWorkspaceCommandMutation(; await assertNoManagedSandboxWorkspacePath(req.body);; if (!(await assertRuntimeManageAllowed(req, res, project.companyId))) return;; throw forbidden(\"Missing permission to manage workspace runtime services\");; await assertCanManageProjectWorkspaceRuntimeServices(db, req, { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"workspaceId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/project.ts\",\"line\":95,\"declaration\":\"updateProjectWorkspaceSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/projects.ts\",\"line\":702,\"claim\":\"assertNoAgentHostWorkspaceCommandMutation(\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":706,\"claim\":\"await assertNoManagedSandboxWorkspacePath(req.body);\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":754,\"claim\":\"if (!(await assertRuntimeManageAllowed(req, res, project.companyId))) return;\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":762,\"claim\":\"throw forbidden(\\\"Missing permission to manage workspace runtime services\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":765,\"claim\":\"await assertCanManageProjectWorkspaceRuntimeServices(db, req, {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/projects.ts:733 `res.json(workspace);`; server/src/routes/projects.ts:1008 `res.json({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/projects.ts\",\"line\":709,\"claim\":\"res.status(404).json({ error: \\\"Project workspace not found\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":714,\"claim\":\"res.status(422).json({ error: \\\"Invalid project workspace payload\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":742,\"claim\":\"res.status(404).json({ error: \\\"Workspace command action not found\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":751,\"claim\":\"res.status(404).json({ error: \\\"Project workspace not found\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":762,\"claim\":\"throw forbidden(\\\"Missing permission to manage workspace runtime services\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":772,\"claim\":\"res.status(422).json({ error: \\\"Project workspace needs a local path before Paperclip can run workspace commands\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":783,\"claim\":\"res.status(404).json({ error: \\\"Workspace command not found for this project workspace\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":787,\"claim\":\"res.status(404).json({ error: \\\"Runtime service not found for this project workspace\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":804,\"claim\":\"res.status(422).json({ error: \\\"Selected runtime service is not defined in this project workspace runtime config\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":808,\"claim\":\"res.status(422).json({ error: `Workspace job \\\"${workspaceCommand.name}\\\" can only be run` });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":812,\"claim\":\"res.status(422).json({ error: `Workspace service \\\"${workspaceCommand.name}\\\" should be started or restarted, not run` });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":816,\"claim\":\"res.status(422).json({ error: \\\"Select a workspace job to run\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":820,\"claim\":\"res.status(422).json({ error: \\\"Project workspace has no workspace command configuration\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -10703,7 +10360,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -10711,15 +10369,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "ordinary",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-inputs. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-inputs; authenticated same-company access. Company skill policy action skills.edit is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:425 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId/test-inputs\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":397,\"resourceOverlap\":30}],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":425,\"claim\":\"res.status(201).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -10774,48 +10430,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 410,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.edit\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 404,
-        "claim": "router.post("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 86,
-        "claim": "createTestInput"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -10829,7 +10460,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.edit against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -10838,7 +10469,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "wakeup through the mounted client for /api/wakeup",
     "canonicalService": "server/src/services/agents.ts",
     "webSurface": "ui/src/components/IssueRunLedger.tsx, ui/src/components/SidebarRecentTasks.tsx, ui/src/pages/AgentDetail.tsx, ui/src/pages/IssueDetail.tsx",
-    "apiOperation": "POST /api/wakeup",
+    "apiOperation": "POST /api/agents/:id/wakeup",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -10854,12 +10485,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agent:wake"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/wakeup. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: Exact route-handler reference from reviewed authorization trace.; handleWakeupRoute allows an Agent actor only when req.actor.agentId === target id; Board actor requires agent:wake. failedRunId submode requires Board.; assertCompanyAccess(req, companyId);; assertBoard(req);; assertCompanyAccess(req, agent.companyId);; router.post(\"/agents/:id/wakeup\", validate(wakeAgentSchema), async (req, res) => {; api.use(\n    agentRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Agent may wake itself only; Board caller must pass agent:wake. Exact failed-run retry is a separate Human-only branch. Raw provider trace requires instance admin. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":228,\"declaration\":\"wakeAgentSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: no exact success response was established in the reviewed handler span; no durable effect or result is claimed.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -11016,12 +10647,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/automation/retry. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId);; await assertStageAutomationTargetWriteAccess(db, req, { access, companyId, stage: plan.targetStage }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/pipeline.ts\",\"line\":160,\"declaration\":\"pipelineAutomationRetryRequestSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2676,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2685,\"claim\":\"await assertStageAutomationTargetWriteAccess(db, req, { access, companyId, stage: plan.targetStage });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2687 `res.json(await svc.retryStageAutomation({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:caseId\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1918,\"resourceOverlap\":4}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -11097,12 +10728,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/plugins/${pluginId}/actions/${encodeURIComponent(key)}. Owner: server/src/routes/plugins.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertAuthenticated(req);; const companyId = assertPluginBridgeScope(req, body?.companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"pluginId\",\"key\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/plugins.ts\",\"line\":1708,\"declaration\":null}],\"routeGuards\":[{\"path\":\"server/src/routes/plugins.ts\",\"line\":1676,\"claim\":\"assertAuthenticated(req);\"},{\"path\":\"server/src/routes/plugins.ts\",\"line\":1714,\"claim\":\"const companyId = assertPluginBridgeScope(req, body?.companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/plugins.ts:1727 `res.json({ data: result });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/plugins.ts\",\"line\":1679,\"claim\":\"res.status(501).json({ error: \\\"Plugin bridge is not enabled\\\" });\"},{\"path\":\"server/src/routes/plugins.ts\",\"line\":1688,\"claim\":\"res.status(404).json({ error: \\\"Plugin not found\\\" });\"},{\"path\":\"server/src/routes/plugins.ts\",\"line\":1704,\"claim\":\"res.status(502).json(bridgeError);\"},{\"path\":\"server/src/routes/plugins.ts\",\"line\":1736,\"claim\":\"res.status(502).json(bridgeError);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -11174,7 +10805,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "syncSkills through the mounted client for /api/skills/sync",
     "canonicalService": "server/src/services/agents.ts",
     "webSurface": "ui/src/components/skill-studio/AgentsUsingSkillDialog.tsx, ui/src/pages/CompanySkills.tsx, ui/src/pages/agent-skills/AgentSkillsTab.tsx",
-    "apiOperation": "POST /api/skills/sync",
+    "apiOperation": "POST /api/agents/:id/skills/sync",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -11188,12 +10819,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/skills/sync. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanUpdateAgent(req, agent); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Agent skill assignment is direct only when the feature mode and agent_config:update authorization allow it; route persists the new desired skill assignment, with no separate proposal state. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/adapter-skills.ts\",\"line\":66,\"declaration\":\"agentSkillSyncSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":3959,\"claim\":\"await assertCanUpdateAgent(req, agent);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:4048 `res.json(annotateConnectorSkills(snapshot, connectorAssignments));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":3992,\"claim\":\"res.status(404).json({ error: \\\"Agent not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -11345,12 +10976,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/folders/items/move. Owner: server/src/services/folders.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/folder.ts\",\"line\":62,\"declaration\":\"moveFolderItemSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/folders.ts\",\"line\":106,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/folders.ts:121 `res.json(moved);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -11482,12 +11113,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "users:invite"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/invites. Owner: server/src/routes/access.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCompanyPermission(req, companyId, \"users:invite\");; if(opts.saasInviteRecipient&&req.body.allowedJoinTypes!==\"agent\")throw conflict(\"Send a recipient-bound invitation from Members\",{code:\"SAAS_EMAIL_INVITE_REQUIRED\"}); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/access.ts\",\"line\":11,\"declaration\":\"createCompanyInviteSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/access.ts\",\"line\":3298,\"claim\":\"await assertCompanyPermission(req, companyId, \\\"users:invite\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":3299,\"claim\":\"if(opts.saasInviteRecipient&&req.body.allowedJoinTypes!==\\\"agent\\\")throw conflict(\\\"Send a recipient-bound invitation from Members\\\",{code:\\\"SAAS_EMAIL_INVITE_REQUIRED\\\"});\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/access.ts:3337 `res.status(201).json({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/invites\",\"path\":\"server/src/routes/access.ts\",\"line\":4153,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/access.ts\",\"line\":3299,\"claim\":\"if(opts.saasInviteRecipient&&req.body.allowedJoinTypes!==\\\"agent\\\")throw conflict(\\\"Send a recipient-bound invitation from Members\\\",{code:\\\"SAAS_EMAIL_INVITE_REQUIRED\\\"});\"},{\"path\":\"server/src/routes/access.ts\",\"line\":3337,\"claim\":\"res.status(201).json({\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -11630,12 +11261,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agents:create"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/agent-hires. Owner: server/src/services/agents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanCreateAgentsForCompany(req, companyId);; throw forbidden(\"Only an agent can inherit native runtime settings from the caller\");; throw forbidden(\"The caller agent is not in this company\");; hireInput.adapterType = await assertSelectableAdapterType(hireInput.adapterType);; assertProviderTraceSettingTransition(req, hireInput.runtimeConfig);; await assertFreshPaperclipRunnerProvider(; assertNoNewAgentLegacyPromptTemplate(; assertNoAgentAdapterConfigMutation(req, rawHireAdapterConfig);; assertExternalInstructionsAdmin(req, {; await assertAgentEnvironmentSelection(companyId, hireInput.adapterType, hireInput.defaultEnvironmentId);; await assertAgentDefaultEnvironmentSelection(companyId, hireInput.defaultEnvironmentId, { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The exact hire route calls assertCanCreateAgentsForCompany and allows an Agent actor when its current agents:create decision allows. This route is also used by native hire_agent (related manifest operation blentera.native.agent.hire, but no exact manifest parity claimed). The company setting requireBoardApprovalForNewAgents selects the persisted postcondition: pending_approval with approval record when on, idle immediately when off. Therefore it is direct Agent-capable subject to permission, safety validation, and company approval policy; under the approval-on policy it creates a pending hire requiring later Human approval. This is a source trace, not an independent policy qualification.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":138,\"declaration\":\"createAgentHireSchema\"},{\"path\":\"packages/shared/src/validators/agent.ts\",\"line\":78,\"declaration\":\"createAgentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":4489,\"claim\":\"await assertCanCreateAgentsForCompany(req, companyId);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4513,\"claim\":\"throw forbidden(\\\"Only an agent can inherit native runtime settings from the caller\\\");\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4525,\"claim\":\"throw forbidden(\\\"The caller agent is not in this company\\\");\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4533,\"claim\":\"hireInput.adapterType = await assertSelectableAdapterType(hireInput.adapterType);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4535,\"claim\":\"assertProviderTraceSettingTransition(req, hireInput.runtimeConfig);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4536,\"claim\":\"await assertFreshPaperclipRunnerProvider(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4541,\"claim\":\"assertNoNewAgentLegacyPromptTemplate(\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4545,\"claim\":\"assertNoAgentAdapterConfigMutation(req, rawHireAdapterConfig);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4563,\"claim\":\"assertExternalInstructionsAdmin(req, {\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4594,\"claim\":\"await assertAgentEnvironmentSelection(companyId, hireInput.adapterType, hireInput.defaultEnvironmentId);\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4595,\"claim\":\"await assertAgentDefaultEnvironmentSelection(companyId, hireInput.defaultEnvironmentId, {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:4804 `res.status(outcome.status).json(outcome.body);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":4513,\"claim\":\"throw forbidden(\\\"Only an agent can inherit native runtime settings from the caller\\\");\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4525,\"claim\":\"throw forbidden(\\\"The caller agent is not in this company\\\");\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4606,\"claim\":\"res.status(404).json({ error: \\\"Company not found\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":4804,\"claim\":\"res.status(outcome.status).json(outcome.body);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -11808,12 +11439,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/work-signals/${id}/${action}. Owner: server/src/services/work-signals/work-signal-service.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: for (const action of [\"apply\", \"ignore\", \"review\"] as const) router.post(`/companies/:companyId/work-signals/:id/${action}`, validate(workSignalDecisionSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.decide(req.actor, companyId, req.params.id as string, action, req.body)); }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "`workSignalService.decide` applies source retention, owner, version and Task ACL checks. `apply` only creates a Roadmap proposal for an explicit shared-source date and requires later Human planning review; this is a candidate proposal operation absent from the typed manifest. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/work-signals.ts\",\"line\":5,\"declaration\":\"workSignalDecisionSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/work-signals.ts\",\"line\":11,\"claim\":\"for (const action of [\\\"apply\\\", \\\"ignore\\\", \\\"review\\\"] as const) router.post(`/companies/:companyId/work-signals/:id/${action}`, validate(workSignalDecisionSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.decide(req.actor, companyId, req.params.id as string, action, req.body)); });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/work-signals.ts:11 `for (const action of [\"apply\", \"ignore\", \"review\"] as const) router.post(`/companies/:companyId/work-signals/:id/${action}`, validate(workSignalDecisionSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.decide(req.actor, companyId, req.params.id as string, action, req.body)); });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -11883,12 +11514,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "pipelines:write"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/pipelines/${pipelineId}/stages. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertPipelineAccess(db, req, pipelineId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId });; await assertWorkflowAutomationRunPermission( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"pipelineId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":48,\"declaration\":\"createStageSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1526,\"claim\":\"const companyId = await assertPipelineAccess(db, req, pipelineId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1527,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1529,\"claim\":\"await assertWorkflowAutomationRunPermission(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1545 `res.status(201).json(stage);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1545,\"claim\":\"res.status(201).json(stage);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -11965,12 +11596,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/playbooks/${playbookId}/compile-skill-candidate. Owner: server/src/services/playbooks.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: projectSkill route delegates to the Playbook service; it requires a current approved source revision and calls Skill lifecycle proposal creation, without activating the candidate.; The operation creates a Skill candidate from an approved Playbook, but exact identity with the manifest native skill-create tool contract was not established; keep it unmapped.; api.use(playbookRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/playbooks.ts\",\"line\":10,\"declaration\":\"projectPlaybookSkillSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/playbooks.ts:26 `router.post(`${base}/:id/compile-skill-candidate`, validate(projectPlaybookSkillSchema), async (req, res) => { res.status(201).json(await svc.projectSkill(req.actor, req.params.companyId as string, req.params.id as string, req.body)); });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/playbooks.ts\",\"line\":26,\"claim\":\"router.post(`${base}/:id/compile-skill-candidate`, validate(projectPlaybookSkillSchema), async (req, res) => { res.status(201).json(await svc.projectSkill(req.actor, req.params.companyId as string, req.params.id as string, req.body)); });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12035,12 +11666,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/issue-links. Owner: server/src/routes/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId);; if (!targetIssue) throw notFound(\"Issue not found\");; await assertIssueLinkMutationAllowed(req, { access, issuesSvc, issue: targetIssue }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":130,\"declaration\":\"createIssueLinkSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2500,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2503,\"claim\":\"if (!targetIssue) throw notFound(\\\"Issue not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2504,\"claim\":\"await assertIssueLinkMutationAllowed(req, { access, issuesSvc, issue: targetIssue });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2523 `res.status(201).json(link);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:caseId/issue-links\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":2471,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2503,\"claim\":\"if (!targetIssue) throw notFound(\\\"Issue not found\\\");\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2523,\"claim\":\"res.status(201).json(link);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12118,12 +11749,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/exports/preview. Owner: server/src/services/companies.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertSameCompanyCeoAgentOrBoard(req, companyId, \"company exports\");; assertSupportCaseExportAccess(req, body);; if (body.includeV7State && (typeof body.expectedUserId!==\"string\" || req.actor.type!==\"board\" || req.actor.userId!==body.expectedUserId)) throw conflict(\"Account changed; reload the export page\",{code:\"ACCOUNT_CHANGED\"});; const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The exact route calls assertSameCompanyCeoAgentOrBoard for company exports, which admits a same-company CEO Agent or Board. The export service receives req.actor and applies narrower per-domain filters; support-case and V7-state export options require a matching Human Board user. Base company export is direct Agent-capable subject to CEO role, with those Human-only export variants blocked. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/company-portability.ts\",\"line\":320,\"declaration\":\"companyPortabilityExportSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/companies.ts\",\"line\":1273,\"claim\":\"await assertSameCompanyCeoAgentOrBoard(req, companyId, \\\"company exports\\\");\"},{\"path\":\"server/src/routes/companies.ts\",\"line\":1275,\"claim\":\"assertSupportCaseExportAccess(req, body);\"},{\"path\":\"server/src/routes/companies.ts\",\"line\":1276,\"claim\":\"if (body.includeV7State && (typeof body.expectedUserId!==\\\"string\\\" || req.actor.type!==\\\"board\\\" || req.actor.userId!==body.expectedUserId)) throw conflict(\\\"Account changed; reload the export page\\\",{code:\\\"ACCOUNT_CHANGED\\\"});\"},{\"path\":\"server/src/routes/companies.ts\",\"line\":1277,\"claim\":\"const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/companies.ts:1279 `res.json(preview);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/companies.ts\",\"line\":1276,\"claim\":\"if (body.includeV7State && (typeof body.expectedUserId!==\\\"string\\\" || req.actor.type!==\\\"board\\\" || req.actor.userId!==body.expectedUserId)) throw conflict(\\\"Account changed; reload the export page\\\",{code:\\\"ACCOUNT_CHANGED\\\"});\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12265,12 +11896,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/status-cards/${id}. Owner: server/src/services/status-cards.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertStatusCardsEnabled();; await assertCanManageCard(req, card);; assertAgentPromptLimit(req, req.body.interestPrompt); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/status-card.ts\",\"line\":158,\"declaration\":\"patchStatusCardSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/status-cards.ts\",\"line\":178,\"claim\":\"await assertStatusCardsEnabled();\"},{\"path\":\"server/src/routes/status-cards.ts\",\"line\":181,\"claim\":\"await assertCanManageCard(req, card);\"},{\"path\":\"server/src/routes/status-cards.ts\",\"line\":182,\"claim\":\"assertAgentPromptLimit(req, req.body.interestPrompt);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/status-cards.ts:196 `res.json(compile?.card ?? restore?.card ?? updated);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/status-cards/:id\",\"path\":\"server/src/routes/status-cards.ts\",\"line\":170,\"resourceOverlap\":24}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12354,12 +11985,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/companies/${encodeURIComponent(companyId)}/folders/${encodeURIComponent(folderId)}. Owner: server/src/services/folders.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"folderId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/folder.ts\",\"line\":44,\"declaration\":\"updateFolderSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/folders.ts\",\"line\":82,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/folders.ts:101 `res.json(updated);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/folders.ts\",\"line\":85,\"claim\":\"res.status(404).json({ error: \\\"Folder not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12423,7 +12054,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -12431,15 +12063,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "launchcritical",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/versions. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/versions; authenticated same-company access. Company skill policy action skills.create is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:794 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId/versions\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":377,\"resourceOverlap\":30}],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":794,\"claim\":\"res.status(201).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12494,48 +12124,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 775,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.create\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 769,
-        "claim": "router.post("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 76,
-        "claim": "createVersion"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -12549,7 +12154,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.create against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -12571,12 +12176,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/companies/${cid}/projects/${pid}/roadmap/tasks/${editor.id}/forecast. Owner: server/src/services/project-control.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: Milestone update route checks company access and dispatches update to Project Control service.; updateMilestone requires v5HumanActorId and tasks:assign permission.; Forecast route checks company access and dispatches forecast update.; forecast rejects Agent updates unless project policy allowAgentForecast is true and forecast ownership is internal.; Org-unit update route checks company access and dispatches service update.; All organization writes require v5HumanActorId and users:manage_permissions.; Governance route dispatches to lifecycle service.; Governance requires skills.approve; Agent authorize rejects all lifecycle actions except skills.propose and explicitly configured skills.promote.; api.use(projectControlRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"projectId\",\"issueId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/project-control.ts\",\"line\":8,\"declaration\":\"taskForecastPatchSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/project-control.ts:38 `router.patch(`${base}/tasks/:issueId/forecast`, validate(taskForecastPatchSchema), async (req, res) => { res.json(publicNativePayloadRow(await svc.forecast(req.actor, req.params.companyId as string, req.params.projectId as string, req.params.issueId as string, req.body))); });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12643,12 +12248,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/projects. Owner: server/src/routes/projects.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId);; if (req.actor.type === \"agent\" && !runContext) throw forbidden(\"Project tools require a current task-bound run\");; if (projectData.visibility === \"private\" && req.actor.source === \"local_implicit\") throw forbidden(\"Private projects require an authenticated human owner\");; await assertProjectEnvironmentSelection(; assertNoAgentHostWorkspaceCommandMutation(; await assertNoManagedSandboxWorkspacePath(workspace);; throw forbidden(\"The current manual input session is unavailable\");; if (sourceOperator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });; await assertDirectInputSessionCurrent(tx, directActor, sourceExpiresAt);; if (prior.details?.fingerprint !== fingerprint) throw conflict(\"Project idempotency key was used with different inputs\");; if (!project) throw conflict(\"Previously created project is no longer available\");; if (!(await canActorReadProjectPrivacy(tx, req.actor, project))) throw notFound(\"Project not found\");; throw notFound(\"Project source is unavailable\");; throw conflict(\"Project source binding is unavailable\");; if (!decision.allowed) throw forbidden(\"Current project authority is required\");; if (!captured?.payloadSourceSnapshot) throw conflict(\"Manual input source capture was not stored\");; if (!(await assertProjectReadAllowed(req, res, result.project))) return;; if (result.duplicate) { res.status(200).json(publicNativePayloadRow(result.project)); return; } Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/project.ts\",\"line\":119,\"declaration\":\"createProjectSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/projects.ts\",\"line\":348,\"claim\":\"assertCompanyAccess(req, companyId);\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":357,\"claim\":\"if (req.actor.type === \\\"agent\\\" && !runContext) throw forbidden(\\\"Project tools require a current task-bound run\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":361,\"claim\":\"if (projectData.visibility === \\\"private\\\" && req.actor.source === \\\"local_implicit\\\") throw forbidden(\\\"Private projects require an authenticated human owner\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":362,\"claim\":\"await assertProjectEnvironmentSelection(\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":366,\"claim\":\"assertNoAgentHostWorkspaceCommandMutation(\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":373,\"claim\":\"await assertNoManagedSandboxWorkspacePath(workspace);\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":399,\"claim\":\"throw forbidden(\\\"The current manual input session is unavailable\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":402,\"claim\":\"if (sourceOperator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":403,\"claim\":\"await assertDirectInputSessionCurrent(tx, directActor, sourceExpiresAt);\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":413,\"claim\":\"if (prior.details?.fingerprint !== fingerprint) throw conflict(\\\"Project idempotency key was used with different inputs\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":415,\"claim\":\"if (!project) throw conflict(\\\"Previously created project is no longer available\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":416,\"claim\":\"if (!(await canActorReadProjectPrivacy(tx, req.actor, project))) throw notFound(\\\"Project not found\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":418,\"claim\":\"if (sourceOperator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":419,\"claim\":\"await assertDirectInputSessionCurrent(tx, directActor, sourceExpiresAt);\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":431,\"claim\":\"throw notFound(\\\"Project source is unavailable\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":439,\"claim\":\"throw conflict(\\\"Project source binding is unavailable\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":455,\"claim\":\"if (!(await canActorReadProjectPrivacy(tx, req.actor, project))) throw notFound(\\\"Project not found\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":478,\"claim\":\"if (!decision.allowed) throw forbidden(\\\"Current project authority is required\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":483,\"claim\":\"if (!captured?.payloadSourceSnapshot) throw conflict(\\\"Manual input source capture was not stored\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":494,\"claim\":\"if (sourceOperator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":495,\"claim\":\"await assertDirectInputSessionCurrent(tx, directActor, sourceExpiresAt);\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":505,\"claim\":\"if (!(await assertProjectReadAllowed(req, res, result.project))) return;\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":506,\"claim\":\"if (result.duplicate) { res.status(200).json(publicNativePayloadRow(result.project)); return; }\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/projects.ts:506 `if (result.duplicate) { res.status(200).json(publicNativePayloadRow(result.project)); return; }`; server/src/routes/projects.ts:511 `res.status(result.duplicate ? 200 : 201).json(publicNativePayloadRow(result.project));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/projects\",\"path\":\"server/src/routes/projects.ts\",\"line\":278,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/projects.ts\",\"line\":357,\"claim\":\"if (req.actor.type === \\\"agent\\\" && !runContext) throw forbidden(\\\"Project tools require a current task-bound run\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":361,\"claim\":\"if (projectData.visibility === \\\"private\\\" && req.actor.source === \\\"local_implicit\\\") throw forbidden(\\\"Private projects require an authenticated human owner\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":399,\"claim\":\"throw forbidden(\\\"The current manual input session is unavailable\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":413,\"claim\":\"if (prior.details?.fingerprint !== fingerprint) throw conflict(\\\"Project idempotency key was used with different inputs\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":415,\"claim\":\"if (!project) throw conflict(\\\"Previously created project is no longer available\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":416,\"claim\":\"if (!(await canActorReadProjectPrivacy(tx, req.actor, project))) throw notFound(\\\"Project not found\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":431,\"claim\":\"throw notFound(\\\"Project source is unavailable\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":439,\"claim\":\"throw conflict(\\\"Project source binding is unavailable\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":455,\"claim\":\"if (!(await canActorReadProjectPrivacy(tx, req.actor, project))) throw notFound(\\\"Project not found\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":478,\"claim\":\"if (!decision.allowed) throw forbidden(\\\"Current project authority is required\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":483,\"claim\":\"if (!captured?.payloadSourceSnapshot) throw conflict(\\\"Manual input source capture was not stored\\\");\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":506,\"claim\":\"if (result.duplicate) { res.status(200).json(publicNativePayloadRow(result.project)); return; }\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":511,\"claim\":\"res.status(result.duplicate ? 200 : 201).json(publicNativePayloadRow(result.project));\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12733,12 +12338,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/learning/cycles/${id}/hypotheses. Owner: server/src/services/learning/learning-service.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: router.post(\"/companies/:companyId/learning/cycles/:id/hypotheses\", validate(learningHypothesisSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.addHypothesis(req.actor, companyId, req.params.id as string, req.body)); }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Hypothesis creation uses the same propose admission for Agent workers and records the hypothesis as a candidate for later evaluation/review. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/learning.ts\",\"line\":21,\"declaration\":\"learningHypothesisSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/learning.ts\",\"line\":17,\"claim\":\"router.post(\\\"/companies/:companyId/learning/cycles/:id/hypotheses\\\", validate(learningHypothesisSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.addHypothesis(req.actor, companyId, req.params.id as string, req.body)); });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/learning.ts:17 `router.post(\"/companies/:companyId/learning/cycles/:id/hypotheses\", validate(learningHypothesisSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.addHypothesis(req.actor, companyId, req.params.id as string, req.body)); });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/learning.ts\",\"line\":17,\"claim\":\"router.post(\\\"/companies/:companyId/learning/cycles/:id/hypotheses\\\", validate(learningHypothesisSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.addHypothesis(req.actor, companyId, req.params.id as string, req.body)); });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12805,12 +12410,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: DELETE /api/issues/${id}/comments/${commentId}. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return; Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"commentId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":17648,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:17760 `res.json(removed);`; server/src/routes/issues.ts:17772 `res.json(publicNativePayloadRow(comment));`; server/src/routes/issues.ts:17858 `res.json(deleted);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/comments/:commentId\",\"path\":\"server/src/routes/issues.ts\",\"line\":17617,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":17652,\"claim\":\"res.status(404).json({ error: \\\"Comment not found\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":17705,\"claim\":\"res.status(403).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":17731,\"claim\":\"res.status(409).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":17829,\"claim\":\"res.status(404).json({ error: \\\"Comment not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -12895,12 +12500,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${idOrIdentifier}/documents/${encodeURIComponent(key)}/revisions/${revisionId}/restore. Owner: server/src/routes/cases.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!existing) throw notFound(\"Case document not found\");; throw conflict(\"Document is locked\", {; if (!sourceRevision) throw notFound(\"Case document revision not found\");; throw conflict(\"Selected revision is already the latest revision\", { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\",\"revisionId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":1081,\"claim\":\"if (!existing) throw notFound(\\\"Case document not found\\\");\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":1083,\"claim\":\"throw conflict(\\\"Document is locked\\\", {\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":1095,\"claim\":\"if (!sourceRevision) throw notFound(\\\"Case document revision not found\\\");\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":1097,\"claim\":\"throw conflict(\\\"Selected revision is already the latest revision\\\", {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/cases.ts:1157 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:id/documents/:key/revisions\",\"path\":\"server/src/routes/cases.ts\",\"line\":1322,\"resourceOverlap\":10},{\"method\":\"GET\",\"route\":\"/api/cases/:id/documents/:key\",\"path\":\"server/src/routes/cases.ts\",\"line\":736,\"resourceOverlap\":8}],\"routeErrors\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":1081,\"claim\":\"if (!existing) throw notFound(\\\"Case document not found\\\");\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":1083,\"claim\":\"throw conflict(\\\"Document is locked\\\", {\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":1095,\"claim\":\"if (!sourceRevision) throw notFound(\\\"Case document revision not found\\\");\"},{\"path\":\"server/src/routes/cases.ts\",\"line\":1097,\"claim\":\"throw conflict(\\\"Selected revision is already the latest revision\\\", {\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13025,12 +12630,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "pipelines:write"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/pipelines. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertPipelineCompanyAccess(req, companyId);; await assertWorkflowAutomationRunPermission( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":28,\"declaration\":\"createPipelineSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1152,\"claim\":\"assertPipelineCompanyAccess(req, companyId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1167,\"claim\":\"await assertWorkflowAutomationRunPermission(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1194 `res.status(201).json(created);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/pipelines\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1028,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1194,\"claim\":\"res.status(201).json(created);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13106,7 +12711,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -13114,15 +12720,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "launchcritical",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/install-catalog. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/install-catalog; authenticated same-company access. Company skill policy action skills.install is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1248 `res.status(result.action === \"created\" ? 201 : 200).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":1248,\"claim\":\"res.status(result.action === \\\"created\\\" ? 201 : 200).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13177,48 +12781,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1221,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.install\", {"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 1216,
-        "claim": "router.post("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 253,
-        "claim": "installCatalog"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -13232,7 +12811,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.install against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -13255,12 +12834,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/approvals/${id}/comments. Owner: server/src/services/approvals.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertApprovalMutationAllowedByRunContext(req, res, approval.companyId))) return; Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Current route uses getAccessibleResource with the Agent actor, blocks only the status-only recovery context via assertApprovalMutationAllowedByRunContext, and records the comment with agent/run attribution. This is a comment, not an approval decision. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/approval.ts\",\"line\":32,\"declaration\":\"addApprovalCommentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/approvals.ts\",\"line\":527,\"claim\":\"if (!(await assertApprovalMutationAllowedByRunContext(req, res, approval.companyId))) return;\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/approvals.ts:545 `res.status(201).json(comment);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/approvals/:id/comments\",\"path\":\"server/src/routes/approvals.ts\",\"line\":515,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/approvals.ts\",\"line\":545,\"claim\":\"res.status(201).json(comment);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13408,12 +12987,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/folders. Owner: server/src/services/folders.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/folder.ts\",\"line\":35,\"declaration\":\"createFolderSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/folders.ts\",\"line\":34,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/folders.ts:49 `res.status(201).json(created);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/folders\",\"path\":\"server/src/routes/folders.ts\",\"line\":26,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/folders.ts\",\"line\":49,\"claim\":\"res.status(201).json(created);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13497,12 +13076,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "runtime:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/execution-workspaces/${id}/runtime-services/${action}. Owner: server/src/services/execution-workspaces.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: Exact route-handler reference from reviewed authorization trace.; assertRuntimeManageAllowed evaluates runtime:manage for req.actor and company.; runtime command handler calls runtime:manage and assertCanManageExecutionWorkspaceRuntimeServices with workspace/source issue.; update handler resolves workspace then enforces runtime:manage before applying patch.; assertCompanyAccess(req, companyId);; assertBoard(req);; router.post(\"/execution-workspaces/:id/runtime-services/:action\", validate(workspaceRuntimeControlTargetSchema), handleExecutionWorkspaceRuntimeCommand);; controlRuntimeServices; api.use(executionWorkspaceRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The handler resolves the workspace and checks authorizationService runtime:manage for req.actor; runtime command routes additionally call assertCanManageExecutionWorkspaceRuntimeServices with the exact workspace/source issue. Current Agent runtime policy admits only authorized runtime control; request execution is persisted with agent/run identity. It is direct, gated runtime control, not a proposal. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"action\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/execution-workspace.ts\",\"line\":49,\"declaration\":\"workspaceRuntimeControlTargetSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: no exact success response was established in the reviewed handler span; no durable effect or result is claimed.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13634,12 +13213,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/routines/${id}/run. Owner: server/src/services/routines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const routine = await assertCanManageExistingRoutine(req, req.params.id as string);; await assertBoardCanAssignTasks(req, routine.companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/routine.ts\",\"line\":231,\"declaration\":\"runRoutineSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":674,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, req.params.id as string);\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":679,\"claim\":\"await assertBoardCanAssignTasks(req, routine.companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:697 `res.status(202).json(run);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/routines/:id\",\"path\":\"server/src/routes/routines.ts\",\"line\":220,\"resourceOverlap\":4}],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":676,\"claim\":\"res.status(404).json({ error: \\\"Routine not found\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":697,\"claim\":\"res.status(202).json(run);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13733,12 +13312,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/interactions/${interactionId}/verdicts. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!authorizedResolution) return; Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"interactionId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":2092,\"declaration\":\"submitIssueThreadInteractionVerdictsSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":17274,\"claim\":\"if (!authorizedResolution) return;\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:17344 `res.json(interaction);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13810,7 +13389,7 @@ const entries: AgentNativeApiOperationContract[] = [
     "customerJob": "createWorkspace through the mounted client for /api/workspaces",
     "canonicalService": "server/src/routes/projects.ts",
     "webSurface": "ui/src/components/ProjectProperties.tsx",
-    "apiOperation": "POST /api/workspaces",
+    "apiOperation": "POST /api/projects/:id/workspaces",
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
@@ -13825,12 +13404,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "project:read"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/workspaces. Owner: server/src/routes/projects.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertNoAgentHostWorkspaceCommandMutation(; await assertNoManagedSandboxWorkspacePath(req.body); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/project.ts\",\"line\":88,\"declaration\":\"createProjectWorkspaceSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/projects.ts\",\"line\":663,\"claim\":\"assertNoAgentHostWorkspaceCommandMutation(\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":667,\"claim\":\"await assertNoManagedSandboxWorkspacePath(req.body);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/projects.ts:691 `res.status(201).json(workspace);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/projects/:id/workspaces\",\"path\":\"server/src/routes/projects.ts\",\"line\":572,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/projects.ts\",\"line\":670,\"claim\":\"res.status(422).json({ error: \\\"Invalid project workspace payload\\\" });\"},{\"path\":\"server/src/routes/projects.ts\",\"line\":691,\"claim\":\"res.status(201).json(workspace);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13898,7 +13477,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -13906,15 +13486,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "ordinary",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/fork. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/fork; authenticated same-company access is checked by assertCompanyAccess. No skills.* policy action is asserted by this route.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:871 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":871,\"claim\":\"res.status(201).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -13969,43 +13547,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 846,
+        "claim": "await assertCanMutateCompanySkills("
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 840,
-        "claim": "router.post("
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -14019,7 +13577,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler calls assertCompanyAccess for the authenticated actor and company. The source does not show a skills.* policy action or separate tasks:assign check on this route; no broader permission is inferred. Qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -14041,12 +13599,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/documents/${encodeURIComponent(key)}/revisions/${revisionId}/restore. Owner: server/src/services/documents.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;; !(await assertDeliverableMutationAllowedByRunContext(req, res, issue)) Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\",\"revisionId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":2148,\"declaration\":\"restoreIssueDocumentRevisionSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":11141,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":11143,\"claim\":\"!(await assertDeliverableMutationAllowedByRunContext(req, res, issue))\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:11277 `res.json(result.document);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/documents/:key/revisions\",\"path\":\"server/src/routes/issues.ts\",\"line\":11091,\"resourceOverlap\":10},{\"method\":\"GET\",\"route\":\"/api/issues/:id/documents/:key\",\"path\":\"server/src/routes/issues.ts\",\"line\":10420,\"resourceOverlap\":8}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":11152,\"claim\":\"res.status(400).json({\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14123,12 +13681,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/learning/cycles. Owner: server/src/services/learning/learning-service.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: router.post(\"/companies/:companyId/learning/cycles\", validate(learningCycleSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.create(req.actor, companyId, req.body)); }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The service admits Agent actors through assertDerivedWorker for proposal-scoped learning-cycle creation, then stores agent attribution. It does not grant policy publication. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/learning.ts\",\"line\":13,\"declaration\":\"learningCycleSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/learning.ts\",\"line\":15,\"claim\":\"router.post(\\\"/companies/:companyId/learning/cycles\\\", validate(learningCycleSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.create(req.actor, companyId, req.body)); });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/learning.ts:15 `router.post(\"/companies/:companyId/learning/cycles\", validate(learningCycleSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.create(req.actor, companyId, req.body)); });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/learning/cycles\",\"path\":\"server/src/routes/learning.ts\",\"line\":13,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/learning.ts\",\"line\":15,\"claim\":\"router.post(\\\"/companies/:companyId/learning/cycles\\\", validate(learningCycleSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.create(req.actor, companyId, req.body)); });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14198,12 +13756,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "workflows:run"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/workflows/${workflowId}/run. Owner: server/src/services/workflows/workflow-executor.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertWorkflowsEnabled();; await assertPermission(req, companyId, \"workflows:run\");; if (!principal || expected !== principal) throw conflict(\"Account changed; reload\", { code: \"ACCOUNT_CHANGED\" }); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"workflowId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/workflow.ts\",\"line\":336,\"declaration\":\"startWorkflowRunSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/workflows.ts\",\"line\":517,\"claim\":\"await assertWorkflowsEnabled();\"},{\"path\":\"server/src/routes/workflows.ts\",\"line\":519,\"claim\":\"await assertPermission(req, companyId, \\\"workflows:run\\\");\"},{\"path\":\"server/src/routes/workflows.ts\",\"line\":554,\"claim\":\"if (!principal || expected !== principal) throw conflict(\\\"Account changed; reload\\\", { code: \\\"ACCOUNT_CHANGED\\\" });\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/workflows.ts:529 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/workflows/:workflowId\",\"path\":\"server/src/routes/workflows.ts\",\"line\":954,\"resourceOverlap\":8},{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/workflows\",\"path\":\"server/src/routes/workflows.ts\",\"line\":432,\"resourceOverlap\":6}],\"routeErrors\":[{\"path\":\"server/src/routes/workflows.ts\",\"line\":529,\"claim\":\"res.status(201).json(result);\"},{\"path\":\"server/src/routes/workflows.ts\",\"line\":554,\"claim\":\"if (!principal || expected !== principal) throw conflict(\\\"Account changed; reload\\\", { code: \\\"ACCOUNT_CHANGED\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14269,12 +13827,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/routines/${id}/description/annotations. Owner: server/src/services/document-annotations.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const routine = await assertCanManageExistingRoutine(req, req.params.id as string); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/document-annotation.ts\",\"line\":45,\"declaration\":\"createDocumentAnnotationThreadSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":272,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, req.params.id as string);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:305 `res.status(201).json(thread);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/routines/:id/description/annotations\",\"path\":\"server/src/routes/routines.ts\",\"line\":236,\"resourceOverlap\":28}],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":274,\"claim\":\"res.status(404).json({ error: \\\"Routine not found\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":305,\"claim\":\"res.status(201).json(thread);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14335,12 +13893,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/runner-goal/actions. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (req.actor.type !== \"agent\") assertBoard(req);; if (!(await assertIssueWriteInfluenceAllowed(req, res, issue))) return; Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/runner-goal.ts\",\"line\":93,\"declaration\":\"runnerGoalActionRequestSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":8836,\"claim\":\"if (req.actor.type !== \\\"agent\\\") assertBoard(req);\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":8837,\"claim\":\"if (!(await assertIssueWriteInfluenceAllowed(req, res, issue))) return;\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:8844 `res.status(202).json(accepted);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":8831,\"claim\":\"res.status(403).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":8844,\"claim\":\"res.status(202).json(accepted);\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":8847,\"claim\":\"res.status(409).json({\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14418,12 +13976,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/exports. Owner: server/src/services/companies.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertSameCompanyCeoAgentOrBoard(req, companyId, \"company exports\");; assertSupportCaseExportAccess(req, body);; if (body.includeV7State && (typeof body.expectedUserId!==\"string\" || req.actor.type!==\"board\" || req.actor.userId!==body.expectedUserId)) throw conflict(\"Account changed; reload the export page\",{code:\"ACCOUNT_CHANGED\"});; const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The exact route calls assertSameCompanyCeoAgentOrBoard for company exports, which admits a same-company CEO Agent or Board. The export service receives req.actor and applies narrower per-domain filters; support-case and V7-state export options require a matching Human Board user. Base company export is direct Agent-capable subject to CEO role, with those Human-only export variants blocked. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/company-portability.ts\",\"line\":320,\"declaration\":\"companyPortabilityExportSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/companies.ts\",\"line\":1284,\"claim\":\"await assertSameCompanyCeoAgentOrBoard(req, companyId, \\\"company exports\\\");\"},{\"path\":\"server/src/routes/companies.ts\",\"line\":1286,\"claim\":\"assertSupportCaseExportAccess(req, body);\"},{\"path\":\"server/src/routes/companies.ts\",\"line\":1287,\"claim\":\"if (body.includeV7State && (typeof body.expectedUserId!==\\\"string\\\" || req.actor.type!==\\\"board\\\" || req.actor.userId!==body.expectedUserId)) throw conflict(\\\"Account changed; reload the export page\\\",{code:\\\"ACCOUNT_CHANGED\\\"});\"},{\"path\":\"server/src/routes/companies.ts\",\"line\":1288,\"claim\":\"const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/companies.ts:1290 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/companies.ts\",\"line\":1287,\"claim\":\"if (body.includeV7State && (typeof body.expectedUserId!==\\\"string\\\" || req.actor.type!==\\\"board\\\" || req.actor.userId!==body.expectedUserId)) throw conflict(\\\"Account changed; reload the export page\\\",{code:\\\"ACCOUNT_CHANGED\\\"});\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14565,12 +14123,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/goals. Owner: server/src/services/goals.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The existing Goal create/update route uses current company resource access and goalService, with actor attribution; it has no Board-only guard. This review does not claim a registered gateway tool or Native parity receipt. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/goal.ts\",\"line\":4,\"declaration\":\"createGoalSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/goals.ts\",\"line\":30,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/goals.ts:47 `res.status(201).json(goal);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/goals\",\"path\":\"server/src/routes/goals.ts\",\"line\":14,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/goals.ts\",\"line\":47,\"claim\":\"res.status(201).json(goal);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14627,12 +14185,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/transition. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":88,\"declaration\":\"transitionCaseSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2327,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2329 `res.json(await svc.transitionCase({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14715,12 +14273,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/logo. Owner: server/src/routes/assets.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertCompanyAccess(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The exact upload handler calls assertCompanyAccess and then persists a company asset with actor agent/user attribution. This guard enforces same-company access but adds no Human-only or per-action permission gate; the endpoint therefore admits a same-company Agent directly. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/assets.ts\",\"line\":226,\"claim\":\"assertCompanyAccess(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/assets.ts:309 `res.status(201).json({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/assets.ts\",\"line\":233,\"claim\":\"res.status(422).json({\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":238,\"claim\":\"res.status(400).json({ error: err.message });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":246,\"claim\":\"res.status(400).json({ error: \\\"Missing file field 'file'\\\" });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":252,\"claim\":\"res.status(422).json({ error: `Unsupported image type: ${contentType || \\\"unknown\\\"}` });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":260,\"claim\":\"res.status(422).json({ error: \\\"SVG could not be sanitized\\\" });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":267,\"claim\":\"res.status(422).json({ error: \\\"Image is empty\\\" });\"},{\"path\":\"server/src/routes/assets.ts\",\"line\":309,\"claim\":\"res.status(201).json({\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14802,12 +14360,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/resolve-suggestion. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":101,\"declaration\":\"resolveSuggestionSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2352,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2354 `res.json(await svc.resolveSuggestion({`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14891,12 +14449,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/routines. Owner: server/src/services/routines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertBoardCanAssignTasks(req, companyId);; assertCanManageCompanyRoutine(req, companyId, { Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/routine.ts\",\"line\":130,\"declaration\":\"createRoutineSchema\"},{\"path\":\"packages/shared/src/validators/routine.ts\",\"line\":78,\"declaration\":\"routineCreateObjectSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":177,\"claim\":\"await assertBoardCanAssignTasks(req, companyId);\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":178,\"claim\":\"assertCanManageCompanyRoutine(req, companyId, {\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:217 `res.status(201).json(created);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/routines\",\"path\":\"server/src/routes/routines.ts\",\"line\":167,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":217,\"claim\":\"res.status(201).json(created);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -14966,12 +14524,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${idOrIdentifier}/documents/${encodeURIComponent(key)}/unlock. Owner: server/src/routes/cases.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!link) throw notFound(\"Case document not found\"); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":1056,\"claim\":\"if (!link) throw notFound(\\\"Case document not found\\\");\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/cases.ts:1068 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:id/documents/:key\",\"path\":\"server/src/routes/cases.ts\",\"line\":736,\"resourceOverlap\":8},{\"method\":\"GET\",\"route\":\"/api/cases/:id\",\"path\":\"server/src/routes/cases.ts\",\"line\":1402,\"resourceOverlap\":4}],\"routeErrors\":[{\"path\":\"server/src/routes/cases.ts\",\"line\":1056,\"claim\":\"if (!link) throw notFound(\\\"Case document not found\\\");\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -15084,7 +14642,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -15095,12 +14654,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "tasks:assign"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-runs/${encodeURIComponent(runId)}/cancel. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/test-runs/${encodeURIComponent(runId)}/cancel; authenticated same-company access. Company skill policy action skills.test is checked on the current resource. Test-harness operations additionally check tasks:assign against the resolved issue/assignee scope.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:728 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId/test-runs/:runId\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":579,\"resourceOverlap\":12},{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId/test-runs\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":569,\"resourceOverlap\":10}],\"routeErrors\":[{\"path\":\"server/src/routes/company-skills.ts\",\"line\":712,\"claim\":\"res.status(404).json({ error: \\\"Test run not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -15155,48 +14714,33 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 692,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.test\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 693,
+        "claim": "await assertCanOrchestrateSkillTestHarness(req, companyId, await loadSkillTestRunAssignmentScope(companyId, skillId, runId));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
+      },
+      {
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       },
       {
         "path": "server/src/routes/company-skills.ts",
         "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 688,
-        "claim": "router.post(\"/companies/:companyId/skills/:skillId/test-runs/:runId/cancel\", async (req, res) => {"
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 142,
-        "claim": "cancelTestRun"
+        "claim": "async function assertCanOrchestrateSkillTestHarness("
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -15210,7 +14754,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.test against the resolved resource. This route also requires tasks:assign for the resolved test-run issue/assignee scope. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -15223,7 +14767,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -15231,15 +14776,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "ordinary",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/skills/browse-project. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route POST /api/companies/${encodeURIComponent(companyId)}/skills/browse-project; authenticated same-company access. Company skill policy action skills.import is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1259 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -15294,48 +14837,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1257,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.import\", { sourceType: \"workspace\" });"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 1252,
-        "claim": "router.post("
-      },
-      {
-        "path": "ui/src/api/companySkills.ts",
-        "line": 220,
-        "claim": "browseProject"
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -15349,7 +14867,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.import against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -15371,12 +14889,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/cases/${caseId}/review. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertCaseAccess(db, req, caseId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"caseId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":121,\"declaration\":\"reviewCaseSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":2380,\"claim\":\"const companyId = await assertCaseAccess(db, req, caseId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:2382 `res.json(await svc.reviewCase({ companyId, caseId, ...req.body, actor }));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/cases/:caseId\",\"path\":\"server/src/routes/pipelines.ts\",\"line\":1918,\"resourceOverlap\":4}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -15454,12 +14972,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "runtime:manage"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/execution-workspaces/${id}/runtime-commands/${action}. Owner: server/src/services/execution-workspaces.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: Exact route-handler reference from reviewed authorization trace.; assertRuntimeManageAllowed evaluates runtime:manage for req.actor and company.; runtime command handler calls runtime:manage and assertCanManageExecutionWorkspaceRuntimeServices with workspace/source issue.; update handler resolves workspace then enforces runtime:manage before applying patch.; assertCompanyAccess(req, companyId);; assertBoard(req);; router.post(\"/execution-workspaces/:id/runtime-services/:action\", validate(workspaceRuntimeControlTargetSchema), handleExecutionWorkspaceRuntimeCommand);; controlRuntimeCommands; api.use(executionWorkspaceRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The handler resolves the workspace and checks authorizationService runtime:manage for req.actor; runtime command routes additionally call assertCanManageExecutionWorkspaceRuntimeServices with the exact workspace/source issue. Current Agent runtime policy admits only authorized runtime control; request execution is persisted with agent/run identity. It is direct, gated runtime control, not a proposal. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"action\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/execution-workspace.ts\",\"line\":49,\"declaration\":\"workspaceRuntimeControlTargetSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: no exact success response was established in the reviewed handler span; no durable effect or result is claimed.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -15600,12 +15118,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/routine-triggers/${id}/rotate-secret. Owner: server/src/services/routines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const routine = await assertCanManageExistingRoutine(req, trigger.routineId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/routine.ts\",\"line\":247,\"declaration\":\"rotateRoutineTriggerSecretSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":638,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, trigger.routineId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:669 `res.json(rotated);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":635,\"claim\":\"res.status(404).json({ error: \\\"Routine trigger not found\\\" });\"},{\"path\":\"server/src/routes/routines.ts\",\"line\":640,\"claim\":\"res.status(404).json({ error: \\\"Routine trigger not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -15681,7 +15199,8 @@ const entries: AgentNativeApiOperationContract[] = [
     "toolId": null,
     "legacyAliases": [],
     "principalTypes": [
-      "agent"
+      "agent",
+      "human"
     ],
     "experienceProfiles": [
       "existing_api_client"
@@ -15689,15 +15208,13 @@ const entries: AgentNativeApiOperationContract[] = [
     "mode": "DIRECT_AGENT",
     "criticality": "material",
     "sourceMateriality": "launchcritical",
-    "requiredPermissions": [
-      "tasks:assign"
-    ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/files. Owner: server/src/services/company-skills.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
+    "requiredPermissions": [],
+    "resourceScope": "Current source route PATCH /api/companies/${encodeURIComponent(companyId)}/skills/${encodeURIComponent(skillId)}/files; authenticated same-company access. Company skill policy action skills.edit is checked on the current resource.",
+    "approvalPolicy": "UNQUALIFIED_SOURCE_ONLY: route-level company skill policy is the current governance gate where present; no separate approval/consent guarantee is asserted by this candidate.",
     "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
     "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/company-skills.ts:1140 `res.json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/companies/:companyId/skills/:skillId/files\",\"path\":\"server/src/routes/company-skills.ts\",\"line\":1010,\"resourceOverlap\":30}],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -15752,43 +15269,23 @@ const entries: AgentNativeApiOperationContract[] = [
     "authorityEvidence": [
       {
         "path": "server/src/routes/company-skills.ts",
+        "line": 1114,
+        "claim": "await assertCanMutateCompanySkills(req, companyId, \"skills.edit\", () => skillPolicyResource({ companyId, skillId }));"
+      },
+      {
+        "path": "server/src/routes/company-skills.ts",
         "line": 208,
-        "claim": "assertCanMutateCompanySkills rejects unauthenticated/cross-company Agent actors and evaluates the configured skill-policy action/resource for req.actor."
+        "claim": "async function assertCanMutateCompanySkills("
       },
       {
         "path": "server/src/routes/company-skills.ts",
-        "line": 252,
-        "claim": "assertCanOrchestrateSkillTestHarness evaluates tasks:assign for the authenticated actor on the test-run assignment scope (test-run create/cancel/delete only)."
+        "line": 241,
+        "claim": "const policyDecision = await skillPolicies.evaluate({"
       },
       {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 102,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 220,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 257,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 324,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 349,
-        "claim": "assertCompanyAccess(req, companyId);"
-      },
-      {
-        "path": "server/src/routes/company-skills.ts",
-        "line": 1108,
-        "claim": "router.patch("
+        "path": "server/src/routes/authz.ts",
+        "line": 75,
+        "claim": "export function assertCompanyAccess(req: Request, companyId: string) {"
       }
     ],
     "qualificationStatus": "UNQUALIFIED_SOURCE_ONLY",
@@ -15826,7 +15323,7 @@ const entries: AgentNativeApiOperationContract[] = [
         ]
       }
     ],
-    "authorizationRationale": "The handler invokes assertCanMutateCompanySkills with the operation-specific skills.* action and resource; that helper checks authenticated actor/company boundary, then the company skill policy for req.actor. Where test harness orchestration applies, it separately requires authorizationService tasks:assign for the assigned agent/issue. The service persists the requested skill/test action and records actor attribution; there is no Human-only check or separate proposal state. Classify DIRECT_AGENT conditional on the company policy and applicable assignment permission.",
+    "authorizationRationale": "The matched handler requires authenticated company access, rejects cross-company Agent actors, applies the current skill_config:update platform safety check, and evaluates the exact company skill-policy action skills.edit against the resolved resource. Source inspection does not establish a separate approval workflow; qualification and test status remain open. This source metadata grants no new permission, tool, alias, or MCP exposure.",
     "testStatus": "NOT_REVIEWED"
   },
   {
@@ -15848,12 +15345,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/documents/${key}/annotations/${threadId}/comments. Owner: server/src/services/document-annotations.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return; Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"key\",\"threadId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/document-annotation.ts\",\"line\":53,\"declaration\":\"createDocumentAnnotationCommentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":10685,\"claim\":\"if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:10747 `res.status(201).json(publicNativePayloadRow(comment));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":10692,\"claim\":\"res.status(400).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":10747,\"claim\":\"res.status(201).json(publicNativePayloadRow(comment));\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -15914,12 +15411,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/issues/${id}/comments. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: ? (assertCompanyAccess(req, candidate.companyId), candidate); if (!(await instanceSettings.getExperimental()).enableAgentChat) throw notFound(\"Agent Chat is disabled\");; if (!req.actor.userId) throw forbidden(\"Board user access required\");; if (req.actor.userId !== issue.conversationUserId) throw forbidden(\"Only the conversation owner can send messages or start a new session\");; if (!req.body.clientRequestId) throw unprocessable(\"Chat messages require a clientRequestId for safe retries\");; if (req.body.body.trim() !== \"/new\" && !(await assertBoardCommentNotPaused(req, res, issue))) return;; throw forbidden(\"The current conversation owner session is unavailable\");; await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,; throw notFound(\"Conversation not found\");; if (!capturedComment?.payloadSourceSnapshot) throw conflict(\"Conversation Human input capture was not stored\");; if (!source.sourceVersion) throw conflict(\"Conversation Human input version is unavailable\");; if (!capturedIssue?.payloadSourceSnapshot) throw conflict(\"Conversation Task source capture was not stored\");; const commentAccessDecision = await assertAgentIssueCommentAllowed(; if (!(await assertBoardCommentNotPaused(req, res, issue))) return;; !assertStructuredCommentFieldsAllowed(req, res, {; !(await assertAgentIssueMutationAllowed(req, res, issue, {; !(await assertExplicitResumeIntentAllowed(req, res, issue, {; if (!(await assertExplicitResumeIntentAllowed(req, res, issue))) return;; !(await assertCrossIssueInfluenceWithinRunCap( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "Agent comments flow through issue comment authorization and actor attribution; Human-only conversation shell handling is a separate branch. This is a source trace, not an independent policy qualification.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":1035,\"declaration\":\"addIssueCommentSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":18028,\"claim\":\"? (assertCompanyAccess(req, candidate.companyId), candidate)\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18032,\"claim\":\"if (!(await instanceSettings.getExperimental()).enableAgentChat) throw notFound(\\\"Agent Chat is disabled\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18033,\"claim\":\"if (!req.actor.userId) throw forbidden(\\\"Board user access required\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18034,\"claim\":\"if (req.actor.userId !== issue.conversationUserId) throw forbidden(\\\"Only the conversation owner can send messages or start a new session\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18035,\"claim\":\"if (!req.body.clientRequestId) throw unprocessable(\\\"Chat messages require a clientRequestId for safe retries\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18036,\"claim\":\"if (req.body.body.trim() !== \\\"/new\\\" && !(await assertBoardCommentNotPaused(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18043,\"claim\":\"throw forbidden(\\\"The current conversation owner session is unavailable\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18044,\"claim\":\"await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18051,\"claim\":\"throw notFound(\\\"Conversation not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18060,\"claim\":\"throw notFound(\\\"Conversation not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18079,\"claim\":\"if (!capturedComment?.payloadSourceSnapshot) throw conflict(\\\"Conversation Human input capture was not stored\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18085,\"claim\":\"if (!source.sourceVersion) throw conflict(\\\"Conversation Human input version is unavailable\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18096,\"claim\":\"if (!capturedIssue?.payloadSourceSnapshot) throw conflict(\\\"Conversation Task source capture was not stored\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18106,\"claim\":\"await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18137,\"claim\":\"const commentAccessDecision = await assertAgentIssueCommentAllowed(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18143,\"claim\":\"if (!(await assertBoardCommentNotPaused(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18149,\"claim\":\"!assertStructuredCommentFieldsAllowed(req, res, {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18195,\"claim\":\"!(await assertAgentIssueMutationAllowed(req, res, issue, {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18203,\"claim\":\"!(await assertExplicitResumeIntentAllowed(req, res, issue, {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18213,\"claim\":\"if (!(await assertExplicitResumeIntentAllowed(req, res, issue))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18267,\"claim\":\"!(await assertCrossIssueInfluenceWithinRunCap(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:18118 `res.status(201).json(publicNativePayloadRow(comment));`; server/src/routes/issues.ts:19152 `res.status(201).json(publicNativePayloadRow(comment));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id/comments\",\"path\":\"server/src/routes/issues.ts\",\"line\":16011,\"resourceOverlap\":26}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":18032,\"claim\":\"if (!(await instanceSettings.getExperimental()).enableAgentChat) throw notFound(\\\"Agent Chat is disabled\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18033,\"claim\":\"if (!req.actor.userId) throw forbidden(\\\"Board user access required\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18034,\"claim\":\"if (req.actor.userId !== issue.conversationUserId) throw forbidden(\\\"Only the conversation owner can send messages or start a new session\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18043,\"claim\":\"throw forbidden(\\\"The current conversation owner session is unavailable\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18051,\"claim\":\"throw notFound(\\\"Conversation not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18060,\"claim\":\"throw notFound(\\\"Conversation not found\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18079,\"claim\":\"if (!capturedComment?.payloadSourceSnapshot) throw conflict(\\\"Conversation Human input capture was not stored\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18085,\"claim\":\"if (!source.sourceVersion) throw conflict(\\\"Conversation Human input version is unavailable\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18096,\"claim\":\"if (!capturedIssue?.payloadSourceSnapshot) throw conflict(\\\"Conversation Task source capture was not stored\\\");\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18118,\"claim\":\"res.status(201).json(publicNativePayloadRow(comment));\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18345,\"claim\":\"res.status(404).json({ error: \\\"Issue not found\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18388,\"claim\":\"res.status(403).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":18559,\"claim\":\"res.status(404).json({ error: \\\"Issue not found\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":19152,\"claim\":\"res.status(201).json(publicNativePayloadRow(comment));\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -16004,12 +15501,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "company-scope:read"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${companyId}/readiness/assess. Owner: server/src/services/readiness/readiness-service.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: admit uses company-scope:read, company access, and readiness feature gate; readinessOwner accepts Agent actor.; This route admits Agent principals with company-scope:read and writes an assessment to the readiness owner. It is not currently represented by a manifest operation; source review did not find a launch-critical state transition.; api.use(readinessRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "This route admits Agent principals with company-scope:read and writes an assessment to the readiness owner. It is not currently represented by a manifest operation; source review did not find a launch-critical state transition. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/readiness.ts\",\"line\":35,\"declaration\":\"assessReadinessSchema\"}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/readiness.ts:137 `res.status(201).json(await service.assess(companyId, req.body, owner));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/readiness.ts\",\"line\":137,\"claim\":\"res.status(201).json(await service.assess(companyId, req.body, owner));\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -16076,12 +15573,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "agents:create"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/companies/${encodeURIComponent(companyId)}/teams/catalog/${encodeURIComponent(catalogRef)}/install. Owner: server/src/services/teams-catalog.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertCanInstallCatalogTeam(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "`server/src/routes/teams-catalog.ts` admits an Agent with `agents:create`; installation creates a team of Agents, while the manifest `blentera.co-worker.setup.propose` creates only an unpublished setup proposal. Keep this a distinct missing operation until the exact install contract is represented. This is a source trace, not an independent policy qualification.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\",\"catalogId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/teams-catalog.ts\",\"line\":146,\"declaration\":\"catalogTeamInstallSchema\"},{\"path\":\"packages/shared/src/validators/teams-catalog.ts\",\"line\":135,\"declaration\":\"catalogTeamPreviewSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/teams-catalog.ts\",\"line\":115,\"claim\":\"await assertCanInstallCatalogTeam(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/teams-catalog.ts:120 `res.status(201).json(result);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/teams-catalog.ts\",\"line\":120,\"claim\":\"res.status(201).json(result);\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -16154,12 +15651,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/heartbeat-runs/${input.runId}/watchdog-decisions. Owner: server/src/services/recovery/service.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: watchdog decision endpoint; run access is checked before recording actor-attributed decision; api.use(\n    agentRoutes( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"runId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":7106,\"declaration\":null}],\"routeGuards\":[]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/agents.ts:7131 `res.json(row);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/agents.ts\",\"line\":7108,\"claim\":\"res.status(400).json({ error: \\\"Unsupported watchdog decision\\\" });\"},{\"path\":\"server/src/routes/agents.ts\",\"line\":7117,\"claim\":\"res.status(400).json({ error: \\\"snoozedUntil must be a future ISO datetime\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -16229,12 +15726,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "users:invite"
     ],
-    "resourceScope": "Unqualified source inventory. Route: POST /api/invites/${inviteId}/revoke. Owner: server/src/routes/access.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: if (!invite) throw notFound(\"Invite not found\");; await assertInstanceAdmin(req);; if (!invite.companyId) throw conflict(\"Invite is missing company scope\");; await assertCompanyPermission(req, invite.companyId, \"users:invite\");; if (invite.acceptedAt) throw conflict(\"Invite already consumed\");; if (invite.revokedAt) return res.json(invite); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"inviteId\"],\"bodySchemaDeclarations\":[],\"routeGuards\":[{\"path\":\"server/src/routes/access.ts\",\"line\":4119,\"claim\":\"if (!invite) throw notFound(\\\"Invite not found\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4121,\"claim\":\"await assertInstanceAdmin(req);\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4123,\"claim\":\"if (!invite.companyId) throw conflict(\\\"Invite is missing company scope\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4124,\"claim\":\"await assertCompanyPermission(req, invite.companyId, \\\"users:invite\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4126,\"claim\":\"if (invite.acceptedAt) throw conflict(\\\"Invite already consumed\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4127,\"claim\":\"if (invite.revokedAt) return res.json(invite);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/access.ts:4127 `if (invite.revokedAt) return res.json(invite);`; server/src/routes/access.ts:4150 `res.json(revoked);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[{\"path\":\"server/src/routes/access.ts\",\"line\":4119,\"claim\":\"if (!invite) throw notFound(\\\"Invite not found\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4123,\"claim\":\"if (!invite.companyId) throw conflict(\\\"Invite is missing company scope\\\");\"},{\"path\":\"server/src/routes/access.ts\",\"line\":4126,\"claim\":\"if (invite.acceptedAt) throw conflict(\\\"Invite already consumed\\\");\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -16376,12 +15873,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/routines/${id}/description/annotations/${threadId}. Owner: server/src/services/document-annotations.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const routine = await assertCanManageExistingRoutine(req, req.params.id as string); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\",\"threadId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/document-annotation.ts\",\"line\":58,\"declaration\":\"updateDocumentAnnotationThreadSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":352,\"claim\":\"const routine = await assertCanManageExistingRoutine(req, req.params.id as string);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/routines.ts:385 `res.json(thread);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/routines/:id/description/annotations/:threadId\",\"path\":\"server/src/routes/routines.ts\",\"line\":250,\"resourceOverlap\":30}],\"routeErrors\":[{\"path\":\"server/src/routes/routines.ts\",\"line\":354,\"claim\":\"res.status(404).json({ error: \\\"Routine not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -16445,12 +15942,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "requiredPermissions": [
       "pipelines:write"
     ],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/pipelines/${pipelineId}/stages/${stageId}. Owner: server/src/services/pipelines.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: const companyId = await assertPipelineAccess(db, req, pipelineId);; await assertPipelineWriteAccess(req, { access, companyId, pipelineId });; await assertWorkflowAutomationRunPermission( Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"pipelineId\",\"stageId\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/pipelines-schemas.ts\",\"line\":55,\"declaration\":\"updateStageSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1554,\"claim\":\"const companyId = await assertPipelineAccess(db, req, pipelineId);\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1555,\"claim\":\"await assertPipelineWriteAccess(req, { access, companyId, pipelineId });\"},{\"path\":\"server/src/routes/pipelines.ts\",\"line\":1558,\"claim\":\"await assertWorkflowAutomationRunPermission(\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/pipelines.ts:1565 `res.json(await svc.updateStage({ companyId, pipelineId, stageId, patch: req.body, actor }));`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. No paired owner GET route was established in this source review; ambiguous results remain unresolved and must not be automatically retried.\",\"pairedReadRoutes\":[],\"routeErrors\":[],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -16528,12 +16025,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "launchcritical",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/companies/${companyId}. Owner: server/src/services/companies.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: await assertSameCompanyCeoAgentOrBoard(req, companyId, \"company settings\");; await assertCompanyDefaultsAdmin(req, companyId); Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "No idempotency/replay key was found in the reviewed handler span; do not automatically retry an ambiguous mutation. Reconcile via the existing owner GET if available.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"companyId\"],\"bodySchemaDeclarations\":[{\"path\":\"packages/shared/src/validators/company.ts\",\"line\":65,\"declaration\":\"updateCompanyBrandingSchema\"},{\"path\":\"packages/shared/src/validators/company.ts\",\"line\":45,\"declaration\":\"updateCompanySchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/companies.ts\",\"line\":1400,\"claim\":\"await assertSameCompanyCeoAgentOrBoard(req, companyId, \\\"company settings\\\");\"},{\"path\":\"server/src/routes/companies.ts\",\"line\":1403,\"claim\":\"await assertCompanyDefaultsAdmin(req, companyId);\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/companies.ts:1476 `res.json(company);`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/:companyId\",\"path\":\"server/src/routes/companies.ts\",\"line\":549,\"resourceOverlap\":22}],\"routeErrors\":[{\"path\":\"server/src/routes/companies.ts\",\"line\":1417,\"claim\":\"res.status(404).json({ error: \\\"Company not found\\\" });\"},{\"path\":\"server/src/routes/companies.ts\",\"line\":1459,\"claim\":\"res.status(404).json({ error: \\\"Company not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
@@ -16728,12 +16225,12 @@ const entries: AgentNativeApiOperationContract[] = [
     "criticality": "material",
     "sourceMateriality": "ordinary",
     "requiredPermissions": [],
-    "resourceScope": "Unqualified source inventory. Route: PATCH /api/issues/${id}. Owner: server/src/routes/issues.ts. See authorityEvidence; this entry grants no new scope.",
-    "approvalPolicy": "Unqualified. Existing route and service authorization behavior remains authoritative; this registration adds no approval, permission, or exposure.",
-    "idempotency": "Unqualified: no idempotency guarantee is asserted. Do not automatically retry mutations; reconcile state through the owning API before retrying.",
-    "expectedVersionOrPrecondition": "Unqualified: endpoint-specific schema and preconditions have not been independently qualified. Consult the current route and client source citations.",
-    "postcondition": "Unqualified: resulting state is not independently specified here; verify it through the owning API.",
-    "recovery": "Unqualified: do not automatically retry after an ambiguous mutation result; read current owner state and resolve through the existing UI/API recovery path.",
+    "resourceScope": "Current source guard trace: assertNoAgentHostWorkspaceCommandMutation(; : await assertAgentIssueMutationAllowed(; if (req.body.comment && !(await assertBoardCommentNotPaused(req, res, existing))) return;; await assertIssueReviewVerdictActorAllowed(db, {; (await assertLowTrustControlPlaneDenied(; !(await assertExplicitResumeIntentAllowed(req, res, existing, {; if (!(await assertExplicitResumeIntentAllowed(req, res, existing))); await assertIssueEnvironmentSelection(; !(await assertExplicitResumeIntentAllowed(req, res, existing)); !(await assertCrossIssueInfluenceWithinRunCap(; await assertCanManageIssueMonitor(; throw forbidden(; const reviewInteractionId = await assertInReviewReviewPath({; throw conflict(\"The user already responded. Keep the current assignee so the queued response can continue after this run.\", {; await assertCanAssignTasks(req, existing.companyId, {; throw conflict(; const assertLockedReviewPolicyAllowsMutation = async (; await assertIssueReviewVerdictActorAllowed(tx as unknown as Db, {; !(await assertLockedReviewPolicyAllowsMutation(tx)) Existing route/service scope remains authoritative; this registration grants no new scope.",
+    "approvalPolicy": "The reviewed route evidence did not identify a separate approval guard. This is not a policy approval or qualification; existing route/service authorization remains authoritative.",
+    "idempotency": "Source trace found handler replay/key evidence; inspect the cited owner for the operation-specific replay behavior. Automatic retries remain disabled unless that behavior is explicitly qualified.",
+    "expectedVersionOrPrecondition": "{\"pathParameters\":[\"id\"],\"bodySchemaDeclarations\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":374,\"declaration\":\"updateIssueRouteSchema\"},{\"path\":\"packages/shared/src/validators/issue.ts\",\"line\":854,\"declaration\":\"updateIssueSchema\"}],\"routeGuards\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":13498,\"claim\":\"assertNoAgentHostWorkspaceCommandMutation(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13524,\"claim\":\": await assertAgentIssueMutationAllowed(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13531,\"claim\":\"if (req.body.comment && !(await assertBoardCommentNotPaused(req, res, existing))) return;\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13608,\"claim\":\"await assertIssueReviewVerdictActorAllowed(db, {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13624,\"claim\":\"(await assertLowTrustControlPlaneDenied(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13635,\"claim\":\"!(await assertExplicitResumeIntentAllowed(req, res, existing, {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13650,\"claim\":\"if (!(await assertExplicitResumeIntentAllowed(req, res, existing)))\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13653,\"claim\":\"await assertIssueEnvironmentSelection(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13700,\"claim\":\"!(await assertExplicitResumeIntentAllowed(req, res, existing))\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13771,\"claim\":\"!(await assertCrossIssueInfluenceWithinRunCap(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13781,\"claim\":\"!(await assertCrossIssueInfluenceWithinRunCap(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13887,\"claim\":\"await assertCanManageIssueMonitor(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13946,\"claim\":\"throw forbidden(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13970,\"claim\":\"throw forbidden(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14082,\"claim\":\"const reviewInteractionId = await assertInReviewReviewPath({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14119,\"claim\":\"throw conflict(\\\"The user already responded. Keep the current assignee so the queued response can continue after this run.\\\", {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14125,\"claim\":\"await assertCanAssignTasks(req, existing.companyId, {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14168,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14212,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14293,\"claim\":\"const assertLockedReviewPolicyAllowsMutation = async (\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14310,\"claim\":\"await assertIssueReviewVerdictActorAllowed(tx as unknown as Db, {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14416,\"claim\":\"!(await assertLockedReviewPolicyAllowsMutation(tx))\"}]}",
+    "postcondition": "UNQUALIFIED_SOURCE_ONLY: the matched handler currently returns server/src/routes/issues.ts:15711 `res.json({`; server/src/routes/issues.ts:15720 `res.json({ ...publicNativePayloadRow(issueResponse), changes, comment: publicComment });`. This records the observed HTTP response, not a tested durable-state postcondition or conformance result.",
+    "recovery": "{\"rule\":\"UNQUALIFIED_SOURCE_ONLY: no automatic retry after an ambiguous mutation result. Reconcile an ambiguous result through the exact paired owner GET route(s) listed in evidence before retrying.\",\"pairedReadRoutes\":[{\"method\":\"GET\",\"route\":\"/api/issues/:id\",\"path\":\"server/src/routes/issues.ts\",\"line\":9352,\"resourceOverlap\":24}],\"routeErrors\":[{\"path\":\"server/src/routes/issues.ts\",\"line\":13583,\"claim\":\"res.status(400).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13590,\"claim\":\"res.status(400).json({ error: \\\"Attachment ids require a comment\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13617,\"claim\":\"res.status(400).json({ error: \\\"Follow-up intent requires a comment\\\" });\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13792,\"claim\":\"res.status(400).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13798,\"claim\":\"res.status(403).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13946,\"claim\":\"throw forbidden(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":13970,\"claim\":\"throw forbidden(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14049,\"claim\":\"res.status(422).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14068,\"claim\":\"res.status(422).json({\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14119,\"claim\":\"throw conflict(\\\"The user already responded. Keep the current assignee so the queued response can continue after this run.\\\", {\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14168,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14212,\"claim\":\"throw conflict(\"},{\"path\":\"server/src/routes/issues.ts\",\"line\":14503,\"claim\":\"res.status(404).json({ error: \\\"Issue not found\\\" });\"}],\"status\":\"source-trace only\"}",
     "channelProjection": [],
     "mcpExposed": false,
     "openclawQualified": false,
