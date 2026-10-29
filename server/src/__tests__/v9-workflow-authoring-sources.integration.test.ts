@@ -22,6 +22,7 @@ import { workflowCustomerDraftFlow } from "../services/workflows/workflow-custom
 import { capabilityResolverService } from "../services/capability-resolver.js";
 import { automationArtifactService } from "../services/automation-artifacts/automation-artifact-service.js";
 import { assertLearningAssetCurrent } from "../services/learning/learning-assets.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 describe.sequential("Original workflow private authoring copy owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -33,6 +34,9 @@ describe.sequential("Original workflow private authoring copy owner", () => {
   afterAll(async () => { await database?.cleanup(); }, 30_000);
   beforeEach(async () => {
     f = await seedV5Presences(db);
+    // Workflow source reads require a current accountable Human session. The
+    // generic V5 company fixture intentionally has no authenticated session.
+    f.actor = { ...f.actor, sessionId: await seedNativePasskeySession(db, f.userId) };
     await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id, status: "active" }).onConflictDoNothing();
     await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true, enableWorkflowBuilderV1: true, enableAiWorkflowAuthoring: true, enableAgentChat: true });
     await db.insert(principalPermissionGrants).values(["workflows:read", "workflows:edit", "workflows:publish", "workflows:run"].flatMap(permissionKey => [
@@ -44,7 +48,7 @@ describe.sequential("Original workflow private authoring copy owner", () => {
     [origin] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
       status: "running", contextSnapshot: { issueId: source.id, conversationSessionGeneration: 0 } }).returning();
   });
-  const human = () => ({ principal: { type: "user" as const, userId: f.userId } });
+  const human = () => ({ principal: { type: "user" as const, userId: f.userId }, authorizationActor: f.actor });
   async function authored() {
     return (await workflowAuthoringToolsService(db).create({ companyId: f.home, agentId: f.presence.id, runId: origin.id },
       { name: "PRIVATE workflow", description: "PRIVATE described intent", idempotencyKey: randomUUID() })).workflow;
@@ -240,6 +244,51 @@ describe.sequential("Original workflow private authoring copy owner", () => {
       triggerPayload: { value: "PRIVATE restored parent" }, authoringSourceWorkflowIds: [] });
     expect((await db.select().from(workflowRuns).where(eq(workflowRuns.id, completed.run.id)))[0].triggerPayload).toEqual({});
     await expect(engine.getRun(f.home, completed.run.id, f.actor)).rejects.toMatchObject({ status: 403 });
+  });
+  it("leaves a recovered successful private child wait intact without its original current reader", async () => {
+    const owner = workflowService(db), childDraft = await authored();
+    const childChanged = await owner.updateDraft(f.home, childDraft.id, { expectedRevisionId: childDraft.draftRevisionId!, graph: {
+      version: 1, nodes: [
+        { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+        { id: "hold", type: "core.wait", name: "Hold for recovery", position: { x: 0, y: 1 }, config: { durationSeconds: 30 } },
+        { id: "value", type: "core.transform", name: "Prepare value", position: { x: 0, y: 2 }, config: { mapping: { value: "PRIVATE recovered child result" } } },
+      ], edges: [{ id: "one", source: "start", target: "hold" }, { id: "two", source: "hold", target: "value" }], variables: [], settings: {},
+    } }, human());
+    const child = await owner.publish(f.home, childDraft.id, { expectedDraftRevisionId: childChanged.draftRevisionId!, expectedPublishedRevisionId: null }, human());
+    const parent = await parentWorkflow(child), engine = workflowExecutorService(db);
+    const requestKey = randomUUID();
+    const waiting = await engine.startManualRun(f.home, parent.id, { input: {} }, human(), requestKey);
+    expect(waiting.run.status).toBe("waiting");
+    const childRunId = waiting.waits.find(wait => wait.kind === "subworkflow")!.referenceId!;
+    // Arrange the persisted checkpoint after child completion and before the
+    // parent consumed it. The paused child has not created its final step yet.
+    const completedAt = new Date();
+    await db.update(workflowWaits).set({ status: "resolved", resolvedAt: completedAt })
+      .where(and(eq(workflowWaits.workflowRunId, childRunId), eq(workflowWaits.status, "active")));
+    await db.update(workflowStepRuns).set({ status: "succeeded", finishedAt: completedAt })
+      .where(and(eq(workflowStepRuns.workflowRunId, childRunId), eq(workflowStepRuns.nodeId, "hold")));
+    await db.insert(workflowStepRuns).values({ companyId: f.home, workflowRunId: childRunId, nodeId: "value",
+      status: "succeeded", outputJson: { value: "PRIVATE recovered child result" }, startedAt: completedAt, finishedAt: completedAt });
+    await db.update(workflowRuns).set({ status: "succeeded", finishedAt: completedAt }).where(eq(workflowRuns.id, childRunId));
+
+    const recovered = await workflowExecutorService(db).recoverExpiredRuns(20, new Date());
+    expect(recovered).toMatchObject({ recovered: 0, deferred: 1, failedRunIds: [] });
+    const current = await engine.getRun(f.home, waiting.run.id, f.actor);
+    expect(current?.run.status).toBe("waiting");
+    expect(current?.waits.find(wait => wait.kind === "subworkflow")?.status).toBe("active");
+    expect(current?.steps.find(step => step.nodeId === "child")).toMatchObject({ status: "waiting", outputJson: null });
+
+    // Replaying the same owner request is the current-authority continuation
+    // path. It consumes the wait and resumes once using the verified carrier.
+    const resumed = await engine.startManualRun(f.home, parent.id, { input: {} }, human(), requestKey);
+    expect(resumed.run.status).toBe("succeeded");
+    expect(resumed.steps.find(step => step.nodeId === "child")?.outputJson).toMatchObject({
+      childRunId, result: { value: "PRIVATE recovered child result" },
+    });
+    expect(resumed.waits.find(wait => wait.kind === "subworkflow")?.status).toBe("resolved");
+    const replay = await engine.startManualRun(f.home, parent.id, { input: {} }, human(), requestKey);
+    expect(replay.run.id).toBe(waiting.run.id);
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.parentWorkflowRunId, waiting.run.id))).toHaveLength(1);
   });
   it("retains the public parent's private child Source in Original Optimizer traces and review reads after child-run removal", async () => {
     const child = await privateValueWorkflow(), parent = await parentWorkflow(child);

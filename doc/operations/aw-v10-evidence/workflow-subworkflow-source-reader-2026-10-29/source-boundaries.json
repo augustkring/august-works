@@ -1,0 +1,85 @@
+{
+  "schema_version": "aw-v10-evidence-boundaries.v1",
+  "scope": "Current verified actor propagation for workflow subworkflow result copying and an actual-source V9 Memory maintenance test fixture.",
+  "production_sources": [
+    {
+      "path": "server/src/services/workflows/workflow-executor.ts",
+      "pinned_sha256": "f27683c051272cf452cbba076f4d7c1805f1fdea0e65c924fb1634c8aee0502a",
+      "current_sha256": "f27683c051272cf452cbba076f4d7c1805f1fdea0e65c924fb1634c8aee0502a",
+      "matches": true
+    }
+  ],
+  "focused_tests": [
+    {
+      "path": "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts",
+      "pinned_sha256": "e5ba5d17f9570f577dadf73486029998499c249263791d794d25fe0d3691a4e9",
+      "current_sha256": "e5ba5d17f9570f577dadf73486029998499c249263791d794d25fe0d3691a4e9",
+      "matches": true
+    },
+    {
+      "path": "server/src/__tests__/v9-memory-maintenance-attention.integration.test.ts",
+      "pinned_sha256": "98f6efa353bdcedf164a4ec8b891292711e0e9dc0961626d70913e9e9134ecc5",
+      "current_sha256": "98f6efa353bdcedf164a4ec8b891292711e0e9dc0961626d70913e9e9134ecc5",
+      "matches": true
+    }
+  ],
+  "receipts": [
+    {
+      "name": "workflow-authoring-current-carrier-r4-20261029",
+      "source_head": "c16a15cc02afe9a396e95c824057e3b8dadb1b58",
+      "qualification_base": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "test_file": "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts",
+      "result": "Tests  19 passed (19)",
+      "exit_code": 0,
+      "source_pins_sha256": "9780127e91ef112145f756c2397c3d39cdc96409ef0c1f14d587508c9218a7b2",
+      "test_log_sha256": "ddb30e77e6dd0dfda4155d84e6f819b63354c371eb86b3fc7b993903aad8b06d",
+      "source_head_patch_sha256": "76ad478691f56b5558b88dd76c8f123ed332c4827ca82902a4a66530e55dabf8",
+      "source_files": [
+        {
+          "path": "server/src/services/workflows/workflow-executor.ts",
+          "pinned_sha256": "f27683c051272cf452cbba076f4d7c1805f1fdea0e65c924fb1634c8aee0502a",
+          "current_sha256": "f27683c051272cf452cbba076f4d7c1805f1fdea0e65c924fb1634c8aee0502a",
+          "matches": true
+        },
+        {
+          "path": "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts",
+          "pinned_sha256": "e5ba5d17f9570f577dadf73486029998499c249263791d794d25fe0d3691a4e9",
+          "current_sha256": "e5ba5d17f9570f577dadf73486029998499c249263791d794d25fe0d3691a4e9",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "name": "memory-maintenance-actual-source-r3-20261029",
+      "source_head": "c2c8ebbd50bfea6268587dc6fc6672e3717e60fe",
+      "qualification_base": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "test_file": "server/src/__tests__/v9-memory-maintenance-attention.integration.test.ts",
+      "result": "Tests  9 passed (9)",
+      "exit_code": 0,
+      "source_pins_sha256": "452c1a25c0c5209216d934b0c0b79a4765d9761d1270807a7e20845f1693433b",
+      "test_log_sha256": "19660a2dc7b6c0f6374d3c795e2ac6afed32fedfec0e11742b55f1132abb4a91",
+      "source_head_patch_sha256": "0d1e2667fe1411f1e61aa270eff224106f7ffeb6527488a4935f75c61a133f43",
+      "source_files": [
+        {
+          "path": "server/src/__tests__/v9-memory-maintenance-attention.integration.test.ts",
+          "pinned_sha256": "98f6efa353bdcedf164a4ec8b891292711e0e9dc0961626d70913e9e9134ecc5",
+          "current_sha256": "98f6efa353bdcedf164a4ec8b891292711e0e9dc0961626d70913e9e9134ecc5",
+          "matches": true
+        }
+      ]
+    }
+  ],
+  "invariants": [
+    "AuthorizationActor remains in-memory only.",
+    "Persisted executionPrincipal is never synthesized into a Human source reader.",
+    "Recovered successful child result remains unconsumed until a current matching actor retries an idempotent start.",
+    "Source currentness is checked in the transaction that copies the terminal child result.",
+    "Memory suite changes only fixture source setup; no Memory production code changed."
+  ],
+  "out_of_scope": [
+    "Unrelated concurrent WIP files included in reconstruction patches.",
+    "External platform qualification.",
+    "Help article changes.",
+    "Schema or API contract changes."
+  ]
+}

@@ -6134,11 +6134,13 @@ async function startSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSelec
   if (child) await executeClaimedRun(db, child, actor, runtimeDeps);
   const [parent] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, run.id));
   const wait = parent ? await activeWaitForRun(db, parent) : null;
-  if (parent?.status === "waiting" && wait?.kind === "subworkflow") await resolveSubworkflowWait(db, parent, wait, new Date(), runtimeDeps);
+  if (parent?.status === "waiting" && wait?.kind === "subworkflow") await resolveSubworkflowWait(db, parent, wait, new Date(), runtimeDeps, actor);
 }
 
 async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSelect, wait: typeof workflowWaits.$inferSelect,
-  now: Date, runtimeDeps: WorkflowExecutorRuntimeDeps): Promise<"recovered" | "raced" | "deferred"> {
+  now: Date, runtimeDeps: WorkflowExecutorRuntimeDeps, continuationActor?: WorkflowRunActor): Promise<"recovered" | "raced" | "deferred"> {
+  if (continuationActor && (!run.executionPrincipal || !isDeepStrictEqual(continuationActor.principal, run.executionPrincipal) ||
+    (continuationActor.runId ?? null) !== (run.executionAgentRunId ?? null))) return "deferred";
   const [child] = wait.referenceId ? await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, run.companyId),
     eq(workflowRuns.id, wait.referenceId), eq(workflowRuns.parentWorkflowRunId, run.id), eq(workflowRuns.parentNodeId, wait.nodeId))) : [];
   const expired = Boolean(wait.timeoutAt && wait.timeoutAt <= now);
@@ -6147,28 +6149,53 @@ async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSel
     await workflowExecutorService(db, runtimeDeps).cancelRun(run.companyId, child.id, { reason: "Parent subworkflow timeout" },
       { principal: { type: "system", service: "workflow-subworkflow" } });
   }
-  const actor: WorkflowRunActor = { principal: run.executionPrincipal ?? { type: "system", service: "workflow-subworkflow" },
-    runId: run.executionAgentRunId, responsibleUserId: run.responsibleUserId };
   let errorCode = !child ? "workflow_subworkflow_missing" : expired ? "workflow_subworkflow_timeout" : "workflow_subworkflow_failed";
   let succeeded = child?.status === "succeeded" && (!wait.timeoutAt || Boolean(child.finishedAt && child.finishedAt <= wait.timeoutAt));
-  const detail = succeeded ? await getRunDetail(db, run.companyId, child!.id,
-    workflowSourceActor(run.companyId, actor), "task") : null;
-  const childRevision = succeeded ? await revisionForRun(db, child!) : null;
-  const terminalNodes = new Set(childRevision?.graph.nodes.filter((item) => !childRevision.graph.edges.some((edge) => edge.source === item.id)).map((item) => item.id) ?? []);
-  const resultSteps = detail?.steps.filter((item) => item.status === "succeeded" && terminalNodes.has(item.nodeId)) ?? [];
-  const result = resultSteps.length === 1 ? resultSteps[0]!.outputJson : Object.fromEntries(resultSteps.map((item) => [item.nodeId, item.outputJson]));
-  if (succeeded && childRevision) validateWorkflowOutput(childRevision.outputSchema, result);
+  // A recovered wait has no authenticated request carrier. Persisted execution
+  // principals are display/attribution data and cannot be promoted into a
+  // source reader. Keep the durable wait intact until a current owner replays
+  // the idempotent start request and resumes it with a fresh verified carrier.
+  if (succeeded && !continuationActor) return "deferred";
+  const actor: WorkflowRunActor = continuationActor ?? {
+    principal: { type: "system", service: "workflow-subworkflow-recovery" },
+    responsibleUserId: run.responsibleUserId,
+  };
+  const sourceReader = succeeded ? workflowSourceActor(run.companyId, actor) : undefined;
+  if (succeeded && !sourceReader) return "deferred";
+  let resultSteps: NonNullable<Awaited<ReturnType<typeof getRunDetail>>>["steps"] = [];
+  let result: unknown = {};
   const publications: ActivityPublication[] = [];
   const resumed = await db.transaction(async (tx) => {
+    const scopedDb = tx as unknown as Db;
+    // Keep source currentness and the copied child result in one transaction;
+    // analytical/erasure writers use these same company locks.
+    await lockAnalyticalCompany(scopedDb, run.companyId);
     await lockMemoryPrivacy(tx as unknown as Db, run.companyId);
+    if (succeeded) {
+      const detail = await getRunDetail(scopedDb, run.companyId, child!.id, sourceReader, "task");
+      if (!detail) {
+        succeeded = false;
+        errorCode = "workflow_subworkflow_missing";
+      } else {
+        const childRevision = await revisionForRun(scopedDb, child!);
+        const terminalNodes = new Set(childRevision?.graph.nodes.filter((item) => !childRevision.graph.edges.some((edge) => edge.source === item.id)).map((item) => item.id) ?? []);
+        resultSteps = detail.steps.filter((item) => item.status === "succeeded" && terminalNodes.has(item.nodeId));
+        result = resultSteps.length === 1 ? resultSteps[0]!.outputJson : Object.fromEntries(resultSteps.map((item) => [item.nodeId, item.outputJson]));
+        if (childRevision) validateWorkflowOutput(childRevision.outputSchema, result);
+      }
+    }
     const references = [...new Set(resultSteps.flatMap((item) => item.memoryRecordIds ?? []))];
     try { await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, references); }
     catch { succeeded = false; errorCode = "workflow_memory_source_deleted"; }
     const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.id, run.id), eq(workflowRuns.companyId, run.companyId))).for("update");
-    if (owned?.status !== "waiting" || owned.executionOwnerId) return null;
+    if (!owned || owned.status !== "waiting" || owned.executionOwnerId || (continuationActor &&
+      (!owned.executionPrincipal || !isDeepStrictEqual(continuationActor.principal, owned.executionPrincipal) ||
+        (continuationActor.runId ?? null) !== (owned.executionAgentRunId ?? null)))) return null;
     const [resolved] = await tx.update(workflowWaits).set({ status: expired ? "timed_out" : "resolved", resolvedAt: now,
       resolvedByType: "system", resolvedById: "workflow-subworkflow", resolutionJson: { childRunId: child?.id ?? null, outcome: succeeded ? "succeeded" : "failed" }, updatedAt: now })
-      .where(and(eq(workflowWaits.id, wait.id), eq(workflowWaits.status, "active"))).returning();
+      .where(and(eq(workflowWaits.id, wait.id), eq(workflowWaits.companyId, run.companyId), eq(workflowWaits.workflowRunId, run.id),
+        eq(workflowWaits.nodeId, wait.nodeId), eq(workflowWaits.kind, "subworkflow"), eq(workflowWaits.referenceId, wait.referenceId),
+        eq(workflowWaits.status, "active"))).returning();
     if (!resolved) return null;
     const [step] = await tx.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.workflowRunId, run.id), eq(workflowStepRuns.companyId, run.companyId),
       eq(workflowStepRuns.nodeId, wait.nodeId), eq(workflowStepRuns.status, "waiting"), eq(workflowStepRuns.childWorkflowRunId, wait.referenceId!))).for("update");
@@ -6189,6 +6216,15 @@ async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSel
   if (succeeded) await executeClaimedRun(db, resumed, actor, runtimeDeps);
   else await failRun(db, resumed, actor, errorCode, "Child workflow did not complete successfully");
   return "recovered";
+}
+
+async function resumeSubworkflowWaitForCurrentActor(db: Db, run: typeof workflowRuns.$inferSelect,
+  actor: WorkflowRunActor, now: Date, runtimeDeps: WorkflowExecutorRuntimeDeps): Promise<"recovered" | "raced" | "deferred"> {
+  if (run.status !== "waiting" || !run.executionPrincipal || !isDeepStrictEqual(actor.principal, run.executionPrincipal) ||
+    (actor.runId ?? null) !== (run.executionAgentRunId ?? null)) return "deferred";
+  const wait = await activeWaitForRun(db, run);
+  if (wait?.kind !== "subworkflow") return "deferred";
+  return resolveSubworkflowWait(db, run, wait, now, runtimeDeps, actor);
 }
 
 async function executeWorkflowGraph(
@@ -8708,6 +8744,8 @@ export function workflowExecutorService(
           });
         }
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
+      } else if (queued.run.status === "waiting") {
+        await resumeSubworkflowWaitForCurrentActor(db, queued.run, actor, new Date(), runtimeDeps);
       }
 
       const detail = await getRunDetail(db, companyId, queued.run.id,workflowSourceActor(companyId,actor),"task");
@@ -8818,6 +8856,8 @@ export function workflowExecutorService(
           });
         }
         await executeClaimedRun(db, claimed, actor, runtimeDeps);
+      } else if (queued.run.status === "waiting") {
+        await resumeSubworkflowWaitForCurrentActor(db, queued.run, actor, new Date(), runtimeDeps);
       }
 
       const detail = await getRunDetail(db, companyId, queued.run.id,workflowSourceActor(companyId,actor),"task");
