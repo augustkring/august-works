@@ -605,30 +605,35 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
       .rejects.toMatchObject({ status: 403 });
     expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, localOperatorId))).toEqual([]);
 
-    const optionsResponse = await request("/passkey/generate-authenticate-options", "GET", undefined,
-      expectedHeaders(passwordSessionId));
-    expect(optionsResponse.status, JSON.stringify(await optionsResponse.clone().json())).toBe(200);
-    const options = await optionsResponse.json() as { challenge: string; userVerification?: string;
-      allowCredentials?: Array<{ id: string }> };
-    expect(options.userVerification).toBe("required");
-    expect(options.allowCredentials?.some(item => item.id === credentialId)).toBe(true);
-    const assertion = await request("/passkey/verify-authentication", "POST",
-      { response: await makePasskeyResponse(options.challenge, credentialId, privateKey) }, expectedHeaders(passwordSessionId));
-    expect(assertion.status, JSON.stringify(await assertion.clone().json())).toBe(200);
-    const passkeySessionId = await currentSession();
-    expect(passkeySessionId).not.toBe(passwordSessionId);
-    const [passkeySession] = await db.select().from(authSessions).where(eq(authSessions.id, passkeySessionId));
-    expect(passkeySession).toMatchObject({ authenticationMethod: "passkey", authenticatorVersion: owner!.authenticatorVersion });
-    expect(passkeySession!.authenticatedAt!.getTime()).toBeGreaterThanOrEqual(now.getTime());
-    const [promotedOwner] = await db.select().from(authUsers).where(eq(authUsers.id, localOperatorId));
-    expect(promotedOwner).toMatchObject({ phishingResistantRequired: true });
+    await instanceSettingsService(db).updateExperimental({ enterprise_identity_v7: false });
+    try {
+      const optionsResponse = await request("/passkey/generate-authenticate-options", "GET", undefined,
+        expectedHeaders(passwordSessionId));
+      expect(optionsResponse.status, JSON.stringify(await optionsResponse.clone().json())).toBe(200);
+      const options = await optionsResponse.json() as { challenge: string; userVerification?: string;
+        allowCredentials?: Array<{ id: string }> };
+      expect(options.userVerification).toBe("required");
+      expect(options.allowCredentials?.some(item => item.id === credentialId)).toBe(true);
+      const assertion = await request("/passkey/verify-authentication", "POST",
+        { response: await makePasskeyResponse(options.challenge, credentialId, privateKey) }, expectedHeaders(passwordSessionId));
+      expect(assertion.status, JSON.stringify(await assertion.clone().json())).toBe(200);
+      const passkeySessionId = await currentSession();
+      expect(passkeySessionId).not.toBe(passwordSessionId);
+      const [passkeySession] = await db.select().from(authSessions).where(eq(authSessions.id, passkeySessionId));
+      expect(passkeySession).toMatchObject({ authenticationMethod: "passkey", authenticatorVersion: owner!.authenticatorVersion });
+      expect(passkeySession!.authenticatedAt!.getTime()).toBeGreaterThanOrEqual(now.getTime());
+      const [promotedOwner] = await db.select().from(authUsers).where(eq(authUsers.id, localOperatorId));
+      expect(promotedOwner).toMatchObject({ phishingResistantRequired: true });
 
-    const receipt = await deletion.request(localOperatorId, { confirmation: "DELETE MY ACCOUNT", password,
-      acknowledgeExport: true, idempotencyKey: "local-operator-password-and-passkey-delete" }, new Date(),
-      { type: "board", source: "session", userId: localOperatorId, sessionId: passkeySessionId });
-    expect(receipt.status).toBe("requested");
-    expect(await db.select().from(authVerifications).where(eq(authVerifications.identifier,
-      `account-deletion-oidc:${localOperatorId}`))).toEqual([]);
-    configuredOperatorUserIds.splice(configuredOperatorUserIds.indexOf(localOperatorId), 1);
+      const receipt = await deletion.request(localOperatorId, { confirmation: "DELETE MY ACCOUNT", password,
+        acknowledgeExport: true, idempotencyKey: "local-operator-password-and-passkey-delete" }, new Date(),
+        { type: "board", source: "session", userId: localOperatorId, sessionId: passkeySessionId });
+      expect(receipt.status).toBe("requested");
+      expect(await db.select().from(authVerifications).where(eq(authVerifications.identifier,
+        `account-deletion-oidc:${localOperatorId}`))).toEqual([]);
+    } finally {
+      await instanceSettingsService(db).updateExperimental({ enterprise_identity_v7: true });
+      configuredOperatorUserIds.splice(configuredOperatorUserIds.indexOf(localOperatorId), 1);
+    }
   });
 });

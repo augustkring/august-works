@@ -388,16 +388,19 @@ export function enterpriseAuthPlugins(
               ctx.path === "/passkey/verify-authentication",
             ),
           handler: createAuthMiddleware(async (ctx) => {
-            if (!(await enabled()))
-              throw new APIError("NOT_FOUND", {
-                message: "Enterprise identity is not enabled",
-              });
+            // Keep native passkey sign-in available when enterprise SSO is
+            // disabled. A deletion-scoped ceremony still needs its current,
+            // qualified SSO binding inside accountDeletionPasskeyScope.
             if (ctx.path === "/passkey/generate-authenticate-options" || ctx.path === "/passkey/verify-authentication") {
               const scope = await accountDeletionPasskeyScope(ctx);
               if (scope) (ctx.context as typeof ctx.context & { accountDeletionSsoPasskeyScope?: typeof scope })
                 .accountDeletionSsoPasskeyScope = scope;
               return;
             }
+            if (!(await enabled()))
+              throw new APIError("NOT_FOUND", {
+                message: "Enterprise identity is not enabled",
+              });
             if (ctx.path === "/sign-in/sso") {
               const input = ctx.body as {
                 providerId?: string;
