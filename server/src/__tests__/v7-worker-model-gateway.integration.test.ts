@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { chmod, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -58,6 +59,7 @@ import { crossCompanyContextService } from "../services/cross-company-context.js
 import { aiConnectionService } from "../services/ai-connections.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
+import { createToolGatewayService } from "../services/tool-gateway.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
 import {
   createRuntimeToolsToken,
@@ -67,6 +69,7 @@ import {
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { runtimeConnectionIntentRoutes } from "../routes/connection-intents.js";
+import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
 import { errorHandler } from "../middleware/index.js";
 import { purgeMemoryRecords, purgeDerivedWorkflowMemory, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
@@ -477,6 +480,37 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       return started;
     }
 
+    async function startManagedMcpApiFixture() {
+      const app = express();
+      app.use(express.json());
+      // The Runner receives a real origin backed by the production MCP route and
+      // gateway service. This keeps run-scoped bearer validation and tool
+      // dispatch on their normal owners instead of substituting a placeholder URL.
+      app.use(mcpGatewayProtocolRoutes(createToolGatewayService(db)));
+      app.use(errorHandler);
+      const server = createServer(app);
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => {
+          server.off("error", reject);
+          resolve();
+        });
+      });
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Expected the local managed MCP API listener");
+      const priorApiUrl = process.env.PAPERCLIP_API_URL;
+      const apiOrigin = `http://127.0.0.1:${address.port}`;
+      process.env.PAPERCLIP_API_URL = apiOrigin;
+      return { apiOrigin, server, close: async () => {
+        if (priorApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
+        else process.env.PAPERCLIP_API_URL = priorApiUrl;
+        server.closeAllConnections();
+        await new Promise<void>((resolve, reject) => {
+          server.close(error => error ? reject(error) : resolve());
+        });
+      } };
+    }
+
     it("qualifies only the explicit private Native draft selector without decrypting or spending", async () => {
       await expect(
         gateway().qualifyDraft(db, {
@@ -561,6 +595,13 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     );
 
     it("forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review", async () => {
+      const managedMcpApi = await startManagedMcpApiFixture();
+      let activeHeartbeat: ReturnType<typeof heartbeatService> | undefined;
+      try {
+      const unauthorizedGatewayCall = await request(managedMcpApi.server)
+        .post("/mcp/gateways/not-a-token")
+        .send({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} });
+      expect(unauthorizedGatewayCall.status).toBe(401);
       const started = await freshNativePlan({ maxModelCostMinor: 6, maxToolActions: 3 });
       modelOutput = "Retained bounded draft";
       const substitution = vi.fn(() => {
@@ -571,18 +612,15 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const heartbeat = heartbeatService(db, {
         nativeSessionBackendFactory: substitution,
       });
-      try {
-        await heartbeat.invoke(
+      activeHeartbeat = heartbeat;
+      await heartbeat.invoke(
           f.presence.id,
           "on_demand",
           { issueId: task.id },
           "manual",
           { actorType: "user", actorId: f.userId },
         );
-        await heartbeat.drainActiveRunExecutions();
-      } finally {
-        await heartbeat.drainActiveRunExecutions();
-      }
+      await heartbeat.drainActiveRunExecutions();
       const attempts = await db
         .select()
         .from(orchestrationWorkerAttempts)
@@ -593,13 +631,13 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, attempts[0]!.runId!));
       expect(actualRun?.issueId, "the exercised scheduler run must retain the canonical human-authored Task").toBe(task.id);
+      expect(actualRun!.error).toBeNull();
       expect(actualRun).toMatchObject({
         status: "succeeded",
         runtimeMode: "native",
         driverKind: "aw_text_messages",
         responsibleUserId: f.userId,
       });
-      expect(actualRun!.error).toBeNull();
       const sourceReceipt = nativeRunInputSourceReceiptSchema.parse(
         (actualRun!.runnerProfileJson as Record<string, unknown>).nativeInputSourceReceipt,
       );
@@ -662,6 +700,10 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       expect(erasedRevision).toMatchObject({ body: "", title: null, payloadSourceSnapshot: null });
       const [retainedDocument] = await db.select().from(documents).where(eq(documents.id, independentDocument.id));
       expect(retainedDocument).toMatchObject({ title: "Independent Human note", latestBody: "KEEP_INDEPENDENT_DOCUMENT" });
+      } finally {
+        if (activeHeartbeat) await activeHeartbeat.drainActiveRunExecutions();
+        await managedMcpApi.close();
+      }
     }, 60000);
 
     it("rejects actual Native admission after a private grant is revoked, before a worker attempt or model dispatch", async () => {
