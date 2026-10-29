@@ -140,6 +140,9 @@ export function enterpriseIdentityBridge(
         where: where({ identifier: `account-deletion-oidc:${binding.userId}` }),
       });
       const proof = challenge ? parseAccountDeletionSsoChallenge(challenge.value) : null;
+      const existingPasskey = proof?.nativeFactorMethod === "passkey"
+        ? await context.database.findOne<{ id: string }>({ model: "passkey", where: where({ userId: binding.userId }) })
+        : null;
       const claims = input.protocol === "oidc" ? input.verifiedIdTokenClaims : null;
       const saml = (input as typeof input & { samlAuthentication?: {
         purpose: "account-deletion"; challengeId: string; userId: string; sourceSessionId: string;
@@ -174,7 +177,7 @@ export function enterpriseIdentityBridge(
         proof.policyVersion === policy.version && proof.policyRevision === revision && proof.bindingId === binding.id &&
         proof.issuer === input.accountKey.issuer && proof.subject === input.accountKey.accountId &&
         protocolEvidenceValid &&
-        !user.phishingResistantRequired &&
+        (!user.phishingResistantRequired || proof.nativeFactorMethod === "passkey" && Boolean(existingPasskey)) &&
         Number.isFinite(Date.parse(proof.expiresAt)) && Date.parse(proof.expiresAt) > Date.now() &&
         Number.isFinite(new Date(challenge.expiresAt).getTime()) && new Date(challenge.expiresAt).getTime() > Date.now() &&
         Number.isFinite(authTimeMs) && authTimeMs <= Date.now() + 5_000 && Date.now() - authTimeMs <= 300_000 &&

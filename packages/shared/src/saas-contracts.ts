@@ -165,8 +165,8 @@ export const accountDeletionRequestSchema = z
     idempotencyKey: idempotencyKeySchema,
   })
   .strict()
-  .refine(input => Boolean(input.password) !== Boolean(input.reauthenticationProofId), {
-    message: "Provide exactly one current password or verified sign-in confirmation",
+  .refine(input => Boolean(input.password) || Boolean(input.reauthenticationProofId), {
+    message: "Provide a current password or verified sign-in confirmation",
   });
 
 export const runtimeModelProviderSchema = z

@@ -1,12 +1,15 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
 import { APIError, type GenericEndpointContext, type BetterAuthPlugin } from "better-auth";
 import { createAuthEndpoint, getSessionFromCtx } from "better-auth/api";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { passkey } from "@better-auth/passkey";
-import { authPasskeys, authRateLimits, type Db } from "@paperclipai/db";
+import { authPasskeys, authRateLimits, authVerifications, enterpriseIdentityPolicies,
+  enterpriseSubjectBindings, type Db } from "@paperclipai/db";
 import { nativePasskeySchema } from "@paperclipai/shared";
+import { parseAccountDeletionSsoChallenge } from "./account-deletion-sso-proof.js";
 import { assertHumanAuthentication, assertPinnedAuthenticationDeadline, isAuthenticationStateBusy } from "./authenticator-assurance.js";
 import { assertExpectedAuthenticationSession, assertExpectedAuthenticationUser,
   withNativeAuthenticationTransaction, type NativeAuthenticationSchema } from "./native-authentication-transaction.js";
@@ -25,10 +28,19 @@ type Owner = { userId: string; version: number; sessionId?: string; sessionToken
 type Ceremony = { userId: string; credentialId?: string; operation: "registration" | "authentication"; verified: boolean };
 type NativeEndpoint = ReturnType<typeof passkey>["endpoints"][keyof ReturnType<typeof passkey>["endpoints"]];
 type NativeResponse = { headers: Headers; response: Record<string, unknown>; status: Parameters<GenericEndpointContext["setStatus"]>[0] };
+const accountDeletionPasskeyScopeSchema = z.object({
+  purpose: z.literal("account-deletion"), challengeId: z.string().uuid(), userId: z.string().min(1),
+  callbackSessionId: z.string().min(1), authenticatorVersion: z.number().int().nonnegative(),
+  sourceSessionId: z.string().min(1), sourceSessionExpiresAt: z.iso.datetime(),
+  policyId: z.string().uuid(), policyVersion: z.number().int().positive(), policyRevision: z.string().regex(/^[a-f0-9]{64}$/),
+  providerId: z.string().min(1), bindingId: z.string().uuid(), companyId: z.string().uuid(),
+  issuer: z.string().min(1), subject: z.string().min(1),
+}).strict();
 
 /** The canonical configured origin/RP and the maintained verifier own the
  * ceremony. Request headers/browser context never select either identity. */
-export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, origin: string, operatorUserIds: readonly string[]): BetterAuthPlugin {
+export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, origin: string, operatorUserIds: readonly string[],
+  enterpriseSourceSha = ""): BetterAuthPlugin {
   const ceremonies = new AsyncLocalStorage<Ceremony>();
   const native = passkey({ rpName: "Blentera", rpID: new URL(origin).hostname, origin,
     authenticatorSelection: { residentKey: "required", userVerification: "required" },
@@ -68,14 +80,15 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
     return { userId: active.user.id, version: current.version, sessionId: active.session.id,
       sessionToken: active.session.token, authenticatedCredentialExpiresAt: active.session.expiresAt.getTime() };
   }
-  async function pin(tx: Pick<Db, "execute">, source: Owner, ctx: GenericEndpointContext, exclusive = true) {
+  async function pin(tx: Pick<Db, "execute">, source: Owner, ctx: GenericEndpointContext, exclusive = true,
+    allowEnterpriseBound = false) {
     if (source.sessionId && (source.authenticatedCredentialExpiresAt === undefined ||
       !Number.isFinite(source.authenticatedCredentialExpiresAt))) deny();
     const [current] = await tx.execute<{ id: string }>(sql`select id from "user" where id=${source.userId}
       and authenticator_version=${source.version}
       and not exists(select 1 from account_deletion_operations where user_id=${source.userId})
       and (not ${ctx.context.options.emailAndPassword?.requireEmailVerification === true}::boolean or email_verified)
-      and not exists(select 1 from enterprise_subject_bindings b where b.user_id=${source.userId} and b.status='active') ${exclusive ? sql`for update nowait` : sql`for share nowait`}`);
+      and (${allowEnterpriseBound}::boolean or not exists(select 1 from enterprise_subject_bindings b where b.user_id=${source.userId} and b.status='active')) ${exclusive ? sql`for update nowait` : sql`for share nowait`}`);
     if (!current) deny();
     if (source.sessionId) {
       const [active] = await tx.execute(sql`select id from "session" where id=${source.sessionId}
@@ -97,6 +110,11 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
     return assertHumanAuthentication(tx, { type: "board", source: "session", userId: source.userId,
       sessionId: source.sessionId, authenticatedCredentialExpiresAt: source.authenticatedCredentialExpiresAt },
       { requireRecent: true, phishingResistant: operatorUserIds.includes(source.userId) });
+  }
+  function accountDeletionPasskeyScope(ctx: GenericEndpointContext) {
+    return accountDeletionPasskeyScopeSchema.safeParse((ctx.context as typeof ctx.context & {
+      accountDeletionSsoPasskeyScope?: unknown;
+    }).accountDeletionSsoPasskeyScope).data ?? null;
   }
   async function challenge(ctx: GenericEndpointContext, operation: Ceremony["operation"]) {
     const cookie = ctx.context.createAuthCookie("better-auth-passkey");
@@ -200,22 +218,106 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
         const active = await getSessionFromCtx(ctx);
         if (active) { assertExpectedAuthenticationUser(ctx, active.user.id); assertExpectedAuthenticationSession(ctx, active.session.id); }
         else if (ctx.getHeader("X-Blentera-Expected-User") !== null || ctx.getHeader("X-Blentera-Expected-Session") !== null) deny();
+        const deletionScope = accountDeletionPasskeyScope(ctx);
+        if (deletionScope) {
+          if (!active || deletionScope.userId !== active.user.id || deletionScope.callbackSessionId !== active.session.id) deny();
+          ctx.query = { ...ctx.query, context: JSON.stringify(deletionScope) };
+        }
         ctx.setHeader("Cache-Control", "no-store");
-        return { ...await invoke(ctx, native.endpoints.generatePasskeyAuthenticationOptions).catch(failure), userVerification: "required" };
+        if (!deletionScope) return { ...await invoke(ctx, native.endpoints.generatePasskeyAuthenticationOptions).catch(failure), userVerification: "required" };
+        // The pinned maintained passkey package does not persist query.context
+        // for authentication options (it does for registration). Add the
+        // server-qualified deletion scope to this one generated verification
+        // value so the later ceremony is bound to the exact callback session.
+        const original = ctx.context.internalAdapter;
+        const scopedAdapter = new Proxy(original, { get(target, property) {
+          if (property !== "createVerificationValue") {
+            const value = Reflect.get(target, property, target);
+            return typeof value === "function" ? value.bind(target) : value;
+          }
+          return async (input: Parameters<typeof original.createVerificationValue>[0]) => {
+          let data: unknown;
+          try { data = JSON.parse(input.value); } catch { deny(); }
+          const expiresAt = input.expiresAt instanceof Date ? input.expiresAt.getTime() : Number.NaN;
+          if (!data || typeof data !== "object" || !("type" in data) || data.type !== "authentication" ||
+            !("userData" in data) || !data.userData || typeof data.userData !== "object" ||
+            !("id" in data.userData) || data.userData.id !== deletionScope.userId ||
+            !("expectedChallenge" in data) || typeof data.expectedChallenge !== "string" || data.expectedChallenge.length < 16 ||
+            "context" in data || typeof input.identifier !== "string" || input.identifier.length < 16 ||
+            !Number.isFinite(expiresAt) || expiresAt <= Date.now() || expiresAt > Date.now() + 600_000) deny();
+          return original.createVerificationValue({ ...input,
+            value: JSON.stringify({ ...data, context: JSON.stringify(deletionScope) }) });
+          };
+        } });
+        const scopedContext = { ...ctx.context, internalAdapter: scopedAdapter };
+        return { ...await invoke({ ...ctx, context: scopedContext } as GenericEndpointContext,
+          native.endpoints.generatePasskeyAuthenticationOptions).catch(failure), userVerification: "required" };
       }),
     verifyPasskeyAuthentication: createAuthEndpoint(native.endpoints.verifyPasskeyAuthentication.path,
       native.endpoints.verifyPasskeyAuthentication.options, async ctx => {
         const pending = await challenge(ctx, "authentication");
+        const deletionScope = accountDeletionPasskeyScope(ctx);
+        if (deletionScope && pending.context !== JSON.stringify(deletionScope) || !deletionScope &&
+          typeof pending.context === "string" && pending.context.includes('"purpose":"account-deletion"')) {
+          await consumeAfterRejection(ctx, pending.nonce); deny();
+        }
         try {
           const credentialId: unknown = ctx.body.response?.id;
           if (typeof credentialId !== "string" || !credentialId.length || credentialId.length>2048) deny();
           const active = await getSessionFromCtx(ctx);
+          if (deletionScope && (!active || active.user.id !== deletionScope.userId || active.session.id !== deletionScope.callbackSessionId ||
+            pending.userId !== deletionScope.userId || pending.version !== deletionScope.authenticatorVersion)) deny();
           const captured = await db.transaction(async tx => {
+            let deletionSourceSessionId: string | null = null;
+            if (deletionScope) {
+              const [row] = await tx.select().from(authVerifications)
+                .where(eq(authVerifications.identifier, `account-deletion-oidc:${deletionScope.userId}`)).limit(1).for("update");
+              const proof = row ? parseAccountDeletionSsoChallenge(row.value) : null;
+              if (!row || !proof || proof.challengeId !== deletionScope.challengeId || proof.state !== "ready" ||
+                proof.nativeFactorMethod !== "passkey" || proof.userId !== deletionScope.userId ||
+                proof.callbackSessionId !== deletionScope.callbackSessionId || proof.proofSessionId !== deletionScope.callbackSessionId ||
+                proof.sourceSessionId !== deletionScope.sourceSessionId || proof.sourceSessionExpiresAt !== deletionScope.sourceSessionExpiresAt ||
+                proof.companyId !== deletionScope.companyId || proof.issuer !== deletionScope.issuer || proof.subject !== deletionScope.subject ||
+                proof.authenticatorVersion !== deletionScope.authenticatorVersion || proof.policyId !== deletionScope.policyId ||
+                proof.policyVersion !== deletionScope.policyVersion || proof.policyRevision !== deletionScope.policyRevision ||
+                proof.providerId !== deletionScope.providerId || proof.bindingId !== deletionScope.bindingId ||
+                !Number.isSafeInteger(proof.authTime)) deny();
+              deletionSourceSessionId = proof!.sourceSessionId;
+              const [live] = await tx.execute<{ valid: boolean }>(sql`
+                select ${row!.expiresAt.toISOString()}::timestamptz>clock_timestamp()+interval '1 second'
+                  and ${proof!.expiresAt}::timestamptz>clock_timestamp()+interval '1 second'
+                  and ${proof!.authTime!}::double precision between
+                    (extract(epoch from clock_timestamp())-299)*1000 and (extract(epoch from clock_timestamp())+5000)*1000 as valid`);
+              if (!live?.valid) deny();
+              const [policy] = await tx.select().from(enterpriseIdentityPolicies)
+                .where(eq(enterpriseIdentityPolicies.id, deletionScope.policyId)).limit(1).for("share");
+              const [binding] = await tx.select().from(enterpriseSubjectBindings)
+                .where(eq(enterpriseSubjectBindings.id, deletionScope.bindingId)).limit(1).for("share");
+              if (!policy || policy.status !== "qualified" || policy.version !== deletionScope.policyVersion ||
+                policy.providerId !== deletionScope.providerId || !policy.qualification ||
+                policy.qualification.sourceRevision !== enterpriseSourceSha ||
+                !Number.isFinite(Date.parse(policy.qualification.expiresAt)) || Date.parse(policy.qualification.expiresAt) <= Date.now() ||
+                !binding || binding.status !== "active" || binding.userId !== deletionScope.userId ||
+                binding.providerId !== deletionScope.providerId || binding.companyId !== policy.companyId ||
+                binding.companyId !== proof!.companyId || binding.issuer !== policy.issuer ||
+                binding.issuer !== proof!.issuer || binding.subject !== proof!.subject ||
+                (policy.configuration as { protocol?: string }).protocol !== proof!.protocol) deny();
+              const policyRevision = createHash("sha256").update(JSON.stringify({ id: policy.id, version: policy.version,
+                companyId: policy.companyId, providerId: policy.providerId, issuer: policy.issuer,
+                configuration: policy.configuration, qualification: policy.qualification,
+                updatedAt: policy.updatedAt.toISOString() })).digest("hex");
+              if (policyRevision !== deletionScope.policyRevision) deny();
+            }
             const [source] = await tx.execute<Owner>(sql`select u.id as "userId",u.authenticator_version as version
               from "user" u join passkey p on p.user_id=u.id where p.credential_id=${credentialId}
+              and (${deletionScope ? sql`u.id=${deletionScope.userId}` : sql`true`})
+              and (${deletionScope ? sql`exists(select 1 from "session" source where source.id=${deletionSourceSessionId}
+                and source.user_id=u.id and source.expires_at>clock_timestamp()
+                and (source.authenticator_version is null or source.authenticator_version=${deletionScope.authenticatorVersion}))` : sql`true`})
               and not exists(select 1 from account_deletion_operations where user_id=u.id)
               and (not ${ctx.context.options.emailAndPassword?.requireEmailVerification === true}::boolean or u.email_verified)
-              and not exists(select 1 from enterprise_subject_bindings b where b.user_id=u.id and b.status='active') for share of u nowait`);
+              and (${deletionScope ? sql`exists(select 1 from enterprise_subject_bindings b where b.user_id=u.id and b.id=${deletionScope.bindingId} and b.provider_id=${deletionScope.providerId} and b.status='active')` :
+                sql`not exists(select 1 from enterprise_subject_bindings b where b.user_id=u.id and b.status='active')`}) for share of u nowait`);
             if (!source || pending.userId && (pending.userId !== source.userId || pending.version !== source.version) ||
               active && active.user.id !== source.userId) deny();
             assertExpectedAuthenticationUser(ctx, source.userId);
@@ -238,7 +340,7 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
           const source = { ...captured.source, sessionId: active?.session.id, sessionToken: active?.session.token,
             authenticatedCredentialExpiresAt: active?.session.expiresAt.getTime() };
           return await withConsumedChallenge(ctx, pending, () => withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
-            await pin(tx, source, ctx);
+            await pin(tx, source, ctx, true, Boolean(deletionScope));
             const [key] = await tx.execute(sql`select id from passkey where user_id=${source.userId} and credential_id=${credentialId} for update nowait`);
             if (!key) deny();
             const state: Ceremony = { userId: source.userId, credentialId, operation: "authentication", verified: false };
@@ -247,6 +349,19 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
             if (operatorUserIds.includes(source.userId)) await tx.execute(sql`update "user" set phishing_resistant_required=true where id=${source.userId}`);
             const [{ at }] = await tx.execute<{ at: string }>(sql`select clock_timestamp() as at`);
             const session = await replacement(ctx, source, source.version, { authenticationMethod: "passkey", authenticatedAt: new Date(at) });
+            if (deletionScope) {
+              const [row] = await tx.select().from(authVerifications)
+                .where(eq(authVerifications.identifier, `account-deletion-oidc:${deletionScope.userId}`)).limit(1).for("update");
+              const proof = row ? parseAccountDeletionSsoChallenge(row.value) : null;
+              if (!row || !proof || proof.challengeId !== deletionScope.challengeId || proof.state !== "ready" ||
+                proof.nativeFactorMethod !== "passkey" || proof.callbackSessionId !== source.sessionId ||
+                proof.proofSessionId !== source.sessionId || proof.authenticatorVersion !== source.version) deny();
+              proof.nativeFactorSessionId = session.id;
+              proof.nativeFactorAuthenticatorVersion = source.version;
+              proof.proofSessionId = session.id;
+              await tx.update(authVerifications).set({ value: JSON.stringify(proof), updatedAt: new Date() })
+                .where(eq(authVerifications.id, row.id));
+            }
             await assertSourceCredentialDeadline(tx, source);
             return { userId: source.userId, sessionId: session.id };
           }));

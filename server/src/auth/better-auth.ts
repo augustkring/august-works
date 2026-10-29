@@ -377,7 +377,8 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     ...(enterprisePlugins.length ? { disabledPaths: ENTERPRISE_DISABLED_AUTH_PATHS } : {}),
     plugins: [ ...enterprisePlugins, ...(resolveWorkspaceHandoffIdentity(config) ? [workspaceLoginHandoffPlugin({ db,
       resolveExpectedIdentity: () => resolveWorkspaceHandoffIdentity(config) ?? {key:null,instanceId:null,executionWorkspaceId:null,companyId:null,origin:null},
-    })] : []), ...(passkeyOrigin ? [nativePasskeyPlugin(db, authSchema, passkeyOrigin, config.saasPlatform?.operatorUserIds ?? [])] : []), nativeTwoFactorPlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []), nativeAuthenticationAssurancePlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? [], !!passkeyOrigin) ],
+    })] : []), ...(passkeyOrigin ? [nativePasskeyPlugin(db, authSchema, passkeyOrigin, config.saasPlatform?.operatorUserIds ?? [],
+      config.saasPlatform?.deployment.sourceSha ?? "")] : []), nativeTwoFactorPlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []), nativeAuthenticationAssurancePlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? [], !!passkeyOrigin) ],
   };
 
   if (!baseUrl) {

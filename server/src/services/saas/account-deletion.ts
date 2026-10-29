@@ -11,6 +11,7 @@ import {
   authAccounts,
   authRateLimits,
   authUsers,
+  enterpriseSubjectBindings,
   humanWorkflowCoverages,
   heartbeatRuns,
   supportCaseIssueLinks,
@@ -34,6 +35,7 @@ export function accountDeletionService(
     cancelRun(id: string): Promise<unknown>;
     removeFeedbackImages?(operationId: string): Promise<unknown>;
     enterpriseSourceSha?: string;
+    operatorUserIds?: readonly string[];
   },
 ) {
   async function request(userId: string, raw: unknown, now = new Date(), actor?: AuthorizationActor) {
@@ -92,6 +94,8 @@ export function accountDeletionService(
       let pendingNativeProof: Awaited<ReturnType<typeof assertHumanAuthentication>> | null = null;
       let expectedPostEraseAuthenticatorVersion = user?.authenticatorVersion ?? -1;
       if (!user?.emailVerified) throw unauthorized("Verified account required");
+      const operatorRequiresPhishingResistant = effects.operatorUserIds?.includes(userId) === true;
+      const requiresPhishingResistant = user.phishingResistantRequired || operatorRequiresPhishingResistant;
       const [activeSession] = await tx.execute<{ id: string }>(sql`select id from "session"
         where id=${actor.sessionId} and user_id=${userId} and expires_at>clock_timestamp() for share nowait`);
       if (!activeSession) throw unauthorized("A current account session is required");
@@ -105,28 +109,41 @@ export function accountDeletionService(
           ),
         )
         .for("update");
+      const activeBindings = await tx.select({ id: enterpriseSubjectBindings.id }).from(enterpriseSubjectBindings)
+        .where(and(eq(enterpriseSubjectBindings.userId, userId), eq(enterpriseSubjectBindings.status, "active")))
+        .for("share");
+      const requiresQualifiedSsoProof = !credential?.password || requiresPhishingResistant && activeBindings.length > 0;
       if (credential?.password) {
-        if (!input.password || input.reauthenticationProofId || !(await verifyPassword({
+        if (!input.password || !(await verifyPassword({
           hash: credential.password,
           password: input.password,
         }))) throw forbidden("Current password confirmation required");
-      } else {
+        if (input.reauthenticationProofId && !requiresQualifiedSsoProof)
+          throw forbidden("Current account confirmation required");
+      } else if (input.password || !input.reauthenticationProofId) {
+        throw forbidden("Current company sign-in confirmation required");
+      }
+      if (requiresQualifiedSsoProof) {
         const [proofRow] = await tx.select().from(authVerifications)
           .where(eq(authVerifications.identifier, `account-deletion-oidc:${userId}`)).for("update");
         const proof = proofRow ? parseAccountDeletionSsoChallenge(proofRow.value) : null;
         const proofTime = proof?.authTime ?? NaN;
+        const nativeFactorMethod = requiresPhishingResistant ? "passkey" : user.twoFactorEnabled ? "totp" : null;
+        const requiresNativeFactor = nativeFactorMethod !== null;
         const proofRowExpiryMs = proofRow?.expiresAt instanceof Date
           ? proofRow.expiresAt.getTime()
           : Date.parse(String(proofRow?.expiresAt ?? ""));
-        if (!input.reauthenticationProofId || input.password || !proofRow || !proof ||
+        if (!input.reauthenticationProofId || !proofRow || !proof ||
           proof.challengeId !== input.reauthenticationProofId || proof.purpose !== "account-deletion" ||
+          proof.nativeFactorMethod !== nativeFactorMethod ||
           proof.state !== "ready" || proof.userId !== userId || proof.proofSessionId !== actor.sessionId ||
           !proof.callbackSessionId || proof.callbackSessionId === proof.sourceSessionId ||
-          (user.twoFactorEnabled ? proof.callbackSessionId === proof.proofSessionId : proof.callbackSessionId !== proof.proofSessionId) ||
-          (user.twoFactorEnabled ? proof.nativeFactorSessionId !== actor.sessionId : proof.nativeFactorSessionId !== null) ||
-          (user.twoFactorEnabled
+          (requiresNativeFactor ? proof.callbackSessionId === proof.proofSessionId : proof.callbackSessionId !== proof.proofSessionId) ||
+          (requiresNativeFactor ? proof.nativeFactorSessionId !== actor.sessionId : proof.nativeFactorSessionId !== null) ||
+          (requiresNativeFactor
             ? proof.nativeFactorAuthenticatorVersion !== user.authenticatorVersion ||
-              (proof.nativeFactorAuthenticatorVersion !== proof.authenticatorVersion && proof.nativeFactorAuthenticatorVersion !== proof.authenticatorVersion + 1) ||
+              (proof.nativeFactorAuthenticatorVersion !== proof.authenticatorVersion &&
+                !(proof.nativeFactorMethod === "totp" && proof.nativeFactorAuthenticatorVersion === proof.authenticatorVersion + 1)) ||
               !proof.sourceSessionExpiresAt || !Number.isFinite(Date.parse(proof.sourceSessionExpiresAt))
             : proof.nativeFactorAuthenticatorVersion !== null || proof.authenticatorVersion !== user.authenticatorVersion) ||
           !Number.isSafeInteger(proofTime) || now.getTime() - proofTime > 300_000 || proofTime > now.getTime() + 5_000 ||
@@ -196,14 +213,17 @@ export function accountDeletionService(
           sourceSessionId: proof.sourceSessionId,
           proofSessionId: proof.proofSessionId!,
           sourceAuthVersion: proof.authenticatorVersion,
-          proofAuthVersion: user.twoFactorEnabled ? proof.nativeFactorAuthenticatorVersion! : proof.authenticatorVersion,
+          proofAuthVersion: requiresNativeFactor ? proof.nativeFactorAuthenticatorVersion! : proof.authenticatorVersion,
           samlNotOnOrAfter: proof.protocol === "saml" ? proof.samlNotOnOrAfter : null,
           sessionExpiries: ["", ""],
         };
+      } else if (input.reauthenticationProofId) {
+        throw forbidden("Current account confirmation required");
       }
-      if (user.twoFactorEnabled || user.phishingResistantRequired) {
+      if (user.twoFactorEnabled || requiresPhishingResistant) {
         if (actor?.type !== "board" || actor.userId !== userId) throw forbidden("Recent factor confirmation required");
-        pendingNativeProof = await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });
+        pendingNativeProof = await assertHumanAuthentication(tx, actor,
+          { requireRecent: true, phishingResistant: requiresPhishingResistant });
       }
       // This rare, bounded operation must also serialize native membership writers that
       // do not take a company lock. Never remove the last owner using a stale snapshot.
@@ -301,7 +321,7 @@ export function accountDeletionService(
             and (${pendingSsoProof.samlNotOnOrAfter === null
               ? sql`true`
               : sql`${pendingSsoProof.samlNotOnOrAfter}::timestamptz>clock_timestamp()+interval '1 second'`})
-            and ${user.twoFactorEnabled
+            and ${user.twoFactorEnabled || requiresPhishingResistant
               ? sql`not exists(select 1 from "session" where id=${pendingSsoProof.callbackSessionId} and user_id=${userId})`
               : sql`true`}
             and exists(select 1 from "user" where id=${userId}

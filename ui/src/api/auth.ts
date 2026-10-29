@@ -266,16 +266,20 @@ export const authApi = {
       headers: { Accept: "application/json", "X-Blentera-Expected-User": expectedUserId,
         "X-Blentera-Expected-Session": expectedSessionId } });
     const payload = await response.json().catch(() => null);
+    const nativeFactorMethod = payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>).nativeFactorMethod : undefined;
     if (!response.ok) throw extractAuthError(payload as AuthErrorBody, response.status);
     if (!payload || typeof payload !== "object" || (payload as Record<string, unknown>).userId !== expectedUserId ||
       typeof (payload as Record<string, unknown>).available !== "boolean" ||
       typeof (payload as Record<string, unknown>).ready !== "boolean" ||
       typeof (payload as Record<string, unknown>).requiresNativeFactor !== "boolean" ||
+      !([null, "totp", "passkey"] as const).includes(nativeFactorMethod as null | "totp" | "passkey") ||
+      (payload as Record<string, unknown>).requiresNativeFactor !== (nativeFactorMethod !== null) ||
       ((payload as Record<string, unknown>).challengeId !== null && typeof (payload as Record<string, unknown>).challengeId !== "string") ||
       ((payload as Record<string, unknown>).providerId !== null && typeof (payload as Record<string, unknown>).providerId !== "string"))
       throw new Error("Company sign-in status is unavailable");
     return payload as { userId: string; providerId: string | null; available: boolean; ready: boolean;
-      requiresNativeFactor: boolean; challengeId: string | null };
+      requiresNativeFactor: boolean; nativeFactorMethod: "totp" | "passkey" | null; challengeId: string | null };
   },
 
   completeAccountDeletionSsoFactor: async (expectedUserId: string, expectedSessionId: string) => {

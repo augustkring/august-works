@@ -1,7 +1,7 @@
 import { createHash, randomUUID, X509Certificate } from "node:crypto";
 import { sso } from "@better-auth/sso";
 import { scim } from "@better-auth/scim";
-import { APIError, type BetterAuthPlugin } from "better-auth";
+import { APIError, type BetterAuthPlugin, type GenericEndpointContext } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { and, eq, sql } from "drizzle-orm";
@@ -130,6 +130,49 @@ export function enterpriseAuthPlugins(
     }
     return candidates.length === 1 ? candidates[0]! : null;
   };
+  const accountDeletionPasskeyScope = async (ctx: GenericEndpointContext) => {
+    const active = await getSessionFromCtx(ctx);
+    if (!active) return null;
+    const [owner] = await db.execute<{ authenticatorVersion: number; phishingResistantRequired: boolean; hasPasskey: boolean }>(sql`
+      select u.authenticator_version as "authenticatorVersion",
+        (u.phishing_resistant_required or ${operatorUserIds.includes(active.user.id)}) as "phishingResistantRequired",
+        exists(select 1 from passkey p where p.user_id=u.id) as "hasPasskey"
+      from "user" u join "session" s on s.user_id=u.id
+      where u.id=${active.user.id} and s.id=${active.session.id} and s.expires_at>clock_timestamp()
+        and not exists(select 1 from account_deletion_operations where user_id=u.id)
+    `);
+    if (!owner?.phishingResistantRequired || !owner.hasPasskey) return null;
+    const [row] = await db.select().from(authVerifications)
+      .where(eq(authVerifications.identifier, reauthIdentifier(active.user.id))).limit(1);
+    const challenge = row ? parseAccountDeletionSsoChallenge(row.value) : null;
+    const authority = challenge?.nativeFactorMethod === "passkey" ? await currentSsoBinding(active.user.id) : null;
+    if (!row || !challenge || !authority || challenge.state !== "ready" || challenge.userId !== active.user.id ||
+      challenge.nativeFactorMethod !== "passkey" || challenge.callbackSessionId !== active.session.id ||
+      challenge.proofSessionId !== active.session.id || challenge.authenticatorVersion !== owner.authenticatorVersion ||
+      challenge.policyId !== authority.policy.id || challenge.policyVersion !== authority.policy.version ||
+      challenge.policyRevision !== authority.revision || challenge.providerId !== authority.policy.providerId ||
+      challenge.bindingId !== authority.binding.id || challenge.issuer !== authority.binding.issuer ||
+      challenge.subject !== authority.binding.subject || !Number.isSafeInteger(challenge.authTime) ||
+      !challenge.sourceSessionExpiresAt || !Number.isFinite(Date.parse(challenge.sourceSessionExpiresAt)) ||
+      !Number.isFinite(Date.parse(challenge.expiresAt)) || Date.parse(challenge.expiresAt) <= Date.now()) return null;
+    const [live] = await db.execute<{ valid: boolean }>(sql`select
+      ${row.expiresAt.toISOString()}::timestamptz>clock_timestamp()+interval '1 second'
+      and ${new Date(challenge.sourceSessionExpiresAt).toISOString()}::timestamptz>clock_timestamp()+interval '1 second'
+      and exists(select 1 from "session" source where source.id=${challenge.sourceSessionId}
+        and source.user_id=${active.user.id} and source.expires_at>clock_timestamp()
+        and (source.authenticator_version is null or source.authenticator_version=${challenge.authenticatorVersion}))
+      and ${challenge.authTime!}::double precision between
+        (extract(epoch from clock_timestamp())-299)*1000 and (extract(epoch from clock_timestamp())+5000)*1000 as valid`);
+    if (!live?.valid) return null;
+    return {
+      purpose: "account-deletion" as const, challengeId: challenge.challengeId, userId: active.user.id,
+      callbackSessionId: active.session.id, authenticatorVersion: owner.authenticatorVersion,
+      sourceSessionId: challenge.sourceSessionId, sourceSessionExpiresAt: challenge.sourceSessionExpiresAt,
+      policyId: authority.policy.id, policyVersion: authority.policy.version, policyRevision: authority.revision,
+      providerId: authority.policy.providerId, bindingId: authority.binding.id, companyId: authority.binding.companyId,
+      issuer: authority.binding.issuer, subject: authority.binding.subject,
+    };
+  };
   const bridge = enterpriseIdentityBridge({
     sourceSha,
     enabled,
@@ -142,21 +185,29 @@ export function enterpriseAuthPlugins(
         method: "GET", use: [sessionMiddleware],
       }, async ctx => {
         const { user, session } = ctx.context.session;
-        const [current] = await db.execute<{ eligible: boolean; twoFactorEnabled: boolean }>(sql`
+        const operatorRequiresPhishingResistant = operatorUserIds.includes(user.id);
+        const [current] = await db.execute<{ eligible: boolean; twoFactorEnabled: boolean;
+          phishingResistantRequired: boolean; hasPasskey: boolean }>(sql`
           select u.two_factor_enabled as "twoFactorEnabled",
-            u.email_verified and not u.phishing_resistant_required
-            and not exists(select 1 from account a where a.user_id=u.id and a.provider_id='credential' and a.password is not null)
+            (u.phishing_resistant_required or ${operatorRequiresPhishingResistant}) as "phishingResistantRequired",
+            exists(select 1 from passkey p where p.user_id=u.id) as "hasPasskey",
+            u.email_verified and (not (u.phishing_resistant_required or ${operatorRequiresPhishingResistant}) or exists(select 1 from passkey p where p.user_id=u.id))
+            and (not exists(select 1 from account a where a.user_id=u.id and a.provider_id='credential' and a.password is not null)
+              or u.phishing_resistant_required or ${operatorRequiresPhishingResistant})
             and not exists(select 1 from account_deletion_operations d where d.user_id=u.id)
             and exists(select 1 from "session" s where s.id=${session.id} and s.user_id=u.id and s.expires_at>clock_timestamp())
             as eligible from "user" u where u.id=${user.id}`);
-        const authority = current?.eligible && !operatorUserIds.includes(user.id) ? await currentSsoBinding(user.id) : null;
+        const authority = current?.eligible ? await currentSsoBinding(user.id) : null;
         const [challengeRow] = await db.select().from(authVerifications)
           .where(eq(authVerifications.identifier, reauthIdentifier(user.id))).limit(1);
         const challenge = challengeRow ? parseAccountDeletionSsoChallenge(challengeRow.value) : null;
         const version = (await db.select({ version: authUsers.authenticatorVersion }).from(authUsers)
           .where(eq(authUsers.id, user.id)).limit(1))[0]?.version;
+        const nativeFactorMethod = current?.phishingResistantRequired || operatorRequiresPhishingResistant ? "passkey" : current?.twoFactorEnabled ? "totp" : null;
         const challengeCurrent = Boolean(authority && challenge && challenge.purpose === "account-deletion" && challenge.state === "ready" &&
           challenge.protocol === authority.policy.configuration.protocol &&
+          challenge.nativeFactorMethod === nativeFactorMethod &&
+          (nativeFactorMethod !== "passkey" || current?.hasPasskey === true) &&
           challenge.userId === user.id && challenge.proofSessionId === session.id &&
           challenge.policyId === authority.policy.id && challenge.policyVersion === authority.policy.version &&
           challenge.policyRevision === authority.revision && challenge.providerId === authority.policy.providerId &&
@@ -164,31 +215,37 @@ export function enterpriseAuthPlugins(
           challenge.subject === authority.binding.subject &&
           Number.isSafeInteger(challenge.authTime) && Number.isFinite(Date.parse(challenge.expiresAt)) &&
           Date.parse(challenge.expiresAt) > Date.now() &&
-          (challenge.authenticatorVersion === version || current?.twoFactorEnabled && challenge.nativeFactorAuthenticatorVersion === version));
-        const ready = challengeCurrent && (!current?.twoFactorEnabled || challenge?.nativeFactorSessionId === session.id);
+          (challenge.authenticatorVersion === version ||
+            challenge.nativeFactorMethod === "totp" && challenge.nativeFactorAuthenticatorVersion === version));
+        const ready = challengeCurrent && (!nativeFactorMethod || challenge?.nativeFactorSessionId === session.id);
         ctx.setHeader("Cache-Control", "no-store");
         return ctx.json({ userId: user.id, providerId: authority?.policy.providerId ?? null, available: Boolean(authority),
-          requiresNativeFactor: Boolean(current?.twoFactorEnabled),
+          requiresNativeFactor: nativeFactorMethod !== null, nativeFactorMethod,
           ready, challengeId: challengeCurrent ? challenge?.challengeId : null });
       }),
       accountDeletionSsoStart: createAuthEndpoint("/account-deletion/sso/start", {
         method: "POST", use: [sessionMiddleware], body: z.object({}).strict(),
       }, async ctx => {
         const { user, session } = ctx.context.session;
+        const operatorRequiresPhishingResistant = operatorUserIds.includes(user.id);
         if ((ctx.getHeader("X-Blentera-Expected-User") !== null && ctx.getHeader("X-Blentera-Expected-User") !== user.id) ||
           (ctx.getHeader("X-Blentera-Expected-Session") !== null && ctx.getHeader("X-Blentera-Expected-Session") !== session.id))
           throw new APIError("CONFLICT", { code: "AUTHENTICATION_STATE_CHANGED", message: "Authenticate again to continue" });
-        const [current] = await db.execute<{ version: number; eligible: boolean; twoFactorEnabled: boolean }>(sql`
+        const [current] = await db.execute<{ version: number; eligible: boolean; twoFactorEnabled: boolean;
+          phishingResistantRequired: boolean; hasPasskey: boolean }>(sql`
           select u.authenticator_version as version,u.two_factor_enabled as "twoFactorEnabled",
-            u.email_verified and not u.phishing_resistant_required
-              and not exists(select 1 from account a where a.user_id=u.id and a.provider_id='credential' and a.password is not null)
+            (u.phishing_resistant_required or ${operatorRequiresPhishingResistant}) as "phishingResistantRequired",
+            exists(select 1 from passkey p where p.user_id=u.id) as "hasPasskey",
+            u.email_verified and (not (u.phishing_resistant_required or ${operatorRequiresPhishingResistant}) or exists(select 1 from passkey p where p.user_id=u.id))
+              and (not exists(select 1 from account a where a.user_id=u.id and a.provider_id='credential' and a.password is not null)
+                or u.phishing_resistant_required or ${operatorRequiresPhishingResistant})
               and not exists(select 1 from account_deletion_operations d where d.user_id=u.id)
               and s.expires_at>clock_timestamp() as eligible
           from "user" u join "session" s on s.user_id=u.id
           where u.id=${user.id} and s.id=${session.id}
             and (s.authenticator_version is null or s.authenticator_version=u.authenticator_version)
           for share of u,s nowait`);
-        if (!current?.eligible || operatorUserIds.includes(user.id))
+        if (!current?.eligible)
           throw new APIError("FORBIDDEN", { code: "ACCOUNT_DELETION_SSO_REAUTH_UNAVAILABLE", message: "A supported recent sign-in method is unavailable" });
         const authority = await currentSsoBinding(user.id);
         if (!authority)
@@ -198,11 +255,12 @@ export function enterpriseAuthPlugins(
         const value = JSON.stringify({
           challengeId, purpose: "account-deletion", protocol: authority.policy.configuration.protocol,
           state: "created", userId: user.id,
-          sourceSessionId: session.id, sourceSessionExpiresAt: null,
+          sourceSessionId: session.id, sourceSessionExpiresAt: session.expiresAt.toISOString(),
           authenticatorVersion: current.version, providerId: authority.policy.providerId,
           policyId: authority.policy.id, policyVersion: authority.policy.version, policyRevision: authority.revision,
           companyId: authority.binding.companyId, bindingId: authority.binding.id, issuer: authority.binding.issuer,
           subject: authority.binding.subject, createdAt: createdAt.toISOString(), expiresAt: expiresAt.toISOString(),
+          nativeFactorMethod: current.phishingResistantRequired ? "passkey" : current.twoFactorEnabled ? "totp" : null,
           authorizationState: null, idTokenNonce: null, samlRequestId: null, samlAssertionId: null,
           samlIssuer: null, samlSubject: null, samlAuthnInstant: null, samlRecipient: null, samlNotOnOrAfter: null, samlBinding: null,
           authTime: null, callbackSessionId: null, proofSessionId: null,
@@ -230,29 +288,39 @@ export function enterpriseAuthPlugins(
         method: "POST", use: [sessionMiddleware], body: z.object({}).strict(),
       }, async ctx => {
         const { user, session } = ctx.context.session;
+        const operatorRequiresPhishingResistant = operatorUserIds.includes(user.id);
         if (ctx.getHeader("X-Blentera-Expected-User") !== user.id ||
           ctx.getHeader("X-Blentera-Expected-Session") !== session.id)
           throw new APIError("CONFLICT", { code: "AUTHENTICATION_STATE_CHANGED", message: "Authenticate again to continue" });
         const completed = await db.transaction(async tx => {
-          const [owner] = await tx.execute<{ authenticatorVersion: number }>(sql`
-            select authenticator_version as "authenticatorVersion" from "user" where id=${user.id}
-              and two_factor_enabled and not phishing_resistant_required
-              and not exists(select 1 from account a where a.user_id=${user.id} and a.provider_id='credential' and a.password is not null)
+          const [owner] = await tx.execute<{ authenticatorVersion: number; twoFactorEnabled: boolean;
+            phishingResistantRequired: boolean; hasPasskey: boolean }>(sql`
+            select authenticator_version as "authenticatorVersion",two_factor_enabled as "twoFactorEnabled",
+              (phishing_resistant_required or ${operatorRequiresPhishingResistant}) as "phishingResistantRequired",
+              exists(select 1 from passkey p where p.user_id="user".id) as "hasPasskey"
+            from "user" where id=${user.id}
+              and ((two_factor_enabled and not phishing_resistant_required)
+                or ((phishing_resistant_required or ${operatorRequiresPhishingResistant}) and exists(select 1 from passkey p where p.user_id="user".id)))
+              and (not exists(select 1 from account a where a.user_id=${user.id} and a.provider_id='credential' and a.password is not null)
+                or phishing_resistant_required or ${operatorRequiresPhishingResistant})
               and not exists(select 1 from account_deletion_operations where user_id=${user.id})
             for share nowait`);
-          if (!owner || operatorUserIds.includes(user.id))
+          if (!owner)
             throw new APIError("FORBIDDEN", { code: "ACCOUNT_DELETION_SSO_REAUTH_UNAVAILABLE", message: "A supported recent sign-in method is unavailable" });
           const [row] = await tx.select().from(authVerifications)
             .where(eq(authVerifications.identifier, reauthIdentifier(user.id))).limit(1).for("update");
           const challenge = row ? parseAccountDeletionSsoChallenge(row.value) : null;
+          const requiredNativeFactor = owner.phishingResistantRequired ? "passkey" : owner.twoFactorEnabled ? "totp" : null;
           if (!row || !challenge || challenge.userId !== user.id || challenge.state !== "ready" ||
+            challenge.nativeFactorMethod !== requiredNativeFactor || requiredNativeFactor === null ||
             challenge.nativeFactorSessionId !== session.id || challenge.callbackSessionId === null ||
             challenge.proofSessionId !== session.id || challenge.callbackSessionId === session.id ||
             challenge.nativeFactorAuthenticatorVersion !== owner.authenticatorVersion ||
             !Number.isSafeInteger(challenge.authTime) || !challenge.sourceSessionExpiresAt ||
             !Number.isFinite(Date.parse(challenge.sourceSessionExpiresAt)) ||
             challenge.nativeFactorAuthenticatorVersion !== challenge.authenticatorVersion &&
-              challenge.nativeFactorAuthenticatorVersion !== challenge.authenticatorVersion + 1)
+              !(challenge.nativeFactorMethod === "totp" &&
+                challenge.nativeFactorAuthenticatorVersion === challenge.authenticatorVersion + 1))
             throw new APIError("FORBIDDEN", { code: "ACCOUNT_DELETION_SSO_REAUTH_UNAVAILABLE", message: "The sign-in confirmation expired; start again" });
           const authority = await currentSsoBinding(user.id);
           if (!authority || challenge.protocol !== authority.policy.configuration.protocol ||
@@ -286,7 +354,7 @@ export function enterpriseAuthPlugins(
           const factorProof = await assertHumanAuthentication(tx, {
             type: "board", source: "session", userId: user.id, sessionId: session.id,
             authenticatedCredentialExpiresAt: session.expiresAt.getTime(),
-          }, { requireRecent: true, phishingResistant: false });
+          }, { requireRecent: true, phishingResistant: challenge.nativeFactorMethod === "passkey" });
           const [fresh] = await tx.execute<{ valid: boolean }>(sql`
             select ${challenge.authTime!}::double precision between
                 (extract(epoch from clock_timestamp())-299)*1000 and (extract(epoch from clock_timestamp())+5000)*1000
@@ -315,13 +383,21 @@ export function enterpriseAuthPlugins(
             Boolean(
               ctx.path?.startsWith("/sso/") ||
               ctx.path?.startsWith("/scim/") ||
-              ctx.path === "/sign-in/sso",
+              ctx.path === "/sign-in/sso" ||
+              ctx.path === "/passkey/generate-authenticate-options" ||
+              ctx.path === "/passkey/verify-authentication",
             ),
           handler: createAuthMiddleware(async (ctx) => {
             if (!(await enabled()))
               throw new APIError("NOT_FOUND", {
                 message: "Enterprise identity is not enabled",
               });
+            if (ctx.path === "/passkey/generate-authenticate-options" || ctx.path === "/passkey/verify-authentication") {
+              const scope = await accountDeletionPasskeyScope(ctx);
+              if (scope) (ctx.context as typeof ctx.context & { accountDeletionSsoPasskeyScope?: typeof scope })
+                .accountDeletionSsoPasskeyScope = scope;
+              return;
+            }
             if (ctx.path === "/sign-in/sso") {
               const input = ctx.body as {
                 providerId?: string;

@@ -20,7 +20,8 @@ function SessionObserver() {
   return null;
 }
 let root: Root, host: HTMLDivElement, client: QueryClient;
-async function render(principal = "owner", settingsProps: { confirmationOnly?: boolean; onConfirmed?: (receipt: { userId: string; sessionId: string }) => void } = {}) {
+async function render(principal = "owner", settingsProps: { confirmationOnly?: boolean; purposePasskeyConfirmation?: boolean;
+  onConfirmed?: (receipt: { userId: string; sessionId: string }) => void } = {}) {
   await act(async () => root.render(<QueryClientProvider client={client}>
     <SessionObserver /><NativeAuthenticationSettings principal={principal} {...settingsProps} />
   </QueryClientProvider>));
@@ -281,10 +282,27 @@ it("uses the current native passkey session for configured confirmation without 
   await mount();
   vi.spyOn(authApi, "listPasskeys").mockResolvedValue([]);
   vi.mocked(authApi.securityStatus).mockResolvedValue({ userId: "owner", hasPassword: false,
-    twoFactorEnabled: false, phishingResistantRequired: true, passkeysAvailable: true });
+    twoFactorEnabled: false, phishingResistantRequired: false, passkeysAvailable: true });
   const onConfirmed = vi.fn();
   vi.spyOn(authApi, "authenticatePasskey").mockResolvedValue({ userId: "owner", sessionId: "session-owner" });
   await render("owner", { confirmationOnly: true, onConfirmed });
+  await act(async () => { await client.invalidateQueries({ queryKey: ["native-authenticator-status", "owner"] }); });
+  const passkeyLabel = i18n.t("account.passkeys.confirm", { ns: "experience" });
+  await vi.waitFor(() => expect(button(passkeyLabel)).toBeTruthy());
+  await act(async () => button(passkeyLabel).click());
+  await vi.waitFor(() => expect(onConfirmed).toHaveBeenCalledWith({ userId: "owner", sessionId: "session-owner" }));
+  expect(authApi.authenticatePasskey).toHaveBeenCalledWith("owner", "session-owner");
+  expect(authApi.listPasskeys).not.toHaveBeenCalled();
+});
+
+it("offers a pre-enrolled passkey only when the account-deletion flow authorizes its scoped confirmation", async () => {
+  await mount();
+  vi.spyOn(authApi, "listPasskeys").mockResolvedValue([]);
+  vi.mocked(authApi.securityStatus).mockResolvedValue({ userId: "owner", hasPassword: false,
+    twoFactorEnabled: false, phishingResistantRequired: true, passkeysAvailable: false });
+  const onConfirmed = vi.fn();
+  vi.spyOn(authApi, "authenticatePasskey").mockResolvedValue({ userId: "owner", sessionId: "session-owner" });
+  await render("owner", { confirmationOnly: true, purposePasskeyConfirmation: true, onConfirmed });
   await act(async () => { await client.invalidateQueries({ queryKey: ["native-authenticator-status", "owner"] }); });
   const passkeyLabel = i18n.t("account.passkeys.confirm", { ns: "experience" });
   await vi.waitFor(() => expect(button(passkeyLabel)).toBeTruthy());

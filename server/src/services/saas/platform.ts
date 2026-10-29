@@ -91,6 +91,7 @@ export function saasPlatform(
   const onboarding = saasOnboardingService(db);
   const accountDeletion = accountDeletionService(db, {
     enterpriseSourceSha: config.deployment.sourceSha,
+    operatorUserIds: config.operatorUserIds,
     removeFeedbackImages: async operationId => {
       for (let count = 0; count < 3; count++)
         if (!(await processFeedbackImageDeletion(db, storage, operationId))) break;

@@ -30,9 +30,10 @@ function clearSecretValues(value: SecretView | null) {
   value.backupCodes.fill("");
 }
 
-export function NativeAuthenticationSettings({ principal, confirmationOnly = false, onConfirmed }: {
+export function NativeAuthenticationSettings({ principal, confirmationOnly = false, purposePasskeyConfirmation = false, onConfirmed }: {
   principal: string;
   confirmationOnly?: boolean;
+  purposePasskeyConfirmation?: boolean;
   onConfirmed?: (receipt: { userId: string; sessionId: string }) => void;
 }) {
   const confirmationId = useId();
@@ -90,7 +91,7 @@ export function NativeAuthenticationSettings({ principal, confirmationOnly = fal
     queryFn: ({ signal }) => authApi.listPasskeys(principal, currentSessionId(), signal), staleTime: 0, gcTime: 0, retry: false });
   const passkeysCurrent = statusCurrent && ownsCurrentSession() && passkeys.isSuccess && !passkeys.isFetching &&
     !client.getQueryState(passkeysKey)?.isInvalidated;
-  const canUsePasskey = confirmationOnly ? currentStatus?.passkeysAvailable === true : passkeysCurrent && passkeys.data.length>0;
+  const canUsePasskey = confirmationOnly ? purposePasskeyConfirmation || currentStatus?.passkeysAvailable === true : passkeysCurrent && passkeys.data.length>0;
 
   useEffect(() => {
     aliveRef.current = true;
@@ -342,7 +343,12 @@ export function NativeAuthenticationSettings({ principal, confirmationOnly = fal
       {status.isError && <Button variant="outline" onClick={() => void refreshNativeSessionAndStatus().catch(() => {})}>{t("account.retry")}</Button>}
     </div>}
     {statusCurrent && currentStatus && <>
-      {currentStatus.phishingResistantRequired ? <p className="saas-muted">{t("account.authenticator.phishingResistantRequired")}</p> : <>
+      {currentStatus.phishingResistantRequired ? <>
+        <p className="saas-muted">{t("account.authenticator.phishingResistantRequired")}</p>
+        {purposePasskeyConfirmation && <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void runAction(async () => {
+          announceConfirmation(await confirmPasskey());
+        })}>{t("account.passkeys.confirm")}</Button>}
+      </> : <>
         {currentStatus.twoFactorEnabled ? <>
           <label className="saas-label" htmlFor={`${confirmationId}-totp`}>{t("account.authenticator.totpCode")}
             <input id={`${confirmationId}-totp`} className="saas-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
@@ -360,7 +366,7 @@ export function NativeAuthenticationSettings({ principal, confirmationOnly = fal
           disabled={busy || (currentStatus.twoFactorEnabled ? !totpCode && !recoveryCode : !password)}
           onClick={() => void confirmIdentity()}>{t("account.authenticator.confirmIdentity")}</Button>}
       </>}
-      {canUsePasskey && <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void runAction(async () => {
+      {canUsePasskey && !currentStatus.phishingResistantRequired && <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void runAction(async () => {
         announceConfirmation(await confirmPasskey());
       })}>{t("account.passkeys.confirm")}</Button>}
       {!canUsePasskey && (currentStatus.phishingResistantRequired || !currentStatus.hasPassword && !currentStatus.twoFactorEnabled) &&

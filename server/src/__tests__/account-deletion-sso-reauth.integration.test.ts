@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { randomUUID, generateKeyPairSync, createSign } from "node:crypto";
+import { randomUUID, randomBytes, createHash, generateKeyPairSync, createSign, type KeyObject } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { symmetricEncrypt } from "better-auth/crypto";
+import { hashPassword, symmetricEncrypt } from "better-auth/crypto";
 import { createOTP } from "@better-auth/utils/otp";
 import {
   createDb, authAccounts, authPasskeys, authRateLimits, authSessions, authTwoFactors, authUsers, authVerifications, accountDeletionOperations,
@@ -19,13 +19,14 @@ import type { AuthorizationActor } from "../services/authorization.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
-(support.supported ? describe : describe.skip)("passwordless account deletion through verified OIDC reauthentication", () => {
+(support.supported ? describe : describe.skip)("account deletion through verified OIDC and native reauthentication", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: Db;
   let auth: ReturnType<typeof createBetterAuthInstance>;
   let operator: Awaited<ReturnType<typeof seedV5Companies>>;
   let operatorActor: AuthorizationActor;
   let targetUserId: string;
+  let configuredOperatorUserIds: string[] = [];
   let providerId: string;
   let jar = new Map<string, string>();
   const previousSecret = process.env.BETTER_AUTH_SECRET;
@@ -46,6 +47,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     await instanceSettingsService(db).getExperimental();
     await enableV5ForTest(db);
     operator = await seedV5Companies(db);
+    configuredOperatorUserIds = [operator.userId];
     const time = new Date(), operatorSessionId = randomUUID();
     await db.insert(authAccounts).values({ id: randomUUID(), issuer: "local:credential", accountId: operator.userId,
       providerId: "credential", userId: operator.userId, password: "structural-fixture-not-a-password-hash",
@@ -92,7 +94,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     const config = { deploymentProfile: "saas", deploymentMode: "authenticated", deploymentExposure: "public",
       authBaseUrlMode: "explicit", authPublicBaseUrl: origin, authDisableSignUp: true, allowedHostnames: ["enterprise.example.test"],
       port: 3100, publicOriginConfig: { primaryAppOrigin: origin, allowedAppOrigins: [origin], legacyOrigins: [] },
-      saasPlatform: { deployment: { sourceSha }, operatorUserIds: [operator.userId] } } as unknown as Config;
+      saasPlatform: { deployment: { sourceSha }, operatorUserIds: configuredOperatorUserIds } } as unknown as Config;
     auth = createBetterAuthInstance(db, config, [origin, idpIssuer]);
     const publicJwk = { ...idpPublicJwk };
     Object.assign(publicJwk, { kid: jwksKid, use: "sig", alg: "RS256" });
@@ -173,6 +175,20 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     return value.session!.id!;
   }
   function expectedHeaders(sessionId: string) { return { "X-Blentera-Expected-User": targetUserId, "X-Blentera-Expected-Session": sessionId }; }
+  async function makePasskeyResponse(challenge: string, credentialId: string, privateKey: KeyObject) {
+    const clientDataJSON = Buffer.from(JSON.stringify({ type: "webauthn.get", challenge, origin, crossOrigin: false }));
+    const authenticatorData = Buffer.concat([
+      createHash("sha256").update(new URL(origin).hostname).digest(), Buffer.from([0x05, 0, 0, 0, 1]),
+    ]);
+    const clientDataHash = createHash("sha256").update(clientDataJSON).digest();
+    const signer = createSign("SHA256");
+    signer.update(Buffer.concat([authenticatorData, clientDataHash]));
+    signer.end();
+    const signature = signer.sign(privateKey).toString("base64url");
+    return { id: credentialId, rawId: credentialId, type: "public-key", authenticatorAttachment: "platform",
+      clientExtensionResults: {}, response: { authenticatorData: authenticatorData.toString("base64url"),
+        clientDataJSON: clientDataJSON.toString("base64url"), signature, userHandle: null } };
+  }
   async function startDeleteReauth(sessionId: string) {
     const result = await request("/account-deletion/sso/start", "POST", {}, expectedHeaders(sessionId));
     expect(result.status).toBe(200);
@@ -223,7 +239,7 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
     const ready = await (await request("/account-deletion/sso/status", "GET", undefined, expectedHeaders(sessionId))).json() as {
       ready: boolean; challengeId: string | null;
     };
-    expect(ready).toEqual({ userId: targetUserId, providerId, available: true, requiresNativeFactor: false,
+    expect(ready).toEqual({ userId: targetUserId, providerId, available: true, requiresNativeFactor: false, nativeFactorMethod: null,
       ready: true, challengeId: challenge.challengeId });
     expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, targetUserId))).toEqual([]);
 
@@ -400,5 +416,219 @@ const origin = "https://enterprise.example.test", sourceSha = "a".repeat(40);
       throw new Error(JSON.stringify({ error: error instanceof Error ? error.message : "failed", diagnostics }));
     }
     expect(receipt.status).toBe("requested");
+  });
+
+  it("requires qualified SSO and an already enrolled native passkey for an operator with an unset PR flag", async () => {
+    jar.clear();
+    targetUserId = `oidc-delete-pr-target-${randomUUID()}`;
+    configuredOperatorUserIds.push(targetUserId);
+    idpSubject = `fixture-pr-subject-${randomUUID()}`;
+    const time = new Date();
+    await db.insert(authUsers).values({ id: targetUserId, name: "OIDC deletion passkey fixture",
+      email: `${targetUserId}@test.invalid`, emailVerified: true, createdAt: time, updatedAt: time });
+    const operatorPassword = "CURRENT-OPERATOR-DELETE-PASSWORD-2026";
+    await db.insert(authAccounts).values({ id: randomUUID(), issuer: "local:credential", accountId: targetUserId,
+      providerId: "credential", userId: targetUserId, password: await hashPassword(operatorPassword), createdAt: time, updatedAt: time });
+    const { companyMemberships } = await import("@paperclipai/db");
+    await db.insert(companyMemberships).values({ companyId: operator.home, principalType: "user", principalId: targetUserId,
+      status: "active", membershipRole: "viewer" });
+    const [initialOperator] = await db.select().from(authUsers).where(eq(authUsers.id, targetUserId));
+    expect(initialOperator).toMatchObject({ phishingResistantRequired: false });
+
+    const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const jwk = publicKey.export({ format: "jwk" });
+    expect(jwk.x).toBeTruthy(); expect(jwk.y).toBeTruthy();
+    const x = Buffer.from(jwk.x!, "base64url"), y = Buffer.from(jwk.y!, "base64url");
+    const cosePublicKey = Buffer.concat([Buffer.from([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20]),
+      x, Buffer.from([0x22, 0x58, 0x20]), y]);
+    const credentialId = randomBytes(32).toString("base64url");
+    await db.insert(authPasskeys).values({ id: randomUUID(), name: "Previously enrolled PR key",
+      publicKey: cosePublicKey.toString("base64url"), userId: targetUserId, credentialID: credentialId, counter: 0,
+      deviceType: "singleDevice", backedUp: false, transports: "internal", createdAt: time, aaguid: null });
+    await enterpriseIdentityPolicyService(db, { operatorUserIds: [operator.userId], sourceSha,
+      protectedEvidenceOrigin: "https://qualification.test.invalid", appOrigin: origin })
+      .bind(operatorActor, operator.home, { userId: targetUserId, subject: idpSubject,
+        manageMembershipLifecycle: false, reason: "Bind pre-enrolled PR passkey deletion fixture" });
+
+    const firstLogin = await completeOidc(`${origin}/company/settings/security`);
+    expect(firstLogin.callback.status).toBe(302);
+    const sourceSessionId = await currentSession();
+    await clearThisFixtureSignInRateLimit();
+    const ordinaryRegistrationOptions = await request("/passkey/generate-register-options", "GET", undefined, expectedHeaders(sourceSessionId));
+    expect(ordinaryRegistrationOptions.status).not.toBe(200);
+    expect(await currentSession()).toBe(sourceSessionId);
+    const ordinaryOptionsResponse = await request("/passkey/generate-authenticate-options", "GET", undefined, expectedHeaders(sourceSessionId));
+    expect(ordinaryOptionsResponse.status).toBe(200);
+    const ordinaryOptions = await ordinaryOptionsResponse.json() as { challenge: string };
+    const ordinaryAttempt = await request("/passkey/verify-authentication", "POST",
+      { response: await makePasskeyResponse(ordinaryOptions.challenge, credentialId, privateKey) }, expectedHeaders(sourceSessionId));
+    expect(ordinaryAttempt.status).not.toBe(200);
+    expect(await currentSession()).toBe(sourceSessionId);
+    const initialStatus = await (await request("/account-deletion/sso/status", "GET", undefined,
+      expectedHeaders(sourceSessionId))).json() as { available: boolean; requiresNativeFactor: boolean; nativeFactorMethod: string | null };
+    expect(initialStatus).toMatchObject({ available: true, requiresNativeFactor: true, nativeFactorMethod: "passkey" });
+
+    const finishSso = async (sourceSession: string) => {
+      const challenge = await startDeleteReauth(sourceSession);
+      const authorization = await request("/sign-in/sso", "POST", { providerId, callbackURL: challenge.callbackURL }, expectedHeaders(sourceSession));
+      expect(authorization.status, JSON.stringify(await authorization.clone().json())).toBe(200);
+      const url = new URL((await authorization.json() as { url: string }).url);
+      const state = url.searchParams.get("state")!, nonce = url.searchParams.get("nonce")!;
+      const code = randomUUID(); tokenByCode.set(code, await signedToken({ nonce, authTime: Math.floor(Date.now() / 1000) }));
+      const callback = await request(`/sso/callback/${providerId}?state=${encodeURIComponent(state)}&code=${encodeURIComponent(code)}`);
+      expect(callback.status).toBe(302);
+      await clearThisFixtureSignInRateLimit();
+      const proofSessionId = await currentSession();
+      return { challenge, proofSessionId };
+    };
+    const optionsFor = async (sessionId: string) => {
+      const response = await request("/passkey/generate-authenticate-options", "GET", undefined, expectedHeaders(sessionId));
+      expect(response.status, JSON.stringify(await response.clone().json())).toBe(200);
+      return await response.json() as { challenge: string; userVerification?: string; allowCredentials?: Array<{ id: string }> };
+    };
+    const verify = async (sessionId: string, challenge: string) => request("/passkey/verify-authentication", "POST",
+      { response: await makePasskeyResponse(challenge, credentialId, privateKey) }, expectedHeaders(sessionId));
+
+    // A same-user but unrelated SSO session cannot use the prior challenge's WebAuthn ceremony.
+    const wrongSessionProof = await finishSso(sourceSessionId);
+    const wrongSessionOptions = await optionsFor(wrongSessionProof.proofSessionId);
+    expect(wrongSessionOptions.userVerification).toBe("required");
+    expect(wrongSessionOptions.allowCredentials?.some(item => item.id === credentialId)).toBe(true);
+    const unrelatedLogin = await completeOidc(`${origin}/company/settings/security`);
+    expect(unrelatedLogin.callback.status).toBe(302);
+    const unrelatedSessionId = await currentSession();
+    const wrongSessionResult = await verify(unrelatedSessionId, wrongSessionOptions.challenge);
+    expect(wrongSessionResult.status).not.toBe(200);
+    expect(await currentSession()).toBe(unrelatedSessionId);
+    expect((await verify(unrelatedSessionId, wrongSessionOptions.challenge)).status).not.toBe(200);
+    expect(await currentSession()).toBe(unrelatedSessionId);
+    await clearThisFixtureSignInRateLimit();
+
+    // A changed qualification after options issuance invalidates the scoped ceremony.
+    const changedPolicyProof = await finishSso(unrelatedSessionId);
+    const changedPolicyOptions = await optionsFor(changedPolicyProof.proofSessionId);
+    const [policy] = await db.select().from(enterpriseIdentityPolicies).where(eq(enterpriseIdentityPolicies.providerId, providerId));
+    await db.update(enterpriseIdentityPolicies).set({ updatedAt: new Date(Date.now() + 1_000) })
+      .where(eq(enterpriseIdentityPolicies.id, policy!.id));
+    const changedPolicyResult = await verify(changedPolicyProof.proofSessionId, changedPolicyOptions.challenge);
+    expect(changedPolicyResult.status).not.toBe(200);
+    expect(await currentSession()).toBe(changedPolicyProof.proofSessionId);
+    await db.update(enterpriseIdentityPolicies).set({ updatedAt: policy!.updatedAt }).where(eq(enterpriseIdentityPolicies.id, policy!.id));
+    await clearThisFixtureSignInRateLimit();
+
+    // The exact callback session, current binding and pre-existing credential complete the required UV ceremony.
+    const successfulProof = await finishSso(changedPolicyProof.proofSessionId);
+    const authenticationOptions = await optionsFor(successfulProof.proofSessionId);
+    expect(authenticationOptions.allowCredentials?.some(item => item.id === credentialId)).toBe(true);
+    const [webauthnChallenge] = await db.select().from(authVerifications)
+      .where(sql`${authVerifications.value} like ${`%${authenticationOptions.challenge}%`}`).limit(1);
+    const webauthnValue = webauthnChallenge ? JSON.parse(webauthnChallenge.value) as Record<string, unknown> : null;
+    const webauthnScope = typeof webauthnValue?.context === "string"
+      ? JSON.parse(webauthnValue.context) as Record<string, unknown> : null;
+    const [accountProof] = await db.select().from(authVerifications)
+      .where(eq(authVerifications.identifier, `account-deletion-oidc:${targetUserId}`));
+    const storedProof = accountProof ? JSON.parse(accountProof.value) as Record<string, unknown> : null;
+    const verified = await verify(successfulProof.proofSessionId, authenticationOptions.challenge);
+    const errorPayload = await verified.clone().json().catch(() => null) as { code?: unknown; message?: unknown } | null;
+    if (verified.status !== 200) throw new Error(JSON.stringify({ status: verified.status,
+      code: typeof errorPayload?.code === "string" ? errorPayload.code : null,
+      challengeContext: { present: Boolean(webauthnScope), purposeMatches: webauthnScope?.purpose === "account-deletion",
+        challengeMatches: webauthnScope?.challengeId === successfulProof.challenge.challengeId,
+        userMatches: webauthnScope?.userId === targetUserId,
+        callbackSessionMatches: webauthnScope?.callbackSessionId === successfulProof.proofSessionId,
+        sourceSessionPresent: typeof webauthnScope?.sourceSessionId === "string",
+        revisionPresent: typeof webauthnScope?.policyRevision === "string" },
+      proof: { state: storedProof?.state, nativeMethod: storedProof?.nativeFactorMethod,
+        callbackSessionMatches: storedProof?.callbackSessionId === successfulProof.proofSessionId,
+        authenticatorVersionMatches: storedProof?.authenticatorVersion === webauthnChallenge?.authenticatorVersion } }));
+    expect(verified.status).toBe(200);
+    const passkeySessionId = await currentSession();
+    expect(passkeySessionId).not.toBe(successfulProof.proofSessionId);
+    const completed = await request("/account-deletion/sso/factor-complete", "POST", {}, expectedHeaders(passkeySessionId));
+    expect(completed.status, JSON.stringify(await completed.clone().json())).toBe(200);
+    expect(await completed.json()).toMatchObject({ userId: targetUserId, sessionId: passkeySessionId,
+      challengeId: successfulProof.challenge.challengeId, ready: true });
+    const status = await (await request("/account-deletion/sso/status", "GET", undefined,
+      expectedHeaders(passkeySessionId))).json();
+    expect(status).toMatchObject({ available: true, requiresNativeFactor: true, nativeFactorMethod: "passkey",
+      ready: true, challengeId: successfulProof.challenge.challengeId });
+
+    const deletion = accountDeletionService(db, { enterpriseSourceSha: sourceSha, operatorUserIds: configuredOperatorUserIds,
+      removeSecret: async () => {}, cancelRun: async () => {} });
+    const passwordOnly = { confirmation: "DELETE MY ACCOUNT", password: operatorPassword,
+      acknowledgeExport: true, idempotencyKey: "oidc-delete-pr-operator-password-only" };
+    await expect(deletion.request(targetUserId, passwordOnly, new Date(),
+      { type: "board", source: "session", userId: targetUserId, sessionId: passkeySessionId }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, targetUserId))).toEqual([]);
+    const receipt = await deletion.request(targetUserId, { confirmation: "DELETE MY ACCOUNT", password: operatorPassword,
+      reauthenticationProofId: successfulProof.challenge.challengeId,
+      acknowledgeExport: true, idempotencyKey: "oidc-delete-pr-passkey-0001" }, new Date(),
+      { type: "board", source: "session", userId: targetUserId, sessionId: passkeySessionId });
+    expect(receipt.status).toBe("requested");
+    expect(await db.select().from(authVerifications).where(eq(authVerifications.identifier, `account-deletion-oidc:${targetUserId}`))).toEqual([]);
+    configuredOperatorUserIds.splice(configuredOperatorUserIds.indexOf(targetUserId), 1);
+  });
+
+  it("requires a fresh native passkey for a configured local operator and then permits password-confirmed deletion", async () => {
+    jar.clear();
+    const localOperatorId = `local-delete-operator-${randomUUID()}`;
+    configuredOperatorUserIds.push(localOperatorId);
+    const now = new Date(), email = `${localOperatorId}@test.invalid`, password = "LOCAL-OPERATOR-DELETE-PASSWORD-2026";
+    await db.insert(authUsers).values({ id: localOperatorId, name: "Local operator fixture", email,
+      emailVerified: true, phishingResistantRequired: false, createdAt: now, updatedAt: now });
+    await db.insert(authAccounts).values({ id: randomUUID(), issuer: "local:credential", accountId: localOperatorId,
+      providerId: "credential", userId: localOperatorId, password: await hashPassword(password), createdAt: now, updatedAt: now });
+    const [ownerBeforeCredential] = await db.select().from(authUsers).where(eq(authUsers.id, localOperatorId));
+    expect(ownerBeforeCredential).toMatchObject({ phishingResistantRequired: false });
+    const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const jwk = publicKey.export({ format: "jwk" });
+    expect(jwk.x).toBeTruthy(); expect(jwk.y).toBeTruthy();
+    const x = Buffer.from(jwk.x!, "base64url"), y = Buffer.from(jwk.y!, "base64url");
+    const cosePublicKey = Buffer.concat([Buffer.from([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20]),
+      x, Buffer.from([0x22, 0x58, 0x20]), y]);
+    const credentialId = randomBytes(32).toString("base64url");
+    await db.insert(authPasskeys).values({ id: randomUUID(), name: "Local operator pre-enrolled PR key",
+      publicKey: cosePublicKey.toString("base64url"), userId: localOperatorId, credentialID: credentialId, counter: 0,
+      deviceType: "singleDevice", backedUp: false, transports: "internal", createdAt: now, aaguid: null });
+    const [owner] = await db.select().from(authUsers).where(eq(authUsers.id, localOperatorId));
+    expect(owner).toMatchObject({ phishingResistantRequired: false });
+    const passwordLogin = await request("/sign-in/email", "POST", { email, password });
+    expect(passwordLogin.status, JSON.stringify(await passwordLogin.clone().json())).toBe(200);
+    targetUserId = localOperatorId;
+    const passwordSessionId = await currentSession();
+    const deletion = accountDeletionService(db, { operatorUserIds: configuredOperatorUserIds,
+      removeSecret: async () => {}, cancelRun: async () => {} });
+    await expect(deletion.request(localOperatorId, { confirmation: "DELETE MY ACCOUNT", password,
+      acknowledgeExport: true, idempotencyKey: "local-operator-password-only-delete" }, now,
+      { type: "board", source: "session", userId: localOperatorId, sessionId: passwordSessionId }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, localOperatorId))).toEqual([]);
+
+    const optionsResponse = await request("/passkey/generate-authenticate-options", "GET", undefined,
+      expectedHeaders(passwordSessionId));
+    expect(optionsResponse.status, JSON.stringify(await optionsResponse.clone().json())).toBe(200);
+    const options = await optionsResponse.json() as { challenge: string; userVerification?: string;
+      allowCredentials?: Array<{ id: string }> };
+    expect(options.userVerification).toBe("required");
+    expect(options.allowCredentials?.some(item => item.id === credentialId)).toBe(true);
+    const assertion = await request("/passkey/verify-authentication", "POST",
+      { response: await makePasskeyResponse(options.challenge, credentialId, privateKey) }, expectedHeaders(passwordSessionId));
+    expect(assertion.status, JSON.stringify(await assertion.clone().json())).toBe(200);
+    const passkeySessionId = await currentSession();
+    expect(passkeySessionId).not.toBe(passwordSessionId);
+    const [passkeySession] = await db.select().from(authSessions).where(eq(authSessions.id, passkeySessionId));
+    expect(passkeySession).toMatchObject({ authenticationMethod: "passkey", authenticatorVersion: owner!.authenticatorVersion });
+    expect(passkeySession!.authenticatedAt!.getTime()).toBeGreaterThanOrEqual(now.getTime());
+    const [promotedOwner] = await db.select().from(authUsers).where(eq(authUsers.id, localOperatorId));
+    expect(promotedOwner).toMatchObject({ phishingResistantRequired: true });
+
+    const receipt = await deletion.request(localOperatorId, { confirmation: "DELETE MY ACCOUNT", password,
+      acknowledgeExport: true, idempotencyKey: "local-operator-password-and-passkey-delete" }, new Date(),
+      { type: "board", source: "session", userId: localOperatorId, sessionId: passkeySessionId });
+    expect(receipt.status).toBe("requested");
+    expect(await db.select().from(authVerifications).where(eq(authVerifications.identifier,
+      `account-deletion-oidc:${localOperatorId}`))).toEqual([]);
+    configuredOperatorUserIds.splice(configuredOperatorUserIds.indexOf(localOperatorId), 1);
   });
 });

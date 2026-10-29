@@ -74,7 +74,7 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
       if (!current.success || current.data.user.id !== principal) throw new Error("Current account is unresolved");
       return authApi.accountDeletionSsoStatus(principal, current.data.session.id);
     }, "deletion"), enabled: scope.ready && capabilities.data?.deletion === true && authentication.isSuccess &&
-      !authentication.data.hasPassword && !authentication.data.phishingResistantRequired,
+      (!authentication.data.hasPassword || authentication.data.phishingResistantRequired),
     staleTime: 0, gcTime: 0, retry: false });
   const callbackReauthId = (() => {
     try { return new URLSearchParams(window.location.search).get("accountDeletionReauth"); } catch { return null; }
@@ -125,8 +125,9 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
   const deletionInFlight = useRef(false);
   const beginSsoReauth = useMutation({
     mutationFn: async () => {
-      if (!scope.canUse("deletion") || !authentication.data || authentication.data.hasPassword ||
-        authentication.data.phishingResistantRequired || !ssoReauth.data?.available)
+      if (!scope.canUse("deletion") || !authentication.data ||
+        authentication.data.hasPassword && !authentication.data.phishingResistantRequired ||
+        !ssoReauth.data?.available || authentication.data.phishingResistantRequired && ssoReauth.data.nativeFactorMethod !== "passkey")
         throw new Error("A supported recent sign-in method is unavailable");
       const current = authSessionSchema.safeParse(client.getQueryData(queryKeys.auth.session));
       if (!current.success || current.data.user.id !== principal) throw new Error("Current account is unresolved");
@@ -167,14 +168,18 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
       if (!scope.canUse("deletion")) throw new Error("Current account access is unresolved");
       if (recoveryUnavailable || !deleteKey.current) throw new Error("Account deletion recovery is unavailable");
       if (!deletionAttempt.current) {
-        const proof = authentication.data?.hasPassword ? null : readyProofId;
-        if (deleteConfirmation !== "DELETE MY ACCOUNT" || (!deletePassword && !proof) || !exportAcknowledged)
+        const hasPassword = authentication.data?.hasPassword === true;
+        const requiresProof = !hasPassword || authentication.data?.phishingResistantRequired === true && ssoReauth.data?.available === true;
+        const proof = requiresProof ? readyProofId : null;
+        if (!authentication.data || deleteConfirmation !== "DELETE MY ACCOUNT" || hasPassword && !deletePassword ||
+          !hasPassword && !proof || requiresProof && !proof || !exportAcknowledged)
           throw new Error("Explicit account deletion confirmation required");
         // Retain only the original account/key locator before any transport.
         // A reopened form still requires fresh explicit consent and password.
         try { retainPendingAccountDeletion(principal, deleteKey.current); }
         catch (error) { setRecoveryUnavailable(true); throw error; }
-        deletionAttempt.current = { confirmation: "DELETE MY ACCOUNT", ...(deletePassword ? { password: deletePassword } : { reauthenticationProofId: proof! }),
+        deletionAttempt.current = { confirmation: "DELETE MY ACCOUNT", ...(deletePassword ? { password: deletePassword } : {}),
+          ...(proof ? { reauthenticationProofId: proof } : {}),
           acknowledgeExport: true, idempotencyKey: deleteKey.current };
       }
       try { retainPendingAccountDeletion(principal, deletionAttempt.current.idempotencyKey); }
@@ -264,18 +269,20 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
         }}>
           <label className="saas-label">{t("account.confirmDelete")}<input className="saas-input" value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} required autoComplete="off" disabled={deleteLocked} /></label>
           {authentication.data?.hasPassword && <label className="saas-label">{t("account.currentPassword")}<input className="saas-input" type="password" autoComplete="current-password" maxLength={LOCAL_PASSWORD_MAX_UTF16_LENGTH} value={deletePassword} onChange={event => setDeletePassword(event.target.value)} required disabled={deleteLocked} /></label>}
-          {authentication.data && !authentication.data.hasPassword && readyProofId && <p role="status">{t("account.companySignInReady")}</p>}
-          {authentication.data && !authentication.data.hasPassword && !readyProofId && ssoReauth.data?.requiresNativeFactor &&
+          {authentication.data && readyProofId && <p role="status">{t("account.companySignInReady")}</p>}
+          {authentication.data && !readyProofId && ssoReauth.data?.requiresNativeFactor &&
             callbackReauthId && ssoReauth.data.challengeId === callbackReauthId &&
             <NativeAuthenticationSettings key={`${principal}:account-delete-confirm`} principal={principal} confirmationOnly
+              purposePasskeyConfirmation={ssoReauth.data.nativeFactorMethod === "passkey"}
               onConfirmed={receipt => completeSsoNativeFactor.mutate(receipt)} />}
-          {authentication.data && !authentication.data.hasPassword && !readyProofId && ssoReauth.isSuccess && ssoReauth.data.available &&
+          {authentication.data && (!authentication.data.hasPassword || authentication.data.phishingResistantRequired) && !readyProofId && ssoReauth.isSuccess && ssoReauth.data.available &&
             <Button type="button" variant="outline" disabled={deleteLocked || beginSsoReauth.isPending} onClick={() => { setSsoReauthError(false); beginSsoReauth.mutate(); }}>{t("account.companySignInReauthenticate")}</Button>}
           {authentication.data && !authentication.data.hasPassword && !readyProofId && ssoReauth.isSuccess && !ssoReauth.data.available &&
             <p className="saas-muted">{t("account.companySignInUnavailable")}</p>}
           <label className="saas-row"><input type="checkbox" checked={exportAcknowledged} onChange={event => setExportAcknowledged(event.target.checked)} disabled={deleteLocked} />{t("account.exportAcknowledgement")}</label>
           <Button type="submit" variant="destructive" disabled={recoveryUnavailable || deletion.isPending || deleteConfirmation !== "DELETE MY ACCOUNT" ||
-            !exportAcknowledged || (authentication.data?.hasPassword ? !deletePassword : !readyProofId)}>{t(recoveringDeletion || deletionAttempt.current ? "account.retryDeletion" : "account.delete")}</Button>
+            !exportAcknowledged || (authentication.data?.hasPassword ? !deletePassword : !readyProofId) ||
+            Boolean(authentication.data?.phishingResistantRequired && (!ssoReauth.isSuccess || ssoReauth.data?.available && !readyProofId))}>{t(recoveringDeletion || deletionAttempt.current ? "account.retryDeletion" : "account.delete")}</Button>
         </form>
       </section>}
     </>}

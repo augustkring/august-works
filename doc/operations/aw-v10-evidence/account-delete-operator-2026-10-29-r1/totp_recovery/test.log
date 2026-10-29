@@ -1,0 +1,13 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/account-deletion-sso-reauth.integration.test.ts > account deletion through verified OIDC and native reauthentication > requires a signed fresh OIDC auth_time, nonce and exact state, then consumes a session-bound proof atomically
+ ✓ src/__tests__/account-deletion-sso-reauth.integration.test.ts > account deletion through verified OIDC and native reauthentication > requires a real native TOTP session after the fresh OIDC callback for 2FA accounts 428ms
+ ↓ src/__tests__/account-deletion-sso-reauth.integration.test.ts > account deletion through verified OIDC and native reauthentication > requires qualified SSO and an already enrolled native passkey for an operator with an unset PR flag
+ ↓ src/__tests__/account-deletion-sso-reauth.integration.test.ts > account deletion through verified OIDC and native reauthentication > requires a fresh native passkey for a configured local operator and then permits password-confirmed deletion
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 3 skipped (4)
+   Start at  07:56:16
+   Duration  19.18s (transform 9.60s, setup 75ms, import 14.50s, tests 4.46s, environment 0ms)
+

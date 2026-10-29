@@ -29,7 +29,8 @@ const receipt = { id: "private-deletion-receipt", companyId: "PRIVATE-DELETION-C
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 let root: Root, host: HTMLDivElement, client: QueryClient;
 async function render() { await act(async () => root.render(<QueryClientProvider client={client}><SaasAccountPage /></QueryClientProvider>)); }
-async function mount(options: { coldSessionFailure?: boolean; passwordless?: boolean; readyChallenge?: string; pendingFactorChallenge?: string; twoFactorEnabled?: boolean } = {}) {
+async function mount(options: { coldSessionFailure?: boolean; passwordless?: boolean; readyChallenge?: string; pendingFactorChallenge?: string;
+  twoFactorEnabled?: boolean; phishingResistantRequired?: boolean } = {}) {
   await i18n.changeLanguage("en"); context.company = "company-one";
   const callbackChallenge = options.readyChallenge ?? options.pendingFactorChallenge;
   if (callbackChallenge) window.history.replaceState({}, "", `/company/settings/security?accountDeletionReauth=${callbackChallenge}`);
@@ -39,9 +40,11 @@ async function mount(options: { coldSessionFailure?: boolean; passwordless?: boo
   vi.spyOn(saasApi, "capabilities").mockResolvedValue(capabilities);
   const account = vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("owner"));
   vi.spyOn(authApi, "securityStatus").mockResolvedValue({ userId: "owner", hasPassword: !options.passwordless,
-    twoFactorEnabled: !!options.twoFactorEnabled, phishingResistantRequired: false, passkeysAvailable: false });
+    twoFactorEnabled: !!options.twoFactorEnabled, phishingResistantRequired: !!options.phishingResistantRequired, passkeysAvailable: false });
   vi.spyOn(authApi, "accountDeletionSsoStatus").mockResolvedValue({ userId: "owner", providerId: options.passwordless ? "qualified-oidc" : null,
-    available: !!options.passwordless, ready: !!options.readyChallenge, requiresNativeFactor: !!options.twoFactorEnabled,
+    available: !!options.passwordless, ready: !!options.readyChallenge,
+    requiresNativeFactor: !!options.twoFactorEnabled || !!options.phishingResistantRequired,
+    nativeFactorMethod: options.phishingResistantRequired ? "passkey" : options.twoFactorEnabled ? "totp" : null,
     challengeId: callbackChallenge ?? null });
   if (options.coldSessionFailure) account.mockRejectedValueOnce(new Error("PRIVATE-COLD-BOOT-ERROR"));
   vi.spyOn(instanceSettingsApi, "getExperimental").mockResolvedValue({ notification_policy_v9: true } as never);
@@ -220,7 +223,7 @@ it("requires the existing native factor after fresh company sign-in before offer
   vi.mocked(authApi.getSession).mockResolvedValueOnce(freshSession);
   vi.mocked(authApi.accountDeletionSsoStatus)
     .mockResolvedValueOnce({ userId: "owner", providerId: "qualified-oidc", available: true, ready: true,
-      requiresNativeFactor: true, challengeId });
+      requiresNativeFactor: true, nativeFactorMethod: "totp", challengeId });
   const remove = vi.spyOn(saasApi, "deleteAccount");
   const factorInput = deletionSection().querySelector<HTMLInputElement>('input[inputmode="numeric"]')!;
   await act(async () => setInput(factorInput, "123456"));
@@ -230,6 +233,28 @@ it("requires the existing native factor after fresh company sign-in before offer
   expect(verify).toHaveBeenCalledWith("123456", "owner", "session-owner");
   expect(remove).not.toHaveBeenCalled();
   expect(deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')?.value).toBe("");
+});
+
+it("offers only a pre-enrolled passkey after PR SSO even when global enterprise passkey availability is false", async () => {
+  const challengeId = "44444444-4444-4444-8444-444444444444";
+  await mount({ passwordless: true, phishingResistantRequired: true, pendingFactorChallenge: challengeId });
+  const authenticate = vi.spyOn(authApi, "authenticatePasskey").mockResolvedValue({ userId: "owner", sessionId: "passkey-session" });
+  const complete = vi.spyOn(authApi, "completeAccountDeletionSsoFactor").mockResolvedValue({
+    userId: "owner", sessionId: "passkey-session", challengeId,
+  });
+  const freshSession = { ...v9SessionFixture("owner"), session: { ...v9SessionFixture("owner").session, id: "passkey-session" } };
+  vi.mocked(authApi.getSession).mockResolvedValue(freshSession);
+  vi.mocked(authApi.accountDeletionSsoStatus).mockResolvedValue({ userId: "owner", providerId: "qualified-oidc",
+    available: true, ready: false, requiresNativeFactor: true, nativeFactorMethod: "passkey", challengeId });
+  const remove = vi.spyOn(saasApi, "deleteAccount");
+  const passkeyLabel = i18n.t("account.passkeys.confirm", { ns: "experience" });
+  const passkeyButton = [...deletionSection().querySelectorAll("button")]
+    .find(button => button.textContent === passkeyLabel)!;
+  expect(passkeyButton).toBeTruthy();
+  await act(async () => passkeyButton.click());
+  await vi.waitFor(() => expect(authenticate).toHaveBeenCalledWith("owner", "session-owner"));
+  await vi.waitFor(() => expect(complete).toHaveBeenCalledWith("owner", "passkey-session"));
+  expect(remove).not.toHaveBeenCalled();
 });
 it("hides private cached data after an actual session failure and exposes an original-session retry", async () => {
   await mount();

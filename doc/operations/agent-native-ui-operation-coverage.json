@@ -9766,7 +9766,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "password, principal, currentSessionId()",
-      "line": 181,
+      "line": 182,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -9844,7 +9844,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "password, principal, currentSessionId()",
-      "line": 183,
+      "line": 184,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -9922,7 +9922,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "totpCode.trim(), principal, secretView.sessionId",
-      "line": 200,
+      "line": 201,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -9995,7 +9995,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "totpCode.trim(), principal, currentSessionId()",
-      "line": 210,
+      "line": 211,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -10068,7 +10068,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "recoveryCode.trim(), principal, currentSessionId()",
-      "line": 211,
+      "line": 212,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -10144,43 +10144,68 @@
       "pathSignature": "principal",
       "routeSignatures": [],
       "argumentsSignature": "principal, currentSessionId()",
-      "line": 218,
+      "line": 219,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
-      "classification": "NOT_APPLICABLE",
+      "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Auth/session endpoints create or end a Human user session; they have no company Agent operation equivalent.",
+      "reviewRationale": "The maintained passkey ceremony authenticates a Human and may be anonymous sign-in or in-session proof. It requires user verification, binds the immutable credential ID to its user, and consumes the one-use challenge. When an active session is present, the expected Human/session bindings are checked; it creates or refreshes a Human session and has no Agent operation equivalent.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
-            "path": "server/src/routes/auth.ts",
-            "line": 47,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
-          },
-          {
-            "path": "server/src/routes/auth.ts",
-            "line": 73,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
-          },
-          {
-            "path": "server/src/routes/auth.ts",
-            "line": 81,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
-          },
-          {
-            "path": "server/src/routes/auth.ts",
-            "line": 117,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
-          },
-          {
-            "path": "server/src/routes/auth.ts",
-            "line": 131,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
+            "path": "ui/src/api/auth.ts",
+            "line": 183,
+            "claim": "Creates the BetterAuth native passkey client with browser credentials and optional expected Human user/session headers."
           },
           {
             "path": "ui/src/api/auth.ts",
             "line": 212,
-            "claim": "authenticatePasskey"
+            "claim": "authenticatePasskey invokes the maintained passkey sign-in ceremony and validates its response."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 216,
+            "claim": "Registers the maintained passkey authentication-options endpoint."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 218,
+            "claim": "Authentication options allow normal sign-in without an existing session; an active session is bound when present."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 220,
+            "claim": "A caller without an active session cannot supply expected Human or session headers."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 227,
+            "claim": "The authentication ceremony requires user verification."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 143,
+            "claim": "The authentication verification challenge is consumed atomically before protected mutation."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 311,
+            "claim": "Verification resolves the immutable credential ID to its owning user and checks current account eligibility."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 323,
+            "claim": "Verification checks expected Human identity and, when present, expected active session."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 53,
+            "claim": "The verified response must belong to the exact passkey credential ID and authentication ceremony."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 56,
+            "claim": "The maintained passkey verifier requires successful user verification."
           }
         ]
       },
@@ -10222,7 +10247,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "password, principal, currentSessionId()",
-      "line": 227,
+      "line": 228,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -10298,7 +10323,7 @@
       "pathSignature": "passkeyName.trim()",
       "routeSignatures": [],
       "argumentsSignature": "passkeyName.trim(), principal, sessionId",
-      "line": 234,
+      "line": 235,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -10371,7 +10396,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "id, name, principal, sessionId",
-      "line": 242,
+      "line": 243,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -10449,7 +10474,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "id, principal, sessionId",
-      "line": 249,
+      "line": 250,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -10527,7 +10552,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "password, principal, currentSessionId()",
-      "line": 268,
+      "line": 269,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -10605,7 +10630,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "confirmedPassword, principal, sessionId",
-      "line": 286,
+      "line": 287,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -10683,7 +10708,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "confirmedPassword, principal, sessionId",
-      "line": 308,
+      "line": 309,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -10761,7 +10786,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "principal, original",
-      "line": 321,
+      "line": 322,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -26198,40 +26223,65 @@
       "line": 116,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
-      "classification": "NOT_APPLICABLE",
+      "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Auth/session endpoints create or end a Human user session; they have no company Agent operation equivalent.",
+      "reviewRationale": "The maintained passkey ceremony authenticates a Human and may be anonymous sign-in or in-session proof. It requires user verification, binds the immutable credential ID to its user, and consumes the one-use challenge. When an active session is present, the expected Human/session bindings are checked; it creates or refreshes a Human session and has no Agent operation equivalent.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
-            "path": "server/src/routes/auth.ts",
-            "line": 47,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
-          },
-          {
-            "path": "server/src/routes/auth.ts",
-            "line": 73,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
-          },
-          {
-            "path": "server/src/routes/auth.ts",
-            "line": 81,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
-          },
-          {
-            "path": "server/src/routes/auth.ts",
-            "line": 117,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
-          },
-          {
-            "path": "server/src/routes/auth.ts",
-            "line": 131,
-            "claim": "if (req.actor.type !== \"board\" || !req.actor.userId) {"
+            "path": "ui/src/api/auth.ts",
+            "line": 183,
+            "claim": "Creates the BetterAuth native passkey client with browser credentials and optional expected Human user/session headers."
           },
           {
             "path": "ui/src/api/auth.ts",
             "line": 212,
-            "claim": "authenticatePasskey"
+            "claim": "authenticatePasskey invokes the maintained passkey sign-in ceremony and validates its response."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 216,
+            "claim": "Registers the maintained passkey authentication-options endpoint."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 218,
+            "claim": "Authentication options allow normal sign-in without an existing session; an active session is bound when present."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 220,
+            "claim": "A caller without an active session cannot supply expected Human or session headers."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 227,
+            "claim": "The authentication ceremony requires user verification."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 143,
+            "claim": "The authentication verification challenge is consumed atomically before protected mutation."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 311,
+            "claim": "Verification resolves the immutable credential ID to its owning user and checks current account eligibility."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 323,
+            "claim": "Verification checks expected Human identity and, when present, expected active session."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 53,
+            "claim": "The verified response must belong to the exact passkey credential ID and authentication ceremony."
+          },
+          {
+            "path": "server/src/auth/native-passkey.ts",
+            "line": 56,
+            "claim": "The maintained passkey verifier requires successful user verification."
           }
         ]
       },
@@ -51872,7 +51922,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "principal, current.data.session.id",
-      "line": 134,
+      "line": 135,
       "occurrence": 0,
       "owner": "server/src/auth/enterprise-auth-plugins.ts",
       "classification": "HUMAN_ONLY",
@@ -51965,7 +52015,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "challenge.providerId, challenge.callbackURL, principal, current.data.session.id",
-      "line": 135,
+      "line": 136,
       "occurrence": 0,
       "owner": "server/src/auth/enterprise-auth-plugins.ts",
       "classification": "HUMAN_ONLY",
@@ -52068,7 +52118,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "principal, receipt.sessionId",
-      "line": 154,
+      "line": 155,
       "occurrence": 0,
       "owner": "server/src/auth/enterprise-auth-plugins.ts",
       "classification": "HUMAN_ONLY",
@@ -52151,7 +52201,7 @@
         "post:scoped(\"/saas/account/deletion\", userId)"
       ],
       "argumentsSignature": "principal, pending",
-      "line": 185,
+      "line": 190,
       "occurrence": 0,
       "owner": "server/src/services/saas/account-deletion.ts",
       "classification": "HUMAN_ONLY",

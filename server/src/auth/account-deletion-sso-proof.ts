@@ -4,6 +4,7 @@ export const accountDeletionSsoChallengeSchema = z.object({
   challengeId: z.string().uuid(),
   purpose: z.literal("account-deletion"),
   protocol: z.enum(["oidc", "saml"]),
+  nativeFactorMethod: z.enum(["totp", "passkey"]).nullable(),
   state: z.enum(["created", "authorization_started", "callback_verified", "ready"]),
   userId: z.string().min(1),
   sourceSessionId: z.string().min(1),
