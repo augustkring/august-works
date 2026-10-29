@@ -20,7 +20,7 @@ import { subworkflowConfig, requireSubworkflowRevision, assertSubworkflowGraph }
 import { executeWorkflowMap } from "./workflow-map.js";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
