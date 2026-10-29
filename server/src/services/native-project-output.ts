@@ -205,7 +205,10 @@ export async function createManagedNativeProjectOutput(input: {
       .where(eq(heartbeatRuns.id, run.id));
     const activity = await persistActivity(tx, { companyId, actorType: "agent", actorId: actor.agentId!,
       agentId: actor.agentId!, runId: run.id, issueId, action: "project.created", entityType: "project",
-      entityId: project.id, details: { source: "managed_native_create_project", sourceSnapshotDigest: snapshot.digest,
+      entityId: project.id, details: { name: project.name, description: project.description,
+        icon: project.icon, status: project.status, sourceIssueId: issueId,
+        repositories: [], workspaceId: workspace.id, envKeys: [],
+        source: "managed_native_create_project", sourceSnapshotDigest: snapshot.digest,
         workspaceIds: workspaceSources.map(value => value.workspaceId) } });
     publication = activity.publication;
     result = { project: dto, receipt, sourceSet };

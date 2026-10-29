@@ -11,6 +11,7 @@ import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embed
 import { enableV5ForTest } from "../../__tests__/helpers/v5-fixtures.js";
 import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
 import { instanceSettingsService } from "../instance-settings.js";
+import { activityService } from "../activity.js";
 import { canActorReadProjectPrivacy } from "../authorization.js";
 import { resolveManagedProjectWorkspaceDir } from "../../home-paths.js";
 import { assertNativeManagedProjectCreateReceiptCurrent, createManagedNativeProjectOutput } from "../native-project-output.js";
@@ -79,6 +80,12 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode private Project c
         const [activitiesBefore] = await db.select({ count: sql<number>`count(*)::int` }).from(activityLog).where(and(
           eq(activityLog.companyId, companyId), eq(activityLog.entityType, "project"),
           eq(activityLog.entityId, created.receipt.projectId), eq(activityLog.action, "project.created")));
+        const conversationEvents = await activityService(db).forIssue(issueId);
+        expect(conversationEvents.filter(event => event.action === "project.created" &&
+          event.entityId === created.receipt.projectId)).toEqual([expect.objectContaining({
+          details: expect.objectContaining({ name: projectName, sourceIssueId: issueId,
+            workspaceId: expect.any(String), repositories: [] }),
+        })]);
         const replay = await createManagedNativeProjectOutput({ db, actor, companyId, issueId, callId,
           arguments: args as Parameters<typeof createManagedNativeProjectOutput>[0]["arguments"], capture });
         const currentnessInput = { companyId, issueId, runId: capture.runId, actor,
