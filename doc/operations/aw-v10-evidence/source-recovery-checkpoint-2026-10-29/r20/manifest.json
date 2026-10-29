@@ -1,0 +1,55 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T18:43:17.679919+00:00",
+  "baseCommit": "5eb2da6ea0814dfe1daa220cf38ecd3c006c4bd4",
+  "patchBytes": 354503,
+  "patchSha256": "43abeb0ba57525c4a6e4e770d0c043a6a4780817d4770a41b586602fc17f96d9",
+  "archiveSha256": "df68d4ac6c2817558a92ec076be71f921c41c86d28c92887907e8356b8875d17",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0563_chilly_matthew_murdock.sql",
+      "bytes": 3167,
+      "sha256": "3a657358183cd499efba154831c969c49dda4d1f7df69a5d0236eb2358a4e57d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0563_snapshot.json",
+      "bytes": 2785906,
+      "sha256": "96adc31edd610b39d07ba6d97ec42ef98d8adbb3f10fae941f5bdedc2f3687c5"
+    },
+    {
+      "path": "packages/db/src/schema/agent_model_migration_monitor_receipts.ts",
+      "bytes": 3030,
+      "sha256": "25b781862fb45a42ef09de0802c0665234c83d8d7373e98652661a0670110d85"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.test.ts",
+      "bytes": 2094,
+      "sha256": "d840e1f3dc02097ae59d5acd5ecf1af41cbccb1b92a9827cf0dde253e81b850e"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.ts",
+      "bytes": 2289,
+      "sha256": "625c3d11b0eb727393bd99943fb4d099d88eced84b8d23949b231badfb8bea83"
+    },
+    {
+      "path": "scripts/generate-v10-capability-projection.ts",
+      "bytes": 6299,
+      "sha256": "2d5bc06c1e41505a7d4596dd7329ae57150463fb5745d6fb9d4ec8cc261bd6b7"
+    },
+    {
+      "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
+      "bytes": 14472,
+      "sha256": "4ce09b1318fa05d21df57861849387e71c9c99b310873e817d5c9ee9cdcf8671"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.test.tsx",
+      "bytes": 8260,
+      "sha256": "939295fb9ec1e6fbe190987816c040af3fdca3fac6ce1cc50ef12f00663e0537"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.tsx",
+      "bytes": 8610,
+      "sha256": "32fecc3d7a3e3b38ac383d26a5214a96dcef7b88b48447cd77ad72ea5387b494"
+    }
+  ]
+}
