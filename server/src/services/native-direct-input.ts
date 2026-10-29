@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq, gte, inArray, is, isNull, sql } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
-import { agents, issues, projects, projectWorkspaces, issueComments, documentRevisions, issueDocuments, issueAttachments, assets,
+import { activityLog, agents, issues, projects, projectWorkspaces, issueComments, documentRevisions, issueDocuments, issueAttachments, assets,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, accountDeletionOperations, memoryRecords,
   memoryDeletionMarkers,
   completionContracts, heartbeatRuns, orchestrationModelReservations, agentExecutionManifests, executionWorkspaces, foundationDocuments,
