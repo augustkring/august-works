@@ -14,6 +14,10 @@ test("capability projection joins source catalog rows without upgrading their qu
   assert.equal(new Set(projection.features.map((row) => row.id)).size, projection.features.length);
   assert.ok(projection.features.some((row) => row.ownerDisposition === "unknown" && row.declaredOwner === null));
   assert.ok(projection.experienceSurfaces.some((row) => row.qualification === "inherited_coverage_status_not_release_acceptance"));
+  const coverage = readJson("doc/experience/v9/coverage.json");
+  for (const screen of coverage.screens) {
+    assert.deepEqual(projection.experienceSurfaces.find((row) => row.id === `screen:${screen.screenId}`)?.sourcePaths, screen.componentPaths ?? []);
+  }
   assert.ok(projection.agentNativeOperations.every((row) => row.qualification === "operation_mapping_not_capability_readiness"));
   assert.equal(projection.sourceInputs.find((row) => row.path === "doc/experience/v9/coverage.json")?.sha256,
     createHash("sha256").update(readFileSync(resolve(root, "doc/experience/v9/coverage.json"))).digest("hex"));

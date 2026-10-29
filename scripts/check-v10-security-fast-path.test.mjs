@@ -43,3 +43,14 @@ test("the declared CI owner invokes changed selectors and has a fail-closed base
   assert.ok(workflow.includes("mktemp --suffix=.json"));
   assert.ok(workflow.includes("node scripts/check-v10-security-regression-execution.mjs"));
 });
+
+
+test("all model monitor contract changes select Human session and OpenAPI regressions", () => {
+  const owner = map.regressions.find((row) => row.id === "AGENT-MODEL-MIGRATION-SESSION-AUTH");
+  assert.ok(owner);
+  for (const path of owner.protectedPaths) {
+    const selected = selectSecurityFastPath(map, [path]);
+    assert.ok(selected.includes("server/src/__tests__/v9-agent-authoring-routes.test.ts"));
+    assert.ok(selected.includes("server/src/__tests__/openapi-routes.test.ts"));
+  }
+});

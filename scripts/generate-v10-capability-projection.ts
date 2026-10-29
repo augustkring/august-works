@@ -25,6 +25,7 @@ interface ExperienceScreen {
   owner?: string | null;
   implementationStatus?: string;
   contractPath?: string | null;
+  componentPaths?: string[];
   evidenceRefs?: string[];
 }
 interface ExperienceCoverage { screens?: ExperienceScreen[] }
@@ -106,6 +107,7 @@ const surfaces = (experience.screens ?? []).map((screen) => ({
   ownerDisposition: screen.owner ? "declared_in_inherited_register" : "unknown",
   implementationStatus: screen.implementationStatus,
   contractPath: screen.contractPath,
+  sourcePaths: screen.componentPaths ?? [],
   evidenceRefs: screen.evidenceRefs ?? [],
   qualification: "inherited_coverage_status_not_release_acceptance",
 }));

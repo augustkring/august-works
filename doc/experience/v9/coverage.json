@@ -875,7 +875,11 @@
         "ui/src/components/AgentDraftPublication.tsx",
         "server/src/services/agents/authoring-drafts.ts",
         "server/src/services/agents/authoring-publication.ts",
-        "ui/src/components/AgentRevisionEntry.tsx"
+        "ui/src/components/AgentRevisionEntry.tsx",
+        "ui/src/components/AgentModelMigrationMonitor.tsx",
+        "server/src/services/agents/authoring-model-migration-monitor.ts",
+        "ui/src/api/agent-authoring.ts",
+        "server/src/routes/agent-authoring.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/agent-change.json"

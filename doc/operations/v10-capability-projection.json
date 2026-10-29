@@ -19,11 +19,11 @@
     },
     {
       "path": "doc/experience/v9/coverage.json",
-      "sha256": "fe9c9c4ae90b71667d1c4a9e300d2e966fee643363b6a5d68e651c4c808350ae"
+      "sha256": "0a1cec608a81513c4362009a192e430dc58448947d6027504d3e29cbd2defe68"
     },
     {
       "path": "doc/operations/agent-native-ui-operation-coverage.json",
-      "sha256": "f794d994bffbf5ef12189a471f841a052c47cc3cfe5aefcd26c5e16ead24939d"
+      "sha256": "67edaf4af0708fb0252107143e325ec2470b90fa6ce9ac90e92f9cd4a4855bd5"
     }
   ],
   "inputDisposition": [
@@ -6142,6 +6142,11 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-01.json",
+      "sourcePaths": [
+        "ui/src/pages/Auth.tsx",
+        "ui/src/api/auth.ts",
+        "ui/src/hooks/useSaasCapabilities.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6155,6 +6160,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-02.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6168,6 +6177,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-03.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6181,6 +6194,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-04.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6194,6 +6211,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-05.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6207,6 +6228,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-06.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6220,6 +6245,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-07.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6233,6 +6262,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-08.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "server/src/services/saas/activation.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6246,6 +6279,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-09.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "ui/src/components/ActivationFirstTask.tsx",
+        "ui/src/components/ActivationFirstValue.tsx",
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-task.ts",
+        "server/src/services/saas/activation-first-value.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6259,6 +6300,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-10.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "ui/src/components/ActivationFirstTask.tsx",
+        "ui/src/components/ActivationFirstValue.tsx",
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-task.ts",
+        "server/src/services/saas/activation-first-value.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6272,6 +6321,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-11.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "ui/src/components/ActivationFirstTask.tsx",
+        "ui/src/components/ActivationFirstValue.tsx",
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-task.ts",
+        "server/src/services/saas/activation-first-value.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6285,6 +6342,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/onb-12.json",
+      "sourcePaths": [
+        "ui/src/pages/Activation.tsx",
+        "ui/src/components/ActivationFirstTask.tsx",
+        "ui/src/components/ActivationFirstValue.tsx",
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-task.ts",
+        "server/src/services/saas/activation-first-value.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6298,6 +6363,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/hire-01.json",
+      "sourcePaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agent-setup-authoring-tools.ts",
+        "packages/shared/src/agent-setup-authoring.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6311,6 +6384,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/hire-02.json",
+      "sourcePaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agent-packages/package-service.ts",
+        "server/src/services/agent-packages/component-source-access.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6324,6 +6405,12 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/hire-03.json",
+      "sourcePaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6337,6 +6424,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/hire-04.json",
+      "sourcePaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agent-packages/package-service.ts",
+        "server/src/services/agent-packages/component-source-access.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6350,6 +6445,12 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/hire-05.json",
+      "sourcePaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6363,6 +6464,12 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/hire-06.json",
+      "sourcePaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6376,6 +6483,12 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/hire-07.json",
+      "sourcePaths": [
+        "ui/src/pages/HireAgent.tsx",
+        "ui/src/pages/HireAgentSetup.tsx",
+        "ui/src/pages/HireSavedSetups.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6389,6 +6502,13 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-01.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "ui/src/components/AgentRevisionEntry.tsx",
+        "server/src/services/agent-setup-authoring-tools.ts",
+        "packages/shared/src/agent-setup-authoring.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6402,6 +6522,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-02.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6415,6 +6539,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-03.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6428,6 +6556,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-04.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6441,6 +6573,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-05.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6454,6 +6590,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-06.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "packages/shared/src/agent-draft-output.ts",
+        "server/src/services/agents/authoring-test-runtime.ts",
+        "server/src/services/native-runtime/aw-text-draft-backend.ts",
+        "server/src/services/issue-thread-interactions.ts",
+        "ui/src/components/SuggestedTaskInitialState.tsx"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6467,6 +6612,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-07.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6480,6 +6629,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-08.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6493,6 +6646,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-09.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6506,6 +6663,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-10.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "packages/shared/src/agent-draft-output.ts",
+        "server/src/services/agents/authoring-test-runtime.ts",
+        "server/src/services/native-runtime/aw-text-draft-backend.ts",
+        "server/src/services/issue-thread-interactions.ts",
+        "ui/src/components/SuggestedTaskInitialState.tsx"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6519,6 +6685,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-11.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "packages/shared/src/agent-draft-output.ts",
+        "server/src/services/agents/authoring-test-runtime.ts",
+        "server/src/services/native-runtime/aw-text-draft-backend.ts",
+        "server/src/services/issue-thread-interactions.ts",
+        "ui/src/components/SuggestedTaskInitialState.tsx"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6532,6 +6707,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-12.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "packages/shared/src/agent-draft-output.ts",
+        "server/src/services/agents/authoring-test-runtime.ts",
+        "server/src/services/native-runtime/aw-text-draft-backend.ts",
+        "server/src/services/issue-thread-interactions.ts",
+        "ui/src/components/SuggestedTaskInitialState.tsx"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6545,6 +6729,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/custom-13.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6558,6 +6746,40 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/shell.json",
+      "sourcePaths": [
+        "ui/src/components/ExperienceUtilities.tsx",
+        "ui/src/components/ExperienceNavigation.tsx",
+        "ui/src/components/Layout.tsx",
+        "ui/src/components/ExperienceMobileNavigation.tsx",
+        "ui/src/components/MobileBottomNav.tsx",
+        "ui/src/lib/company-routes.ts",
+        "ui/src/components/ExperienceCommandPalette.tsx",
+        "server/src/services/experience/commands.ts",
+        "ui/src/pages/ExperienceInsights.tsx",
+        "ui/src/api/instanceSettings.ts",
+        "ui/src/components/ExperienceMetricObservations.tsx",
+        "ui/src/api/insight-metric-observations.ts",
+        "packages/shared/src/experience-metric-observations.ts",
+        "ui/src/components/ExperienceProcessFindings.tsx",
+        "ui/src/api/insight-process-findings.ts",
+        "packages/shared/src/experience-process-findings.ts",
+        "ui/src/components/ExperienceScenarioComparisons.tsx",
+        "ui/src/api/insight-scenario-comparisons.ts",
+        "packages/shared/src/experience-scenario-comparisons.ts",
+        "ui/src/components/ExperienceExperimentResults.tsx",
+        "ui/src/api/insight-experiment-results.ts",
+        "packages/shared/src/experience-experiment-results.ts",
+        "server/src/services/business-experiments/recording.ts",
+        "server/src/routes/business-experiments.ts",
+        "ui/src/components/ExperienceForecastResults.tsx",
+        "ui/src/api/insight-forecast-results.ts",
+        "packages/shared/src/experience-forecast-results.ts",
+        "ui/src/components/ExperienceManagementReviews.tsx",
+        "ui/src/api/insight-management-review-summaries.ts",
+        "packages/shared/src/experience-management-review-summaries.ts",
+        "server/src/services/management-reviews/service.ts",
+        "server/src/routes/management-reviews.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6571,6 +6793,16 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/home.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceHome.tsx",
+        "server/src/services/experience/service.ts",
+        "server/src/services/experience/maintenance-attention.ts",
+        "server/src/services/experience/projection.ts",
+        "server/src/services/stewards/maintenance-policy.ts",
+        "server/src/services/experience/core-maintenance.ts",
+        "server/src/services/experience/procedure-revalidation.ts",
+        "server/src/services/experience/package-revalidation.ts"
+      ],
       "evidenceRefs": [
         "server/src/__tests__/v9-core-maintenance.integration.test.ts",
         "ui/src/components/ExperienceCard.core-maintenance.test.tsx",
@@ -6589,6 +6821,19 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/needs-you.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceNeedsYou.tsx",
+        "ui/src/pages/WhatNeedsMe.tsx",
+        "ui/src/components/ExperienceCard.tsx",
+        "server/src/services/experience/attention-card.ts",
+        "server/src/services/experience/service.ts",
+        "server/src/services/experience/maintenance-attention.ts",
+        "server/src/services/experience/projection.ts",
+        "server/src/services/stewards/maintenance-policy.ts",
+        "server/src/services/experience/core-maintenance.ts",
+        "server/src/services/experience/procedure-revalidation.ts",
+        "server/src/services/experience/package-revalidation.ts"
+      ],
       "evidenceRefs": [
         "server/src/__tests__/v9-core-maintenance.integration.test.ts",
         "ui/src/components/ExperienceCard.core-maintenance.test.tsx",
@@ -6607,6 +6852,11 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/work.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceWork.tsx",
+        "ui/src/components/ExperienceCard.tsx",
+        "server/src/services/experience/service.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6620,6 +6870,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/apps.json",
+      "sourcePaths": [
+        "ui/src/pages/apps/Browse.tsx",
+        "ui/src/pages/apps/AppsConnect.tsx",
+        "ui/src/pages/apps/AppsReview.tsx",
+        "ui/src/pages/apps/AppDetail.tsx",
+        "server/src/services/connection-intents.ts",
+        "server/src/services/tool-access.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6633,6 +6891,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/agent-monitor.json",
+      "sourcePaths": [
+        "ui/src/pages/AgentMonitor.tsx",
+        "server/src/services/experience/agent-monitor.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6646,6 +6908,19 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/agent-change.json",
+      "sourcePaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "ui/src/components/AgentDraftReview.tsx",
+        "ui/src/components/AgentDraftSafeTest.tsx",
+        "ui/src/components/AgentDraftPublication.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agents/authoring-publication.ts",
+        "ui/src/components/AgentRevisionEntry.tsx",
+        "ui/src/components/AgentModelMigrationMonitor.tsx",
+        "server/src/services/agents/authoring-model-migration-monitor.ts",
+        "ui/src/api/agent-authoring.ts",
+        "server/src/routes/agent-authoring.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6659,6 +6934,12 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/agent-retire.json",
+      "sourcePaths": [
+        "ui/src/pages/AgentRetirement.tsx",
+        "ui/src/api/agent-retirement.ts",
+        "server/src/services/agents/retirement.ts",
+        "packages/shared/src/agent-retirement.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6672,6 +6953,22 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/orchestration.json",
+      "sourcePaths": [
+        "ui/src/pages/OrchestrationExperience.tsx",
+        "ui/src/pages/Orchestration.tsx",
+        "ui/src/api/orchestration-experience.ts",
+        "server/src/routes/orchestration.ts",
+        "server/src/services/experience/orchestration-experience.ts",
+        "server/src/services/orchestration/orchestration-service.ts",
+        "packages/shared/src/orchestration-experience.ts",
+        "packages/shared/src/orchestration-control.ts",
+        "server/src/services/experience/orchestration-control.ts",
+        "server/src/services/orchestration/orchestration-runtime-control.ts",
+        "ui/src/pages/OrchestrationControl.tsx",
+        "ui/src/api/orchestration-control.ts",
+        "ui/src/lib/pending-orchestration-controls.ts",
+        "ui/src/components/ExperienceUtilities.tsx"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6685,6 +6982,11 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowIndex.tsx",
+        "server/src/services/experience/workflow-draft-intent.ts",
+        "packages/shared/src/workflow-authoring-experience.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6698,6 +7000,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/company.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6711,6 +7017,13 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/help-recovery.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowRunExperience.tsx",
+        "ui/src/components/WorkflowSupportDiagnostics.tsx",
+        "ui/src/lib/support-diagnostic-download.ts",
+        "packages/shared/src/support-diagnostics.ts",
+        "tests/e2e/aw-v9-support-diagnostics.spec.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6724,6 +7037,12 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/feedback.json",
+      "sourcePaths": [
+        "ui/src/components/CustomerFeedbackDialog.tsx",
+        "server/src/services/customer-feedback.ts",
+        "server/src/services/feedback-data-processing.ts",
+        "packages/shared/src/feedback-data-processing.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6737,6 +7056,10 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/my-feedback.json",
+      "sourcePaths": [
+        "ui/src/pages/MyFeedback.tsx",
+        "server/src/services/customer-feedback.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6750,6 +7073,11 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/approval-card.json",
+      "sourcePaths": [
+        "ui/src/components/ExperienceCard.tsx",
+        "server/src/services/experience/attention-card.ts",
+        "ui/src/pages/WhatNeedsMe.tsx"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6763,6 +7091,12 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-general.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/CompanySettings.tsx",
+        "server/src/routes/companies.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6776,6 +7110,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-people-access.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/CompanyAccess.tsx",
+        "ui/src/pages/Enterprise.tsx",
+        "server/src/routes/access.ts",
+        "server/src/services/enterprise/identity-policy.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6789,6 +7131,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-agents-ai.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/Agents.tsx",
+        "ui/src/pages/CompanySettings.tsx",
+        "ui/src/pages/AIGovernance.tsx",
+        "ui/src/pages/AgentRuntimeFabric.tsx",
+        "server/src/services/agents/authoring-drafts.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6802,6 +7153,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-apps-data.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/apps/Browse.tsx",
+        "ui/src/pages/apps/AppDetail.tsx",
+        "ui/src/pages/Foundation.tsx",
+        "server/src/services/connection-intents.ts",
+        "server/src/services/foundation/foundation-service.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6815,6 +7175,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-governance-compliance.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/AIGovernance.tsx",
+        "ui/src/pages/WorkflowIndex.tsx",
+        "ui/src/pages/Readiness.tsx",
+        "server/src/services/ai-governance/governance-service.ts",
+        "server/src/services/readiness/readiness-service.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6828,6 +7197,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-security.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/SaasAccount.tsx",
+        "ui/src/pages/CustomerSupport.tsx",
+        "ui/src/pages/Secrets.tsx",
+        "ui/src/pages/SecurityEvents.tsx",
+        "ui/src/pages/AgentRuntimeFabric.tsx"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6841,6 +7219,13 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-data-privacy.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/CompanyExport.tsx",
+        "ui/src/pages/SaasDeletion.tsx",
+        "server/src/services/saas/account-deletion.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6854,6 +7239,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-audit-evidence.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/audit/CompanyActivity.tsx",
+        "ui/src/pages/SecurityEvents.tsx",
+        "ui/src/pages/AIGovernance.tsx",
+        "ui/src/pages/Readiness.tsx",
+        "server/src/services/ai-governance/evidence-pack.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6867,6 +7261,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-billing-capacity.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/SaasBilling.tsx",
+        "ui/src/pages/SaasRuntimes.tsx",
+        "server/src/services/billing/billing.ts",
+        "server/src/services/billing/capacity-admission.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6880,6 +7282,15 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/settings-advanced-developer.json",
+      "sourcePaths": [
+        "ui/src/pages/ExperienceCompany.tsx",
+        "server/src/services/experience/company-navigation.ts",
+        "ui/src/pages/ExperienceAdvanced.tsx",
+        "ui/src/pages/AgentRuntimeFabric.tsx",
+        "ui/src/pages/tools/AdvancedToolsRoute.tsx",
+        "ui/src/pages/CompanyEnvironments.tsx",
+        "server/src/services/experience/service.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6893,6 +7304,13 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-describe.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowDescribe.tsx",
+        "server/src/services/experience/workflow-draft-intent.ts",
+        "packages/shared/src/workflow-authoring-experience.ts",
+        "ui/src/components/WorkflowAuthoringHandoff.tsx",
+        "server/src/services/workflows/workflow-draft-authors.ts"
+      ],
       "evidenceRefs": [
         "ui/src/components/WorkflowAuthoringHandoff.test.tsx",
         "server/src/__tests__/v9-workflow-draft-authors.integration.test.ts",
@@ -6910,6 +7328,13 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-draft.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowDraftFlow.tsx",
+        "ui/src/api/workflow-draft-flow.ts",
+        "server/src/services/workflows/workflow-customer-draft-flow.ts",
+        "ui/src/components/WorkflowAuthoringHandoff.tsx",
+        "server/src/services/workflows/workflow-draft-authors.ts"
+      ],
       "evidenceRefs": [
         "server/src/__tests__/v9-workflow-draft-flow.integration.test.ts",
         "ui/src/pages/WorkflowDraftFlow.test.tsx",
@@ -6930,6 +7355,34 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-review.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowReview.tsx",
+        "server/src/routes/workflows.ts",
+        "server/src/services/experience/workflow-review.ts",
+        "server/src/services/experience/workflow-comparison.ts",
+        "ui/src/components/ConversationAuthoringProposals.tsx",
+        "ui/src/api/conversation-authoring.ts",
+        "server/src/services/experience/conversation-authoring.ts",
+        "server/src/services/workflows/workflow-authoring-authority.ts",
+        "ui/src/components/ConversationWorkflowPreview.tsx",
+        "server/src/services/experience/workflow-flow.ts",
+        "server/src/services/agent-setup-authoring-tools.ts",
+        "packages/shared/src/agent-setup-authoring.ts",
+        "server/src/services/workflows/workflow-authoring-sources.ts",
+        "server/src/services/learning/learning-analytical-sources.ts",
+        "server/src/services/memory/memory-privacy.ts",
+        "packages/db/src/schema/workflows.ts",
+        "packages/db/src/migrations/0493_tidy_kat_farrell.sql",
+        "server/src/services/analytical-context-authority.ts",
+        "packages/db/src/migrations/0494_goofy_lionheart.sql",
+        "server/src/services/experience/workflow-step-actors.ts",
+        "server/src/services/experience/workflow-step-semantics.ts",
+        "server/src/services/experience/workflow-review-binding.ts",
+        "server/src/services/workflows/workflow-step-input-review.ts",
+        "server/src/services/tool-connection-visibility.ts",
+        "ui/src/components/WorkflowAuthoringHandoff.tsx",
+        "server/src/services/workflows/workflow-draft-authors.ts"
+      ],
       "evidenceRefs": [
         "ui/src/components/WorkflowAuthoringHandoff.test.tsx",
         "server/src/__tests__/v9-workflow-draft-authors.integration.test.ts",
@@ -6947,6 +7400,16 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-access.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowReview.tsx",
+        "ui/src/pages/WorkflowDraftStep.tsx",
+        "ui/src/pages/WorkflowDraftFlow.tsx",
+        "server/src/services/workflows/workflow-draft-tools.ts",
+        "server/src/services/tool-access.ts",
+        "server/src/services/tool-gateway.ts",
+        "server/src/services/experience/workflow-step-actors.ts",
+        "ui/src/pages/apps/app-detail/PermissionsPanel.tsx"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6960,6 +7423,18 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-approval.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowReview.tsx",
+        "ui/src/pages/WorkflowDraftStep.tsx",
+        "ui/src/pages/WorkflowDraftFlow.tsx",
+        "ui/src/pages/WorkflowBuilder.tsx",
+        "server/src/services/workflows/workflow-execution-policy.ts",
+        "server/src/services/approvals.ts",
+        "ui/src/pages/WorkflowRunExperience.tsx",
+        "ui/src/components/workflows/WorkflowToolReview.tsx",
+        "server/src/services/experience/workflow-run-review.ts",
+        "server/src/services/approval-review.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6973,6 +7448,20 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-test.json",
+      "sourcePaths": [
+        "ui/src/components/WorkflowTestControls.tsx",
+        "server/src/services/workflows/workflow-customer-test.ts",
+        "server/src/services/workflows/workflow-executor.ts",
+        "server/src/__tests__/v9-workflow-test-routes.test.ts",
+        "packages/shared/src/workflow-request-receipts.ts",
+        "ui/src/pages/WorkflowRequestReceipt.tsx",
+        "ui/src/components/WorkflowRequestRecoveryLinks.tsx",
+        "ui/src/hooks/useWorkflowRequestLocator.ts",
+        "ui/src/lib/pending-workflow-requests.ts",
+        "server/src/services/workflows/workflow-customer-authority.ts",
+        "server/src/services/workflows/workflow-service.ts",
+        "server/src/routes/workflows.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6986,6 +7475,20 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-inspect.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowRunExperience.tsx",
+        "server/src/routes/workflows.ts",
+        "server/src/services/experience/workflow-run-review.ts",
+        "packages/shared/src/workflow-run-experience.ts",
+        "ui/src/components/WorkflowStopControls.tsx",
+        "server/src/services/workflows/workflow-customer-stop.ts",
+        "packages/shared/src/workflow-stop.ts",
+        "packages/shared/src/workflow-test.ts",
+        "ui/src/pages/WorkflowRunControl.tsx",
+        "ui/src/api/workflow-run-control.ts",
+        "ui/src/lib/pending-workflow-stops.ts",
+        "server/src/services/workflows/workflow-executor.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -6999,6 +7502,14 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-fix.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowDraftStep.tsx",
+        "ui/src/api/workflow-draft-edit.ts",
+        "packages/shared/src/workflow-draft-edit.ts",
+        "server/src/services/workflows/workflow-customer-draft-edit.ts",
+        "server/src/routes/workflows.ts",
+        "ui/src/pages/WorkflowBuilder.tsx"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -7012,6 +7523,18 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-check-publish.json",
+      "sourcePaths": [
+        "ui/src/components/WorkflowPublicationControls.tsx",
+        "server/src/services/workflows/workflow-customer-publication.ts",
+        "packages/shared/src/workflow-request-receipts.ts",
+        "ui/src/pages/WorkflowRequestReceipt.tsx",
+        "ui/src/components/WorkflowRequestRecoveryLinks.tsx",
+        "ui/src/hooks/useWorkflowRequestLocator.ts",
+        "ui/src/lib/pending-workflow-requests.ts",
+        "server/src/services/workflows/workflow-customer-authority.ts",
+        "server/src/services/workflows/workflow-service.ts",
+        "server/src/routes/workflows.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -7025,6 +7548,18 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-publish.json",
+      "sourcePaths": [
+        "ui/src/components/WorkflowPublicationControls.tsx",
+        "server/src/services/workflows/workflow-customer-publication.ts",
+        "packages/shared/src/workflow-request-receipts.ts",
+        "ui/src/pages/WorkflowRequestReceipt.tsx",
+        "ui/src/components/WorkflowRequestRecoveryLinks.tsx",
+        "ui/src/hooks/useWorkflowRequestLocator.ts",
+        "ui/src/lib/pending-workflow-requests.ts",
+        "server/src/services/workflows/workflow-customer-authority.ts",
+        "server/src/services/workflows/workflow-service.ts",
+        "server/src/routes/workflows.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -7038,6 +7573,31 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-operate.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowReview.tsx",
+        "ui/src/components/WorkflowLifecycleControls.tsx",
+        "packages/shared/src/workflow-lifecycle.ts",
+        "server/src/services/workflows/workflow-service.ts",
+        "server/src/services/workflows/workflow-executor.ts",
+        "server/src/routes/workflows.ts",
+        "ui/src/components/WorkflowOperations.tsx",
+        "packages/shared/src/workflow-operations.ts",
+        "ui/src/components/WorkflowRunControls.tsx",
+        "packages/shared/src/workflow-launch.ts",
+        "server/src/services/workflows/workflow-customer-launch.ts",
+        "packages/shared/src/workflow-test.ts",
+        "packages/shared/src/workflow-request-receipts.ts",
+        "ui/src/pages/WorkflowRequestReceipt.tsx",
+        "ui/src/components/WorkflowRequestRecoveryLinks.tsx",
+        "ui/src/hooks/useWorkflowRequestLocator.ts",
+        "ui/src/lib/pending-workflow-requests.ts",
+        "server/src/services/workflows/workflow-customer-authority.ts",
+        "packages/shared/src/workflow-stop.ts",
+        "ui/src/pages/WorkflowRunControl.tsx",
+        "ui/src/api/workflow-run-control.ts",
+        "ui/src/lib/pending-workflow-stops.ts",
+        "server/src/services/workflows/workflow-customer-stop.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -7051,6 +7611,29 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-recover.json",
+      "sourcePaths": [
+        "packages/shared/src/workflow-request-receipts.ts",
+        "ui/src/pages/WorkflowRequestReceipt.tsx",
+        "ui/src/components/WorkflowRequestRecoveryLinks.tsx",
+        "ui/src/hooks/useWorkflowRequestLocator.ts",
+        "ui/src/lib/pending-workflow-requests.ts",
+        "server/src/services/workflows/workflow-customer-authority.ts",
+        "server/src/services/workflows/workflow-service.ts",
+        "server/src/routes/workflows.ts",
+        "packages/shared/src/workflow-stop.ts",
+        "ui/src/pages/WorkflowRunControl.tsx",
+        "ui/src/api/workflow-run-control.ts",
+        "ui/src/lib/pending-workflow-stops.ts",
+        "server/src/services/workflows/workflow-customer-stop.ts",
+        "server/src/services/workflows/workflow-executor.ts",
+        "server/src/services/workflows/workflow-authoring-sources.ts",
+        "server/src/services/learning/learning-analytical-sources.ts",
+        "server/src/services/memory/memory-privacy.ts",
+        "packages/db/src/schema/workflows.ts",
+        "packages/db/src/migrations/0493_tidy_kat_farrell.sql",
+        "server/src/services/analytical-context-authority.ts",
+        "packages/db/src/migrations/0494_goofy_lionheart.sql"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     },
@@ -7064,6 +7647,20 @@
       "ownerDisposition": "declared_in_inherited_register",
       "implementationStatus": "in_progress",
       "contractPath": "doc/experience/v9/contracts/workflow-retire.json",
+      "sourcePaths": [
+        "ui/src/pages/WorkflowReview.tsx",
+        "ui/src/components/WorkflowLifecycleControls.tsx",
+        "packages/shared/src/workflow-lifecycle.ts",
+        "server/src/services/workflows/workflow-service.ts",
+        "server/src/services/workflows/workflow-executor.ts",
+        "server/src/routes/workflows.ts",
+        "packages/shared/src/workflow-request-receipts.ts",
+        "ui/src/pages/WorkflowRequestReceipt.tsx",
+        "ui/src/components/WorkflowRequestRecoveryLinks.tsx",
+        "ui/src/hooks/useWorkflowRequestLocator.ts",
+        "ui/src/lib/pending-workflow-requests.ts",
+        "server/src/services/workflows/workflow-customer-authority.ts"
+      ],
       "evidenceRefs": [],
       "qualification": "inherited_coverage_status_not_release_acceptance"
     }
