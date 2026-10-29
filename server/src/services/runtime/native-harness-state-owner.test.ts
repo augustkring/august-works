@@ -40,7 +40,7 @@ describe("Native harness-state relay command owner", () => {
       return `linux:${bootId}:${ticks}`;
     };
     const liveRunner = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "--", "--runner-id", runnerInstanceId],
-      { stdio: "ignore" });
+      { stdio: "ignore", detached: true });
     const unrelatedLiveProcess = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
     const exitingProcess = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
     const parent = spawn("python3", ["-c",
@@ -80,7 +80,7 @@ describe("Native harness-state relay command owner", () => {
       const cleanup = spawnSync("sh", ["-c", REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
         "paperclip-runner-identity-failure-cleanup", identityPath, nonce, runnerInstanceId,
         REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT], { encoding: "utf8", timeout: 10_000 });
-      expect(cleanup.status).toBe(0);
+      expect(cleanup.status, cleanup.stderr).toBe(0);
       await expect(access(identityPath)).rejects.toThrow();
 
       const exitingPid = exitingProcess.pid;

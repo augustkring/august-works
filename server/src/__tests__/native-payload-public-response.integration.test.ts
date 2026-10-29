@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
+import { authUsers, authSessions, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   agents, heartbeatRuns, issueComments, issues, memoryBindings, memoryRecords, projects } from "@paperclipai/db";
 import { agentRoutes } from "../routes/agents.js";
 import { issueRoutes } from "../routes/issues.js";
@@ -24,13 +24,18 @@ describe("Native payload proofs stay on the server at public response boundaries
   afterAll(async () => { await database?.cleanup(); }, 30000);
 
   async function seed() {
-    const companyId = randomUUID(), userId = randomUUID();
+    const companyId = randomUUID(), userId = randomUUID(), sessionId = randomUUID();
+    const now = new Date();
     await db.insert(companies).values({ id: companyId, name: "Public native payload", issuePrefix: randomUUID() });
-    await db.insert(authUsers).values({ id: userId, name: "Actual Human", email: `${userId}@example.test`, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(authUsers).values({ id: userId, name: "Actual Human", email: `${userId}@example.test`, createdAt: now, updatedAt: now });
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "admin", status: "active" });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 60 * 60_000) });
     const app = express(); app.use(express.json());
-    // API serialization proof only, not credential middleware qualification.
-    app.use((req, _res, next) => { req.actor = { type: "board", source: "session", userId, companyIds: [companyId] }; next(); });
+    // API serialization proof only; the actor is backed by a current session
+    // row so service authorization exercises the same current-principal gate.
+    app.use((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "admin", status: "active" }] }; next(); });
     app.use("/api", issueRoutes(db, {} as never)); app.use("/api", projectRoutes(db)); app.use("/api", projectControlRoutes(db)); app.use("/api", memoryRoutes(db));
     app.use("/run-api", agentRoutes(db)); app.use(errorHandler);
     return { companyId, userId, http: request(app) };
@@ -42,7 +47,10 @@ describe("Native payload proofs stay on the server at public response boundaries
       select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
         select jsonb_build_object('version',1,'owner',jsonb_build_object('kind',${kind}::text,'companyId',target.company_id,'id',target.id,
           'contentHash',public.aw_native_payload_body_hash(${kind},to_jsonb(target))),
-          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,
+            'projectIds',case when ${kind}='issue' then coalesce((select jsonb_agg(distinct edge.source_id::text order by edge.source_id::text)
+              from issue_privacy_sources edge where edge.company_id=target.company_id and edge.issue_id=target.id
+                and edge.source_kind='project'),'[]'::jsonb) else '[]'::jsonb end,'runIds','[]'::jsonb,
             'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
       ) actual_body
     ) where target.id=${id}::uuid`);
@@ -75,7 +83,8 @@ describe("Native payload proofs stay on the server at public response boundaries
     await bind("issues", "issue", task!.id);
     const response = await s.http.patch(`/api/companies/${s.companyId}/projects/${project!.id}/roadmap/tasks/${task!.id}/forecast`)
       .send({ expectedUpdatedAt: task!.updatedAt.toISOString(), forecastStartAt: null, forecastEndAt: null,
-        forecastConfidence: 0.7, forecastReason: reason }).expect(200);
+        forecastConfidence: 0.7, forecastReason: reason });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
     publicRow(response.body, task!.id); expect(response.body.forecastReason).toBe(reason);
     expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]!.payloadSourceSnapshot).not.toBeNull();
   });
