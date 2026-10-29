@@ -3928,6 +3928,13 @@
       "when": 1793214428685,
       "tag": "0562_curious_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 563,
+      "version": "7",
+      "when": 1793299535413,
+      "tag": "0563_wise_yellow_claw",
+      "breakpoints": true
     }
   ]
 }

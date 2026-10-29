@@ -318,6 +318,7 @@ export * from "./activation_connection_consents.js";
 export * from "./activation_connection_validations.js";
 
 export { agentConfigurationTests } from "./agent_configuration_tests.js";
+export { agentModelMigrationMonitorReceipts } from "./agent_model_migration_monitor_receipts.js";
 
 export * from "./saas_notification_channels.js";
 export * from "./experience_observations.js";

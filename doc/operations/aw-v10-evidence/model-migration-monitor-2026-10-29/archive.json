@@ -1,0 +1,28 @@
+{
+  "purpose": "scoped_software_qualification_not_release_readiness",
+  "savedAtUtc": "2026-10-29T21:25:46.061653+00:00",
+  "sourceHead": "8d8499aef5c12bc6c524ae5fde5df0e34368990b",
+  "archiveSha256": "db787ff02bbb6096814bacfe144c2af7bce3998dc6a5a568d7cdfffecf6abc68",
+  "archiveBytes": 1411327,
+  "selectedSourceFiles": 28,
+  "sharedBarrelCommitProjection": {
+    "path": "packages/shared/src/index.ts",
+    "capturedFullWorkingSha256": "e1bed5e74b73ae44ca389a387bcf96f297913ec0c840b5a2b708df3813faf755",
+    "selectedCommitSha256": "90f201354971d557fbd252c7d5c8b53b5d95bfa14480b271ff4ae29ea5be3769",
+    "scope": "Only the model-monitor export is included; the separately pending Resource export is excluded."
+  },
+  "checks": {
+    "postgresMigrationFlow": "passed",
+    "sharedContract": "passed",
+    "routeAndOpenApiTests": 47,
+    "uiTests": 4,
+    "serverTypecheck": "passed",
+    "uiTypecheck": "passed",
+    "tokenGates": "passed"
+  },
+  "limits": [
+    "Controlled software fixtures do not establish live provider, operator or customer qualification.",
+    "E2E publication fixture updates were captured and syntax checked; that E2E suite was not executed in this scoped qualification.",
+    "Unrelated WIP source blobs retained only to reconstruct the original snapshots are not qualified by this feature evidence."
+  ]
+}

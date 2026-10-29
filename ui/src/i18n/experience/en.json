@@ -2131,6 +2131,24 @@
     "manageAgent": "Monitor or pause agent",
     "reviewPackage": "Review package setup"
   },
+  "agentMigrationMonitor": {
+    "title": "Post-publication model check",
+    "instructions": "After publishing this model change, run and independently verify each saved scenario again. This records a Human-reviewed check of the exact active model version; it does not start work or change routing.",
+    "checking": "Checking the active model migration…",
+    "changed": "The active model version or current access changed. Review it again.",
+    "unknown": "The monitoring receipt is unresolved. Check the original receipt before making another request.",
+    "unavailable": "The model migration check is unavailable.",
+    "notRequired": "This Agent version has no model migration to monitor.",
+    "newDraft": "Start a fresh draft from the current published Agent to run monitoring tests against the active model version.",
+    "pending": "{{count}} current scenario checks are available. Finish post-publication tests and independent Human reviews for every saved scenario.",
+    "ready": "All {{count}} saved scenarios have current, independently Human-verified results for the active model version.",
+    "holdReady": "All {{count}} saved scenarios have current Human-reviewed results, and at least one does not pass. Keep the migration on hold.",
+    "record": "Record Human monitoring review",
+    "recordHold": "Record hold",
+    "recorded": "The post-publication model review for version {{version}} was recorded.",
+    "recordedHold": "The model migration for version {{version}} is recorded as on hold.",
+    "checkOriginal": "Check original monitoring receipt"
+  },
   "publishedInstructions": {
     "title": "Published instructions",
     "boundary": "Published instructions are read-only. Edit a private draft and test it before publishing; the active version stays in place.",

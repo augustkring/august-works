@@ -1226,6 +1226,30 @@ describe("openapi routes", () => {
     });
   });
 
+  it("documents AgentAuthoring model migration monitoring as Human-session-only", () => {
+    const { spec } = loadSpecRoutes();
+    const publicationReview = spec.paths["/api/companies/{companyId}/agent-configuration-drafts/{id}/publication-review"].get;
+    expect(publicationReview.security).toEqual([{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }]);
+    expect(publicationReview["x-paperclip-authorization"]).toMatchObject({ actor: "board" });
+    expect(publicationReview["x-paperclip-authorization"].humanSession).toBeUndefined();
+    const root = "/api/companies/{companyId}/agent-configuration-drafts/{id}/model-migrations/{revisionId}";
+    const current = "/api/companies/{companyId}/agent-configuration-drafts/{id}/model-migrations/current/monitor-review";
+    const currentOperation = spec.paths[current].get;
+    expect(currentOperation.security).toEqual([{ BoardSessionAuth: [] }]);
+    expect(currentOperation.security).not.toContainEqual({ BoardApiKeyAuth: [] });
+    expect(currentOperation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+    for (const [path, method] of [
+      [`${root}/monitor-review`, "get"],
+      [`${root}/monitor-receipt`, "get"],
+      [`${root}/monitor`, "post"],
+    ] as const) {
+      const operation = spec.paths[path][method];
+      expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+      expect(operation.security).not.toContainEqual({ BoardApiKeyAuth: [] });
+      expect(operation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+    }
+  });
+
   it("documents temporary Human workflow coverage as session-only and binds the covered-run header", () => {
     const { spec } = loadSpecRoutes();
     const coveragePaths = [

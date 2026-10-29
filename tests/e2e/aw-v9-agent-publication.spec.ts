@@ -56,7 +56,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
           expect(Object.keys(input)).toHaveLength(6);
           receipt = agentDraftPublicationReceiptSchema.parse({ companyId: company.id, draftId: id, requestId: input.requestId, agentId, revisionId: input.requestId,
             ...(kind === "hire" ? { packageInstallation: { installationId: planId, versionId: packageId, key: "research", version: "1.0.0", contentHash: "a".repeat(64) } } : {}),
-            publishedContent: draft.content!, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00.000Z", activatedAtPublication: true, authorityGranted: false, executionStarted: false });
+            publishedContent: draft.content!, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00.000Z", activatedAtPublication: true,
+            modelMigration: { required: false, action: "none", stage: "single_agent" }, authorityGranted: false, executionStarted: false });
           return route.abort("failed");
         }
         expect(req.method()).toBe("GET");

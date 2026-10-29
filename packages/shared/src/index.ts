@@ -3435,6 +3435,8 @@ export * from "./feedback-retention-erasure.js";
 export { agentDraftTestReviewSchema, agentDraftTestCommandSchema, agentDraftTestViewSchema, agentDraftTestPacketSchema, type AgentDraftTestReview, type AgentDraftTestCommand, type AgentDraftTestView } from "./agent-authoring-tests.js";
 export { agentDraftPublicationCommandSchema, agentDraftPublicationReviewSchema, agentDraftPublicationReceiptSchema,
   type AgentDraftPublicationCommand, type AgentDraftPublicationReview, type AgentDraftPublicationReceipt } from "./agent-authoring-publication.js";
+export { agentModelMigrationMonitorReviewSchema, agentModelMigrationMonitorCommandSchema, agentModelMigrationMonitorReceiptSchema,
+  type AgentModelMigrationMonitorReview, type AgentModelMigrationMonitorCommand, type AgentModelMigrationMonitorReceipt } from "./agent-model-migration-monitoring.js";
 export * from "./agent-authoring-package-setup.js";
 
 export * from "./agent-pause.js";

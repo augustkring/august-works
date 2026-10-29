@@ -88,6 +88,13 @@ export function agentAuthoringTestService(db: Db) {
     if (!row) throw notFound("Representative test not found");
     return row;
   }
+  async function listInTransaction(tx: Db, actor: AuthorizationActor, companyId: string, draftId: string) {
+    await read(tx, actor, companyId, draftId);
+    const rows = await tx.select().from(agentConfigurationTests).where(and(eq(agentConfigurationTests.companyId, companyId), eq(agentConfigurationTests.draftId, draftId),
+      eq(agentConfigurationTests.createdByUserId, v7HumanActorId(actor)))).orderBy(desc(agentConfigurationTests.createdAt), desc(agentConfigurationTests.id)).limit(31);
+    if (rows.length > 30) throw conflict("The complete test history exceeds its current review budget");
+    const result = []; for (const row of rows) result.push(await view(tx, actor, row)); return result;
+  }
   return {
     /** Internal read projection. The caller retains the privacy/company locks;
      * the installed model controller is still resolved through the root Db.
@@ -142,13 +149,12 @@ export function agentAuthoringTestService(db: Db) {
         eq(agentConfigurationTests.createdByUserId, v7HumanActorId(actor)), eq(agentConfigurationTests.requestId, requestId)));
       return row ? view(tx, actor, row) : null;
     }),
-    list: async (actor: AuthorizationActor, companyId: string, draftId: string) => db.transaction(async raw => {
-      const tx = raw as unknown as Db; await read(tx, actor, companyId, draftId);
-      const rows = await tx.select().from(agentConfigurationTests).where(and(eq(agentConfigurationTests.companyId, companyId), eq(agentConfigurationTests.draftId, draftId),
-        eq(agentConfigurationTests.createdByUserId, v7HumanActorId(actor)))).orderBy(desc(agentConfigurationTests.createdAt), desc(agentConfigurationTests.id)).limit(31);
-      if (rows.length > 30) throw conflict("The complete test history exceeds its current review budget");
-      const result = []; for (const row of rows) result.push(await view(tx, actor, row)); return result;
-    }),
+    list: async (actor: AuthorizationActor, companyId: string, draftId: string) => db.transaction(async raw =>
+      listInTransaction(raw as unknown as Db, actor, companyId, draftId)),
+    /** Internal projection for callers that already own the transaction and
+     * privacy locks. The service keeps its root-Db Native gateway while every
+     * evidence row is read through the caller's transaction. */
+    listInTransaction,
     start: async (actor: AuthorizationActor, companyId: string, draftId: string, raw: unknown) => {
       const input = agentDraftTestCommandSchema.parse(raw), userId = v7HumanActorId(actor), requestHash = nativeSha256({ companyId, draftId, input });
       const saved = await withV7ActivityTransaction(db, async (tx, publications) => {

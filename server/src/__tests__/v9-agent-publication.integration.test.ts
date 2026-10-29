@@ -7,6 +7,7 @@ import { agentIdentityService } from "../services/agent-identities.js";
 import { agentService } from "../services/agents.js";
 import { readAgentMonitor } from "../services/experience/agent-monitor.js";
 import { agentAuthoringPublicationService } from "../services/agents/authoring-publication.js";
+import { agentAuthoringModelMigrationMonitorService } from "../services/agents/authoring-model-migration-monitor.js";
 import { agentAuthoringPackageSetupService } from "../services/agents/authoring-package-setup.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { buildRetainedNativeRuntimeContext, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
@@ -16,7 +17,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agentPresenceRuntimeBindings, agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authSessions, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, principalPermissionGrants, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
+import { agentPresenceRuntimeBindings, agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests,
+  agentModelMigrationMonitorReceipts, agents, authSessions, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills,
+  companySkillVersions, principalPermissionGrants, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations,
+  orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
 import { CUSTOM_AGENT_STEPS, agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, AUTHORED_AGENT_DEFINITION_KEY, agentDraftPublicationCommandSchema, type AgentDraftPublicationCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
@@ -99,7 +103,10 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       contract: "anthropic-text-messages-2023-06-01", maximumEnvelopeBytes: 64000, inputTokensUpperBound: 1000, maxOutputTokens: 256,
       tariff: { provider: "anthropic", model: config.model, currency: "USD", fixedMinor: 3, inputMinorPerMillion: 0, outputMinorPerMillion: 0,
         sourceSha, qualificationHash: "b".repeat(64), testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 300000).toISOString() },
-      qualificationEvidenceRef: "https://protected.test.invalid/qualification/safe-test-fixture", qualificationArtifactSha256: "c".repeat(64) };
+      qualificationEvidenceRef: "https://protected.test.invalid/qualification/safe-test-fixture", qualificationArtifactSha256: "c".repeat(64),
+      lifecycle: { status: "active", owner: "fixture model owner", retirementAt: null, replacementProfileId: null,
+        regionOrRoutingProfile: "fixture-region", dataUseProfile: "fixture-no-training", supportedInputOutput: ["text"],
+        toolUseCapability: false, rateLimits: { requestsPerMinute: 100, tokensPerMinute: 100000 } } };
     registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile, { ...profile, id: randomUUID(), qualifiedConfigurationHash: "f".repeat(64), tariff: { ...profile.tariff, model: "unselected-alternative-model" } }], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid", fetch: transport }));
     return runtime;
   }
@@ -127,14 +134,16 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       confirmRepresentativeTest: true, confirmCompanyVisibleResult: true };
   }
   async function execute() { const input = await command(); return { input, result: await service().start(f.actor, f.home, draft.id, input) }; }
-  async function reviewInput(requestId: string): Promise<VerificationReviewInput> {
+  async function reviewInput(requestId: string, result: "pass" | "fail" = "pass"): Promise<VerificationReviewInput> {
     const packet = await service().packet(f.actor, f.home, draft.id, requestId), refs = packet.evidence.map(evidence => evidence.ref);
     expect(packet.policy.humanRequired).toBe(true); expect(packet.deterministicFailures).toEqual([]);
-    return { expectedPlanVersion: packet.planVersion, expectedResultHash: packet.resultHash, workerId: null, result: "pass",
-      objectiveSatisfied: true, explicitHighImpactApproval: true, rationale: "I compared the generated draft with every saved requirement.",
-      businessInvariants: packet.contract.businessInvariants.map((_, index) => ({ index, satisfied: true, evidenceRefs: refs })),
-      evidenceRequirements: packet.contract.evidenceRequirements.map((_, index) => ({ index, satisfied: true, evidenceRefs: refs })),
-      prohibitedOutcomes: packet.contract.prohibitedOutcomes.map((_, index) => ({ index, satisfied: true, evidenceRefs: refs })) };
+    const satisfied = result === "pass";
+    return { expectedPlanVersion: packet.planVersion, expectedResultHash: packet.resultHash, workerId: null, result,
+      objectiveSatisfied: satisfied, explicitHighImpactApproval: true,
+      rationale: satisfied ? "I compared the generated draft with every saved requirement." : "I found that the generated draft missed a saved requirement.",
+      businessInvariants: packet.contract.businessInvariants.map((_, index) => ({ index, satisfied, evidenceRefs: refs })),
+      evidenceRequirements: packet.contract.evidenceRequirements.map((_, index) => ({ index, satisfied, evidenceRefs: refs })),
+      prohibitedOutcomes: packet.contract.prohibitedOutcomes.map((_, index) => ({ index, satisfied, evidenceRefs: refs })) };
   }
   const publications = () => agentAuthoringPublicationService(db);
   async function qualify() {
@@ -153,7 +162,20 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   }
   async function publish() { return publications().publish(f.actor, f.home, draft.id, await publicationCommand()); }
   async function agent() { return (await db.select().from(agents).where(eq(agents.id, f.presence.id)))[0]!; }
-  it("tests a saved alternative and atomically promotes its Original configuration, runtime proof and identified version", async () => {
+  it("tests a saved alternative, promotes its model migration, then records post-publication Human monitoring", async () => {
+    const timed = async <T>(phase: string, action: () => Promise<T>): Promise<T> => {
+      const started = performance.now();
+      try { return await action(); }
+      finally { console.info("model-migration-monitor-phase", JSON.stringify({ phase, elapsedMs: Math.round(performance.now() - started) })); }
+    };
+    const initialReadiness = await timed("baseline_readiness", () => drafts().reviewContent(f.actor, f.home, draft.id));
+    expect(initialReadiness.blockers.map(blocker => blocker.code).sort(), "baseline candidate readiness").toEqual([
+      "native_promotion_unqualified", "representative_test_unqualified",
+    ]);
+    await timed("baseline_safe_test", () => qualify());
+    const baseline = await timed("baseline_publish", () => publish());
+    expect(baseline).toMatchObject({ publishedVersion: 1, modelMigration: { required: false, action: "none" } });
+    draft = await timed("migration_draft_create", () => drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id }));
     const original = await agent(), peer = f.guestPresence, peerProfileId = randomUUID();
     const peerConfig = { provider: "aw_text_only", model: profile.tariff.model, workerModelProfileId: peerProfileId, maxOutputTokens: 256 };
     await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: peerConfig }).where(eq(agents.id, peer.id));
@@ -169,7 +191,8 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       binding: { provider: "anthropic", method: "api_key", mode: "shared", ...connection } };
     const candidateProfileId = randomUUID(), configuration = normalizePaperclipRunnerAdapterConfig(original.adapterType, { ...original.adapterConfig, workerModelProfileId: candidateProfileId });
     const alternative: WorkerModelProfile = { ...profile, id: candidateProfileId,
-      qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig: configuration }) };
+      qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig: configuration }),
+      lifecycle: { ...profile.lifecycle!, status: "candidate" } };
     const profiles = [profile, alternative, peerProfile], options = { profiles, sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid" };
     let probes = 0;
     const probeTransport: typeof guardedRemoteHttpFetch = async (_url, init) => {
@@ -187,24 +210,30 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     registerNativeDraftConformance(db, nativeDraftConformanceService(db, { ...options, fetch: probeTransport }));
     registerNativeDraftGateway(db, workerModelGateway(db, { ...options, fetch: transport }));
     const candidates = agentRuntimeCandidateService(db, options), conformance = agentRuntimeCandidateConformanceService(db, options);
-    const candidate = await candidates.create(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, modelProfileId: alternative.id });
-    draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "runtime",
-      content: { ...draft.content!, runtimeCandidateId: candidate.id } });
+    const candidate = await timed("candidate_create", () => candidates.create(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, modelProfileId: alternative.id }));
+    draft = await timed("candidate_select", () => drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "runtime",
+      content: { ...draft.content!, runtimeCandidateId: candidate.id } }));
     const input = { acknowledgeProviderRuns: true as const, maximumCostCents: 12, isolationPeer: { companyId: f.guest, agentId: peer.id } };
-    const review = await conformance.review(f.actor, f.home, draft.id, candidate.id, input);
+    const review = await timed("candidate_conformance_review", () => conformance.review(f.actor, f.home, draft.id, candidate.id, input));
     expect(review.canTest).toBe(true);
-    expect(await conformance.start(f.actor, f.home, draft.id, candidate.id, { ...input, requestId: randomUUID(), expectedVersion: draft.version,
-      expectedReviewHash: review.reviewHash, confirmBoundedConformance: true, confirmCompanyVisibleProbes: true })).toMatchObject({ status: "qualified" });
+    expect(await timed("candidate_conformance_run", () => conformance.start(f.actor, f.home, draft.id, candidate.id, { ...input,
+      requestId: randomUUID(), expectedVersion: draft.version, expectedReviewHash: review.reviewHash,
+      confirmBoundedConformance: true, confirmCompanyVisibleProbes: true }))).toMatchObject({ status: "qualified" });
     expect((await agent()).adapterConfig).toEqual(original.adapterConfig);
-    await qualify(); expect(calls).toBe(1); expect((await agent()).adapterConfig).toEqual(original.adapterConfig);
-    const publicationInput = await publicationCommand();
+    const alternativeReadiness = await drafts().reviewContent(f.actor, f.home, draft.id);
+    expect(alternativeReadiness.blockers.map(blocker => blocker.code).sort(), "saved alternative readiness").toEqual([
+      "native_promotion_unqualified", "representative_test_unqualified",
+    ]);
+    await timed("prepublication_safe_test", () => qualify()); expect(calls).toBe(2); expect((await agent()).adapterConfig).toEqual(original.adapterConfig);
+    const publicationInput = await timed("migration_publication_review", () => publicationCommand());
     const beforeRuntime = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id));
     await db.execute(sql`create function aw_v9_candidate_publication_failure() returns trigger language plpgsql as $body$
       begin if new.action='agent_configuration.version_published' then raise exception 'Synthetic final audit failure'; end if;
       return new; end $body$`);
     await db.execute(sql`create trigger aw_v9_candidate_publication_failure after insert on activity_log
       for each row execute function aw_v9_candidate_publication_failure()`);
-    try { await expect(publications().publish(f.actor, f.home, draft.id, publicationInput)).rejects.toThrow(); }
+    try { await expect(timed("publication_rollback_probe", () => publications().publish(f.actor, f.home, draft.id, publicationInput)).then(() => { throw new Error("Expected rollback probe to fail"); }))
+      .rejects.toThrow(); }
     finally {
       await db.execute(sql`drop trigger aw_v9_candidate_publication_failure on activity_log`);
       await db.execute(sql`drop function aw_v9_candidate_publication_failure()`);
@@ -213,17 +242,77 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect((await agent()).runtimeConfig).toEqual(original.runtimeConfig);
     expect(await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id))).toEqual(beforeRuntime);
     expect(await db.select().from(agentConfigRevisions).where(eq(agentConfigRevisions.id, publicationInput.requestId))).toEqual([]);
-    const publication = await publications().publish(f.actor, f.home, draft.id, publicationInput); expect(publication.publishedVersion).toBe(1);
+    const publication = await timed("migration_publish", () => publications().publish(f.actor, f.home, draft.id, publicationInput));
+    expect(publication).toMatchObject({ publishedVersion: 2, modelMigration: { required: true, action: "migration", stage: "single_agent" } });
     const live = await agent(); expect(live.adapterConfig).toEqual(configuration);
     const runtime = await bindings.assertRuntime(f.home, f.presence.id);
     expect(runtime.runtime.qualifiedConfigurationHash).toBe(alternative.qualifiedConfigurationHash);
     expect((live.runtimeConfig as Record<string, any>)[AUTHORED_AGENT_DEFINITION_KEY].revisionId).toBe(publication.revisionId);
     const [revision] = await db.select().from(agentConfigRevisions).where(eq(agentConfigRevisions.id, publication.revisionId));
-    expect(revision!.afterConfig.adapterConfig).toEqual({ ...configuration, maxOutputTokens: "***REDACTED***" }); expect(probes).toBe(4); expect(calls).toBe(1);
+    expect(revision!.afterConfig.adapterConfig).toEqual({ ...configuration, maxOutputTokens: "***REDACTED***" }); expect(probes).toBe(4); expect(calls).toBe(2);
+    const monitoring = agentAuthoringModelMigrationMonitorService(db);
+    const publicationDraftId = draft.id;
+    const publishedDefinition = (revision!.afterConfig.runtimeConfig as Record<string, any>)[AUTHORED_AGENT_DEFINITION_KEY];
+    expect(publishedDefinition.publication.modelMigration).toMatchObject({ action: "migration", reviewedByUserId: f.userId,
+      baseline: { verifiedTestIds: [expect.any(String)] }, candidate: { verifiedTestIds: [expect.any(String)] }, cohort: { maxAgents: 1 } });
+    const oldDraftReview = await timed("old_draft_monitor_review", () => monitoring.review(f.actor, f.home, publicationDraftId, publication.revisionId));
+    expect(oldDraftReview.canRecord).toBe(false);
+    expect(oldDraftReview.blockers).toContain("monitor_requires_a_fresh_draft_from_the_current_published_agent");
+    expect((await timed("current_migration_discovery", () => monitoring.current(f.actor, f.home, publicationDraftId)))?.migrationRevisionId).toBe(publication.revisionId);
+    await expect(timed("stale_version_review", () => monitoring.review(f.actor, f.home, publicationDraftId, baseline.revisionId)))
+      .rejects.toMatchObject({ status: 409 });
+    const changedDraft = await timed("changed_content_draft_create", () => drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id }));
+    await timed("changed_content_save", () => drafts().save(f.actor, f.home, changedDraft.id, { requestId: randomUUID(), expectedVersion: changedDraft.version, step: "test",
+      content: { ...changedDraft.content!, description: "Changed after the published model migration" } }));
+    const changedReview = await timed("changed_content_monitor_review", () => monitoring.review(f.actor, f.home, changedDraft.id, publication.revisionId));
+    expect(changedReview.canRecord).toBe(false);
+    expect(changedReview.blockers).toContain("monitor_draft_does_not_match_published_migration_content");
+    // Monitoring runs in a fresh draft copied from the active publication.
+    // Its baseline is current and it intentionally has no selector tied to
+    // the prior draft; the monitor verifies the original conformance receipt.
+    draft = await timed("fresh_monitor_draft_create", () => drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id }));
+    expect(draft.content?.runtimeCandidateId).toBeUndefined();
+    expect(draft.content?.scenarios).toEqual(publishedDefinition.content.scenarios);
+    expect((await timed("empty_monitor_review", () => monitoring.review(f.actor, f.home, draft.id, publication.revisionId))).canRecord).toBe(false);
+    const heldTest = await timed("postpublication_hold_test", () => execute());
+    await timed("postpublication_hold_verification", async () => service().verify(f.actor, f.home, draft.id, heldTest.input.requestId, await reviewInput(heldTest.input.requestId, "fail")));
+    const heldReview = await timed("held_monitor_review", () => monitoring.review(f.actor, f.home, draft.id, publication.revisionId));
+    expect(heldReview.blockers, "monitor blockers before recording hold").toEqual([]);
+    expect(heldReview).toMatchObject({ canRecord: true, recommendation: "hold", tests: [{ testQualified: false, verificationResult: "fail" }] });
+    const holdCommand = { requestId: randomUUID(), expectedReviewHash: heldReview.reviewHash, confirmMonitoring: true } as const;
+    expect(await timed("hold_monitor_record", () => monitoring.record(f.actor, f.home, draft.id, publication.revisionId, holdCommand)))
+      .toMatchObject({ decision: "hold", reviewedByUserId: f.userId });
+    const postPublication = await timed("postpublication_healthy_test", () => execute());
+    await timed("postpublication_healthy_verification", async () => service().verify(f.actor, f.home, draft.id, postPublication.input.requestId, await reviewInput(postPublication.input.requestId)));
+    const monitorReview = await timed("healthy_monitor_review", () => monitoring.review(f.actor, f.home, draft.id, publication.revisionId));
+    expect(monitorReview).toMatchObject({ canRecord: true, blockers: [], recommendation: "healthy", publishedVersion: 2, migrationRevisionId: publication.revisionId });
+    expect(monitorReview.tests).toEqual([expect.objectContaining({ testId: postPublication.result.id, runId: postPublication.result.runId,
+      scenarioIndex: 0, testCreatedAt: expect.any(String), verificationCreatedAt: expect.any(String) })]);
+    const monitorCommand = { requestId: randomUUID(), expectedReviewHash: monitorReview.reviewHash, confirmMonitoring: true } as const;
+    const recorded = await timed("healthy_monitor_record", () => monitoring.record(f.actor, f.home, draft.id, publication.revisionId, monitorCommand));
+    expect(recorded).toMatchObject({ migrationRevisionId: publication.revisionId, publishedVersion: 2, reviewedByUserId: f.userId, decision: "healthy" });
+    expect(await timed("monitor_replay", () => monitoring.record(f.actor, f.home, draft.id, publication.revisionId, monitorCommand))).toEqual(recorded);
+    const [monitorRow] = await db.select().from(agentModelMigrationMonitorReceipts).where(and(
+      eq(agentModelMigrationMonitorReceipts.migrationRevisionId, publication.revisionId),
+      eq(agentModelMigrationMonitorReceipts.requestId, monitorCommand.requestId)));
+    expect(monitorRow).toMatchObject({ reviewHash: monitorReview.reviewHash, decision: "healthy", evidence: monitorReview.tests });
+    await expect(db.update(agentModelMigrationMonitorReceipts).set({ reviewHash: "0".repeat(64) })
+      .where(eq(agentModelMigrationMonitorReceipts.id, monitorRow!.id))).rejects.toMatchObject({
+        cause: expect.objectContaining({ code: "23514", message: "agent_model_migration_monitor_immutable" }),
+      });
+    expect(await db.select().from(agentModelMigrationMonitorReceipts).where(eq(agentModelMigrationMonitorReceipts.migrationRevisionId, publication.revisionId))).toHaveLength(2);
+    expect(calls).toBe(4);
     const fresh = await drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
     expect(fresh.content?.runtimeCandidateId).toBeUndefined();
+    await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.home),
+      eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, f.userId)));
+    await expect(monitoring.record(f.actor, f.home, draft.id, publication.revisionId, monitorCommand))
+      .rejects.toMatchObject({ status: 403 });
+    await db.delete(agentConfigurationDrafts).where(eq(agentConfigurationDrafts.id, draft.id));
+    expect(await db.select().from(agentModelMigrationMonitorReceipts)
+      .where(eq(agentModelMigrationMonitorReceipts.migrationRevisionId, publication.revisionId))).toHaveLength(2);
     registerNativeDraftConformance(db, undefined);
-  });
+  }, 90000);
   it("completes the custom-agent authoring lifecycle without changing the active version during a later draft", async () => {
     const original = await agent();
     // Every builder stage uses the same real versioned draft owner. Provider

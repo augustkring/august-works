@@ -1732,10 +1732,17 @@ const BOARD_ONLY_OPERATIONS = new Set([
   "GET /api/issues/{issueId}/chat-binding",
 ]);
 
-// Trust and temporary Human workflow coverage are session-owned surfaces.
+// Trust, monitor decisions and temporary Human workflow coverage are session-owned surfaces.
 // Match their mounted families so these routes cannot inherit board-key docs.
+const HUMAN_SESSION_ONLY_MODEL_MIGRATION_MONITOR = new Set([
+  "GET /api/companies/{companyId}/agent-configuration-drafts/{id}/model-migrations/current/monitor-review",
+  "GET /api/companies/{companyId}/agent-configuration-drafts/{id}/model-migrations/{revisionId}/monitor-review",
+  "GET /api/companies/{companyId}/agent-configuration-drafts/{id}/model-migrations/{revisionId}/monitor-receipt",
+  "POST /api/companies/{companyId}/agent-configuration-drafts/{id}/model-migrations/{revisionId}/monitor",
+]);
 function requiresBoardSession(method: string, path: string): boolean {
   return path.startsWith("/api/companies/{companyId}/trust/") ||
+    HUMAN_SESSION_ONLY_MODEL_MIGRATION_MONITOR.has(operationKey(method, path)) ||
     path.startsWith("/api/companies/{companyId}/workflow-coverages") ||
     operationKey(method, path) === "POST /api/companies/{companyId}/members/{memberId}/security-suspend" ||
     operationKey(method, path) === "GET /api/companies/{companyId}/notices/action-required" ||

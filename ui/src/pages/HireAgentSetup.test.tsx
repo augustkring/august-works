@@ -458,6 +458,7 @@ it("keeps a recovered Original publication visible across the hire receipt trans
   }));
   const original = agentDraftPublicationReceiptSchema.parse({ companyId: company, draftId: id, requestId, agentId,
     revisionId: requestId, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00Z", activatedAtPublication: true,
+    modelMigration: { required: false, action: "none", stage: "single_agent" },
     publishedContent: prepared.content, authorityGranted: false, executionStarted: false });
   const receipt = vi.spyOn(agentAuthoringApi, "publicationReceipt").mockResolvedValue(original);
   const publish = vi.spyOn(agentAuthoringApi, "publish");

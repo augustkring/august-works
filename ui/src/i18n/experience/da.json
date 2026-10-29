@@ -2131,6 +2131,24 @@
     "manageAgent": "Overvåg eller pausér agent",
     "reviewPackage": "Gennemgå pakkeopsætning"
   },
+  "agentMigrationMonitor": {
+    "title": "Modelkontrol efter publicering",
+    "instructions": "Efter publicering af modelændringen skal du køre og få hvert gemt scenarie verificeret igen. Dette registrerer en menneskelig gennemgang af den præcise aktive modelversion; det starter ikke arbejde eller ændrer routing.",
+    "checking": "Kontrollerer den aktive modelmigrering…",
+    "changed": "Den aktive modelversion eller den aktuelle adgang er ændret. Gennemgå igen.",
+    "unknown": "Kvitteringen for overvågningen er uafklaret. Tjek den oprindelige kvittering før en ny anmodning.",
+    "unavailable": "Modelkontrollen er ikke tilgængelig.",
+    "notRequired": "Denne Agent-version har ingen modelmigrering, der skal overvåges.",
+    "newDraft": "Start en ny kladde fra den aktuelt publicerede Agent for at køre overvågningstests mod den aktive modelversion.",
+    "pending": "{{count}} aktuelle scenarietjek er tilgængelige. Afslut test efter publicering og uafhængig menneskelig gennemgang af hvert gemt scenarie.",
+    "ready": "Alle {{count}} gemte scenarier har aktuelle, uafhængigt menneskeligt verificerede resultater for den aktive modelversion.",
+    "holdReady": "Alle {{count}} gemte scenarier har aktuelle, menneskeligt gennemgåede resultater, og mindst ét består ikke. Hold migreringen tilbage.",
+    "record": "Registrer menneskelig overvågningsgennemgang",
+    "recordHold": "Registrer hold",
+    "recorded": "Modelgennemgangen efter publicering for version {{version}} er registreret.",
+    "recordedHold": "Modelmigreringen for version {{version}} er registreret som holdt tilbage.",
+    "checkOriginal": "Tjek oprindelig overvågningskvittering"
+  },
   "publishedInstructions": {
     "title": "Publicerede instruktioner",
     "boundary": "Publicerede instruktioner kan kun læses. Rediger en privat kladde og test den før publicering; den aktive version fortsætter imens.",

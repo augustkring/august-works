@@ -46,6 +46,7 @@ export const agentDraftPublicationReceiptSchema = z.strictObject({
   companyId: z.uuid(), draftId: z.uuid(), requestId: z.uuid(), agentId: z.uuid(), revisionId: z.uuid(),
   publishedVersion: z.number().int().positive(), publishedAt: z.iso.datetime(), activatedAtPublication: z.boolean(),
   publishedContent: agentAuthoringContentSchema,
+  modelMigration: z.strictObject({ required: z.boolean(), action: z.enum(["none", "migration", "rollback"]), stage: z.literal("single_agent") }),
   packageInstallation: agentPublicationPackageSchema.nullable().optional(),
   authorityGranted: z.literal(false), executionStarted: z.literal(false),
 });

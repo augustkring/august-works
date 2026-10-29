@@ -148,6 +148,9 @@ export function agentAuthoringPublicationService(db: Db) {
       requestId: record.id, agentId: record.agentId, revisionId: record.id, publishedVersion: definition.version,
       publishedAt: record.createdAt.toISOString(), activatedAtPublication: definition.publication.activatedAtPublication,
       publishedContent: definition.content,
+      modelMigration: definition.publication.modelMigration
+        ? { required: true, action: definition.publication.modelMigration.action, stage: "single_agent" as const }
+        : { required: false, action: "none" as const, stage: "single_agent" as const },
       ...(definition.publication.packageInstallation ? { packageInstallation: {
         installationId: definition.publication.packageInstallation.installationId, versionId: definition.publication.packageInstallation.versionId,
         key: "keyParts" in definition.publication.packageInstallation
