@@ -6,6 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agents, authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   heartbeatRuns, issues, memoryJobs, memoryRecords } from "@paperclipai/db";
 import type { ContextAuthorityDecision } from "@paperclipai/shared";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { issueService } from "../services/issues.js";
 import { memoryRoutes } from "../routes/memory.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -42,11 +44,15 @@ describe("Original Memory jobs retain current source read authority", () => {
     await db.insert(authUsers).values([aliceId, bobId].map(id => ({ id, name: "Actual Human", email: `${id}@example.test`, createdAt: new Date(), updatedAt: new Date() })));
     await db.insert(companyMemberships).values([aliceId, bobId].map(principalId => ({ companyId, principalType: "user", principalId, membershipRole: "admin", status: "active" })));
     await db.insert(agents).values({ id: agentId, companyId, name: "Private producer", role: "engineer", status: "idle", adapterType: "paperclip_runner" });
-    const issueId = taskBound ? randomUUID() : null;
-    if (issueId) {
+    const alice = { type: "board" as const, source: "session" as const, userId: aliceId,
+      sessionId: await seedNativePasskeySession(db, aliceId), companyIds: [companyId] };
+    let issueId: string | null = null;
+    if (taskBound) {
       await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agentId, status: "active" });
-      await db.insert(issues).values({ id: issueId, companyId, title: "Public native Task", visibility: "open",
-        responsibleUserId: aliceId, createdByUserId: aliceId, assigneeAgentId: agentId });
+      const task = await issueService(db).create(companyId, { title: "Public native Task", visibility: "open",
+        responsibleUserId: aliceId, createdByUserId: aliceId, assigneeAgentId: agentId }, undefined, undefined,
+        { manualInputActor: alice });
+      issueId = task.id;
     }
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, responsibleUserId: aliceId, runtimeMode: "native", status: "running",
       ...(issueId ? { nativeIssueId: issueId, contextSnapshot: { issueId } } : {}) });
@@ -54,12 +60,15 @@ describe("Original Memory jobs retain current source read authority", () => {
     const binding = await service.createCompanyBinding(companyId, { key: randomUUID(), name: "Native Memory", providerKey: "local" }, human);
     await service.addBindingTarget(companyId, binding.id, { targetType: "agent", targetId: agentId }, human);
     const actor = (userId: string) => ({ type: "board" as const, source: "session" as const, userId, companyIds: [companyId] });
-    return { companyId, aliceId, bobId, agentId, runId, issueId, service, human, binding, alice: actor(aliceId), bob: actor(bobId) };
+    return { companyId, aliceId, bobId, agentId, runId, issueId, service, human, binding, alice, bob: actor(bobId) };
   }
   type Seed = Awaited<ReturnType<typeof seed>>;
-  function evidence(text: string) {
-    return { sourceClass: "task" as const, sourceProvider: "native_job_fixture", sourceType: "reviewed_outcome", sourceRef: `outcome://${randomUUID()}`,
-      sourceVersion: "1", sourceUpdatedAt: null, observedAt: new Date().toISOString(), excerptHash: createHash("sha256").update(text).digest("hex"),
+  async function evidence(s: Seed, text: string) {
+    const task = await issueService(db).create(s.companyId, { title: "Reviewed Memory evidence", description: text,
+      createdByUserId: s.aliceId }, undefined, undefined, { manualInputActor: s.alice });
+    const version = task.updatedAt.toISOString();
+    return { sourceClass: "task" as const, sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${task.id}`,
+      sourceVersion: version, sourceUpdatedAt: version, observedAt: new Date().toISOString(), excerptHash: createHash("sha256").update(text).digest("hex"),
       citation: { label: "Native outcome" }, trustLevel: "low" as const, relation: "supports" as const };
   }
   async function source(s: Seed, privateRoot: boolean, longDistinctContent = false) {
@@ -67,7 +76,7 @@ describe("Original Memory jobs retain current source read authority", () => {
     const payload = { bindingId: s.binding.id, memoryType: "lesson" as const, title: text,
       content: longDistinctContent ? `${text}. ${Array.from({ length: 16 }, () => randomUUID()).join(" ")}` : `${text}. Full reviewed supporting text.`, summary: text,
       sensitivity: "internal" as const, observedAt: new Date().toISOString(), validFrom: null, validUntil: null, expiresAt: null,
-      createdByOperationId: randomUUID(), evidence: [evidence(text)] };
+      createdByOperationId: randomUUID(), evidence: [await evidence(s, text)] };
     let candidate;
     if (privateRoot) {
       const producer = { principal: { type: "agent" as const, agentId: s.agentId, responsibleUserId: s.aliceId }, runId: s.runId };
@@ -118,7 +127,13 @@ describe("Original Memory jobs retain current source read authority", () => {
 
   it("withholds a source-version-stale job without trusting retained version metadata", async () => {
     const s = await seed(), row = await source(s, false), job = await enqueue(s, row.id);
-    await db.update(memoryRecords).set({ content: "A later changed payload", updatedAt: new Date(row.updatedAt.getTime() + 1000) })
+    // Sealed payloads reject an unbound body replacement. Advance only the
+    // retained source version to isolate this job's stale-version guard.
+    await expect(db.update(memoryRecords).set({ content: "A later changed payload" })
+      .where(and(eq(memoryRecords.companyId, s.companyId), eq(memoryRecords.id, row.id))))
+      .rejects.toMatchObject({ cause: { code: "23514",
+        message: "Native payload source snapshot does not bind its owner and body" } });
+    await db.update(memoryRecords).set({ updatedAt: new Date(row.updatedAt.getTime() + 1000) })
       .where(and(eq(memoryRecords.companyId, s.companyId), eq(memoryRecords.id, row.id)));
     expect.soft((await http(s).get(`/api/companies/${s.companyId}/memory/jobs`).expect(200)).body).toEqual([]);
     expect((await readMemoryMaintenanceHistory(db, s.bob, s.companyId)).entries).toEqual([]);
