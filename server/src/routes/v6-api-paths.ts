@@ -295,6 +295,10 @@ export const v6ApiPaths: {
     query: shared.supportCaseReadQuerySchema, result: shared.supportCaseDetailSchema, privateResponse: true,
   },
   {
+    method: "post", path: "/api/companies/{companyId}/support/cases/{caseId}/issue-links", successStatus: 201, auth: "native",
+    query: noQuery, body: shared.linkSupportCaseIssueSchema, result: shared.supportCaseIssueLinkSchema, privateResponse: true,
+  },
+  {
     method: "post", path: "/api/companies/{companyId}/support/cases/{caseId}/replies", successStatus: 201, auth: "native",
     query: noQuery, body: shared.replySupportCaseSchema, result: shared.supportCaseDetailSchema, privateResponse: true,
   },
@@ -614,6 +618,7 @@ const bodies: Record<string, z.ZodType> = {
   "POST /api/saas/internal/support-cases/{caseId}/respond":
     supportCaseOperatorBodySchema,
   "POST /api/companies/{companyId}/support/cases": shared.createSupportCaseSchema,
+  "POST /api/companies/{companyId}/support/cases/{caseId}/issue-links": shared.linkSupportCaseIssueSchema,
   "POST /api/companies/{companyId}/support/cases/{caseId}/replies": shared.replySupportCaseSchema,
   "POST /api/companies/{companyId}/support/cases/{caseId}/close": shared.closeSupportCaseSchema,
   "POST /api/projects/{id}/access-members": shared.addProjectAccessMemberSchema,

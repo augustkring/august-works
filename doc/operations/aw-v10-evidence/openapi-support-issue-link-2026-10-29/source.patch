@@ -1,0 +1,112 @@
+diff --git a/doc/operations/agent-native-ui-operation-coverage.json b/doc/operations/agent-native-ui-operation-coverage.json
+index b56b8e82b..efacbd40e 100644
+--- a/doc/operations/agent-native-ui-operation-coverage.json
++++ b/doc/operations/agent-native-ui-operation-coverage.json
+@@ -52324,35 +52324,47 @@
+         "delete:scoped(companyPath(companyId), userId)"
+       ],
+       "argumentsSignature": "selectedCompanyId!, identity.userId!, {\n        confirmation,\n        acknowledgeExport: true,\n        idempotencyKey: requestKey,\n      }",
+-      "line": 32,
++      "line": 39,
+       "occurrence": 0,
+       "owner": "server/src/services/saas/offboarding.ts",
+       "classification": "HUMAN_ONLY",
+-      "materiality": "ordinary",
+-      "reviewRationale": "This is hosted-account, billing, company onboarding, runtime administration, notification, or support-session UI. The route requires a Human board principal; it is not an Agent-native operation.",
++      "materiality": "launchcritical",
++      "reviewRationale": "The current Human company-owner flow requests durable organization offboarding; this destructive action is not available to Agents.",
+       "authorityEvidence": {
+         "sourceEvidence": [
+           {
+             "path": "server/src/routes/saas.ts",
+-            "line": 57,
+-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
++            "line": 463,
++            "claim": "The company DELETE route resolves the request through the authenticated Human company membership helper before dispatch."
+           },
+           {
+             "path": "server/src/services/saas/offboarding.ts",
+-            "claim": "Canonical operation owner identified through route dispatch and the SaasPlatform component wiring."
++            "line": 52,
++            "claim": "The offboarding transaction requires an active owner membership for the exact target company."
++          },
++          {
++            "path": "server/src/services/saas/offboarding.ts",
++            "line": 66,
++            "claim": "The service requires the Human to confirm the exact company name before creating offboarding."
+           }
+         ]
+       },
+-      "materialityRationale": "This operation writes within the existing company/resource boundary and has ordinary business impact; its canonical route and service remain the effect authority.",
++      "materialityRationale": "Offboarding archives the company, pauses its Agents, revokes company API keys and support sessions, and begins durable deletion/retention work.",
+       "materialityEvidence": [
+         {
+-          "path": "server/src/routes/saas.ts",
+-          "line": 57,
+-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
++          "path": "server/src/services/saas/offboarding.ts",
++          "line": 95,
++          "claim": "The original offboarding transaction archives the company and records the deletion request."
+         },
+         {
+           "path": "server/src/services/saas/offboarding.ts",
+-          "claim": "Canonical operation owner identified through route dispatch and the SaasPlatform component wiring."
++          "line": 113,
++          "claim": "The transaction pauses company Agents and revokes their company API keys."
++        },
++        {
++          "path": "server/src/services/saas/offboarding.ts",
++          "line": 135,
++          "claim": "The same transaction revokes current support sessions for the company."
+         }
+       ]
+     },
+diff --git a/server/src/__tests__/openapi-routes.test.ts b/server/src/__tests__/openapi-routes.test.ts
+index 58e761ff6..3367bd6d7 100644
+--- a/server/src/__tests__/openapi-routes.test.ts
++++ b/server/src/__tests__/openapi-routes.test.ts
+@@ -386,6 +386,21 @@ describe("openapi routes", () => {
+     expect(grant?.responses).toHaveProperty("200");
+     expect(grant?.responses).toHaveProperty("201");
+   });
++  it("documents linking a support case to an accessible Task as a private native write", () => {
++    const operation = buildOpenApiSpec().paths[
++      "/api/companies/{companyId}/support/cases/{caseId}/issue-links"
++    ]?.post;
++    expect(operation?.tags).toEqual(["Native"]);
++    expect(operation?.description).toContain("do not require a SaaS deployment profile");
++    expect(operation?.requestBody.required).toBe(true);
++    const body = operation?.requestBody.content["application/json"].schema;
++    expect(body.required).toEqual(expect.arrayContaining(["expectedUserId", "issueRef"]));
++    expect(body.properties).toHaveProperty("expectedUserId");
++    expect(body.properties).toHaveProperty("issueRef");
++    expect(body.additionalProperties).toBe(false);
++    expect(operation?.responses["201"]).toBeDefined();
++    expect(operation?.responses["201"].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
++  });
+   it("documents the native operator case response with path-owned case ID and exact receipt", () => {
+     const operation = buildOpenApiSpec().paths["/api/saas/internal/support-cases/{caseId}/respond"]?.post as any;
+     expect(operation).toBeDefined();
+diff --git a/server/src/routes/v6-api-paths.ts b/server/src/routes/v6-api-paths.ts
+index 46db238d0..0d1e3e7dc 100644
+--- a/server/src/routes/v6-api-paths.ts
++++ b/server/src/routes/v6-api-paths.ts
+@@ -294,6 +294,10 @@ export const v6ApiPaths: {
+     method: "get", path: "/api/companies/{companyId}/support/cases/{caseId}", successStatus: 200, auth: "native",
+     query: shared.supportCaseReadQuerySchema, result: shared.supportCaseDetailSchema, privateResponse: true,
+   },
++  {
++    method: "post", path: "/api/companies/{companyId}/support/cases/{caseId}/issue-links", successStatus: 201, auth: "native",
++    query: noQuery, body: shared.linkSupportCaseIssueSchema, result: shared.supportCaseIssueLinkSchema, privateResponse: true,
++  },
+   {
+     method: "post", path: "/api/companies/{companyId}/support/cases/{caseId}/replies", successStatus: 201, auth: "native",
+     query: noQuery, body: shared.replySupportCaseSchema, result: shared.supportCaseDetailSchema, privateResponse: true,
+@@ -614,6 +618,7 @@ const bodies: Record<string, z.ZodType> = {
+   "POST /api/saas/internal/support-cases/{caseId}/respond":
+     supportCaseOperatorBodySchema,
+   "POST /api/companies/{companyId}/support/cases": shared.createSupportCaseSchema,
++  "POST /api/companies/{companyId}/support/cases/{caseId}/issue-links": shared.linkSupportCaseIssueSchema,
+   "POST /api/companies/{companyId}/support/cases/{caseId}/replies": shared.replySupportCaseSchema,
+   "POST /api/companies/{companyId}/support/cases/{caseId}/close": shared.closeSupportCaseSchema,
+   "POST /api/projects/{id}/access-members": shared.addProjectAccessMemberSchema,

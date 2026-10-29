@@ -1,0 +1,15 @@
+node:fs:484
+    return binding.readFileUtf8(path, stringToFlags(options.flag));
+                   ^
+
+Error: ENOENT: no such file or directory, open '/workspace/v10-dep-qualification/doc/operations/agent-native-ui-operation-coverage.json'
+    at readFileSync (node:fs:484:20)
+    at checkOperationCoverage (file:///workspace/v10-dep-qualification/scripts/check-aw-v10-operation-coverage.mjs:47:32)
+    at file:///workspace/v10-dep-qualification/scripts/check-aw-v9-coverage.mjs:185:25 {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: '/workspace/v10-dep-qualification/doc/operations/agent-native-ui-operation-coverage.json'
+}
+
+Node.js v24.19.0

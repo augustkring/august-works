@@ -386,6 +386,21 @@ describe("openapi routes", () => {
     expect(grant?.responses).toHaveProperty("200");
     expect(grant?.responses).toHaveProperty("201");
   });
+  it("documents linking a support case to an accessible Task as a private native write", () => {
+    const operation = buildOpenApiSpec().paths[
+      "/api/companies/{companyId}/support/cases/{caseId}/issue-links"
+    ]?.post;
+    expect(operation?.tags).toEqual(["Native"]);
+    expect(operation?.description).toContain("do not require a SaaS deployment profile");
+    expect(operation?.requestBody.required).toBe(true);
+    const body = operation?.requestBody.content["application/json"].schema;
+    expect(body.required).toEqual(expect.arrayContaining(["expectedUserId", "issueRef"]));
+    expect(body.properties).toHaveProperty("expectedUserId");
+    expect(body.properties).toHaveProperty("issueRef");
+    expect(body.additionalProperties).toBe(false);
+    expect(operation?.responses["201"]).toBeDefined();
+    expect(operation?.responses["201"].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+  });
   it("documents the native operator case response with path-owned case ID and exact receipt", () => {
     const operation = buildOpenApiSpec().paths["/api/saas/internal/support-cases/{caseId}/respond"]?.post as any;
     expect(operation).toBeDefined();

@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/openapi-routes.test.ts
+test_pattern=documents linking a support case to an accessible Task as a private native write|covers the mounted server routes exactly
