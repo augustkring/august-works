@@ -565,6 +565,8 @@ export async function createApp(
     decisionServiceOptions: DecisionServiceOptions;
     /** Server-owned operator qualification registry; absent profiles fail closed. */
     decisionShadow?: { sourceSha: string; profiles: readonly import("./services/jev-skill-suggestions.js").JevSkillSuggestionProfile[] };
+    /** Server-owned heartbeat instance for composed server fixtures. Never request-controlled. */
+    heartbeat?: ReturnType<typeof heartbeatService>;
     betterAuthHandler?: express.RequestHandler;
     resolveSession?: (
       req: ExpressRequest,
@@ -675,7 +677,7 @@ export async function createApp(
 
   const hostServicesDisposers = new Map<string, () => void>();
   const workerManager = opts.pluginWorkerManager ?? createPluginWorkerManager();
-  const connectionIntentHeartbeat = heartbeatService(db, {
+  const connectionIntentHeartbeat = opts.heartbeat ?? heartbeatService(db, {
     pluginWorkerManager: workerManager,
     sandboxExec: opts.saasPlatform?.runtime.executeSandboxTask,
     decisionShadow: opts.decisionShadow,
@@ -1029,11 +1031,7 @@ export async function createApp(
     deploymentExposure: opts.deploymentExposure,
     trustedLocalStdioRuntimeHost,
   });
-  const toolActionDeliveries = toolActionDeliveryService(db, heartbeatService(db, {
-    pluginWorkerManager: workerManager,
-    sandboxExec: opts.saasPlatform?.runtime.executeSandboxTask,
-    decisionShadow: opts.decisionShadow,
-  }));
+  const toolActionDeliveries = toolActionDeliveryService(db, connectionIntentHeartbeat);
   const toolGateway = createToolGatewayService(db, {
     supportCaseDataPolicy: readSupportCaseDataPolicy(process.env),
     onToolActionSettled: (id) => toolActionDeliveries.deliver(id),

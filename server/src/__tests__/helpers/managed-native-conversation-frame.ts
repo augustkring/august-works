@@ -7,7 +7,7 @@ import { createServer as createHttpServer, request as httpRequest } from "node:h
 import { createConnection, type Socket } from "node:net";
 import { createServer as createHttpsServer } from "node:https";
 import { execFile, execFileSync } from "node:child_process";
-import express from "express";
+import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
   heartbeatRuns, issueComments, issueThreadInteractions, issues,
@@ -63,6 +63,25 @@ export async function runManagedNativeConversationFrame(input: {
   providerReply?: (facts:{body:Record<string,unknown>;callIndex:number}) => {
     stop_reason:"tool_use"|"end_turn";content:Array<Record<string,unknown>>;
   } | undefined;
+  /** Test-only full app composition for browser drivers; the returned app must use the supplied heartbeat and session resolver. */
+  createConversationApp?: (context: {
+    db: ReturnType<typeof createDb>;
+    heartbeat: ReturnType<typeof heartbeatService>;
+    resolveSession: (req: ExpressRequest) => Promise<BetterAuthSessionResult | null>;
+    resolveSessionFromHeaders: (headers: Headers) => Promise<BetterAuthSessionResult | null>;
+  }) => Promise<{ app: ExpressApp; origin: string; close?: () => Promise<void> }>;
+  /** Optional browser driver; absent preserves the existing mini-app/Supertest route flow. */
+  driveConversation?: (context: {
+    app: ExpressApp;
+    origin: string;
+    humanCookie: string;
+    companyId: string;
+    agentId: string;
+    chatPath: string;
+    conversationRoute: string;
+    prompt: string;
+    onConversationOpened: (issueId: string) => void;
+  }) => Promise<{ issueId: string; wakeCommentId: string }>;
   /** Test-only canonical source setup before the Agent profile is qualified or chat opens. */
   prepareNativeRuntimeContext?: (context: {
     db: ReturnType<typeof createDb>;
@@ -529,12 +548,10 @@ export async function runManagedNativeConversationFrame(input: {
     throw new Error("conversation_fixture_foreign_session_unavailable");
   const humanCookie = `session_token=${encodeURIComponent(humanSession.token)}`;
   const foreignCookie = `session_token=${encodeURIComponent(foreignSession.token)}`;
-  const app = express();
-  app.use(express.json());
-  app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async req => {
-    const token = (req.header("cookie") ?? "").split(";").map(value => value.trim())
-      .map(value => value.slice(value.indexOf("=") + 1)).map(decodeURIComponent)
-      .find(Boolean);
+  const resolveSessionFromHeaders = async (headers: Headers): Promise<BetterAuthSessionResult | null> => {
+    const tokenCookie = (headers.get("cookie") ?? "").split(";").map((value: string) => value.trim())
+      .find((value: string) => value.startsWith("session_token="));
+    const token = tokenCookie ? decodeURIComponent(tokenCookie.slice("session_token=".length)) : null;
     if (!token) return null;
     const [session] = await db.select({ id: authSessions.id, userId: authSessions.userId,
       expiresAt: authSessions.expiresAt }).from(authSessions)
@@ -547,33 +564,78 @@ export async function runManagedNativeConversationFrame(input: {
       session: { id: session.id, userId: session.userId, expiresAt: session.expiresAt }, user,
     };
     return result;
-  } }));
-  app.use("/api", issueRoutes(db, {} as never, { heartbeat }));
-  app.use(errorHandler);
+  };
+  const resolveSession = async (req: ExpressRequest) =>
+    resolveSessionFromHeaders(new Headers({ cookie: req.header("cookie") ?? "" }));
+  let app: ExpressApp;
+  let conversationOrigin = "";
+  let closeConversationApp: (() => Promise<void>) | undefined;
+  let closeConversationFailure: unknown;
   try {
-    const chat = await import("supertest").then(({ default: request }) => request(app)
-      .post(`/api/companies/${companyId}/chats/${agentId}`).set("cookie", humanCookie));
-    if (chat.status !== 200 || typeof chat.body.id !== "string") throw new Error(`conversation_fixture_chat_open_failed_${chat.status}`);
-    if (input.conversationWorkMode) {
-      const mode = await import("supertest").then(({ default: request }) => request(app)
-        .patch(`/api/issues/${chat.body.id}`).set("cookie", humanCookie)
-        .send({ workMode: input.conversationWorkMode }));
-      if (mode.status !== 200) {
-        const error = typeof mode.body?.error === "string" && /^[A-Za-z ]{1,80}$/.test(mode.body.error)
-          ? mode.body.error.toLowerCase().replaceAll(" ", "_") : "unclassified";
-        throw new Error(`conversation_fixture_work_mode_update_failed_${mode.status}_${error}`);
-      }
+    if (input.createConversationApp && !input.driveConversation)
+      throw new Error("conversation_fixture_composed_app_requires_driver");
+    if (input.createConversationApp) {
+      const composed = await input.createConversationApp({ db, heartbeat, resolveSession, resolveSessionFromHeaders });
+      app = composed.app;
+      conversationOrigin = composed.origin;
+      closeConversationApp = composed.close;
+      if (!conversationOrigin || !/^https?:\/\//.test(conversationOrigin))
+        throw new Error("conversation_fixture_browser_origin_invalid");
+    } else {
+      app = express();
+      app.use(express.json());
+      app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession }));
+      app.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      app.use(errorHandler);
     }
-    const sent = await import("supertest").then(({ default: request }) => request(app)
-      .post(`/api/issues/${chat.body.id}/comments`).set("cookie", humanCookie)
-      .send({ body: "Please respond briefly and complete this conversation turn.", clientRequestId: randomUUID() }));
-    if (sent.status !== 201) throw new Error(`conversation_fixture_first_comment_failed_${sent.status}`);
+    let conversationIssueId: string;
+    let firstCommentId: string;
+    const originHeaders: Record<string, string> = conversationOrigin ? { origin: conversationOrigin } : {};
+    const conversationPrompt = "Please respond briefly and complete this conversation turn.";
+    if (input.driveConversation) {
+      if (!input.createConversationApp)
+        throw new Error("conversation_fixture_browser_driver_requires_composed_app");
+      const [company] = await db.select({ issuePrefix: companies.issuePrefix }).from(companies)
+        .where(eq(companies.id, companyId)).limit(1);
+      if (!company?.issuePrefix) throw new Error("conversation_fixture_company_prefix_missing");
+      let openedIssueId: string | null = null;
+      const driven = await input.driveConversation({ app, origin: conversationOrigin, humanCookie, companyId, agentId,
+        chatPath: `/api/companies/${companyId}/chats/${agentId}`,
+        conversationRoute: `/${company.issuePrefix}/chats/${agentId}`,
+        prompt: conversationPrompt,
+        onConversationOpened: issueId => { openedIssueId = issueId; activeIssueId = issueId; },
+      });
+      if (!driven.issueId || !driven.wakeCommentId || openedIssueId !== driven.issueId)
+        throw new Error("conversation_fixture_browser_driver_result_invalid");
+      conversationIssueId = driven.issueId;
+      firstCommentId = driven.wakeCommentId;
+    } else {
+      const chat = await import("supertest").then(({ default: request }) => request(app)
+        .post(`/api/companies/${companyId}/chats/${agentId}`).set("cookie", humanCookie).set(originHeaders));
+      if (chat.status !== 200 || typeof chat.body.id !== "string") throw new Error(`conversation_fixture_chat_open_failed_${chat.status}`);
+      conversationIssueId = chat.body.id;
+      if (input.conversationWorkMode) {
+        const mode = await import("supertest").then(({ default: request }) => request(app)
+          .patch(`/api/issues/${conversationIssueId}`).set("cookie", humanCookie).set(originHeaders)
+          .send({ workMode: input.conversationWorkMode }));
+        if (mode.status !== 200) {
+          const error = typeof mode.body?.error === "string" && /^[A-Za-z ]{1,80}$/.test(mode.body.error)
+            ? mode.body.error.toLowerCase().replaceAll(" ", "_") : "unclassified";
+          throw new Error(`conversation_fixture_work_mode_update_failed_${mode.status}_${error}`);
+        }
+      }
+      const sent = await import("supertest").then(({ default: request }) => request(app)
+        .post(`/api/issues/${conversationIssueId}/comments`).set("cookie", humanCookie).set(originHeaders)
+        .send({ body: conversationPrompt, clientRequestId: randomUUID() }));
+      if (sent.status !== 201) throw new Error(`conversation_fixture_first_comment_failed_${sent.status}`);
+      firstCommentId = sent.body.id;
+    }
     const deadline = Date.now() + 180_000;
     while (Date.now() < deadline) {
       const [candidate] = await db.select().from(heartbeatRuns).where(and(
         eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
-        sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${chat.body.id}`,
-        sql`${heartbeatRuns.contextSnapshot}->>'wakeCommentId' = ${sent.body.id}`,
+        sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${conversationIssueId}`,
+        sql`${heartbeatRuns.contextSnapshot}->>'wakeCommentId' = ${firstCommentId}`,
       )).orderBy(desc(heartbeatRuns.startedAt)).limit(1);
       if (candidate && ["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(candidate.status)) {
         break;
@@ -583,36 +645,36 @@ export async function runManagedNativeConversationFrame(input: {
     await heartbeat.drainActiveRunExecutions();
     const [finalRun] = await db.select().from(heartbeatRuns).where(and(
       eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
-      sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${chat.body.id}`,
-      sql`${heartbeatRuns.contextSnapshot}->>'wakeCommentId' = ${sent.body.id}`,
+      sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${conversationIssueId}`,
+      sql`${heartbeatRuns.contextSnapshot}->>'wakeCommentId' = ${firstCommentId}`,
     )).orderBy(desc(heartbeatRuns.startedAt)).limit(1);
     const [manifest] = finalRun ? await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, finalRun.id)).limit(1) : [];
     const [reservation] = finalRun ? await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.conversationRunId, finalRun.id)).limit(1) : [];
-    const [plan] = finalRun ? await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.issueId, chat.body.id)).limit(1) : [];
+    const [plan] = finalRun ? await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.issueId, conversationIssueId)).limit(1) : [];
     const attempts = finalRun ? await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.runId, finalRun.id)) : [];
     const profileValue = finalRun?.runnerProfileJson && typeof finalRun.runnerProfileJson === "object"
       ? finalRun.runnerProfileJson as Record<string, unknown> : {};
-    const comments = await db.select().from(issueComments).where(eq(issueComments.issueId, chat.body.id as string));
+    const comments = await db.select().from(issueComments).where(eq(issueComments.issueId, conversationIssueId));
     const reviewInteractionCount = await db.select({ id: issueThreadInteractions.id }).from(issueThreadInteractions)
-      .where(eq(issueThreadInteractions.issueId, chat.body.id as string));
+      .where(eq(issueThreadInteractions.issueId, conversationIssueId));
     const agentReply = comments.find(comment => comment.authorAgentId === agentId && comment.createdByRunId === finalRun?.id) ?? null;
     const [conversationIssue] = await db.select({ status: issues.status, conversationState: issues.conversationState,
-      executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, chat.body.id as string)).limit(1);
+      executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, conversationIssueId)).limit(1);
     const countBeforeForeignWrite = comments.length;
     const foreignWrite = await import("supertest").then(({ default: request }) => request(app)
-      .post(`/api/issues/${chat.body.id}/comments`).set("cookie", foreignCookie)
+      .post(`/api/issues/${conversationIssueId}/comments`).set("cookie", foreignCookie).set(originHeaders)
       .send({ body: "This foreign session must not write to the conversation.", clientRequestId: randomUUID() }));
-    const commentsAfterForeignWrite = await db.select().from(issueComments).where(eq(issueComments.issueId, chat.body.id as string));
+    const commentsAfterForeignWrite = await db.select().from(issueComments).where(eq(issueComments.issueId, conversationIssueId));
     const sandboxRuntimeFacts = sandboxHeartbeat?.facts?.() ?? null;
     const nativeInputSourceReceipt = profileValue.nativeInputSourceReceipt ?? null;
     if (finalRun && (["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(finalRun.status) ||
       process.env.PAPERCLIP_NATIVE_CANCEL_ORIGIN_TEST_DIAGNOSTICS === "1"))
       await input.afterRunSettledBeforeTeardown?.({ db, actor: human, companyId, guestCompanyId: f.guest,
         identityId: f.identity.id, agentId,
-        issueId: chat.body.id as string, run: finalRun, manifest: manifest ?? null, reservation: reservation ?? null,
+        issueId: conversationIssueId, run: finalRun, manifest: manifest ?? null, reservation: reservation ?? null,
         nativeInputSourceReceipt, sandboxRuntimeFacts, providerCallCount: providerCalls.length,
         providerHookInvoked, providerStubFailure });
-    return { issueId: chat.body.id as string, firstCommentId: sent.body.id as string, run: finalRun ?? null,
+    return { issueId: conversationIssueId, firstCommentId, run: finalRun ?? null,
       manifest: manifest ?? null, reservation: reservation ?? null, workerPlan: plan ?? null,
       workerAttempts: attempts, providerCallCount: providerCalls.length,
       providerHookInvoked, providerHookFailure, providerStubFailure, providerToolNames, brokerRequestFacts,
@@ -625,6 +687,8 @@ export async function runManagedNativeConversationFrame(input: {
       runStatus: finalRun?.status ?? "not_started", success: finalRun?.status === "succeeded" };
   } finally {
     await heartbeat.drainActiveRunExecutions().catch(() => undefined);
+    try { await closeConversationApp?.(); }
+    catch (error) { closeConversationFailure = error; }
     await sandboxHeartbeat?.close?.().catch(() => undefined);
     for (const socket of brokerProxySockets) socket.destroy();
     if (brokerProxy?.listening) await new Promise<void>(resolve => brokerProxy!.close(() => resolve()));
@@ -637,5 +701,7 @@ export async function runManagedNativeConversationFrame(input: {
     if (prevPaperclipApiUrl === undefined) delete process.env.PAPERCLIP_API_URL; else process.env.PAPERCLIP_API_URL = prevPaperclipApiUrl;
     await makeConversationFixtureTreeWritable(runHome);
     await rm(runHome, { recursive: true, force: true });
+    if (closeConversationFailure !== undefined)
+      throw new AggregateError([closeConversationFailure], "conversation_fixture_app_shutdown_failed");
   }
 }
