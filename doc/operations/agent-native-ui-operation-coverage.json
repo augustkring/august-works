@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "scope": "Mounted UI write and unknown HTTP client operations are inventoried at their exact source callsites. The inventory reconciles every current AST-discovered call in the 1,354-module route graph; each call carries a reviewed authorization classification, canonical owner, rationale, and source evidence. Review classifications describe current server behavior and do not create manifest operations or tool exposure.",
+  "scope": "Mounted UI write and unknown HTTP client operations are inventoried at their exact source callsites. The inventory reconciles every current AST-discovered call in the current mounted module graph; each call carries a reviewed authorization classification, canonical owner, rationale, and source evidence. Review classifications describe current server behavior and do not create manifest operations or tool exposure.",
   "operations": [
     {
       "operationId": "blentera.support.case.manage",
@@ -3005,7 +3005,7 @@
         "post:scope(`${root(company)}/${id}/tests`, principal)"
       ],
       "argumentsSignature": "company, principal, draft.id, command",
-      "line": 86,
+      "line": 87,
       "occurrence": 0,
       "owner": "server/src/services/agents/authoring-drafts.ts",
       "classification": "HUMAN_ONLY",
@@ -3088,7 +3088,7 @@
         "post:scope(`${root(company)}/${id}/tests/${requestId}/verify`, principal)"
       ],
       "argumentsSignature": "company, principal, draftId, value.requestId, input",
-      "line": 168,
+      "line": 169,
       "occurrence": 0,
       "owner": "server/src/services/agents/authoring-drafts.ts",
       "classification": "HUMAN_ONLY",
@@ -36642,7 +36642,7 @@
         "post:scope(root(company), principal)"
       ],
       "argumentsSignature": "company, principal, pending",
-      "line": 142,
+      "line": 143,
       "occurrence": 0,
       "owner": "server/src/services/agents/authoring-drafts.ts",
       "classification": "HUMAN_ONLY",
@@ -36725,7 +36725,7 @@
         "post:scope(`${root(company)}/${id}/save`, principal)"
       ],
       "argumentsSignature": "company, principal, id, pending.input",
-      "line": 375,
+      "line": 376,
       "occurrence": 0,
       "owner": "server/src/services/agents/authoring-drafts.ts",
       "classification": "HUMAN_ONLY",
@@ -36818,7 +36818,7 @@
         "post:scope(`${root(company)}/${id}/discard`, principal)"
       ],
       "argumentsSignature": "company, principal, id, pending",
-      "line": 410,
+      "line": 411,
       "occurrence": 0,
       "owner": "server/src/services/agents/authoring-drafts.ts",
       "classification": "HUMAN_ONLY",
@@ -57450,7 +57450,7 @@
         "post:`/companies/${companyId}/workflow-runs/${runId}/cancel`"
       ],
       "argumentsSignature": "selectedCompanyId!, runId!, {\n        reason: \"Cancelled by operator from workflow run view\",\n      }",
-      "line": 196,
+      "line": 233,
       "occurrence": 0,
       "owner": "server/src/services/workflows/workflow-executor.ts",
       "classification": "DIRECT_AGENT",
@@ -57495,7 +57495,7 @@
         "post:`/companies/${companyId}/workflow-runs/${runId}/retry`"
       ],
       "argumentsSignature": "selectedCompanyId!, runId!, { reason: \"Retried by operator from workflow run view\" }, retryIdempotencyKeyRef.current",
-      "line": 215,
+      "line": 252,
       "occurrence": 0,
       "owner": "server/src/services/workflows/workflow-executor.ts",
       "classification": "DIRECT_AGENT",
@@ -65967,6 +65967,134 @@
       ],
       "operationIds": [
         "existing-api:ac3ff6c41562a658df9b"
+      ]
+    },
+    {
+      "owner": "server/src/services/agents/authoring-model-migration-monitor.ts",
+      "classification": "HUMAN_ONLY",
+      "materiality": "launchcritical",
+      "reviewRationale": "The mounted model-migration monitor calls the Human-only AgentAuthoring routes through company(req). The service requires the current publishing Human, original draft and Agent authority; no Agent tool or delegated Agent route is introduced.",
+      "authorityEvidence": {
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/agent-authoring.ts",
+            "line": 44,
+            "claim": "company(req) calls assertBoard(req), validates company access and binds expectedUserId before every model-migration monitoring route invokes the service."
+          },
+          {
+            "path": "server/src/routes/agent-authoring.ts",
+            "line": 56,
+            "claim": "Every monitor route runs requireModelMigrationMonitorSession before validation/service access, requiring a Board actor with source=session, userId and sessionId; Board API keys and Agents are rejected."
+          }
+        ]
+      },
+      "materialityRationale": "This write records an immutable Human monitoring decision over current model-migration evidence; it does not change model routing, pause work or grant authority.",
+      "materialityEvidence": [
+        {
+          "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
+          "line": 25,
+          "claim": "The original monitor service checks current draft and Agent authority, pins the published migration and derives a review from retained independent Human test evidence."
+        }
+      ],
+      "source": "ui/src/components/AgentModelMigrationMonitor.tsx",
+      "clientCall": "agentAuthoringApi.recordModelMigrationMonitor",
+      "apiVerb": "write",
+      "pathSignature": "company",
+      "routeSignatures": [
+        "post:scope(`${root(company)}/${id}/model-migrations/${revisionId}/monitor`, principal)"
+      ],
+      "argumentsSignature": "company, principal, draft.id, migration.migrationRevisionId, command",
+      "line": 57,
+      "occurrence": 0
+    },
+    {
+      "source": "ui/src/pages/WorkflowRun.tsx",
+      "clientCall": "workflowsApi.startTaskRun",
+      "apiVerb": "write",
+      "pathSignature": "expected.companyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/issues/${issueId}/workflows/${workflowId}/run`"
+      ],
+      "argumentsSignature": "expected.companyId, replay.taskId!, expected.workflowId, input, replay.key, replay.coverageId",
+      "line": 288,
+      "occurrence": 0,
+      "owner": "server/src/services/workflows/workflow-executor.ts",
+      "classification": "DIRECT_AGENT",
+      "materiality": "launchcritical",
+      "reviewRationale": "The route authorizes workflows:run and issue:mutate on the selected Task before passing runActor(req) to the executor. Existing Agent-capable Task workflow execution is not represented by a matching manifest operation ID.",
+      "authorityEvidence": {
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/workflows.ts",
+            "line": 476,
+            "claim": "The route authorizes workflows:run and issue:mutate on the selected Task before passing runActor(req) to the executor."
+          },
+          {
+            "path": "server/src/routes/workflows.ts",
+            "line": 228,
+            "claim": "runActor preserves Agent principals; no board-only restriction is applied to these run lifecycle endpoints."
+          },
+          {
+            "path": "server/src/routes/workflows.ts",
+            "line": 294,
+            "claim": "decidePermission passes the current actor into accessService.decide for workflows:run authorization."
+          }
+        ]
+      },
+      "materialityRationale": "This operation can change or invoke an active automation/runtime path, so its source-backed effect is launch-critical.",
+      "materialityEvidence": [
+        {
+          "path": "server/src/services/workflows/workflow-executor.ts",
+          "claim": "The existing workflow executor starts or changes an active workflow run under current route authorization."
+        }
+      ],
+      "operationIds": [
+        "existing-api:5d92eb972f5920f77120"
+      ]
+    },
+    {
+      "source": "ui/src/pages/WorkflowRun.tsx",
+      "clientCall": "workflowsApi.startRun",
+      "apiVerb": "write",
+      "pathSignature": "expected.companyId",
+      "routeSignatures": [
+        "post:`/companies/${companyId}/workflows/${workflowId}/run`"
+      ],
+      "argumentsSignature": "expected.companyId, expected.workflowId, input, replay.key, replay.coverageId",
+      "line": 289,
+      "occurrence": 0,
+      "owner": "server/src/services/workflows/workflow-executor.ts",
+      "classification": "DIRECT_AGENT",
+      "materiality": "launchcritical",
+      "reviewRationale": "The route authorizes workflows:run and passes runActor(req), which retains Agent principals; executor creates the durable run. Existing Agent-capable manual workflow execution is not represented by a matching manifest operation ID.",
+      "authorityEvidence": {
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/workflows.ts",
+            "line": 513,
+            "claim": "The route authorizes workflows:run and passes runActor(req), which retains Agent principals; executor creates the durable run."
+          },
+          {
+            "path": "server/src/routes/workflows.ts",
+            "line": 228,
+            "claim": "runActor preserves Agent principals; no board-only restriction is applied to these run lifecycle endpoints."
+          },
+          {
+            "path": "server/src/routes/workflows.ts",
+            "line": 294,
+            "claim": "decidePermission passes the current actor into accessService.decide for workflows:run authorization."
+          }
+        ]
+      },
+      "materialityRationale": "This operation can change or invoke an active automation/runtime path, so its source-backed effect is launch-critical.",
+      "materialityEvidence": [
+        {
+          "path": "server/src/services/workflows/workflow-executor.ts",
+          "claim": "The existing workflow executor starts or changes an active workflow run under current route authorization."
+        }
+      ],
+      "operationIds": [
+        "existing-api:d1aa2cc7bccda422083f"
       ]
     }
   ],
