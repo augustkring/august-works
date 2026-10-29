@@ -2,19 +2,23 @@
 import readline from "node:readline";
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 
 let threadId = `agent-chat-${process.pid}`;
 let turnNumber = 0;
 const pendingTools = new Map();
 const lineReader = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
 
+let fixtureSourceSha256;
 function note(event) {
   const destination = process.env.PAPERCLIP_AGENT_CHAT_EVENT_TRACE;
   if (!destination) return;
   try {
+    fixtureSourceSha256 ??= createHash("sha256").update(fs.readFileSync(new URL(import.meta.url))).digest("hex");
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.appendFileSync(destination, `${JSON.stringify({
       ...event,
+      fixtureSourceSha256,
       observedAt: new Date().toISOString(),
       monotonicMs: performance.now(),
       processId: process.pid,
@@ -78,10 +82,25 @@ function tool(turn, name, args, next) {
   } });
 }
 
-function toolValue(message) {
+function toolValue(message, operationId) {
   const text = message.result?.contentItems?.[0]?.text;
-  if (typeof text !== "string") return message.result;
-  try { return JSON.parse(text); } catch { return text; }
+  let value = message.result;
+  if (typeof text === "string") {
+    try { value = JSON.parse(text); } catch { return text; }
+  }
+  // Match the canonical semantic envelope before reading its API/entity value.
+  // Core tools may also return the unwrapped value directly.
+  if (value && typeof value === "object" && typeof value.ok === "boolean" &&
+      (Object.hasOwn(value, "callId") || Object.hasOwn(value, "operationId"))) {
+    if (value.callId !== message.id || value.operationId !== operationId)
+      throw new Error("fixture semantic response identity mismatch");
+    if (value.ok) {
+      if (Object.hasOwn(value, "result")) return value.result;
+      if (Object.hasOwn(value, "value")) return value.value;
+      throw new Error("fixture semantic response omitted its value");
+    }
+  }
+  return value;
 }
 
 function progress(turn, body, next = () => finish(turn, body)) {
@@ -149,7 +168,8 @@ function actionAfterHistory(turn, comments) {
   if (!turn.activeTask) {
     return finish(turn, "I could not verify the current task context, so I cannot safely continue.");
   }
-  if (humanComments.length === 0 && turn.activeTask?.parentId && turn.activeTask?.projectId)
+  if (humanComments.length === 0 && turn.activeTask?.projectId &&
+      ["todo", "in_progress"].includes(turn.activeTask.status))
     return executeDelegatedTask(turn);
   turn.commentId = current?.id;
   turn.command = command;
@@ -187,7 +207,7 @@ function actionAfterHistory(turn, comments) {
     }, value => {
       const interactions = value?.data ?? value;
       const answered = Array.isArray(interactions) && interactions.some(item =>
-        item.kind === "ask_user_questions" && ["resolved", "accepted", "completed"].includes(item.status));
+        item.kind === "ask_user_questions" && item.status === "answered");
       if (answered) return progress(turn, "Clarification received.", () => finish(turn, `Reply generation ${turn.generation}: Clarification received.`));
       tool(turn, "request_human_input", {
         idempotencyKey: current.id,
@@ -245,6 +265,9 @@ function actionAfterHistory(turn, comments) {
 }
 
 function executeDelegatedTask(turn) {
+  if (!turn.completionContract?.revision || !Array.isArray(turn.completionContract.criteria) ||
+      turn.completionContract.criteria.length !== 1)
+    throw new Error("delegated fixture requires its current single-output completion contract");
   tool(turn, "read_document", { key: "plan" }, planValue => {
     const plan = planValue?.document ?? planValue;
     if (typeof plan?.body !== "string") return finish(turn, "The delegated task has no readable plan.");
@@ -260,8 +283,9 @@ function executeDelegatedTask(turn) {
         const result = {
           schema: "paperclip.run_result.v1", reportedWorkDisposition: "done",
           summary: "Completed the assigned plan.",
-          completionClaim: { contractRevision: "1", objectiveSatisfied: true,
-            criteria: [{ criterionId: "objective", status: "satisfied", evidenceRefs: [] }], remainingWork: [] },
+          completionClaim: { contractRevision: turn.completionContract.revision, objectiveSatisfied: true,
+            criteria: turn.completionContract.criteria.map(criterion => ({ criterionId: criterion.id,
+              status: "satisfied", evidenceRefs: [] })), remainingWork: [] },
           evidence: [], verification: [], attentionRequests: [], artifacts: [],
         };
         tool(turn, "paperclip_finish", result, () => finish(turn, result.summary));
@@ -387,7 +411,7 @@ function handleToolResult(message) {
   const pending = pendingTools.get(message.id);
   if (!pending) return false;
   pendingTools.delete(message.id);
-  const value = toolValue(message);
+  const value = toolValue(message, pending.name);
   const details = value && typeof value === "object" ? value : {};
   const rawCode = message.error?.code ?? details.errorCode ?? details.code;
   const errorCode = typeof rawCode === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(rawCode) ? rawCode : null;

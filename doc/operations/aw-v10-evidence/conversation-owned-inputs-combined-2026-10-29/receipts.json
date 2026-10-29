@@ -1,0 +1,86 @@
+{
+  "schema": "aw.v10.scoped-test-evidence.v1",
+  "attempt": "conversation-owned-inputs-combined-r1-20261029",
+  "exitCode": 0,
+  "result": {
+    "passed": 86,
+    "failed": 0,
+    "skipped": 0,
+    "durationSeconds": 86.47
+  },
+  "stdoutArtifact": "stdout.log.gz",
+  "stdoutSha256": "689d991ae91fe281e8d0ea8f2212b3ba4e835c94ef2323187705e5e6df26e723",
+  "fullSourcePinsArtifact": "source-pins.json.gz",
+  "fullSourcePinsSha256": "42b41bcc27f38a111b6f8abda76c2dcc9dd306e19ed23f9093bf71d37e95d9b5",
+  "sourceHead": "d258e500bb753acd0fd7c52bf318374c8ac87e2b",
+  "sourcePins": [
+    {
+      "path": "server/src/__tests__/agent-conversations.test.ts",
+      "sha256": "4553c7eb7a49f4bb9ab6aff55215d625a04fc1150af89583d22c1a89fda64219",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/__tests__/manual-task-payload-source.integration.test.ts",
+      "sha256": "35d3dba6539d038c883804916c161a313f59d799047591c586483b5575537cf9",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/__tests__/manual-upload-payload-source.integration.test.ts",
+      "sha256": "416c263b5876b324b9f12ec84900664ced40340feee914668ff2f39f1af62015",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/routes/issues.ts",
+      "sha256": "f50fbbe1596256c5ec2a5709e20fe5bb7ab39a223d765be8909826b0516652c4",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/services/authorization.ts",
+      "sha256": "13d38f278270075867523c074f73bc9515de4972c9c84857efb1f2924c2728ce",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "sha256": "a8b4b40f4fc835e879d7401ee8bed7e921c6b7fd67a6c5deb4890f37b54c4d3c",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/services/native-direct-input.ts",
+      "sha256": "643ace8b2268cc1f2b8884ac9e86f9d9d443331a61c2c619e6902f4863bb1a6b",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "tests/e2e/agent-chat-projects.spec.ts",
+      "sha256": "6dee7341b22bba982342a3593997736dec2e11fd7027fa1d35c8ce8f8df868f4",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "tests/e2e/aw-v10-agent-chat.config.ts",
+      "sha256": "b97e2ca9eaa616ba21cea2cc8f8542ca09ec7a8993b912e1526e5386e5ef9b4f",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "tests/e2e/fixtures/native-chat-codex.mjs",
+      "sha256": "a19dee5a85c45a54dd3a0ec62d6ad09942bbf40ae030090f4f22f0b38b54eb4d",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "tests/e2e/fixtures/native-chat-codex.protocol.test.mjs",
+      "sha256": "af91f7bf4ef7c3c42acc5e6db7ce7e27173fea4fe2feafcd39ef48ec535b95a3",
+      "matchesCurrentAtArchive": true
+    }
+  ],
+  "qualifiedScope": [
+    "All three original files in one current-source snapshot, sequential/maxWorkers1 under shared flock and owned-child cleanup",
+    "manual-task-payload-source.integration.test.ts: all27",
+    "manual-upload-payload-source.integration.test.ts: all13",
+    "agent-conversations.test.ts: all46, including8 owned interaction positive/adverse cases",
+    "Actual current owner upload/list/content/later comment/repeated upload; source withdrawal and credential negatives preserved"
+  ],
+  "excludedScope": [
+    "Production provider or physical-host qualification",
+    "General private Task write permission",
+    "OpenAPI/Help changes made after this source snapshot"
+  ],
+  "laterDependencyChange": "After this exact86/86 capture, Temporal changed the upper authorization membership join (text=uuid correction). Own lower upload clause/route/issues/manual-related helpers remain unchanged; fresh authorization owner proof is separate. This is not a blanket current-authorization claim."
+}

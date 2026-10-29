@@ -4429,14 +4429,18 @@ registry.registerPath({
   path: "/api/companies/{companyId}/issues",
   tags: ["issues"],
   summary: "Create an issue",
+  description: "An authenticated Human session may create literal Task text linked to a currently readable parentId and/or projectId. These links retain source privacy restrictions without treating parent or Project contents as copied Human input. A selected Project must match the parent’s existing Project when present. Explicit private creation, generated content, and agent effects retain their separate admission rules. New Tasks return 201; an existing deduplicated Task returns 200.",
   request: {
     params: z.object({ companyId: z.string() }),
     body: jsonBody(createIssueSchema),
   },
   responses: {
     200: r.ok(),
+    201: r.ok(),
     400: r.badRequest,
     401: r.unauthorized,
+    403: r.forbidden,
+    404: r.notFound,
     422: r.unprocessable,
   },
 });
@@ -4967,8 +4971,9 @@ registry.registerPath({
   path: "/api/issues/{id}/attachments",
   tags: ["issues"],
   summary: "List issue attachments",
+  description: "The current authenticated owner may list attachments in their own pristine conversation before its first message; a pristine conversation returns an empty list. Existing attachments still require current conversation and file-source access.",
   request: { params: z.object({ id: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized },
+  responses: { 200: r.ok(), 401: r.unauthorized, 403: r.forbidden, 404: r.notFound },
 });
 
 registry.registerPath({
@@ -8009,6 +8014,7 @@ registry.registerPath({
   path: "/api/issues/{id}/interactions/{interactionId}/accept",
   tags: ["issues"],
   summary: "Accept an issue thread interaction",
+  description: "The current authenticated Human owner may resolve an interaction in their own current conversation. Resolver policy, addressed audience, membership, session and source access remain mandatory; plan confirmations must target the current document revision. This grants no general private-Task write access or downstream execution authority.",
   request: {
     params: z.object({ id: z.string(), interactionId: z.string() }),
     body: jsonBody(acceptIssueThreadInteractionSchema),
@@ -8017,6 +8023,9 @@ registry.registerPath({
     200: r.ok(),
     400: r.badRequest,
     401: r.unauthorized,
+    403: r.forbidden,
+    409: r.conflict,
+    422: r.unprocessable,
     404: r.notFound,
   },
 });
@@ -8026,6 +8035,7 @@ registry.registerPath({
   path: "/api/issues/{id}/interactions/{interactionId}/reject",
   tags: ["issues"],
   summary: "Reject an issue thread interaction",
+  description: "The current authenticated Human owner may resolve an interaction in their own current conversation. Resolver policy, addressed audience, membership, session and source access remain mandatory; plan confirmations must target the current document revision. This grants no general private-Task write access or downstream execution authority.",
   request: {
     params: z.object({ id: z.string(), interactionId: z.string() }),
     body: jsonBody(rejectIssueThreadInteractionSchema),
@@ -8034,6 +8044,9 @@ registry.registerPath({
     200: r.ok(),
     400: r.badRequest,
     401: r.unauthorized,
+    403: r.forbidden,
+    409: r.conflict,
+    422: r.unprocessable,
     404: r.notFound,
   },
 });
@@ -8043,6 +8056,7 @@ registry.registerPath({
   path: "/api/issues/{id}/interactions/{interactionId}/respond",
   tags: ["issues"],
   summary: "Answer questions on an issue thread interaction",
+  description: "The current authenticated Human owner may resolve an interaction in their own current conversation. Resolver policy, addressed audience, membership, session and source access remain mandatory; plan confirmations must target the current document revision. This grants no general private-Task write access or downstream execution authority.",
   request: {
     params: z.object({ id: z.string(), interactionId: z.string() }),
     body: jsonBody(respondIssueThreadInteractionSchema),
@@ -8051,6 +8065,9 @@ registry.registerPath({
     200: r.ok(),
     400: r.badRequest,
     401: r.unauthorized,
+    403: r.forbidden,
+    409: r.conflict,
+    422: r.unprocessable,
     404: r.notFound,
   },
 });
@@ -8186,8 +8203,9 @@ registry.registerPath({
   path: "/api/companies/{companyId}/issues/{issueId}/attachments",
   tags: ["assets"],
   summary: "Upload an attachment to an issue",
+  description: "Upload actual file bytes using multipart/form-data. The current authenticated Human owner may upload to their own pristine conversation before its first message and continue uploading afterward. Each upload retains its own byte-source binding and current parent-conversation authority; another member or an expired session receives no owner exception.",
   request: { params: z.object({ companyId: z.string(), issueId: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized },
+  responses: { 201: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 422: r.unprocessable },
 });
 
 registry.registerPath({

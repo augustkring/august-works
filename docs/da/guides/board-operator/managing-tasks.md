@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-25
+last_verified_at: 2026-10-29
 review_trigger: Ændringer i oprettelse af opgaver, fordeling, status, kommentarer eller kørselsdetaljer
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/pages/ExperienceWork.tsx, ui/src/pages/IssueDetail.tsx]
@@ -19,9 +19,15 @@ Opgaver er virksomhedens arbejdsemner. Åbn **Work** for at finde de opgaver, du
 
 Vælg **Spørg Blentera** for at åbne chatten med din foretrukne Co-worker, hvis du har valgt en, eller vælg en Co-worker.
 
+Du kan vedhæfte en fil i din egen chat, før du sender den første besked, og tilføje flere filer senere. Du skal stadig have adgang til samtalen og dens filer.
+
+Hvis en Co-worker stiller et spørgsmål eller viser et bekræftelseskort, kan du svare eller acceptere/afvise i chatten. En plan, der er ændret, kræver sin aktuelle bekræftelse. Dit svar eller din godkendelse betyder ikke i sig selv, at arbejdet er færdigt.
+
 ## Opret en tydelig opgave
 
 Skriv det ønskede resultat i titlen, og tilføj derefter den sammenhæng og de acceptkriterier, som den ansvarlige skal bruge. Vælg et projekt eller en overordnet opgave, hvis arbejdet hører til en eksisterende indsats. Vælg først en ejer, når du har kontrolleret, at personen eller Co-worker er passende til opgaven.
+
+En opgave, du opretter under en eksisterende overordnet opgave eller et projekt, beholder arbejdets adgangsbegrænsninger. Skriv de instruktioner, den nye opgave har brug for. En opgave fra chatten kan bruge et eksisterende projekt uden at oprette et nyt.
 
 Opgavesiden viser den aktuelle status. En tildeling eller statusændring beviser ikke i sig selv, at en Co-worker er begyndt, eller at resultatet er færdigt. Læs opgavens aktivitet og output, før du lukker den.
 

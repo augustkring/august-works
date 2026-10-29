@@ -3301,12 +3301,47 @@ async function assertNativeTaskSnapshotOwnerCurrentInScope(db: Db | Transaction,
         const [comment] = exactCommentRoot ? await db.select({ authorUserId: issueComments.authorUserId,
           authorType: issueComments.authorType }).from(issueComments).where(and(eq(issueComments.companyId, companyId),
           eq(issueComments.issueId, issueId), eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt))).for("share") : [];
-        if (!exactCommentRoot || !comment || comment.authorUserId !== owner.conversationUserId || comment.authorType !== "user")
-          throw forbidden("The Native conversation source witness is unavailable");
-        await assertConversationCommentSourceCurrent(db, { companyId, actor, source, policy: snapshot.data.policy,
-          inputs: snapshot.data.inputs, selfOwnedConversationTaskId: issueId }, scope);
-        if (validatedTaskSource?.issueId === issueId)
-          scope.conversationRootComments.add(nativeSha256({ companyId, task: validatedTaskSource, source }));
+        if (source?.kind === "attachment" && source.issueId === issueId && source.commentId === null &&
+            source.disposition === "delivered" &&
+            isDeepStrictEqual(snapshot.data.policy, { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] })) {
+          // An actual first Human upload can seal the pristine shell, just as
+          // its first Human comment does. Validate that exact original witness
+          // here; the ordinary attachment reader still checks its parent ACL.
+          const [uploaded] = await db.select({ attachment: issueAttachments, asset: assets,
+            bodyHash: sql<string>`public.aw_native_payload_body_hash('attachment',to_jsonb(${issueAttachments}))`,
+            digestValid: sql<boolean>`(${issueAttachments.payloadSourceSnapshot}->>'digest')=encode(sha256(convert_to((${issueAttachments.payloadSourceSnapshot}-'digest')::text,'UTF8')),'hex')` })
+            .from(issueAttachments).innerJoin(assets, and(eq(assets.companyId, issueAttachments.companyId),
+              eq(assets.id, issueAttachments.assetId))).where(and(eq(issueAttachments.companyId, companyId),
+              eq(issueAttachments.issueId, issueId), eq(issueAttachments.id, source.attachmentId))).for("share");
+          const uploadSnapshot = nativePayloadSourceSnapshotSchema.safeParse(uploaded?.attachment.payloadSourceSnapshot);
+          if (!source.assetId || !source.sha256 || !Number.isSafeInteger(source.byteSize) ||
+              source.byteSize === null || source.byteSize <= 0 ||
+              !uploaded || uploaded.attachment.payloadSourceProtocolVersion !== 1 ||
+              uploaded.attachment.payloadSourceSnapshotInvalidated || !uploaded.digestValid || !uploadSnapshot.success ||
+              uploadSnapshot.data.owner.kind !== "attachment" || uploadSnapshot.data.owner.companyId !== companyId ||
+              uploadSnapshot.data.owner.id !== source.attachmentId || uploadSnapshot.data.owner.contentHash !== uploaded.bodyHash ||
+              !isDeepStrictEqual(uploadSnapshot.data.policy, { ...snapshot.data.policy, issueIds: [issueId] }) || uploadSnapshot.data.inputs.length !== 0 ||
+              uploaded.attachment.issueCommentId !== null || uploaded.attachment.originatingRunId !== null ||
+              uploaded.asset.createdByAgentId !== null || uploaded.asset.createdByUserId !== owner.conversationUserId ||
+              source.assetId !== uploaded.asset.id || source.sha256 !== uploaded.asset.sha256 || source.byteSize !== uploaded.asset.byteSize)
+            throw forbidden("The Native conversation upload source witness is unavailable");
+          const [capture] = await db.select({ id: activityLog.id }).from(activityLog).where(and(
+            eq(activityLog.companyId, companyId), eq(activityLog.actorType, "user"),
+            eq(activityLog.actorId, owner.conversationUserId), eq(activityLog.entityType, "issue"),
+            eq(activityLog.entityId, issueId), eq(activityLog.action, "attachment.payload_source_captured"),
+            sql`${activityLog.details}->>'attachmentId'=${source.attachmentId}`,
+            sql`${activityLog.details}->>'assetId'=${uploaded.asset.id}`,
+            sql`${activityLog.details}->>'producer'='direct_manual_upload'`,
+            sql`${activityLog.details}->>'digest'=${uploadSnapshot.data.digest}`)).limit(1);
+          if (!capture) throw forbidden("The Native conversation upload source receipt is unavailable");
+        } else {
+          if (!exactCommentRoot || !comment || comment.authorUserId !== owner.conversationUserId || comment.authorType !== "user")
+            throw forbidden("The Native conversation source witness is unavailable");
+          await assertConversationCommentSourceCurrent(db, { companyId, actor, source, policy: snapshot.data.policy,
+            inputs: snapshot.data.inputs, selfOwnedConversationTaskId: issueId }, scope);
+          if (validatedTaskSource?.issueId === issueId)
+            scope.conversationRootComments.add(nativeSha256({ companyId, task: validatedTaskSource, source }));
+        }
       } else await assertNativeFrozenTaskSnapshotCurrent(db, companyId, actor, issueId, snapshot.data, scope);
       if (snapshot.data.inputs.some(source =>
         source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch"))
@@ -3366,6 +3401,17 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
     const match = /^issue:\/\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
     if (!match) throw forbidden("A Native Context Task source changed or was erased");
     return match[1]!;
+  if (snapshot.inputs.length === 0 && await isAuditedManualRelatedSnapshot(db, companyId, issueId, snapshot)) {
+    const key = `manual-child:${companyId}:${issueId}`;
+    if (scope.active.has(key)) throw forbidden("The manual child privacy graph contains a cycle");
+    scope.active.add(key);
+    try {
+      await assertManualRelatedPrivacyCurrent(db, companyId, actor, {
+        parentId: snapshot.policy.issueIds[0] ?? null, projectId: snapshot.policy.projectIds[0] ?? null,
+      });
+    } finally { scope.active.delete(key); }
+    return;
+  }
   });
   const taskIssueIds = [...new Set(taskIds)];
   const taskOwners = taskIssueIds.length ? await db.select({ id: issues.id,
@@ -4102,4 +4148,59 @@ export async function assertDirectInputSessionCurrent(
     (${expiresAt}::double precision is null or ${expiresAt}::double precision>extract(epoch from clock_timestamp())*1000)
     and not exists(select 1 from account_deletion_operations where user_id=${actor.userId}) as active`);
   if (!current?.active) throw forbidden(unavailableMessage);
+}
+/** Literal Human text contains no copied parent/Project bytes. Only its original
+ * capture audit admits the empty byte-input set with these exact privacy edges. */
+async function isAuditedManualRelatedSnapshot(db: Db | Transaction, companyId: string, issueId: string,
+  snapshot: NativePayloadSourceSnapshot) {
+  const [owner] = await db.select({ parentId: issues.parentId, createdByUserId: issues.createdByUserId, projectId: issues.projectId,
+    createdByAgentId: issues.createdByAgentId, originKind: issues.originKind,
+    conversationAgentId: issues.conversationAgentId }).from(issues).where(and(
+    eq(issues.companyId, companyId), eq(issues.id, issueId))).for("share");
+  if (!owner || !(owner.parentId || owner.projectId) || !owner.createdByUserId || owner.createdByAgentId || owner.originKind !== "manual" ||
+      owner.conversationAgentId || snapshot.inputs.length !== 0 || !isDeepStrictEqual(snapshot.policy, {
+        issueIds: owner.parentId ? [owner.parentId] : [], projectIds: owner.projectId ? [owner.projectId] : [], runIds: [], memoryIds: [], foundationRevisionIds: [],
+      })) return false;
+  const [audit] = await db.select({ id: activityLog.id }).from(activityLog).where(and(
+    eq(activityLog.companyId, companyId), eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
+    eq(activityLog.action, "issue.payload_source_captured"), eq(activityLog.actorType, "user"),
+    eq(activityLog.actorId, owner.createdByUserId),
+    sql`${activityLog.details}->>'producer'='direct_manual_related_input'`,
+    sql`(${activityLog.details}->>'parentId') is not distinct from ${owner.parentId}::text`,
+    sql`(${activityLog.details}->>'projectId') is not distinct from ${owner.projectId}::text`,
+    sql`${activityLog.details}->>'digest'=${snapshot.digest}`,
+    sql`${activityLog.details}->>'contentHash'=${snapshot.owner.contentHash}`)).limit(1);
+  return !!audit;
+}
+
+/** Original create owner only: revalidate selected privacy dependencies before
+ * accepting literal Human text, while retaining each current reader ACL. */
+export async function assertManualRelatedSourcesCurrent(db: Db | Transaction, companyId: string,
+  actor: AuthorizationActor, related: { parentId: string | null; projectId: string | null }) {
+  return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, actor, async scope => {
+    await lockNativeSourceReadPrivacy(tx, companyId, scope);
+    await assertManualRelatedPrivacyCurrent(tx, companyId, actor, related);
+  }));
+}
+
+async function assertManualRelatedPrivacyCurrent(db: Db | Transaction, companyId: string,
+  actor: AuthorizationActor, related: { parentId: string | null; projectId: string | null }) {
+  // Selected IDs constrain the new literal's privacy; they do not say that its
+  // bytes consumed parent content, a model prefix, or Project workspace config.
+  // Actual byte readers still use their full ordinary source validators.
+  if (related.parentId) {
+    const [parent] = await db.select({ projectId: issues.projectId,
+      invalidated: issues.payloadSourceSnapshotInvalidated }).from(issues)
+      .where(and(eq(issues.companyId, companyId), eq(issues.id, related.parentId))).for("share");
+    if (!parent || parent.invalidated || !await canActorReadIssuePrivacy(db, actor, { id: related.parentId, companyId }))
+      throw forbidden("The current parent source is unavailable");
+    if (related.projectId && parent.projectId && related.projectId !== parent.projectId)
+      throw forbidden("The selected parent Project changed");
+  }
+  if (related.projectId) {
+    const [project] = await db.select({ invalidated: projects.payloadSourceSnapshotInvalidated }).from(projects)
+      .where(and(eq(projects.companyId, companyId), eq(projects.id, related.projectId))).for("share");
+    if (!project || project.invalidated || !await canActorReadProjectPrivacy(db, actor, { id: related.projectId, companyId }))
+      throw forbidden("The current Project source is unavailable");
+  }
 }

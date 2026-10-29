@@ -19,8 +19,10 @@ import {
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { issueRoutes } from "../routes/issues.js";
+import { projectRoutes } from "../routes/projects.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
+import { assertNativeTaskSourceOwnerCurrent } from "../services/native-direct-input.js";
 
 describe("manual Human Task payload source capture", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -78,6 +80,7 @@ describe("manual Human Task payload source capture", () => {
       next();
     }) as RequestHandler);
     app.use("/api", issueRoutes(db, {} as never));
+    app.use("/api", projectRoutes(db));
     app.use(errorHandler);
     return app;
   }
@@ -277,19 +280,109 @@ describe("manual Human Task payload source capture", () => {
     expect(plan[0]!.body).toContain("Server-stored separate document.");
   });
 
-  it("leaves a Human Task with a related parent source unqualified", async () => {
+  it("captures only new literal child bytes while retaining an unknown parent's privacy dependency", async () => {
     const f = await seed();
     const parent = await issueService(db).create(f.companyId, {
-      title: "Existing related parent", description: "The Task body inherits context.", createdByUserId: f.userId,
+      title: "Existing related parent", description: "Unknown parent source.", createdByUserId: f.userId,
     });
     const child = await issueService(db).create(f.companyId, {
-      title: "Related Human child", description: "Do not claim a direct-root source.", parentId: parent.id,
+      title: "Related Human child", description: "Independent literal text.", parentId: parent.id,
       responsibleUserId: f.userId, createdByUserId: f.userId,
     }, db, undefined, manualActorOptions(f.actor));
-    expect((await readOwner(child.id)).row).toMatchObject({ payloadSourceProtocolVersion: 0,
-      payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false });
-    expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId),
-      eq(activityLog.entityId, child.id), eq(activityLog.action, "issue.payload_source_captured")))).toHaveLength(0);
+    const { row, proof } = await readOwner(child.id);
+    expect((await readOwner(parent.id)).row).toMatchObject({ payloadSourceProtocolVersion: 0, payloadSourceSnapshot: null });
+    expect(row.payloadSourceSnapshot).toMatchObject({ inputs: [], policy: {
+      issueIds: [parent.id], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [],
+    } });
+    await assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: row.id, sourceVersion: "snapshot-owner-current", contentHash: proof.bodyHash } });
+  });
+
+  it.each(["owner", "foreign", "revoked", "changed_parent"] as const)(
+    "admits only current literal Human child sources: %s", async mode => {
+    const f = await seed();
+    const parent = await issueService(db).create(f.companyId, { title: "Private current parent",
+      description: "Parent content is not the child input.", visibility: "private", responsibleUserId: f.userId,
+      createdByUserId: f.userId }, db, undefined, manualActorOptions(f.actor));
+    let actor = f.actor;
+    if (mode === "foreign") {
+      const other = await seed();
+      await db.insert(companyMemberships).values({ companyId: f.companyId, principalType: "user",
+        principalId: other.userId, membershipRole: "member", status: "active" });
+      actor = { ...other.actor, companyIds: [f.companyId], memberships: [{ companyId: f.companyId,
+        membershipRole: "member", status: "active" }] };
+    }
+    if (mode === "revoked") await db.update(companyMemberships).set({ status: "inactive" }).where(and(
+      eq(companyMemberships.companyId, f.companyId), eq(companyMemberships.principalId, f.userId)));
+    if (mode === "changed_parent") await issueService(db).update(parent.id, {
+      description: "Authoritatively changed source", actorUserId: f.userId, privacyActor: f.actor,
+    });
+    const response = await request(appFor(actor)).post(`/api/companies/${f.companyId}/issues`).send({
+      title: "Literal child request", description: "Only this new Human text.", parentId: parent.id,
+    });
+    if (mode !== "owner") {
+      expect([403, 404]).toContain(response.status);
+      expect(await db.select().from(issues).where(and(eq(issues.companyId, f.companyId),
+        eq(issues.parentId, parent.id)))).toHaveLength(0);
+      return;
+    }
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    const { row, proof } = await readOwner(response.body.id);
+    expect(row).toMatchObject({ parentId: parent.id, visibility: "private", responsibleUserId: f.userId,
+      description: "Only this new Human text.", payloadSourceProtocolVersion: 1 });
+    expect(row.payloadSourceSnapshot).toMatchObject({ owner: { contentHash: proof.bodyHash },
+      policy: { issueIds: [parent.id], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] });
+    expect(proof.digestValid).toBe(true);
+    await assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: row.id, sourceVersion: "snapshot-owner-current", contentHash: proof.bodyHash } });
+    expect(JSON.stringify(row.payloadSourceSnapshot)).not.toContain("Parent content");
+    await request(appFor(f.actor)).get(`/api/issues/${row.id}`).expect(200);
+    const [audit] = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId),
+      eq(activityLog.entityId, row.id), eq(activityLog.action, "issue.payload_source_captured")));
+    expect(audit!.details).toMatchObject({ producer: "direct_manual_related_input", parentId: parent.id,
+      digest: row.payloadSourceSnapshot!.digest });
+  });
+
+  it.each(["project", "parent_project", "wrong_project", "foreign_project", "changed_project"] as const)(
+    "captures literal Human Project-task privacy dependencies: %s", async mode => {
+    const f = await seed("admin"), http = request(appFor(f.actor));
+    const created = await http.post(`/api/companies/${f.companyId}/projects`).send({
+      name: "Human selected Project", description: "Project content stays separate", color: "#2457A7", icon: "folder",
+    }).expect(201);
+    const projectId = created.body.id as string;
+    const parent = mode === "parent_project" || mode === "wrong_project" ? await issueService(db).create(f.companyId, {
+      title: "Literal Project parent", projectId, createdByUserId: f.userId,
+    }, db, undefined, manualActorOptions(f.actor)) : null;
+    let selectedProjectId = projectId;
+    if (mode === "wrong_project") {
+      const other = await http.post(`/api/companies/${f.companyId}/projects`).send({ name: "Different selected Project" }).expect(201);
+      selectedProjectId = other.body.id;
+    }
+    if (mode === "foreign_project") {
+      const other = await seed("admin");
+      const foreign = await request(appFor(other.actor)).post(`/api/companies/${other.companyId}/projects`)
+        .send({ name: "Foreign Project" }).expect(201);
+      selectedProjectId = foreign.body.id;
+    }
+    if (mode === "changed_project") await http.patch(`/api/projects/${projectId}`)
+      .send({ description: "Current authoritative Project edit" }).expect(200);
+    const response = await http.post(`/api/companies/${f.companyId}/issues`).send({
+      title: "Literal Project task", description: "Only this Human Task text", projectId: selectedProjectId,
+      ...(parent ? { parentId: parent.id } : {}),
+    });
+    if (mode !== "project" && mode !== "parent_project") {
+      expect([403, 404]).toContain(response.status);
+      expect(await db.select().from(issues).where(and(eq(issues.companyId, f.companyId),
+        eq(issues.title, "Literal Project task")))).toHaveLength(0);
+      return;
+    }
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    const { row, proof } = await readOwner(response.body.id);
+    expect(row.payloadSourceSnapshot).toMatchObject({ owner: { contentHash: proof.bodyHash }, inputs: [],
+      policy: { issueIds: parent ? [parent.id] : [], projectIds: [projectId], runIds: [], memoryIds: [], foundationRevisionIds: [] } });
+    await assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: row.id, sourceVersion: "snapshot-owner-current", contentHash: proof.bodyHash } });
+    await http.get(`/api/issues/${row.id}`).expect(200);
   });
 
   it("does not upgrade an unqualified deduplication replay", async () => {
@@ -339,8 +432,13 @@ describe("manual Human Task payload source capture", () => {
     }
   });
 
-  it("rechecks a session after a real company-counter lock wait", async () => {
+  it.each(["root", "child", "project"] as const)("rechecks a session after a real company-counter lock wait: %s", async kind => {
     const f = await seed("admin");
+    const parent = kind === "child" ? await issueService(db).create(f.companyId, {
+      title: "Current parent before wait", createdByUserId: f.userId,
+    }, db, undefined, manualActorOptions(f.actor)) : null;
+    const project = kind === "project" ? await request(appFor(f.actor)).post(`/api/companies/${f.companyId}/projects`)
+      .send({ name: "Current Project before wait" }).expect(201) : null;
     await db.execute(sql`update "session" set expires_at=clock_timestamp()+interval '1500 milliseconds' where id=${f.sessionId}`);
     const [liveAtStart] = await db.execute<{ live: boolean }>(sql`select expires_at>clock_timestamp() as live from "session" where id=${f.sessionId}`);
     expect(liveAtStart!.live).toBe(true);
@@ -359,6 +457,7 @@ describe("manual Human Task payload source capture", () => {
     const creating = issueService(db).create(f.companyId, {
       title,
       description: "expires while waiting",
+      ...(parent ? { parentId: parent.id } : {}),
       createdByUserId: f.userId,
     }, db, undefined, manualActorOptions(f.actor));
     try {

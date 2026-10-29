@@ -290,6 +290,7 @@ import {
   ISSUE_WAKE_DIAGNOSTICS_MAX_ACTIVITY_RECORDS,
   ISSUE_WAKE_DIAGNOSTICS_MAX_WAKE_REQUESTS,
   isCurrentUnsealedConversationShell,
+  isManualRelatedPayloadInput,
   readAcceptedPlanConfirmationTarget,
   lockIssuePrivacyTree,
   pinIssueMutationHuman,
@@ -3605,13 +3606,16 @@ export function issueRoutes(
       const isNativeConversationWorkModeWrite = req.method === "PATCH" && requestPath.endsWith(`/issues/${id}`) &&
         req.body != null && typeof req.body === "object" && !Array.isArray(req.body) &&
         Object.keys(req.body).length === 1 && Object.hasOwn(req.body, "workMode");
-      const isNativeConversationShellWrite = isNativeConversationCommentWrite || isNativeConversationWorkModeWrite;
+      const isNativeConversationAttachmentWrite = req.method === "POST" && requestPath.endsWith(`/issues/${id}/attachments`);
+      const isNativeConversationShellWrite = isNativeConversationCommentWrite || isNativeConversationWorkModeWrite || isNativeConversationAttachmentWrite;
+      const isNativeConversationInteractionResolution = req.method === "POST" &&
+        new RegExp(`/issues/${id}/interactions/[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}/(?:respond|accept|reject)$`).test(requestPath);
       if (!canReadCurrentPrivacy && !(isNativeConversationShellWrite && req.actor.type === "board" &&
           req.actor.source === "session" && req.actor.sessionId && req.actor.userId &&
           await db.transaction(tx => isCurrentUnsealedConversationShell(tx, req.actor, { id, companyId }, "issue:comment"))))
         throw notFound("Issue not found");
       let ownedNativeConversation = false;
-      if ((isNativeConversationCommentWrite || isNativeConversationWorkModeWrite) &&
+      if ((isNativeConversationShellWrite || isNativeConversationInteractionResolution) &&
           req.actor.type === "board" && req.actor.source === "session" && req.actor.sessionId && req.actor.userId) {
         ownedNativeConversation = await db.transaction(async tx => {
           const [conversation] = await tx.select({ conversationAgentId: issueRows.conversationAgentId,
@@ -3622,20 +3626,28 @@ export function issueRoutes(
           if (!pinned || pinned.credentialExpiresAt === null) throw notFound("Issue not found");
           await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt);
           const ownerShell = await isCurrentUnsealedConversationShell(tx, pinned.actor, { id, companyId }, "issue:comment");
-          if (ownerShell && (isNativeConversationCommentWrite || isNativeConversationWorkModeWrite)) return true;
+          if (ownerShell && isNativeConversationShellWrite) return true;
           if (!await canActorReadIssuePrivacy(tx, pinned.actor, { id, companyId })) throw notFound("Issue not found");
           return true;
         });
       }
       const ownedConversationWorkModeWrite = ownedNativeConversation && isNativeConversationWorkModeWrite;
       if (ownedConversationWorkModeWrite && res) res.locals.ownedConversationWorkModeWrite = true;
-      if (!ownedNativeConversation && !(await canActorReadIssuePrivacy(db, { type: "none" }, { id, companyId })))
+      const literalHumanRelated = req.method === "POST" && req.originalUrl.split("?")[0]!.endsWith(`/companies/${companyId}/issues`) &&
+        req.actor.type === "board" && req.actor.source === "session" && !!req.actor.userId && !!req.actor.sessionId &&
+        !req.actor.runId && req.body?.parentId === id && isManualRelatedPayloadInput(req.body);
+      if (!ownedNativeConversation && !literalHumanRelated && !(await canActorReadIssuePrivacy(db, { type: "none" }, { id, companyId })))
         throw unprocessable("Private tasks are not available");
     }
     const projectId = req.body?.projectId;
     if (typeof projectId === "string" && isUuidLike(projectId)) {
       if (!(await canActorReadProjectPrivacy(db, req.actor, { id: projectId, companyId }))) throw notFound("Project not found");
-      if (!(await canActorReadProjectPrivacy(db, { type: "none" }, { id: projectId, companyId }))) throw unprocessable("Private tasks are not available");
+      if (!(await canActorReadProjectPrivacy(db, { type: "none" }, { id: projectId, companyId }))) {
+        const literalHumanRelated = req.method === "POST" && req.originalUrl.split("?")[0]!.endsWith(`/companies/${companyId}/issues`) &&
+          req.actor.type === "board" && req.actor.source === "session" && !!req.actor.userId && !!req.actor.sessionId &&
+          !req.actor.runId && isManualRelatedPayloadInput(req.body);
+        if (!literalHumanRelated) throw unprocessable("Private tasks are not available");
+      }
     }
   }
   router.use("/issues/:id", async (req, _res, next) => {
@@ -19267,12 +19279,12 @@ export function issueRoutes(
 
   router.get("/issues/:id/attachments", async (req, res) => {
     const issueId = req.params.id as string;
-    const issue = await getAccessibleResource(
-      req,
-      res,
-      getIssueById(req, issueId),
-      "Issue not found",
-    );
+    const candidate = await getIssueById(req, issueId);
+    const shellOwner = candidate && hasCompanyAccess(req, candidate.companyId) && req.actor.type === "board" &&
+      req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+        { ...req.actor, userId: req.actor.userId ?? undefined }, candidate, "issue:read"));
+    if (shellOwner) { res.json([]); return; }
+    const issue = await getAccessibleResource(req, res, candidate, "Issue not found");
     if (!issue) return;
     if (!(await assertIssueReadAllowed(req, res, issue))) return;
     const attachments = await svc.listAttachments(issueId);
@@ -19300,7 +19312,10 @@ export function issueRoutes(
       if (issue.conversationAgentId && req.actor.type === "board" && req.actor.userId !== issue.conversationUserId) {
         throw forbidden("Only the conversation owner can upload attachments");
       }
-      if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;
+      const ownerShell = req.actor.type === "board" && hasCompanyAccess(req, companyId) &&
+        req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+          { ...req.actor, userId: req.actor.userId ?? undefined }, issue, "issue:comment"));
+      if (!ownerShell && !(await assertAgentIssueMutationAllowed(req, res, issue))) return;
       if (
         !(await assertDeliverableMutationAllowedByRunContext(req, res, issue))
       )

@@ -16,7 +16,7 @@ import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./bus
 import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadTypedTaskSourcePrivacy, issueReadSqlCondition, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
 import { assertHumanAuthentication, isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 import { directHumanPayloadSnapshotSql, nativePayloadSnapshotSql, captureNativeTemporalContext,
-  assertDirectInputSessionCurrent as assertManualInputCredentialCurrent, readNativeIssueEffectPrefix } from "./native-direct-input.js";
+  assertDirectInputSessionCurrent as assertManualInputCredentialCurrent, readNativeIssueEffectPrefix, assertManualRelatedSourcesCurrent } from "./native-direct-input.js";
 import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
 import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
@@ -2366,29 +2366,38 @@ function isManualRootPayloadInput(data: IssueCreateInput) {
     ].every(value => value == null);
 }
 
+/** Literal text is independent input; selected parent/Project links remain privacy dependencies. */
+export function isManualRelatedPayloadInput(data: IssueCreateInput) {
+  return !!(data.parentId || data.projectId) && (!data.parentId || isUuidLike(data.parentId)) &&
+    (!data.projectId || isUuidLike(data.projectId)) && isManualRootPayloadInput({ ...data, parentId: null, projectId: null });
+}
+
 async function bindManualTaskPayload(tx: DbTransaction, issue: typeof issues.$inferSelect,
-  actor: AuthorizationActor, publications: ActivityPublication[]) {
+  actor: AuthorizationActor, publications: ActivityPublication[], related?: { parentId: string | null; projectId: string | null } | null) {
   // A protocol-1 new row has no source snapshot until its authenticated
   // manual input is captured. Bind that exact inserted body first inside the
   // same transaction, then make the ordinary current issue:mutate decision on
   // the now-valid row. Any denial rolls the provisional snapshot back.
-  const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue") })
+  const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: related ? nativePayloadSnapshotSql("issue", {
+    issueIds: related.parentId ? [related.parentId] : [], projectIds: related.projectId ? [related.projectId] : [], runIds: [], memoryIds: [], foundationRevisionIds: [],
+  }, []) : directHumanPayloadSnapshotSql("issue") })
     .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
     eq(issues.createdByUserId, actor.userId!), eq(issues.payloadSourceProtocolVersion, 1),
     isNull(issues.payloadSourceSnapshot), eq(issues.payloadSourceSnapshotInvalidated, false))).returning();
   if (!captured?.payloadSourceSnapshot) throw conflict("Manual input source capture was not stored");
+  const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+  const activity = await persistActivity(tx as unknown as Db, {
+    companyId: issue.companyId, actorType: "user", actorId: actor.userId!,
+    action: "issue.payload_source_captured", entityType: "issue", entityId: issue.id,
+    details: { producer: related ? "direct_manual_related_input" : "direct_manual_input",
+      ...(related ?? {}), contentHash: snapshot.owner.contentHash, digest: snapshot.digest },
+  });
+  publications.push(activity.publication);
   const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
     resource: { type: "issue", companyId: captured.companyId, issueId: captured.id,
       status: captured.status, assigneeAgentId: captured.assigneeAgentId, assigneeUserId: captured.assigneeUserId },
     enforceResponsibleUserIntersection: true });
   if (!decision.allowed) throw forbidden("Current task write authority is required");
-  const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
-  const activity = await persistActivity(tx as unknown as Db, {
-    companyId: issue.companyId, actorType: "user", actorId: actor.userId!,
-    action: "issue.payload_source_captured", entityType: "issue", entityId: issue.id,
-    details: { producer: "direct_manual_input", contentHash: snapshot.owner.contentHash, digest: snapshot.digest },
-  });
-  publications.push(activity.publication);
   return captured;
 }
 type IssueChildCreateInput = IssueCreateInput & {
@@ -10257,9 +10266,10 @@ export function issueService(db: Db) {
       )) throw forbidden("Task creator does not match the current native actor");
       if (suppliedSourceAccessActor && (suppliedSourceAccessActor.type === "none" || suppliedSourceAccessActor.source === "local_implicit"))
         throw forbidden("A current Task source reader is required");
-      const captureManualInput = !!manualActor && isManualRootPayloadInput(data) &&
+      const captureManualInput = !!manualActor && (isManualRootPayloadInput(data) || isManualRelatedPayloadInput(data)) &&
         (!data.responsibleUserId || data.responsibleUserId === manualActor.userId) &&
         (!data.actorResponsibleUserId || data.actorResponsibleUserId === manualActor.userId);
+      const captureManualRelated = captureManualInput && isManualRelatedPayloadInput(data);
       const {
         privateWorkAdmission,
         initialPlan,
@@ -10316,6 +10326,8 @@ export function issueService(db: Db) {
         let currentSourceAccessActor = suppliedSourceAccessActor;
         const finishManualInput = async <T>(result: T) => {
           if (captureManualInput && manualActor && manualExpiresAt !== null) {
+            if (captureManualRelated) await assertManualRelatedSourcesCurrent(tx, companyId,
+              { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null });
             if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
             await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
           }
@@ -10388,6 +10400,9 @@ export function issueService(db: Db) {
         }
           await lockIssuePrivacyTree(tx, companyId);
           await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
+          if (captureManualRelated && manualActor)
+            await assertManualRelatedSourcesCurrent(tx, companyId,
+              { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null });
         if (issueData.conversationAgentId && issueData.conversationUserId) {
           await lockBusinessEventCompany(tx, companyId);
           await lockMemoryPrivacy(tx as unknown as Db, companyId);
@@ -10832,7 +10847,7 @@ export function issueService(db: Db) {
           nativeEffectPrefix.inputs.length + nativeEffectPolicy!.issueIds.length + nativeEffectPolicy!.projectIds.length +
             nativeEffectPolicy!.runIds.length + nativeEffectPolicy!.memoryIds.length + nativeEffectPolicy!.foundationRevisionIds.length <= 256;
         if (nativeEffectPrefix && !freezeNativeEffectPrefix) throw forbidden("Native Task input prefix exceeds its bound");
-        if (privateWorkAdmission === "closed" && privacy.visibility === "private") throw unprocessable("Private tasks are not available");
+        if (privateWorkAdmission === "closed" && privacy.visibility === "private" && !captureManualRelated) throw unprocessable("Private tasks are not available");
         if (privacy.visibility === "private" && !responsibleUserId) throw unprocessable("Private tasks require a responsible user");
         const creatorActor: AuthorizationActor = currentPrivacyActor ?? (issueData.createdByAgentId
           ? { type: "agent", agentId: issueData.createdByAgentId, companyId, runId: actorRunId ?? undefined,
@@ -10924,7 +10939,8 @@ export function issueService(db: Db) {
         if (assignmentGrant) privacyPublications.push(assignmentGrant.publication);
         if (captureManualInput && manualActor && manualExpiresAt !== null) {
           issue = await bindManualTaskPayload(tx, issue,
-            { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, privacyPublications);
+            { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, privacyPublications,
+            captureManualRelated ? { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null } : null);
         }
         if (issue.visibility === "private") {
           const finalPrivacyReader = currentSourceAccessActor ?? manualActor ?? creatorActor;
@@ -14166,7 +14182,7 @@ export function issueService(db: Db) {
 
       let sourcePublication: ActivityPublication | null = null;
       const result = await db.transaction(async (tx) => {
-        let sourceExpiresAt: number | null = null, sourceOperator = false;
+        let sourceExpiresAt: number | null = null, sourceOperator = false, ownerShell = false;
         const finishManualInput = async () => {
           if (manualActor && sourceExpiresAt !== null) {
             if (sourceOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
@@ -14187,10 +14203,11 @@ export function issueService(db: Db) {
           if (!current) throw notFound("Issue not found");
           await finishManualInput();
           const actor = { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !sourceOperator };
+          ownerShell = await isCurrentUnsealedConversationShell(tx, actor, current, "issue:comment");
           const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
             resource: { type: "issue", companyId: issue.companyId, issueId: issue.id, status: current.status,
               assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId }, enforceResponsibleUserIntersection: true });
-          if (!decision.allowed || !await canActorReadIssuePrivacy(tx, actor, current))
+          if (!ownerShell && (!decision.allowed || !await canActorReadIssuePrivacy(tx, actor, current)))
             throw forbidden("Current attachment write authority is required");
         }
         if (input.createdByAgentId && input.issueCommentId) {
@@ -14403,6 +14420,16 @@ export function issueService(db: Db) {
               eq(issueAttachments.payloadSourceSnapshotInvalidated, false))).returning();
           if (!captured?.payloadSourceSnapshot) throw conflict("Manual upload source capture was not stored");
           const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+          if (ownerShell) {
+            const [sealed] = await tx.update(issues).set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue",
+              { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
+              [{ kind: "attachment", issueId: issue.id, attachmentId: attachment.id, commentId: null,
+                assetId: asset.id, sha256: asset.sha256, byteSize: asset.byteSize, disposition: "delivered" }]) })
+              .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+                eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
+                eq(issues.payloadSourceSnapshotInvalidated, false))).returning({ snapshot: issues.payloadSourceSnapshot });
+            if (!sealed?.snapshot) throw conflict("Conversation upload source capture was not stored");
+          }
           const source = await persistActivity(tx as unknown as Db, { companyId: issue.companyId, actorType: "user",
             actorId: manualActor.userId!, action: "attachment.payload_source_captured", entityType: "issue", entityId: issue.id,
             details: { attachmentId: attachment.id, assetId: asset.id, producer: "direct_manual_upload",

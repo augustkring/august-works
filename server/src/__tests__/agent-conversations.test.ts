@@ -7,6 +7,7 @@ import { ensureHumanRoleDefaultGrants } from "../services/principal-access-compa
 import express from "express";
 import request from "supertest";
 import { issueRoutes } from "../routes/issues.js";
+import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { errorHandler } from "../middleware/index.js";
 import { actorMiddleware } from "../middleware/auth.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -155,6 +156,64 @@ const support = await getEmbeddedPostgresTestSupport();
           .returning()
       )[0]!;
     }
+    it.each(["owner", "stranger", "revoked", "accept", "reject", "stale", "foreign_confirmation", "revoked_confirmation"] as const)("admits only current conversation interaction resolutions: %s", async kind => {
+      const ownerId = randomUUID(), strangerId = randomUUID();
+      const actorFor = async (userId: string) => {
+        await db.insert(authUsers).values({ id: userId, name: "Question Human", email: `${userId}@example.test`,
+          emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+        await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+          status: "active", membershipRole: "operator" });
+        await ensureHumanRoleDefaultGrants(db, { companyId, principalId: userId, membershipRole: "operator", grantedByUserId: null });
+        return { type: "board" as const, source: "session" as const, userId,
+          sessionId: await seedNativePasskeySession(db, userId), companyIds: [companyId] };
+      };
+      const owner = await actorFor(ownerId), stranger = await actorFor(strangerId);
+      const appFor = (actor: typeof owner) => {
+        const app = express(); app.use(express.json());
+        app.use((req, _res, next) => { req.actor = actor; next(); });
+        const heartbeat = { wakeup: vi.fn(async () => null) } as unknown as ReturnType<typeof heartbeatService>;
+        app.use("/api", issueRoutes(db, {} as never, { heartbeat })); app.use(errorHandler); return app;
+      };
+      const ownerHttp = request(appFor(owner));
+      const opened = await ownerHttp.post(`/api/companies/${companyId}/chats/${agentId}`).send({}).expect(200);
+      await ownerHttp.post(`/api/issues/${opened.body.id}/comments`).send({ body: "Please ask about the audience.",
+        clientRequestId: randomUUID() }).expect(201);
+      const confirmation = !["owner", "stranger", "revoked"].includes(kind);
+      const plan = confirmation ? await documentService(db).upsertIssueDocument({ issueId: opened.body.id,
+        key: "plan", format: "markdown", title: "Current plan", body: "Approve this exact original plan.",
+        createdByUserId: ownerId, manualInputActor: owner }) : null;
+      const interaction = await issueThreadInteractionService(db).create({ id: opened.body.id, companyId }, confirmation ? {
+        kind: "request_confirmation", title: "Approve plan", resolverPolicy: "human_only", continuationPolicy: "wake_assignee_on_accept",
+        payload: { version: 1, prompt: "Approve this exact revision?", target: { type: "issue_document", key: "plan",
+          documentId: plan!.document.id, revisionId: plan!.document.latestRevisionId!, revisionNumber: plan!.document.latestRevisionNumber } },
+      } : {
+        kind: "ask_user_questions", title: "Choose audience", resolverPolicy: "human_only", continuationPolicy: "wake_assignee",
+        payload: { version: 1, questions: [{ id: "audience", prompt: "Who is this for?", selectionMode: "single",
+          required: true, options: [{ id: "garden", label: "Garden club" }] }] },
+      }, { userId: ownerId, requestActor: owner });
+      if (kind === "revoked" || kind === "revoked_confirmation") await db.update(companyMemberships).set({ status: "inactive" }).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, ownerId)));
+      if (kind === "stale") await documentService(db).upsertIssueDocument({ issueId: opened.body.id, key: "plan", format: "markdown",
+        body: "A later unapproved plan.", baseRevisionId: plan!.document.latestRevisionId, createdByUserId: ownerId });
+      const foreign = kind === "stranger" || kind === "foreign_confirmation";
+      const action = confirmation ? kind === "reject" ? "reject" : "accept" : "respond";
+      const response = await request(appFor(foreign ? stranger : owner))
+        .post(`/api/issues/${opened.body.id}/interactions/${interaction.id}/${action}`)
+        .send(confirmation ? kind === "reject" ? { reason: "Revise this original plan." } : {}
+          : { answers: [{ questionId: "audience", optionIds: ["garden"] }] });
+      const [stored] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interaction.id));
+      if (["owner", "accept", "reject"].includes(kind)) {
+        expect(response.status, JSON.stringify(response.body)).toBe(200);
+        expect(stored).toMatchObject({ status: kind === "accept" ? "accepted" : kind === "reject" ? "rejected" : "answered",
+          resolvedByUserId: ownerId });
+        if (kind === "owner") expect(stored!.result).toMatchObject({ answers: [{ questionId: "audience", optionIds: ["garden"] }] });
+        else expect(stored!.payload).toMatchObject({ target: { revisionId: plan!.document.latestRevisionId } });
+      } else {
+        expect(kind === "stale" ? [403, 404, 409, 422] : [403, 404]).toContain(response.status);
+        if (kind === "stale") expect(stored!.status).not.toBe("accepted");
+        else expect(stored).toMatchObject({ status: "pending", resolvedAt: null });
+      }
+    });
     it("routes the first authenticated Human comment through the configured heartbeat owner", async () => {
       const userId = randomUUID();
       await db.insert(authUsers).values({ id: userId, name: "Configured heartbeat owner",

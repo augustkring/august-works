@@ -1518,3 +1518,23 @@ it("documents private local observations, mandatory current-person binding and s
   expect(choice.required).toEqual(expect.arrayContaining(["requestId", "enabled", "expectedVersion"]));
   expect(spec.paths[base]!.post.responses[429]).toBeTruthy();
 });
+
+it("documents the scoped Human literal Task, conversation upload and interaction contracts", () => {
+  const paths = buildOpenApiSpec().paths;
+  const task = paths["/api/companies/{companyId}/issues"]?.post;
+  expect(task?.description).toContain("without treating parent or Project contents as copied Human input");
+  expect(task?.responses).toHaveProperty("201");
+  expect(task?.responses).toHaveProperty("200");
+  expect(JSON.stringify(task?.requestBody)).not.toContain("payloadSourceSnapshot");
+  const upload = paths["/api/companies/{companyId}/issues/{issueId}/attachments"]?.post;
+  expect(upload?.description).toContain("before its first message");
+  expect(upload?.responses).toHaveProperty("201");
+  expect(paths["/api/issues/{id}/attachments"]?.get?.description).toContain("current conversation and file-source access");
+  for (const action of ["respond", "accept", "reject"]) {
+    const operation = paths[`/api/issues/{id}/interactions/{interactionId}/${action}`]?.post;
+    expect(operation?.description).toContain("plan confirmations must target the current document revision");
+    expect(operation?.description).toContain("no general private-Task write access");
+    expect(operation?.responses).toHaveProperty("403");
+    expect(operation?.responses).toHaveProperty("409");
+  }
+});

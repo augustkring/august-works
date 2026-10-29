@@ -479,6 +479,21 @@ test("shared questions resume and existing project reuse creates no project card
     );
     await page.goto(f.route);
     await send(page, { action: "question" });
+    // This turn performs several authenticated tools before producing its
+    // question. Observe that real owner effect before timing its live UI.
+    // API reads do not reload the page or invalidate the browser's queries.
+    await expect.poll(async () => {
+      const chat = await json(await request.get(f.chatPath));
+      if (!chat) return false;
+      const response = await request.get(`/api/issues/${chat.id}/interactions`);
+      // Before the first authenticated comment commits, the shell intentionally
+      // exposes no interaction payload. Keep waiting for the actual producer.
+      if (response.status() === 404) return false;
+      const interactions = await json(response);
+      return interactions.some((interaction: any) => interaction.kind === "ask_user_questions" &&
+        interaction.status === "pending" && Boolean(interaction.sourceRunId) &&
+        interaction.payload.questions.some((question: any) => question.id === "audience"));
+    }, { timeout: 60_000 }).toBe(true);
     await expect(
       page.getByRole("radio", { name: "Garden club", exact: true }).last(),
     ).toBeVisible();

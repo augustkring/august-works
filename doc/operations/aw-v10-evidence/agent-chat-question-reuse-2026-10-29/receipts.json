@@ -1,0 +1,109 @@
+{
+  "schema": "aw.v10.scoped-test-evidence.v1",
+  "attempt": "agent-chat-question-reuse-current-r8-20261029",
+  "exitCode": 0,
+  "result": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "reportedCaseDuration": "1.4m",
+    "reportedSuiteDuration": "2.2m"
+  },
+  "stdoutArtifact": "stdout.log.gz",
+  "stdoutSha256": "8fd2bd964129dfe8a07e729ccfa0c3421e8004a16dad053913c7427112b06d95",
+  "fullSourcePinsArtifact": "source-pins.json.gz",
+  "fullSourcePinsSha256": "5be23be96cedd6bd42b8986bc65fed283cb7ffafebda17ee964c347acce570c3",
+  "sourceHead": "3b4cd83feb4642f7845f46f884a379f59f458ea2",
+  "sourcePins": [
+    {
+      "path": "server/src/__tests__/agent-conversations.test.ts",
+      "sha256": "4553c7eb7a49f4bb9ab6aff55215d625a04fc1150af89583d22c1a89fda64219",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/__tests__/manual-task-payload-source.integration.test.ts",
+      "sha256": "35d3dba6539d038c883804916c161a313f59d799047591c586483b5575537cf9",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/__tests__/manual-upload-payload-source.integration.test.ts",
+      "sha256": "416c263b5876b324b9f12ec84900664ced40340feee914668ff2f39f1af62015",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/routes/issues.ts",
+      "sha256": "f50fbbe1596256c5ec2a5709e20fe5bb7ab39a223d765be8909826b0516652c4",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/services/authorization.ts",
+      "sha256": "86ffed8bddc9be3af8f366d731660d353831435d230efcca9877214e34000619",
+      "matchesCurrentAtArchive": false
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "sha256": "a8b4b40f4fc835e879d7401ee8bed7e921c6b7fd67a6c5deb4890f37b54c4d3c",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "server/src/services/native-direct-input.ts",
+      "sha256": "643ace8b2268cc1f2b8884ac9e86f9d9d443331a61c2c619e6902f4863bb1a6b",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "tests/e2e/agent-chat-projects.spec.ts",
+      "sha256": "6dee7341b22bba982342a3593997736dec2e11fd7027fa1d35c8ce8f8df868f4",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "tests/e2e/aw-v10-agent-chat.config.ts",
+      "sha256": "b97e2ca9eaa616ba21cea2cc8f8542ca09ec7a8993b912e1526e5386e5ef9b4f",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "tests/e2e/fixtures/native-chat-codex.mjs",
+      "sha256": "a19dee5a85c45a54dd3a0ec62d6ad09942bbf40ae030090f4f22f0b38b54eb4d",
+      "matchesCurrentAtArchive": true
+    },
+    {
+      "path": "tests/e2e/fixtures/native-chat-codex.protocol.test.mjs",
+      "sha256": "af91f7bf4ef7c3c42acc5e6db7ce7e27173fea4fe2feafcd39ef48ec535b95a3",
+      "matchesCurrentAtArchive": true
+    }
+  ],
+  "qualifiedScope": [
+    "Exact existing Chromium question/resume/existing-Project-reuse case, controlled local Codex protocol and actual RunnerD binary",
+    "Live question card without reload/query invalidation; authenticated owner answer and resumed clarification",
+    "One root Task assigned to existing Project, no new Project/card; final ordinary Human child creation inherits private access",
+    "Actual final case assertions all passed"
+  ],
+  "excludedScope": [
+    "New model-created private Project or repo/API parity",
+    "Delegated Task output/completion: this scenario has no saved execution plan",
+    "Production provider/physical-host qualification",
+    "Legacy Codex parent model-prefix provenance: actual parent remains protocol0"
+  ],
+  "controlledProvider": {
+    "turns": 4,
+    "finalItems": 4,
+    "turnCompletions": 4,
+    "failedToolResults": 0,
+    "toolCalls": {
+      "get_task_context": 4,
+      "get_task_history": 4,
+      "call_api": 2,
+      "request_human_input": 1,
+      "report_progress": 2,
+      "create_task": 2,
+      "read_document": 1,
+      "list_documents": 1,
+      "write_document": 1,
+      "paperclip_finish": 1
+    },
+    "executedFixtureSha256": [
+      "a19dee5a85c45a54dd3a0ec62d6ad09942bbf40ae030090f4f22f0b38b54eb4d"
+    ]
+  },
+  "durationNote": "Playwright rounded display values preserved verbatim; no performance SLO qualification.",
+  "providerEventsSha256": "c26e34802bc0bfa6f820dfaf7a91d40647eb5fb245a50da57075f51b7b0c1291"
+}
