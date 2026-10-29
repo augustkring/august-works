@@ -17840,7 +17840,7 @@ export function heartbeatService(
     // legitimate retry fail the current-principal gate during preparation.
     // The conditional write cannot resume a paused/terminated Agent or clear
     // the previous failure for an already cancelled Run.
-    await db.update(agents).set({ status: "running", statusReason: null, updatedAt: claimedAt })
+    await db.update(agents).set({ status: "running", errorReason: null, updatedAt: claimedAt })
       .where(and(eq(agents.id, claimed.agentId), eq(agents.companyId, claimed.companyId),
         eq(agents.status, "error"), exists(db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
           .where(and(eq(heartbeatRuns.id, claimed.id), eq(heartbeatRuns.companyId, claimed.companyId),

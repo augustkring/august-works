@@ -252,6 +252,8 @@ suite("task project repository provisioning", () => {
         .toEqual({ status: "succeeded", errorCode: null, error: null });
     }, { timeout: 15_000 });
     expect(execute.mock.calls.filter(([input]) => input.runId === retry!.id)).toHaveLength(1);
+    expect(execute.mock.calls.find(([input]) => input.runId === retry!.id)![0].agent)
+      .toMatchObject({ status: "running", errorReason: null });
     const [task] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId)));
     expect(task).toMatchObject({ status: "done", assigneeAgentId: agentId });
     const copies = (execute.mock.calls.find(([input]) => input.runId === retry!.id)![0].context.paperclipWorkspaces as Array<{ cwd: string }>).filter((hint) => hint.cwd.includes(".paperclip-repositories"));
