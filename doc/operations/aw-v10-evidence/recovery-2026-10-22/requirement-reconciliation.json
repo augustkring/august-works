@@ -10893,7 +10893,7 @@
       "id": "V10-116",
       "sourceLine": 6930,
       "work": "export/delete/offboarding journey.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -10902,9 +10902,11 @@
           "server/src/services/business-event-export.ts",
           "server/src/services/export-fidelity.ts",
           "server/src/services/saas/offboarding.ts",
-          "server/src/services/saas/company-purge.ts"
+          "server/src/services/saas/company-purge.ts",
+          "server/src/services/saas/account-deletion.ts",
+          "server/src/__tests__/account-deletion-sso-reauth.integration.test.ts"
         ],
-        "implementationFinding": "Export fidelity and business-event export have explicit owners; company offboarding/purge uses a durable deletion operation. A complete export acknowledgement through deletion, source erasure, restart recovery, and post-delete non-resurrection journey remains unqualified.",
+        "implementationFinding": "The account-deletion owner now requires a current session and either current credential confirmation or a session-bound, qualified fresh SSO proof; configured operators and accounts with native factor policy also require the applicable native factor. It creates a durable deletion operation and immediately revokes account access, sessions, credentials, memberships and grants in its native erasure transaction while preserving legally or provider-held material behind its retention fences. The scoped receipts exercise request authorization and account-deletion authentication paths; they do not complete a same-company export/delete/offboarding journey or independently verify physical erasure, restart recovery, held-data release, and post-delete non-resurrection.",
         "scopedEvidence": [
           {
             "kind": "source_review",
@@ -10916,6 +10918,31 @@
             ],
             "finding": "Export fidelity and business-event export have explicit owners; company offboarding/purge uses a durable deletion operation. A complete export acknowledgement through deletion, source erasure, restart recovery, and post-delete non-resurrection journey remains unqualified.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+          },
+          {
+            "kind": "focused_source_and_test_receipts",
+            "paths": [
+              "server/src/services/saas/account-deletion.ts",
+              "server/src/__tests__/account-deletion-sso-reauth.integration.test.ts",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/README.md",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_oidc/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_oidc/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_oidc/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_saml/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_saml/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_saml/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/local_operator_positive/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/local_operator_positive/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/local_operator_positive/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/totp_recovery/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/totp_recovery/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/totp_recovery/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/enterprise_off_passkey/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/enterprise_off_passkey/receipt.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/enterprise_off_passkey/source-pins.json"
+            ],
+            "finding": "Current account-deletion code performs password or qualified fresh OIDC/SAML reauthentication, applies configured-operator and native-factor requirements, records a durable operation, then immediately revokes scoped account access. Pinned tests cover OIDC freshness and one-use/session binding, signed SAML freshness, native TOTP/recovery, operator password denial/passkey acceptance, and enterprise-flag-off native passkey availability. These are bounded request/authentication cases, not a full export/delete/offboarding or independently inspected erasure completion.",
+            "verification": "Each receipt retains its own source-pins.json and reconstruction patch; the README records selectors, results, and snapshot heads. Operator OIDC 4/4, SAML 1/1, local configured operator positive 1/1, TOTP recovery 1/1, and enterprise-off passkey 1/1. Provider operation, legal-hold release, full journey, and customer acceptance remain unqualified."
           }
         ],
         "historicalPinComparison": {
@@ -10923,7 +10950,7 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Complete a same-company export/delete/offboarding journey with data inventory, retained legal exceptions, actor/account revocation, retry/restore behavior and independently inspected erasure receipt.",
+        "remainingWork": "Complete a same-company export/delete/offboarding journey with data inventory, actor/account revocation, held-data and legal-exception release, retry/restart recovery, and an independently inspected erasure receipt; prove no stale identity, grant, job or restore can resurrect access.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -10943,7 +10970,7 @@
             "observedWorktreeSha256": "8c3e54b700044da4ce16a229a9fbb38bb28e7133561462aa39a151012e2d6077"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Committed account-deletion owner source plus separately pinned scoped authentication receipts. The receipts establish bounded request-path behavior only; they do not establish physical erasure, full export/offboarding, hosted provider operation, customer acceptance, or release qualification."
       }
     },
     {
@@ -11506,27 +11533,40 @@
       "id": "V10-123",
       "sourceLine": 6942,
       "work": "domain tool projection for Tasks/Projects/Work/Agents/Apps/Insights/Support according to least-authority modes.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
         "bindingClause": "123. `V10-123` domain tool projection for Tasks/Projects/Work/Agents/Apps/Insights/Support according to least-authority modes.",
         "sourceOwners": [
+          "ui/src/pages/AgentRuntimeFabric.tsx",
+          "ui/src/api/v5.ts",
+          "server/src/routes/agent-runtime-fabric.ts",
+          "server/src/services/agent-runtime-fabric.ts",
+          "server/src/services/cross-company-context.ts",
+          "server/src/services/scoped-runtime-actions.ts",
+          "server/src/services/orchestration/native-tool-boundary.ts",
+          "server/src/services/orchestration/worker-model-gateway.ts",
           "server/src/services/agent-native-operation-manifest.ts",
           "server/src/services/tool-gateway.ts",
           "packages/shared/src/remote-mcp-connectors.ts"
         ],
-        "implementationFinding": "The operation manifest describes least-authority modes across Tasks, Projects, Work, Agents, Apps, Insights, Decisions, Support, Skills, Workflows, Foundation, Memory, Notifications, Co-workers and Routines. Manifest presence is not proof every domain owner is exposed, denied, or recovered consistently through every Tool Gateway/MCP/profile path.",
+        "implementationFinding": "The audited board-originated cross-company runtime path supports bounded delegated read and contribute under a represented Human and exact company/presence/scope bindings; orchestration accepts exact read/contribute Context. It does not reject delegated scopes wholesale. A bounded orchestration plan is explicitly denied guest act until its delegated side-effect and budget receipts are qualified. This scoped finding does not close the broader operation-by-domain Tool Gateway/MCP/profile matrix in the binding clause.",
         "scopedEvidence": [
           {
             "kind": "source_review",
             "paths": [
-              "server/src/services/agent-native-operation-manifest.ts",
-              "server/src/services/tool-gateway.ts",
-              "packages/shared/src/remote-mcp-connectors.ts"
+              "ui/src/pages/AgentRuntimeFabric.tsx",
+              "ui/src/api/v5.ts",
+              "server/src/routes/agent-runtime-fabric.ts",
+              "server/src/services/agent-runtime-fabric.ts",
+              "server/src/services/cross-company-context.ts",
+              "server/src/services/scoped-runtime-actions.ts",
+              "server/src/services/orchestration/native-tool-boundary.ts",
+              "server/src/services/orchestration/worker-model-gateway.ts"
             ],
-            "finding": "The operation manifest describes least-authority modes across Tasks, Projects, Work, Agents, Apps, Insights, Decisions, Support, Skills, Workflows, Foundation, Memory, Notifications, Co-workers and Routines. Manifest presence is not proof every domain owner is exposed, denied, or recovered consistently through every Tool Gateway/MCP/profile path.",
-            "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+            "finding": "The board/runtime execution request binds requestedByUserId, company/presence, scope request and current run. Cross-company Context checks feature/current Human/current guest local presence, mode, policy, classifications, current rights and revocation before disclosure; it returns source-company manifests/evidence with the home company as result owner. Scoped actions recheck current home run and guest authority and route to canonical domain owners. Native bounded orchestration accepts exact read/contribute Context and rejects guest act; scoped-runtime-actions rejects guest act for bounded plans pending side-effect/budget qualification. Therefore the old claim that orchestration rejects delegated scopes wholesale is inaccurate; only delegated act is explicitly blocked for bounded plans.",
+            "verification": "source review of current worktree; related integration-test source is separately recorded under V10-129; no hosted provider/profile or release qualification asserted"
           }
         ],
         "historicalPinComparison": {
@@ -11534,30 +11574,50 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Close the operation-by-domain matrix with each original service, principal, owner ACL, side-effect mode, idempotency, status recovery and unsupported profile explicitly recorded.",
+        "remainingWork": "Close the broader operation-by-domain matrix across original owners and Tool Gateway/MCP/profile paths, including mode-specific ACLs, side effects, idempotency, status recovery and unsupported profiles; separately qualify delegated guest act for bounded plans with the required receipts.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
-            "path": "server/src/services/agent-native-operation-manifest.ts",
-            "observedWorktreeSha256": "db036b733a5e76ed2b19bc1fbdb48d2b8345401f2b2b54d2e75cfaf2068ae40a"
+            "path": "ui/src/pages/AgentRuntimeFabric.tsx",
+            "observedWorktreeSha256": "d5a0533c2bec4967aa65e9bf7cc53fa22416185bea58d8e136f887cfcbef9bb4"
           },
           {
-            "path": "server/src/services/tool-gateway.ts",
-            "observedWorktreeSha256": "edc8ee1efc39771f2d1df5b19294daf2150802f19bdef8dee6d3ac2c0cfffa2d"
+            "path": "ui/src/api/v5.ts",
+            "observedWorktreeSha256": "84a8237ce46c7b16541b34ce17815bcd04af68284d9f972616e17921f23f2d15"
           },
           {
-            "path": "packages/shared/src/remote-mcp-connectors.ts",
-            "observedWorktreeSha256": "28e16b281ac04d9b878460f45a2b68cefb2b1c49e200a466587d8eecbba6c2b0"
+            "path": "server/src/routes/agent-runtime-fabric.ts",
+            "observedWorktreeSha256": "6a7ecccf8404fc24ab618aab13756e23dc514f970bb95622e1995f78cc7441bd"
+          },
+          {
+            "path": "server/src/services/agent-runtime-fabric.ts",
+            "observedWorktreeSha256": "6f241e0102c15da8956a71f724deef458070d47d1dbb37bf30d8849371205bc8"
+          },
+          {
+            "path": "server/src/services/cross-company-context.ts",
+            "observedWorktreeSha256": "0396edfb3bf58e8474dc15b4724398c88a0f3464851594dabb6eef0cd920f71d"
+          },
+          {
+            "path": "server/src/services/scoped-runtime-actions.ts",
+            "observedWorktreeSha256": "9866a73da491888a0afee396cdb382370b08944c1d9d6c99e30e2d0ece1d4e41"
+          },
+          {
+            "path": "server/src/services/orchestration/native-tool-boundary.ts",
+            "observedWorktreeSha256": "7c827384fa4829372c069896b07450c8ecf4f68588265c5d06d8bcff2a6df22f"
+          },
+          {
+            "path": "server/src/services/orchestration/worker-model-gateway.ts",
+            "observedWorktreeSha256": "0240e94393b7ff7e33c5c09af5d2016c7083fda18eb574031890eee9c0033897"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection of the board-originated bounded cross-company path. It corrects the delegated-scope behavior description but does not certify all domains, ambient profiles, provider/runtime deployment, or release acceptance."
       }
     },
     {
       "id": "V10-124",
       "sourceLine": 6943,
       "work": "represented-user / agent-principal / execution-identity binding for channel-originated operations.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -11568,18 +11628,19 @@
           "server/src/services/chat-channels.ts",
           "server/src/services/authorization.ts"
         ],
-        "implementationFinding": "Tool Gateway operations bind a current agent run and represented Human/company admission; chat channel identity/link lifecycle has separate provider owners. Cross-channel actor mapping remains a seam: all operations must preserve distinct represented user, agent principal, execution identity, company and provider sender through retries.",
+        "implementationFinding": "The audited board-originated scoped-execution path carries a represented Human, home company, local presence, run and exact guest scope, then rechecks current Human membership and local guest authority. Native bounded workers accept only exact delegated read/contribute Context and reject act. This does not establish the corresponding represented-user/agent-principal/execution-identity tuple for Slack, Teams or other channel-originated requests; channel/provider identity linking remains a separate seam.",
         "scopedEvidence": [
           {
             "kind": "source_review",
             "paths": [
-              "server/src/services/tool-gateway.ts",
-              "server/src/services/chat-provider-links.ts",
-              "server/src/services/chat-channels.ts",
-              "server/src/services/authorization.ts"
+              "server/src/routes/agent-runtime-fabric.ts",
+              "server/src/services/agent-runtime-fabric.ts",
+              "server/src/services/cross-company-context.ts",
+              "server/src/services/orchestration/native-tool-boundary.ts",
+              "server/src/services/orchestration/worker-model-gateway.ts"
             ],
-            "finding": "Tool Gateway operations bind a current agent run and represented Human/company admission; chat channel identity/link lifecycle has separate provider owners. Cross-channel actor mapping remains a seam: all operations must preserve distinct represented user, agent principal, execution identity, company and provider sender through retries.",
-            "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+            "finding": "Bounded board-originated runtime execution preserves the current represented Human, home identity and requested guest presence/scope through authorization; bounded Native orchestration accepts read/contribute and rejects act. This is not evidence of the full channel-originated identity tuple or retry behavior.",
+            "verification": "current source inspection only; channel/provider end-to-end qualification remains open"
           }
         ],
         "historicalPinComparison": {
@@ -11587,27 +11648,27 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Prove exact identity tuples and current membership/grant checks on Slack, Teams and each enabled channel mutation/read path, including re-link, duplicate sender, revoked membership and late reply.",
+        "remainingWork": "Prove exact represented-user, agent-principal, execution-identity, company and provider-sender tuples on Slack, Teams and each enabled channel mutation/read path, including re-link, duplicate sender, revoked membership and late reply.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
-            "path": "server/src/services/tool-gateway.ts",
-            "observedWorktreeSha256": "edc8ee1efc39771f2d1df5b19294daf2150802f19bdef8dee6d3ac2c0cfffa2d"
+            "path": "server/src/services/agent-runtime-fabric.ts",
+            "observedWorktreeSha256": "6f241e0102c15da8956a71f724deef458070d47d1dbb37bf30d8849371205bc8"
           },
           {
-            "path": "server/src/services/chat-provider-links.ts",
-            "observedWorktreeSha256": "e6c758fa76331b1bd00e1a18223eb1c1fc1ef65ea8fe1776c356eb41c311525d"
+            "path": "server/src/services/cross-company-context.ts",
+            "observedWorktreeSha256": "0396edfb3bf58e8474dc15b4724398c88a0f3464851594dabb6eef0cd920f71d"
           },
           {
-            "path": "server/src/services/chat-channels.ts",
-            "observedWorktreeSha256": "f167ce1ed44dd346e6d6b8d70e43595c45d61af985f8ff2929319e8b9e031bf8"
+            "path": "server/src/services/orchestration/native-tool-boundary.ts",
+            "observedWorktreeSha256": "7c827384fa4829372c069896b07450c8ecf4f68588265c5d06d8bcff2a6df22f"
           },
           {
-            "path": "server/src/services/authorization.ts",
-            "observedWorktreeSha256": "d3fc48c25bc098bb59751ab0ac229dcc5e2f529e2b8fab5ef48f67443ba9ca96"
+            "path": "server/src/services/orchestration/worker-model-gateway.ts",
+            "observedWorktreeSha256": "0240e94393b7ff7e33c5c09af5d2016c7083fda18eb574031890eee9c0033897"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current board-originated scoped-execution source inspection only; not evidence for channel-originated identity flows, hosted providers, retries, or release readiness."
       }
     },
     {
@@ -11888,7 +11949,7 @@
       "id": "V10-129",
       "sourceLine": 6948,
       "work": "zero-web-day member/manager E2E + stale/replay/revoke/failure cases.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -11899,18 +11960,15 @@
           "server/src/__tests__/chat-channels.integration.test.ts",
           "tests/e2e/aw-v10-native-auth.spec.ts"
         ],
-        "implementationFinding": "Chat channel auth, identity linking and provider lifecycle tests exist, and a separate authenticated native journey exists. No single member/manager zero-web-day journey proves channel setup, least-authority tool use, cross-company boundary, approval, stale/replay/revoke and failure recovery together.",
+        "implementationFinding": "A current integration-test source case exercises bounded guest read, a guest-local Playbook contribution with the home company as result owner, and act behavior including bounded-plan denial and post-revocation denial. Other channel identity and authenticated-browser tests remain separate; no single member/manager zero-web-day journey composes channel setup, scoped work, stale/replay/revoke and recovery.",
         "scopedEvidence": [
           {
-            "kind": "source_review",
+            "kind": "test_source_review",
             "paths": [
-              "server/src/routes/chat-channels.ts",
-              "server/src/routes/chat-channels.identity.test.ts",
-              "server/src/__tests__/chat-channels.integration.test.ts",
-              "tests/e2e/aw-v10-native-auth.spec.ts"
+              "server/src/__tests__/agent-runtime-fabric-v5.test.ts"
             ],
-            "finding": "Chat channel auth, identity linking and provider lifecycle tests exist, and a separate authenticated native journey exists. No single member/manager zero-web-day journey proves channel setup, least-authority tool use, cross-company boundary, approval, stale/replay/revoke and failure recovery together.",
-            "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+            "finding": "The case \u201callows explicitly authorized guest act forecasts, denies read/contribute mutations and rechecks revoked humans\u201d prepares read/contribute/act scopes and checks exact delegated bindings. It permits guest task.forecast for the unbounded fixture, denies that mutation for read/contribute, checks task.forecast scope authorization, and revokes guest membership before rechecking delegated action/context. Related portions also cover guest-local proposal ownership and retained Context erasure. This source review does not claim that the test was run in this task.",
+            "verification": "test source inspected; execution status not asserted"
           }
         ],
         "historicalPinComparison": {
@@ -11918,9 +11976,13 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Compose the real channel/member and manager flows with current board/session and provider auth, then retain raw end-to-end evidence for successful and denied branches plus manual capability limits.",
+        "remainingWork": "Run and retain the focused service integration evidence, then compose the actual member/manager browser and channel flows with setup, scoped work, stale/replay/revoke and failure recovery in one zero-web-day end-to-end journey.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
+          {
+            "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+            "observedWorktreeSha256": "aa7d101850d7d64206595fff0040187c9ed78b2d1220c4b0b2379bc44d3d5f76"
+          },
           {
             "path": "server/src/routes/chat-channels.ts",
             "observedWorktreeSha256": "48610de76e75af45e2b31725bdee3b72900fb7cbf4e33c3d8ff5feede2805500"
@@ -11931,21 +11993,21 @@
           },
           {
             "path": "server/src/__tests__/chat-channels.integration.test.ts",
-            "observedWorktreeSha256": "e57cfb22844b01f94cd4be52a57b829cb01e2117216868827be040e00527ddfb"
+            "observedWorktreeSha256": "5045491541e2e2e7522584e6e05c295d16291857dd69e33c627c8a073357274a"
           },
           {
             "path": "tests/e2e/aw-v10-native-auth.spec.ts",
             "observedWorktreeSha256": "6483e96b8f24a9403dab9e0de87a82657ad0799fb03e55c3501b52511e58a79b"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current test/source inspection distinguishes service-level bounded-scope coverage from the still-missing composite browser/channel journey. No test execution or release qualification is claimed."
       }
     },
     {
       "id": "V10-130",
       "sourceLine": 6949,
       "work": "Agent-Native/ambient coverage audit + final release evidence.",
-      "reconciliation": "no_scoped_evidence_located_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [],
       "oct22Reconciliation": "not_reconciled",
       "currentAssessment": {
@@ -11955,17 +12017,19 @@
           "server/src/services/platform-skill-admission.ts",
           "doc/plans/2026-10-28-v10-current-reconciliation.md"
         ],
-        "implementationFinding": "Operation and Skill admission source is present, but manifest coverage, runtime/provider qualification, live identity/session proof, negative controls, and full release evidence are distinct and incomplete. No Agent-Native all-ambient release audit is recorded here.",
+        "implementationFinding": "The current source audit establishes that bounded Native orchestration allows exact delegated read/contribute Context and rejects guest act; scoped runtime actions also block guest act for bounded plans pending qualification receipts. That is a narrow mode-specific boundary, not a completed Agent-Native/ambient audit. Full manifest, every profile and owner, runtime/provider qualification, negative controls and release evidence remain open.",
         "scopedEvidence": [
           {
             "kind": "source_review",
             "paths": [
+              "server/src/services/scoped-runtime-actions.ts",
+              "server/src/services/orchestration/native-tool-boundary.ts",
+              "server/src/services/orchestration/worker-model-gateway.ts",
               "server/src/services/agent-native-operation-manifest.ts",
-              "server/src/services/platform-skill-admission.ts",
-              "doc/plans/2026-10-28-v10-current-reconciliation.md"
+              "server/src/services/platform-skill-admission.ts"
             ],
-            "finding": "Operation and Skill admission source is present, but manifest coverage, runtime/provider qualification, live identity/session proof, negative controls, and full release evidence are distinct and incomplete. No Agent-Native all-ambient release audit is recorded here.",
-            "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+            "finding": "Bounded guest act is explicitly denied pending delegated side-effect and budget receipts, while bounded read/contribute Context is accepted by the Native boundaries under current bindings. This corrects an overly broad denial characterization but does not close ambient-operation or profile coverage.",
+            "verification": "current source inspection only; no all-profile audit or release qualification asserted"
           }
         ],
         "historicalPinComparison": {
@@ -11973,23 +12037,31 @@
           "matchingCurrentWorktree": 0,
           "differentOrMissingCurrentWorktree": 0
         },
-        "remainingWork": "Complete the generated manifest audit and field regression hook, then attach exact candidate evidence for every claimed runtime/profile and leave unsupported ambient paths disabled.",
+        "remainingWork": "Complete the generated manifest and owner/profile audit with current test evidence for every claimed runtime/profile, preserve explicit unsupported-profile denials, and attach candidate release evidence.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
+            "path": "server/src/services/scoped-runtime-actions.ts",
+            "observedWorktreeSha256": "9866a73da491888a0afee396cdb382370b08944c1d9d6c99e30e2d0ece1d4e41"
+          },
+          {
+            "path": "server/src/services/orchestration/native-tool-boundary.ts",
+            "observedWorktreeSha256": "7c827384fa4829372c069896b07450c8ecf4f68588265c5d06d8bcff2a6df22f"
+          },
+          {
+            "path": "server/src/services/orchestration/worker-model-gateway.ts",
+            "observedWorktreeSha256": "0240e94393b7ff7e33c5c09af5d2016c7083fda18eb574031890eee9c0033897"
+          },
+          {
             "path": "server/src/services/agent-native-operation-manifest.ts",
-            "observedWorktreeSha256": "db036b733a5e76ed2b19bc1fbdb48d2b8345401f2b2b54d2e75cfaf2068ae40a"
+            "observedWorktreeSha256": "8bfc90d76744eebd938c7f90348495b641119ba056b6beb1e78d6008098b59cc"
           },
           {
             "path": "server/src/services/platform-skill-admission.ts",
-            "observedWorktreeSha256": "fe736b7aeef9dea7bf090e7b74eeaa6498d8719e6a810efc38dbec4b4ef12c24"
-          },
-          {
-            "path": "doc/plans/2026-10-28-v10-current-reconciliation.md",
-            "observedWorktreeSha256": "57419f8a60b107b1b952903ca992e13e9165a1069b61365d8033bb6275207f62"
+            "observedWorktreeSha256": "7ec9732ddaa461401f3213d8d72e24a0433de92d0e966d487d27bbfd04623db8"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Current source inspection corrects only the bounded cross-company mode behavior; it does not certify manifest completeness, all ambient paths, runtime/provider behavior, or release acceptance."
       }
     },
     {
@@ -15797,7 +15869,7 @@
       "work": "Complete auth/recovery/reauthentication and bilingual mail",
       "nativeOwnerOrContract": "CE-03 / AUTH; A/C",
       "requiredOutcome": "Every offered login method has a secure usable lifecycle and EN/DA delivery",
-      "reconciliation": "historical_partial_evidence_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [
         "local-password-policy-checkpoint.json",
         "auth-mail-locale-checkpoint.json",
@@ -15846,9 +15918,20 @@
           "ui/src/pages/SaasPasswordReset.test.tsx",
           "ui/src/pages/SaasPasswordReset.tsx",
           "ui/src/pages/SaasWelcome.test.tsx",
-          "ui/src/pages/SaasWelcome.tsx"
+          "ui/src/pages/SaasWelcome.tsx",
+          "server/src/auth/account-deletion-sso-proof.ts",
+          "server/src/auth/enterprise-auth-plugins.ts",
+          "server/src/auth/enterprise-identity-bridge.ts",
+          "server/src/auth/native-passkey.ts",
+          "server/src/auth/native-two-factor.ts",
+          "server/src/services/saas/account-deletion.ts",
+          "server/src/__tests__/account-deletion-sso-reauth.integration.test.ts",
+          "ui/src/components/NativeAuthenticationSettings.tsx",
+          "ui/src/components/NativeAuthenticationSettings.test.tsx",
+          "ui/src/pages/SaasAccount.tsx",
+          "ui/src/pages/SaasAccount.test.tsx"
         ],
-        "implementationFinding": "Credential auth, recovery routes, mail-copy delivery, and EN/DA login/reset UI exist; current branches include additional MFA/re-auth work. Existing historical evidence specifically leaves offered-method completeness, factor enrollment/removal/recovery, break-glass/operator paths and complete bilingual mail journeys open.",
+        "implementationFinding": "Beyond the credential and mail/recovery flows already recorded, current account-deletion software now has scoped passwordless OIDC and signed SAML fresh-reauthentication, bound to the active user/session, current qualified provider policy and one-use challenge. It preserves native factor policy: TOTP/recovery-code completion and already-enrolled UV WebAuthn passkeys are exercised for configured operator and local operator paths; ordinary native passkey sign-in remains usable while enterprise identity is disabled. The focused tests prove selected flows only. They do not qualify every login method/profile, physical authenticator behavior, real enterprise IdP configuration/interoperability, all recovery/reset/revoke branches, or complete EN/DA mail and customer journeys.",
         "scopedEvidence": [
           {
             "reference": "local-password-policy-checkpoint.json",
@@ -16055,6 +16138,35 @@
             ],
             "finding": "Credential auth, recovery routes, mail-copy delivery, and EN/DA login/reset UI exist; current branches include additional MFA/re-auth work. Existing historical evidence specifically leaves offered-method completeness, factor enrollment/removal/recovery, break-glass/operator paths and complete bilingual mail journeys open.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+          },
+          {
+            "kind": "focused_committed_authentication_receipts",
+            "paths": [
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/README.md",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_oidc/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_oidc/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_oidc/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_saml/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_saml/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/operator_saml/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/local_operator_positive/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/local_operator_positive/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/local_operator_positive/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/totp_recovery/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/totp_recovery/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/totp_recovery/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/enterprise_off_passkey/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/enterprise_off_passkey/receipt.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/enterprise_off_passkey/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/ui35/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/ui35/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/ui35/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/typecheck/server.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/typecheck/ui.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/typecheck/source-pins.json"
+            ],
+            "finding": "The retained account-deletion operator receipt set separately pins OIDC freshness/operator/TOTP cases, signed SAML freshness, local configured-operator passkey-positive behavior, TOTP/recovery-code completion, and passkey availability with enterprise_identity_v7 disabled; the UI cohort covers SaasAccount and NativeAuthenticationSettings. Distinct snapshots are not merged into one profile or release qualification.",
+            "verification": "README records exact selectors and independent source heads: OIDC 4/4, SAML 1/1, local operator positive 1/1, TOTP/recovery 1/1, enterprise-off native passkey 1/1, UI 35/35, final server and UI typechecks both exit 0. Receipts retain source pins/reconstruction patches. Actual IdP/provider and physical authenticator use remain external/unqualified."
           }
         ],
         "historicalPinComparison": {
@@ -16062,7 +16174,7 @@
           "matchingCurrentWorktree": 20,
           "differentOrMissingCurrentWorktree": 36
         },
-        "remainingWork": "Complete each actually offered login method from enrollment through recovery, reset, reauthentication and revoke; verify canonical domains, deliverability, anti-enumeration, MFA races and EN/DA text.",
+        "remainingWork": "Close CE-03 across every actually offered profile and method from enrollment through recovery, reset, fresh reauthentication and revoke; validate provider-specific IdP behavior and physical authenticators, concurrent MFA/recovery cases, canonical domains, deliverability, anti-enumeration, and complete EN/DA customer journeys.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -16222,7 +16334,7 @@
             "observedWorktreeSha256": "c0c2f29263f80cf2ab97a9a255fc1f0d361733eb134c40ff70232c421ed50954"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Committed account-deletion/native-auth source and separately pinned selected server/UI/typecheck receipts. This is bounded software evidence, not all-profile, live-provider, physical-authenticator, bilingual delivery, customer-acceptance, or release qualification."
       }
     },
     {
@@ -16231,7 +16343,7 @@
       "work": "Complete paired copy and rendered state acceptance",
       "nativeOwnerOrContract": "\u00a735 / UX-01; C\u2013H",
       "requiredOutcome": "Both locales preserve action, actor, cost, data and status meaning across all critical states",
-      "reconciliation": "historical_partial_evidence_open",
+      "reconciliation": "partial_implementation_open",
       "evidence": [
         "auth-mail-locale-checkpoint.json",
         "account-locale-checkpoint.json"
@@ -16273,9 +16385,13 @@
           "ui/src/pages/SaasWelcome.test.tsx",
           "ui/src/pages/SaasWelcome.tsx",
           "tests/e2e/aw-v9-language.spec.ts",
-          "tests/e2e/aw-v9-auth-language.spec.ts"
+          "tests/e2e/aw-v9-auth-language.spec.ts",
+          "ui/src/pages/SaasAccount.tsx",
+          "ui/src/pages/SaasAccount.test.tsx",
+          "ui/src/components/NativeAuthenticationSettings.tsx",
+          "ui/src/components/NativeAuthenticationSettings.test.tsx"
         ],
-        "implementationFinding": "Paired EN/DA dictionaries, locale routing and browser specs exist; retained browser evidence covers scoped V9 pages. Every critical V10 state/callout has not been accepted for exact action/actor/cost/data/status meaning and rendered truncation/accessibility across both languages.",
+        "implementationFinding": "Paired EN/DA dictionaries, locale routing and existing browser specs remain present. The pinned 35-test SaasAccount and NativeAuthenticationSettings UI cohort adds bounded coverage for the reauthentication/account security settings states that accompany the current native authentication work. It does not record customer or editorial acceptance, full critical-state parity, rendered screenshots, accessibility/truncation review, or a complete browser path in both locales; the V10 rendered-state requirement remains open.",
         "scopedEvidence": [
           {
             "reference": "auth-mail-locale-checkpoint.json",
@@ -16425,6 +16541,17 @@
             ],
             "finding": "Paired EN/DA dictionaries, locale routing and browser specs exist; retained browser evidence covers scoped V9 pages. Every critical V10 state/callout has not been accepted for exact action/actor/cost/data/status meaning and rendered truncation/accessibility across both languages.",
             "verification": "current dirty-worktree source inspection only; does not certify a test result, hosted deployment, live provider, operator/Human acceptance, or release readiness"
+          },
+          {
+            "kind": "focused_ui_test_receipt",
+            "paths": [
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/ui35/test.exit",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/ui35/test.log",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/ui35/source-pins.json",
+              "doc/operations/aw-v10-evidence/account-delete-operator-2026-10-29-r1/README.md"
+            ],
+            "finding": "The selected SaasAccount and NativeAuthenticationSettings UI suite passed 35/35 against its recorded source snapshot. This is component/UI test evidence for selected auth/account flows, not bilingual rendered-state or customer acceptance.",
+            "verification": "Pinned test exit and source snapshot; no hosted browser/customer session, screenshot/accessibility inspection, or full V10 critical-state inventory is asserted."
           }
         ],
         "historicalPinComparison": {
@@ -16432,7 +16559,7 @@
           "matchingCurrentWorktree": 17,
           "differentOrMissingCurrentWorktree": 24
         },
-        "remainingWork": "Complete a source-derived list of critical states, verify parity and rendered screenshots/accessibility, and rerun against the frozen current source after copy changes.",
+        "remainingWork": "Complete the source-derived critical-state inventory and verify action, actor, cost, data and status meaning in rendered EN and DA screens, including screenshots, accessibility/truncation and customer acceptance; rerun against frozen current source after copy changes.",
         "implementationStatus": "partial_implementation",
         "sourceReviewFindings": [
           {
@@ -16568,7 +16695,7 @@
             "observedWorktreeSha256": "82ad961b210f251cc59edf51fffc79ef2758880727ff0f28861279fa50eaa594"
           }
         ],
-        "reviewBasis": "Current source inspection at recorded repository HEAD plus dirty worktree. Historical checkpoint/test details remain in existing scopedEvidence. Source presence does not certify full journey, hosted provider/runtime behavior, or release acceptance."
+        "reviewBasis": "Existing paired-locale and browser evidence plus the separately pinned selected account/auth UI test cohort. UI test coverage is bounded software evidence; full rendered EN/DA and human acceptance remain open."
       }
     },
     {
