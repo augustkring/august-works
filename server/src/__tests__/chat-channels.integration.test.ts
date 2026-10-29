@@ -25977,7 +25977,9 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     });
 
     const heartbeat = heartbeatService(db);
+    const previousApiUrl = process.env.PAPERCLIP_API_URL;
     try {
+      process.env.PAPERCLIP_API_URL = "https://paperclip.example.test";
       await db
         .update(companies)
         .set({ defaultResponsibleUserId: "owner-user" })
@@ -26311,6 +26313,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     } finally {
       await heartbeat.drainActiveRunExecutions();
       unregisterServerAdapter(adapterType);
+      if (previousApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
+      else process.env.PAPERCLIP_API_URL = previousApiUrl;
     }
   });
 
