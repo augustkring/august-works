@@ -1,0 +1,514 @@
+ ✓ src/pages/apps/chat/ChatIdentityConfirm.test.tsx > self-service Slack identity confirmation > sends signed-out users to sign in with the confirmation route preserved 82ms
+ ✓ src/pages/apps/chat/ChatIdentityConfirm.test.tsx > self-service Slack identity confirmation > requires an explicit identity confirmation from members 124ms
+ ✓ src/pages/apps/chat/ChatIdentityConfirm.test.tsx > self-service Slack identity confirmation > keeps other providers out of the Slack return flow 108ms
+ ✓ src/pages/apps/chat/ChatIdentityConfirm.test.tsx > self-service Slack identity confirmation > lets nonmembers request access without confirming the identity 107ms
+ ✓ src/pages/apps/chat/ChatIdentityConfirm.test.tsx > self-service Slack identity confirmation > does not allow requests using an expired or consumed link 55ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > step 1 leads straight to the agent — there is no mission step 2 > creates the organization on Continue and lands on the agent step, no mission 140ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > step 1 leads straight to the agent — there is no mission step 2 > shows no environment-check card on the model step, and no Mission row on review 170ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > step 1 leads straight to the agent — there is no mission step 2 > adopts an agent the company already has under that name instead of hiring it twice 163ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > step 1 leads straight to the agent — there is no mission step 2 > hires from a legacy draft that saved an empty role 134ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > step 1 leads straight to the agent — there is no mission step 2 > hires one agent when Connect fires twice in one breath 137ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > step 1 leads straight to the agent — there is no mission step 2 > creates one company for one keystroke, modifier or not 38ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > step 1 leads straight to the agent — there is no mission step 2 > creates one company however many times Enter repeats 35ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > step 1 leads straight to the agent — there is no mission step 2 > sends Back to the screen the run actually came from 44ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > blocks the hire on a warn result that holds adapter_auth_missing, and shows the returned checks 95ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > still hires on a warn result that carries no adapter_auth_missing check 99ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > defaults to a saved personal API key and uses the same reference for probe and hire 153ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > defaults to a saved organization API key and uses the same reference for probe and hire 128ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > an API key typed on the step > is stored as a personal connection and referenced, never carried in the hire 155ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > an API key typed on the step > creates a managed connection without rotating an existing saved key 146ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > an API key typed on the step > blocks the hire when the key cannot be stored 93ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > an API key typed on the step > stores one connection when Connect is pressed twice with the same key 100ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > re-probes rather than reusing a pass when the credential mode changes 155ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > does not open the create path on a cached warn result that holds adapter_auth_missing 108ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > sends the fixed Claude binding and applyStoredClaudeLogin when a stored login exists 97ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > sends no binding and no flag when the Claude status route returns 404 102ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > sends no binding when the adapter configuration holds a non-empty ANTHROPIC_API_KEY 89ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > carries no token value in the hire payload 90ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > sends the fixed binding in the environment test request when the status route returns 200 85ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > sends no binding in the environment test request when the status route returns 404 62ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > hires when a stored login exists, even though a probe without the binding would warn adapter_auth_missing 66ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > blocks the hire when the probe reports warn with adapter_auth_missing and no stored login exists 75ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > hire gate: adapter authentication (claude_local, the default onboarding adapter) > reads the stored-login status once for each create attempt 78ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > re-syncs a restored draft once companies resolve asynchronously (companies start empty/loading) 17ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > keeps the live wizard mounted while a post-create company-list refetch runs 30ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > restores a draft after its initial ownership check fails and a retry succeeds 22ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > discards a saved draft for a company the signed-in account does not own, and wipes the stale blob 13ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > opens, and keeps the draft, when the initial company query fails 12ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > renders instead of throwing when the browser denies storage access 12ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > opens but does not restore when a refetch fails over a cached list 8ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > leaves the draft untouched when the company query fails and onboarding is closed 4ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > does not hand one account's draft to the next when a refetch fails after a switch 10ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > does not judge ownership against a warm cache that never refetched 9ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > does not delete a draft when the company list comes back unauthorized 9ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > does not restore against data retained from a failed post-mount refetch 9ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > does not mount undecided over a warm cache, which would overwrite the draft 2ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > clears an unreadable draft without waiting on the company endpoint 11ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > finishes claude_local sign-in when its connection becomes visible before the completion poll 2136ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > finishes codex_local sign-in when its connection becomes visible before the completion poll 2145ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > names the tiles for the provider, not the adapter type 36ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > will not advance on a saved adapter the step no longer offers 57ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > will not advance on a saved adapter the row does not show 30ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > will not hire from the keyboard on a source nobody selected 136ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > starts no call to the test-environment route on adapter selection 44ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > starts the claude_local sign-in on Connect when the signal reports no ready credential 91ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > collapses the row to the chosen source and walks the button through the sign-in 150ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > submits the browser code on the paste, not on the first keystroke 115ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > does not hire on the paste alone, before the login is stored 2492ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > gives the button back when the pasted code is refused 112ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > does not reopen the card when a pasted code fails after Back 1664ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > does not hire when the login finishes after Back 3358ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > starts the sign-in on the first press, even when it changes the adapter 82ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > opens the OpenAI card's sign-in once the prompt lands 91ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > does not hire after Back interrupts the hold before step 5 2552ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > shows no probe diagnostics between the sign-in succeeding and the step advancing 2542ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > starts no login when Back interrupts the collapse 1299ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > starts the codex_local sign-in on Connect when the signal cannot decide 93ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > shows the failure instead of starting a codex_local login when the active-session read fails 74ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > shows the failure instead of starting a claude_local login when the active-session read fails 79ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > resumes the same claude_local session after Back, rather than starting a second 214ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > resumes the same codex_local session after Back, rather than starting a second 203ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > starts the other source's login after backing out of the first 204ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > hires on Connect, with no sign-in, when the signal reports a ready credential 90ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > renders no 'Use saved login' control 27ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > reads the signal again after an adapter change 55ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > automatically verifies detected claude_local once through connection refreshes and advances 161ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > automatically verifies detected codex_local once through connection refreshes and advances 161ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > automatically verifies a saved claude_local subscription only after selecting its provider 114ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > automatically verifies a saved codex_local subscription only after selecting its provider 112ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > prefers the personal default claude_local subscription over an earlier shared account 99ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > prefers the personal default codex_local subscription over an earlier shared account 99ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > does not choose an arbitrary claude_local account when several shared subscriptions exist 80ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > does not choose an arbitrary codex_local account when several shared subscriptions exist 70ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > keeps claude_local verification pending through environment query updates 160ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > keeps codex_local verification pending through environment query updates 180ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > ignores an already-submitted hire response after back 160ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > ignores an already-submitted hire response after unmount 120ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > offers a manual retry after failed claude_local verification without signing in again 139ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > offers a manual retry after failed codex_local verification without signing in again 115ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > keeps Connect usable when claude_local detection has not completed 76ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > keeps Connect usable when codex_local detection has not completed 96ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > shows Connecting while saving, then Testing while verifying 133ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > ignores verification completion after back navigation 151ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > ignores verification completion after provider navigation 194ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > ignores verification completion after company navigation 153ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > automatic subscription verification > ignores verification completion after unmount navigation 99ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > shows local Claude instructions and saves its connection before hiring 77ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > hides the panel when the resolved login environment driver is not sandbox 22ms
+ ✓ src/components/OnboardingWizard.test.tsx > OnboardingWizard restore-gate (stale localStorage across accounts) > the adapter step login panel (cheap auth signal, no adapter test) > restores the started-login state after a reload, resuming the active session with no press 46ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > inline aggregator zapier collects the endpoint and completes only for the requester 126ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > inline aggregator arcade collects the endpoint and completes only for the requester 60ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > inline aggregator composio collects the endpoint and completes only for the requester 51ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > inline aggregator executor collects the endpoint and completes only for the requester 48ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > inline aggregator arcade binds OAuth to the task and retries the same draft 48ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > inline aggregator composio binds OAuth to the task and retries the same draft 54ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > inline aggregator executor binds OAuth to the task and retries the same draft 53ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > inline aggregator saves and resumes a draft without storing credentials in browser storage 40ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > inline aggregator reuses an eligible account without changing its access 10ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > blocks direct mem0 setup while memory connectors are off 5ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > blocks direct zep setup while memory connectors are off 4ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > blocks direct supermemory setup while memory connectors are off 4ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > blocks direct cognee setup while memory connectors are off 4ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > blocks direct honcho setup while memory connectors are off 4ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > allows an existing memory connection to reconnect while setup is hidden 15ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > opens direct zapier setup with default settings 27ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > opens direct arcade setup with default settings 27ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > opens direct composio setup with default settings 26ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > opens direct executor setup with default settings 29ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > explains a failed arcade OAuth return and retries the same saved draft 27ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > explains a failed composio OAuth return and retries the same saved draft 16ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > explains a failed executor OAuth return and retries the same saved draft 15ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > explains a declined Composio OAuth return without discarding the draft 10ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > retains the shared identity when returning to Access after an OAuth return 29ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > retains the per_user identity when returning to Access after an OAuth return 22ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > shows only MCP URL setup on the BYO page 10ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > reloads a generic task reconnect endpoint from config-url with selection-only card metadata 52ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > reloads a generic task reconnect endpoint from transport-url with selection-only card metadata 32ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > reloads a generic task reconnect endpoint from transport-serverUrl with selection-only card metadata 32ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves an edited task reconnect endpoint after refreshing connection data 28ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > an unrecognized URL routes to a minimal frame with the URL and key choice 41ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > opens the shared Access step before configuring a pasted MCP server 22ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > gates chat-only cards in the embedded tool gallery without hiding GitHub (false) 10ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > gates chat-only cards in the embedded tool gallery without hiding GitHub (true) 10ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > does not reveal hidden telegram setup from a pasted link or its generic follow-up 29ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > does not reveal hidden discord setup from a pasted link or its generic follow-up 37ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > matches GitHub tool URLs independently of gallery search while chat connectors are hidden 27ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > offers both Anthropic methods without the obsolete REST option (task repair: false) 100ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > offers both Anthropic methods without the obsolete REST option (task repair: true) 69ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > asks for a GitHub identity and defaults to the current user and every agent 21ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps provider guidance and card styling out of the shared access step 19ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > defaults to every agent and only blocks an empty explicit selection 28ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps the access selections when the wizard moves backward 43ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > uses Cancel to exit while the bottom Back button stays in the wizard 25ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > defaults flexible methods to company identity and keeps personal credentials submittable 71ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > shows Gmail's instance configuration notice instead of a dead connect path 11ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > collects customer-owned OAuth client details for a curated manual OAuth app 49ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > submits the Postman access mode selected on the setup screen 45ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > opens a manual OAuth app from the same source deep link Browse uses 21ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > starts a selected app deep link at step one of its two-step setup 19ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > opens a brokered Gmail deep link at the access step 19ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > prompts for one-time Cloud registration inside Gmail when managed methods are not yet advertised 29ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > retains task access and interaction through enrollment (popup blocked: false) 32ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > retains task access and interaction through enrollment (popup blocked: true) 29ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > closes the reserved enrollment popup after request failure 20ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > closes the reserved enrollment popup after missing-url failure 21ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > closes the reserved enrollment popup after invalid-url failure 21ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > binds OAuth to the task even when setup resumes in the page host 16ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > revalidates a cached pending enrollment before continuing (expiry 2020-01-01T00:00:00.000Z) 12ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > revalidates a cached pending enrollment before continuing (expiry 2099-01-01T00:00:00.000Z) 11ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > labels GitHub's local setup transition without promising a provider handoff 19ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps provider-specific wording and the handoff cue for direct OAuth 14ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps GitHub's personal identity defaults while its managed method awaits enrollment 20ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > restores the setup step after the one-time enrollment callback 11ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > explains unavailable GitHub sign-in without silently switching to a PAT 14ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps GitHub sign-in intent when enrollment recovery reveals an unavailable profile 14ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves a dedicated agent identity across the full-page enrollment callback 102ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'gmail' when changing method (enrollment return: false) 52ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'gmail' when changing method (enrollment return: true) 33ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-drive' when changing method (enrollment return: false) 53ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-drive' when changing method (enrollment return: true) 32ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-docs' when changing method (enrollment return: false) 53ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-docs' when changing method (enrollment return: true) 34ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-sheets' when changing method (enrollment return: false) 50ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-sheets' when changing method (enrollment return: true) 31ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-slides' when changing method (enrollment return: false) 52ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-slides' when changing method (enrollment return: true) 31ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-calendar' when changing method (enrollment return: false) 45ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-calendar' when changing method (enrollment return: true) 30ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-chat' when changing method (enrollment return: false) 51ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-chat' when changing method (enrollment return: true) 30ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-people' when changing method (enrollment return: false) 56ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-people' when changing method (enrollment return: true) 25ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-workspace-search' when changing method (enrollment return: false) 31ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves personal Workspace access for 'google-workspace-search' when changing method (enrollment return: true) 22ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps the managed Slack route and own-app fallback visible with honest requested scopes 36ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > never renders self-host enrollment when the connector identity is already active 10ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps Google Drive prerequisites off access and defaults to its write-capable method 21ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > renders Google Calendar as one minimal, unboxed setup screen 26ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps Shopify prerequisite copy off access before collecting the store domain 20ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > disables Any agent and blocks Continue when the member cannot install company-wide 15ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > opens the selected app directly on its setup route 18ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > connects PostHog without a project ID and keeps optional controls advanced 43ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > hands reviewed PostHog credentials to Vercel and submits only the connector reference 33ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > folds optional customer-owned OAuth details under Advanced 29ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > shows unavailable Vercel configuration only inside the isolated Vercel entry point 10ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > renders the same PostHog method choices in page and task-dialog hosts 34ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > reserves the task-dialog OAuth popup before awaiting connection setup and assigns only the validated URL 31ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > returns a standalone GitHub popup to its host only after verifying the saved connection 1043ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps the task dialog recoverable when the browser blocks its reserved OAuth popup 35ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > chooses identity before the Notion source deep link opens provider sign-in 35ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > shows an in-flight state while Paperclip prepares Notion sign-in 30ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps the same steps when Notion sign-in takes over the wizard 28ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > backs from the sign-in checkpoint to Access without exiting the wizard 38ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > resumes an existing Notion OAuth connection instead of creating another draft 36ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > resumes the exact draft selected by Finish setup 27ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > shows installation recovery for GitHub even when an advanced PAT method is available 34ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > returns a declined OAuth draft to the same one-action resume checkpoint 24ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves an active personal identity when reconnecting Notion 35ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > preserves an active organization identity when reconnecting Notion 35ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > revives an archived Notion connection without reopening its organization identity choice 24ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > offers recovery when provider details fail during an exact retained reconnect 23ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps an exact retained reconnect retryable when the connection lookup fails 22ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps an exact retained reconnect retryable when the application lookup fails 19ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > creates a fresh Notion OAuth connection when the provider landing requests another 30ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > waits for fresh connection data before creating a Notion OAuth draft 40ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > resumes Notion OAuth after a failed connection lookup is retried 38ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > restores the Notion lookup error when retrying still fails 29ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > retries OAuth on the prepared connection without creating another draft 38ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > recovers a response-lost Notion draft before retrying creation 40ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > opens customer-owned OAuth apps instead of blocking them by slug 22ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > routes the enabled Notion gallery tile through the generic source deep link 15ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > choosing No and clicking Check link connects with no credentials 43ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > choosing Yes reveals one masked key field without extra reassurance copy 87ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > a Zapier MCP URL stays in the URL flow and includes its token in the submitted link 40ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > gives Zapier the shared credential and agent access opener 37ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps alternate setup methods out of the connection wizard 14ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > advertises that remote/local MCP URLs work under 'Connect with a link' 14ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > prefills the link frame from search params and passes applicationId to connect 31ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > shows the Google Sheets robot email and keeps empty sheet links from continuing 31ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > shows inline validation for invalid Google Sheets links 51ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > gallery setup names the connection automatically 31ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > keeps the originating connection intent in wizard URLs 28ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > steps back from the key step to Access, and from Access to Connectors 35ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > leaving the default name connects with the app name 33ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > continues an exact credential-based draft instead of creating a replacement 25ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > uses the gallery app name automatically 32ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > uses the Google Sheets app name automatically 43ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — Connect with a link (M4 frame) > passes parsed Google Sheets IDs as connection config values 45ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > defaults the hidden connection name from host, port, and path 39ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > keeps the endpoint host visible while skipping action review 38ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > offers a curated setup as a convenience without leaving the generic flow 37ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > explains a private-network address instead of blaming the key 48ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > explains an unreachable host 37ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > uses deployment guidance without rendering the server env-var message 41ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > does not ask the operator to resolve an internal name conflict 40ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > opens advanced authentication when the server wants a credential we can't discover 40ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > sends the operator to sign-in when the endpoint needs browser authorization 36ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > keeps the generic three-step model when a pasted endpoint hands off to sign-in 38ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > exchanges a managed connect response in the tenant without opening Cloud confirmation 48ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a javascript: start url from connect 31ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a data: start url from connect 31ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a file: start url from connect 29ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a plaintext http start url from connect 30ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a credentials start url from connect 28ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a javascript: authorization url from start sign-in 30ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a data: authorization url from start sign-in 34ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a file: authorization url from start sign-in 30ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a plaintext http authorization url from start sign-in 36ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > unsafe authorization urls > never opens a credentials authorization url from start sign-in 36ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > asks for a preregistered client rather than losing the draft 36ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > submits custom headers as secret-backed credential values 56ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > blocks a header Paperclip refuses to send before making a request 47ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > sends preregistered client credentials when the operator supplies them 55ms
+ ✓ src/pages/apps/AppsConnect.test.tsx > AppsConnect — guided generic MCP flow (PAP-17087) > keeps protocol jargon off the consumer path 38ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > shows retirement guidance before paused state for an obsolete Composio account 84ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > hides cached memory connectors until enabled and preserves saved MCP connections 66ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > shows all MCP aggregators by default and ignores cached legacy opt-outs 36ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > defaults to tools-only GitHub and hides chat-only catalog and existing chat accounts 20ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > restores the GitHub intent chooser when enabled and hides cached chat rows immediately when disabled 33ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > renders one connector list with the requested header and no gallery sections 39ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > sorts connected providers first and shows account, owner, status actions, and edit menus inline 43ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > removes a connection from the overflow menu only after destructive confirmation 219ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > puts Manage and removal in the slack chat menu while keeping draft setup visible 69ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > puts Manage and removal in the discord chat menu while keeping draft setup visible 69ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > puts Manage and removal in the telegram chat menu while keeping draft setup visible 68ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > puts Manage and removal in the github chat menu while keeping draft setup visible 65ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > puts Manage and removal in the microsoft-teams chat menu while keeping draft setup visible 68ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > puts Manage and removal in the agentmail chat menu while keeping draft setup visible 67ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > puts Manage and removal in the imessage-photon chat menu while keeping draft setup visible 62ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > confirms chat removal for active connections and refreshes the list 95ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > confirms chat removal for draft connections and refreshes the list 97ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > keeps chat removal open for retry when the server rejects removal 121ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > keeps an interrupted account visible and resumes setup from its account row 24ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > filters the single list without restoring section chrome 29ms
+ ✓ src/pages/apps/Browse.test.tsx > Connections landing page > shows existing accounts and an actionable warning when the gallery request fails 24ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > loads candidates and selects rows, persisting through pagination 253ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > disables checkboxes for already-imported (duplicate) rows and shows a conflict badge for conflicts 59ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > blocks import when a review row collides with an existing Paperclip secret 69ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > requires lowercase operator-entered keys during review 64ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > submits the operator-entered review description 80ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > renders mixed import results (created/skipped/failed) and shows error reason 83ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > shows an empty state when no AWS vault is configured 14ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > shows a permission-error banner when AWS denies ListSecrets 22ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > renders sanitized preview provider errors without raw AWS exception text 23ms
+ ✓ src/pages/secrets/ImportFromVaultDialog.test.tsx > ImportFromVaultDialog > debounces search and uses the new query for the next preview 349ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > opens the shared connection setup for the addressed user 111ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > keeps connection resolution controls exclusive to the addressed user 12ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > exposes pending question options as selectable radio and checkbox controls 26ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > submits written Other answers for pending questions 36ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > reveals an inline field when a free-text option is selected and hides the standalone Other link 26ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders nothing for a degenerate ask_user_questions card 2ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > still renders a legitimate ask_user_questions card 15ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > keeps a closed native select set closed while preserving direct-question defaults 28ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > only shows question cancellation when a cancel handler is wired 38ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders expired question interactions as resolved and non-actionable 7ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > uses singular copy for expired single-question interactions 5ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders withdrawn confirmations with the withdraw reason 7ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders confirmations expired by issue closure with dedicated copy 4ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders withdrawn question interactions with the withdraw reason 4ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders question interactions expired by issue closure with dedicated copy 5ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > makes child tasks explicit in suggested task trees 37ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > shows the proposed backlog state before a Human accepts task creation 16ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > localizes a separate proposal's scope and explicit creation action without translating its business title 33ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > shows an explicit placeholder when a rejected interaction has no reason 11ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > requires a revision note when the request confirmation payload asks for one 29ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > invokes the confirm callback with pending request confirmations 12ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > keeps the server denial reason in an aria-live region when a confirmation is refused 13ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > still offers a retry when a resolution fails for a transient reason 11ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > surfaces a denied suggested-task acceptance instead of failing silently 33ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > surfaces a denied answer submission on a questions card 16ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > standardizes the bare-reject button to Reject even when the payload carries a legacy rejectLabel 10ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > does not expose continuation wake policy labels in the card header 9ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders request confirmation target links and stale-target expiry 8ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders a jump link for confirmations expired by comment 5ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > declines immediately when decline reasons are disabled 10ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders explicit copy for failed request confirmations 3ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders a plan confirmation as a distinct state-coloured plan card 21ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > attaches screenshots to a plan request-changes reason as markdown images 25ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > submits an approve verdict once a draft is marked and applied 47ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > blocks apply for a rejected item until a reason is entered 39ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > renders resolved verdicts as terminal chips with reason echo 18ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard > shows an already-applied, cannot-revert notice when superseded 17ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > shows only the request description, app icon, and decision controls 11ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > keeps reviewed argument values visible across preview paragraphs 4ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > keeps the destructive request warning and approval styling 6ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > declines in one click without an optional reason form 9ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > renders the approved-running state with a spinner and no action buttons 12ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > keeps the executed result collapsed and never reads Accepted 32ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > expands stored results as formatted JSON on demand 22ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > distinguishes failed (ran + connector error) from declined (did not run) 12ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > renders the expired state without decision controls 5ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > keeps the generic confirmation rendering for cards without a toolAction 6ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > renders the addressee chip without the removed policy badge 7ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > omits the addressee badge for a board-only interaction 5ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > marks agent resolution with an audit chip in the resolved footer 4ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > renders a withdrawn footer with the withdrawer, reason, and agent chip 9ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard tool-action card > renders an issue-closed expiry footer for terminal auto-expiry 4ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard secret-proposal card > renders only safe proposal metadata and exposes accept/reject actions 17ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard secret-proposal card > renders an accepted proposal as executed rather than merely accepted 8ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard secret-proposal card > renders accepted execution failure as visibly FAILED with its error code 5ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard secret-proposal card > distinguishes rejected and expired proposals as non-executed terminal states 22ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard connection-authorization card > offers the addressed person Connect plus Not now, and nothing from the generic grammar 10ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard connection-authorization card > gives another reader Waiting for Carol and no action controls at all 8ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard connection-authorization card > resolves to Gmail connected with the resolver and a timestamp 6ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard connection-intent card > offers the addressed user the shared setup entry point and Not now 8ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard connection-intent card > shows another viewer only who it is waiting for 8ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard connection-intent card > renders retry and connected terminal states without generic confirmation actions 16ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard resolver audience > shows an open audience on a pending card created without a restriction 10ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard resolver audience > names the excluded creator for an explicit not_creator card 11ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard resolver audience > keeps human-only ownership copy on a human-only card 23ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard resolver audience > keeps addressee ownership copy on an agent-addressed card 14ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard resolver audience > explains a company cap that narrowed the requested audience 12ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard resolver audience > explains a legacy card that predates the open default 9ms
+ ✓ src/components/IssueThreadInteractionCard.test.tsx > IssueThreadInteractionCard resolver audience > omits the audience row once a card is resolved and shows who resolved it 11ms
+ ✓ src/components/access/InvitesSection.test.tsx > InvitesSection > renders a human-only invite flow and keeps invite history in a table 137ms
+ ✓ src/components/access/InvitesSection.test.tsx > InvitesSection > falls back to selectable text when browser clipboard access is unavailable 50ms
+ ✓ src/components/access/InvitesSection.test.tsx > InvitesSection > ignores legacy cached invite arrays and refetches paginated history 18ms
+ ✓ src/pages/apps/chat/GitHubSetupPrompt.test.tsx > GitHub setup prompt > copies the complete instructions and confirms success 52ms
+ ✓ src/pages/apps/chat/GitHubSetupPrompt.test.tsx > GitHub setup prompt > offers selectable instructions when clipboard access fails and allows retry 16ms
+ ✓ src/pages/apps/chat/GitHubSetupPrompt.test.tsx > GitHub setup prompt > uses the preview's configured instance instead of its Storybook host 9ms
+ ✓ src/pages/apps/chat/GitHubSetupPrompt.test.tsx > GitHub setup prompt > includes only the instance origin, without URL credentials or callback state 3ms
+ ✓ src/pages/apps/chat/GitHubSetupPrompt.test.tsx > GitHub setup prompt > asks for the URL when preview configuration is unavailable:  3ms
+ ✓ src/pages/apps/chat/GitHubSetupPrompt.test.tsx > GitHub setup prompt > asks for the URL when preview configuration is unavailable: not a URL 3ms
+ ✓ src/pages/apps/chat/GitHubSetupPrompt.test.tsx > GitHub setup prompt > asks for the URL when preview configuration is unavailable: javascript:alert(1) 2ms
+ ✓ src/pages/apps/PaperclipCloudOAuthHandoff.test.tsx > PaperclipCloudOAuthHandoffPage > keeps a tenant loading state visible until the provider URL is ready 45ms
+ ✓ src/pages/apps/PaperclipCloudOAuthHandoff.test.tsx > PaperclipCloudOAuthHandoffPage > keeps terminal handoff failures in Paperclip instead of opening confirmation 20ms
+ ✓ src/pages/apps/PaperclipCloudOAuthHandoff.test.tsx > PaperclipCloudOAuthHandoffPage > does not loop when recent-login recovery remains stale 12ms
+ ✓ src/components/TrustPresetSection.test.tsx > TrustPresetSection > hides the CE boundary editor under Standard 46ms
+ ✓ src/components/TrustPresetSection.test.tsx > TrustPresetSection > shows a selectable CE boundary editor for low-trust review 16ms
+ ✓ src/components/TrustPresetSection.test.tsx > TrustPresetSection > renders multi-boundary policies as read-only 8ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > renders the exact accepted response-wake summary instead of commentary: accepted 3ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > renders the exact accepted response-wake summary instead of commentary: provider_final 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > keeps proposed evidence out of the response-wake final exception 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > keeps mismatched_run evidence out of the response-wake final exception 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > keeps forged_kind evidence out of the response-wake final exception 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > keeps missing_source evidence out of the response-wake final exception 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > keeps question evidence out of the response-wake final exception 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > keeps attention evidence out of the response-wake final exception 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > keeps blank_key evidence out of the response-wake final exception 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > keeps nonterminal evidence out of the response-wake final exception 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > keeps failed_terminal evidence out of the response-wake final exception 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > accepted native response-wake answers > does not grant the exception to another run or a live fallback 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > completion tool feed visibility > keeps the full bounded notice text available when expanded 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > completion tool feed visibility > keeps completion events inspectable but hides both tool representations from live and settled feed activity 3ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > omitProgressRepeatedByResponseAcrossSegments > removes only the final matching progress item across a steered run 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > omitProgressRepeatedByResponseAcrossSegments > preserves segment identity when there is no durable-response match 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > splitTranscriptAtAnchors > assigns each boundary and its following entries to the next segment 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > deriveRunStatusLabel > labels a tail tool_call with the taxonomy verb and tool · target detail 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > deriveRunStatusLabel > uses family verbs per tool 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > deriveRunStatusLabel > omits the target from the detail when the input has none 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > deriveRunStatusLabel > keeps Thinking / Responding / Running fallbacks 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > toolDisplayName > collapses mcp names the same way the taxonomy does 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > toolDisplayName > maps acpx placeholder names to the explicit unnamed-tool label 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems tool_call updates > keeps the initial real name and target when a generic update arrives 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems tool_call updates > keeps identity on retitle and uses the invocation as the target 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems tool_call updates > never renders the synthesized { text, status } input as a target 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems tool_call updates > upgrades a generic-named call when a later entry carries the real name 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems tool_call updates > marks an unfinished tool interrupted once the transcript is settled 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems protocol surfaces > retains and updates provider activity instead of dropping it 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems protocol surfaces > preserves named ACPX tool identity and progress when terminal updates omit them 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems protocol surfaces > marks a running provider activity interrupted in a settled transcript 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems protocol surfaces > coalesces workspace revisions and runtime request lifecycle states 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems protocol surfaces > bounds provider output and workspace previews to 8 KiB 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems protocol surfaces > turns canonical research sources into safe links and exposes notice metadata 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems protocol surfaces > retains every canonical provider family for live and settled rendering 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildActivityPhases provider summaries > includes canonical provider work in the folded activity summary 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildActivityPhases provider summaries > counts canonical tool execution when no native tool row exists 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildActivityPhases provider summaries > summarizes the sanitized DOT-212 mix with at most three semantic groups 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnTimelineRows (DOT-217) > keeps commentary, grouped tools, and latest question receipts in first-seen order 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnTimelineRows (DOT-217) > keeps a pending request composer-only while preserving its group boundary 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnTimelineRows (DOT-217) > retains progress-only phases and uses the same row order for settled assembly 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnTimelineRows (DOT-217) > keeps runtime requests in the Paperclip Runner timeline input 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnTimelineRows (DOT-217) > keeps aggregate workspace changes at the turn boundary outside activity 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnTimelineRows (DOT-217) > suppresses file-change fragments only when an aggregate event exists 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnTimelineRows (DOT-217) > keeps a yielded run-result and provider wait prose out of the durable final slot 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnTimelineRows (DOT-217) > keeps a saved plan at its write_document boundary 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnTimelineRows (DOT-217) > retains a saved plan as an explicit fallback when its write boundary is unavailable 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems native usage > does not merge progress and final runner messages 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems native usage > keeps separate completed commentary items as separate chronological paragraphs 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems native usage > coalesces only streaming chunks that share an item identity 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems native usage > keeps distinct completed reasoning items separate even on the same channel 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems native usage > renders runner usage without inventing a context-window size 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems native usage > renders cumulative-only runner session usage 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > transcriptToTaskChatItems native usage > does not change direct-adapter result presentation 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnSummary tool counting > counts unique tool calls, not per-status transcript entries 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnSummary tool counting > counts id-less legacy entries once each 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildTurnSummary tool counting > keeps session-cumulative runner usage out of run summaries 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > deriveRunStatusLabel with generic tail updates > recovers the real tool name from the call's initial entry 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > deriveRunStatusLabel with generic tail updates > treats a tail retitle as the invocation, not the identity 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > isNestableLiveChild > nests tools, provider reasoning, and usage inside the live parent row 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > isNestableLiveChild > keeps messages, markers, statuses and interactions out 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > interstitial self-talk classification (PAP-355) > tags agent messages streamed inside a live run turn as interstitial 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > interstitial self-talk classification (PAP-355) > marks only the message still open at the tail as streaming 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > interstitial self-talk classification (PAP-355) > marks no message streaming when the tail is a tool call 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > interstitial self-talk classification (PAP-355) > tags settled-history messages interstitial too, so live and history agree 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > interstitial self-talk classification (PAP-355) > stamps atMs from the first streamed chunk 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > flattenSelfTalk > strips markdown markers to one plain line 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > flattenSelfTalk > keeps link text, drops the url, and is stream-safe on unclosed markers 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > deriveRunStatusLabel streaming interstitial text (PAP-361) > returns the trailing message's flattened text with the Responding label 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > deriveRunStatusLabel streaming interstitial text (PAP-361) > only accumulates the trailing message, not one closed by a tool call 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > deriveRunStatusLabel streaming interstitial text (PAP-361) > carries no selfTalk for tool or thinking tails 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > settledRunChildren (PAP-361) > groups tools under the historical assistant boundary and excludes the final reply 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > settledRunChildren (PAP-361) > excludes an explicit final reply when runner usage follows it 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > settledRunChildren (PAP-361) > keeps a channel-less final reply out of activity when bookkeeping follows it 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > settledRunChildren (PAP-361) > keeps a channel-less final reply out of activity when a workspace summary follows it 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > settledRunChildren (PAP-361) > does not hide channel-less commentary when real activity follows it 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > settledRunChildren (PAP-361) > matches the folded summary's tool count exactly (row-count parity) 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > settledRunChildren (PAP-361) > creates a stable opening phase for calls before the first interstitial 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > paperclip runner semantic channels > concatenates fragmented reasoning deltas into logical lines 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > paperclip runner semantic channels > ends reasoning when a newer transcript surface becomes current 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > paperclip runner semantic channels > turns empty reasoning lifecycle frames into a visible thinking item 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > paperclip runner semantic channels > keeps progress/final messages and reasoning summary/detail in distinct items 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > paperclip runner semantic channels > filters lifecycle and usage noise from only the runner history surface 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > paperclip runner semantic channels > projects one semantic activity row per useful logical item 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildMergedTurnSummary (PAP-362) > sums tool count, diffs, tokens, and duration across runs 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildMergedTurnSummary (PAP-362) > sums per-run ts spans — never the idle gap between runs 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > buildMergedTurnSummary (PAP-362) > marks the merged turn failed when any run failed 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > coalesceSettledTurns (PAP-362) > merges two back-to-back runs into ONE Worked row summing tools and duration 1ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > coalesceSettledTurns (PAP-362) > keeps two rows when a user message sits between the runs 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > coalesceSettledTurns (PAP-362) > does not merge across an interaction or into another agent's turn 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > coalesceSettledTurns (PAP-362) > never merges the live (unsettled) turn and preserves animateFold 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > attachSettledTurns (round 9) > folds a settled turn into the agent reply bubble directly above it 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > attachSettledTurns (round 9) > keeps the standalone row when the preceding item is not that agent's bubble 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > attachSettledTurns (round 9) > never attaches the live (unsettled) turn and attaches at most one turn per bubble 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > assembleThreadItems (PAP-367) > inserts a comment-less settled turn chronologically at its run's start time 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > assembleThreadItems (PAP-367) > does not append a comment-less turn after the newest user message (the P11 bug) 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > assembleThreadItems (PAP-367) > keeps anchored turns directly after their run's reply comment 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > assembleThreadItems (PAP-367) > keeps the tail slot for a turn with unknown start, and puts ties after the entry 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > assembleThreadItems (PAP-367) > chronological insertion after a user message stays a standalone row through coalesce+attach 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > prependIssueBrief (PAP-375) > keeps the description bubble above an unanchored turn that predates every backbone entry (F15) 0ms
+ ✓ src/components/task-chat/transcript-adapter.test.ts > prependIssueBrief (PAP-375) > is the first item of an otherwise empty thread, and a no-op without a brief 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > endpointHost > returns the host so the operator can see whose server this is 2ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > endpointHost > returns null for anything that isn't a URL 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > oauthCallbackUrlForBrowser > uses localhost for local HTTP callbacks to match the API authorization request 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > oauthCallbackUrlForBrowser > preserves public HTTPS origins 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > defaultGenericMcpName > keeps the port and path so endpoints on one host get distinct names 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > defaultGenericMcpName > does not copy a potentially secret query string into the name 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectGuidance > names the URL as the thing to fix for invalid, unsafe and unreachable endpoints 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectGuidance > names the credentials for a challenge with no discoverable sign-in 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectGuidance > points at the deployment when Paperclip itself has no public HTTPS address 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectGuidance > does not ask the operator to resolve an internal name conflict 1ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectGuidance > passes a rejected header's own message through 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectGuidance > falls back to the server's message for an unrecognised code 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > customHeaderError > accepts a filled row and ignores a blank one 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > customHeaderError > rejects headers Paperclip refuses to send 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > customHeaderError > rejects a value that would split the request 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > customHeaderError > asks for a value on a half-filled row and flags duplicates 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectPayload > sends nothing but the link on the simplest path 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectPayload > omits authMode on the simple path so the server probes and decides 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectPayload > sends the explicit mode chosen under Advanced authentication 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectPayload > maps custom headers to headers.* credential paths 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectPayload > only sends a preregistered client when the operator supplied one 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > genericConnectPayload > does not carry a bearer key into a custom-header or no-auth submission 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > canSubmitGenericConnect > needs a link 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > canSubmitGenericConnect > lets the simple no-key path through and holds the yes-key path until a key is typed 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > canSubmitGenericConnect > requires a key for the explicit bearer mode 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > canSubmitGenericConnect > requires at least one valid header for custom-header mode 0ms
+ ✓ src/pages/apps/generic-mcp-connect.test.ts > canSubmitGenericConnect > allows no-auth and browser sign-in without any value 0ms
+ ✓ src/pages/apps/chat/github-private-key-file.test.ts > readGitHubPrivateKeyFile > preserves the downloaded PEM line breaks exactly 5ms
+ ✓ src/pages/apps/chat/github-private-key-file.test.ts > readGitHubPrivateKeyFile > rejects empty and oversized files without including file metadata 1ms
+ ✓ src/pages/apps/chat/github-private-key-file.test.ts > readGitHubPrivateKeyFile > turns a local read failure into generic actionable copy 1ms
+ ✓ src/pages/apps/chat/github-private-key-file.test.ts > readGitHubPrivateKeyFile > lets only the latest file read settle and lets paste invalidate it 0ms
+ Test Files  13 passed (13)
+      Tests  511 passed (511)
+   Duration  62.22s (transform 4.80s, setup 85ms, import 17.57s, tests 36.90s, environment 6.07s)

@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { InvitesSection } from "./InvitesSection";
 import { queryKeys } from "@/lib/queryKeys";
 
@@ -201,7 +202,7 @@ describe("InvitesSection", () => {
     });
     expect(clipboardWriteTextMock).toHaveBeenCalledWith("https://paperclip.local/invite/new-token");
     expect(container.textContent).toContain("Latest invite link");
-    expect(container.textContent).toContain("This URL includes the current Paperclip domain returned by the server.");
+    expect(container.textContent).toContain(`This URL includes the current ${PRODUCT_IDENTITY.productName} domain returned by the server.`);
     expect(container.querySelector('input[aria-label="Latest invite URL"]')).toHaveProperty(
       "value",
       "https://paperclip.local/invite/new-token",

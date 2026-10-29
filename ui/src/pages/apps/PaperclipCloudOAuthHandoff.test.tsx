@@ -3,6 +3,7 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { savePendingCloudHandoff } from "@/lib/oauthHandoff";
 import { PaperclipCloudOAuthHandoffPage } from "./PaperclipCloudOAuthHandoff";
 
@@ -95,7 +96,7 @@ describe("PaperclipCloudOAuthHandoffPage", () => {
     await act(async () => root.render(<PaperclipCloudOAuthHandoffPage />));
     await flushReact();
 
-    expect(container.textContent).toContain("Paperclip couldn’t refresh this sign-in. Try again to continue.");
+    expect(container.textContent).toContain(`${PRODUCT_IDENTITY.productName} couldn’t refresh this sign-in. Try again to continue.`);
     expect(navigateTopLevel).not.toHaveBeenCalled();
   });
 });

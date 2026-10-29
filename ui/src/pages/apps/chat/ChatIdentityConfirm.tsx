@@ -81,7 +81,7 @@ export function ChatIdentityConfirm() {
         <div>
           <h1 className="text-xl font-bold">Identity linked</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Future messages from {identity.externalLabel} use your current
+            Future messages from {identity.externalLabel} use your current{" "}
             {PRODUCT_IDENTITY.productName} permissions in {identity.companyName}.
           </p>
         </div>
