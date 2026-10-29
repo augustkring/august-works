@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { assertAuthoredProceduresCurrent } from "../agents/authoring-procedures.js";
 import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
-import { and, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   agents,
   agentIdentities,
@@ -21,6 +21,7 @@ import {
   orchestrationModelReservations,
   costEvents,
   toolInvocations,
+  nativeRunFinalizations,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -64,6 +65,7 @@ import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
 import { assertNativeManagedConsumedSourceSetCurrent } from "../native-direct-input.js";
+import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { assertNativeManagedProjectCreateReceiptCurrent, type NativeProjectCreateReceipt } from "../native-project-output.js";
 import {
   anthropicReadOnlyCall,
@@ -275,6 +277,118 @@ async function managedJsonbSha256(db: Db, value: unknown): Promise<string> {
   const [row] = await db.execute<{ digest: string }>(sql`select encode(sha256(convert_to((${JSON.stringify(value)}::jsonb)::text,'UTF8')),'hex') as digest`);
   if (!row || !/^[0-9a-f]{64}$/.test(row.digest)) throw forbidden("Managed OpenCode source receipt digest is unavailable");
   return row.digest;
+}
+
+type NativeWorkerSourceDispatchBinding = {
+  issueId: string;
+  responsibleUserId: string;
+  sourcePolicyHash: string;
+  sourceDispatchDigest: string;
+  sourceSetHash: string;
+  sourceSet: { policy: ReturnType<typeof nativePayloadSourcePolicySchema.parse>; inputs: NativePayloadSourceInput[] };
+  consumedSourceComponents: NativeConsumedSourceComponent[];
+};
+
+/** An acknowledged input is not yet a completed model response. Reconstruct
+ * its exact retained prefix from original components; only completed response
+ * prefixes may use the dispatch component's mandatory wire receipt. */
+function nativeWorkerConsumedSourceComponents(receipt: NativeRunInputSourceReceipt,
+  sourceSet: NativeWorkerSourceDispatchBinding["sourceSet"]): NativeConsumedSourceComponent[] {
+  const subset = (candidate: { policy: unknown; inputs: unknown[] }) => {
+    const policy = managedRecord(candidate.policy);
+    return Object.entries(sourceSet.policy).every(([key, values]) =>
+      Array.isArray(policy[key]) && (policy[key] as unknown[]).every(value => typeof value === "string" && values.includes(value))) &&
+      candidate.inputs.every(value => sourceSet.inputs.some(source => isDeepStrictEqual(source, value)));
+  };
+  const components: NativeConsumedSourceComponent[] = [];
+  if (subset(receipt.bootstrap)) components.push({ kind: "bootstrap" });
+  for (const dispatch of receipt.dispatches) {
+    if (!subset(dispatch) || !dispatch.inputs.some(source => source.kind === "worker_model_dispatch" ||
+      source.kind === "conversation_model_dispatch")) continue;
+    components.push({ kind: "dispatch", executionInputDigest: dispatch.executionInputDigest,
+      policy: dispatch.policy, inputs: dispatch.inputs });
+  }
+  for (const additional of receipt.additionalInputs) {
+    if (subset(additional)) components.push({ kind: "additional_input", responsibleUserId: additional.responsibleUserId,
+      policy: additional.policy, inputs: additional.inputs });
+  }
+  if (!components.length || components.length > 64 ||
+    !isDeepStrictEqual(mergeManagedSourceComponents(components, receipt.bootstrap), sourceSet))
+    throw forbidden("The Native input prefix cannot be reconstructed from its original sources");
+  return components;
+}
+
+/** Resolve the exact latest acknowledged Native input for this active run and
+ * recheck its retained owners before a text-only Worker model call. The
+ * provider wire observer is deliberately not an authority input. */
+async function currentNativeWorkerSourceDispatchBinding(db: Db, claims: BoundClaims): Promise<NativeWorkerSourceDispatchBinding> {
+  await lockAnalyticalCompany(db, claims.company_id);
+  await lockMemoryPrivacy(db, claims.company_id);
+  const [run] = await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
+    eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.status, "running"),
+  ));
+  // A live heartbeat owns a finalization row in `observed` until the native
+  // controller begins finalization. `running` is also accepted for rows whose
+  // owner has already advanced that coordinator state while the run remains
+  // active; terminal and retryable states never authorize model dispatch.
+  const [lease] = run?.nativeIssueId ? await db.select().from(nativeRunFinalizations).where(and(
+    eq(nativeRunFinalizations.companyId, claims.company_id), eq(nativeRunFinalizations.runId, run.id),
+    eq(nativeRunFinalizations.issueId, run.nativeIssueId), inArray(nativeRunFinalizations.phase, ["observed", "running"]),
+    gt(nativeRunFinalizations.leaseExpiresAt, sql`clock_timestamp()`),
+  )) : [];
+  const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+    ? run.runnerProfileJson as Record<string, unknown> : null;
+  const parsedReceipt = profile && nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  if (!run || !run.nativeIssueId || !profile || run.nativeInputSourceProtocolVersion !== 1 || !lease ||
+    !parsedReceipt?.success || parsedReceipt.data.binding.companyId !== run.companyId ||
+    parsedReceipt.data.binding.runId !== run.id || parsedReceipt.data.binding.agentId !== run.agentId ||
+    parsedReceipt.data.binding.issueId !== run.nativeIssueId ||
+    parsedReceipt.data.binding.responsibleUserId !== run.responsibleUserId ||
+    parsedReceipt.data.bootstrap.executionInputDigest !== await managedJsonbSha256(db, profile.nativeExecutionInput))
+    throw forbidden("The Native source receipt cannot bind this model dispatch");
+  const { digest: storedDigest, ...receiptBody } = parsedReceipt.data;
+  if (storedDigest !== await managedJsonbSha256(db, receiptBody))
+    throw forbidden("The Native source receipt cannot bind this model dispatch");
+  const sourceDispatch = parsedReceipt.data.dispatches.at(-1);
+  const rawInputIntents = profile.nativeModelInputDispatchIntents;
+  if (!sourceDispatch || !Array.isArray(rawInputIntents))
+    throw forbidden("The Native source receipt cannot bind this model dispatch");
+  const matchingInputs = rawInputIntents.map(managedRecord).filter(intent =>
+    Number.isSafeInteger(intent.eventSeq) && intent.attempt === lease.attempt &&
+    intent.responsibleUserId === run.responsibleUserId && intent.continuation === false &&
+    typeof intent.turnId === "string" && intent.turnId.length > 0 &&
+    intent.turnInputDigest === sourceDispatch.executionInputDigest);
+  const matchedInputDigest = matchingInputs[0]?.turnInputDigest;
+  const sourceDispatchDigest = typeof matchedInputDigest === "string" && /^[0-9a-f]{64}$/.test(matchedInputDigest)
+    ? matchedInputDigest : null;
+  const policy = nativePayloadSourcePolicySchema.safeParse(sourceDispatch.policy);
+  const inputs = nativePayloadSourceInputSchema.array().max(256).safeParse(sourceDispatch.inputs);
+  if (matchingInputs.length !== 1 || !sourceDispatchDigest || sourceDispatch.responsibleUserId !== run.responsibleUserId ||
+    !policy.success || !inputs.success || !inputs.data.some(source => source.kind === "task" && source.issueId === run.nativeIssueId))
+    throw forbidden("The Native source receipt cannot bind this model dispatch");
+  const sourceSet = { policy: policy.data, inputs: inputs.data };
+  const sourceSetHash = nativeSha256(sourceSet);
+  const exactReceiptDispatches = parsedReceipt.data.dispatches.filter(dispatch =>
+    dispatch.executionInputDigest === sourceDispatchDigest &&
+    dispatch.responsibleUserId === run.responsibleUserId &&
+    nativeSha256({ policy: dispatch.policy, inputs: dispatch.inputs }) === sourceSetHash);
+  if (exactReceiptDispatches.length !== 1)
+    throw forbidden("The Native source receipt cannot bind this model dispatch");
+  const [launch] = await db.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+    eq(heartbeatRunEvents.companyId, run.companyId), eq(heartbeatRunEvents.runId, run.id),
+    eq(heartbeatRunEvents.agentId, run.agentId), eq(heartbeatRunEvents.seq, matchingInputs[0]!.eventSeq as number),
+    eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+  ));
+  if (!launch) throw forbidden("The Native source receipt cannot bind this model dispatch");
+  const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: run.companyId,
+    agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId ?? undefined };
+  const components = nativeWorkerConsumedSourceComponents(parsedReceipt.data, sourceSet);
+  await assertNativeManagedConsumedSourceSetCurrent(db, { companyId: run.companyId, issueId: run.nativeIssueId,
+    runId: run.id, actor, components, sourceSet });
+  return { issueId: run.nativeIssueId, responsibleUserId: run.responsibleUserId!,
+    sourcePolicyHash: nativeSha256(parsedReceipt.data.bootstrap), sourceDispatchDigest,
+    sourceSetHash, sourceSet, consumedSourceComponents: components };
 }
 
 /** Keep database diagnostics finite and content-free at the managed model boundary. */
@@ -929,9 +1043,15 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           const sources = Array.isArray(sourceSet.inputs) ? sourceSet.inputs : [];
           const manifestIds = contextCapture.manifestIds;
           const contextSources = sources.filter((value) => managedRecord(value).kind === "context");
+          const manifestBinding = Array.isArray(manifestIds) && manifestIds.length === 1 ? managedRecord(manifestIds[0]) : {};
+          const currentManifestId = manifestBinding.contextManifestId;
+          const currentContextSources = contextSources.filter(value => managedRecord(value).manifestId === currentManifestId);
           if (capture.managedOpenCode !== true || contextCapture.contentDigest !== contentHash ||
             !nativePayloadSourcePolicySchema.safeParse(policy).success || !nativePayloadSourceInputSchema.array().safeParse(sources).success ||
-            contextSources.length !== 1 || !Array.isArray(manifestIds) ||
+            contextSources.length === 0 || contextSources.length > 64 ||
+            new Set(contextSources.map(value => managedRecord(value).manifestId)).size !== contextSources.length ||
+            !Array.isArray(manifestIds) || manifestIds.length !== 1 || currentContextSources.length !== 1 ||
+            manifestBinding.companyId !== claims.company_id ||
             !isDeepStrictEqual(consumedEntry.policy, policy) ||
             !isDeepStrictEqual(consumedEntry.inputs, [source, ...sources]) ||
             source.toolName !== "read_context")
@@ -1808,6 +1928,10 @@ export function workerModelGateway(db: Db, options: Options) {
         throw forbidden(
           "Worker input exceeds the qualified complete wire envelope",
         );
+      // Reject source-unbound requests before creating a financial
+      // reservation. The same evidence is rechecked under the Run lock at the
+      // transport callback to cover changes between this preflight and wire.
+      await currentNativeWorkerSourceDispatchBinding(db, bound);
       const reservations = modelReservationService(db, {
         sourceSha: options.sourceSha,
         qualifiedTariff: async (i) =>
@@ -1900,12 +2024,16 @@ export function workerModelGateway(db: Db, options: Options) {
           credential,
           controller.signal,
           { fetch: options.fetch, onWireDispatch: async (wire) => {
-            if (!internal?.onWireDispatch) return;
             const receipt: WorkerModelDispatchWireReceipt = {
               ...wire, reservationId: reservation.id, callId: input.callId,
               requestHash: nativeSha256(request),
             };
             await db.transaction(async (tx) => {
+              // Source authorization and financial dispatch persistence are
+              // mandatory. The optional callback below only lets an
+              // in-process caller retain this receipt with its output capture.
+              await lockAnalyticalCompany(tx as unknown as Db, claims.company_id);
+              await lockMemoryPrivacy(tx as unknown as Db, claims.company_id);
               const fresh = await current(tx, bound);
               if (fresh.authorityHash !== state.authorityHash)
                 throw forbidden("Worker source authority changed before wire dispatch");
@@ -1918,13 +2046,72 @@ export function workerModelGateway(db: Db, options: Options) {
               const sourceReceipt = profile && nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
               const rawPrevious = profile?.nativeAwModelWireIntents;
               const previous = rawPrevious === undefined ? [] : rawPrevious;
-              if (!run || !profile || !sourceReceipt?.success || !Array.isArray(previous) || previous.length >= 64 ||
+              const [lease] = run && run.nativeIssueId ? await tx.select().from(nativeRunFinalizations).where(and(
+                eq(nativeRunFinalizations.companyId, claims.company_id), eq(nativeRunFinalizations.runId, run.id),
+                eq(nativeRunFinalizations.issueId, run.nativeIssueId), inArray(nativeRunFinalizations.phase, ["observed", "running"]),
+                gt(nativeRunFinalizations.leaseExpiresAt, sql`clock_timestamp()`),
+              )).for("share") : [];
+              const sourceDispatch = sourceReceipt?.success ? sourceReceipt.data.dispatches.at(-1) : undefined;
+              const inputProfile = profile?.nativeModelInputDispatchIntents;
+              let receiptDigestMatches = false;
+              if (sourceReceipt?.success) {
+                const { digest: storedDigest, ...receiptBody } = sourceReceipt.data;
+                receiptDigestMatches = storedDigest === await managedJsonbSha256(tx as unknown as Db, receiptBody);
+              }
+              if (!run || !profile || !sourceReceipt?.success || run.nativeInputSourceProtocolVersion !== 1 ||
+                !lease || !receiptDigestMatches || sourceReceipt.data.binding.companyId !== run.companyId ||
+                sourceReceipt.data.binding.runId !== run.id || sourceReceipt.data.binding.agentId !== run.agentId ||
+                sourceReceipt.data.binding.responsibleUserId !== run.responsibleUserId ||
+                sourceReceipt.data.binding.issueId !== run.nativeIssueId ||
+                sourceReceipt.data.bootstrap.executionInputDigest !== await managedJsonbSha256(tx as unknown as Db, profile.nativeExecutionInput) ||
+                !sourceDispatch || !Array.isArray(inputProfile) || !Array.isArray(previous) || previous.length >= 64 ||
                 previous.some((item) => item && typeof item === "object" && !Array.isArray(item) &&
                   (item as Record<string, unknown>).reservationId === receipt.reservationId))
                 throw forbidden("The Native source receipt cannot bind this model dispatch");
+              const inputDispatches = inputProfile.map(managedRecord).filter(intent =>
+                Number.isSafeInteger(intent.eventSeq) && intent.attempt === lease.attempt &&
+                intent.responsibleUserId === run.responsibleUserId && intent.continuation === false &&
+                typeof intent.turnId === "string" && intent.turnId.length > 0 &&
+                intent.turnInputDigest === sourceDispatch.executionInputDigest);
+              const wireSourceDigestValue = inputDispatches[0]?.turnInputDigest;
+              const wireSourceDigest = typeof wireSourceDigestValue === "string" && /^[0-9a-f]{64}$/.test(wireSourceDigestValue)
+                ? wireSourceDigestValue : null;
+              const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceDispatch.policy);
+              const sourceInputs = nativePayloadSourceInputSchema.array().max(256).safeParse(sourceDispatch.inputs);
+              if (inputDispatches.length !== 1 || !wireSourceDigest || sourceDispatch.responsibleUserId !== run.responsibleUserId ||
+                !sourcePolicy.success || !sourceInputs.success || !run.nativeIssueId ||
+                !sourceInputs.data.some(source => source.kind === "task" && source.issueId === run.nativeIssueId))
+                throw forbidden("The Native source receipt cannot bind this model dispatch");
+              const sourceSetHash = nativeSha256({ policy: sourcePolicy.data, inputs: sourceInputs.data });
+              const exactReceiptDispatches = sourceReceipt.data.dispatches.filter(dispatch =>
+                dispatch.executionInputDigest === wireSourceDigest &&
+                dispatch.responsibleUserId === run.responsibleUserId &&
+                nativeSha256({ policy: dispatch.policy, inputs: dispatch.inputs }) === sourceSetHash);
+              if (exactReceiptDispatches.length !== 1)
+                throw forbidden("The Native source receipt cannot bind this model dispatch");
+              const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+                eq(heartbeatRunEvents.companyId, run.companyId), eq(heartbeatRunEvents.runId, run.id),
+                eq(heartbeatRunEvents.agentId, run.agentId), eq(heartbeatRunEvents.seq, inputDispatches[0]!.eventSeq as number),
+                eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+              )).for("share");
+              if (!launch) throw forbidden("The Native source receipt cannot bind this model dispatch");
+              await assertNativeManagedConsumedSourceSetCurrent(tx as unknown as Db, {
+                companyId: run.companyId, issueId: run.nativeIssueId, runId: run.id,
+                actor: { type: "agent", source: "agent_jwt", companyId: run.companyId,
+                  agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId ?? undefined },
+                components: nativeWorkerConsumedSourceComponents(sourceReceipt.data,
+                  { policy: sourcePolicy.data, inputs: sourceInputs.data }),
+                sourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data },
+              });
               const intents = [...previous, {
                 reservationId: receipt.reservationId, callId: receipt.callId, requestHash: receipt.requestHash,
                 wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint, method: receipt.method,
+                modelPurpose: "worker_model", sourcePolicyHash: nativeSha256(sourceReceipt.data.bootstrap),
+                sourceDispatchDigest: wireSourceDigest, sourceSetHash,
+                consumedSourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data },
+                consumedSourceComponents: nativeWorkerConsumedSourceComponents(sourceReceipt.data,
+                  { policy: sourcePolicy.data, inputs: sourceInputs.data }),
+                idempotencyKey: reservation.idempotencyKey,
               }];
               if (Buffer.byteLength(JSON.stringify(intents), "utf8") > 256 * 1024)
                 throw forbidden("The Native model wire receipt exceeds its bound");
@@ -1934,6 +2121,9 @@ export function workerModelGateway(db: Db, options: Options) {
             await reservations.recordWireDispatch(state.actor, claims.company_id, reservation.id, {
               method: receipt.method, endpoint: receipt.endpoint, bodySha256: receipt.bodySha256, callId: receipt.callId,
             });
+            // The observer is not an authority or persistence prerequisite,
+            // but if an installed output-capture observer fails, fail closed
+            // before transport rather than dispatching an uncaptured result.
             internal?.onWireDispatch?.(receipt);
           } },
         );

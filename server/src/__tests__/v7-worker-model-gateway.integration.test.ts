@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { chmod, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -25,6 +25,8 @@ import {
   connectionGrants,
   createDb,
   heartbeatRuns,
+  heartbeatRunEvents,
+  nativeRunFinalizations,
   issues,
   agentExecutionManifests,
   contextManifestMemoryRoots,
@@ -60,6 +62,8 @@ import { aiConnectionService } from "../services/ai-connections.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 import { createToolGatewayService } from "../services/tool-gateway.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
 import {
   createRuntimeToolsToken,
@@ -80,8 +84,18 @@ import type { ToolGatewayService } from "../services/tool-gateway.js";
 import { withOrchestrationNativeTool } from "../services/orchestration/native-tool-boundary.js";
 import { createAwTextDraftBackend } from "../services/native-runtime/aw-text-draft-backend.js";
 import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
-import { heartbeatService } from "../services/heartbeat.js";
+import { heartbeatService, getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../services/heartbeat.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
+import { currentNativeControllerIdentity } from "../services/native-runtime/native-restart-recovery.js";
+import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement } from "../services/native-runtime/native-session-executor.js";
+import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "../services/native-runtime/native-execution-input.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { buildNativeModelEnvelope, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
+import { buildRetainedNativeRuntimeContext } from "../services/native-runtime/runtime-context.js";
+import { ensureNativeCompletionContract } from "../services/native-runtime/completion-contracts.js";
+import { initializeRunIdentity } from "../services/run-identity.js";
+import { PROCESS_START_REQUESTED } from "../services/native-local-process-stop.js";
+import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
 
 import {
   validatePrpEvent,
@@ -120,15 +134,20 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       plan: typeof orchestrationPlans.$inferSelect,
       task: typeof issues.$inferSelect,
       run: typeof heartbeatRuns.$inferSelect,
+      fixtureSourceClosure: Awaited<ReturnType<typeof prepareFixtureNativeSourceClosure>>["sourceClosure"],
+      fixtureExpectedTask: ReturnType<typeof buildNativeExecutionInput>["task"],
       binding: WorkerModelBinding,
       profile: WorkerModelProfile,
       claims: RuntimeToolsTokenClaims;
+    let managedMcpApi: Awaited<ReturnType<typeof startManagedMcpApiFixture>> | undefined;
+    let activeHeartbeat: ReturnType<typeof heartbeatService> | undefined;
     let calls: number,
       observedKey: string,
       observedBody: string,
       inputTokens: number,
       modelOutput: string,
-      duringCall: (() => Promise<void>) | undefined;
+      duringCall: (() => Promise<void>) | undefined,
+      providerSignalAbortedBeforeResponse: boolean;
     beforeAll(async () => {
       home = await mkdtemp(join(tmpdir(), "aw-v7-worker-model-fixture-"));
       vi.stubEnv("PAPERCLIP_HOME", home);
@@ -151,6 +170,10 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       }
     }, 30000);
     beforeEach(async (context) => {
+      // The direct draft-session and ledger cases also reach the production
+      // Runner MCP client. Keep the same real API route available for every
+      // fixture, not only tests that launch through freshNativePlan().
+      await ensureManagedMcpApiFixture();
       await instanceSettingsService(db).updateExperimental({
         enableWorkflowsV1: true,
         role_packs_v5: false,
@@ -221,15 +244,24 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         },
       );
       const provider = await providers.assertRuntime(f.home, f.presence.id);
-      [task] = (await db
-        .insert(issues)
-        .values({
-          companyId: f.home,
-          title: "Save the bounded private fixture draft",
-          status: "todo",
-          assigneeAgentId: f.presence.id,
-        })
-        .returning()) as [typeof task];
+      const taskSourceActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+      task = await issueService(db).create(f.home, {
+        title: "Save the bounded private fixture draft",
+        description: "Human-authored internal draft request.",
+        status: "todo",
+        createdByUserId: f.userId,
+        responsibleUserId: f.userId,
+      }, db, undefined, {
+        manualInputActor: taskSourceActor,
+        privacyActor: taskSourceActor,
+        sourceAccessActor: taskSourceActor,
+      });
+      task = await issueService(db).update(task.id, {
+        assigneeAgentId: f.presence.id,
+        actorUserId: f.userId,
+        privacyActor: taskSourceActor,
+      });
+      if (!task) throw new Error("The canonical Human Task fixture disappeared before assignment");
       [run] = (await db
         .insert(heartbeatRuns)
         .values({
@@ -301,6 +333,27 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         executionManifestId: prepared!.record.id,
         expectedPlanVersion: plan.version,
       };
+      const nativeSourceFixture = await prepareFixtureNativeSourceClosure();
+      fixtureSourceClosure = nativeSourceFixture.sourceClosure;
+      fixtureExpectedTask = nativeSourceFixture.expectedTask;
+      const [sourcePreparedRun] = await db.select({ protocol: heartbeatRuns.nativeInputSourceProtocolVersion,
+        profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, run.id)));
+      if (sourcePreparedRun?.protocol !== 1 ||
+        !nativeRunInputSourceReceiptSchema.safeParse((sourcePreparedRun.profile as Record<string, unknown> | null)?.nativeInputSourceReceipt).success ||
+        !fixtureSourceClosure.sourceSet.inputs.some(source => source.kind === "task" && source.issueId === task.id))
+        throw new Error("The worker gateway fixture requires the original Native source preparer");
+      // The fixture source preparer writes the retained execution profile.
+      // Record the required platform Skill admission after that canonical
+      // write, as the production launch path does; admitting first would be
+      // overwritten by the full runnerProfileJson fixture replacement.
+      await preparePlatformSkillAdmission(db, {
+        companyId: f.home,
+        agentId: f.presence.id,
+        runId: run.id,
+        responsibleUserId: f.userId,
+        requireExisting: false,
+      }, blenteraPlatformContractHashes());
       const connection = await aiConnectionService(db).save(
         f.home,
         f.userId,
@@ -359,8 +412,22 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       inputTokens = 10;
       modelOutput = "Retained bounded draft";
       duringCall = undefined;
+      providerSignalAbortedBeforeResponse = false;
     });
-    afterEach(() => registerNativeDraftGateway(db, undefined));
+    afterEach(async () => {
+      try {
+        if (activeHeartbeat) await activeHeartbeat.drainActiveRunExecutions();
+      } finally {
+        try {
+          activeHeartbeat = undefined;
+          registerNativeDraftGateway(db, undefined);
+        } finally {
+          const api = managedMcpApi;
+          managedMcpApi = undefined;
+          if (api) await api.close();
+        }
+      }
+    });
 
     async function qualifiedNativePresence() {
       await db
@@ -424,6 +491,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     async function freshNativePlan(
       budgets = { maxModelCostMinor: 6, maxToolActions: 2 },
     ) {
+      await ensureManagedMcpApiFixture();
       await qualifiedNativePresence();
       // Retire the separate, manually bound component fixture before exercising
       // the real scheduler. This new plan has no manually inserted attempt.
@@ -511,6 +579,93 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       } };
     }
 
+    async function ensureManagedMcpApiFixture() {
+      managedMcpApi ??= await startManagedMcpApiFixture();
+      return managedMcpApi;
+    }
+
+    async function prepareFixtureNativeSourceClosure() {
+      const controller = await currentNativeControllerIdentity();
+      const eventSeq = 1;
+      const attempt = 1;
+      const leaseOwner = `worker-model-source-${randomUUID()}`;
+      const runnerInstanceId = randomUUID();
+      const normalizedSessionId = randomUUID();
+      await db.update(heartbeatRuns).set({ runnerInstanceId, nativeSessionId: normalizedSessionId })
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, run.id)));
+      await db.insert(nativeRunFinalizations).values({
+        runId: run.id, companyId: f.home, issueId: task.id, phase: "running", attempt, leaseOwner,
+        leaseExpiresAt: new Date(Date.now() + 60_000), controllerBootId: controller.bootId,
+        controllerPid: controller.pid, controllerProcessStartedAt: controller.processStartedAt,
+      });
+      await db.insert(heartbeatRunEvents).values({ companyId: f.home, runId: run.id, agentId: f.presence.id,
+        seq: eventSeq, eventType: PROCESS_START_REQUESTED, payload: { fixture: "native source dispatch setup" } });
+      await db.update(issues).set({ status: "in_progress", executionRunId: run.id })
+        .where(and(eq(issues.companyId, f.home), eq(issues.id, task.id)));
+      await initializeRunIdentity(db, { companyId: f.home, runId: run.id, issueId: task.id,
+        responsibleUserId: f.userId, cause: "dispatch" });
+
+      const taskCaptureHolder: { value: import("../services/issues.js").NativeTaskSourceCapture | null } = { value: null };
+      const selectedTask = await getIssueExecutionContext(db, f.home, task.id, capture => { taskCaptureHolder.value = capture; });
+      const taskCapture = taskCaptureHolder.value;
+      if (!selectedTask || !taskCapture?.payloadSourceSnapshot)
+        throw new Error("The canonical Native source fixture did not capture its Task");
+      const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+      const markdown = buildPaperclipTaskMarkdown({ issue: { id: task.id, identifier: selectedTask.identifier,
+        title: selectedTask.title, description: selectedTask.description, workMode: selectedTask.workMode } },
+      { onRenderedSource: source => references.push(source) });
+      if (!markdown) throw new Error("The canonical Native source fixture could not render its Task");
+
+      const [agent] = await db.select().from(agents).where(and(eq(agents.companyId, f.home), eq(agents.id, f.presence.id)));
+      if (!agent) throw new Error("The Native source fixture Agent disappeared");
+      const runtimeCaptureHolder: { value: import("../services/native-runtime/runtime-context.js").NativeRuntimeAuthoredSourceCapture | null } = { value: null };
+      const runtimeContext = await buildRetainedNativeRuntimeContext({ db, agent, runId: run.id,
+        runtimeConfig: {}, runtimeSkillEntries: [], onAuthoredSourceCapture: capture => { runtimeCaptureHolder.value = capture; } });
+      const runtimeCapture = runtimeCaptureHolder.value;
+      if (!runtimeCapture) throw new Error("The canonical Native runtime source capture is unavailable");
+      const completion = await ensureNativeCompletionContract({ db, companyId: f.home,
+        issue: { id: task.id, title: selectedTask.title, description: selectedTask.description }, actorId: f.presence.id });
+      await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
+        completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, run.id));
+      const workspaceTuple = { cwd: resolveDefaultAgentWorkspaceDir(f.presence.id), repoUrl: null, repoRef: null, branchName: null };
+      const workspace = { id: run.id, ...workspaceTuple };
+      const execution = buildNativeExecutionInput({ companyId: f.home, runId: run.id, agentId: f.presence.id,
+        issue: { id: task.id, identifier: selectedTask.identifier, title: selectedTask.title,
+          description: selectedTask.description, workMode: selectedTask.workMode }, taskPrompt: markdown, workspace,
+        normalizedSessionId, provider: "codex", model: "worker-source-fixture-model",
+        completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
+          schemaVersion: completion.row.schemaVersion, contract: completion.contract }, runtimeContext });
+      const parsedExecution = parseNativeExecutionInput(execution);
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: parsedExecution } })
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, run.id)));
+      const sourceSet = buildNativeBootstrapSourceSet({ companyId: f.home, runId: run.id, agentId: f.presence.id,
+        issueId: task.id, renderedMarkdown: markdown,
+        renderedMarkdownDigest: createHash("sha256").update(markdown, "utf8").digest("hex"), references,
+        candidates: [{ kind: "task", id: task.id, input: taskCapture.input, payloadSourceSnapshot: taskCapture.payloadSourceSnapshot }],
+        runtimeInputs: runtimeCapture.inputs, contextManifestIds: runtimeCapture.contextManifests,
+        governedContextMarkdown: "", contextWitnessMarkdown: "", contextWitness: null,
+        rolePackInputs: [], unsupportedInputPresent: false,
+        additionalInputs: [
+          { kind: "completion_contract", issueId: task.id, contractId: completion.row.id,
+            revision: String(completion.row.revision), contentHash: completion.row.canonicalSha256 },
+          { kind: "workspace_metadata", runId: run.id, executionWorkspaceId: run.id,
+            origin: "agent_home", sourceVersion: `agent-home:${f.presence.id}:v1`,
+            contentHash: createHash("sha256").update(JSON.stringify(workspaceTuple), "utf8").digest("hex") },
+        ],
+      });
+      if (!sourceSet) throw new Error("The canonical Native source set could not be prepared");
+      const closure = { sourceSet, taskEnvelopeDigest: nativeSha256(parsedExecution.task) };
+      const turnInput = { message: { role: "user" as const, text: JSON.stringify(buildNativeModelEnvelope(parsedExecution)) },
+        requestedCollaborationMode: "default" as const };
+      const dispatchId = await recordNativeModelInputDispatchIntent({ db, runId: run.id, companyId: f.home,
+        issueId: task.id, agentId: f.presence.id, leaseOwner, attempt, controller, eventSeq, turnInput,
+        bootstrapSourceClosure: closure });
+      await recordNativeModelInputDispatchAcknowledgement({ db, runId: run.id, companyId: f.home,
+        issueId: task.id, agentId: f.presence.id, leaseOwner, attempt, controller, eventSeq, dispatchId,
+        turnInput, turnId: `worker-source-turn-${run.id}`, sourceClosure: closure });
+      return { sourceClosure: closure, expectedTask: parsedExecution.task };
+    }
+
     it("qualifies only the explicit private Native draft selector without decrypting or spending", async () => {
       await expect(
         gateway().qualifyDraft(db, {
@@ -595,10 +750,9 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     );
 
     it("forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review", async () => {
-      const managedMcpApi = await startManagedMcpApiFixture();
-      let activeHeartbeat: ReturnType<typeof heartbeatService> | undefined;
+      const api = await ensureManagedMcpApiFixture();
       try {
-      const unauthorizedGatewayCall = await request(managedMcpApi.server)
+      const unauthorizedGatewayCall = await request(api.server)
         .post("/mcp/gateways/not-a-token")
         .send({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} });
       expect(unauthorizedGatewayCall.status).toBe(401);
@@ -631,6 +785,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, attempts[0]!.runId!));
       expect(actualRun?.issueId, "the exercised scheduler run must retain the canonical human-authored Task").toBe(task.id);
+      expect(calls).toBe(1);
       expect(actualRun!.error).toBeNull();
       expect(actualRun).toMatchObject({
         status: "succeeded",
@@ -645,7 +800,6 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         expect.arrayContaining(["task", "context", "workspace_metadata"]),
       );
       expect(substitution).not.toHaveBeenCalled();
-      expect(calls).toBe(1);
       expect(observedBody).toContain("assignedRuntimeContext");
       expect(observedBody).not.toContain("## Pinned execution inventory");
       expect(observedBody).not.toContain(credential);
@@ -701,8 +855,9 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const [retainedDocument] = await db.select().from(documents).where(eq(documents.id, independentDocument.id));
       expect(retainedDocument).toMatchObject({ title: "Independent Human note", latestBody: "KEEP_INDEPENDENT_DOCUMENT" });
       } finally {
-        if (activeHeartbeat) await activeHeartbeat.drainActiveRunExecutions();
-        await managedMcpApi.close();
+        try {
+          if (activeHeartbeat) await activeHeartbeat.drainActiveRunExecutions();
+        } finally { activeHeartbeat = undefined; }
       }
     }, 60000);
 
@@ -713,6 +868,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .set({ status: "revoked", revokedAt: new Date() })
         .where(eq(connectionGrants.companyId, f.home));
       const heartbeat = heartbeatService(db);
+      activeHeartbeat = heartbeat;
       await heartbeat.invoke(
         f.presence.id,
         "on_demand",
@@ -745,6 +901,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         });
       };
       const heartbeat = heartbeatService(db);
+      activeHeartbeat = heartbeat;
       const invocation = await heartbeat.invoke(
         f.presence.id,
         "on_demand",
@@ -814,6 +971,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         maximumMinor: 3,
       });
       await duringCall?.();
+      providerSignalAbortedBeforeResponse = init.signal?.aborted === true;
       return new Response(
         JSON.stringify({
           type: "message",
@@ -850,6 +1008,8 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         ...issueInput(),
         outputKey: "result",
         maxOutputTokens: 256,
+        expectedTask: fixtureExpectedTask,
+        sourceClosure: fixtureSourceClosure,
       });
     }
     const sessionIdentity = () => ({
@@ -1034,7 +1194,10 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(issues)
         .where(eq(issues.id, task.id));
-      expect(currentTask!.status).toBe("todo");
+      // The real Native source preparer marks the Task in progress before it
+      // builds this retained input; the draft backend must leave that state
+      // unchanged.
+      expect(currentTask!.status).toBe("in_progress");
       const events = [];
       for await (const event of session.events()) {
         expect(validatePrpEvent(event).ok).toBe(true);
@@ -1512,10 +1675,12 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       expect(JSON.stringify(receipts)).not.toContain(
         "Authorized unverified draft",
       );
+      // The canonical retained-input fixture has already started this Run.
+      // The read/write tool path must leave its active Task in progress.
       expect(
         (await db.select().from(issues).where(eq(issues.id, task.id)))[0]
           ?.status,
-      ).toBe("todo");
+      ).toBe("in_progress");
     });
     it("deduplicates concurrent Native protocol calls and refuses changed or completed dispatch identities", async () => {
       const call = {
@@ -1825,6 +1990,8 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       ).toMatchObject({ status: "paused", toolActionsUsed: 1 });
     });
     it("reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification", async () => {
+      const beforeDispatch = (await db.select({ status: issues.status }).from(issues).where(eq(issues.id, task.id)))[0]!;
+      expect(beforeDispatch.status).toBe("in_progress");
       const result = await gateway().call(claims, input());
       expect(result).toMatchObject({
         text: "Retained bounded draft",
@@ -1838,10 +2005,21 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         purpose: "worker_model",
         workerAttemptId: binding.workerAttemptId,
       });
+      const [runAfterDispatch] = await db.select({ profile: heartbeatRuns.runnerProfileJson })
+        .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, run.id)));
+      const persistedWireIntents = (runAfterDispatch?.profile as Record<string, unknown> | null)?.nativeAwModelWireIntents;
+      expect(persistedWireIntents).toEqual([expect.objectContaining({
+        callId: "draft-1",
+        modelPurpose: "worker_model",
+        sourceDispatchDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+        sourceSetHash: nativeSha256(fixtureSourceClosure.sourceSet),
+        consumedSourceSet: fixtureSourceClosure.sourceSet,
+        idempotencyKey: expect.stringContaining(`worker-model:${run.id}`),
+      })]);
       expect(
         (await db.select().from(issues).where(eq(issues.id, task.id)))[0]
           ?.status,
-      ).toBe("todo");
+      ).toBe(beforeDispatch.status);
       await expect(gateway().call(claims, input())).rejects.toMatchObject({
         status: 409,
       });
@@ -1959,18 +2137,26 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       "company",
       "Task source",
     ])(
-      "settles known usage without disclosure and requests Native Stop on %s during inference",
+      "preserves known or unknown provider usage without disclosure when %s changes during inference",
       async (kind) => {
         duringCall = () => change(kind);
         await expect(gateway().call(claims, input())).rejects.toMatchObject({
           status: 409,
         });
         expect(calls).toBe(1);
-        expect((await ledger())[0]).toMatchObject({
-          status: "completed",
-          maximumMinor: 3,
-          usage: { inputTokens, outputTokens: 20 },
-        });
+        if (kind === "Task source") {
+          // Whether the watcher aborts before the fixture returns a response
+          // depends on scheduling. A source change during the in-flight call
+          // must always leave usage unknown and prevent publication.
+          expect((await ledger())[0]).toMatchObject({ status: "unknown", maximumMinor: 3, usage: null });
+        } else {
+          expect(providerSignalAbortedBeforeResponse).toBe(false);
+          expect((await ledger())[0]).toMatchObject({
+            status: "completed",
+            maximumMinor: 3,
+            usage: { inputTokens, outputTokens: 20 },
+          });
+        }
         expect(
           (
             await db
@@ -1985,7 +2171,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           .where(eq(supervisionInterventions.planId, plan.id));
         expect(stop[0]).toMatchObject({
           decisionAction: "ESCALATE_HUMAN",
-          reasonCode: "worker_model_result_withheld",
+          reasonCode: kind === "Task source" ? "worker_model_unsettled" : "worker_model_result_withheld",
         });
         await expect(gateway().call(claims, input())).rejects.toThrow();
         expect(calls).toBe(1);

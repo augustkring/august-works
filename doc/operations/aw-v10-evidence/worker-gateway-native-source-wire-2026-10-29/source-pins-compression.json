@@ -1,0 +1,29 @@
+{
+  "format": "gzip; exact raw bytes retained",
+  "files": [
+    {
+      "artifact": "worker-gateway-final67-r2-source-pins.json.gz",
+      "rawName": "worker-gateway-final67-r2-source-pins.json",
+      "rawSha256": "a6cedee78688c63526f788922d32105a7dcc2cce91afd1b06a6aaf314f974c97",
+      "artifactSha256": "fc18cd5a06115bcc402d40e7da8c1031acb5d578c5ef20b5ec67ca61e069a884"
+    },
+    {
+      "artifact": "worker-gateway-full-r8-source-pins.json.gz",
+      "rawName": "worker-gateway-full-r8-source-pins.json",
+      "rawSha256": "bdc86a48c4676a1acec8cc04ac88e3ebda53b798056af6ddc24d53a1624e5bda",
+      "artifactSha256": "293c15a2de6c614a54663218303152c133a2fad59a1da017b4e3d84cf0f040e1"
+    },
+    {
+      "artifact": "worker-gateway-heartbeat-clean-r1-source-pins.json.gz",
+      "rawName": "worker-gateway-heartbeat-clean-r1-source-pins.json",
+      "rawSha256": "f5d6803222d0c69573f3bf8682d3c59844d7b447e637cb31e2b78d6e53f99733",
+      "artifactSha256": "0579d0a4f6c0f3c8e2bb4e67adc753991510d7be97d4e97523f1093203c623e8"
+    },
+    {
+      "artifact": "worker-gateway-task-source-current-r1-source-pins.json.gz",
+      "rawName": "worker-gateway-task-source-current-r1-source-pins.json",
+      "rawSha256": "ff5d93b4449275dee9a917920bb492b5d3e0babe9eb3db1779d45172413ee800",
+      "artifactSha256": "50c1bf2b2e5180d42b5ca9b016aa1eb98b3289bc9c7d0ae803c808d5a532242c"
+    }
+  ]
+}
