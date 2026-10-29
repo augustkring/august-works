@@ -4848,7 +4848,11 @@ describeEmbeddedPostgres("tool access service", () => {
       grantStatus: "active", scopeNames: ["read:user", "repo"], state: "DEGRADED",
       credentialExpiresAt: expiresAt, accessVersion: "access-version-1",
       webhook: { health: "healthy", lastDeliveryAt: "2026-10-27T23:00:00.000Z", expiry: "not_applicable" },
-      providerLifecycle: "not_reported", syncReconciliation: "not_reported",
+      providerLifecycle: "not_reported", syncReconciliation: {
+        state: "not_reported", mode: "github_repository_full_snapshot", accessRevision: "access-version-1",
+        accessRevisionKind: "local_access_revision", lastFullReconciledAt: "2026-10-28T00:00:00.000Z",
+        gapDetection: "not_reported",
+      },
     });
     expect(response.body.grants[0].lifecycle).not.toHaveProperty("accessToken");
     expect(response.body.grants[0].lifecycle).not.toHaveProperty("refreshToken");

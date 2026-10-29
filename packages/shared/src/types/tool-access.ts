@@ -230,7 +230,7 @@ export interface ToolConnectionLifecycle {
   operations: {
     credentialRefresh: "provider_dependent" | "not_applicable";
     subscriptionRenewal: "not_reported" | "not_applicable";
-    syncReconciliation: "not_reported";
+    syncReconciliation: "github_full_snapshot" | "not_reported";
     pause: "supported";
     revoke: "supported";
     deprecation: "not_reported";
@@ -243,8 +243,17 @@ export interface ToolConnectionLifecycle {
   };
   /** No provider-wide version/deprecation contract exists for this connection. */
   providerLifecycle: "not_reported";
-  /** No source cursor/watermark reconciliation owner exists for this connection. */
-  syncReconciliation: "not_reported";
+  /** GitHub has a local full-snapshot revision; provider-feed completeness remains unreported. */
+  syncReconciliation: {
+    state: "required" | "not_reported";
+    mode: "github_repository_full_snapshot" | "not_reported";
+    accessRevision: string | null;
+    accessRevisionKind: "local_access_revision" | "not_reported";
+    /** GitHub stores this only when its complete paginated access refresh succeeds. */
+    lastFullReconciledAt: string | null;
+    /** Opaque provider delivery IDs do not establish feed completeness. */
+    gapDetection: "not_reported";
+  };
 }
 
 export interface ConnectionGrant {

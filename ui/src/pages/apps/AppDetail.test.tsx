@@ -1413,7 +1413,8 @@ describe("AppDetail", () => {
         connectionHealth: { state: "ok", checkedAt: "2026-10-27T12:00:00.000Z" },
         lastAccessVerifiedAt: null, lastCredentialRefreshedAt: "2026-10-27T12:00:00.000Z",
         webhook: null, providerLifecycle: "not_reported",
-        syncReconciliation: "not_reported",
+        syncReconciliation: { state: "not_reported", mode: "not_reported", accessRevision: null,
+          accessRevisionKind: "not_reported", lastFullReconciledAt: null, gapDetection: "not_reported" },
       } })],
       capabilities: fullCapabilities(), currentUserId: "user-1", members: [],
     });

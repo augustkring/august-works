@@ -119,6 +119,10 @@ describe("V9 Original connector recovery projection", () => {
         accessRevision: "invalidated-version", lastAccessRefreshAt: new Date().toISOString(), webhookHealth: "healthy" } } }).returning();
     expect((await toolAccessService(db).personalReconnectIdentity(fixture.home, row.id, fixture.userId))?.grant?.lifecycle).toMatchObject({
       state: "PERMISSION_CHANGED", action: "refresh_access", accessVersion: "invalidated-version",
+      syncReconciliation: {
+        state: "required", mode: "github_repository_full_snapshot", accessRevision: "invalidated-version",
+        accessRevisionKind: "local_access_revision", lastFullReconciledAt: null, gapDetection: "not_reported",
+      },
     });
     const value = await read();
     expect(value.needsYou.filter(card => card.source.resourceId === row.id)).toHaveLength(1);
@@ -129,6 +133,9 @@ describe("V9 Original connector recovery projection", () => {
       repositories: [{ id: "789", fullName: "octo/project", installationId: "456" }], accessRevision: "verified-version",
       lastAccessRefreshAt: new Date().toISOString(), webhookHealth: "healthy" } }, updatedAt: new Date() })
       .where(eq(connectionGrants.id, grant!.id));
+    expect((await toolAccessService(db).personalReconnectIdentity(fixture.home, row.id, fixture.userId))?.grant?.lifecycle)
+      .toMatchObject({ syncReconciliation: { state: "not_reported", mode: "github_repository_full_snapshot",
+        accessRevision: "verified-version", accessRevisionKind: "local_access_revision", gapDetection: "not_reported" } });
     expect((await read()).needsYou.some(card => card.source.resourceId === row.id)).toBe(false);
   });
   it("uses the Original manager role/grant policy and denies viewer/admin bypass", async () => {

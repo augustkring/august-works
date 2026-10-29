@@ -27,7 +27,10 @@ describe("tool connection lifecycle projection", () => {
     expect(result).toMatchObject({
       state: "HEALTHY", action: null, grantStatus: "active", scopeNames: ["read:user", "repo"],
       credentialExpiresAt: "2026-10-28T02:00:00.000Z", credentialFreshness: "current",
-      providerLifecycle: "not_reported", syncReconciliation: "not_reported",
+      providerLifecycle: "not_reported", syncReconciliation: {
+        state: "not_reported", mode: "not_reported", accessRevision: null,
+        accessRevisionKind: "not_reported", lastFullReconciledAt: null, gapDetection: "not_reported",
+      },
       operations: {
         credentialRefresh: "provider_dependent", subscriptionRenewal: "not_reported",
         syncReconciliation: "not_reported", pause: "supported", revoke: "supported",
@@ -112,8 +115,45 @@ describe("tool connection lifecycle projection", () => {
     expect(projectToolConnectionLifecycle(connection({ healthStatus: "failed" }), item, now)).toMatchObject({
       state: "PERMISSION_CHANGED", action: "refresh_access", accessVersion: "version-2",
       webhook: { health: "unhealthy", lastDeliveryAt: "2026-10-27T01:00:00.000Z", expiry: "not_applicable" },
-      syncReconciliation: "not_reported",
+      syncReconciliation: {
+        state: "required", mode: "github_repository_full_snapshot", accessRevision: "version-2",
+        accessRevisionKind: "local_access_revision", lastFullReconciledAt: null, gapDetection: "not_reported",
+      },
       subscription: { state: "not_applicable", expiresAt: null, renewal: "not_applicable" },
+    });
+  });
+
+  it("reports the last verified GitHub full snapshot without claiming delivery-gap detection", () => {
+    const verifiedGitHub = grant({ providerTenant: { github: {
+      userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+      repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+      repositories: [{ id: "789", fullName: "octo/project", installationId: "456" }],
+      accessRevision: "version-2", lastAccessRefreshAt: "2026-10-27T00:00:00.000Z",
+      webhookHealth: "healthy",
+    } } });
+    expect(projectToolConnectionLifecycle(connection(), verifiedGitHub, now).syncReconciliation).toEqual({
+      state: "not_reported", mode: "github_repository_full_snapshot", accessRevision: "version-2",
+      accessRevisionKind: "local_access_revision", lastFullReconciledAt: "2026-10-27T00:00:00.000Z",
+      gapDetection: "not_reported",
+    });
+    expect(projectToolConnectionLifecycle(connection({ config: {} }), grant(), now).syncReconciliation).toEqual({
+      state: "not_reported", mode: "not_reported", accessRevision: null,
+      accessRevisionKind: "not_reported", lastFullReconciledAt: null, gapDetection: "not_reported",
+    });
+  });
+
+  it("does not treat an empty or malformed repository snapshot as a completed refresh", () => {
+    const invalidSnapshot = grant({ providerTenant: { github: {
+      userId: "123", login: "octocat", installationCount: 1, repositoryCount: 0,
+      repositorySelection: "none", installationIds: ["456"], installationOwnerLogins: ["octo"],
+      repositories: [], accessRevision: "local-version", lastAccessRefreshAt: "2026-10-27T00:00:00.000Z",
+    } } });
+    expect(projectToolConnectionLifecycle(connection(), invalidSnapshot, now)).toMatchObject({
+      state: "PERMISSION_CHANGED", action: "refresh_access",
+      syncReconciliation: {
+        state: "required", mode: "github_repository_full_snapshot", accessRevision: "local-version",
+        lastFullReconciledAt: null, gapDetection: "not_reported",
+      },
     });
   });
 

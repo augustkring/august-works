@@ -12,6 +12,7 @@ import {
 } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
 import { githubConnectionEventService } from "../services/github-connection-events.js";
+import { projectToolConnectionLifecycle } from "../services/tool-connection-lifecycle.js";
 import { subscribeCompanyLiveEvents } from "../services/live-events.js";
 import type { PaperclipCloudConnector } from "../services/paperclip-cloud-connector.js";
 import {
@@ -304,6 +305,12 @@ describeEmbeddedPostgres.sequential("GitHub connection event delivery", () => {
     unsubscribe();
     let [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grantId));
     expect(grant?.providerTenant?.github).toMatchObject({ repositoryCount: refreshed ? 3 : 4, webhookHealth: "healthy" });
+    const [connection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connectionId));
+    expect(projectToolConnectionLifecycle(connection!, grant!, currentTime).syncReconciliation).toMatchObject(
+      refreshed
+        ? { state: "not_reported", mode: "github_repository_full_snapshot", lastFullReconciledAt: "2026-09-04T12:00:02.000Z", gapDetection: "not_reported" }
+        : { state: "required", mode: "github_repository_full_snapshot", accessRevisionKind: "local_access_revision", lastFullReconciledAt: null, gapDetection: "not_reported" },
+    );
     if (refreshed) {
       expect(grant?.providerTenant?.github?.repositories).toHaveLength(1);
     } else {

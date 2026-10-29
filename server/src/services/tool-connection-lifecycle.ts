@@ -85,12 +85,34 @@ export function projectToolConnectionLifecycle(
           ? "expiring" as const
           : "current" as const;
   const githubConfigured = record(connection.config).sourceTemplateKey === "github";
+  // GitHub's local accessRevision changes on verified refresh and on an
+  // installation-membership webhook. A missing repository snapshot after a
+  // revision means the existing paginated full read must run. This is not a
+  // provider delivery cursor: opaque event IDs provide no completeness proof.
+  const localAccessRevision = typeof github?.accessRevision === "string" && github.accessRevision.length > 0
+    ? github.accessRevision
+    : null;
+  const hasFullRepositorySnapshot = Array.isArray(github?.repositories) && github.repositories.length > 0 &&
+    Array.isArray(github?.installationIds) && github.installationIds.length > 0;
+  const lastFullReconciledAtValue = github?.lastAccessRefreshAt;
+  const lastFullReconciledAt = hasFullRepositorySnapshot && typeof lastFullReconciledAtValue === "string" &&
+    Number.isFinite(Date.parse(lastFullReconciledAtValue))
+    ? new Date(lastFullReconciledAtValue).toISOString()
+    : null;
+  const syncReconciliation: ToolConnectionLifecycle["syncReconciliation"] = {
+    state: githubConfigured && localAccessRevision && !hasFullRepositorySnapshot ? "required" : "not_reported",
+    mode: githubConfigured ? "github_repository_full_snapshot" : "not_reported",
+    accessRevision: localAccessRevision,
+    accessRevisionKind: localAccessRevision ? "local_access_revision" : "not_reported",
+    lastFullReconciledAt,
+    gapDetection: "not_reported",
+  };
   // GitHub App installation webhooks have no per-install expiry. Other
   // providers remain unknown until their lifecycle owner reports a contract.
   const subscriptionStatus = githubConfigured
     ? "not_applicable" as const
     : "not_reported" as const;
-  const githubAccessUnverified = githubConfigured && (!github?.accessRevision || !github.lastAccessRefreshAt || !github.repositories);
+  const githubAccessUnverified = githubConfigured && (!localAccessRevision || !lastFullReconciledAt || !hasFullRepositorySnapshot);
   const githubWebhookUnverified = Boolean(github && github.webhookHealth !== "healthy");
   const connectionHealthUnverified = (connection.healthStatus === "ok" || connection.healthStatus === "healthy") && !connection.healthCheckedAt;
   const externallyRenewableIssuance = credentialExpirySource === "vercel_connect_issuance";
@@ -113,7 +135,7 @@ export function projectToolConnectionLifecycle(
     state = "REQUIRES_REAUTH";
     reason = "refresh_credential_expired";
     action = "reauthorize";
-  } else if (github && (github.webhookHealth === "unhealthy" || (github.accessRevision && !github.repositories))) {
+  } else if (github && (github.webhookHealth === "unhealthy" || (localAccessRevision && !hasFullRepositorySnapshot))) {
     state = "PERMISSION_CHANGED";
     reason = "provider_access_changed";
     action = "refresh_access";
@@ -181,7 +203,7 @@ export function projectToolConnectionLifecycle(
     operations: {
       credentialRefresh: connection.authKind === "oauth" ? "provider_dependent" : "not_applicable",
       subscriptionRenewal: subscriptionStatus,
-      syncReconciliation: "not_reported",
+      syncReconciliation: githubConfigured ? "github_full_snapshot" : "not_reported",
       pause: "supported",
       revoke: "supported",
       deprecation: "not_reported",
@@ -192,6 +214,6 @@ export function projectToolConnectionLifecycle(
       renewal: subscriptionStatus,
     },
     providerLifecycle: "not_reported",
-    syncReconciliation: "not_reported",
+    syncReconciliation,
   };
 }
