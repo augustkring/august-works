@@ -53,6 +53,8 @@ import { approvalService } from "../services/approvals.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { verificationService } from "../services/supervision/verification-service.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { heartbeatService } from "../services/heartbeat.js";
+import { documentService } from "../services/documents.js";
 import { aiConnectionService } from "../services/ai-connections.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
@@ -88,13 +90,14 @@ import { learningChangeSchema } from "@paperclipai/shared";
 import {
   beforeAll,
   afterAll,
+  afterEach,
   beforeEach,
   describe,
   it,
   expect,
   vi,
 } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rolePacks } from "@paperclipai/db";
@@ -112,13 +115,20 @@ import {
   agentPackageComponents,
   companyAgentPackageInstallations,
   heartbeatRuns,
+  orchestrationWorkerAttempts,
   agents,
   agentConfigurationDrafts,
   agentPackageStopActions,
   issues,
+  companySkills,
+  companySkillVersions,
 } from "@paperclipai/db";
 import {
   PROVIDER_CAPABILITY_FEATURES,
+  SPECIALIST_CANDIDATES,
+  specialistCompletionContract,
+  BLENTERA_MANAGED_STARTER_PROFILE,
+  managedCustomerStarterReleaseCandidate,
   type PackageRelease,
 } from "@paperclipai/shared";
 import {
@@ -130,6 +140,9 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { rolePackService } from "../services/role-packs.js";
 import { agentPackageService } from "../services/agent-packages/package-service.js";
+import { removeRuntimeStorageTree } from "../services/runtime-skill-cache.js";
+import { companyPortabilityService } from "../services/company-portability.js";
+import { customerSupportCaseService } from "../services/experience/support-cases.js";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import {
   assertPackageExecution,
@@ -156,7 +169,27 @@ const support = await getEmbeddedPostgresTestSupport();
       versionId: string,
       roleId: string,
       roleVersionId: string,
+      installComponents: Array<{ key: string; resourceId: string; versionId: string }>,
       fixtureHome: string;
+    let starterModelProfile: WorkerModelProfile | null = null,
+      starterModelTransport: typeof guardedRemoteHttpFetch | null = null,
+      starterModelGateway: ReturnType<typeof workerModelGateway> | null = null,
+      starterModelOutput = "A concise follow-up draft grounded in the reviewed meeting notes.",
+      starterModelExpectedTaskNotes: string | null = null,
+      starterModelObservedRequest: { endpoint: boolean; credential: boolean; model: boolean; maxTokens: boolean; system: boolean; taskNotes: boolean | null } | null = null,
+      starterModelCalls = 0;
+    async function cancelCurrentFixtureRuns() {
+      if (!db || !f?.home || !f?.presence?.id) return;
+      const heartbeat = heartbeatService(db);
+      const active = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.agentId, f.presence.id),
+        sql`${heartbeatRuns.status} in ('queued','running','scheduled_retry')`,
+      ));
+      for (const run of active) {
+        await heartbeat.cancelRun(run.id, "Native package test fixture teardown", { suppressImmediateRecovery: true });
+      }
+      await heartbeat.drainActiveRunExecutions();
+    }
     beforeAll(async () => {
       fixtureHome = await mkdtemp(join(tmpdir(), "aw-v9-first-preparation-"));
       vi.stubEnv("PAPERCLIP_HOME", fixtureHome);
@@ -166,10 +199,14 @@ const support = await getEmbeddedPostgresTestSupport();
       await enableV5ForTest(db);
     }, 60000);
     afterAll(async () => {
+      await cancelCurrentFixtureRuns();
+      if (fixtureHome) await removeRuntimeStorageTree(fixtureHome);
       await database?.cleanup();
-      if (fixtureHome) await rm(fixtureHome, { recursive: true, force: true });
       vi.unstubAllEnvs();
     }, 30000);
+    afterEach(async () => {
+      await cancelCurrentFixtureRuns();
+    });
     beforeEach(async () => {
       await instanceSettingsService(db).updateExperimental({
         saas_deployment_profile_v6: true,
@@ -179,6 +216,13 @@ const support = await getEmbeddedPostgresTestSupport();
         maintenance_autopilot_v9: false,
       });
       f = await seedV5Presences(db);
+      starterModelProfile = null;
+      starterModelTransport = null;
+      starterModelGateway = null;
+      registerNativeDraftGateway(db, undefined);
+      starterModelExpectedTaskNotes = null;
+      starterModelObservedRequest = null;
+      starterModelCalls = 0;
       // Structural passkey/session proof for the native package-domain suite;
       // this is not a WebAuthn ceremony or a browser authentication claim.
       f.actor.sessionId = await seedNativePasskeySession(db, f.userId);
@@ -210,6 +254,7 @@ const support = await getEmbeddedPostgresTestSupport();
       });
       roleVersionId = version.id;
       await rp.publish(f.actor, f.home, roleId, roleVersionId, null);
+      installComponents = [{ key: "internal-role", resourceId: roleId, versionId: roleVersionId }];
       const [digest] = await db.execute(
         sql`select aw_v7_package_component_hash(${f.home}::uuid,'role_pack',${roleId}::uuid,${roleVersionId}::uuid) as hash`,
       );
@@ -311,9 +356,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const installInput = () => ({
       versionId,
       agentId: f.presence.id,
-      components: [
-        { key: "internal-role", resourceId: roleId, versionId: roleVersionId },
-      ],
+      components: installComponents,
       acceptInternalEvaluation: true,
     });
     it("refuses package activation under another installer's identity and preserves its actual owner session", async () => {
@@ -1903,7 +1946,152 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(agentPackageStopActions.id, action!.id)),
       ).rejects.toMatchObject({ cause: { code: "23514" } });
     });
-    async function prepareFirstValueFixture(budgets: CreateOrchestrationPlanInput["budgets"] = {}, configurePresence?: () => Promise<void>) {
+    async function managedStarterFixture(): Promise<StarterFixture> {
+      // Disposable native service rows and explicit fixture evidence only.
+      // This exercises software wiring; none of these references qualify a
+      // production model, customer demand, provider or sandbox.
+      const fixtureEvidence = input.releaseEvidence.provenance!;
+      const sourceSha = input.manifest.sourceRevision;
+      const skillBody = "# Internal follow-up drafting\nKeep drafts factual, source-bound and ready for Human review.\n";
+      const [skill] = await db.insert(companySkills).values({
+        companyId: f.home,
+        key: `company/${f.home}/managed-customer-starter`,
+        slug: `managed-customer-starter-${randomUUID().slice(0, 8)}`,
+        name: "Managed customer starter procedure",
+        markdown: skillBody,
+        sourceType: "generated",
+        lifecycleState: "draft",
+        sharingScope: "company",
+        metadata: { sourceKind: "controlled_software_fixture" },
+      }).returning();
+      const [skillVersion] = await db.insert(companySkillVersions).values({
+        companyId: f.home,
+        companySkillId: skill!.id,
+        revisionNumber: 1,
+        state: "active",
+        visibility: "company",
+        fileInventory: [{ path: "SKILL.md", kind: "skill", content: skillBody }],
+        validationSummary: { sensitivity: "internal", sourceCompanyId: f.home, source: "controlled_software_fixture" },
+      }).returning();
+      await db.update(companySkills).set({ lifecycleState: "active", activeVersionId: skillVersion!.id,
+        currentVersionId: skillVersion!.id, headVersionId: skillVersion!.id }).where(eq(companySkills.id, skill!.id));
+      const playbook = await seedApprovedAuthoringPlaybook(db, f.actor, f.home);
+      async function componentHash(type: "role_pack" | "skill" | "playbook", resourceId: string, version: string) {
+        const [row] = await db.execute(sql`select aw_v7_package_component_hash(${f.home}::uuid, ${type}, ${resourceId}::uuid, ${version}::uuid) as hash`);
+        return String(row!.hash);
+      }
+      const cases = SPECIALIST_CANDIDATES[BLENTERA_MANAGED_STARTER_PROFILE.packageKey].cases;
+      const components: PackageRelease["components"] = [
+        { key: "starter-role", type: "role_pack", sourceVersion: "1", contentHash: await componentHash("role_pack", roleId, roleVersionId), source: fixtureEvidence, required: true },
+        { key: "starter-skill", type: "skill", sourceVersion: "1", contentHash: await componentHash("skill", skill!.id, skillVersion!.id), source: fixtureEvidence, required: true },
+        { key: "starter-playbook", type: "playbook", sourceVersion: "1", contentHash: await componentHash("playbook", playbook.playbookId, playbook.revisionId), source: fixtureEvidence, required: true },
+        { key: BLENTERA_MANAGED_STARTER_PROFILE.evaluation.suiteComponentKey, type: "eval_suite",
+          sourceVersion: BLENTERA_MANAGED_STARTER_PROFILE.evaluation.suiteVersion,
+          contentHash: nativeSha256(cases.map((scenario) => ({ caseKey: scenario.key,
+            contract: specialistCompletionContract(BLENTERA_MANAGED_STARTER_PROFILE.packageKey, scenario.key) }))), source: fixtureEvidence, required: true },
+      ];
+      const release = managedCustomerStarterReleaseCandidate({ sourceRevision: sourceSha, components,
+        releaseEvidence: { ...input.releaseEvidence, sbom: fixtureEvidence, provenance: fixtureEvidence,
+          signature: fixtureEvidence, scan: fixtureEvidence, evaluations: fixtureEvidence, protectedHoldout: fixtureEvidence,
+          sandboxQualification: fixtureEvidence, releaseAuthorization: fixtureEvidence, customerDemand: fixtureEvidence,
+          unresolvedCritical: [] } });
+      return { release, intent: BLENTERA_MANAGED_STARTER_PROFILE.intent,
+        meetingNotes: "The team will collect launch feedback before next Tuesday's review. Confirm an owner before assigning follow-up work.",
+        installComponents: components.filter((component) => ["role_pack", "skill", "playbook"].includes(component.type))
+          .map((component) => component.type === "role_pack"
+            ? { key: component.key, resourceId: roleId, versionId: roleVersionId }
+            : component.type === "skill"
+              ? { key: component.key, resourceId: skill!.id, versionId: skillVersion!.id }
+              : { key: component.key, resourceId: playbook.playbookId, versionId: playbook.revisionId }) };
+    }
+    async function configureManagedStarterModel(): Promise<() => Promise<void>> {
+      vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `managed-starter-native-${randomUUID()}-${randomUUID()}`);
+      // The original managed-runner context includes Paperclip's MCP endpoint.
+      // This controlled, non-listening fixture address lets the scheduler
+      // assemble that server without claiming a hosted endpoint or making a
+      // network request (the deterministic model response is plain text).
+      vi.stubEnv("PAPERCLIP_API_URL", "http://127.0.0.1:3100/api");
+      const modelProfileId = randomUUID();
+      const sourceSha = input.manifest.sourceRevision;
+      const transport: typeof guardedRemoteHttpFetch = async (url, init) => {
+        starterModelCalls++;
+        let requestBody: { model?: string; max_tokens?: number; system?: string;
+          messages?: Array<{ content?: Array<{ text?: string }> }> };
+        try {
+          requestBody = JSON.parse(String(init.body)) as { model?: string; max_tokens?: number; system?: string;
+            messages?: Array<{ content?: Array<{ text?: string }> }> };
+        } catch {
+          requestBody = {};
+        }
+        let taskNotes: boolean | null = starterModelExpectedTaskNotes === null ? null : false;
+        if (starterModelExpectedTaskNotes !== null) {
+          try {
+            const dispatchedInput = JSON.parse(requestBody.messages?.[0]?.content?.[0]?.text ?? "null") as { task?: { description?: string | null } };
+            taskNotes = dispatchedInput.task?.description?.includes(starterModelExpectedTaskNotes) ?? false;
+          } catch { taskNotes = false; }
+        }
+        starterModelObservedRequest = {
+          endpoint: String(url) === "https://api.anthropic.com/v1/messages",
+          credential: Boolean(new Headers(init.headers).get("x-api-key")),
+          model: requestBody.model === "fixture-managed-starter-model-20261029",
+          maxTokens: requestBody.max_tokens === 256,
+          system: requestBody.system?.includes("internal draft") ?? false,
+          taskNotes,
+        };
+        return new Response(JSON.stringify({ type: "message", role: "assistant", model: requestBody.model ?? "fixture-managed-starter-model-20261029",
+          stop_reason: "end_turn", content: [{ type: "text", text: starterModelOutput }],
+          usage: { input_tokens: 28, output_tokens: 24 } }), { status: 200, headers: { "content-type": "application/json" } });
+      };
+      return async () => {
+        const connection = await aiConnectionService(db).save(f.home, f.userId, {
+          provider: "anthropic", method: "api_key", ownership: "shared", name: "Managed starter controlled model fixture",
+          apiKey: "fixture", allAgents: false, agentIds: [f.presence.id],
+        }, "fixture-managed-starter-provider-credential-20261029");
+        await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: {
+          provider: "aw_text_only", workerModelProfileId: modelProfileId, model: "fixture-managed-starter-model-20261029",
+          maxOutputTokens: 256, lifecycleMode: "per_turn",
+        }, runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true } } }).where(eq(agents.id, f.presence.id));
+        const [presence] = await db.select().from(agents).where(eq(agents.id, f.presence.id));
+        const providers = agentProviderBindingService(db);
+        const discovery = await discoverNativeCapabilities({ companyId: f.home, adapterType: "paperclip_runner", config: presence!.adapterConfig });
+        const recorded = await providers.recordDiscovery(f.home, f.presence.id, discovery, {
+          connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true,
+        });
+        await providers.revalidate(f.actor, f.home, f.presence.id, recorded.capabilitySnapshotHash!,
+          "Controlled test validation of this exact software configuration; no hosted provider delivery qualification");
+        const bound = await providers.assertRuntime(f.home, f.presence.id);
+        starterModelProfile = {
+          id: modelProfileId, companyId: f.home, workerAgentId: f.presence.id,
+          providerBindingId: bound.provider.id, providerSnapshotHash: bound.provider.capabilitySnapshotHash!,
+          providerProfileRef: bound.runtime.providerProfileRef, qualifiedConfigurationHash: bound.runtime.qualifiedConfigurationHash!,
+          binding: { provider: "anthropic", method: "api_key", mode: "shared", ...connection },
+          transport: "server-text-only-v1", contract: "anthropic-text-messages-2023-06-01",
+          maximumEnvelopeBytes: 64000, inputTokensUpperBound: 100000, maxOutputTokens: 256,
+          tariff: { provider: "anthropic", model: "fixture-managed-starter-model-20261029", currency: "USD",
+            inputMinorPerMillion: 0, outputMinorPerMillion: 0, fixedMinor: 0, qualificationHash: "b".repeat(64),
+            sourceSha, testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 120000).toISOString() },
+          qualificationEvidenceRef: "https://qualification.test.invalid/qualification/managed-starter-software-fixture.json",
+          qualificationArtifactSha256: "c".repeat(64),
+        };
+        starterModelGateway = workerModelGateway(db, { profiles: [starterModelProfile], sourceSha,
+          protectedEvidenceOrigin: "https://qualification.test.invalid", fetch: transport });
+        registerNativeDraftGateway(db, starterModelGateway);
+        // This transport is a controlled deterministic test provider, not a
+        // live API call and not evidence of a production tariff or model route.
+        starterModelTransport = transport;
+      };
+    }
+    type StarterFixture = {
+      release: PackageRelease;
+      installComponents: Array<{ key: string; resourceId: string; versionId: string }>;
+      intent: string;
+      meetingNotes: string;
+    };
+    async function prepareFirstValueFixture(
+      budgets: CreateOrchestrationPlanInput["budgets"] = {},
+      configurePresence?: () => Promise<void>,
+      starter?: StarterFixture,
+    ) {
       await instanceSettingsService(db).updateExperimental({
         activation_v9: true, experience_analytics_v9: true, free_core_commercial_v7: true, billing_entitlements_v6: true,
         billing_usage_v6: true, enableWorkflowsV1: true,
@@ -1911,26 +2099,34 @@ const support = await getEmbeddedPostgresTestSupport();
         readiness_engine_v7: true, orchestration_v7: true, supervision_v7: true, verifier_v7: true,
         ai_use_cases_v7: true,
       });
-      const { published } = await hireFixture();
+      const published = starter
+        ? await service.publish(f.actor, starter.release)
+        : (await hireFixture()).published;
       versionId = published.id;
+      if (starter) installComponents = starter.installComponents;
       // Seed the original onboarding owner at review, and a bounded native test
       // entitlement. All package activation, orchestration, admission and review
       // below use their original writers; this is not a live customer outcome.
       const [account] = await db.insert(billingAccounts).values({ displayName: "First value fixture", payerUserId: f.userId }).returning();
       await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
       await db.insert(billingSubscriptions).values({ billingAccountId: account!.id,
-        providerSubscriptionId: `native-test-fixture-${randomUUID()}`, status: "active", productKeys: ["agent_package_research"],
+        providerSubscriptionId: `native-test-fixture-${randomUUID()}`, status: "active",
+        productKeys: [published.release.manifest.commercialProductKey ?? "agent_package_research"],
         currentPeriodEnd: new Date(Date.now() + 3600000), providerUpdatedAt: new Date(), sourceHash: "native-test-fixture" });
-      const intent = "Prepare a source-bound customer research draft";
+      const intent = starter
+        ? `${starter.intent}\n\nMeeting notes:\n${starter.meetingNotes}`
+        : "Prepare a source-bound customer research draft";
       const [onboarding] = await db.insert(companyOnboardingRuns).values({ companyId: f.home, billingAccountId: account!.id,
         createdByUserId: f.userId, idempotencyKey: randomUUID(), requestHash: "a".repeat(64), currentStage: "v9_review",
         activationState: { ...initialActivationState(), step: "review", intent, packageVersionId: versionId } }).returning();
-      const foundation = foundationService(db), principal = { principal: { type: "user" as const, userId: f.userId } };
-      const companyProfile = await foundation.createDraft(f.home, { foundationKey: "company_profile", category: "company",
-        documentType: "profile", body: "Native test company prepares source-bound customer research drafts",
-        authorityLevel: "canonical", sensitivity: "internal" }, principal);
-      await foundation.submitForReview(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
-      await foundation.approve(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+      if (!starter) {
+        const foundation = foundationService(db), principal = { principal: { type: "user" as const, userId: f.userId } };
+        const companyProfile = await foundation.createDraft(f.home, { foundationKey: "company_profile", category: "company",
+          documentType: "profile", body: "Native test company prepares source-bound customer research drafts",
+          authorityLevel: "canonical", sensitivity: "internal" }, principal);
+        await foundation.submitForReview(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+        await foundation.approve(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+      }
       await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id, status: "active" }).onConflictDoNothing();
       await db.insert(principalPermissionGrants).values(["company_scope:read", "foundation:read"].map(permissionKey => ({
         companyId: f.home, principalType: "agent", principalId: f.presence.id, permissionKey,
@@ -1952,15 +2148,74 @@ const support = await getEmbeddedPostgresTestSupport();
         expectedVersion: installed.version, reason: "Explicit native fixture reviewed-purpose activation",
       });
       expect(installation.status, JSON.stringify(installation.readiness)).toBe("active");
-      const [task] = await db.insert(issues).values({ companyId: f.home, title: "Private first-result draft", status: "todo",
-        assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
+      let task: typeof issues.$inferSelect;
+      let created: typeof orchestrationPlans.$inferSelect;
+      let governanceDeployment: { id: string } | null = null;
+      let currentOnboarding = onboarding!;
+      if (starter) {
+        // This new company has not pre-seeded the required platform Skill.
+        // First-task preparation must establish the exact platform identity
+        // before binding the deployment that the first Run will consume.
+        expect(await db.select({ id: companySkills.id }).from(companySkills)
+          .where(and(eq(companySkills.companyId, f.home), eq(companySkills.key, "blentera-platform")))).toEqual([]);
+        const activation = activationService(db);
+        const review = await activation.get(f.actor, f.home);
+        const option = review.firstTask!.preparationOptions.find(item => item.installationId === installation.id);
+        if (!option) throw new Error("The original first-task owner did not expose the reviewed package and purpose");
+        const prepared = await activation.command(f.actor, f.home, {
+          operation: "prepare_first_task", requestId: randomUUID(), expectedVersion: review.version,
+          installationId: option.installationId, expectedInstallationVersion: option.installationVersion,
+          expectedInstallationHash: option.installationHash, expectedUseCaseVersion: option.useCaseVersion,
+          expectedPurposeVersion: option.purposeVersion, confirmCurrentPurpose: true,
+        });
+        const reference = prepared.state.preparedFirstTask;
+        if (!reference) throw new Error("The original activation owner did not retain its prepared Task and plan");
+        [task] = await db.select().from(issues).where(and(eq(issues.companyId, f.home), eq(issues.id, reference.issueId)));
+        if (!task) throw new Error("The original activation owner did not persist its Task");
+        [created] = await db.select().from(orchestrationPlans).where(and(
+          eq(orchestrationPlans.companyId, f.home), eq(orchestrationPlans.id, reference.planId)));
+        if (!created) throw new Error("The original activation owner did not persist its bounded plan");
+        const [deployment] = await db.execute(sql`select id::text as id from ai_use_case_deployments
+          where company_id=${f.home}::uuid and issue_id=${task.id}::uuid and agent_id=${f.presence.id}::uuid and use_case_id=${useCase.id}::uuid
+            and aw_v7_governance_deployment_current(ai_use_case_deployments)`);
+        if (typeof deployment?.id !== "string") throw new Error("The original activation owner did not bind a current intended purpose");
+        governanceDeployment = { id: deployment.id };
+        const platform = await db.select({ activeVersionId: companySkills.activeVersionId, lifecycleState: companySkills.lifecycleState })
+          .from(companySkills).where(and(eq(companySkills.companyId, f.home), eq(companySkills.key, "blentera-platform")));
+        expect(platform).toHaveLength(1);
+        expect(platform[0]).toMatchObject({ lifecycleState: "active" });
+        expect(process.env.PAPERCLIP_API_URL).toBe("http://127.0.0.1:3100/api");
+        starterModelExpectedTaskNotes = starter?.meetingNotes ?? null;
+        const started = await activation.command(f.actor, f.home, {
+          operation: "start_first_task", requestId: randomUUID(), expectedVersion: prepared.version,
+          installationId: installation.id, planId: created.id, expectedPlanVersion: created.version,
+          expectedInstallationHash: installation.activationHash!, expectedMaximumModelCostMinor: 0,
+        });
+        expect(started.state.firstTask).toMatchObject({ issueId: task.id, planId: created.id, installationId: installation.id });
+        [created] = await db.select().from(orchestrationPlans).where(and(
+          eq(orchestrationPlans.companyId, f.home), eq(orchestrationPlans.id, reference.planId)));
+        if (!created) throw new Error("The original activation owner did not persist the running plan version");
+        const [storedOnboarding] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, onboarding!.id));
+        if (!storedOnboarding) throw new Error("The original activation owner did not retain its first-task state");
+        currentOnboarding = storedOnboarding;
+      } else {
+        const [createdTask] = await db.insert(issues).values({ companyId: f.home, title: "Private first-result draft", status: "todo",
+          assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
+        task = createdTask!;
+        governanceDeployment = await governance.bind(f.actor, f.home, useCase.id, {
+          expectedVersion: useCase.version,
+          issueId: task.id,
+          agentId: f.presence.id,
+        });
+        const orchestration = orchestrationService(db);
+        created = await orchestration.create(f.actor, f.home, createOrchestrationPlanSchema.parse({
+          issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(), riskClass: "C1", workload: "semantic",
+          completionContract: { objective: intent, requiredOutputs: [{ key: "result" }],
+            businessInvariants: ["Every claim cites an authorized retained source"] }, budgets, workers: [{ key: "worker", issueId: task.id }],
+        }));
+      }
       const orchestration = orchestrationService(db);
-      const created = await orchestration.create(f.actor, f.home, createOrchestrationPlanSchema.parse({
-        issueId: task!.id, expectedIssueUpdatedAt: task!.updatedAt.toISOString(), riskClass: "C1", workload: "semantic",
-        completionContract: { objective: intent, requiredOutputs: [{ key: "result" }],
-          businessInvariants: ["Every claim cites an authorized retained source"] }, budgets, workers: [{ key: "worker", issueId: task!.id }],
-      }));
-      return { onboarding: onboarding!, installation, task: task!, created, intent, orchestration, useCase };
+      return { onboarding: currentOnboarding, installation, task, created, intent, orchestration, useCase, governanceDeployment };
     }
     async function noChargePreparationFixture() {
       const modelProfileId = randomUUID();
@@ -2888,30 +3143,165 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(retried.firstAgent?.status).toBe("pending_approval");
       expect(Number((await counts())!.agents)).toBe(Number(before!.agents) + 1);
     }, 60000);
-    async function firstValueFixture() {
-      const { onboarding, installation, task, created, intent, orchestration } = await prepareFirstValueFixture();
-      const plan = await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",
-        rationale: "Start the explicitly bounded native fixture draft" });
-      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
-        status: "running", contextSnapshot: { issueId: task!.id } }).returning();
-      await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: run!.id,
-        responsibleUserId: f.userId, issueId: task!.id, query: intent });
-      const [document] = await db.insert(documents).values({ companyId: f.home, title: "Research result",
-        latestBody: "Native fixture output for an independent human review", createdByAgentId: f.presence.id }).returning();
-      const [revision] = await db.insert(documentRevisions).values({ companyId: f.home, documentId: document!.id,
-        revisionNumber: 1, body: document!.latestBody }).returning();
-      await db.update(documents).set({ latestRevisionId: revision!.id }).where(eq(documents.id, document!.id));
-      await db.insert(issueDocuments).values({ companyId: f.home, issueId: task!.id, documentId: document!.id, key: "result" });
-      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run!.id));
+    async function firstValueFixture(starter?: StarterFixture, configurePresence?: () => Promise<void>) {
+      const sourceSha = input.manifest.sourceRevision;
+      const { onboarding, installation, task, created, intent, orchestration, useCase, governanceDeployment } = await prepareFirstValueFixture(
+        starter ? { maxModelCostMinor: BLENTERA_MANAGED_STARTER_PROFILE.execution.currentV9ActivationOwnerMaximumModelCostMinor } : {},
+        configurePresence,
+        starter,
+      );
+      const plan = starter
+        ? created
+        : await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",
+          rationale: "Start the explicitly bounded native fixture draft" });
+      let run: typeof heartbeatRuns.$inferSelect,
+        document: typeof documents.$inferSelect,
+        revision: typeof documentRevisions.$inferSelect;
+      if (starter && starterModelProfile && starterModelTransport) {
+        if (!governanceDeployment) throw new Error("The managed starter has no exact intended-purpose deployment");
+        const worker = (await orchestration.get(f.actor, f.home, plan.id)).workers[0]!;
+        // start_first_task dispatches the canonical plan through the normal
+        // heartbeat scheduler. Wait for that original run instead of creating
+        // a second run or opening a test-only backend session.
+        let scheduledRun: typeof heartbeatRuns.$inferSelect | undefined;
+        let attempt: typeof orchestrationWorkerAttempts.$inferSelect | undefined;
+        await vi.waitFor(async () => {
+          // A wakeup may register its run after activation dispatch returns;
+          // repeatedly drain then observe the original durable attempt until it
+          // reaches a terminal state. No run or attempt is written by this test.
+          await heartbeatService(db).drainActiveRunExecutions();
+          [attempt] = await db.select().from(orchestrationWorkerAttempts).where(and(
+            eq(orchestrationWorkerAttempts.companyId, f.home), eq(orchestrationWorkerAttempts.planId, plan.id),
+            eq(orchestrationWorkerAttempts.workerId, worker.id),
+          )).orderBy(sql`${orchestrationWorkerAttempts.attempt} desc`).limit(1);
+          if (!attempt?.runId) throw new Error("The original plan worker attempt has not yet bound its scheduler run");
+          [scheduledRun] = await db.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, attempt.runId),
+            eq(heartbeatRuns.nativeIssueId, task!.id), eq(heartbeatRuns.agentId, f.presence.id),
+          ));
+          if (scheduledRun && ["succeeded", "failed", "cancelled", "timed_out"].includes(scheduledRun.status) && attempt.status === "running") {
+            // The canonical verification packet owner reconciles a terminal
+            // Native run into its durable worker attempt before exposing the
+            // packet. Do not manufacture attempt or run terminal state here.
+            await verificationService(db).packet(f.actor, f.home, plan.id, worker.id);
+            [attempt] = await db.select().from(orchestrationWorkerAttempts).where(and(
+              eq(orchestrationWorkerAttempts.companyId, f.home), eq(orchestrationWorkerAttempts.planId, plan.id),
+              eq(orchestrationWorkerAttempts.workerId, worker.id),
+            )).orderBy(sql`${orchestrationWorkerAttempts.attempt} desc`).limit(1);
+          }
+          if (!scheduledRun || !["succeeded", "failed", "cancelled", "timed_out"].includes(scheduledRun.status) || attempt?.status === "running")
+            throw new Error(`The original scheduler run has not reached its terminal owner receipt (run=${scheduledRun?.status ?? "missing"}, runError=${scheduledRun?.errorCode ?? "none"}, attempt=${attempt?.status ?? "missing"}, calls=${starterModelCalls}, request=${JSON.stringify(starterModelObservedRequest)})`);
+        }, { timeout: 30000, interval: 50 });
+        if (!scheduledRun || !attempt || !attempt.executionManifestId || attempt.status !== "succeeded" || scheduledRun.status !== "succeeded")
+          throw new Error(`The original scheduler did not retain a successful native run as the plan worker attempt (run=${scheduledRun?.status ?? "missing"}, runError=${scheduledRun?.errorCode ?? "none"}, attempt=${attempt?.status ?? "missing"}, manifest=${Boolean(attempt?.executionManifestId)}, modelCalls=${starterModelCalls})`);
+        run = scheduledRun;
+        const [purposeBinding] = await db.execute(sql`
+          select d.id::text as "deploymentId", d.company_id::text as "deploymentCompanyId",
+            d.issue_id::text as "deploymentIssueId", d.agent_id::text as "deploymentAgentId", d.status as "deploymentStatus",
+            aw_v7_governance_deployment_current(d) as "deploymentCurrent",
+            i.ai_use_case_id::text as "installationUseCaseId",
+            r.native_issue_id::text as "runIssueId",
+            r.context_snapshot->>'governanceDeploymentId' as "runDeploymentId"
+          from heartbeat_runs r
+          join company_agent_package_installations i on i.id=${installation.id}::uuid and i.company_id=r.company_id
+          join ai_use_case_deployments d on d.id=${governanceDeployment.id}::uuid and d.company_id=r.company_id
+          where r.company_id=${f.home}::uuid and r.id=${run.id}::uuid`);
+        expect(purposeBinding).toMatchObject({ deploymentId: governanceDeployment.id, deploymentCompanyId: f.home,
+          deploymentIssueId: task!.id, deploymentAgentId: f.presence.id, deploymentStatus: "active", deploymentCurrent: true,
+          installationUseCaseId: useCase.id, runIssueId: task!.id, runDeploymentId: governanceDeployment.id });
+        expect(starterModelCalls).toBe(1);
+        expect(starterModelObservedRequest).toEqual({ endpoint: true, credential: true, model: true, maxTokens: true, system: true, taskNotes: true });
+        const saved = await documentService(db).getIssueDocumentByKey(task!.id, "result");
+        if (!saved) throw new Error("Controlled native model draft was not saved by its original document owner");
+        document = (await db.select().from(documents).where(eq(documents.id, saved.id)))[0]!;
+        revision = (await db.select().from(documentRevisions).where(eq(documentRevisions.id, saved.latestRevisionId)))[0]!;
+      } else {
+        const [createdRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+          status: "running", contextSnapshot: { issueId: task!.id } }).returning();
+        run = createdRun!;
+        await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: run.id,
+          responsibleUserId: f.userId, issueId: task!.id, query: intent });
+        const [createdDocument] = await db.insert(documents).values({ companyId: f.home, title: "Research result",
+          latestBody: "Native fixture output for an independent human review", createdByAgentId: f.presence.id }).returning();
+        const [createdRevision] = await db.insert(documentRevisions).values({ companyId: f.home, documentId: createdDocument!.id,
+          revisionNumber: 1, body: createdDocument!.latestBody }).returning();
+        await db.update(documents).set({ latestRevisionId: createdRevision!.id }).where(eq(documents.id, createdDocument!.id));
+        await db.insert(issueDocuments).values({ companyId: f.home, issueId: task!.id, documentId: createdDocument!.id, key: "result" });
+        await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
+        document = createdDocument!;
+        revision = createdRevision!;
+      }
       const worker = (await orchestration.get(f.actor, f.home, plan.id)).workers[0]!;
       const verifier = verificationService(db), packet = await verifier.packet(f.actor, f.home, plan.id, worker.id);
       const review = await verifier.review(f.actor, f.home, plan.id, { expectedPlanVersion: packet.planVersion, workerId: worker.id,
         expectedResultHash: packet.resultHash, result: "pass", objectiveSatisfied: true,
-        rationale: "Independently inspected the saved native draft against the declared invariant",
-        businessInvariants: [{ index: 0, satisfied: true, evidenceRefs: [packet.evidence[0]!.ref] }] });
+        rationale: starter
+          ? "Reviewed the meeting-note draft for source support, proposed versus agreed commitments, and missing owners or deadlines"
+          : "Independently inspected the saved native draft against the declared invariant",
+        businessInvariants: packet.contract.businessInvariants.map((_, index) => ({ index, satisfied: true,
+          evidenceRefs: [packet.evidence.find((evidence) => evidence.type === "task_document")!.ref] })),
+        evidenceRequirements: packet.contract.evidenceRequirements.map((_, index) => ({ index, satisfied: true,
+          evidenceRefs: [packet.evidence.find((evidence) => evidence.type === "task_document")!.ref] })),
+        prohibitedOutcomes: packet.contract.prohibitedOutcomes.map((_, index) => ({ index, satisfied: true,
+          evidenceRefs: [packet.evidence.find((evidence) => evidence.type === "task_document")!.ref] })),
+      });
+      if (starter) expect(packet.contract.businessInvariants).toEqual([...BLENTERA_MANAGED_STARTER_PROFILE.evaluation.judgments]);
       expect(review.result).toBe("pass");
       return { onboarding: onboarding!, installation, task: task!, run: run!, document: document!, revision: revision!, review: review! };
     }
+    it("joins the versioned managed starter through native draft execution, activation, Human review, support intake and opt-in export in a controlled software fixture", async () => {
+      const starter = await managedStarterFixture();
+      starterModelOutput = "Draft — proposed follow-up: collect launch feedback before next Tuesday's review. The notes do not record an owner or an agreed deadline; confirm both before assigning work.";
+      const configurePresence = await configureManagedStarterModel();
+      const fixture = await firstValueFixture(starter, configurePresence), activation = activationService(db);
+      const pending = await activation.get(f.actor, f.home);
+      expect(starter.release.packageKey).toBe(BLENTERA_MANAGED_STARTER_PROFILE.packageKey);
+      expect(fixture.installation.installedVersionId).toBe(fixture.onboarding.activationState!.packageVersionId);
+      const recorded = await activation.command(f.actor, f.home, {
+        operation: "record_verified_result", expectedVersion: fixture.onboarding.version, requestId: randomUUID(),
+        installationId: fixture.installation.id, verificationRunId: fixture.review.id,
+      });
+      expect(recorded.firstValue?.status).toBe("verified");
+      expect(recorded.firstValue?.result?.title).toContain(BLENTERA_MANAGED_STARTER_PROFILE.intent);
+      expect(pending.firstTask?.current).toMatchObject({ issueId: fixture.task.id, planId: fixture.review.planId,
+        installationId: fixture.installation.id, status: "completed", dispatched: true });
+      const completed = await activation.command(f.actor, f.home, {
+        operation: "complete_activation", expectedVersion: recorded.version, requestId: randomUUID(),
+      });
+      expect(completed.status).toBe("completed");
+
+      const supportPolicy = {
+        schemaVersion: 1, policyVersion: "starter-software-fixture", recipientName: "Configured test support operator",
+        privacyNoticeUrl: "https://support.example.test/privacy", processingRegion: "eu",
+        retentionTrigger: "after_last_customer_or_support_message" as const, retentionDays: 30,
+        backupMaxDays: 7, restoreLagDays: 1, deletionMarkerDays: 30, legalHoldPolicyId: "starter-software-fixture",
+      };
+      const support = customerSupportCaseService(db, { dataPolicy: supportPolicy });
+      const disclosure = await support.intakePolicy(f.actor, f.home, f.userId);
+      if (!disclosure.available) throw new Error("The controlled support fixture must have an explicit intake policy");
+      const supportCase = await support.create(f.actor, f.home, {
+        expectedUserId: f.userId, expectedPolicyRevision: disclosure.revision, idempotencyKey: randomUUID(),
+        category: "other", impact: null,
+        description: "The reviewed internal follow-up draft was useful; please retain the current authorization boundaries.",
+      });
+      const exported = await companyPortabilityService(db).exportBundle(f.home, {
+        expectedUserId: f.userId,
+        include: { company: true, agents: false, projects: false, issues: false, skills: false, supportCases: true },
+      }, { actor: f.actor });
+      const archive = JSON.parse(exported.files["blentera-support-cases-v1.json"]!) as {
+        schema: string; companyId: string; caseCount: number; cases: Array<{ id: string; description: string }>;
+      };
+      expect(archive).toMatchObject({ schema: "blentera.support-cases.v1", companyId: f.home, caseCount: 1,
+        cases: [{ id: supportCase.id, description: supportCase.description }] });
+      expect(exported.manifest.includes.supportCases).toBe(true);
+      // The deterministic test transport drives the original Worker Model
+      // Gateway and Native text-draft backend. Its fixture tariff and response
+      // are not live provider, hosted model, package release or customer
+      // acceptance qualification.
+      expect(fixture.document.latestBody).toContain("proposed follow-up");
+      expect(fixture.document.latestBody).toContain("The notes do not record an owner or an agreed deadline");
+      expect((await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.id, fixture.installation.id)))[0]!.status).toBe("active");
+    }, 60000);
     it("records only a current native first-result task/run/review and replays without executing or granting", async () => {
       const fixture = await firstValueFixture(), activation = activationService(db);
       const beforeRuns = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length;
@@ -3032,7 +3422,19 @@ const support = await getEmbeddedPostgresTestSupport();
         const beforeTasks = await db.select().from(issues).where(eq(issues.companyId, f.home));
         const beforePlans = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.companyId, f.home));
         const grants = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));
-        const [prepared, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, fixture.input), fixture.activation.command(f.actor, f.home, fixture.input)]);
+        const outcomes = await Promise.allSettled([
+          fixture.activation.command(f.actor, f.home, fixture.input),
+          fixture.activation.command(f.actor, f.home, fixture.input),
+        ]);
+        const completed = outcomes.filter((outcome) => outcome.status === "fulfilled").map((outcome) => outcome.value);
+        const contention = outcomes.filter((outcome) => outcome.status === "rejected");
+        expect(completed.length).toBeGreaterThanOrEqual(1);
+        expect(contention.length).toBeLessThanOrEqual(1);
+        if (contention.length) expect(contention[0]!.reason).toMatchObject({
+          status: 409, details: { code: "activation_state_busy", retryable: true },
+        });
+        const prepared = completed[0]!;
+        const replay = completed[1] ?? await fixture.activation.command(f.actor, f.home, fixture.input);
         expect(prepared.version).toBe(fixture.onboarding.version + 1);expect(replay.version).toBe(prepared.version);
         expect(prepared.state.step).toBe("review");expect(prepared.state.firstTask).toBeUndefined();expect(prepared.state.preparedFirstTask).toBeDefined();
         const reference = prepared.state.preparedFirstTask!;
@@ -3040,8 +3442,33 @@ const support = await getEmbeddedPostgresTestSupport();
         expect(prepared.firstTask!.candidates).toHaveLength(1);expect(prepared.firstTask!.candidates[0]!.planId).toBe(reference.planId);
         const task = (await db.select().from(issues).where(eq(issues.id, reference.issueId)))[0]!;
         expect(task).toMatchObject({ createdByUserId: f.userId, responsibleUserId: f.userId, assigneeAgentId: f.presence.id,
-          originKind: "v9_activation", originId: fixture.onboarding.id, status: "todo", executionRunId: null, checkoutRunId: null });
+          originKind: "manual", originId: null, status: "todo", executionRunId: null, checkoutRunId: null,
+          payloadSourceProtocolVersion: 1, payloadSourceSnapshotInvalidated: false });
         const plan = (await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, reference.planId)))[0]!;
+        const [captureProof] = await db.execute<{ bodyHash: string; digestValid: boolean }>(sql`
+          select public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "bodyHash",
+            (i.payload_source_snapshot->>'digest')=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex') as "digestValid"
+          from issues i where i.company_id=${f.home}::uuid and i.id=${task.id}::uuid
+        `);
+        expect(task.payloadSourceSnapshot).toMatchObject({ version: 1,
+          owner: { kind: "issue", companyId: f.home, id: task.id, contentHash: captureProof!.bodyHash },
+          policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] });
+        expect(captureProof?.digestValid).toBe(true);
+        const capturedInput = await db.select().from(activityLog).where(and(
+          eq(activityLog.companyId, f.home), eq(activityLog.entityId, task.id),
+          eq(activityLog.action, "issue.payload_source_captured"),
+        ));
+        expect(capturedInput).toHaveLength(1);
+        expect(capturedInput[0]).toMatchObject({ actorType: "user", actorId: f.userId });
+        expect(JSON.stringify(capturedInput[0]!.details)).not.toContain(fixture.intent);
+        const preparedAudit = await db.select().from(activityLog).where(and(
+          eq(activityLog.companyId, f.home), eq(activityLog.entityId, task.id),
+          eq(activityLog.action, "activation.first_task_prepared"),
+        ));
+        expect(preparedAudit).toHaveLength(1);
+        expect(preparedAudit[0]!.details).toMatchObject({ onboardingRunId: fixture.onboarding.id,
+          planId: plan.id, installationId: fixture.installation.id, runCreated: false, grantsCreated: 0 });
+        expect(JSON.stringify(preparedAudit[0]!.details)).not.toContain(fixture.intent);
         expect(plan).toMatchObject({ status: "draft", mode: "single_worker", riskClass: "C1", actionClass: "internal_draft", executionPrincipal: null, startedAt: null });
         expect(plan.budgets).toEqual({ maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 0, maxRetries: 0,
           maxWallClockSeconds: 300, maxModelCostMinor: 0, maxToolActions: 2 });
@@ -3058,6 +3485,36 @@ const support = await getEmbeddedPostgresTestSupport();
         expect(changed.state.step).toBe("intent");expect(changed.state.preparedFirstTask).toBeUndefined();
         expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]!.status).toBe("cancelled");
         expect(fixture.transport).not.toHaveBeenCalled();
+      } finally { registerNativeDraftGateway(db, undefined); }
+    });
+    it("does not capture activation intent for a different Human or an expired initiating session", async () => {
+      try {
+        const fixture = await noChargePreparationFixture();
+        const strangerId = `activation-stranger-${randomUUID()}`, now = new Date();
+        await db.insert(authUsers).values({ id: strangerId, name: "Different activation Human",
+          email: `${strangerId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+        await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: strangerId,
+          status: "active", membershipRole: "owner" });
+        await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+          companyId: f.home, principalType: "user", principalId: strangerId, ...grant,
+        })));
+        const strangerSessionId = await seedNativePasskeySession(db, strangerId);
+        const stranger: typeof f.actor = { type: "board", source: "session", userId: strangerId,
+          sessionId: strangerSessionId, companyIds: [f.home] };
+        const taskCount = async () => db.select({ id: issues.id }).from(issues).where(eq(issues.companyId, f.home));
+        const before = await taskCount();
+        await expect(fixture.activation.command(stranger, f.home, fixture.input)).rejects.toMatchObject({ status: 404 });
+        expect(await taskCount()).toEqual(before);
+        expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home),
+          eq(activityLog.action, "issue.payload_source_captured")))).toHaveLength(0);
+
+        await db.update(authSessions).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(authSessions.id, f.actor.sessionId!));
+        await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 403 });
+        expect(await taskCount()).toEqual(before);
+        expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home),
+          eq(activityLog.action, "issue.payload_source_captured")))).toHaveLength(0);
+        expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home),
+          eq(activityLog.action, "activation.first_task_prepared")))).toHaveLength(0);
       } finally { registerNativeDraftGateway(db, undefined); }
     });
     it("refuses a stale reviewed purpose before creating a first Task and preserves original authorities", async () => {

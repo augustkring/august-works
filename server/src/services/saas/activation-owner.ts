@@ -4,6 +4,7 @@ import { activationStateSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
+import { isAuthenticationStateBusy } from "../../auth/authenticator-assurance.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { readFirstAgentCapabilityPin } from "./activation-first-agent.js";
@@ -16,13 +17,21 @@ export async function lockActivationSnapshot(tx: Db, companyId: string) {
   await tx.execute(
     sql`select set_config('statement_timeout', '5000', true), set_config('lock_timeout', '1000', true)`,
   );
-  await lockAnalyticalCompany(tx, companyId);
-  await lockMemoryPrivacy(tx, companyId);
-  await tx
-    .select({ key: instanceSettings.singletonKey })
-    .from(instanceSettings)
-    .where(eq(instanceSettings.singletonKey, "default"))
-    .for("share");
+  try {
+    await lockAnalyticalCompany(tx, companyId);
+    await lockMemoryPrivacy(tx, companyId);
+    await tx
+      .select({ key: instanceSettings.singletonKey })
+      .from(instanceSettings)
+      .where(eq(instanceSettings.singletonKey, "default"))
+      .for("share");
+  } catch (error) {
+    if (isAuthenticationStateBusy(error))
+      throw conflict("Activation is being updated; retry the same request.", {
+        code: "activation_state_busy", retryable: true,
+      });
+    throw error;
+  }
 }
 export async function assertActivationAccess(
   tx: Db,

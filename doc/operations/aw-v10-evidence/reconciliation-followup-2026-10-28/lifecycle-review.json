@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewDate": "2026-10-28",
   "sourceRegister": "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
-  "bindingBrief": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md; §§39.1/40 catalogue definitions for V10-101..120 and final-revision table for V10-149..168",
+  "bindingBrief": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md; \u00a7\u00a739.1/40 catalogue definitions for V10-101..120 and final-revision table for V10-149..168",
   "scope": [
     "V10-101..120",
     "V10-149..168"
@@ -13,7 +13,7 @@
       "id": "V10-101",
       "bindingClause": "101. `V10-101` chat-channel policy/adapter extraction as V9 touches it.",
       "classification": "unqualified_no_specific_software_defect_found",
-      "currentSourceFinding": "The binding clause is deliberately scoped to adapter extraction “as V9 touches it.” `chat-provider-lifecycle.ts` centralizes lifecycle event effects while parsing provider-specific Slack, GitHub, Teams, Discord, Telegram and other shapes. Provider-specific parsing is expected at this seam; no faulty caller, missing guard, or concrete V9-touched lifecycle behavior was identified in the reviewed files. The earlier demand for a uniform provider-neutral adapter across existing providers overstates the clause.",
+      "currentSourceFinding": "The binding clause is deliberately scoped to adapter extraction \u201cas V9 touches it.\u201d `chat-provider-lifecycle.ts` centralizes lifecycle event effects while parsing provider-specific Slack, GitHub, Teams, Discord, Telegram and other shapes. Provider-specific parsing is expected at this seam; no faulty caller, missing guard, or concrete V9-touched lifecycle behavior was identified in the reviewed files. The earlier demand for a uniform provider-neutral adapter across existing providers overstates the clause.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
         "server/src/routes/chat-channels.ts",
@@ -88,7 +88,7 @@
       "id": "V10-103",
       "bindingClause": "103. `V10-103` onboarding/Agent/Inbox legacy convergence completion.",
       "classification": "unqualified_no_specific_software_defect_found",
-      "currentSourceFinding": "The onboarding seed route documents transactional application and idempotent retry; `saas/onboarding.ts` serializes runs and controls staged first-agent/task creation. Inbox policy and dismissal have separate canonical owners. The review found no specific legacy route/caller that bypasses a canonical owner or a customer behavior regression; the prior “add a route/UI migration map” is inventory work, not proof of a missing implementation.",
+      "currentSourceFinding": "The onboarding seed route documents transactional application and idempotent retry; `saas/onboarding.ts` serializes runs and controls staged first-agent/task creation. Inbox policy and dismissal have separate canonical owners. The review found no specific legacy route/caller that bypasses a canonical owner or a customer behavior regression; the prior \u201cadd a route/UI migration map\u201d is inventory work, not proof of a missing implementation.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
         "server/src/routes/onboarding-seed.ts",
@@ -496,7 +496,7 @@
       "id": "V10-112",
       "bindingClause": "112. `V10-112` noisy-neighbor / denial-of-wallet drill.",
       "classification": "conditional_unqualified_no_specific_software_defect_found",
-      "currentSourceFinding": "The budget owner stores company/Agent/project policies and computes hard-stop state from persisted cost events and model reservations; tests include budget enforcement and source-binding regressions. The operator model-cost receipt explicitly leaves complete cost attribution/shared-account allocation and real runtime qualification unknown. No tenant/fleet race or process-local bypass was reproduced, so “shared multi-process limit if enforcement is process-local” remains conditional rather than a code defect.",
+      "currentSourceFinding": "The budget owner stores company/Agent/project policies and computes hard-stop state from persisted cost events and model reservations; tests include budget enforcement and source-binding regressions. The operator model-cost receipt explicitly leaves complete cost attribution/shared-account allocation and real runtime qualification unknown. No tenant/fleet race or process-local bypass was reproduced, so \u201cshared multi-process limit if enforcement is process-local\u201d remains conditional rather than a code defect.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
         "server/src/services/budgets.ts",
@@ -757,49 +757,59 @@
     {
       "id": "V10-118",
       "bindingClause": "118. `V10-118` integrated managed-customer golden journey.",
-      "classification": "software_missing_and_unqualified",
-      "currentSourceFinding": "First-task, activation, native-auth and other journeys are separate suites. No single managed-customer golden path composes actual provider connection, staffed support, incident, export/delete, billing and operator evidence.",
+      "classification": "partially_implemented_unqualified",
+      "currentSourceFinding": "One current-source integration now composes the versioned managed starter, real package installation/activation, the Human-owned source-bound first Task, controlled native draft execution, Human review, support intake, and opt-in support export. The fixture controls the model/provider and support recipient; it does not qualify a live provider, hosted deployment, staffed operations, or a production managed-customer journey.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
-        "tests/e2e/aw-v9-first-task.spec.ts",
-        "tests/e2e/aw-v9-activation-connections.spec.ts",
-        "tests/e2e/aw-v10-native-auth.spec.ts",
-        "doc/plans/2026-10-28-v10-current-reconciliation.md"
+        "packages/shared/src/agent-package-candidates.ts",
+        "packages/shared/src/specialist-packages.ts",
+        "server/src/services/saas/activation-first-task-preparation.ts",
+        "server/src/services/saas/activation-first-value.ts",
+        "server/src/__tests__/v7-agent-packages.integration.test.ts"
       ],
       "currentSourceIdentitySample": [
         {
-          "path": "tests/e2e/aw-v9-first-task.spec.ts",
+          "path": "packages/shared/src/agent-package-candidates.ts",
           "exists": true,
-          "currentSha256": "b5afe22aeb2d87b382c15c6fb0ef6cea2dcf08d75b9a0569907ab513a9ac7bb0"
+          "currentSha256": "6262fbccfe1a7e77562ce6962dc1736adfec644e4210c4af719c62e4f3c8563d"
         },
         {
-          "path": "tests/e2e/aw-v9-activation-connections.spec.ts",
+          "path": "packages/shared/src/specialist-packages.ts",
           "exists": true,
-          "currentSha256": "8599cdd27c2107016347211717af022f58a69a5ffd90ea607ce5d4107c7c9492"
+          "currentSha256": "e9796411a09911ddd3d84e41665f2ecf3851db3979a82efa28a04aad1e8127cc"
         },
         {
-          "path": "tests/e2e/aw-v10-native-auth.spec.ts",
+          "path": "server/src/services/saas/activation-first-task-preparation.ts",
           "exists": true,
-          "currentSha256": "6483e96b8f24a9403dab9e0de87a82657ad0799fb03e55c3501b52511e58a79b"
+          "currentSha256": "e4419f6e0b09ebe6a099938ae458b5210dce82b87352fd73e1abfaeb65709ce5"
         },
         {
-          "path": "doc/plans/2026-10-28-v10-current-reconciliation.md",
+          "path": "server/src/services/saas/activation-first-value.ts",
           "exists": true,
-          "currentSha256": "38b1707cf04e57e760a31683e0e1b81a26ffcb17ac687b31456049e7dd0c776f"
+          "currentSha256": "8de5d8219dc779816aa3b6c26f10bec165b7027ed51284be73ec160eefa53312"
+        },
+        {
+          "path": "server/src/__tests__/v7-agent-packages.integration.test.ts",
+          "exists": true,
+          "currentSha256": "8c757618ef5c67573908e451dd8d916926e04b4db708706027eebcd92c935c5f"
         }
       ],
       "confirmedSoftwareMissingOrRecheck": [
-        "Build the integrated journey harness and bind it to one supported profile after the individual owners are frozen; retain real provider/operator/Human results as external qualification."
+        "Retain live provider, hosted deployment, staffed support/incident, billing and operator evidence as separate external qualification work; the controlled software fixture is not those receipts."
       ],
-      "retainedReceiptsReviewed": [],
-      "qualificationBoundary": "Assemble the exact supported managed-customer path after individual owners freeze; retain missing provider/operator/Human receipts as explicit external gates.",
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/managed-first-value-software-2026-10-29/README.md",
+        "activation-manual-input-20261029-r9: 3 selected PostgreSQL integration cases passed; current-source pin and raw log retained in the evidence folder.",
+        "activation-owner-flows-20261029-r3: 13 selected PostgreSQL integration cases passed; separate current-source pin and raw log retained in the evidence folder."
+      ],
+      "qualificationBoundary": "This closes a controlled integrated software journey only. It does not qualify live provider/customer operations, hosted deployment, staffed support, incident response, or GA.",
       "missingListedSourceOwners": []
     },
     {
       "id": "V10-119",
-      "bindingClause": "119. `V10-119` final V6–V10 evidence reconciliation.",
+      "bindingClause": "119. `V10-119` final V6\u2013V10 evidence reconciliation.",
       "classification": "artifact_missing",
-      "currentSourceFinding": "A V10 per-ID register and current closeout plan exist, but no V6–V9 predecessor-register crosswalk plus original acceptance journey and final-candidate receipt join is present.",
+      "currentSourceFinding": "A V10 per-ID register and current closeout plan exist, but no V6\u2013V9 predecessor-register crosswalk plus original acceptance journey and final-candidate receipt join is present.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
         "doc/plans/2026-10-28-v10-current-reconciliation.md",
@@ -843,7 +853,7 @@
       "id": "V10-120",
       "bindingClause": "120. `V10-120` GA operating-readiness decision + temporary flag/legacy cleanup.",
       "classification": "non_software_release_gate",
-      "currentSourceFinding": "Prerequisite tooling checks V7–V9 inputs and the current plan says V10 is not ready. No approved GA decision, exact beta profile, complete flag cleanup receipt or live dossier is in source.",
+      "currentSourceFinding": "Prerequisite tooling checks V7\u2013V9 inputs and the current plan says V10 is not ready. No approved GA decision, exact beta profile, complete flag cleanup receipt or live dossier is in source.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
         "scripts/check-aw-v9-coverage.mjs",
@@ -924,42 +934,51 @@
     {
       "id": "V10-150",
       "bindingClause": "| V10-150 | Qualified starter/default experience profile | V6 activation + V7 packages + V9 activation | A usable account reaches real first value without technical setup decisions |",
-      "classification": "artifact_missing_no_specific_software_defect_found",
-      "currentSourceFinding": "Both default and CEO onboarding assets exist, as do the canonical activation service and first-Agent owner. The open gap is the versioned, owner-reviewed starter/default profile artifact plus first-value evidence across offered install types. No missing runtime function or defective activation caller was identified in this source review.",
+      "classification": "partially_implemented_unqualified",
+      "currentSourceFinding": "A distinct versioned managed-starter profile now binds to a registered package identity, canonical specialist evaluation/completion contract, current activation limits, and a controlled first-value journey. The journey reaches actual native draft execution and Human review. External provider/customer qualification and general release readiness remain unproven.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
-        "server/src/onboarding-assets/default/AGENTS.md",
-        "server/src/onboarding-assets/ceo/AGENTS.md",
-        "server/src/services/saas/activation.ts",
-        "server/src/services/saas/activation-first-agent.ts"
+        "packages/shared/src/agent-package-candidates.ts",
+        "packages/shared/src/specialist-packages.ts",
+        "server/src/services/saas/activation-first-task-preparation.ts",
+        "server/src/services/saas/activation-first-value.ts",
+        "server/src/__tests__/v7-agent-packages.integration.test.ts"
       ],
       "currentSourceIdentitySample": [
         {
-          "path": "server/src/onboarding-assets/default/AGENTS.md",
+          "path": "packages/shared/src/agent-package-candidates.ts",
           "exists": true,
-          "currentSha256": "dd9b13ce54b7e1e0a5707cc3b5da22907f42b6ccdbf0086612bd5a73bdd7985a"
+          "currentSha256": "6262fbccfe1a7e77562ce6962dc1736adfec644e4210c4af719c62e4f3c8563d"
         },
         {
-          "path": "server/src/onboarding-assets/ceo/AGENTS.md",
+          "path": "packages/shared/src/specialist-packages.ts",
           "exists": true,
-          "currentSha256": "044051009fd0947608bcaab2bb550472b57b3e03c9067be7109cc4714a0f209f"
+          "currentSha256": "e9796411a09911ddd3d84e41665f2ecf3851db3979a82efa28a04aad1e8127cc"
         },
         {
-          "path": "server/src/services/saas/activation.ts",
+          "path": "server/src/services/saas/activation-first-task-preparation.ts",
           "exists": true,
-          "currentSha256": "4dbe56416e4ee80b9e8abb4a426cb994f05f97e54101bee4fb609fd0585730a7"
+          "currentSha256": "e4419f6e0b09ebe6a099938ae458b5210dce82b87352fd73e1abfaeb65709ce5"
         },
         {
-          "path": "server/src/services/saas/activation-first-agent.ts",
+          "path": "server/src/services/saas/activation-first-value.ts",
           "exists": true,
-          "currentSha256": "2a4eb4d46fabdaf033f47555bcf3ee076371478ad6ca9aaa4f01d91db8f195d9"
+          "currentSha256": "8de5d8219dc779816aa3b6c26f10bec165b7027ed51284be73ec160eefa53312"
+        },
+        {
+          "path": "server/src/__tests__/v7-agent-packages.integration.test.ts",
+          "exists": true,
+          "currentSha256": "8c757618ef5c67573908e451dd8d916926e04b4db708706027eebcd92c935c5f"
         }
       ],
-      "confirmedSoftwareMissingOrRecheck": [],
-      "retainedReceiptsReviewed": [
-        "Source assets exist; no profile-owner review or all-install-type first-value receipt was present in the retained evidence inspected."
+      "confirmedSoftwareMissingOrRecheck": [
+        "Owner/release qualification and representative real customer/provider receipts remain open; the profile and controlled first-value fixture alone do not establish hosted release readiness."
       ],
-      "qualificationBoundary": "Produce/qualify the profile artifact and actual first-value journey. Treat as artifact and release evidence work unless a specific setup decision currently blocks the promised no-technical-setup path.",
+      "retainedReceiptsReviewed": [
+        "doc/operations/aw-v10-evidence/managed-first-value-software-2026-10-29/README.md",
+        "activation-manual-input-20261029-r9 and activation-owner-flows-20261029-r3: current-source selected integration receipts retained separately in the evidence folder."
+      ],
+      "qualificationBoundary": "The versioned profile and controlled first-value path are software evidence, not a production-qualified default or GA claim.",
       "missingListedSourceOwners": [],
       "specificSoftwareGap": null,
       "reviewDisposition": "No concrete missing function, call path, or violated guard was established by the reviewed source and receipts."
@@ -1012,7 +1031,7 @@
       "id": "V10-152",
       "bindingClause": "| V10-152 | Progressive workflow authoring completion | Original workflow author/revision/test/publish owners | Intent becomes a real reviewed, testable graph; drafts remain truthfully labeled |",
       "classification": "unqualified_no_specific_software_defect_found",
-      "currentSourceFinding": "Workflow routes and the original authoring authority are implemented; the authority distinguishes conversation-created drafts and keeps saved routine configuration/enablement with a Human. The retained current-source V9 route/lifecycle suites passed their documented scoped counts. The broad catalogue phrase “progressive workflow authoring completion” does not identify a missing graph mutation or unguarded caller, and no such failing path was established by this review.",
+      "currentSourceFinding": "Workflow routes and the original authoring authority are implemented; the authority distinguishes conversation-created drafts and keeps saved routine configuration/enablement with a Human. The retained current-source V9 route/lifecycle suites passed their documented scoped counts. The broad catalogue phrase \u201cprogressive workflow authoring completion\u201d does not identify a missing graph mutation or unguarded caller, and no such failing path was established by this review.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
         "server/src/routes/experience.ts",
@@ -1234,7 +1253,7 @@
       "id": "V10-157",
       "bindingClause": "| V10-157 | Exact release/claim reconciliation | Existing V4/V7/V8/V9/V10 registers | No historical/source-only/fixture evidence silently becomes hosted acceptance |",
       "classification": "artifact_missing",
-      "currentSourceFinding": "The V10 current reconciliation and V9 readiness exist, but no exact V6–V9 clause crosswalk ties each retained release claim to final candidate source, config, migration, runtime and signed owner receipt.",
+      "currentSourceFinding": "The V10 current reconciliation and V9 readiness exist, but no exact V6\u2013V9 clause crosswalk ties each retained release claim to final candidate source, config, migration, runtime and signed owner receipt.",
       "currentImplementationStatusFromRegister": "partial_implementation",
       "sourceOwners": [
         "doc/plans/2026-10-28-v10-current-reconciliation.md",
@@ -1555,7 +1574,7 @@
     },
     {
       "id": "V10-164",
-      "bindingClause": "| V10-164 | Short activation composition over retained logical states | UX-02/03 / ONB-01–12; C | No fabricated skipped step, duplicate command, required project/website or technical first-run setup |",
+      "bindingClause": "| V10-164 | Short activation composition over retained logical states | UX-02/03 / ONB-01\u201312; C | No fabricated skipped step, duplicate command, required project/website or technical first-run setup |",
       "classification": "unqualified_no_specific_software_defect_found",
       "currentSourceFinding": "Activation has a retained staged state, first-Agent/task preparation, verified first-value receipt, completion revalidation, and a UI that exposes resume/current-stage behavior. Its code expressly represents optional website as `not_requested`. The retained 012 browser attempt passed the first-value test and failed the separate password-reset selector; it is not evidence of an activation product defect. No missing transition/duplicate command was reproduced.",
       "currentImplementationStatusFromRegister": "partial_implementation",
@@ -1726,7 +1745,7 @@
     },
     {
       "id": "V10-167",
-      "bindingClause": "| V10-167 | Complete paired copy and rendered state acceptance | §35 / UX-01; C–H | Both locales preserve action, actor, cost, data and status meaning across all critical states |",
+      "bindingClause": "| V10-167 | Complete paired copy and rendered state acceptance | \u00a735 / UX-01; C\u2013H | Both locales preserve action, actor, cost, data and status meaning across all critical states |",
       "classification": "partially_implemented_unqualified",
       "currentSourceFinding": "EN/DA catalogs, locale selection and paired UI copy checks exist, but no complete source-derived critical-state matrix and rendered acceptance across all V10 flows is retained. Recent shard evidence documents one unpassed Apps credential-expiry assertion.",
       "currentImplementationStatusFromRegister": "partial_implementation",
@@ -1802,7 +1821,7 @@
     },
     {
       "id": "V10-168",
-      "bindingClause": "| V10-168 | Mandatory beta profile and exact live evidence dossier | §§47/55; H | No required capability hidden by narrowing claims; real source/runtime/human/operator evidence |",
+      "bindingClause": "| V10-168 | Mandatory beta profile and exact live evidence dossier | \u00a7\u00a747/55; H | No required capability hidden by narrowing claims; real source/runtime/human/operator evidence |",
       "classification": "non_software_release_gate",
       "currentSourceFinding": "No claim-complete mandatory beta profile or signed source/artifact/migration/host/provider/operator/Human dossier is present. Narrowing claims would violate the required outcome.",
       "currentImplementationStatusFromRegister": "partial_implementation",
@@ -1855,10 +1874,6 @@
       {
         "id": "V10-109",
         "gap": "Expiry and missed-event reconciliation remain incomplete across enabled connector providers; existing facts are provider-bounded."
-      },
-      {
-        "id": "V10-118",
-        "gap": "There is no composed managed-customer golden-journey harness bound to a frozen supported profile."
       },
       {
         "id": "V10-153",
