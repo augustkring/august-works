@@ -411,7 +411,11 @@ import {
   readManagedWorktreeInstanceOwnership,
   WORKTREE_INSTANCE_ROOT_METADATA_KEY,
 } from "./workspace-instance-cleanup.js";
-import { issueService, type NativeTaskSourceCapture } from "./issues.js";
+import {
+  issueService,
+  readAcceptedPlanConfirmationTarget,
+  type NativeTaskSourceCapture,
+} from "./issues.js";
 import {
   blockRunnerGoalRecovery,
   failRunnerGoalAction,
@@ -3624,6 +3628,8 @@ interface WakeupOptions {
   };
   /** Keep causally distinct external chat continuations out of an existing run. */
   allowRunCoalescing?: boolean;
+  /** Recovery counts only a newly created wake; adopted idempotency receipts return null. */
+  returnNullForIdempotentReplay?: boolean;
 }
 
 type UsageTotals = {
@@ -4362,6 +4368,25 @@ export function buildReferencedProjectRunObservability(input: {
 
 function readNonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function isWakeableInteractionContinuation(input: {
+  status: string;
+  continuationPolicy: string;
+  kind: string;
+  payload: unknown;
+}, issueId: string) {
+  if (input.status === "accepted" || input.status === "answered") {
+    return input.continuationPolicy === "wake_assignee" ||
+      input.continuationPolicy === "wake_assignee_on_accept";
+  }
+  const planTarget = input.kind === "request_confirmation"
+    ? readAcceptedPlanConfirmationTarget(input.payload, issueId)
+    : null;
+  return input.status === "rejected" && (
+    input.continuationPolicy === "wake_assignee" ||
+    (planTarget?.issueId === issueId && planTarget.key === "plan")
+  );
 }
 
 function parseNativeSessionGoalControl(
@@ -27070,6 +27095,47 @@ export function heartbeatService(
       return priorReceipt.runId ? getRun(priorReceipt.runId) : null;
     }
 
+    const interactionId = readNonEmptyString(
+      enrichedContextSnapshot.interactionId,
+    );
+    const interactionStatus = readNonEmptyString(
+      enrichedContextSnapshot.interactionStatus,
+    );
+    const interactionWakeKey =
+      interactionId &&
+      interactionStatus &&
+      `interaction:${interactionId}:${interactionStatus}`;
+    if (
+      interactionWakeKey &&
+      opts.idempotencyKey === interactionWakeKey &&
+      ["accepted", "answered", "rejected"].includes(interactionStatus)
+    ) {
+      if (!issueId)
+        throw new Error("interaction_wakeup_idempotency_source_mismatch");
+      const [sourceInteraction] = await db
+        .select({
+          status: issueThreadInteractions.status,
+          continuationPolicy: issueThreadInteractions.continuationPolicy,
+          kind: issueThreadInteractions.kind,
+          payload: issueThreadInteractions.payload,
+        })
+        .from(issueThreadInteractions)
+        .where(
+          and(
+            eq(issueThreadInteractions.companyId, agent.companyId),
+            eq(issueThreadInteractions.issueId, issueId),
+            eq(issueThreadInteractions.id, interactionId),
+          ),
+        )
+        .limit(1);
+      if (
+        !sourceInteraction ||
+        sourceInteraction.status !== interactionStatus ||
+        !isWakeableInteractionContinuation(sourceInteraction, issueId)
+      )
+        throw new Error("interaction_wakeup_idempotency_source_mismatch");
+    }
+
     const agentDebug = parseObject(parseObject(agent.runtimeConfig).debug);
     const runDebug = parseObject(enrichedContextSnapshot.debug);
     if (
@@ -27617,6 +27683,116 @@ export function heartbeatService(
           );
           if (durableReceipt)
             return { kind: "durable" as const, receipt: durableReceipt };
+          const interactionId = readNonEmptyString(
+            enrichedContextSnapshot.interactionId,
+          );
+          const interactionStatus = readNonEmptyString(
+            enrichedContextSnapshot.interactionStatus,
+          );
+          const interactionWakeKey =
+            interactionId &&
+            interactionStatus &&
+            `interaction:${interactionId}:${interactionStatus}`;
+          if (
+            interactionWakeKey &&
+            opts.idempotencyKey === interactionWakeKey &&
+            ["accepted", "answered", "rejected"].includes(interactionStatus)
+          ) {
+            // The issue row is locked above. A recovery sweep and the
+            // resolution-time wake can therefore converge on the one
+            // canonical interaction receipt instead of both creating a
+            // successor after racing their preflight queue checks.
+            const [existingInteractionWake] = await tx
+              .select()
+              .from(agentWakeupRequests)
+              .where(
+                and(
+                  eq(agentWakeupRequests.companyId, agent.companyId),
+                  eq(agentWakeupRequests.idempotencyKey, interactionWakeKey),
+                  notInArray(agentWakeupRequests.status, [
+                    "skipped",
+                    "failed",
+                    "cancelled",
+                  ]),
+                ),
+              )
+              .for("update", { noWait: true })
+              .limit(1);
+            if (existingInteractionWake) {
+              const existingPayload = parseObject(
+                existingInteractionWake.payload,
+              );
+              if (
+                existingInteractionWake.agentId !== agentId ||
+                existingPayload.issueId !== issueId ||
+                existingPayload.interactionId !== interactionId ||
+                existingPayload.interactionStatus !== interactionStatus
+              )
+                throw new Error(
+                  "interaction_wakeup_idempotency_scope_mismatch",
+                );
+            }
+            const [sourceInteraction] = await tx
+              .select({
+                status: issueThreadInteractions.status,
+                continuationPolicy:
+                  issueThreadInteractions.continuationPolicy,
+                kind: issueThreadInteractions.kind,
+                payload: issueThreadInteractions.payload,
+              })
+              .from(issueThreadInteractions)
+              .where(
+                and(
+                  eq(issueThreadInteractions.companyId, agent.companyId),
+                  eq(issueThreadInteractions.issueId, issueId),
+                  eq(issueThreadInteractions.id, interactionId),
+                ),
+              )
+              .for("update", { noWait: true })
+              .limit(1);
+            if (
+              !sourceInteraction ||
+              sourceInteraction.status !== interactionStatus ||
+              !isWakeableInteractionContinuation(sourceInteraction, issueId)
+            )
+              throw new Error(
+                "interaction_wakeup_idempotency_source_mismatch",
+              );
+            if (existingInteractionWake) {
+              if (opts.returnNullForIdempotentReplay)
+                return { kind: "idempotent_replay" as const };
+              if (!existingInteractionWake.runId)
+                return { kind: "idempotent_replay" as const };
+              const [existingRun] = await tx
+                .select()
+                .from(heartbeatRuns)
+                .where(
+                  and(
+                    eq(heartbeatRuns.companyId, agent.companyId),
+                    eq(heartbeatRuns.agentId, agentId),
+                    eq(
+                      heartbeatRuns.id,
+                      existingInteractionWake.runId,
+                    ),
+                  ),
+                );
+              if (
+                !existingRun ||
+                readNonEmptyString(existingRun.contextSnapshot?.issueId) !==
+                  issueId ||
+                readNonEmptyString(
+                  existingRun.contextSnapshot?.interactionId,
+                ) !== interactionId ||
+                readNonEmptyString(
+                  existingRun.contextSnapshot?.interactionStatus,
+                ) !== interactionStatus
+              )
+                throw new Error(
+                  "interaction_wakeup_idempotency_run_scope_mismatch",
+                );
+              return { kind: "replayed" as const, run: existingRun };
+            }
+          }
           const failedChatRetry = await authorizeFailedChatRunRetryWake(
             db,
             tx as unknown as Db,
@@ -28898,7 +29074,11 @@ export function heartbeatService(
       if (outcome.kind === "durable") {
         return outcome.receipt.runId ? getRun(outcome.receipt.runId) : null;
       }
-      if (outcome.kind === "deferred" || outcome.kind === "skipped") {
+      if (
+        outcome.kind === "deferred" ||
+        outcome.kind === "skipped" ||
+        outcome.kind === "idempotent_replay"
+      ) {
         return null;
       }
       if (outcome.kind === "coalesced") {

@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "sourceSha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The heartbeat path now preserves the remote-marker provenance pair when forwarding a process observation to cleanup. Recovery guidance still directs the user to the original run and to wait for its status update."
+      "rationale": "Reviewed the current heartbeat source: continuation receipts bind to the exact company, agent, issue, interaction, and status; rejected responses wake only under the wake_assignee policy or for a rejected plan-change confirmation. The article still directs people to inspect the original task and its current run before retrying; no user-facing recovery instruction changes."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "sourceSha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Heartbeat now preserves the remote-marker provenance pair when forwarding a process observation to cleanup. Recovery guidance still directs the user to the original run and to wait for its status update."
+      "rationale": "Gennemgået den aktuelle heartbeat-kilde: fortsættelseskvitteringer bindes til den præcise virksomhed, agent, opgave, interaktion og status; afviste svar vækker kun agenten med politikken wake_assignee eller ved en afvist planændring. Artiklen vejleder fortsat om at kontrollere den oprindelige opgave og dens aktuelle kørsel før et nyt forsøg; brugerens genopretningsvejledning ændres ikke."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "sourceSha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Heartbeat forwards the remote-marker provenance pair into cleanup, which continues to require current Native run and lease identity. The article promises only that managed cleanup waits for confirmed stop and storage removal."
+      "rationale": "Reviewed the current heartbeat source: interaction wake idempotency changes task continuation only, including exact-source replay for eligible rejected responses. Native cleanup still carries current run/lease provenance and waits for confirmed process stop and storage removal, so the article’s export, deletion, retention, and managed-cleanup guidance remains accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "5a15327e95c67ef4e9067013732cc57bbb7d60b4c94837d745fdcf28779c8f24",
+      "sourceSha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Heartbeat forwards the remote-marker provenance pair into cleanup, which continues to require current Native run and lease identity. The article promises only that managed cleanup waits for confirmed stop and storage removal."
+      "rationale": "Gennemgået den aktuelle heartbeat-kilde: idempotens for interaktionsvækninger ændrer kun opgavefortsættelse, herunder genbrug af præcis kilde for tilladte afviste svar. Native-oprydning viderefører fortsat aktuel kørsels- og lease-proveniens og afventer bekræftet processtop og fjernelse fra lageret, så artiklens vejledning om eksport, sletning, opbevaring og administreret oprydning fortsat er korrekt."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

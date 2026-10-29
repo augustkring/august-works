@@ -10258,6 +10258,341 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     ))).toHaveLength(1);
   }, 90_000);
 
+  it.each(["failed", "cancelled"] as const)(
+    "retries accepted interaction recovery after an earlier %s receipt",
+    async (priorStatus) => {
+      const { companyId, agentId, issueId, runId, wakeupRequestId } =
+        await seedQueuedIssueRunFixture();
+      const interactionId = randomUUID();
+      const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
+      const idempotencyKey = `interaction:${interactionId}:accepted`;
+      await db
+        .update(heartbeatRuns)
+        .set({
+          status: "succeeded",
+          startedAt: new Date("2026-03-19T00:00:00.000Z"),
+          finishedAt: new Date("2026-03-19T00:01:00.000Z"),
+          updatedAt: new Date("2026-03-19T00:01:00.000Z"),
+        })
+        .where(eq(heartbeatRuns.id, runId));
+      await db
+        .update(agentWakeupRequests)
+        .set({
+          status: "completed",
+          finishedAt: new Date("2026-03-19T00:01:00.000Z"),
+          updatedAt: new Date("2026-03-19T00:01:00.000Z"),
+        })
+        .where(eq(agentWakeupRequests.id, wakeupRequestId));
+      await db
+        .update(issues)
+        .set({ status: "in_review", executionRunId: null, checkoutRunId: null })
+        .where(eq(issues.id, issueId));
+      await db.insert(issueThreadInteractions).values({
+        id: interactionId,
+        companyId,
+        issueId,
+        kind: "request_confirmation",
+        status: "accepted",
+        continuationPolicy: "wake_assignee_on_accept",
+        createdByAgentId: agentId,
+        resolvedByUserId: "responsible-user",
+        resolvedAt,
+        updatedAt: resolvedAt,
+        payload: { version: 1, prompt: "Approve the plan?" },
+        result: { outcome: "accepted" },
+      });
+      const priorReceiptId = randomUUID();
+      await db.insert(agentWakeupRequests).values({
+        id: priorReceiptId,
+        companyId,
+        agentId,
+        source: "automation",
+        triggerDetail: "system",
+        reason: "issue_continuation_needed",
+        payload: {
+          issueId,
+          interactionId,
+          interactionStatus: "accepted",
+        },
+        status: priorStatus,
+        requestedByActorType: "system",
+        requestedByActorId: "heartbeat",
+        idempotencyKey,
+      });
+
+      const databaseUrl = externalTestDatabaseUrl ?? tempDb!.connectionString;
+      const recovered = await runRecoveryWorkerProcess(databaseUrl, issueId);
+
+      expect(recovered.continuationRequeued).toBe(1);
+      const receipts = await db
+        .select()
+        .from(agentWakeupRequests)
+        .where(eq(agentWakeupRequests.idempotencyKey, idempotencyKey));
+      expect(receipts).toHaveLength(2);
+      expect(receipts.find(({ id }) => id === priorReceiptId)?.status).toBe(
+        priorStatus,
+      );
+      const successors = (await db
+        .select()
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.agentId, agentId)))
+        .filter((run) => run.id !== runId);
+      expect(successors).toHaveLength(1);
+      expect(successors[0]?.contextSnapshot).toMatchObject({
+        issueId,
+        interactionId,
+        interactionStatus: "accepted",
+        source: "issue.interaction_continuation_recovery",
+      });
+    },
+    90_000,
+  );
+
+  it("does not adopt an interaction wake idempotency receipt from another issue", async () => {
+    const { companyId, agentId, issueId } = await seedQueuedIssueRunFixture();
+    const interactionId = randomUUID();
+    const otherIssueId = randomUUID();
+    const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+    const idempotencyKey = `interaction:${interactionId}:accepted`;
+    await db.insert(issues).values({
+      id: otherIssueId,
+      companyId,
+      title: "Separate interaction target",
+      status: "in_review",
+      priority: "medium",
+      assigneeAgentId: agentId,
+      responsibleUserId: "responsible-user",
+      issueNumber: 2,
+      identifier: `${issuePrefix}-2`,
+    });
+    const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
+    await db.insert(issueThreadInteractions).values({
+      id: interactionId,
+      companyId,
+      issueId: otherIssueId,
+      kind: "request_confirmation",
+      status: "accepted",
+      continuationPolicy: "wake_assignee_on_accept",
+      createdByAgentId: agentId,
+      resolvedByUserId: "responsible-user",
+      resolvedAt,
+      updatedAt: resolvedAt,
+      payload: { version: 1, prompt: "Approve the plan?" },
+      result: { outcome: "accepted" },
+    });
+    await db.insert(agentWakeupRequests).values({
+      companyId,
+      agentId,
+      source: "automation",
+      triggerDetail: "system",
+      reason: "issue_commented",
+      payload: {
+        issueId,
+        interactionId,
+        interactionStatus: "accepted",
+      },
+      status: "completed",
+      requestedByActorType: "system",
+      requestedByActorId: "heartbeat",
+      idempotencyKey,
+    });
+
+    const heartbeat = heartbeatService(db);
+    await expect(
+      heartbeat.wakeup(agentId, {
+        source: "automation",
+        triggerDetail: "system",
+        reason: "issue_continuation_needed",
+        payload: {
+          issueId: otherIssueId,
+          interactionId,
+          interactionStatus: "accepted",
+          mutation: "interaction",
+        },
+        contextSnapshot: {
+          issueId: otherIssueId,
+          taskId: otherIssueId,
+          interactionId,
+          interactionStatus: "accepted",
+          source: "issue.interaction_continuation_recovery",
+        },
+        idempotencyKey,
+        requestedByActorType: "system",
+        requestedByActorId: "heartbeat",
+      }),
+    ).rejects.toThrow("interaction_wakeup_idempotency_scope_mismatch");
+    expect(
+      await db
+        .select()
+        .from(agentWakeupRequests)
+        .where(eq(agentWakeupRequests.idempotencyKey, idempotencyKey)),
+    ).toHaveLength(1);
+  });
+
+  it("does not replay a run for an interaction id absent from the source issue", async () => {
+    const { companyId, agentId, issueId } = await seedQueuedIssueRunFixture();
+    const interactionId = randomUUID();
+    const idempotencyKey = `interaction:${interactionId}:accepted`;
+    const runId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: runId,
+      companyId,
+      agentId,
+      status: "succeeded",
+      contextSnapshot: {
+        issueId,
+        taskId: issueId,
+        interactionId,
+        interactionStatus: "accepted",
+      },
+    });
+    await db.insert(agentWakeupRequests).values({
+      companyId,
+      agentId,
+      source: "automation",
+      triggerDetail: "system",
+      reason: "issue_continuation_needed",
+      payload: {
+        issueId,
+        interactionId,
+        interactionStatus: "accepted",
+        mutation: "interaction",
+      },
+      status: "completed",
+      runId,
+      requestedByActorType: "system",
+      requestedByActorId: "heartbeat",
+      idempotencyKey,
+    });
+
+    const heartbeat = heartbeatService(db);
+    await expect(
+      heartbeat.wakeup(agentId, {
+        source: "automation",
+        triggerDetail: "system",
+        reason: "issue_continuation_needed",
+        payload: {
+          issueId,
+          interactionId,
+          interactionStatus: "accepted",
+          mutation: "interaction",
+        },
+        contextSnapshot: {
+          issueId,
+          taskId: issueId,
+          interactionId,
+          interactionStatus: "accepted",
+          source: "issue.interaction_continuation_recovery",
+        },
+        idempotencyKey,
+        requestedByActorType: "system",
+        requestedByActorId: "heartbeat",
+      }),
+    ).rejects.toThrow("interaction_wakeup_idempotency_source_mismatch");
+    expect(
+      await db
+        .select()
+        .from(agentWakeupRequests)
+        .where(eq(agentWakeupRequests.idempotencyKey, idempotencyKey)),
+    ).toHaveLength(1);
+    expect(
+      await db
+        .select()
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, runId)),
+    ).toHaveLength(1);
+  });
+
+  it("replays a rejected wake_assignee interaction receipt and refuses accept-only rejection", async () => {
+    const { companyId, agentId, issueId, runId, wakeupRequestId } =
+      await seedQueuedIssueRunFixture();
+    const interactionId = randomUUID();
+    const idempotencyKey = `interaction:${interactionId}:rejected`;
+    const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
+    await db.update(issues).set({ status: "in_review", executionRunId: null, checkoutRunId: null })
+      .where(eq(issues.id, issueId));
+    await db.update(heartbeatRuns).set({
+      status: "succeeded",
+      contextSnapshot: { issueId, taskId: issueId, interactionId, interactionStatus: "rejected" },
+      startedAt: new Date("2026-03-19T00:00:00.000Z"),
+      finishedAt: new Date("2026-03-19T00:01:00.000Z"),
+      updatedAt: new Date("2026-03-19T00:01:00.000Z"),
+    }).where(eq(heartbeatRuns.id, runId));
+    await db.update(agentWakeupRequests).set({
+      status: "completed",
+      reason: "issue_commented",
+      payload: { issueId, interactionId, interactionStatus: "rejected", mutation: "interaction" },
+      idempotencyKey,
+      finishedAt: new Date("2026-03-19T00:01:00.000Z"),
+      updatedAt: new Date("2026-03-19T00:01:00.000Z"),
+    }).where(eq(agentWakeupRequests.id, wakeupRequestId));
+    await db.insert(issueThreadInteractions).values({
+      id: interactionId,
+      companyId,
+      issueId,
+      kind: "request_confirmation",
+      status: "rejected",
+      continuationPolicy: "wake_assignee",
+      createdByAgentId: agentId,
+      resolvedByUserId: "responsible-user",
+      resolvedAt,
+      updatedAt: resolvedAt,
+      payload: { version: 1, prompt: "Approve the action?" },
+      result: { outcome: "rejected", reason: "Declined" },
+    });
+
+    const heartbeat = heartbeatService(db);
+    const replayed = await heartbeat.wakeup(agentId, {
+      source: "automation",
+      triggerDetail: "system",
+      reason: "issue_commented",
+      payload: { issueId, interactionId, interactionStatus: "rejected", mutation: "interaction" },
+      contextSnapshot: { issueId, taskId: issueId, interactionId, interactionStatus: "rejected" },
+      idempotencyKey,
+      requestedByActorType: "user",
+      requestedByActorId: "responsible-user",
+    });
+    expect(replayed?.id).toBe(runId);
+    expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey, idempotencyKey)))
+      .toHaveLength(1);
+
+    const acceptOnlyInteractionId = randomUUID();
+    await db.insert(issueThreadInteractions).values({
+      id: acceptOnlyInteractionId,
+      companyId,
+      issueId,
+      kind: "request_confirmation",
+      status: "rejected",
+      continuationPolicy: "wake_assignee_on_accept",
+      createdByAgentId: agentId,
+      resolvedByUserId: "responsible-user",
+      resolvedAt,
+      updatedAt: resolvedAt,
+      payload: { version: 1, prompt: "Approve the action?" },
+      result: { outcome: "rejected", reason: "Declined" },
+    });
+    await expect(heartbeat.wakeup(agentId, {
+      source: "automation",
+      triggerDetail: "system",
+      reason: "issue_commented",
+      payload: {
+        issueId,
+        interactionId: acceptOnlyInteractionId,
+        interactionStatus: "rejected",
+        mutation: "interaction",
+      },
+      contextSnapshot: {
+        issueId,
+        taskId: issueId,
+        interactionId: acceptOnlyInteractionId,
+        interactionStatus: "rejected",
+      },
+      idempotencyKey: `interaction:${acceptOnlyInteractionId}:rejected`,
+      requestedByActorType: "user",
+      requestedByActorId: "responsible-user",
+    })).rejects.toThrow("interaction_wakeup_idempotency_source_mismatch");
+  });
+
   it("lets a Task Stop win while an accepted interaction continuation is recovering", async () => {
     const { companyId, agentId, issueId, runId, wakeupRequestId } =
       await seedQueuedIssueRunFixture();

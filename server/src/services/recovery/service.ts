@@ -192,6 +192,7 @@ type RecoveryWakeupOptions = {
   reason?: string | null;
   payload?: Record<string, unknown> | null;
   idempotencyKey?: string | null;
+  returnNullForIdempotentReplay?: boolean;
   requestedByActorType?: "user" | "agent" | "system";
   requestedByActorId?: string | null;
   contextSnapshot?: Record<string, unknown>;
@@ -1973,10 +1974,27 @@ export function recoveryService(
       )
         return null;
     }
+    const interactionId = readNonEmptyString(input.extraContext?.interactionId);
+    const interactionStatus = readNonEmptyString(
+      input.extraContext?.interactionStatus,
+    );
+    const interactionWakeKey =
+      input.source === "issue.interaction_continuation_recovery" &&
+      interactionId &&
+      interactionStatus &&
+      ["accepted", "answered", "rejected"].includes(interactionStatus)
+        ? `interaction:${interactionId}:${interactionStatus}`
+        : null;
     const queued = await deps.enqueueWakeup(input.agentId, {
       source: "automation",
       triggerDetail: "system",
       reason: input.reason,
+      ...(interactionWakeKey
+        ? {
+            idempotencyKey: interactionWakeKey,
+            returnNullForIdempotentReplay: true,
+          }
+        : {}),
       // The sweep can combine an old in-progress issue snapshot with a newer
       // successful run. Validate eligibility under the enqueue issue lock so
       // completion or reassignment cannot create a redundant continuation.

@@ -56256,7 +56256,11 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     it.each(["concurrent", "lost_scheduler_receipt"] as const)(
       "keeps one exact chat delivery owner through %s reconciliation",
       async (mode) => {
-        const context = await fixture();
+        // Let both route transactions commit before this test models the
+        // background processor. An immediate post-commit dispatch can
+        // correctly defer on the competing route's row lock; concurrent
+        // worker delivery is exercised after the routes have settled.
+        const context = await fixture(true);
         try {
           if (mode === "lost_scheduler_receipt") {
             // The scheduler is simulated, but its durable authorization and
@@ -56326,11 +56330,11 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
           ]);
           await context.resolve().expect(200);
           expect(context.genericWake).not.toHaveBeenCalled();
-          expect(context.wakeup).toHaveBeenCalledTimes(1);
           const receipts = await db
             .select()
             .from(agentWakeupRequests)
             .where(eq(agentWakeupRequests.id, retry.id));
+          expect(context.wakeup).toHaveBeenCalledTimes(1);
           expect(receipts).toHaveLength(1);
           expect(receipts[0]).toMatchObject({
             status: "queued",
