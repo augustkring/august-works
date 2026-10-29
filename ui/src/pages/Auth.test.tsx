@@ -819,6 +819,7 @@ describe("CliAuthPage rate-limit recovery", () => {
     expect(cliContainer.querySelector('input[autocomplete="current-password"]')).toBeNull();
     expect(fetchCli.mock.calls.filter(([, init]) => init?.method !== "POST").length).toBeGreaterThan(readsBeforeConfirmation);
     expect(button("Approve CLI access")?.disabled).toBe(false);
+    expect(document.activeElement).toBe(button("Approve CLI access"));
 
     await reactAct(async () => { button("Approve CLI access")!.click(); });
     await advance(2);

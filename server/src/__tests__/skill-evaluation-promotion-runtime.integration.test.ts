@@ -17,6 +17,8 @@ import { pluginAgentRuntimeState } from "../services/plugin-agent-runtime-state.
 import { companySkillService } from "../services/company-skills.js";
 import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { skillEvaluationService } from "../services/skill-evaluations.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 import { skillResolverService } from "../services/skill-resolver.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
@@ -78,10 +80,13 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
               const startedAt=new Date();
               const [run]=await db.insert(heartbeatRuns).values({companyId:f.home,agentId,status:"running",runtimeMode:"native",
                 responsibleUserId:f.userId,nativeIssueId:issueId,startedAt,invocationSource:"on_demand"}).returning();
+              await preparePlatformSkillAdmission(db,{companyId:f.home,agentId,runId:run!.id,responsibleUserId:f.userId,requireExisting:false},
+                blenteraPlatformContractHashes());
               await skillResolverService(db).authorizedVersion({type:"agent",source:"none",companyId:f.home,agentId,
                 runId:run!.id,onBehalfOfUserId:f.userId},f.home,draft.skillId,versionId,true,"task");
               const prepared=await fabric.prepare({companyId:f.home,agentId,runId:run!.id,responsibleUserId:f.userId,issueId,query:testCase.input});
-              expect(prepared?.manifest.skills.map(pin=>pin.versionId)).toEqual(testCase.shouldTrigger?[versionId]:[]);
+              expect(prepared?.manifest.skills.filter(pin=>pin.key!=="blentera-platform").map(pin=>pin.versionId))
+                .toEqual(testCase.shouldTrigger?[versionId]:[]);
               await costService(db).createEvent(f.home,{agentId,issueId,heartbeatRunId:run!.id,provider:"controlled-evaluation-fixture",model:"deterministic-fixture",
                 billingType:"unknown",costStatus:"reported",costCents:1,occurredAt:new Date()});
               await db.update(heartbeatRuns).set({status:"succeeded",finishedAt:new Date()}).where(eq(heartbeatRuns.id,run!.id));
@@ -106,16 +111,21 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
       {recordRevision:{createdByUserId:f.userId,source:"skill-sync"}});
     await refreshControlledProvider();
     const [running]=await db.insert(heartbeatRuns).values({companyId:f.home,agentId,status:"running",runtimeMode:"native",responsibleUserId:f.userId,startedAt:new Date(),invocationSource:"on_demand"}).returning();
+    await preparePlatformSkillAdmission(db,{companyId:f.home,agentId,runId:running!.id,responsibleUserId:f.userId,requireExisting:false},
+      blenteraPlatformContractHashes());
     await fabric.prepare({companyId:f.home,agentId,runId:running!.id,responsibleUserId:f.userId,issueId:null,query:"Review a zephyr receipt"});
     const [pinned]=await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,running!.id));
-    expect(pinned!.manifest.skills).toMatchObject([{skillId:draft.skillId,versionId:draft.candidate.id}]);
+    expect(pinned!.manifest.skills.filter(pin=>pin.key!=="blentera-platform"))
+      .toMatchObject([{skillId:draft.skillId,versionId:draft.candidate.id}]);
     const next=await lifecycle.propose(actor,f.home,draft.skillId,skillCandidateInputSchema.parse({baseActiveVersionId:draft.candidate.id,
       markdown:"# Zephyr receipts\n\nReview and cross-check every discrepancy.",sharing:"company_proposed"}));
     await evaluateAndPromote(next.id,draft.candidate.id);
     await agentService(db).update(agentId,{adapterConfig:{paperclipSkillSync:{desiredSkills:[]}}},
       {recordRevision:{createdByUserId:f.userId,source:"skill-sync"}});
-    expect(await pluginAgentRuntimeState(db,pluginId,f.home,agentId)).toMatchObject({skillsReady:true,
-      skills:[expect.objectContaining({versionId:draft.candidate.id,currentVersionId:next.id,sourceStatus:"available"})]});
+    const promotedState=await pluginAgentRuntimeState(db,pluginId,f.home,agentId);
+    expect(promotedState?.skillsReady).toBe(true);
+    expect(promotedState?.skills.filter(entry=>entry.key!=="blentera-platform"))
+      .toMatchObject([expect.objectContaining({versionId:draft.candidate.id,currentVersionId:next.id,sourceStatus:"available"})]);
     const versions=await db.select().from(companySkillVersions).where(eq(companySkillVersions.companySkillId,draft.skillId));
     expect(versions.find(version=>version.id===draft.candidate.id)?.state).toBe("superseded");
     expect(versions.find(version=>version.id===next.id)?.state).toBe("active");
@@ -123,13 +133,18 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
     await db.update(heartbeatRuns).set({status:"succeeded",finishedAt:new Date()}).where(eq(heartbeatRuns.id,running!.id));
     const [fresh]=await db.insert(heartbeatRuns).values({companyId:f.home,agentId,status:"running",runtimeMode:"native",responsibleUserId:f.userId,startedAt:new Date(),invocationSource:"on_demand"}).returning();
     const freshInput={companyId:f.home,agentId,runId:fresh!.id,responsibleUserId:f.userId,issueId:null,query:"Review a zephyr receipt"};
+    await preparePlatformSkillAdmission(db,{companyId:f.home,agentId,runId:fresh!.id,responsibleUserId:f.userId,requireExisting:false},
+      blenteraPlatformContractHashes());
     await expect(fabric.prepare(freshInput)).rejects.toMatchObject({status:409,message:"Provider profile/configuration changed; repeat conformance and dependency validation"});
     expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,fresh!.id))).toEqual([]);
     await refreshControlledProvider();
     const current=await fabric.prepare(freshInput);
-    expect(current!.manifest.skills).toMatchObject([{skillId:draft.skillId,versionId:next.id}]);
-    expect(await pluginAgentRuntimeState(db,pluginId,f.home,agentId)).toMatchObject({skillsReady:true,
-      skills:[expect.objectContaining({versionId:next.id,currentVersionId:next.id})]});
+    expect(current!.manifest.skills.filter(pin=>pin.key!=="blentera-platform"))
+      .toMatchObject([{skillId:draft.skillId,versionId:next.id}]);
+    const currentState=await pluginAgentRuntimeState(db,pluginId,f.home,agentId);
+    expect(currentState?.skillsReady).toBe(true);
+    expect(currentState?.skills.filter(entry=>entry.key!=="blentera-platform"))
+      .toMatchObject([expect.objectContaining({versionId:next.id,currentVersionId:next.id})]);
     await lifecycle.transition(actor,f.home,draft.skillId,{state:"revoked",reason:"Withdraw this procedure after review"});
     await expect(pluginAgentRuntimeState(db,pluginId,f.home,agentId)).rejects.toMatchObject({status:409,message:"The pinned Skill is no longer active; revalidation is required"});
     expect((await db.select().from(companySkills).where(and(eq(companySkills.companyId,f.home),eq(companySkills.id,draft.skillId))))[0]!.lifecycleState).toBe("revoked");

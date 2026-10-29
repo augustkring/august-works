@@ -135,12 +135,13 @@ export function CliAuthPage() {
     confirmedReceipt.sessionId === identity.sessionId && authority.canRead();
   useEffect(() => {
     const button = approveButton.current;
-    if (confirmationCurrent && challengeQuery.isSuccess && !challengeQuery.isFetching && !challengeQuery.isPlaceholderData &&
+    if (!confirmationRequired && confirmationCurrent && challengeQuery.isSuccess && !challengeQuery.isFetching && !challengeQuery.isPlaceholderData &&
         button && !button.disabled && focusedReceipt.current !== confirmedReceipt?.sessionId) {
       button.focus();
-      focusedReceipt.current = confirmedReceipt?.sessionId ?? null;
+      if (document.activeElement === button) focusedReceipt.current = confirmedReceipt?.sessionId ?? null;
     }
-  }, [confirmationCurrent, confirmedReceipt?.sessionId, challengeQuery.isSuccess, challengeQuery.isFetching, challengeQuery.isPlaceholderData]);
+  }, [confirmationRequired, confirmationCurrent, confirmedReceipt?.sessionId, challengeQuery.isSuccess,
+    challengeQuery.isFetching, challengeQuery.isPlaceholderData]);
 
   if (!challengeId || !token) {
     return <div className="mx-auto max-w-xl py-10 text-sm text-destructive">{t("cliAuth.invalidUrl")}</div>;
