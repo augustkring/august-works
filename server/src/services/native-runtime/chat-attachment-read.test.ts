@@ -33,6 +33,9 @@ import { createLocalDiskStorageProvider } from "../../storage/local-disk-provide
 import { createStorageService } from "../../storage/service.js";
 import type { StorageService } from "../../storage/types.js";
 import { issueService } from "../issues.js";
+import { seedCurrentHumanMembership } from "../../__tests__/helpers/current-human-membership-fixture.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 
@@ -117,11 +120,13 @@ describe("native same-conversation historical attachment reading", () => {
       status: "in_progress",
       workMode: "standard",
       assigneeAgentId: agentId,
+      responsibleUserId: userId,
     });
     await db.insert(heartbeatRuns).values({
       id: runId,
       companyId,
       agentId,
+      responsibleUserId: userId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: issueId,
@@ -202,13 +207,9 @@ describe("native same-conversation historical attachment reading", () => {
       paperclipUserId: userId,
       status: "linked",
     });
-    await db.insert(companyMemberships).values({
-      companyId,
-      principalType: "user",
-      principalId: userId,
-      status: "active",
-      membershipRole: "member",
-    });
+    await seedCurrentHumanMembership(db, companyId, userId, "operator");
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
 
     const sourceComment = await issueService(db).addComment(
       issueId,

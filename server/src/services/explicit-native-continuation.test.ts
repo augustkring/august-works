@@ -14,6 +14,8 @@ import {
   issues, nativeRunFinalizations, nativeRunResults, completionContracts, environmentLeases, environments, issueRelations, issueTreeHolds, issueTreeHoldMembers,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "../__tests__/helpers/embedded-postgres.js";
+import { issueService } from "./issues.js";
+import { seedCurrentHumanSourceActor } from "../__tests__/helpers/current-human-source-fixture.js";
 import { admitExplicitNativeContinuation } from "./explicit-native-continuation.js";
 import { buildExecutionContinuation } from "./execution-continuation.js";
 import { heartbeatService, persistHeartbeatRunProcessMetadata, type HeartbeatEnvironmentRuntime } from "./heartbeat.js";
@@ -27,13 +29,21 @@ const support = await getEmbeddedPostgresTestSupport();
   let db: ReturnType<typeof createDb>;
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("explicit-native-message-"); db = createDb(database.connectionString); }, 30000);
   afterAll(async () => { await database?.cleanup(); });
-  async function seed() {
+  async function seed(canonicalHumanTask = false) {
     const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID();
     const sourceRunId = randomUUID(), successorRunId = randomUUID();
     const commentId: string = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Explicit turn", defaultResponsibleUserId: "board", issuePrefix: `E${companyId.slice(0, 6)}` });
     await db.insert(agents).values({ id: agentId, companyId, name: "Native", role: "engineer", adapterType: "paperclip_runner", status: "idle", runtimeConfig: { heartbeat: { maxConcurrentRuns: 1 } } });
-    await db.insert(issues).values({ id: issueId, companyId, title: "Deploy", status: "blocked", assigneeAgentId: agentId });
+    if (canonicalHumanTask) {
+      const human = await seedCurrentHumanSourceActor(db, [companyId], "board");
+      await issueService(db).create(companyId, { id: issueId, title: "Deploy", status: "todo", priority: "medium",
+        assigneeAgentId: agentId, responsibleUserId: "board", createdByUserId: "board" }, db, undefined,
+      { manualInputActor: human });
+      await db.update(issues).set({ status: "blocked" }).where(eq(issues.id, issueId));
+    } else {
+      await db.insert(issues).values({ id: issueId, companyId, title: "Deploy", status: "blocked", assigneeAgentId: agentId });
+    }
     await db.insert(heartbeatRuns).values({ id: sourceRunId, companyId, agentId,
       nativeIssueId: issueId, runtimeMode: "native", status: "failed", processPid: 999999999,
       contextSnapshot: { issueId }, finishedAt: new Date("2026-09-11T10:00:00Z") });
@@ -50,7 +60,7 @@ const support = await getEmbeddedPostgresTestSupport();
   }
   type Fixture = Awaited<ReturnType<typeof seed>>;
   it.each(["handoff", "foreign_task", "running_source", "different_owner", "mention", "interaction", "chat"])("adopts former-owner comments only during an authorized handoff (%s)", async kind => {
-    const f = await seed(), nextAgentId = randomUUID(), queueId = randomUUID();
+    const f = await seed(true), nextAgentId = randomUUID(), queueId = randomUUID();
     await db.delete(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, f.issueId));
     await db.delete(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, f.sourceRunId));
     await db.insert(agents).values({ id: nextAgentId, companyId: f.companyId, name: "Replacement", role: "engineer", adapterType: "paperclip_runner", runtimeConfig: { heartbeat: { maxConcurrentRuns: 1 } } });
