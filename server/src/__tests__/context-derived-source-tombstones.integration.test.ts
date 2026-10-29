@@ -1,11 +1,15 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, authUsers, companies, companyMemberships, contextManifests, contextManifestMemoryRoots,
-  createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, memoryBindings, memoryRecords,
+import { activityLog, agents, authUsers, companies, companyMemberships, contextManifests, contextManifestMemoryRoots,
+  createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, memoryRecords,
   memoryObservations, memoryObservationEvidence, memoryModels, memoryModelVersions, memoryModelEvidence, type Db } from "@paperclipai/db";
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
 import { modelLineage } from "../services/memory/derived-memory.js";
+import { issueService } from "../services/issues.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
+import { memoryService } from "../services/memory/memory-service.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 describe("Source deletion preserves Context and model restrictions", () => {
@@ -13,22 +17,53 @@ describe("Source deletion preserves Context and model restrictions", () => {
   beforeAll(async () => {
     database = await startEmbeddedPostgresTestDatabase("v10-context-source-tombstones-");
     db = createDb(database.connectionString, { maxConnections: 3 });
+    await instanceSettingsService(db).updateExperimental({
+      enableFoundationV1: true, enableContextEngineV1: true, agent_identities_v5: true,
+      agent_provider_bindings_v5: true, agent_runtime_fabric_v5: true, role_packs_v5: true,
+      skill_resolver_v5: true, skill_lifecycle_v5: true, playbooks_v5: true,
+      saas_deployment_profile_v6: true, billing_v6: true,
+      enableCollectiveMemoryV1: true, readiness_engine_v7: true, cognitive_memory_v7: true,
+      memory_observations_v7: true, memory_models_v7: true, learning_engine_v7: true, ai_use_cases_v7: true,
+      enableMemoryPostRunExtractionV1: true,
+      governance_evidence_v7: true, core_stewards_v7: true,
+      experience_projection_v9: true, maintenance_autopilot_v9: true,
+    });
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
   afterAll(async () => { await database?.cleanup(); }, 30000);
 
-  // Direct native rows qualify persisted lineage/erasure, not producer capture
-  // or historical completeness. Current private ACL has positive/negative proof.
+  // Create evidence through the Human Task → Memory candidate → review path so
+  // current source admission can validate the same provenance as production.
   async function fixture() {
-    const companyId = randomUUID(), ownerId = randomUUID(), readerId = randomUUID(), privateIssueId = randomUUID();
+    const companyId = randomUUID(), ownerId = randomUUID(), readerId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Retained source identities", issuePrefix: randomUUID() });
     await db.insert(authUsers).values([ownerId, readerId].map(id => ({ id, name: "Current Human", email: `${id}@example.test`, createdAt: new Date(), updatedAt: new Date() })));
     await db.insert(companyMemberships).values([ownerId, readerId].map(principalId => ({ companyId, principalType: "user", principalId, status: "active", membershipRole: "admin" })));
-    await db.insert(issues).values({ id: privateIssueId, companyId, title: "Private source", visibility: "private", createdByUserId: ownerId, responsibleUserId: ownerId });
-    const [binding] = await db.insert(memoryBindings).values({ companyId, key: randomUUID(), name: "Source binding", providerKey: "local" }).returning();
-    const roots = await db.insert(memoryRecords).values([true, false].map(privateSource => ({ companyId, bindingId: binding!.id, providerKey: "local", memoryType: "outcome", scopeType: "company",
-      content: privateSource ? "Private payload" : "Independent public payload", observedAt: new Date(), createdByActorType: "user", createdByActorId: ownerId,
-      reviewState: "accepted", verificationState: "human_verified", sourceProvenanceQualified: true, sourceIssueIds: privateSource ? [privateIssueId] : [] }))).returning();
-    return { companyId, ownerId, roots, owner: { type: "board" as const, source: "session" as const, userId: ownerId }, reader: { type: "board" as const, source: "session" as const, userId: readerId } };
+    const owner = { type: "board" as const, source: "session" as const, userId: ownerId,
+      sessionId: await seedNativePasskeySession(db, ownerId), companyIds: [companyId] };
+    const reader = { type: "board" as const, source: "session" as const, userId: readerId,
+      sessionId: await seedNativePasskeySession(db, readerId), companyIds: [companyId] };
+    const human = { principal: { type: "user" as const, userId: ownerId }, authorizationActor: owner };
+    const service = memoryService(db);
+    const binding = await service.createCompanyBinding(companyId, { key: randomUUID(), name: "Source binding", providerKey: "local" }, human);
+    async function reviewedRoot(privateSource: boolean) {
+      const title = privateSource ? "Private source" : "Independent public source";
+      const task = await issueService(db).create(companyId, { title, description: `${title} evidence`,
+        visibility: privateSource ? "private" : "open", responsibleUserId: ownerId, createdByUserId: ownerId },
+        undefined, undefined, { manualInputActor: owner });
+      const evidenceText = `${title} evidence`;
+      const candidate = await service.createCandidate(companyId, { bindingId: binding.id, memoryType: "lesson",
+        scope: { type: "company", id: null }, ownerAgentId: null, title: `${title} memory`,
+        content: `${title} payload`, summary: `${title} summary`, sensitivity: "internal",
+        observedAt: new Date().toISOString(), validFrom: null, validUntil: null, expiresAt: null,
+        createdByOperationId: randomUUID(), evidence: [{ sourceClass: "task", sourceProvider: "august_works_tasks",
+          sourceType: "issue", sourceRef: `issue://${task.id}`, sourceVersion: task.updatedAt.toISOString(),
+          sourceUpdatedAt: task.updatedAt.toISOString(), observedAt: new Date().toISOString(),
+          excerptHash: createHash("sha256").update(evidenceText).digest("hex"), citation: { label: title },
+          trustLevel: "low", relation: "supports" }] }, human);
+      return (await service.reviewCandidate(companyId, candidate.record.id, { decision: "accept" }, human)).record;
+    }
+    const roots = [await reviewedRoot(true), await reviewedRoot(false)];
+    return { companyId, ownerId, roots, owner, reader };
   }
 
   it("denies retained conversation payload when one of its two Memory roots is physically deleted", async () => {
@@ -63,7 +98,7 @@ describe("Source deletion preserves Context and model restrictions", () => {
     await db.delete(memoryObservations).where(eq(memoryObservations.id, observation!.id));
     const retained = await db.select().from(memoryModelEvidence).where(and(eq(memoryModelEvidence.companyId, f.companyId), eq(memoryModelEvidence.modelId, model!.id)));
     expect.soft(retained.map(root => root.memoryRecordId).sort()).toEqual(f.roots.map(root => root.id).sort());
-    await expect.soft(modelLineage(db, f.reader, model!)).rejects.toMatchObject({ status: 403 });
+    await expect.soft(modelLineage(db, f.reader, model!)).rejects.toMatchObject({ status: 409 });
     await expect.soft(modelLineage(db, f.owner, model!)).rejects.toMatchObject({ status: 409 });
   });
 
@@ -138,6 +173,7 @@ describe("Source deletion preserves Context and model restrictions", () => {
     // This fixture also owns an unrelated Task. Its original company FK
     // correctly blocks deletion until that prerequisite is removed.
     await db.delete(issues).where(eq(issues.companyId, f.companyId));
+    await db.delete(activityLog).where(eq(activityLog.companyId, f.companyId));
     await db.delete(companyMemberships).where(eq(companyMemberships.companyId, f.companyId));
     await db.delete(companies).where(eq(companies.id, f.companyId));
     expect(await f.read()).toEqual([]);

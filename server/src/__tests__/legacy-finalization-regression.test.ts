@@ -53,6 +53,7 @@ describe("P6-32 legacy finalization regression", () => {
   const agentId = randomUUID();
 
   beforeAll(async () => {
+    if (!process.env.PAPERCLIP_API_URL?.trim()) vi.stubEnv("PAPERCLIP_API_URL", "http://127.0.0.1:3100/api");
     temporary = await startEmbeddedPostgresTestDatabase("paperclip-native-legacy-");
     db = createDb(temporary.connectionString);
     await instanceSettingsService(db).updateExperimental({ enableNativeRunner: false });
@@ -83,6 +84,7 @@ describe("P6-32 legacy finalization regression", () => {
       await drainHeartbeatRunsToQuiescence(db, heartbeatService(db));
       await temporary.cleanup();
     }
+    vi.unstubAllEnvs();
   });
 
   it("executes a flag-off heartbeat through the legacy adapter with byte-stable reads and zero native rows", async () => {

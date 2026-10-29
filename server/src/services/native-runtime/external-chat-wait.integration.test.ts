@@ -43,6 +43,7 @@ import type {
 } from "../../vendor/paperclip-runner/index.js";
 
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { finalizeNativeRun } from "./native-run-finalizer.js";
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import {
@@ -71,6 +72,8 @@ import type {
   NativePayloadSourceInput,
 } from "@paperclipai/shared";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
 import { subscribeAllCompanyLiveEvents } from "../live-events.js";
@@ -1166,7 +1169,15 @@ describe("native external-chat response wait", () => {
       provider === "github"
         ? await seedGitHubBoardAnsweredTurn()
         : await seedAnsweredChatTurn(provider);
+    const responsibleUserId = randomUUID();
+    await seedCurrentHumanSourceActor(db, [fixture.companyId], responsibleUserId);
+    await db.update(issues).set({ responsibleUserId }).where(eq(issues.id, fixture.issueId));
+    await db.update(heartbeatRuns).set({ responsibleUserId }).where(eq(heartbeatRuns.id, fixture.runId));
     await attestAnswer(fixture);
+    if ("sourceRunId" in fixture && typeof fixture.sourceRunId === "string")
+      await db.update(heartbeatRuns).set({ responsibleUserId }).where(eq(heartbeatRuns.id, fixture.sourceRunId));
+    await preparePlatformSkillAdmission(db, { companyId: fixture.companyId, agentId: fixture.agentId,
+      runId: fixture.runId, responsibleUserId, requireExisting: false }, blenteraPlatformContractHashes());
     const root = await mkdtemp(path.join(tmpdir(), "answered-chat-file-"));
     try {
       const workspaceRoot = path.join(root, "workspace");
