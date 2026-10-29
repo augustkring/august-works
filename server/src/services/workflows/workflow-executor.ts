@@ -587,6 +587,31 @@ async function createQueuedRun(
   }
 }
 
+async function authorizePersistedWorkflowCoverage(
+  tx: Parameters<Parameters<Db["transaction"]>[0]>[0], pending: typeof workflowRuns.$inferSelect,
+) {
+  if (!pending.humanCoverageId) return;
+  const companyId = pending.companyId;
+  // Queue claims can be performed by the workflow recovery worker after
+  // the interactive session has ended. The immutable run admission keeps
+  // the delegatee identity; revalidate that identity's live rights here.
+  const userId = pending.executionPrincipal?.type === "user"
+    ? pending.executionPrincipal.userId : null;
+  const payloadTask = typeof pending.triggerPayload.task === "object" && pending.triggerPayload.task !== null
+    ? (pending.triggerPayload.task as Record<string, unknown>).id : null;
+  const taskId = pending.source === "task" && typeof payloadTask === "string" ? payloadTask : null;
+  if (!userId || pending.responsibleUserId !== userId ||
+      !["manual", "task"].includes(pending.source) || (pending.source === "task" && !taskId)) {
+    throw forbidden("Covered workflow run has no exact Human delegatee admission identity.", { code: "workflow_coverage_session_required" });
+  }
+  await accessService(tx as unknown as Db).authorizeWorkflowCoverage({
+    tx: tx as unknown as Parameters<Parameters<Db["transaction"]>[0]>[0], companyId,
+    coverageId: pending.humanCoverageId, delegateeUserId: userId,
+    workflowId: pending.workflowId, workflowRevisionId: pending.workflowRevisionId,
+    scopeType: pending.source === "task" ? "task" : "manual", taskId,
+  });
+}
+
 async function claimQueuedRun(
   db: Db,
   companyId: string,
@@ -600,26 +625,7 @@ async function claimQueuedRun(
       eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId), eq(workflowRuns.status, "queued"),
     )).for("update");
     if (!pending) return null;
-    if (pending.humanCoverageId) {
-      // Queue claims can be performed by the workflow recovery worker after
-      // the interactive session has ended. The immutable run admission keeps
-      // the delegatee identity; revalidate that identity's live rights here.
-      const userId = pending.executionPrincipal?.type === "user"
-        ? pending.executionPrincipal.userId : null;
-      const payloadTask = typeof pending.triggerPayload.task === "object" && pending.triggerPayload.task !== null
-        ? (pending.triggerPayload.task as Record<string, unknown>).id : null;
-      const taskId = pending.source === "task" && typeof payloadTask === "string" ? payloadTask : null;
-      if (!userId || pending.responsibleUserId !== userId ||
-          !["manual", "task"].includes(pending.source) || (pending.source === "task" && !taskId)) {
-        throw forbidden("Covered workflow run has no exact Human delegatee admission identity.", { code: "workflow_coverage_session_required" });
-      }
-      await accessService(tx as unknown as Db).authorizeWorkflowCoverage({
-        tx: tx as unknown as Parameters<Parameters<Db["transaction"]>[0]>[0], companyId,
-        coverageId: pending.humanCoverageId, delegateeUserId: userId,
-        workflowId: pending.workflowId, workflowRevisionId: pending.workflowRevisionId,
-        scopeType: pending.source === "task" ? "task" : "manual", taskId,
-      });
-    }
+    await authorizePersistedWorkflowCoverage(tx, pending);
     // Coverage and both principals' current rights may have waited behind
     // concurrent transactions. Sample the execution lease clock only after
     // those locks and authorization checks have settled.
@@ -6167,6 +6173,10 @@ async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSel
   const publications: ActivityPublication[] = [];
   const resumed = await db.transaction(async (tx) => {
     const scopedDb = tx as unknown as Db;
+    // Successful replay resumes execution under the retained coverage too.
+    // Pin both Humans/current scope before copying child data or taking the
+    // same company privacy fences used by Source withdrawal.
+    if (succeeded) await authorizePersistedWorkflowCoverage(tx, run);
     // Keep source currentness and the copied child result in one transaction;
     // analytical/erasure writers use these same company locks.
     await lockAnalyticalCompany(scopedDb, run.companyId);
@@ -6188,13 +6198,19 @@ async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSel
     try { await assertMemoryRecordsRetained(tx as unknown as Db, run.companyId, references); }
     catch { succeeded = false; errorCode = "workflow_memory_source_deleted"; }
     const [owned] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.id, run.id), eq(workflowRuns.companyId, run.companyId))).for("update");
-    if (!owned || owned.status !== "waiting" || owned.executionOwnerId || (continuationActor &&
+    if (!owned || owned.status !== "waiting" || owned.executionOwnerId ||
+      owned.humanCoverageId !== run.humanCoverageId || (continuationActor &&
       (!owned.executionPrincipal || !isDeepStrictEqual(continuationActor.principal, owned.executionPrincipal) ||
         (continuationActor.runId ?? null) !== (owned.executionAgentRunId ?? null)))) return null;
+    // Locks preserve revocation ordering, but coverage TTL can expire while
+    // Source/privacy or parent ownership waits are pending. Sample it again
+    // after those waits, immediately before consuming the durable wait.
+    if (succeeded) await authorizePersistedWorkflowCoverage(tx, owned);
     const [resolved] = await tx.update(workflowWaits).set({ status: expired ? "timed_out" : "resolved", resolvedAt: now,
       resolvedByType: "system", resolvedById: "workflow-subworkflow", resolutionJson: { childRunId: child?.id ?? null, outcome: succeeded ? "succeeded" : "failed" }, updatedAt: now })
       .where(and(eq(workflowWaits.id, wait.id), eq(workflowWaits.companyId, run.companyId), eq(workflowWaits.workflowRunId, run.id),
-        eq(workflowWaits.nodeId, wait.nodeId), eq(workflowWaits.kind, "subworkflow"), eq(workflowWaits.referenceId, wait.referenceId),
+        eq(workflowWaits.nodeId, wait.nodeId), eq(workflowWaits.kind, "subworkflow"),
+        wait.referenceId === null ? isNull(workflowWaits.referenceId) : eq(workflowWaits.referenceId, wait.referenceId),
         eq(workflowWaits.status, "active"))).returning();
     if (!resolved) return null;
     const [step] = await tx.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.workflowRunId, run.id), eq(workflowStepRuns.companyId, run.companyId),

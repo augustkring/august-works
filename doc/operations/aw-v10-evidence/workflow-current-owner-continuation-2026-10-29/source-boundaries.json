@@ -1,0 +1,379 @@
+{
+  "currentSourceChecks": [
+    {
+      "path": "server/src/services/workflows/workflow-executor.ts",
+      "sha256": "ff4193591ab70cbfbe78dd0d333a0d6e95e81615f7a7eec46e416cfbdf3b7f4f",
+      "qualification": "workflow-covered-current-owner-resume-r3-20261029",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts",
+      "sha256": "16453415f9aa5925fba0e1e6d685faabc2199d88ed82109223d771b5ffbd8f0f",
+      "qualification": "workflow-covered-current-owner-resume-r3-20261029",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "ui/src/pages/WorkflowRun.tsx",
+      "sha256": "7031b66da31cde26b5a5f406d802d783b114de45ecdd9b887ea4a978a266ab3d",
+      "qualification": "workflow-continue-ui-r2-20261029",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "ui/src/pages/WorkflowRun.test.tsx",
+      "sha256": "b482d96415f94026da882b9da8829d0ffde1ebf940aac76c710e25c2fd469a46",
+      "qualification": "workflow-continue-ui-r2-20261029",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "ui/src/i18n/experience/en.json",
+      "sha256": "3d163ad24a5c2397eda99b2382d1692f29dcfae126ec6d898a5ec3d102f6eb7d",
+      "qualification": "workflow-continue-ui-r2-20261029",
+      "matchesCurrentSource": true
+    },
+    {
+      "path": "ui/src/i18n/experience/da.json",
+      "sha256": "d5add7ebe006c1ea069e86369c8a9a145718a24e85530094c6bffa9d86aa5f38",
+      "qualification": "workflow-continue-ui-r2-20261029",
+      "matchesCurrentSource": true
+    }
+  ],
+  "archives": [
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-test.log.gz",
+      "rawSha256": "6f530ee3fd6a4f282f88872745714894419edceb9eeaaacd03e90eab41ff5abc",
+      "rawBytes": 9256,
+      "storedSha256": "9fefe8a602ddae8a37a15031fc5ad6e282bc7a02606c9d78987f50c6a0049fe1"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-test.exit",
+      "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "rawBytes": 2,
+      "storedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029.exit",
+      "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "rawBytes": 2,
+      "storedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-runner.txt",
+      "rawSha256": "0285ff924579002c4ecffd2d47035ace174b910821400b40884ddab73080a08f",
+      "rawBytes": 109,
+      "storedSha256": "0285ff924579002c4ecffd2d47035ace174b910821400b40884ddab73080a08f"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-source-pins.json.gz",
+      "rawSha256": "a2dafb30d3fc831044b766e5b3a5a904739e408b438e40a12a6703c08f9c2b4a",
+      "rawBytes": 181969,
+      "storedSha256": "10f7186192c5bdd6dc39fa27e6bb7912b592bd3fe35594fced4c3fb172bcd6a2"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-source-pins.source.patch.gz",
+      "rawSha256": "bbf1acad5baaee592ae8387672a00294bd881f9f5316e760b05547d8fc67aaa1",
+      "rawBytes": 482132,
+      "storedSha256": "30b2b5e5c37e32f3fa2d5e77f73c54d5d6c1141c29db802a3d978b0bb0909333"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-syntax.log.gz",
+      "rawSha256": "24a1d4b0e3b732bf3ed54fb23e8536f4336c9e04a3ee9c79b2d580819cfb5c2d",
+      "rawBytes": 61,
+      "storedSha256": "e000ce9640e9981fdac3444c3802ed3120e599b9286694975d5c5f95f120dc41"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-snapshot.log.gz",
+      "rawSha256": "d10ba5b55c121d4de677d1d357e4b410dd0c356301823dc4590cce4ea33f7da8",
+      "rawBytes": 38,
+      "storedSha256": "4f3f9d99bc4529c3917d5bb8d1a889d514b19a5dfa4223271fe411e4d12cd28a"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r1-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65,
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-test.log.gz",
+      "rawSha256": "25b8e195e52681c900e09768091488ed55752d893bab6abd6b1bbf5b66acdbec",
+      "rawBytes": 9046,
+      "storedSha256": "d562651ec33cfcf5b4e76488b054ec188e6b48844b7ef72ed9f6c41ba007b471"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-test.exit",
+      "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "rawBytes": 2,
+      "storedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029.exit",
+      "rawSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "rawBytes": 2,
+      "storedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-runner.txt",
+      "rawSha256": "0285ff924579002c4ecffd2d47035ace174b910821400b40884ddab73080a08f",
+      "rawBytes": 109,
+      "storedSha256": "0285ff924579002c4ecffd2d47035ace174b910821400b40884ddab73080a08f"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-source-pins.json.gz",
+      "rawSha256": "ebc7d06899159522f0ae2dbff1a7c9085af7d44603618f43b2c61a6caa32de4d",
+      "rawBytes": 182116,
+      "storedSha256": "c95c2ddb624109f3908aa65992b379c0e989ef96c409dc586f85736abbf83ad8"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-source-pins.source.patch.gz",
+      "rawSha256": "f5699000ba362b0120061834641dc2b315e17f4d92ef975b3fcd9109d054f548",
+      "rawBytes": 499977,
+      "storedSha256": "adef10ada2b2a48fb97aaed8e3e2740fa30c0f7f0028085533a987f83f7cc6eb"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-syntax.log.gz",
+      "rawSha256": "cd2e8ee7137810d3a22b86aafd750befae3698f0b968a6621106f818b10557e8",
+      "rawBytes": 61,
+      "storedSha256": "867062fefe747e7b274dc20390b6d4610b0cb8b790d373fa91e891df24592b3b"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-snapshot.log.gz",
+      "rawSha256": "df9870419eba5da31d7890b250ab2f615920608d7fb7f778595ed471e0d2a245",
+      "rawBytes": 38,
+      "storedSha256": "3cfb1e318fd4374f599801a349fb4ce2af656780f15c78afa7692189856b8e45"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r2-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65,
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-test.log.gz",
+      "rawSha256": "8d6457a967e52e811b21c2091233dc4eff901d1a79b398b4844c4896045b3248",
+      "rawBytes": 5688,
+      "storedSha256": "82d9a4c17aa0c937ab4971352d0cd233af30da6eecc2ad7d89b61c616a93227a"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-test.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-runner.txt",
+      "rawSha256": "0285ff924579002c4ecffd2d47035ace174b910821400b40884ddab73080a08f",
+      "rawBytes": 109,
+      "storedSha256": "0285ff924579002c4ecffd2d47035ace174b910821400b40884ddab73080a08f"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-source-pins.json.gz",
+      "rawSha256": "b945808e78c7760ec94aeee2f1bd172a083c998bf195fbfb1cd266d9230bcffa",
+      "rawBytes": 178804,
+      "storedSha256": "c00c2a4bebcf09c2fd1c32f347c8e548d4637fc349bf0cb2359cde7768797c70"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-source-pins.source.patch.gz",
+      "rawSha256": "8b8e1f89ef386e28aea86abb02b70f9463915a952604b728b931154345a49e8a",
+      "rawBytes": 479212,
+      "storedSha256": "15da3914bc2b5621fe39502526f599745a546c9285ddd2e1a8df7476b414856c"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-syntax.log.gz",
+      "rawSha256": "cd2e8ee7137810d3a22b86aafd750befae3698f0b968a6621106f818b10557e8",
+      "rawBytes": 61,
+      "storedSha256": "867062fefe747e7b274dc20390b6d4610b0cb8b790d373fa91e891df24592b3b"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-snapshot.log.gz",
+      "rawSha256": "df9870419eba5da31d7890b250ab2f615920608d7fb7f778595ed471e0d2a245",
+      "rawBytes": 38,
+      "storedSha256": "3cfb1e318fd4374f599801a349fb4ce2af656780f15c78afa7692189856b8e45"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-covered-current-owner-resume-r3-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65,
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-test.log.gz",
+      "rawSha256": "cdd58cd2a872b87002a5903ecd9675614a82fd632d4a88b0fb9176bc5b469e5c",
+      "rawBytes": 2924,
+      "storedSha256": "b9ff7e0b3b432f45c1b3e371563bbe8b00cc35b551c5851694c5009aa8da65c3"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-test.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-runner.txt",
+      "rawSha256": "fd42548a77cf1d2c7593f783c7bcc4e8fabbfbdf8cdc925cd3bfb35adc4addd7",
+      "rawBytes": 76,
+      "storedSha256": "fd42548a77cf1d2c7593f783c7bcc4e8fabbfbdf8cdc925cd3bfb35adc4addd7"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-source-pins.json.gz",
+      "rawSha256": "3aa1ca529bbe4bedc41f84a3905a2c479484ba9075c7d0da8562ec358168953d",
+      "rawBytes": 181793,
+      "storedSha256": "72058070f91e61c295228f9edff2755b0fff0e212731dc0b0f491f767873095b"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-source-pins.source.patch.gz",
+      "rawSha256": "569824544a025eda686e1175e15d2b5f15012de307fa4cfb423ca33c8b73fc95",
+      "rawBytes": 505984,
+      "storedSha256": "694ddd6278e6317246b118b17a9bfd6ed84fc6182c2488fb95220311c2c3b920"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-syntax.log.gz",
+      "rawSha256": "cd2e8ee7137810d3a22b86aafd750befae3698f0b968a6621106f818b10557e8",
+      "rawBytes": 61,
+      "storedSha256": "867062fefe747e7b274dc20390b6d4610b0cb8b790d373fa91e891df24592b3b"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-snapshot.log.gz",
+      "rawSha256": "df9870419eba5da31d7890b250ab2f615920608d7fb7f778595ed471e0d2a245",
+      "rawBytes": 38,
+      "storedSha256": "3cfb1e318fd4374f599801a349fb4ce2af656780f15c78afa7692189856b8e45"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-continue-ui-r1-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65,
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-test.log.gz",
+      "rawSha256": "b81de050eb9d42d6576c32e3b2056b76ebaf1261c7e21391266402bea0dcdfa9",
+      "rawBytes": 3289,
+      "storedSha256": "7cd383706d4a4daa85ad0369a6129b260993020d69fc06a1f87a3e7168330345"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-test.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-runner.txt",
+      "rawSha256": "fd42548a77cf1d2c7593f783c7bcc4e8fabbfbdf8cdc925cd3bfb35adc4addd7",
+      "rawBytes": 76,
+      "storedSha256": "fd42548a77cf1d2c7593f783c7bcc4e8fabbfbdf8cdc925cd3bfb35adc4addd7"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-source-pins.json.gz",
+      "rawSha256": "d0b9b329e13d85ab2499d7c12abb45ae009065434e6bccd9744bb6d800baba02",
+      "rawBytes": 178651,
+      "storedSha256": "77c814cdaeace14627799c888770a9998775fb1406ce17224e2ed3a07ef3f394"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-source-pins.source.patch.gz",
+      "rawSha256": "8b8e1f89ef386e28aea86abb02b70f9463915a952604b728b931154345a49e8a",
+      "rawBytes": 479212,
+      "storedSha256": "15da3914bc2b5621fe39502526f599745a546c9285ddd2e1a8df7476b414856c"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-syntax.log.gz",
+      "rawSha256": "cd2e8ee7137810d3a22b86aafd750befae3698f0b968a6621106f818b10557e8",
+      "rawBytes": 61,
+      "storedSha256": "867062fefe747e7b274dc20390b6d4610b0cb8b790d373fa91e891df24592b3b"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-syntax.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-snapshot.log.gz",
+      "rawSha256": "df9870419eba5da31d7890b250ab2f615920608d7fb7f778595ed471e0d2a245",
+      "rawBytes": 38,
+      "storedSha256": "3cfb1e318fd4374f599801a349fb4ce2af656780f15c78afa7692189856b8e45"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-snapshot.exit",
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "rawBytes": 2,
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "workflow-continue-ui-r2-20261029-binary.sha256",
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "rawBytes": 65,
+      "storedSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    }
+  ],
+  "limits": [
+    "Scoped service integration and DOM/API integration only; no assembled browser/provider/physical-host qualification.",
+    "No whole-workspace build or typecheck asserted.",
+    "Earlier r1/r2 backend failures and UI r1 are preserved as historical, superseded attempts.",
+    "Locale files contain concurrent migration-monitor changes; only four workflow continuation keys per locale belong to this feature.",
+    "Executor diff includes Root-owned nullable reference predicate correction, preserved in the qualified capture."
+  ]
+}

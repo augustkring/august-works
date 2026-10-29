@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/pages/WorkflowRun.test.tsx
+test_pattern=.
