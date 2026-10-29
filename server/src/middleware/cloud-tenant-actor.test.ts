@@ -36,8 +36,16 @@ function createFakeDb(options: {
   const insertedTables: unknown[] = [];
   const deletedTables: unknown[] = [];
   const selectWheres: Array<{ table: unknown; condition: unknown }> = [];
+  let insertTable: unknown;
+  let primaryMembership: typeof membershipRow | null = null;
   const chain: Record<string, unknown> = {};
-  chain.values = () => chain;
+  chain.values = (value: Record<string, unknown>) => {
+    if (insertTable === companyMemberships) {
+      primaryMembership = { companyId: String(value.companyId),
+        membershipRole: String(value.membershipRole), status: membershipRow.status };
+    }
+    return chain;
+  };
   chain.onConflictDoUpdate = () => chain;
   chain.onConflictDoNothing = () => chain;
   chain.where = () => chain;
@@ -46,6 +54,7 @@ function createFakeDb(options: {
   const db = {
     insert: (table: unknown) => {
       insertedTables.push(table);
+      insertTable = table;
       return chain;
     },
     delete: (table: unknown) => {
@@ -68,10 +77,17 @@ function createFakeDb(options: {
                 : table === companyMemberships
                   ? (options.membershipQueryRows ?? [])
                   : [];
+            const optionalRead = () => options.selectThrows && !initializing
+              ? Promise.reject(new Error("select unavailable")) : Promise.resolve(rows);
             return {
-              for: () => Promise.resolve(rows),
+              // The primary membership is now re-read under the canonical row
+              // lock; optional membership-union reads remain independent.
+              for: () => Promise.resolve(!initializing && table === companyMemberships
+                ? primaryMembership ? [primaryMembership] : [] : rows),
+              limit: (count: number) => table === instanceSettings
+                ? optionalRead().then(result => result.slice(0, count)) : Promise.resolve(rows.slice(0, count)),
               then: (resolve: (v: unknown) => unknown, reject: (error: unknown) => unknown) =>
-                (options.selectThrows && !initializing ? Promise.reject(new Error("select unavailable")) : Promise.resolve(rows)).then(resolve, reject),
+                optionalRead().then(resolve, reject),
             };
           },
         }),
@@ -241,13 +257,18 @@ describe("resolveCloudTenantActor (shared-pool hardening)", () => {
 
     it("loads memberships with the session path's exact own-user active-status filter", async () => {
       const { db, selectWheres } = createFakeDb();
-      await resolveCloudTenantActor(db, fakeReq(VALID_HEADERS));
+      const actor = await resolveCloudTenantActor(db, fakeReq(VALID_HEADERS));
       const membershipSelects = selectWheres.filter((entry) => entry.table === companyMemberships);
-      expect(membershipSelects).toHaveLength(1);
+      expect(membershipSelects).toHaveLength(2);
+      expect(membershipSelects[0]!.condition).toEqual(and(
+        eq(companyMemberships.companyId, actor!.companyIds![0]!),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, "user-123"),
+      ));
       // Rows for other users and rows in any non-active status are excluded
       // by the query itself: the filter binds exactly this user id and the
       // "active" status — the same condition the session path applies.
-      expect(membershipSelects[0]!.condition).toEqual(
+      expect(membershipSelects[1]!.condition).toEqual(
         and(
           eq(companyMemberships.principalType, "user"),
           eq(companyMemberships.principalId, "user-123"),
