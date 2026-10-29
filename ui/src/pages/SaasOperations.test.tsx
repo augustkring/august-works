@@ -34,6 +34,7 @@ const costSnapshot: SaasCostSnapshot = {
   estimatedMonthlyCogsMinor: "15000", reportedMrrMinor: "25000", reportedArrMinor: "300000", estimatedGrossMarginMinor: "10000",
   unallocatedHostCostMinor: "0", hosts: [], accounts: [],
   unitEconomics: {
+    schemaVersion: 1,
     windowStart: "2026-10-01T00:00:00.000Z", windowEnd: "2026-11-01T00:00:00.000Z", observedAt: "2026-10-28T00:00:00.000Z",
     coverage: "partial_sources_only", platformCost: { amountMinor: "5000", currency: "EUR", basis: "provider_price_estimate", source: "operator_report", allocation: "environment_unallocated" },
     managedRuntimeHostCost: { amountMinor: "10000", currency: "EUR", basis: "provider_price_estimate", source: "operator_report_cpu_reservation_estimate", unallocatedMultiCompanyMinor: "0", unallocatedNoActiveCompanyMinor: "0" },

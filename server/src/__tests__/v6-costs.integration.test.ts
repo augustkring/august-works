@@ -191,6 +191,9 @@ const support = await getEmbeddedPostgresTestSupport();
       const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
       const dayEnd = new Date(monthStart.getTime() + 86400000);
       await db.insert(usageAggregates).values([
+        // A bucket ending exactly when this month starts belongs to the prior
+        // month. Including it would silently overstate both tenant and totals.
+        { companyId: firstCompanyId, billingAccountId: accountId, meterKey: "runtime.shared_millisecond", bucketStart: new Date(monthStart.getTime() - 86400000), bucketEnd: monthStart, quantity: "999999", unit: "millisecond", sourceWatermark: now },
         { companyId: firstCompanyId, billingAccountId: accountId, meterKey: "runtime.shared_millisecond", bucketStart: monthStart, bucketEnd: dayEnd, quantity: "60000", unit: "millisecond", sourceWatermark: now },
         { companyId: firstCompanyId, billingAccountId: accountId, meterKey: "storage.byte_millisecond", bucketStart: monthStart, bucketEnd: dayEnd, quantity: "4096000", unit: "byte_millisecond", sourceWatermark: now },
         { companyId: firstCompanyId, billingAccountId: accountId, meterKey: "backup.byte_millisecond", bucketStart: monthStart, bucketEnd: dayEnd, quantity: "2048000", unit: "byte_millisecond", sourceWatermark: now },
@@ -202,6 +205,12 @@ const support = await getEmbeddedPostgresTestSupport();
         ]);
       expect(results[0]).toEqual(results[1]);
       expect(() => saasCostSnapshotSchema.parse(results[0])).not.toThrow();
+      const legacy = structuredClone(results[0]!);
+      Reflect.deleteProperty(legacy.unitEconomics!, "schemaVersion");
+      expect(saasCostSnapshotSchema.parse(legacy).unitEconomics.schemaVersion).toBe(1);
+      expect(() => saasCostSnapshotSchema.parse({ ...results[0], unitEconomics: {
+        ...results[0]!.unitEconomics, schemaVersion: 2,
+      } })).toThrow();
       expect(results[0]).toMatchObject({
         estimatedMonthlyCogsMinor: "15000",
         reportedMrrMinor: "25000",
@@ -215,6 +224,7 @@ const support = await getEmbeddedPostgresTestSupport();
         ),
       ).toEqual(["2500", "2500"]);
       expect(results[0]!.unitEconomics).toMatchObject({
+        schemaVersion: 1,
         coverage: "partial_sources_only",
         platformCost: { amountMinor: "5000", currency: "EUR", allocation: "environment_unallocated" },
         managedRuntimeHostCost: { amountMinor: "10000", currency: "EUR", basis: "provider_price_estimate", unallocatedMultiCompanyMinor: "0" },

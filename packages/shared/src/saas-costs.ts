@@ -72,6 +72,7 @@ export interface SaasCostSnapshot {
    * keeps incomparable currencies and quantities separate and never implies
    * complete cost-to-serve coverage. */
   unitEconomics?: {
+    schemaVersion: 1;
     windowStart: string;
     windowEnd: string;
     observedAt: string;
@@ -109,6 +110,7 @@ export const saasCostSnapshotSchema = z.strictObject({
   hosts: z.array(z.strictObject({ hostId: z.uuid(), monthlyMinor: money, allocatedMinor: money, reservedCpuMillis: z.number().int().nonnegative(), totalCpuMillis: z.number().int().positive() })).max(50),
   accounts: z.array(z.strictObject({ accountId: z.uuid(), estimatedRuntimeMonthlyMinor: money, reportedMrrMinor: money })).max(1000),
   unitEconomics: z.strictObject({
+    schemaVersion: z.literal(1).default(1),
     windowStart: z.iso.datetime(), windowEnd: z.iso.datetime(), observedAt: z.iso.datetime(), coverage: z.literal("partial_sources_only"),
     platformCost: z.strictObject({ amountMinor: money, currency: z.literal("EUR"), basis: z.enum(["provider_invoice", "provider_price_estimate"]), source: z.literal("operator_report"), allocation: z.literal("environment_unallocated") }),
     managedRuntimeHostCost: z.strictObject({ amountMinor: money, currency: z.literal("EUR"), basis: z.enum(["provider_invoice", "provider_price_estimate"]), source: z.literal("operator_report_cpu_reservation_estimate"), unallocatedMultiCompanyMinor: money, unallocatedNoActiveCompanyMinor: money }),

@@ -82,7 +82,7 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
         bucketCount: sql<number>`count(*)::int`,
         sourceWatermark: sql<Date | string | null>`max(${usageAggregates.sourceWatermark})`,
       }).from(usageAggregates).innerJoin(companies, eq(companies.id, usageAggregates.companyId))
-        .where(and(eq(companies.status, "active"), lt(usageAggregates.bucketStart, windowEnd), gte(usageAggregates.bucketEnd, windowStart)))
+        .where(and(eq(companies.status, "active"), lt(usageAggregates.bucketStart, windowEnd), gt(usageAggregates.bucketEnd, windowStart)))
         .groupBy(usageAggregates.companyId, usageAggregates.billingAccountId, usageAggregates.meterKey, usageAggregates.unit)
         .orderBy(usageAggregates.companyId, usageAggregates.meterKey).limit(5001),
     ]);
@@ -147,6 +147,7 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
     return {
       ...snapshot,
       unitEconomics: {
+        schemaVersion: 1,
         windowStart: windowStart.toISOString(), windowEnd: windowEnd.toISOString(), observedAt: now.toISOString(), coverage: "partial_sources_only",
         platformCost: { amountMinor: snapshot.platformMonthlyMinor, currency: "EUR", basis: snapshot.basis, source: "operator_report", allocation: "environment_unallocated" },
         managedRuntimeHostCost: { amountMinor: snapshot.hosts.reduce((sum, host) => sum + BigInt(host.monthlyMinor), 0n).toString(), currency: "EUR", basis: snapshot.basis, source: "operator_report_cpu_reservation_estimate", unallocatedMultiCompanyMinor: unallocatedSharedAccountHostMinor.toString(), unallocatedNoActiveCompanyMinor: unallocatedNoActiveCompanyHostMinor.toString() },
