@@ -283,7 +283,11 @@ describe("native support case storage and erasure boundaries", () => {
       await applyPendingMigrations(target.toString());
       await restored.execute(sql`drop table human_workflow_coverages`);
       await restored.execute(sql`alter table workflow_runs drop column human_coverage_id`);
-      await restored.execute(sql`delete from drizzle.__drizzle_migrations where id=(select max(id) from drizzle.__drizzle_migrations)`);
+      // Rewind the two migrations after the simulated old snapshot, not just
+      // whichever row happens to have the largest surrogate ID. Migrations
+      // live in Drizzle's configured schema, not public.
+      await restored.execute(sql`drop table support_case_issue_links`);
+      await restored.execute(sql`delete from drizzle.__drizzle_migrations where created_at >= 1793202169674`);
 
       await prepareRestoredQuarantine(restored, target.toString(), {
         companies: [], memory: [], businessEvents: [], analyticalSources: [], feedback: [], supportCases: [],

@@ -312,6 +312,12 @@ describe("native selected feedback images with owned scanner-wire and filesystem
       legalHold: { active: true, releaseAt: null, reason: "Owned legal hold fixture" }, extensionUntil: null, extensionReason: "",
     });
     expect((await controls.plan(actor(otherUser), companyId, feedbackId)).held).toBe(true);
+    // Account erasure cannot proceed while this Human is still the payer of an
+    // active company billing link. Reconcile the fixture's billing owner first.
+    const [billing] = await db.select({ id: billingAccounts.id }).from(billingAccounts).where(eq(billingAccounts.payerUserId, userId));
+    expect(billing).toBeDefined();
+    await db.update(billingAccountCompanies).set({ status: "inactive" }).where(eq(billingAccountCompanies.companyId, companyId));
+    await db.update(billingAccounts).set({ status: "closed", closedAt: new Date() }).where(eq(billingAccounts.id, billing!.id));
     await expect(service.remove(actor(), companyId, feedbackId, image.id)).rejects.toMatchObject({ status: 409 });
     await expect(db.delete(customerFeedback).where(eq(customerFeedback.id, feedbackId))).rejects.toMatchObject({ cause: { code: "23514" } });
     await expect(db.delete(customerFeedbackImages).where(eq(customerFeedbackImages.id, image.id))).rejects.toMatchObject({ cause: { code: "23514" } });
@@ -386,7 +392,9 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     await owner.processOne(new Date(Date.now() + 120000));
     const retryState = await owner.get(companyId);
     expect(bulkCalls).toBe(1); expect(await rows()).toEqual([]);
-    expect(retryState).toMatchObject({ status: "processing", completedAt: null });
+    // The company purge reaches the retained image but must remain pending
+    // until the separate image worker confirms physical deletion.
+    expect(retryState).toMatchObject({ status: "processing", errorCode: "offboarding_reconciliation_pending", completedAt: null });
     const pending = await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.companyId, companyId));
     expect(pending).toHaveLength(1); expect(pending[0]!.imageId).toBe(image.id); expect(pending[0]!.deletedAt).toBeNull();
     expect(await processFeedbackImageDeletion(db, storage, undefined, companyId)).toBe(true);
@@ -612,6 +620,14 @@ describe("native selected feedback images with owned scanner-wire and filesystem
   });
   it("blocks legacy local company completion until the original protected objects and erasure receipts are confirmed", async () => {
     const image = await upload(), [row] = await rows(), local = companyService(db);
+    // The legacy local delete is intentionally available only to an unbilled
+    // fixture with no retained billing-account foreign keys. A billed company
+    // must use the governed offboarding owner and keeps its billing receipts.
+    const [billingLink] = await db.select({ billingAccountId: billingAccountCompanies.billingAccountId })
+      .from(billingAccountCompanies).where(eq(billingAccountCompanies.companyId, companyId));
+    expect(billingLink).toBeDefined();
+    await db.delete(billingAccountCompanies).where(eq(billingAccountCompanies.companyId, companyId));
+    await db.delete(billingAccounts).where(eq(billingAccounts.id, billingLink!.billingAccountId));
     await expect(local.remove(companyId)).rejects.toMatchObject({ status: 409 });
     expect(await db.select().from(companies).where(eq(companies.id, companyId))).toHaveLength(1);
     expect(await db.select().from(customerFeedback).where(eq(customerFeedback.id, feedbackId))).toHaveLength(1);
