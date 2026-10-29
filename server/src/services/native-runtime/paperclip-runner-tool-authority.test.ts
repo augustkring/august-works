@@ -29,6 +29,7 @@ import {
   workAssessments,
 } from "@paperclipai/db";
 import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
+import { seedCurrentHumanMembership } from "../../__tests__/helpers/current-human-membership-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../run-identity.js";
 import { documentService } from "../documents.js";
@@ -74,10 +75,8 @@ describe("PaperclipRunnerToolAuthority", () => {
     let issueId: string = randomUUID();
     const issuePrefix = `RDR${companyId.slice(0, 4).toUpperCase()}`;
     await db.insert(companies).values({ id: companyId, name: "Document source reader", issuePrefix });
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
-      membershipRole: "admin", status: "active" });
-    await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
     const currentHuman = await seedCurrentHumanSourceActor(db, [companyId], userId);
+    await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
     const human = payloadSourceProtocolVersion === 1 ? currentHuman : null;
     if (human) {
       const task = await issueService(db).create(companyId, {
@@ -167,7 +166,14 @@ describe("PaperclipRunnerToolAuthority", () => {
             cwd: workspace.cwd, repoUrl: workspace.repoUrl, repoRef: workspace.repoRef, branchName: workspace.branchName,
           }), "utf8").digest("hex") }] });
       if (!sourceSet) throw new Error("dispatch_fixture_bootstrap_source_set_unavailable");
-      await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution,
+      const [runBeforeSourceClosure] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+        .from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+      const existingProfile = runBeforeSourceClosure?.runnerProfileJson &&
+        typeof runBeforeSourceClosure.runnerProfileJson === "object" &&
+        !Array.isArray(runBeforeSourceClosure.runnerProfileJson)
+        ? runBeforeSourceClosure.runnerProfileJson as Record<string, unknown>
+        : {};
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { ...existingProfile, nativeExecutionInput: execution,
         nativeOpenCodeSourceAuthority: { authorizedPromptHashes: [], promptSourceBindings: [] } } })
         .where(eq(heartbeatRuns.id, fixture.runId));
       qualifiedTurnInput = { message: { role: "user", text: JSON.stringify(buildNativeModelEnvelope(execution)) },
@@ -213,10 +219,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       issuePrefix: "RNT",
       issueCounter: 1,
     });
-    await db.insert(authUsers).values({ id: userId, name: "Actual tool Human", email: `${userId}@test.invalid`,
-      createdAt: new Date(), updatedAt: new Date() });
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
-      membershipRole: "admin", status: "active" });
+    await seedCurrentHumanMembership(db, companyId, userId, "admin");
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -235,6 +238,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       status: "in_progress",
       workMode: "standard",
       assigneeAgentId: agentId,
+      responsibleUserId: userId,
     });
     await db.insert(heartbeatRuns).values({
       id: runId,
@@ -252,6 +256,8 @@ describe("PaperclipRunnerToolAuthority", () => {
       .update(issues)
       .set({ executionRunId: runId })
       .where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
   });
 
   afterAll(async () => {
@@ -262,10 +268,14 @@ describe("PaperclipRunnerToolAuthority", () => {
     const binding = { companyId: randomUUID(), agentId: randomUUID(), issueId: randomUUID(), runId: randomUUID() };
     await db.insert(companies).values({ id: binding.companyId, name: "Task proposal", issuePrefix: "TPR" });
     await db.insert(agents).values({ id: binding.agentId, companyId: binding.companyId, name: "Proposer", status: "active", adapterType: "paperclip_runner" });
-    await db.insert(issues).values({ id: binding.issueId, companyId: binding.companyId, title: "Original scope", status: "in_progress", assigneeAgentId: binding.agentId });
+    await seedCurrentHumanMembership(db, binding.companyId, userId, "operator");
+    await seedCurrentHumanMembership(db, binding.companyId, "local-board", "operator");
+    await db.insert(issues).values({ id: binding.issueId, companyId: binding.companyId, title: "Original scope", status: "in_progress", assigneeAgentId: binding.agentId, responsibleUserId: userId });
     await db.insert(heartbeatRuns).values({ id: binding.runId, companyId: binding.companyId, agentId: binding.agentId,
-      status: "running", runtimeMode: "native", nativeIssueId: binding.issueId, invocationSource: "assignment", triggerDetail: "system" });
+      status: "running", runtimeMode: "native", nativeIssueId: binding.issueId, responsibleUserId: userId, invocationSource: "assignment", triggerDetail: "system" });
     await db.update(issues).set({ executionRunId: binding.runId }).where(eq(issues.id, binding.issueId));
+    await preparePlatformSkillAdmission(db, { companyId: binding.companyId, agentId: binding.agentId,
+      runId: binding.runId, responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
     const authority = new PaperclipRunnerToolAuthority(db, binding);
     const definition = authority.definitions().find(tool => tool.name === "request_human_input")!;
     expect((definition.inputSchema as { properties: { resolverPolicy: unknown } }).properties.resolverPolicy)
@@ -1043,6 +1053,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       adapterType: "paperclip_runner",
       status: "active",
     });
+    await seedCurrentHumanMembership(db, binding.companyId, userId, "operator");
     await db.insert(issues).values({
       id: binding.issueId,
       companyId: binding.companyId,
@@ -1051,11 +1062,13 @@ describe("PaperclipRunnerToolAuthority", () => {
       workMode: "standard",
       reviewPolicy: "human_only",
       assigneeAgentId: binding.agentId,
+      responsibleUserId: userId,
     });
     await db.insert(heartbeatRuns).values({
       id: binding.runId,
       companyId: binding.companyId,
       agentId: binding.agentId,
+      responsibleUserId: userId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: binding.issueId,
@@ -1067,6 +1080,9 @@ describe("PaperclipRunnerToolAuthority", () => {
       .update(issues)
       .set({ executionRunId: binding.runId })
       .where(eq(issues.id, binding.issueId));
+    await preparePlatformSkillAdmission(db, { companyId: binding.companyId,
+      agentId: binding.agentId, runId: binding.runId, responsibleUserId: userId,
+      requireExisting: false }, blenteraPlatformContractHashes());
     const authority = new PaperclipRunnerToolAuthority(db, binding);
     const advertised = authority
       .definitions()
@@ -1685,6 +1701,8 @@ describe("PaperclipRunnerToolAuthority", () => {
       triggerDetail: "system",
       contextSnapshot: { issueId },
     });
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId: nextRunId,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
     await db
       .update(issues)
       .set({ executionRunId: nextRunId })
@@ -2031,12 +2049,16 @@ describe("PaperclipRunnerToolAuthority", () => {
   it("captures delegation and approval origins before steering and preserves replay identity", async () => {
     const issueId = "00000000-0000-4000-8000-000000000120";
     const runId = "00000000-0000-4000-8000-000000000121";
+    await seedCurrentHumanMembership(db, companyId, "person-a", "operator");
+    await seedCurrentHumanMembership(db, companyId, "person-b", "operator");
     await db.insert(issues).values({ id: issueId, companyId, title: "Identity delegation",
-      status: "in_progress", assigneeAgentId: agentId });
+      status: "in_progress", assigneeAgentId: agentId, responsibleUserId: "person-a" });
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId,
-      status: "running", runtimeMode: "native", nativeIssueId: issueId,
+      status: "running", runtimeMode: "native", nativeIssueId: issueId, responsibleUserId: "person-a",
       invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+      responsibleUserId: "person-a", requireExisting: false }, blenteraPlatformContractHashes());
     const origin = await initializeRunIdentity(db, {
       companyId, runId, issueId, responsibleUserId: "person-a", cause: "instruction",
     });

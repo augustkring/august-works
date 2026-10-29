@@ -12,9 +12,7 @@ import {
   activityLog,
   agentWakeupRequests,
   agents,
-  authUsers,
   companies,
-  companyMemberships,
   completionContracts,
   createDb,
   executionWorkspaces,
@@ -28,7 +26,6 @@ import {
   nativeRunResults,
   projectWorkspaces,
   projects,
-  principalPermissionGrants,
   statusDecisionEffects,
   statusDecisions,
   workAssessments,
@@ -86,19 +83,14 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { initializeRunIdentity } from "../services/run-identity.js";
 import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/index.js";
-import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
 import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 
 async function seedNativeRecoveryHuman(db: ReturnType<typeof createDb>, companyId: string, userId: string) {
-  await db.insert(authUsers).values({ id: userId, name: "Native recovery owner",
-    email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
-  await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
-    status: "active", membershipRole: "owner" });
-  await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
-    companyId, principalType: "user" as const, principalId: userId, ...grant,
-  })));
+  await seedCurrentHumanMembership(db, companyId, userId, "owner");
   return seedNativePasskeySession(db, userId);
 }
 
@@ -140,8 +132,10 @@ describe("P6-25 pre-result native session recovery", () => {
       activeTurnId: "active-turn",
     },
   };
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     temporary = await startEmbeddedPostgresTestDatabase("paperclip-native-resume-");
     db = createDb(temporary.connectionString);
     await db.insert(companies).values({ id: companyId, name: "Native resume", issuePrefix: "NRR" });
@@ -300,7 +294,10 @@ describe("P6-25 pre-result native session recovery", () => {
     ]);
   }, 30_000);
 
-  afterAll(async () => temporary?.cleanup());
+  afterAll(async () => {
+    await temporary?.cleanup();
+    restoreApiUrl?.();
+  });
 
   it("filters durable ownership holds before the bounded resume candidate limit", async () => {
     const heldRunIds = Array.from(
@@ -654,6 +651,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
     > | null = null;
     let db: ReturnType<typeof createDb>;
     let staleProviderProcess: ReturnType<typeof spawn> | null = null;
+    let restoreApiUrl: (() => void) | null = null;
     const companyId = randomUUID();
     const agentId = randomUUID();
     let projectId: string;
@@ -822,6 +820,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
     };
 
     beforeAll(async () => {
+      restoreApiUrl = installHeartbeatApiUrlFixture();
       await mkdir(repoRoot, { mode: 0o700 });
       // The unchanged legacy adapter preflight requires a real Git workspace.
       // Initialize only this owned disposable fixture, without host Git config.
@@ -1018,6 +1017,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         await temporary.cleanup();
       }
       await rm(repoRoot, { recursive: true, force: true });
+      restoreApiUrl?.();
     });
 
     it("preserves the old provider contract and admits newer direction only in a separate turn", async () => {

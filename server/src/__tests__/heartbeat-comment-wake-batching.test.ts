@@ -17,7 +17,6 @@ import {
   chatMessageLinks,
   chatPublications,
   companies,
-  companyMemberships,
   createDb,
   heartbeatRunEvents,
   heartbeatRuns,
@@ -2092,13 +2091,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           paperclipUserId: userId,
           status: "linked",
         });
-        await db.insert(companyMemberships).values({
-          companyId,
-          principalType: "user",
-          principalId: userId,
-          status: "active",
-          membershipRole: "member",
-        });
+        await seedHeartbeatResponsibleHuman(db, companyId, userId, "operator");
         await db.insert(chatDeliveries).values({
           id: deliveryId,
           companyId,

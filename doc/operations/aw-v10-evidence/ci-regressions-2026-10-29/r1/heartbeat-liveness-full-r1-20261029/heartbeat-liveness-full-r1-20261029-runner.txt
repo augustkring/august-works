@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/heartbeat-issue-liveness-escalation.test.ts
+test_pattern=heartbeat resolved dependency wake reconciliation

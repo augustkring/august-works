@@ -175,7 +175,6 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
     const [receipt] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, queueId));
     expect(receipt.status).toBe("coalesced");
     const completed = await waitForRun(db, receipt.runId!);
-    console.error("heartbeat-responsible-debug", completed?.error, completed?.resultJson);
     expect(completed).toMatchObject({ status: "succeeded", responsibleUserId: operatorId });
     expect(completed?.activeIdentityContextId).toBeTruthy();
     expect(completed?.contextSnapshot?.originIdentityContextId).toBeUndefined();
