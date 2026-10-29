@@ -55,6 +55,7 @@ import { issueRoutes } from "../routes/issues.js";
 import { createCanonicalHumanProject, seedCurrentHumanSourceActor, updateCanonicalHumanProject } from "./helpers/current-human-source-fixture.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { LOW_TRUST_QUARANTINED_BODY } from "../services/source-trust.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported
@@ -202,7 +203,11 @@ function boardActor(fixture: Fixture): Express.Request["actor"] {
   };
 }
 
-function createApp(db: Db, actor: Express.Request["actor"]) {
+function createApp(
+  db: Db,
+  actor: Express.Request["actor"],
+  heartbeat?: ReturnType<typeof heartbeatService>,
+) {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -210,7 +215,7 @@ function createApp(db: Db, actor: Express.Request["actor"]) {
     next();
   });
   app.use("/api", agentRoutes(db));
-  app.use("/api", issueRoutes(db, {} as any));
+  app.use("/api", issueRoutes(db, {} as any, heartbeat ? { heartbeat } : {}));
   app.use(errorHandler);
   return app;
 }
@@ -224,6 +229,12 @@ async function createControlledGatewayServer() {
     firstWaitRelease = resolve;
   });
   let waitCount = 0;
+  let skillInstalled = false;
+  let uploadedSkillArchive = Buffer.alloc(0);
+  let installedSkillText = "";
+  let currentPaperclipRunId: string | null = null;
+  const currentToolCount = 7;
+  const currentToolsHash = "b".repeat(64);
 
   wss.on("connection", (socket) => {
     socket.send(
@@ -256,7 +267,7 @@ async function createControlledGatewayServer() {
               protocol: 3,
               server: { version: "test", connId: "conn-1" },
               features: {
-                methods: ["connect", "agent", "agent.wait"],
+                methods: ["connect", "agent", "agent.wait", "skills.status", "skills.files.get", "skills.upload.begin", "skills.upload.chunk", "skills.upload.commit", "skills.install", "blentera.platform.bind.v1", "blentera.platform.status.v1", "blentera.platform.unbind.v1"],
                 events: ["agent"],
               },
               snapshot: { version: 1, ts: Date.now() },
@@ -288,6 +299,62 @@ async function createControlledGatewayServer() {
             },
           }),
         );
+        return;
+      }
+
+      if (frame.method === "skills.status") {
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: {
+          managedSkillsDir: "/remote/agent/skills",
+          skills: skillInstalled ? [{ name: "Blentera platform", skillKey: "blentera-platform",
+            filePath: "/remote/agent/skills/blentera-platform/SKILL.md", eligible: true, blockedByAgentFilter: false }] : [],
+        } }));
+        return;
+      }
+
+      if (frame.method === "skills.upload.begin") {
+        uploadedSkillArchive = Buffer.alloc(0);
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { uploadId: "11111111-1111-4111-8111-111111111111", receivedBytes: 0 } }));
+        return;
+      }
+      if (frame.method === "skills.upload.chunk") {
+        const chunk = Buffer.from(String(frame.params?.dataBase64 ?? ""), "base64");
+        uploadedSkillArchive = Buffer.concat([uploadedSkillArchive, chunk]);
+        const bytes = chunk.byteLength;
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { receivedBytes: Number(frame.params?.offset ?? 0) + bytes } }));
+        return;
+      }
+      if (frame.method === "skills.upload.commit") {
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { sha256: frame.params?.sha256 } }));
+        return;
+      }
+      if (frame.method === "skills.install") {
+        skillInstalled = true;
+        const name = uploadedSkillArchive.subarray(0, 100).toString("utf8").replace(/\0.*$/s, "");
+        const size = Number.parseInt(uploadedSkillArchive.subarray(124, 136).toString("ascii").replace(/\0.*$/s, "").trim() || "0", 8);
+        if (name === "SKILL.md" && Number.isSafeInteger(size) && size >= 0) {
+          installedSkillText = uploadedSkillArchive.subarray(512, 512 + size).toString("utf8");
+        }
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { ok: true, sha256: frame.params?.sha256 } }));
+        return;
+      }
+      if (frame.method === "skills.files.get") {
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { content: installedSkillText } }));
+        return;
+      }
+      if (frame.method === "blentera.platform.bind.v1") {
+        currentPaperclipRunId = typeof frame.params?.paperclipRunId === "string" ? frame.params.paperclipRunId : null;
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { protocolVersion: 1, pluginVersion: "1.0.0", toolCount: currentToolCount, toolsHash: currentToolsHash } }));
+        return;
+      }
+      if (frame.method === "blentera.platform.status.v1") {
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { protocolVersion: 1, ready: true,
+          paperclipRunId: currentPaperclipRunId, toolCount: currentToolCount, toolsHash: currentToolsHash,
+          expiresAt: new Date(Date.now() + 60_000).toISOString() } }));
+        return;
+      }
+      if (frame.method === "blentera.platform.unbind.v1") {
+        currentPaperclipRunId = null;
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { ok: true } }));
         return;
       }
 
@@ -1051,8 +1118,23 @@ describeEmbeddedPostgres(
 
     it("preserves direct-parent reporting while default-opening visible standard-trust writes", async () => {
       const fixture = await seedLowTrustFixture(db);
-      const standardApp = createApp(db, standardReportActor(fixture));
-      const lowTrustApp = createApp(db, agentActor(fixture));
+      // This case checks HTTP write authorization. Prevent comment-triggered
+      // background runs from changing the locked issue while the assertions
+      // inspect the rejected write.
+      const testHeartbeat = {
+        ...heartbeatService(db),
+        wakeup: async () => null,
+      } as ReturnType<typeof heartbeatService>;
+      const standardApp = createApp(
+        db,
+        standardReportActor(fixture),
+        testHeartbeat,
+      );
+      const lowTrustApp = createApp(
+        db,
+        agentActor(fixture),
+        testHeartbeat,
+      );
 
       const parentComment = await request(standardApp)
         .post(`/api/issues/${fixture.issues.standardReportParent.id}/comments`)
@@ -1093,6 +1175,11 @@ describeEmbeddedPostgres(
         expect(response.status, JSON.stringify(response.body)).toBe(201);
       }
 
+      const [parentBeforeLockedUpdate] = await db
+        .select({ status: issues.status })
+        .from(issues)
+        .where(eq(issues.id, fixture.issues.standardReportParent.id));
+      expect(parentBeforeLockedUpdate?.status).toBe("in_progress");
       const checkedOutPeerUpdate = await request(standardApp)
         .patch(`/api/issues/${fixture.issues.standardReportParent.id}`)
         .send({ status: "blocked" });
@@ -1103,6 +1190,18 @@ describeEmbeddedPostgres(
       expect(checkedOutPeerUpdate.body.details.code).toBe(
         "issue_write_assignee_run_lock",
       );
+      const [unchangedPeer] = await db
+        .select({ status: issues.status })
+        .from(issues)
+        .where(eq(issues.id, fixture.issues.standardReportParent.id));
+      const parentUpdates = await db
+        .select({ actorType: activityLog.actorType, actorId: activityLog.actorId, agentId: activityLog.agentId, runId: activityLog.runId, details: activityLog.details })
+        .from(activityLog)
+        .where(and(
+          eq(activityLog.entityId, fixture.issues.standardReportParent.id),
+          eq(activityLog.action, "issue.updated"),
+        ));
+      expect(unchangedPeer?.status, JSON.stringify(parentUpdates)).toBe("in_progress");
 
       const documentWrite = await request(standardApp)
         .put(
@@ -1898,6 +1997,7 @@ describeEmbeddedPostgres(
 
     it("redacts quarantined low-trust output from higher-trust wake and continuation contexts", async () => {
       const fixture = await seedLowTrustFixture(db);
+      const restoreApiUrl = installHeartbeatApiUrlFixture();
       const lowTrustApp = createApp(db, agentActor(fixture));
       const standardApp = createApp(db, standardReportActor(fixture));
       const gateway = await createControlledGatewayServer();
@@ -2022,6 +2122,7 @@ describeEmbeddedPostgres(
             adapterType: "openclaw_gateway",
             adapterConfig: {
               url: gateway.url,
+              agentId: "main",
               headers: {
                 "x-openclaw-token": "gateway-token",
               },
@@ -2073,7 +2174,21 @@ describeEmbeddedPostgres(
         });
 
         expect(run).not.toBeNull();
-        await waitFor(() => gateway.getAgentPayloads().length === 1, 30_000);
+        await waitFor(async () => {
+          if (gateway.getAgentPayloads().length === 1) return true;
+          const [currentRun] = await db
+            .select({ status: heartbeatRuns.status })
+            .from(heartbeatRuns)
+            .where(eq(heartbeatRuns.id, run!.id));
+          return currentRun?.status === "failed" || currentRun?.status === "cancelled";
+        }, 30_000);
+        if (gateway.getAgentPayloads().length !== 1) {
+          const [failedRun] = await db
+            .select({ status: heartbeatRuns.status, error: heartbeatRuns.error, errorCode: heartbeatRuns.errorCode })
+            .from(heartbeatRuns)
+            .where(eq(heartbeatRuns.id, run!.id));
+          throw new Error(`Gateway wake ended before delivery: ${JSON.stringify(failedRun)}`);
+        }
         const payload = gateway.getAgentPayloads()[0] ?? {};
         // The gateway rejects unknown root params, so the wake context rides in the
         // generated message rather than a top-level `paperclip` field.
@@ -2130,7 +2245,12 @@ describeEmbeddedPostgres(
         }, 30_000);
       } finally {
         gateway.releaseFirstWait();
-        await gateway.close();
+        try {
+          await heartbeat.drainActiveRunExecutions();
+        } finally {
+          await gateway.close();
+          restoreApiUrl();
+        }
       }
     }, 120_000);
 

@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/agent-hire-ai-connections.test.ts
+test_pattern=.

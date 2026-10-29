@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/low-trust-red-team-routes.test.ts
+test_pattern=.
