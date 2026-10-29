@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-28
+last_verified_at: 2026-10-29
 review_trigger: Workflow authoring, supported steps, test, publish, run, or recovery behavior changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/Workflows.tsx, ui/src/pages/WorkflowDescribe.tsx, ui/src/pages/WorkflowBuilder.tsx, ui/src/pages/WorkflowReview.tsx, server/src/routes/workflows.ts, server/src/services/workflows/workflow-node-registry.ts, server/src/services/workflows/workflow-service.ts, ui/src/pages/CompanyAccess.tsx, ui/src/pages/IssueDetail.tsx, server/src/routes/access.ts, server/src/services/access.ts, server/src/services/workflows/workflow-executor.ts, packages/shared/src/validators/access.ts, packages/db/src/schema/workflows.ts]
+linked_source_files: [ui/src/pages/Workflows.tsx, ui/src/pages/WorkflowRun.tsx, ui/src/pages/WorkflowDescribe.tsx, ui/src/pages/WorkflowBuilder.tsx, ui/src/pages/WorkflowReview.tsx, server/src/routes/workflows.ts, server/src/services/workflows/workflow-node-registry.ts, server/src/services/workflows/workflow-service.ts, ui/src/pages/CompanyAccess.tsx, ui/src/pages/IssueDetail.tsx, server/src/routes/access.ts, server/src/services/access.ts, server/src/services/workflows/workflow-executor.ts, packages/shared/src/validators/access.ts, packages/db/src/schema/workflows.ts]
 ---
 
 Workflows are available only when they are enabled for your company and instance. If you do not see **Workflows**, ask your instance administrator whether the feature is available.
@@ -29,12 +29,14 @@ Publishing makes a specific reviewed revision available to run. Review the trigg
 
 Open a workflow’s run history to check its current state and step details. A run can wait for a task, approval, delay, or other supported condition. Use the run’s own recovery or stop action when one is shown. Do not create a duplicate run just because a response was interrupted; first check whether the original run was accepted.
 
+If a run is waiting for a child workflow, the person who started it may see **Continue existing run**. This checks the original saved request and current access, then continues the same run when its child result is available. It does not create another child run. If continuation is refused, refresh the run and check its access, coverage and published version before trying again.
+
 This feature is in preview and its available steps depend on the current registry and deployment. For technical details, see the [Workflow API reference](/api/workflows).
 
 ## Temporary workflow coverage
 
 In your company’s access settings, use **Temporary workflow coverage** to choose another active Human, a published workflow version, and a start and expiry time. Choose manual starts or one visible Task, and give a reason. Coverage can last up to 30 days. Both people must already have the required current permissions and Task access.
 
-The other person can select your coverage when starting that workflow from its editor or the chosen Task. The run records the person who actually starts it. Access and the coverage window are checked again when a queued run is claimed.
+The other person can select your coverage when starting that workflow from its editor or the chosen Task. The run records the person who actually starts it. Access and the coverage window are checked again when a queued run is claimed and before a successful child result resumes a waiting run. Expired or revoked coverage cannot authorize that continuation.
 
 Coverage applies to the chosen published version. Review and create new coverage after publishing a different version. Revoke coverage in access settings to end it early. Withdrawal of a required permission, account closure, or a restored database invalidates prior coverage; create a new arrangement once the current access and version have been reviewed.

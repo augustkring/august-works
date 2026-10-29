@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "da1c6851b636a0477afe1d554ae5e2e0a38832b8154401822e5b941e491dd791",
+      "sourceSha256": "d9873c3052813e04737a7f769da5b7eac1fae60cbd62ca49ae7210cfdd6d25dd",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The regenerated catalog includes the revised company sign-in and additional-factor wording; the Help overview’s search guidance remains accurate."
+      "rationale": "Regenerated searchable Help text includes the English and Danish workflow continuation guidance; the Help entry article still accurately describes opening and searching the same source-linked articles."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "da1c6851b636a0477afe1d554ae5e2e0a38832b8154401822e5b941e491dd791",
+      "sourceSha256": "d9873c3052813e04737a7f769da5b7eac1fae60cbd62ca49ae7210cfdd6d25dd",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "The regenerated catalog includes the revised company sign-in and additional-factor wording; the Help overview’s search guidance remains accurate."
+      "rationale": "Regenerated searchable Help text includes the English and Danish workflow continuation guidance; the Help entry article still accurately describes opening and searching the same source-linked articles."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1846,7 +1846,7 @@
       "source": "server/src/routes/workflows.ts",
       "articleId": "workflows-preview",
       "sourceSha256": "45117a317a22c78441b7a3f1b0a44104e463f89234329a62a669a5d8a4e63705",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "Workflow starts validate optional coverage against the current Human and exact published revision; the paired workflow article describes the checks and queued admission."
     },
@@ -1854,7 +1854,7 @@
       "source": "server/src/services/workflows/workflow-node-registry.ts",
       "articleId": "workflows-preview",
       "sourceSha256": "214ce3d5a536155ba2fd0709834c92ce718c35803b67cdcfb8bed3f961216723",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -1862,7 +1862,7 @@
       "source": "server/src/services/workflows/workflow-service.ts",
       "articleId": "workflows-preview",
       "sourceSha256": "542b1dd3c6581c5ada29220856a64a99aa6f0a62578ffb3f247e8b246e4378f5",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -1870,7 +1870,7 @@
       "source": "ui/src/pages/WorkflowBuilder.tsx",
       "articleId": "workflows-preview",
       "sourceSha256": "7bffb0d5109a85fb043bbee1604de2518ea8fce4abe65dde11bb3dd22f143bf8",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "The paired workflow article now explains the exact published version, current permissions, actual starting Human, coverage expiry and revocation."
     },
@@ -1878,7 +1878,7 @@
       "source": "ui/src/pages/WorkflowDescribe.tsx",
       "articleId": "workflows-preview",
       "sourceSha256": "f2cb06f632c77fbdd7c7e436961dc2fbf68e861bc51df8830f4359be377fc4c8",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -1886,7 +1886,7 @@
       "source": "ui/src/pages/WorkflowReview.tsx",
       "articleId": "workflows-preview",
       "sourceSha256": "95e074af2312083633592f05f620bff8dea0e161affb3fbd4887819b9cd7bd26",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -1894,7 +1894,7 @@
       "source": "ui/src/pages/Workflows.tsx",
       "articleId": "workflows-preview",
       "sourceSha256": "ea58e8e84c102e15e2c85a59406b78b7b40949e9c2afc2f0547c4b484118e152",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -1902,7 +1902,7 @@
       "source": "server/src/routes/workflows.ts",
       "articleId": "workflows-preview-da",
       "sourceSha256": "45117a317a22c78441b7a3f1b0a44104e463f89234329a62a669a5d8a4e63705",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. Workflow starts validate optional coverage against the current Human and exact published revision; the paired workflow article describes the checks and queued admission."
     },
@@ -1910,7 +1910,7 @@
       "source": "server/src/services/workflows/workflow-node-registry.ts",
       "articleId": "workflows-preview-da",
       "sourceSha256": "214ce3d5a536155ba2fd0709834c92ce718c35803b67cdcfb8bed3f961216723",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -1918,7 +1918,7 @@
       "source": "server/src/services/workflows/workflow-service.ts",
       "articleId": "workflows-preview-da",
       "sourceSha256": "542b1dd3c6581c5ada29220856a64a99aa6f0a62578ffb3f247e8b246e4378f5",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -1926,7 +1926,7 @@
       "source": "ui/src/pages/WorkflowBuilder.tsx",
       "articleId": "workflows-preview-da",
       "sourceSha256": "7bffb0d5109a85fb043bbee1604de2518ea8fce4abe65dde11bb3dd22f143bf8",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article now explains the exact published version, current permissions, actual starting Human, coverage expiry and revocation."
     },
@@ -1934,7 +1934,7 @@
       "source": "ui/src/pages/WorkflowDescribe.tsx",
       "articleId": "workflows-preview-da",
       "sourceSha256": "f2cb06f632c77fbdd7c7e436961dc2fbf68e861bc51df8830f4359be377fc4c8",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -1942,7 +1942,7 @@
       "source": "ui/src/pages/WorkflowReview.tsx",
       "articleId": "workflows-preview-da",
       "sourceSha256": "95e074af2312083633592f05f620bff8dea0e161affb3fbd4887819b9cd7bd26",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -1950,7 +1950,7 @@
       "source": "ui/src/pages/Workflows.tsx",
       "articleId": "workflows-preview-da",
       "sourceSha256": "ea58e8e84c102e15e2c85a59406b78b7b40949e9c2afc2f0547c4b484118e152",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
     },
@@ -2438,7 +2438,7 @@
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "workflows-preview",
       "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
     },
@@ -2446,7 +2446,7 @@
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview",
       "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
     },
@@ -2454,7 +2454,7 @@
       "source": "server/src/routes/access.ts",
       "articleId": "workflows-preview",
       "sourceSha256": "a279232cd4603363ef4c3f8a1177745d73deb5154614964f3d403aeaed74030d",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "The workflow article describes the authenticated coverage controls and explicit revocation; existing member access remains separate."
     },
@@ -2462,23 +2462,23 @@
       "source": "server/src/services/access.ts",
       "articleId": "workflows-preview",
       "sourceSha256": "1db330169f2492f12baf454114298c556a01a761baea72b9e0f68f2fd13c2d9e",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "Coverage validates both current Humans and source access; required permission withdrawal permanently revokes the arrangement rather than reviving it on later regrant."
     },
     {
       "source": "server/src/services/workflows/workflow-executor.ts",
       "articleId": "workflows-preview",
-      "sourceSha256": "bf38aec5d5610d4ea6d127c22d0b2e3f89cebbcabf4afb934184a777fc7f9471",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "sourceSha256": "ff4193591ab70cbfbe78dd0d333a0d6e95e81615f7a7eec46e416cfbdf3b7f4f",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
-      "rationale": "Queued workflow claims recheck persisted coverage and current source access; the workflow article explicitly describes that second check."
+      "rationale": "Documents the original initiator continuation using the same saved request and the current coverage/revocation/expiry checks before consuming a child-result wait."
     },
     {
       "source": "packages/shared/src/validators/access.ts",
       "articleId": "workflows-preview",
       "sourceSha256": "a18c6b7145eb5ac15664f7f7ac61fe70f42769f976106f7fea12707422e3fb65",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "The workflow article matches the bounded coverage window, required reason, exact revision and manual or visible Task trigger choices."
     },
@@ -2486,7 +2486,7 @@
       "source": "packages/db/src/schema/workflows.ts",
       "articleId": "workflows-preview",
       "sourceSha256": "6cb14b07252bdb21ec10da98e0d0a6d093cf2c2857bcff51ada7da5ae2e36dfc",
-      "articleSha256": "39380f57cddffaa0ddf1fd33936ead37ae342c9c7d50254970d9b1c5bc8f3384",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
       "rationale": "The workflow article describes the persisted exact-version coverage and actual starting Human; it does not imply a copied role or new permission grant."
     },
@@ -2494,7 +2494,7 @@
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "workflows-preview-da",
       "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
     },
@@ -2502,7 +2502,7 @@
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "workflows-preview-da",
       "sourceSha256": "17601953ca2b7cf23453ed24e217a6077f096a46d9e870b7b3379e4d9deb1fa5",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. Current-session guards and the optional temporary workflow coverage selector preserve the described Task status, approval and recovery actions."
     },
@@ -2510,7 +2510,7 @@
       "source": "server/src/routes/access.ts",
       "articleId": "workflows-preview-da",
       "sourceSha256": "a279232cd4603363ef4c3f8a1177745d73deb5154614964f3d403aeaed74030d",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The workflow article describes the authenticated coverage controls and explicit revocation; existing member access remains separate."
     },
@@ -2518,23 +2518,23 @@
       "source": "server/src/services/access.ts",
       "articleId": "workflows-preview-da",
       "sourceSha256": "1db330169f2492f12baf454114298c556a01a761baea72b9e0f68f2fd13c2d9e",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. Coverage validates both current Humans and source access; required permission withdrawal permanently revokes the arrangement rather than reviving it on later regrant."
     },
     {
       "source": "server/src/services/workflows/workflow-executor.ts",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "bf38aec5d5610d4ea6d127c22d0b2e3f89cebbcabf4afb934184a777fc7f9471",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "sourceSha256": "ff4193591ab70cbfbe78dd0d333a0d6e95e81615f7a7eec46e416cfbdf3b7f4f",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Queued workflow claims recheck persisted coverage and current source access; the workflow article explicitly describes that second check."
+      "rationale": "Documents the original initiator continuation using the same saved request and the current coverage/revocation/expiry checks before consuming a child-result wait."
     },
     {
       "source": "packages/shared/src/validators/access.ts",
       "articleId": "workflows-preview-da",
       "sourceSha256": "a18c6b7145eb5ac15664f7f7ac61fe70f42769f976106f7fea12707422e3fb65",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The workflow article matches the bounded coverage window, required reason, exact revision and manual or visible Task trigger choices."
     },
@@ -2542,7 +2542,7 @@
       "source": "packages/db/src/schema/workflows.ts",
       "articleId": "workflows-preview-da",
       "sourceSha256": "6cb14b07252bdb21ec10da98e0d0a6d093cf2c2857bcff51ada7da5ae2e36dfc",
-      "articleSha256": "ad90b927964ad206f18174603bc17210414727186357da89a19979959dfd84cc",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The workflow article describes the persisted exact-version coverage and actual starting Human; it does not imply a copied role or new permission grant."
     },
@@ -2593,6 +2593,22 @@
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The provider projection reports global provider facts and unknown customer impact, matching the Help article and its human-support route."
+    },
+    {
+      "source": "ui/src/pages/WorkflowRun.tsx",
+      "articleId": "workflows-preview",
+      "sourceSha256": "7031b66da31cde26b5a5f406d802d783b114de45ecdd9b887ea4a978a266ab3d",
+      "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
+      "decision": "updated",
+      "rationale": "Documents the original initiator continuation using the same saved request and the current coverage/revocation/expiry checks before consuming a child-result wait."
+    },
+    {
+      "source": "ui/src/pages/WorkflowRun.tsx",
+      "articleId": "workflows-preview-da",
+      "sourceSha256": "7031b66da31cde26b5a5f406d802d783b114de45ecdd9b887ea4a978a266ab3d",
+      "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
+      "decision": "updated",
+      "rationale": "Documents the original initiator continuation using the same saved request and the current coverage/revocation/expiry checks before consuming a child-result wait."
     }
   ]
 }
