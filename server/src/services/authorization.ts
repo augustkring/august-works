@@ -3261,35 +3261,16 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         return { userId, companyId, userExists: Boolean(user), activeMembership: membership };
       });
     }
-    const [user, membership] = await Promise.all([
-      db
-        .select({ id: authUsers.id })
-        .from(authUsers)
-        .where(eq(authUsers.id, userId))
-        .then((rows) => rows[0] ?? null),
-      db
-        .select({
-          companyId: companyMemberships.companyId,
-          membershipRole: companyMemberships.membershipRole,
-          status: companyMemberships.status,
-        })
-        .from(companyMemberships)
-        .where(
-          and(
-            eq(companyMemberships.companyId, companyId),
-            eq(companyMemberships.principalType, "user"),
-            eq(companyMemberships.principalId, userId),
-            eq(companyMemberships.status, "active"),
-          ),
-        )
-        .then((rows) => rows[0] ?? null),
-    ]);
-    return {
-      userId,
-      companyId,
-      userExists: Boolean(user),
-      activeMembership: user ? membership : null,
-    };
+    // Read the current Human and membership in one statement. Neither fact
+    // nor its permission decision is reused by a later authorization call.
+    const [row] = await db.select({ userId: authUsers.id, membership: {
+      companyId: companyMemberships.companyId, membershipRole: companyMemberships.membershipRole,
+      status: companyMemberships.status,
+    } }).from(authUsers).leftJoin(companyMemberships, and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, authUsers.id), eq(companyMemberships.status, "active"),
+    )).where(eq(authUsers.id, userId));
+    return { userId, companyId, userExists: Boolean(row), activeMembership: row?.membership ?? null };
   }
 
   async function findGrant(
@@ -4602,7 +4583,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       });
     }
 
-    const readActorEvidence = readSources && input.actor.runId
+    const readActorEvidence = (readSources || input.action === "company_scope:read") && input.actor.runId
       ? await loadReadActorEvidence(input.actor, companyId)
       : undefined;
     const actorAgent = readActorEvidence ? readActorEvidence.agent : await loadAgent(actorAgentId);
