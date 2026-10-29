@@ -1,0 +1,9 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T12:43:24.659485+00:00",
+  "baseCommit": "a726da2c365c373bfc0c9e7cc668652b01106482",
+  "patchBytes": 247528,
+  "patchSha256": "58ae9a89b260f674fb854bfacd8ae1fdcfddf2f329ef0fb6d9b5c6d11ae006ff",
+  "archiveSha256": "4e09b29cc9845c69b524c8ccb89b62dd45c97f35680c9a8a519b9bc377a35cd6",
+  "untrackedSourceFiles": []
+}
