@@ -885,10 +885,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "e79f6abd23f47fc45faa4413b46963eb9e097b0db92ddf8273193e9a57126871",
+      "sourceSha256": "468ccdc6688defd12edab8be823fe011757a513bf4300927462d978ea7088b85",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "decision": "no_change",
+      "rationale": "The server change injects the existing heartbeat instance into tool-action delivery for composed fixtures; it does not change Help, support intake, or user-visible controls. The English article remains accurate."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1197,10 +1197,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "e79f6abd23f47fc45faa4413b46963eb9e097b0db92ddf8273193e9a57126871",
+      "sourceSha256": "468ccdc6688defd12edab8be823fe011757a513bf4300927462d978ea7088b85",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "decision": "no_change",
+      "rationale": "The server change injects the existing heartbeat instance into tool-action delivery for composed fixtures; it does not change Hjælp, support intake, or user-visible controls. The Danish article remains accurate."
     },
     {
       "source": "server/src/routes/customer-support.ts",
