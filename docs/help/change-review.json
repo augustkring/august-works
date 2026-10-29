@@ -701,10 +701,10 @@
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b",
+      "sourceSha256": "666c0ef19e4521e73e98fd36a64b4fe69d4106e3de54895be61ff9b3b72e66cc",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Offboarding waits for required managed runtime erasure jobs before purge advances; the article accurately describes cleanup as pending until verified."
+      "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
@@ -733,10 +733,10 @@
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "c10303000adfea5317b7cf3c75dd420eb1beee5771a749de17cec32d82a8161f",
+      "sourceSha256": "26895e94931ae7e5a74bcb6c9ddc0ff8263255a5c407eaffbb6f29d73d17cf05",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "The deletion page presents staged offboarding and retention status; the article correctly says that acceptance is not proof of final erasure."
+      "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
     },
     {
       "source": "server/src/routes/memory.ts",
@@ -781,10 +781,10 @@
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "ff20c7a867ab27127760544386a436f5d20ed79196df02bf333a16997e4e483b",
+      "sourceSha256": "666c0ef19e4521e73e98fd36a64b4fe69d4106e3de54895be61ff9b3b72e66cc",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Offboarding waits for required managed runtime erasure jobs before purge advances; the article accurately describes cleanup as pending until verified."
+      "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
@@ -813,10 +813,10 @@
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "c10303000adfea5317b7cf3c75dd420eb1beee5771a749de17cec32d82a8161f",
+      "sourceSha256": "26895e94931ae7e5a74bcb6c9ddc0ff8263255a5c407eaffbb6f29d73d17cf05",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "The deletion page presents staged offboarding and retention status; the article correctly says that acceptance is not proof of final erasure."
+      "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
     },
     {
       "source": "packages/shared/src/agent-packages.ts",

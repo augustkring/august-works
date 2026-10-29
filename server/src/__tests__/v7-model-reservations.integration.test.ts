@@ -743,6 +743,45 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(result.workerPlan).toBeNull();
       expect(result.workerAttempts).toHaveLength(0);
     }, conversationFrameTestTimeoutMs);
+    itNativeConversation("company deletion stops a live Native run before advancing past revoke", async () => {
+      let observedStop = false;
+      const result = await conversationReservationFixture(async facts => {
+        expect(facts.run.runtimeMode).toBe("native");
+        expect(facts.run.status).toBe("running");
+        await rehomeConversationIdentityForOffboarding({ actor: facts.actor, companyId: facts.companyId,
+          agentId: facts.agentId, run: facts.run });
+        const [company] = await db.select({ name: companies.name }).from(companies)
+          .where(eq(companies.id, facts.companyId));
+        if (!company) throw new Error("offboarding_native_company_missing");
+        const offboarding = saasOffboardingService(db, {} as never, {} as never,
+          { targets: () => ({ fixture: true }) } as never);
+        const operation = await offboarding.request(facts.companyId, facts.actor.userId!, {
+          confirmation: company.name,
+          acknowledgeExport: true,
+          idempotencyKey: `native-stop-${randomUUID()}`,
+        });
+        expect(operation.stage).toBe("revoke");
+        expect(await offboarding.processOne(new Date(Date.now() + 1_000))).toBe(true);
+
+        const [stopped] = await db.select().from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, facts.companyId), eq(heartbeatRuns.id, facts.run.id),
+        ));
+        const cancellation = stopped?.resultJson && typeof stopped.resultJson === "object"
+          ? (stopped.resultJson as Record<string, unknown>).nativeCancellation as Record<string, unknown> | undefined
+          : undefined;
+        expect(stopped).toMatchObject({ status: "cancelled", runtimeMode: "native" });
+        expect(cancellation).toMatchObject({ schema: "paperclip.native-cancellation.v1",
+          dispatchState: "acknowledged", dispatched: true });
+        const [advanced] = await db.select({ stage: companyDeletionOperations.stage,
+          status: companyDeletionOperations.status }).from(companyDeletionOperations)
+          .where(eq(companyDeletionOperations.id, operation.id));
+        expect(advanced).toMatchObject({ stage: "runtimes", status: "processing" });
+        observedStop = true;
+      });
+      expect(observedStop).toBe(true);
+      expect(result.providerCallCount).toBeGreaterThan(0);
+      expect(result.runStatus).toBe("cancelled");
+    }, conversationFrameTestTimeoutMs);
     itNativeConversation("settles the actual qualified conversation usage once and preserves the exact debit in canonical purge", async () => {
       const priorAssetHome = process.env.PAPERCLIP_HOME, priorAssetInstance = process.env.PAPERCLIP_INSTANCE_ID;
       const assetHome = await fs.mkdtemp(path.join(os.tmpdir(), "aw-conversation-legacy-assets-"));

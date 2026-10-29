@@ -1474,6 +1474,7 @@
     },
     "deletionStage": {
       "revoke": "Revoking access",
+      "revoke_finalizing": "Stopping active work",
       "runtimes": "Removing runtimes",
       "billing": "Closing billing",
       "retention": "Checking retention",

@@ -60,3 +60,69 @@ said it was not acceptance evidence. The recovery plan since records many newer
 bounded results and many retained failures. This review retains the earlier mandatory-notice 70/71 attempt as a failure. It records the later four-mode Trust/API 21/21, notice/projection 33/33, migration safety, UI typecheck, and Agent Runtime candidate integration 8/8 as separate bounded results. None establishes present-day full-suite or release PASS.
 “No evidence cited here” is not a finding that no source exists; “code added”
 is not a finding that the required journey passed.
+
+## 29 October — bounded migration-phase and revocation source audit
+
+This is a source/evidence audit for `V10-169` and `V10-159`, not a live-database
+or release qualification. The binding migration requirements are MIG-01–07 in
+the master brief, lines 8400–8412; the register's V10-169 asks for current
+writer/state/recovery definitions and old/new combinations. The source sample
+below covers the current tail of the 563-entry Drizzle journal and the material
+families with existing migration-specific receipts. It does not claim that all
+563 migrations or all upstream slices were assessed.
+
+| Phase / clause | Current source and retained evidence | Finding and smallest meaningful closure |
+|---|---|---|
+| MIG-01 semantics; MIG-02 old/new compatibility | `packages/db/src/migrations/0558_better_auth_issuer_compatibility.sql` refuses duplicate `(provider_id, account_id)` rows before dropping issuer-based uniqueness; `packages/db/src/better-auth-account-issuer-migration.test.ts` covers historical rows, collision refusal, and new uniqueness. `doc/plans/2026-10-22-blentera-v10-recovery.md` entry 28 Oct records the scoped auth/DB result. | This is real semantic protection for the Better Auth key change, not proof of mixed deployed versions. Retained tests do not run old and new application readers/writers against the pre/post schema. Add an isolated migration integration case that exercises both declared versions across each permitted phase, or document and enforce a no-mixed-version deployment boundary. Do not infer absence of external consumers from repository search. |
+| MIG-03 phase authority and recovery | `packages/db/src/migrate.ts`, `packages/db/src/client.ts`, `_journal.json`, and `check-migration-numbering.ts` identify ordered migration execution and pending-history checks. `0554`, `0555`, `0558`, `0561`, and `0562` have concrete schema/migration artifacts; receipts include `human-workflow-coverage-2026-10-28/official-0561-migration-receipt.md` and `support-improvement-bridge-2026-10-28/r1/migration-0562-generation-receipt.json`. | Generation, numbering, safety lint, and schema-snapshot drift are not a phase record. No reviewed per-migration record was found for preconditions, authoritative writer, allowed app versions, stop/continue criteria, recovery choice, irreversible point, or named operator. Smallest closure is a scoped phase record for each material migration (starting with 0554 and 0558), linked to the exact SQL and test receipt; do not manufacture a universal rollback policy. |
+| MIG-04 bounded backfill and reconciliation | `0554_company_import_fenced_effects.sql` adds lease/checkpoint fields and runs one unbounded `UPDATE` over every `customer_operations` row where type is `company_import` and status is `running`, assigning attempt ID and an already-expired lease. `0555_company_membership_permission_initialization.sql` stamps every existing user membership with `clock_timestamp()`. Current import recovery in `server/src/services/company-import-jobs.ts` selects expired running rows in `IMPORT_RECOVERY_BATCH_LIMIT` batches with `skipLocked`, then changes them to `needs_reconciliation`; it does not replay an unknown effect. | The runtime has bounded recovery and fail-closed unknown-outcome handling, but that does not bound the 0554 migration backfill. The 0554 statement can lock/update the full qualifying population in one migration transaction; no count, batch checkpoint, lock/statement budget, or migration-specific population reconciliation receipt was found. Before claiming MIG-04, either establish/record a reviewed scale and lock budget for this atomic one-shot update or split/replace it with a bounded resumable migration procedure. Verify eligible-row counts and that all migrated attempts enter `needs_reconciliation` before any replay. For 0555, verify existing user memberships are stamped without granting new permissions; the SQL itself only adds the marker. |
+| MIG-05 rollback vs roll-forward | `packages/db/src/migrate.ts` inspects and applies forward migrations; the reviewed tail includes constraint/index/trigger changes and the new tables/columns in 0561–0562. Source checks do not define reverse SQL. | No rollback/roll-forward/restore/isolate decision record was found for the sampled material changes. For each phase, identify the state in which old code remains valid, the point after which only roll-forward is allowed, and the recovery owner. At minimum rehearse a failed transaction/restart on an isolated DB and confirm migration history and schema remain consistent; this does not substitute for production recovery approval. |
+| MIG-06 transition retirement | Current journal tail includes additive/new contracts (0554–0562); 0561 creates a new coverage table and nullable workflow-run reference, and 0562 creates support-case issue links. `quarantine.ts` invalidates restored sessions, verification rows, API keys, host credentials, runtime jobs/bindings and pauses agents before restore admission. | The source shows explicit fail-closed restore handling and new additive contracts, but no sampled migration record names remaining compatibility shims/consumers, observation horizon, cleanup owner, or retired data derivatives. Keep cleanup conditional on actual consumer cadence and retention; no fixed sunset is supported by the evidence reviewed. |
+| MIG-07 authority; restore with unknown provenance | `packages/db/src/migrations/0511_native_run_input_source_binding.sql` and `0533_native_run_input_source_dispatch_receipts.sql` reject restoration of erased native inputs; `0550_native_manifest_run_owned_purge.sql` allows manifest removal only with same-transaction company erasure proof. `server/src/services/saas/quarantine.ts` runs migrations on an isolated restore target and keeps admission blocked while reconciling external/current erasure ledgers. | These are concrete safeguards, not a complete end-to-end restore drill. No current receipt was found proving a full restore with post-backup revocation/erasure evidence, unknown/missing provenance, and blocked customer reads/writes/jobs/outbound effects through operator release. Smallest meaningful check: use the existing isolated quarantine/backup path, restore a fixture with a post-snapshot tombstone plus one missing-provenance record, prove suppression/unknown remains fail-closed, and only then test explicit operator release. AI-generated plans/manifests must continue to enter through the existing scoped migration/restore authority; code generation is not approval. |
+
+The minimal evidence set to close this scoped V10-169 sample is therefore: (1)
+an explicit 0554 scale/lock decision and population reconciliation or bounded
+backfill; (2) a real old/new-version compatibility case for each declared
+coexistence window, or an enforced deployment exclusion; (3) phase-specific
+recovery records and interrupted-migration restart proof; and (4) the isolated
+restore test above. The existing official checks remain useful but answer
+narrower questions: `packages/db/src/check-migration-numbering.ts` validates
+journal/file numbering, `check-migration-safety.ts` is static policy lint,
+`migration-snapshot-drift.test.ts` compares the current schema with the newest
+snapshot, and generation receipts prove artifact creation. None alone proves
+live upgrade, mixed-version behavior, or recovery.
+
+### V10-159: company-deletion stop-path correction
+
+The source gap identified in the read-only audit is now corrected in the
+existing archive owner. `server/src/services/saas/offboarding.ts` still archives
+the company at request time to fence admission immediately. When the `revoke`
+worker later calls `companyService(db).archive(...)`,
+`server/src/services/companies.ts` now runs the canonical
+`applyArchiveCascadeInTx()` even if the company is already archived, then calls
+the existing `finalizeArchive()` Stop path. Ordinary repeated archive calls
+remain idempotent. The worker claims `revoke_finalizing` with its exact
+`notBefore` lease; both success and error updates compare that claim token, and
+stale calls that no longer own a due revoke phase no-op. This also prevents a
+late same-stage worker from overwriting a newer worker's completion.
+
+Retained bounded evidence is the full company-service PG file (22 passed),
+including the archived-company cascade regression
+(`/workspace/v10-preparation/v10-159-offboarding-cascade-current-r1-20261029-test.log`),
+the managed Native Stop regression (1 passed)
+(`/workspace/v10-preparation/v10-159-offboarding-native-current-r1-20261029-test.log`),
+and the concurrent lease barrier covering both late completion and late error
+(2 passed; `/workspace/v10-preparation/v10-159-offboarding-lease-barrier-r2-20261029-test.log`).
+The deletion UI label regression passed 3 tests
+(`/workspace/v10-preparation/v10-159-offboarding-ui-r1-20261029/test.log`).
+Each PG receipt has a successful source snapshot and Oxc syntax check. The
+company/offboarding source hashes in the full service, Native, and barrier
+receipts match current production files; the UI receipt likewise matches the
+current page and translation files. This establishes these focused source
+behaviors only; it does not establish deployed-provider, credential, external
+queue, backup, or operator revocation across a production environment.
+
+This finding is separate from external qualification: it does not establish
+whether every credential, provider grant, queue consumer, backup, or human
+operator is revoked in a deployed environment. Those remain separately scoped
+evidence, not additional source defects inferred from missing receipts.

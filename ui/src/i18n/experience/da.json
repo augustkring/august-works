@@ -1474,6 +1474,7 @@
     },
     "deletionStage": {
       "revoke": "Tilbagekalder adgang",
+      "revoke_finalizing": "Stopper igangværende arbejde",
       "runtimes": "Fjerner kørselsmiljøer",
       "billing": "Lukker fakturering",
       "retention": "Kontrollerer opbevaring",

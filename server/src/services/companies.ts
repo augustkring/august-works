@@ -2,6 +2,7 @@ import { and, count, eq, gte, inArray, isNull, lt, notInArray, sql } from "drizz
 import type { Db } from "@paperclipai/db";
 import {
   companies,
+  companyDeletionOperations,
   companyLogos,
   assets,
   agents,
@@ -500,14 +501,49 @@ export function companyService(db: Db) {
       return result.company;
     },
 
-    archive: async (id: string, actor: CompanyActivityActor = SYSTEM_COMPANY_ACTOR) => {
+    archive: async (
+      id: string,
+      actor: CompanyActivityActor = SYSTEM_COMPANY_ACTOR,
+      options: { offboardingOperationId?: string; now?: Date } = {},
+    ) => {
       const result = await db.transaction(async (tx) => {
         const existing = await tx
           .select({ status: companies.status })
           .from(companies)
           .where(eq(companies.id, id))
+          .for("update")
           .then((rows) => rows[0] ?? null);
         if (!existing) return null;
+
+        const offboardingOperation = options.offboardingOperationId
+          ? await tx
+              .select({ id: companyDeletionOperations.id, stage: companyDeletionOperations.stage,
+                status: companyDeletionOperations.status, notBefore: companyDeletionOperations.notBefore })
+              .from(companyDeletionOperations)
+              .where(and(eq(companyDeletionOperations.id, options.offboardingOperationId),
+                eq(companyDeletionOperations.companyId, id)))
+              .for("update")
+              .then((rows) => rows[0] ?? null)
+          : null;
+        if (options.offboardingOperationId && !offboardingOperation)
+          throw conflict("Company deletion operation changed before archive", { code: "offboarding_operation_changed" });
+        const offboardingRevokeDue = !!offboardingOperation &&
+          ["revoke", "revoke_finalizing"].includes(offboardingOperation.stage) &&
+          ["requested", "processing", "waiting_retention"].includes(offboardingOperation.status) &&
+          offboardingOperation.notBefore <= (options.now ?? new Date());
+        const offboardingLeaseUntil = offboardingRevokeDue
+          ? new Date((options.now ?? new Date()).getTime() + 60_000)
+          : null;
+
+        if (options.offboardingOperationId && !offboardingRevokeDue) {
+          const row = await getCompanyQuery(tx)
+            .where(eq(companies.id, id))
+            .then((rows) => rows[0] ?? null);
+          if (!row) return null;
+          const [hydrated] = await hydrateCompanySpend([row], tx);
+          return { company: enrichCompany(hydrated), cascade: null, wasAlreadyArchived: true,
+            offboardingRevokeDue: false, offboardingLeaseUntil: null };
+        }
 
         const wasAlreadyArchived = existing.status === "archived";
 
@@ -518,7 +554,28 @@ export function companyService(db: Db) {
             .where(eq(companies.id, id));
         }
 
-        const cascade = wasAlreadyArchived ? null : await applyArchiveCascadeInTx(tx, id);
+        // Company deletion marks the company archived in its request
+        // transaction so admission is fenced immediately. Its current revoke
+        // phase must still run this canonical cascade; ordinary repeated
+        // archive calls retain their idempotent no-op behavior.
+        const cascade = wasAlreadyArchived && !offboardingRevokeDue
+          ? null
+          : await applyArchiveCascadeInTx(tx, id);
+
+        if (offboardingRevokeDue && options.offboardingOperationId) {
+          // Claim the durable revoke phase before calling native Stop outside
+          // this transaction. A stale worker then sees a different stage; if
+          // the process dies during Stop, the bounded notBefore lease lets the
+          // existing operation worker retry the same canonical cascade.
+          await tx
+            .update(companyDeletionOperations)
+            .set({ status: "processing", stage: "revoke_finalizing",
+              notBefore: offboardingLeaseUntil! })
+            .where(and(eq(companyDeletionOperations.id, options.offboardingOperationId),
+              eq(companyDeletionOperations.companyId, id),
+              inArray(companyDeletionOperations.stage, ["revoke", "revoke_finalizing"]),
+              inArray(companyDeletionOperations.status, ["requested", "processing", "waiting_retention"])));
+        }
 
         const row = await getCompanyQuery(tx)
           .where(eq(companies.id, id))
@@ -528,14 +585,44 @@ export function companyService(db: Db) {
         return {
           company: enrichCompany(hydrated),
           cascade,
+          wasAlreadyArchived,
+          offboardingRevokeDue,
+          offboardingLeaseUntil,
         };
       });
       if (!result) return null;
 
-      // Same doorbell rule as update(): the archive is committed, so ring
-      // before finalization, which can throw without undoing it.
-      if (result.cascade) {
-        void notifyCloudOfPrimaryCompanyLifecycleChange(id);
+      if (result.offboardingRevokeDue && options.offboardingOperationId) {
+        try {
+          if (result.cascade) {
+            if (!result.wasAlreadyArchived) void notifyCloudOfPrimaryCompanyLifecycleChange(id);
+            await finalizeArchive(id, actor, result.cascade);
+          }
+          await db
+            .update(companyDeletionOperations)
+            .set({ status: "processing", stage: "runtimes", notBefore: options.now ?? new Date(), errorCode: null })
+            .where(and(eq(companyDeletionOperations.id, options.offboardingOperationId),
+              eq(companyDeletionOperations.companyId, id), eq(companyDeletionOperations.stage, "revoke_finalizing"),
+              eq(companyDeletionOperations.notBefore, result.offboardingLeaseUntil!),
+              inArray(companyDeletionOperations.status, ["requested", "processing", "waiting_retention"])));
+        } catch (error) {
+          // Record a retry only while this caller still owns the exact lease.
+          // A late stop/error from an expired worker cannot extend a newer
+          // worker's same-stage lease or overwrite its recovered state.
+          await db
+            .update(companyDeletionOperations)
+            .set({ notBefore: new Date((options.now ?? new Date()).getTime() + 60_000),
+              errorCode: "offboarding_reconciliation_pending" })
+            .where(and(eq(companyDeletionOperations.id, options.offboardingOperationId),
+              eq(companyDeletionOperations.companyId, id), eq(companyDeletionOperations.stage, "revoke_finalizing"),
+              eq(companyDeletionOperations.notBefore, result.offboardingLeaseUntil!),
+              eq(companyDeletionOperations.status, "processing")));
+          throw error;
+        }
+      } else if (result.cascade) {
+        // Same doorbell rule as update(): the archive is committed, so ring
+        // before finalization, which can throw without undoing it.
+        if (!result.wasAlreadyArchived) void notifyCloudOfPrimaryCompanyLifecycleChange(id);
         await finalizeArchive(id, actor, result.cascade);
       }
 

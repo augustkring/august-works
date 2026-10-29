@@ -180,15 +180,11 @@ export function saasOffboardingService(
       .limit(1);
     if (!operation) return false;
     try {
-      if (operation.stage === "revoke") {
+      if (operation.stage === "revoke" || operation.stage === "revoke_finalizing") {
         await companyService(db).archive(operation.companyId, {
           actorType: "user",
           actorId: operation.requestedByUserId,
-        });
-        await db
-          .update(companyDeletionOperations)
-          .set({ status: "processing", stage: "runtimes", errorCode: null })
-          .where(eq(companyDeletionOperations.id, operation.id));
+        }, { offboardingOperationId: operation.id, now });
         return true;
       }
       if (operation.stage === "runtimes") {
@@ -473,7 +469,12 @@ export function saasOffboardingService(
           notBefore: new Date(now.getTime() + 60000),
           errorCode: "offboarding_reconciliation_pending",
         })
-        .where(eq(companyDeletionOperations.id, operation.id));
+        .where(and(
+          eq(companyDeletionOperations.id, operation.id),
+          eq(companyDeletionOperations.stage, operation.stage),
+          eq(companyDeletionOperations.notBefore, operation.notBefore),
+          inArray(companyDeletionOperations.status, ["requested", "processing", "waiting_retention"]),
+        ));
       return true;
     }
   }

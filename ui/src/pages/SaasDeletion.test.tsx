@@ -130,4 +130,16 @@ describe("Organization deletion consent scope", () => {
       expect(current[2].idempotencyKey).not.toBe(original[2].idempotencyKey);
     },
   );
+
+  it("shows a customer-facing label while the deletion worker stops active runs", async () => {
+    fixture.deletion.mockResolvedValue({
+      id: "deletion-operation",
+      companyId: fixture.companyId,
+      status: "processing",
+      stage: "revoke_finalizing",
+    });
+    await render();
+    expect(container.textContent).toContain("Current step: Stopping active work");
+    expect(container.textContent).not.toContain("revoke_finalizing");
+  });
 });
