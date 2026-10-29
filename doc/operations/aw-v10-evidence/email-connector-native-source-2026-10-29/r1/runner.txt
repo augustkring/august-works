@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/email-channels.integration.test.ts
+test_pattern=installs one connector skill and provider tools only for the assigned agent
