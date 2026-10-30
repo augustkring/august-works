@@ -4,29 +4,38 @@ import { activationStateSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
-import { isAuthenticationStateBusy } from "../../auth/authenticator-assurance.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { readFirstAgentCapabilityPin } from "./activation-first-agent.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 
+export function isActivationSnapshotBusy(error: unknown): boolean {
+  let cause = error;
+  for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {
+    const candidate = cause as { code?: unknown; cause?: unknown };
+    if (candidate.code === "55P03" || candidate.code === "40P01") return true;
+    cause = candidate.cause;
+  }
+  return false;
+}
+
 /** Shared original onboarding locks and human authority. No cached session,
  * instance-admin flag, consent receipt or provider credential grants access. */
-export async function lockActivationSnapshot(tx: Db, companyId: string) {
+export async function lockActivationSnapshot(tx: Db, companyId: string, mode: "read" | "write" = "write") {
   await tx.execute(
     sql`select set_config('statement_timeout', '5000', true), set_config('lock_timeout', '1000', true)`,
   );
   try {
-    await lockAnalyticalCompany(tx, companyId);
-    await lockMemoryPrivacy(tx, companyId);
+    await lockAnalyticalCompany(tx, companyId, mode);
+    await lockMemoryPrivacy(tx, companyId, mode);
     await tx
       .select({ key: instanceSettings.singletonKey })
       .from(instanceSettings)
       .where(eq(instanceSettings.singletonKey, "default"))
       .for("share");
   } catch (error) {
-    if (isAuthenticationStateBusy(error))
+    if (isActivationSnapshotBusy(error))
       throw conflict("Activation is being updated; retry the same request.", {
         code: "activation_state_busy", retryable: true,
       });

@@ -146,7 +146,12 @@ function ActivationScope({
     enabled: ready && !!companyId,
     staleTime: 0,
     gcTime: 0,
-    retry: false,
+    retry: (failureCount, error) => {
+      if (failureCount >= 3 || !(error instanceof ApiError) || error.status !== 409) return false;
+      const details = (error.body as { details?: { code?: unknown; retryable?: unknown } } | null)?.details;
+      return details?.code === "activation_state_busy" && details.retryable === true;
+    },
+    retryDelay: attemptIndex => Math.min(200 * 2 ** attemptIndex, 800),
   });
   const current =
     ready && run.isSuccess && !run.isFetching ? run.data : undefined;

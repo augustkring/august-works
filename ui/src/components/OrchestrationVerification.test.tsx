@@ -12,8 +12,8 @@ vi.mock("@/api/orchestration",() => { const orchestrationApi = { verificationPac
 vi.mock("@/lib/router",() => ({ Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a> }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "company" }) }));
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-it("starts every semantic and high-impact acknowledgement unchecked and binds review to the observed output hash",async () => {
-  const companyId = "company", plan = { id: "plan",version: 2,status: "running",issueId: "task",workers: [] } as unknown as OrchestrationPlanDetail;
+it("keeps coordinator review and offers the primary-task worker",async () => {
+  const companyId = "company", plan = { id: "plan",version: 2,status: "running",issueId: "task",workers: [{ id: "worker",issueId: "task",agentId: "agent",completionContractId: "contract",workerKey: "primary task",dependsOn: [],status: "active",attemptCount: 1 }],attempts: [{ id: "attempt",workerId: "worker",runId: "run",workflowRunId: null,status: "running",attempt: 1 }] } as unknown as OrchestrationPlanDetail;
   const packet: VerificationPacket = { planId: plan.id,planVersion: 2,workerId: null,issueId: "task",contractId: "contract",contractHash: "sha256:contract",resultHash: "a".repeat(64),contract: { objective: "Review the consequential result",requiredOutputs: [{ kind: "task_document",key: "result",jsonSchema: null }],businessInvariants: ["Only the approved recipient receives the approved message"],evidenceRequirements: [],prohibitedOutcomes: [],requiredPostconditions: [] },evidence: [{ ref: "tool:approved-receipt",type: "tool_receipt",sourceId: "receipt",sourceVersion: "version",hash: "hash" }],deterministicFailures: [],liveAttempts: 0,riskClass: "C3",policy: { independentRequired: true,humanRequired: true,workerSelfCertification: false } };
   const client = new QueryClient({ defaultOptions: { queries: { retry: false,staleTime: Infinity } } });
   client.setQueryData(["verification-packet",companyId, "user:fixture-user",plan.id,plan.version,null],packet);
@@ -23,6 +23,7 @@ it("starts every semantic and high-impact acknowledgement unchecked and binds re
   try {
     await act(async () => root.render(<QueryClientProvider client={client}><Scoped /></QueryClientProvider>));
     expect(element.textContent).toContain("Model assessment: needs human · human review required");
+    expect(Array.from(element.querySelectorAll("select")[0]!.options).map(option => option.textContent)).toEqual(["Final coordinator result", "primary task"]);
     expect(Array.from(element.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).every(input => !input.checked)).toBe(true);
     const rationale = Array.from(element.querySelectorAll("label")).find(label => label.textContent?.startsWith("Review rationale"))!.querySelector("input")!;
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(rationale,"Independently reviewed this exact consequential output"); rationale.dispatchEvent(new Event("input",{ bubbles: true })); });

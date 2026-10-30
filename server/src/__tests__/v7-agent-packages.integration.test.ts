@@ -17,6 +17,16 @@ import { agentPackageRoutes } from "../routes/agent-packages.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { experienceService } from "../services/experience/service.js";
 import express from "express";
+import { existsSync } from "node:fs";
+import { createServer } from "node:http";
+import { chromium, expect as browserExpect, type Browser, type BrowserContext, type Response } from "@playwright/test";
+import { createApp } from "../app.js";
+import * as errorHandlerModule from "../middleware/error-handler.js";
+import { createLocalDiskStorageProvider } from "../storage/local-disk-provider.js";
+import { createStorageService } from "../storage/service.js";
+import { setupLiveEventsWebSocketServer } from "../realtime/live-events-ws.js";
+import { saasPlatform } from "../services/saas/platform.js";
+import type { SaasPlatformConfig } from "../saas-platform-config.js";
 import request from "supertest";
 import { maintenanceHistoryRoutes } from "../routes/maintenance-history.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -59,7 +69,7 @@ import { aiConnectionService } from "../services/ai-connections.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
-import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
+import { installedNativeDraftGateway, registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { initialActivationState, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
@@ -105,6 +115,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import {
   createDb,
+  completionContracts,
   principalPermissionGrants,
   orchestrationPlans,
   connectionGrants,
@@ -115,7 +126,12 @@ import {
   agentPackageComponents,
   companyAgentPackageInstallations,
   heartbeatRuns,
+  heartbeatRunEvents,
+  nativeRunFinalizations,
+  nativeRunResults,
   orchestrationWorkerAttempts,
+  verificationRuns,
+  supportCases,
   agents,
   agentConfigurationDrafts,
   agentPackageStopActions,
@@ -158,6 +174,7 @@ import {
 } from "../services/agent-packages/package-policy.js";
 import { V9_FEATURE_KEYS } from "@paperclipai/shared";
 const support = await getEmbeddedPostgresTestSupport();
+const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
 (support.supported ? describe : describe.skip)(
   "V7 native internal package installation and activation",
   () => {
@@ -178,6 +195,7 @@ const support = await getEmbeddedPostgresTestSupport();
       starterModelExpectedTaskNotes: string | null = null,
       starterModelObservedRequest: { endpoint: boolean; credential: boolean; model: boolean; maxTokens: boolean; system: boolean; taskNotes: boolean | null } | null = null,
       starterModelCalls = 0;
+    let managedStarterFixtureSequence = 0;
     async function cancelCurrentFixtureRuns() {
       if (!db || !f?.home || !f?.presence?.id) return;
       const heartbeat = heartbeatService(db);
@@ -189,6 +207,27 @@ const support = await getEmbeddedPostgresTestSupport();
         await heartbeat.cancelRun(run.id, "Native package test fixture teardown", { suppressImmediateRecovery: true });
       }
       await heartbeat.drainActiveRunExecutions();
+    }
+    // Direct conversation-tool fixtures never start a Native runner. Assert
+    // that no Native owner/provider evidence exists before closing their row.
+    async function finishSyntheticConversationRun(runId: string) {
+      const [run] = await db.select({ companyId: heartbeatRuns.companyId, runtimeMode: heartbeatRuns.runtimeMode,
+        status: heartbeatRuns.status, startedAt: heartbeatRuns.startedAt, nativeSessionId: heartbeatRuns.nativeSessionId,
+        runtimeModeResolvedAt: heartbeatRuns.runtimeModeResolvedAt }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, f.home)));
+      expect(run).toMatchObject({ runtimeMode: "native", status: "running", startedAt: null,
+        nativeSessionId: null, runtimeModeResolvedAt: null });
+      expect(await db.select({ runId: nativeRunFinalizations.runId }).from(nativeRunFinalizations)
+        .where(eq(nativeRunFinalizations.runId, runId))).toEqual([]);
+      expect(await db.select({ id: nativeRunResults.id }).from(nativeRunResults)
+        .where(eq(nativeRunResults.runId, runId))).toEqual([]);
+      expect(await db.select({ id: heartbeatRunEvents.id }).from(heartbeatRunEvents)
+        .where(eq(heartbeatRunEvents.runId, runId)).limit(1)).toEqual([]);
+      await db.update(heartbeatRuns).set({ status: "cancelled", finishedAt: new Date(),
+        errorCode: "test_fixture_ended", error: "Synthetic conversation context ended by its fixture." })
+        .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.status, "running")));
+      expect((await db.select({ status: heartbeatRuns.status, finishedAt: heartbeatRuns.finishedAt }).from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, runId)))[0]).toMatchObject({ status: "cancelled" });
     }
     beforeAll(async () => {
       fixtureHome = await mkdtemp(join(tmpdir(), "aw-v9-first-preparation-"));
@@ -434,6 +473,7 @@ const support = await getEmbeddedPostgresTestSupport();
         conversationState: "active", status: "in_progress" }).returning();
       const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
         nativeIssueId: conversation!.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+      try {
       await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, conversation!.id));
       const author = agentSetupAuthoringToolsService(db), context = { companyId: f.home, agentId: f.presence.id, runId: run!.id };
       expect(await author.catalog(context, { query: release.packageKey })).toMatchObject({ coverage: "bounded", modelCalled: false,
@@ -452,6 +492,9 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(author.create(context, { ...command, packageVersionId: versionId })).rejects.toMatchObject({ status: 409 });
       await service.revoke(f.actor, published.id);
       await expect(author.create(context, { ...command, idempotencyKey: "later-package" })).rejects.toMatchObject({ status: 422 });
+      } finally {
+        await finishSyntheticConversationRun(run!.id);
+      }
     });
     it("saves a pinned unpublished Hire setup once without installing, granting or creating an agent", async () => {
       const {release, published, hire} = await hireFixture();
@@ -577,6 +620,7 @@ const support = await getEmbeddedPostgresTestSupport();
         conversationState: "active", status: "in_progress", createdByUserId: f.userId });
       const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
         nativeIssueId: conversation.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+      try {
       await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, conversation.id));
       const draft = await routineAuthoringToolsService(db).create({ companyId: f.home, agentId: f.presence.id, runId: run!.id }, {
         idempotencyKey: `package-private-routine-${randomUUID()}`, title: "PRIVATE authored routine", description: "PRIVATE routine source body", priority: "medium",
@@ -606,6 +650,9 @@ const support = await getEmbeddedPostgresTestSupport();
         .rejects.toMatchObject({ status: 403 });
       expect(await db.select().from(readinessAssessments)).toEqual(beforeAssessments);
       expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
+      } finally {
+        await finishSyntheticConversationRun(run!.id);
+      }
     });
 
     it("bounds package option reads when the Original company privacy lock is busy", async () => {
@@ -1990,11 +2037,16 @@ const support = await getEmbeddedPostgresTestSupport();
           contentHash: nativeSha256(cases.map((scenario) => ({ caseKey: scenario.key,
             contract: specialistCompletionContract(BLENTERA_MANAGED_STARTER_PROFILE.packageKey, scenario.key) }))), source: fixtureEvidence, required: true },
       ];
-      const release = managedCustomerStarterReleaseCandidate({ sourceRevision: sourceSha, components,
+      const candidate = managedCustomerStarterReleaseCandidate({ sourceRevision: sourceSha, components,
         releaseEvidence: { ...input.releaseEvidence, sbom: fixtureEvidence, provenance: fixtureEvidence,
           signature: fixtureEvidence, scan: fixtureEvidence, evaluations: fixtureEvidence, protectedHoldout: fixtureEvidence,
           sandboxQualification: fixtureEvidence, releaseAuthorization: fixtureEvidence, customerDemand: fixtureEvidence,
           unresolvedCritical: [] } });
+      // Each invocation owns different company-bound component revisions. Keep
+      // each immutable release distinct when the full suite builds this fixture
+      // more than once for the same package key.
+      const release: PackageRelease = { ...candidate,
+        version: `1.0.${managedStarterFixtureSequence++}` };
       return { release, intent: BLENTERA_MANAGED_STARTER_PROFILE.intent,
         meetingNotes: "The team will collect launch feedback before next Tuesday's review. Confirm an owner before assigning follow-up work.",
         installComponents: components.filter((component) => ["role_pack", "skill", "playbook"].includes(component.type))
@@ -2091,6 +2143,7 @@ const support = await getEmbeddedPostgresTestSupport();
       budgets: CreateOrchestrationPlanInput["budgets"] = {},
       configurePresence?: () => Promise<void>,
       starter?: StarterFixture,
+      deferFirstTaskStart = false,
     ) {
       await instanceSettingsService(db).updateExperimental({
         activation_v9: true, experience_analytics_v9: true, free_core_commercial_v7: true, billing_entitlements_v6: true,
@@ -2186,18 +2239,20 @@ const support = await getEmbeddedPostgresTestSupport();
         expect(platform[0]).toMatchObject({ lifecycleState: "active" });
         expect(process.env.PAPERCLIP_API_URL).toBe("http://127.0.0.1:3100/api");
         starterModelExpectedTaskNotes = starter?.meetingNotes ?? null;
-        const started = await activation.command(f.actor, f.home, {
-          operation: "start_first_task", requestId: randomUUID(), expectedVersion: prepared.version,
-          installationId: installation.id, planId: created.id, expectedPlanVersion: created.version,
-          expectedInstallationHash: installation.activationHash!, expectedMaximumModelCostMinor: 0,
-        });
-        expect(started.state.firstTask).toMatchObject({ issueId: task.id, planId: created.id, installationId: installation.id });
-        [created] = await db.select().from(orchestrationPlans).where(and(
-          eq(orchestrationPlans.companyId, f.home), eq(orchestrationPlans.id, reference.planId)));
-        if (!created) throw new Error("The original activation owner did not persist the running plan version");
-        const [storedOnboarding] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, onboarding!.id));
-        if (!storedOnboarding) throw new Error("The original activation owner did not retain its first-task state");
-        currentOnboarding = storedOnboarding;
+        if (!deferFirstTaskStart) {
+          const started = await activation.command(f.actor, f.home, {
+            operation: "start_first_task", requestId: randomUUID(), expectedVersion: prepared.version,
+            installationId: installation.id, planId: created.id, expectedPlanVersion: created.version,
+            expectedInstallationHash: installation.activationHash!, expectedMaximumModelCostMinor: 0,
+          });
+          expect(started.state.firstTask).toMatchObject({ issueId: task.id, planId: created.id, installationId: installation.id });
+          [created] = await db.select().from(orchestrationPlans).where(and(
+            eq(orchestrationPlans.companyId, f.home), eq(orchestrationPlans.id, reference.planId)));
+          if (!created) throw new Error("The original activation owner did not persist the running plan version");
+          const [storedOnboarding] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, onboarding!.id));
+          if (!storedOnboarding) throw new Error("The original activation owner did not retain its first-task state");
+          currentOnboarding = storedOnboarding;
+        }
       } else {
         const [createdTask] = await db.insert(issues).values({ companyId: f.home, title: "Private first-result draft", status: "todo",
           assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
@@ -3302,6 +3357,416 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(fixture.document.latestBody).toContain("The notes do not record an owner or an agreed deadline");
       expect((await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.id, fixture.installation.id)))[0]!.status).toBe("active");
     }, 60000);
+    it.skipIf(!browserExecutable || !existsSync(browserExecutable))(
+      "composes the real managed starter first-task and independent review through the authenticated browser and retains support intake",
+      async () => {
+        const priorApiUrl = process.env.PAPERCLIP_API_URL;
+        const priorInstanceId = process.env.PAPERCLIP_INSTANCE_ID;
+        const priorSecretsMasterKeyFile = process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+        const starter = await managedStarterFixture();
+        starterModelOutput = "Draft — proposed follow-up: collect launch feedback before next Tuesday's review. The notes do not record an owner or an agreed deadline; confirm both before assigning work.";
+        const configurePresence = await configureManagedStarterModel();
+        // Versioned package, purpose approval, installation, onboarding owner,
+        // current provider profile and prepared Task/plan are seeded through
+        // their original owners. The browser performs the first-task dispatch,
+        // independent review, first-value record, activation completion and
+        // support intake through the assembled application.
+        process.env.PAPERCLIP_INSTANCE_ID = `managed-first-value-browser-${randomUUID()}`;
+        process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = join(fixtureHome, "managed-browser-secrets", "master.key");
+        let fixture: Awaited<ReturnType<typeof prepareFirstValueFixture>>;
+        try {
+          fixture = await prepareFirstValueFixture(
+            { maxModelCostMinor: BLENTERA_MANAGED_STARTER_PROFILE.execution.currentV9ActivationOwnerMaximumModelCostMinor },
+            configurePresence,
+            starter,
+            true,
+          );
+        } catch (error) {
+          if (priorSecretsMasterKeyFile === undefined) delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+          else process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = priorSecretsMasterKeyFile;
+          if (priorInstanceId === undefined) delete process.env.PAPERCLIP_INSTANCE_ID;
+          else process.env.PAPERCLIP_INSTANCE_ID = priorInstanceId;
+          throw error;
+        }
+        if (!starterModelGateway || !fixture.task || !fixture.created) throw new Error("managed_browser_fixture_incomplete");
+        expect(fixture.created.status).toBe("draft");
+        expect((await activationService(db).get(f.actor, f.home)).firstTask?.candidates[0]?.planId).toBe(fixture.created.id);
+
+        const policy = {
+          schemaVersion: 1, policyVersion: "managed-first-value-browser-software", recipientName: "Configured test support operator",
+          privacyNoticeUrl: "https://support.example.test/privacy", processingRegion: "eu",
+          retentionTrigger: "after_last_customer_or_support_message", retentionDays: 30,
+          backupMaxDays: 7, restoreLagDays: 1, deletionMarkerDays: 30, legalHoldPolicyId: "managed-first-value-browser-software",
+        } as const;
+        const priorSupportPolicy = process.env.AW_SUPPORT_CASE_DATA_POLICY_JSON;
+        process.env.AW_SUPPORT_CASE_DATA_POLICY_JSON = JSON.stringify(policy);
+        let server: ReturnType<typeof createServer> | undefined;
+        let app: Awaited<ReturnType<typeof createApp>> | undefined;
+        let liveEvents: ReturnType<typeof setupLiveEventsWebSocketServer> | undefined;
+        let browser: Browser | undefined;
+        let browserContext: BrowserContext | undefined;
+        let foreignBrowserContext: BrowserContext | undefined;
+        let origin = "";
+        const foreignId = randomUUID();
+        let activationErrorContext = "journey";
+        const activationServerErrors: Array<{ name: string; status?: number; code?: string; retryable?: boolean; context: string; stack?: string[]; issues?: Array<{ code?: string; path: unknown[] }> }> = [];
+        const originalErrorHandler = errorHandlerModule.errorHandler;
+        const errorHandlerSpy = vi.spyOn(errorHandlerModule, "errorHandler").mockImplementation((error, req, res, next) => {
+          if (req.method === "GET" && req.path === `/api/companies/${f.home}/activation`) {
+            const chain: Array<{ name: string; status?: number; code?: string; retryable?: boolean; context: string; stack?: string[]; issues?: Array<{ code?: string; path: unknown[] }> }> = [];
+            let current: unknown = error;
+            for (let depth = 0; current && typeof current === "object" && depth < 3; depth++) {
+              const row = current as { name?: unknown; status?: unknown; code?: unknown; details?: unknown; stack?: unknown; cause?: unknown; issues?: unknown };
+              const details = row.details && typeof row.details === "object" ? row.details as { code?: unknown; retryable?: unknown } : {};
+              const issues = Array.isArray(row.issues) ? row.issues.slice(0, 8).map(item => {
+                const issue = item && typeof item === "object" ? item as { code?: unknown; path?: unknown } : {};
+                return { ...(typeof issue.code === "string" ? { code: issue.code } : {}),
+                  path: Array.isArray(issue.path) ? issue.path.slice(0, 8) : [] };
+              }) : undefined;
+              chain.push({ name: typeof row.name === "string" ? row.name : "Error",
+                ...(typeof row.status === "number" ? { status: row.status } : {}),
+                ...(typeof row.code === "string" ? { code: row.code } : {}),
+                ...(typeof details.code === "string" ? { code: details.code } : {}),
+                ...(typeof details.retryable === "boolean" ? { retryable: details.retryable } : {}),
+                context: activationErrorContext,
+                ...(typeof row.stack === "string" ? { stack: row.stack.split("\n").slice(1, 5) } : {}),
+                ...(issues ? { issues } : {}) });
+              current = row.cause;
+            }
+            activationServerErrors.push(...chain);
+          }
+          originalErrorHandler(error, req, res, next);
+        });
+        try {
+          const now = new Date();
+          await db.insert(authUsers).values({ id: foreignId, name: "Other company owner",
+            email: `${foreignId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+          const [foreignCompany] = await db.insert(companies).values({ name: "Managed first-value foreign tenant" }).returning();
+          await db.insert(companyMemberships).values({ companyId: foreignCompany!.id, principalType: "user",
+            principalId: foreignId, status: "active", membershipRole: "owner" });
+          const foreignSessionToken = randomUUID();
+          await db.insert(authSessions).values({ id: randomUUID(), userId: foreignId, token: foreignSessionToken,
+            createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+
+          const [humanSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+            token: authSessions.token, expiresAt: authSessions.expiresAt }).from(authSessions)
+            .where(and(eq(authSessions.id, f.actor.sessionId!), eq(authSessions.userId, f.userId))).limit(1);
+          if (!humanSession || humanSession.expiresAt.getTime() <= Date.now()) throw new Error("managed_browser_human_session_unavailable");
+          const resolveSessionFromHeaders = async (headers: Headers) => {
+            const entry = (headers.get("cookie") ?? "").split(";").map(value => value.trim())
+              .find(value => value.startsWith("session_token="));
+            const token = entry ? decodeURIComponent(entry.slice("session_token=".length)) : null;
+            if (!token) return null;
+            const [session] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+              expiresAt: authSessions.expiresAt }).from(authSessions)
+              .where(and(eq(authSessions.token, token), sql`${authSessions.expiresAt} > now()`)).limit(1);
+            if (!session) return null;
+            const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+              .from(authUsers).where(eq(authUsers.id, session.userId)).limit(1);
+            return user ? { session: { id: session.id, userId: session.userId, expiresAt: session.expiresAt }, user } : null;
+          };
+          const resolveSession = (req: import("express").Request) =>
+            resolveSessionFromHeaders(new Headers({ cookie: req.header("cookie") ?? "" }));
+          server = createServer();
+          await new Promise<void>((resolve, reject) => {
+            server!.once("error", reject);
+            server!.listen(0, "127.0.0.1", () => { server!.off("error", reject); resolve(); });
+          });
+          const address = server.address();
+          if (!address || typeof address === "string") throw new Error("managed_browser_listener_missing");
+          origin = `http://127.0.0.1:${address.port}`;
+          const fixtureKey = (byte: number) => Buffer.alloc(32, byte).toString("base64");
+          const fixturePlatform = saasPlatform(db, {
+            environment: "staging",
+            databaseUrl: database.connectionString,
+            outbox: { encryptionKey: fixtureKey(11), keyId: "managed-browser", previousKeys: {}, recipientHashKey: fixtureKey(12) },
+            mail: { apiKey: "controlled-software-fixture", signingKey: "controlled-software-fixture",
+              domain: "example.test", from: "support@example.test", stagingRecipients: [`${f.userId}@test.invalid`] },
+            billing: { environment: "sandbox", apiKey: "controlled-software-fixture", webhookSecret: "controlled-software-fixture",
+              payloadKey: fixtureKey(13), payloadKeyId: "managed-browser", previousKeys: {}, graceDays: 7 },
+            objects: { bucket: "managed-browser-fixture", endpoint: "https://objects.example.test", region: "eu-west-1" },
+            runtime: { region: "fixture", networkId: "fixture", hostPlan: "fixture", hostAgentImage: "fixture", osTemplate: "fixture",
+              maxHosts: 0, maxCreatesPerHour: 0, maxEstimatedMonthlyMinor: "0", heartbeatSeconds: 30,
+              suspectSeconds: 90, unreachableSeconds: 300, backupRetentionDays: 7 },
+            operatorUserIds: [f.userId],
+            deployment: { imageDigest: `sha256:${"0".repeat(64)}`, sourceSha: input.manifest.sourceRevision },
+          } as SaasPlatformConfig, { primaryAppOrigin: origin, allowedAppOrigins: [origin], legacyOrigins: [] });
+          app = await createApp(db, { heartbeat: heartbeatService(db), resolveSession, uiMode: "static",
+            serverPort: address.port, storageService: createStorageService(createLocalDiskStorageProvider(join(fixtureHome, "managed-browser-storage"))),
+            deploymentMode: "authenticated", deploymentExposure: "private", bindHost: "127.0.0.1",
+            allowedHostnames: ["127.0.0.1"], authReady: true, companyDeletionEnabled: false,
+            saasPlatform: fixturePlatform,
+            instanceId: process.env.PAPERCLIP_INSTANCE_ID, localPluginDir: join(fixtureHome, "plugins"),
+            managedPluginAutoInstall: [], decisionServiceOptions: { wakeOriginAgent: async () => undefined } });
+          server.on("request", app);
+          liveEvents = setupLiveEventsWebSocketServer(server, db, { deploymentMode: "authenticated", resolveSessionFromHeaders });
+          // The application installs its normal controller during boot. The
+          // test then registers the same controlled gateway already bound to
+          // this profile and asserts the original internal accessor is live.
+          registerNativeDraftGateway(db, starterModelGateway);
+          expect(installedNativeDraftGateway(db)).toBe(starterModelGateway);
+          process.env.PAPERCLIP_API_URL = `${origin}/api`;
+
+          browser = await chromium.launch({ executablePath: browserExecutable!, headless: true,
+            args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+          const context = await browser.newContext();
+          browserContext = context;
+          await context.addCookies([{ name: "session_token", value: humanSession.token, url: origin }]);
+          const page = await context.newPage();
+          let experienceStage = "bootstrap";
+          const pageErrors: string[] = [];
+          page.on("pageerror", error => pageErrors.push(error.message));
+          const privateExperienceResponses: Promise<string>[] = [];
+          const observePrivateExperienceResponse = (response: Response) => {
+            const url = new URL(response.url());
+            const operation = url.pathname === `/api/companies/${f.home}/activation` ? "activation"
+              : url.pathname === `/api/companies/${f.home}/onboarding` ? "onboarding" : null;
+            if (response.request().method() !== "GET" || !operation) return;
+            privateExperienceResponses.push(response.text().then(body => {
+              let parsed: Record<string, unknown> = {};
+              try { parsed = JSON.parse(body) as Record<string, unknown>; } catch { /* summarize only valid JSON fields */ }
+              const details = parsed.details && typeof parsed.details === "object" ? parsed.details as Record<string, unknown> : {};
+              const state = parsed.state && typeof parsed.state === "object" ? parsed.state as Record<string, unknown> : {};
+              const firstValue = parsed.firstValue && typeof parsed.firstValue === "object" ? parsed.firstValue as Record<string, unknown> : {};
+              const summary = { operation, stage: experienceStage, status: response.status(), code: parsed.code ?? details.code ?? null,
+                retryable: details.retryable ?? null, error: typeof parsed.error === "string" ? parsed.error : null,
+                activationStatus: typeof parsed.status === "string" ? parsed.status : null,
+                step: typeof state.step === "string" ? state.step : null,
+                firstValueStatus: typeof firstValue.status === "string" ? firstValue.status : null };
+              return JSON.stringify(summary);
+            }));
+            if (privateExperienceResponses.length > 16) privateExperienceResponses.shift();
+          };
+          page.on("response", observePrivateExperienceResponse);
+          try {
+          const [homeCompany] = await db.select({ issuePrefix: companies.issuePrefix }).from(companies).where(eq(companies.id, f.home));
+          if (!homeCompany?.issuePrefix) throw new Error("managed_browser_home_company_prefix_missing");
+          await page.goto(`${origin}/${homeCompany.issuePrefix}/dashboard`);
+          const claimBootstrap = page.getByRole("button", { name: "Claim this instance", exact: true });
+          await browserExpect(claimBootstrap).toBeVisible({ timeout: 30_000 });
+          const claimResponsePromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === "/api/bootstrap/claim");
+          await claimBootstrap.click();
+          const claimResponse = await claimResponsePromise;
+          expect(claimResponse.status()).toBe(200);
+          expect(await claimResponse.json()).toMatchObject({ claimed: true, userId: f.userId });
+          await page.reload();
+          await browserExpect(claimBootstrap).toHaveCount(0, { timeout: 30_000 });
+          await page.waitForFunction(
+            companyId => localStorage.getItem("paperclip.selectedCompanyId") === companyId,
+            f.home,
+            { timeout: 30_000 },
+          );
+
+          const deniedForeignTenant = await context.request.get(`${origin}/api/companies/${foreignCompany!.id}/activation`);
+          expect(deniedForeignTenant.status()).toBe(403);
+          foreignBrowserContext = await browser.newContext();
+          await foreignBrowserContext.addCookies([{ name: "session_token", value: foreignSessionToken, url: origin }]);
+          activationErrorContext = "foreign-user-negative-probe";
+          const deniedForeignUser = await foreignBrowserContext.request.get(`${origin}/api/companies/${f.home}/activation`);
+          expect(deniedForeignUser.status()).toBe(403);
+          activationErrorContext = "journey";
+
+          const activationPath = `${origin}/saas/activation/9`;
+          experienceStage = "activation-review-read";
+          const activationRead = await context.request.get(
+            `${origin}/api/companies/${f.home}/activation?expectedUserId=${encodeURIComponent(f.userId)}`,
+          );
+          const activationReadBody = await activationRead.text();
+          expect(activationRead.status(), activationReadBody).toBe(200);
+          await page.goto(activationPath);
+          const runFirstTask = page.getByRole("button", { name: "Run first task", exact: true });
+          await browserExpect(runFirstTask).toBeEnabled({ timeout: 30_000 });
+          const startResponsePromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation`);
+          experienceStage = "first-task-dispatch";
+          await runFirstTask.click();
+          const startResponse = await startResponsePromise;
+          expect(startResponse.status()).toBe(200);
+          const startedView = await startResponse.json() as { firstTask?: { current?: { issueId?: string; planId?: string; installationId?: string } } };
+          expect(startedView.firstTask?.current).toMatchObject({ issueId: fixture.task.id, planId: fixture.created.id,
+            installationId: fixture.installation.id });
+
+          let nativeRun: typeof heartbeatRuns.$inferSelect | undefined;
+          await vi.waitFor(async () => {
+            await heartbeatService(db).drainActiveRunExecutions();
+            [nativeRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),
+              eq(heartbeatRuns.agentId, f.presence.id), eq(heartbeatRuns.nativeIssueId, fixture.task!.id)))
+              .orderBy(sql`${heartbeatRuns.createdAt} desc`).limit(1);
+            if (!nativeRun || nativeRun.status !== "succeeded") {
+              const [completion] = nativeRun?.completionContractId ? await db.select({ contractJson: completionContracts.contractJson })
+                .from(completionContracts).where(and(eq(completionContracts.companyId, f.home),
+                  eq(completionContracts.id, nativeRun.completionContractId))).limit(1) : [];
+              const contract = completion?.contractJson as { v7?: { requiredOutputs?: unknown[] } } | undefined;
+              throw new Error(`managed_native_draft_not_terminal_${JSON.stringify({ status: nativeRun?.status ?? "missing",
+                errorCode: nativeRun?.errorCode, error: nativeRun?.error, completionContractId: nativeRun?.completionContractId,
+                requiredOutputs: contract?.v7?.requiredOutputs })}`);
+            }
+          }, { timeout: 90_000, interval: 100 });
+          expect(nativeRun).toMatchObject({ status: "succeeded", nativeIssueId: fixture.task.id, agentId: f.presence.id,
+            responsibleUserId: f.userId });
+          expect(starterModelCalls).toBe(1);
+          expect(starterModelObservedRequest).toMatchObject({ taskNotes: true, endpoint: true, credential: true, model: true });
+          const saved = await documentService(db).getIssueDocumentByKey(fixture.task.id, "result");
+          if (!saved) throw new Error("Managed starter did not save the original first-task result");
+          const [document] = await db.select().from(documents).where(eq(documents.id, saved.id));
+          const [revision] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, saved.latestRevisionId));
+          expect(revision?.body).toContain("proposed follow-up");
+          expect(revision?.body).toContain("The notes do not record an owner or an agreed deadline");
+          expect(revision?.body).not.toContain("Assign the follow-up to");
+
+          experienceStage = "human-worker-review";
+          await page.goto(`${origin}/orchestration`);
+          const reviewPlan = await orchestrationService(db).get(f.actor, f.home, fixture.created.id);
+          const reviewedWorker = reviewPlan.workers.find(worker => worker.issueId === fixture.task!.id);
+          if (!reviewedWorker) throw new Error("managed_browser_primary_worker_missing");
+          await page.getByRole("button", { name: `${reviewPlan.mode} · ${reviewPlan.riskClass} · ${reviewPlan.status}`, exact: true }).click();
+          const independentReview = page.getByRole("heading", { name: "Independent review", exact: true }).locator("xpath=..");
+          await browserExpect(independentReview).toBeVisible({ timeout: 30_000 });
+          await browserExpect(independentReview.getByRole("link", { name: "Open the Task outputs and sources" })).toBeVisible();
+          const reviewTarget = independentReview.getByRole("combobox").first();
+          const workerPacketResponsePromise = page.waitForResponse(response => {
+            const url = new URL(response.url());
+            return response.request().method() === "GET" &&
+              url.pathname.endsWith(`/companies/${f.home}/orchestration/plans/${reviewPlan.id}/verification-packet`) &&
+              url.searchParams.get("workerId") === reviewedWorker.id;
+          });
+          await reviewTarget.selectOption(reviewedWorker.id);
+          const workerPacketResponse = await workerPacketResponsePromise;
+          expect(workerPacketResponse.status()).toBe(200);
+          expect(await workerPacketResponse.json()).toMatchObject({ workerId: reviewedWorker.id, issueId: fixture.task.id, deterministicFailures: [] });
+          await browserExpect(independentReview.getByRole("checkbox").first()).toBeVisible({ timeout: 30_000 });
+          const checkboxes = await independentReview.getByRole("checkbox").all();
+          expect(checkboxes.length).toBeGreaterThan(0);
+          for (const checkbox of checkboxes) await checkbox.check();
+          const selects = await independentReview.getByRole("combobox").all();
+          expect(selects.length).toBeGreaterThan(1);
+          for (let index = 1; index < selects.length - 1; index++) await selects[index]!.selectOption({ index: 1 });
+          await independentReview.getByRole("textbox", { name: "Review rationale" }).fill(
+            "I reviewed the original meeting notes and the saved draft, including the missing owner and unagreed deadline.");
+          await selects.at(-1)!.selectOption("pass");
+          await independentReview.getByRole("button", { name: "Record independent review", exact: true }).click();
+          let review: typeof verificationRuns.$inferSelect | undefined;
+          await vi.waitFor(async () => {
+            [review] = await db.select().from(verificationRuns).where(and(eq(verificationRuns.companyId, f.home),
+              eq(verificationRuns.planId, fixture.created!.id), eq(verificationRuns.reviewerType, "human"),
+              eq(verificationRuns.reviewerId, f.userId), eq(verificationRuns.result, "pass")))
+              .orderBy(sql`${verificationRuns.createdAt} desc`).limit(1);
+            if (!review) throw new Error("managed_browser_independent_review_not_retained");
+          }, { timeout: 30_000, interval: 100 });
+          const [reviewedAttempt] = await db.select().from(orchestrationWorkerAttempts).where(and(
+            eq(orchestrationWorkerAttempts.companyId, f.home), eq(orchestrationWorkerAttempts.planId, reviewPlan.id),
+            eq(orchestrationWorkerAttempts.workerId, reviewedWorker.id)))
+            .orderBy(sql`${orchestrationWorkerAttempts.attempt} desc`).limit(1);
+          expect(reviewedAttempt).toMatchObject({ status: "succeeded", runId: nativeRun!.id });
+          expect(review).toMatchObject({ issueId: fixture.task.id, workerId: reviewedWorker.id,
+            workerAttemptId: reviewedAttempt!.id, reviewerType: "human", reviewerId: f.userId, result: "pass" });
+          expect(review!.resultHash).toMatch(/^[a-f0-9]{64}$/);
+
+          experienceStage = "record-first-result";
+          const activationPageReadPromise = page.waitForResponse(response => response.request().method() === "GET" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation` && response.status() === 200);
+          await page.goto(activationPath);
+          const activationPageRead = await activationPageReadPromise;
+          const activationPageReadBody = await activationPageRead.text();
+          expect(activationPageRead.status(), activationPageReadBody).toBe(200);
+          const useResult = page.getByRole("button", { name: "Use this as my first result", exact: true });
+          await browserExpect(useResult).toBeEnabled({ timeout: 30_000 });
+          const recordResponsePromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation`);
+          await useResult.click();
+          expect((await recordResponsePromise).status()).toBe(200);
+          await page.reload();
+          await browserExpect(page.getByRole("region", { name: "Your verified first result" })).toBeVisible({ timeout: 30_000 });
+          const finishSetup = page.getByRole("button", { name: "Use result", exact: true });
+          await browserExpect(finishSetup).toBeEnabled();
+          const finishResponsePromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation`);
+          experienceStage = "complete-activation";
+          await finishSetup.click();
+          expect((await finishResponsePromise).status()).toBe(200);
+          experienceStage = "completed-activation-reload";
+          await page.reload();
+          await browserExpect(page.getByRole("region", { name: "Your verified first result" })).toBeVisible({ timeout: 30_000 });
+          const activation = await activationService(db).get(f.actor, f.home);
+          expect(activation.status).toBe("completed");
+          expect(activation.firstValue?.result).toMatchObject({ issueId: fixture.task.id, runId: nativeRun!.id,
+            verificationRunId: review!.id, installationId: fixture.installation.id,
+            artifacts: [{ documentId: document!.id, revisionId: revision!.id, documentKey: "result" }] });
+
+          experienceStage = "support-intake";
+          await page.goto(`${origin}/${homeCompany.issuePrefix}/company/support`);
+          await browserExpect(page.getByRole("textbox", { name: "What do you need help with?", exact: true }))
+            .toBeVisible({ timeout: 30_000 });
+          const supportDescription = "The reviewed internal follow-up draft was useful; please retain the current authorization boundaries.";
+          await page.getByRole("textbox", { name: "What do you need help with?", exact: true }).fill(supportDescription);
+          const supportPostPromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/support/cases`);
+          await page.getByRole("button", { name: "Send to support", exact: true }).click();
+          const supportResponse = await supportPostPromise;
+          expect(supportResponse.status()).toBe(201);
+          const supportBody = await supportResponse.json() as { id: string; companyId: string; description: string };
+          expect(supportBody).toMatchObject({ companyId: f.home, description: supportDescription });
+          const [storedSupport] = await db.select().from(supportCases).where(and(eq(supportCases.companyId, f.home),
+            eq(supportCases.id, supportBody.id)));
+          expect(storedSupport).toMatchObject({ openedByUserId: f.userId, description: supportDescription });
+
+          experienceStage = "completed-activation-reload-after-support";
+          await page.goto(activationPath);
+          const completedActivationReadPromise = page.waitForResponse(response => response.request().method() === "GET" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation` && response.status() === 200);
+          await page.reload();
+          const completedActivationRead = await completedActivationReadPromise;
+          const completedActivationReadBody = await completedActivationRead.text();
+          expect(completedActivationRead.status(), completedActivationReadBody).toBe(200);
+          expect(JSON.parse(completedActivationReadBody)).toMatchObject({
+            companyId: f.home, status: "completed", state: { step: "activated" },
+            firstValue: { status: "verified", result: { issueId: fixture.task.id, runId: nativeRun!.id,
+              verificationRunId: review!.id } },
+          });
+          await browserExpect(page.getByRole("region", { name: "Your verified first result" })).toBeVisible();
+          const currentView = await activationService(db).get(f.actor, f.home);
+          expect(currentView.firstValue?.result).toMatchObject({ issueId: fixture.task.id, runId: nativeRun!.id,
+            verificationRunId: review!.id, artifacts: [{ documentId: document!.id, revisionId: revision!.id }] });
+          expect(pageErrors).toEqual([]);
+          expect(activationServerErrors.filter(error => error.status === 403)).toEqual([
+            expect.objectContaining({ context: "foreign-user-negative-probe" }),
+          ]);
+          expect(activationServerErrors.filter(error => error.status === 409).length).toBeGreaterThan(0);
+          expect(activationServerErrors.filter(error => error.status === 409).every(error =>
+            error.context === "journey" && error.code === "activation_state_busy" && error.retryable === true)).toBe(true);
+          expect(activationServerErrors.filter(error => error.status !== 403 && error.status !== 409)).toEqual([]);
+          } catch (error) {
+            const responseFacts = await Promise.all(privateExperienceResponses);
+            throw new Error(`${String(error)}\nprivate experience stage: ${experienceStage}\nprivate experience responses: ${JSON.stringify(responseFacts)}\npage errors: ${JSON.stringify(pageErrors)}\nactivation server errors: ${JSON.stringify(activationServerErrors)}`);
+          } finally {
+            page.off("response", observePrivateExperienceResponse);
+          }
+        } finally {
+          errorHandlerSpy.mockRestore();
+          await browserContext?.close();
+          await foreignBrowserContext?.close();
+          await browser?.close();
+          for (const client of liveEvents?.clients ?? []) client.terminate();
+          if (liveEvents) await new Promise<void>(resolve => liveEvents!.close(() => resolve()));
+          try { await app?.locals.paperclipShutdown?.(); } catch { /* Preserve the primary test failure. */ }
+          if (server?.listening) {
+            server.closeAllConnections();
+            await new Promise<void>(resolve => server!.close(() => resolve()));
+          }
+          if (priorSupportPolicy === undefined) delete process.env.AW_SUPPORT_CASE_DATA_POLICY_JSON;
+          else process.env.AW_SUPPORT_CASE_DATA_POLICY_JSON = priorSupportPolicy;
+          if (priorApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
+          else process.env.PAPERCLIP_API_URL = priorApiUrl;
+          if (priorInstanceId === undefined) delete process.env.PAPERCLIP_INSTANCE_ID;
+          else process.env.PAPERCLIP_INSTANCE_ID = priorInstanceId;
+          if (priorSecretsMasterKeyFile === undefined) delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+          else process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = priorSecretsMasterKeyFile;
+          registerNativeDraftGateway(db, undefined);
+        }
+      },
+      240_000,
+    );
     it("records only a current native first-result task/run/review and replays without executing or granting", async () => {
       const fixture = await firstValueFixture(), activation = activationService(db);
       const beforeRuns = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length;
@@ -3330,6 +3795,31 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(completionReplay.version).toBe(completed.version);
       expect(completionReplay.state.firstValueAt).toBe(first.state.firstValueAt);
     }, 60000);
+    it("classifies a busy company-row lock during the activation read as retryable", async () => {
+      const [account] = await db.insert(billingAccounts).values({ displayName: "Activation read-lock fixture", payerUserId: f.userId }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
+      await db.insert(companyOnboardingRuns).values({ companyId: f.home, billingAccountId: account!.id,
+        createdByUserId: f.userId, idempotencyKey: randomUUID(), requestHash: "a".repeat(64),
+        activationState: initialActivationState() });
+      let release!: () => void, acquired!: () => void;
+      const ready = new Promise<void>(resolve => { acquired = resolve; });
+      const done = new Promise<void>(resolve => { release = resolve; });
+      const owner = db.transaction(async tx => {
+        await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, f.home)).for("update");
+        acquired();
+        await done;
+      });
+      await ready;
+      try {
+        await expect(activationService(db).get(f.actor, f.home)).rejects.toMatchObject({
+          status: 409, details: { code: "activation_state_busy", retryable: true },
+        });
+      } finally {
+        release();
+        await owner;
+      }
+      expect((await activationService(db).get(f.actor, f.home)).companyId).toBe(f.home);
+    });
     it("measures original independently reviewed output without exporting content, inventing TTFO or writing analytics", async () => {
       const fixture = await firstValueFixture(), activation = activationService(db);
       await activation.command(f.actor, f.home, { operation: "record_verified_result", expectedVersion: fixture.onboarding.version,
