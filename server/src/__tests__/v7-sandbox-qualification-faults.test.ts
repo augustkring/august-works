@@ -87,6 +87,53 @@ describe("sandbox qualification under compound host/probe faults (local fixtures
     expect(report.capabilities?.expiresAt).toBe(f.snapshot.expiresAt);
     expect(report.capabilities?.evidenceKind).toBe("local_fixture");
   });
+  it("accepts fresh report timestamps for unchanged target evidence without renewing expiry", async () => {
+    const f = fixture();
+    let reports = 0;
+    f.backend.capabilities = async () => {
+      if (++reports === 1) return structuredClone(f.snapshot);
+      f.advance(1000);
+      return { ...f.snapshot, testedAt: new Date(now.getTime() + 1000).toISOString(),
+        expiresAt: new Date(now.getTime() + 61000).toISOString() };
+    };
+    const report = await runSandboxQualification(f.backend, identity, now);
+    expect(report.status).toBe("passed");
+    expect(report.capabilities?.expiresAt).toBe(f.snapshot.expiresAt);
+    expect(f.probes()).toBe(18);
+  });
+  it("cannot replace an expired original attestation with a fresh report", async () => {
+    const f = fixture();
+    let reports = 0;
+    f.backend.capabilities = async () => {
+      if (++reports === 1) return structuredClone(f.snapshot);
+      f.advance(61000);
+      return { ...f.snapshot, testedAt: new Date(now.getTime() + 61000).toISOString(),
+        expiresAt: new Date(now.getTime() + 121000).toISOString() };
+    };
+    const report = await runSandboxQualification(f.backend, identity, now);
+    expect(report.status).toBe("inconclusive");
+    expect(report.capabilities).toBeNull();
+    expect(report.exceptions).toContain("capability_snapshot_changed_or_expired");
+  });
+  it("rejects a current attestation that expires before the completion fence", async () => {
+    const f = fixture();
+    let reports = 0, clocks = 0;
+    vi.mocked(performance.now).mockImplementation(() => ++clocks < 4 ? 0 : 2);
+    f.backend.capabilities = async () => ({ ...f.snapshot,
+      expiresAt: new Date(now.getTime() + (++reports === 1 ? 60000 : 1)).toISOString() });
+    const report = await runSandboxQualification(f.backend, identity, now);
+    expect(report.status).toBe("inconclusive");
+    expect(report.capabilities).toBeNull();
+  });
+  it("retains a shortened current attestation expiry", async () => {
+    const f = fixture();
+    let reports = 0;
+    f.backend.capabilities = async () => ({ ...f.snapshot,
+      expiresAt: new Date(now.getTime() + (++reports === 1 ? 60000 : 30000)).toISOString() });
+    const report = await runSandboxQualification(f.backend, identity, now);
+    expect(report.status).toBe("passed");
+    expect(report.capabilities?.expiresAt).toBe(new Date(now.getTime() + 30000).toISOString());
+  });
   it("rejects expiry during a passing sequence instead of renewing it", async () => {
     const f = fixture(),
       probe = f.backend.probeBoundary;

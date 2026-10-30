@@ -76,7 +76,12 @@ export async function runSandboxQualification(
   const current = await readCapabilities(),
     completedAt = clock();
   const unchanged = Boolean(
-    declared && current && nativeSha256(declared) === nativeSha256(current),
+    declared && current && new Date(declared.expiresAt) > completedAt &&
+      new Date(current.expiresAt) > completedAt &&
+      // Reports can refresh observation timestamps without changing their
+      // target evidence. Keep the original expiry and compare every other field.
+      nativeSha256({ ...declared, testedAt: null, expiresAt: null }) ===
+        nativeSha256({ ...current, testedAt: null, expiresAt: null }),
   );
   const exceptions = results
     .filter((r) => r.verdict !== "pass")
@@ -106,13 +111,14 @@ export async function runSandboxQualification(
     results,
   });
   const capabilities: SandboxCapabilitySnapshot | null =
-    unchanged && declared
+    unchanged && declared && current
       ? {
           ...declared,
           testedAt: completedAt.toISOString(),
           expiresAt: new Date(
             Math.min(
               new Date(declared.expiresAt).getTime(),
+              new Date(current.expiresAt).getTime(),
               completedAt.getTime() + 86_400_000,
             ),
           ).toISOString(),
