@@ -1,0 +1,68 @@
+{
+  "formatVersion": 1,
+  "status": "source-pinned-not-qualified",
+  "upstream": {
+    "repository": "https://github.com/NVIDIA/OpenShell.git",
+    "version": "v0.1.2",
+    "commit": "6648bd0c290efbc41ba131ee9831ee45cd431f94"
+  },
+  "patch": {
+    "path": "third_party/openshell/rt01/openshell-rt01-expected-id.patch",
+    "sha256": "bc7ea25a9c23a562707297a00d0da3adcb5e5cb527e2afb158db1e8bcf899cdc",
+    "parentPatchSha256": "5d1556c605d4ea33cc896a718e179d985d33645f505a31c8f1c7719838a5542a"
+  },
+  "candidateSourcePins": {
+    "sha256": "b0c81ee7d1871d8b48872e8a1f1d3e89f5d60a8b3169f342ad0edc7d4b2358b1"
+  },
+  "toolchain": {
+    "rust": "1.95.0",
+    "profile": "minimal",
+    "requiredByUpstreamManifest": "1.94"
+  },
+  "files": {
+    "crates/openshell-cli/src/commands/provider.rs": "9b32988d4f4eb7b14e89c392a65dafbd8bbfb0d5167acc59337fa833a5e32487",
+    "crates/openshell-cli/src/main.rs": "2c366d0b4167065bd1f8f9da2fd28b48dc00dac8c6ab7d41479f4f9c02494e47",
+    "crates/openshell-cli/src/run.rs": "04f0b1111f5c05c9b8e6a07655d20f3501e8dcf2c5e0130740068f9913e2e24d",
+    "crates/openshell-cli/tests/ensure_providers_integration.rs": "8d02e4f806c2f132ce7282648da31bf348352cf3ce58be4082514d482a8e8fa8",
+    "crates/openshell-cli/tests/mtls_integration.rs": "4d154bd31be5bebbfc70833e1d6de4b44757cf44a7943dec342568e72d6e5290",
+    "crates/openshell-cli/tests/provider_commands_integration.rs": "3e2d05066325c2172ecfd5682972281c07556dc2dfa02457abf5fd0172c40854",
+    "crates/openshell-cli/tests/sandbox_create_lifecycle_integration.rs": "ccc35a5632bcb81b249a1d65213acb59750d119c5e8c8e624636dccfeaa9b206",
+    "crates/openshell-cli/tests/sandbox_name_fallback_integration.rs": "026c6c9fd062ce01ca4738ddec08dc0c8bc93852873b8d5494779b76caf1016d",
+    "crates/openshell-sdk/tests/client_mock.rs": "97107c277baad5f5d26c97db205fbbca485e35197335e7ab05d6d3266c985e26",
+    "crates/openshell-server/src/compute/mod.rs": "ba0ccbd197d30de27dc86818fe1f9ce7693e9fe545ab2116fdeeaa57ade38f79",
+    "crates/openshell-server/src/grpc/mod.rs": "0a66e161872c58912b336a42940adbdf012a217622e3705f57aa9e52c13568e6",
+    "crates/openshell-server/src/grpc/mutation_replay/ordinary.rs": "db268584fa32180e8f7260f3cda67ac4abc3c4594669acf92883aae8c799930e",
+    "crates/openshell-server/src/grpc/mutation_replay/streaming.rs": "8f6dd383453249ac1bd32afbe38e994646c3c886a587931f1c7cfdca9bf7822f",
+    "crates/openshell-server/src/grpc/policy.rs": "5d48bd29575f3ccb0b3c1113fd2a8120ec76aa6287dcef5639fd09ba631e1e1b",
+    "crates/openshell-server/src/grpc/sandbox.rs": "8a231f48bf204a41dddae409243f5456155b63a08d6e8c00ced772402e549f57",
+    "crates/openshell-server/tests/common/mod.rs": "7de4b153aa9b6494c7041bb92828fbd9a1f1f1343c0ed0c469e18cba7e4c1e98",
+    "crates/openshell-server/tests/supervisor_relay_integration.rs": "b4c84155292bf013cee9368b1b4019c3b5ee641d7efc1b1a0644d06b9e0d70fb",
+    "proto/openshell.proto": "9a0e207c87d116e4410caeb8e0054113b308f879fc72c69df09d9cfaeeb47abf",
+    "Cargo.toml": "6c467f300f12eeffba50628cab784fbeab718b497c40a003becca6748a1003ef",
+    "Cargo.lock": "ea10e2922eece4077a2c1be17cac83214aa5f79f39fd6c5cc830e1a2cf9d459a",
+    "crates/openshell-core/build.rs": "556088b95812b705947d22a1d6613c5b876af811e3c8a7fa253b7aceecbb173d",
+    "crates/openshell-server/build.rs": "637aa140fe3fe2e3d8b171687ec1a23c435493c62540e3f1859e2a800c66052d",
+    "rust-toolchain.toml": "f7969f2aef5faff3a786f980b53b1aeecb92179613531fa0fd74406abf92e1ed",
+    "LICENSE": "c4be3acebe12527d7de689933d98329b4065f8c50cd929d0365584eafe6c20dd"
+  },
+  "expectedPatchedPaths": [
+    "crates/openshell-cli/src/commands/provider.rs",
+    "crates/openshell-cli/src/main.rs",
+    "crates/openshell-cli/src/run.rs",
+    "crates/openshell-cli/tests/ensure_providers_integration.rs",
+    "crates/openshell-cli/tests/mtls_integration.rs",
+    "crates/openshell-cli/tests/provider_commands_integration.rs",
+    "crates/openshell-cli/tests/sandbox_create_lifecycle_integration.rs",
+    "crates/openshell-cli/tests/sandbox_name_fallback_integration.rs",
+    "crates/openshell-sdk/tests/client_mock.rs",
+    "crates/openshell-server/src/compute/mod.rs",
+    "crates/openshell-server/src/grpc/mod.rs",
+    "crates/openshell-server/src/grpc/mutation_replay/ordinary.rs",
+    "crates/openshell-server/src/grpc/mutation_replay/streaming.rs",
+    "crates/openshell-server/src/grpc/policy.rs",
+    "crates/openshell-server/src/grpc/sandbox.rs",
+    "crates/openshell-server/tests/common/mod.rs",
+    "crates/openshell-server/tests/supervisor_relay_integration.rs",
+    "proto/openshell.proto"
+  ]
+}

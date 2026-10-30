@@ -1,0 +1,3343 @@
+diff --git a/crates/openshell-cli/src/commands/provider.rs b/crates/openshell-cli/src/commands/provider.rs
+index fca1d16..9f88355 100644
+--- a/crates/openshell-cli/src/commands/provider.rs
++++ b/crates/openshell-cli/src/commands/provider.rs
+@@ -15,16 +15,17 @@ use dialoguer::Confirm;
+ use miette::{IntoDiagnostic, Result, WrapErr, miette};
+ use openshell_core::proto::ProviderProfileCategory;
+ use openshell_core::proto::{
+-    AttachSandboxProviderRequest, ConfigureProviderRefreshRequest, CreateProviderRequest,
+-    DeleteProviderProfileRequest, DeleteProviderRefreshRequest, DeleteProviderRequest,
+-    DetachSandboxProviderRequest, GetProviderProfileRequest, GetProviderRefreshStatusRequest,
+-    GetProviderRequest, GetSandboxRequest, ImportProviderProfilesRequest,
+-    LintProviderProfilesRequest, ListProviderProfilesRequest, ListProvidersRequest,
+-    ListSandboxProvidersRequest, Provider, ProviderCredentialRefreshRecoveryAction,
+-    ProviderCredentialRefreshStatus, ProviderCredentialRefreshStrategy,
+-    ProviderCredentialTokenGrantType, ProviderMutationKind, ProviderProfile,
+-    ProviderProfileDiagnostic, ProviderProfileImportItem, RotateProviderCredentialRequest,
+-    UpdateProviderProfilesRequest, UpdateProviderRequest,
++    AttachSandboxProviderRequest, AttachSandboxProviderWithIdentityRequest,
++    ConfigureProviderRefreshRequest, CreateProviderRequest, DeleteProviderProfileRequest,
++    DeleteProviderRefreshRequest, DeleteProviderRequest, DetachSandboxProviderRequest,
++    DetachSandboxProviderWithIdentityRequest, GetProviderProfileRequest,
++    GetProviderRefreshStatusRequest, GetProviderRequest, GetSandboxRequest,
++    ImportProviderProfilesRequest, LintProviderProfilesRequest, ListProviderProfilesRequest,
++    ListProvidersRequest, ListSandboxProvidersRequest, Provider,
++    ProviderCredentialRefreshRecoveryAction, ProviderCredentialRefreshStatus,
++    ProviderCredentialRefreshStrategy, ProviderCredentialTokenGrantType, ProviderMutationKind,
++    ProviderProfile, ProviderProfileDiagnostic, ProviderProfileImportItem,
++    RotateProviderCredentialRequest, UpdateProviderProfilesRequest, UpdateProviderRequest,
+ };
+ use openshell_core::rpc_error::{ERROR_DOMAIN, decode_details};
+ use openshell_core::{ObjectId, ObjectName, ObjectWorkspace};
+@@ -137,6 +138,22 @@ pub async fn sandbox_provider_attach(
+     workspace: &str,
+     tls: &TlsOptions,
+     readiness: ProviderWaitOptions<'_>,
++) -> Result<()> {
++    sandbox_provider_attach_with_expected_id(
++        server, name, provider, None, workspace, tls, readiness,
++    )
++    .await
++}
++
++/// Save a provider attachment while binding the target name to an observed UUID.
++pub async fn sandbox_provider_attach_with_expected_id(
++    server: &str,
++    name: &str,
++    provider: &str,
++    expected_sandbox_id: Option<&str>,
++    workspace: &str,
++    tls: &TlsOptions,
++    readiness: ProviderWaitOptions<'_>,
+ ) -> Result<()> {
+     readiness.validate()?;
+     let mut client = grpc_client(server, tls).await?;
+@@ -154,21 +171,41 @@ pub async fn sandbox_provider_attach(
+         .into_inner()
+         .sandbox
+         .ok_or_else(|| miette::miette!("sandbox not found"))?;
++    if expected_sandbox_id.is_some_and(|expected| sandbox.object_id() != expected) {
++        return Err(miette!(
++            "sandbox name no longer identifies the expected sandbox UUID"
++        ));
++    }
+ 
+     let resource_version = sandbox.metadata.as_ref().map_or(0, |m| m.resource_version);
+ 
+-    let response = match client
+-        .attach_sandbox_provider(AttachSandboxProviderRequest {
+-            request_id: String::new(),
+-            sandbox: (name).to_string(),
+-            workspace_scope: Some(openshell_core::proto::workspace_selector(
+-                (workspace).to_string(),
+-            )),
+-            provider: provider.to_string(),
+-            expected_resource_version: resource_version,
+-        })
+-        .await
+-    {
++    let attach_result = if let Some(expected_sandbox_id) = expected_sandbox_id {
++        client
++            .attach_sandbox_provider_with_identity(AttachSandboxProviderWithIdentityRequest {
++                request_id: String::new(),
++                sandbox: (name).to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    (workspace).to_string(),
++                )),
++                provider: provider.to_string(),
++                expected_resource_version: resource_version,
++                expected_sandbox_id: expected_sandbox_id.to_string(),
++            })
++            .await
++    } else {
++        client
++            .attach_sandbox_provider(AttachSandboxProviderRequest {
++                request_id: String::new(),
++                sandbox: (name).to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++                provider: provider.to_string(),
++                expected_resource_version: resource_version,
++            })
++            .await
++    };
++    let response = match attach_result {
+         Ok(response) => response.into_inner(),
+         // Explicit post-save uncertainty takes precedence over a generic retry hint.
+         Err(status)
+@@ -212,6 +249,22 @@ pub async fn sandbox_provider_detach(
+     workspace: &str,
+     tls: &TlsOptions,
+     readiness: ProviderWaitOptions<'_>,
++) -> Result<()> {
++    sandbox_provider_detach_with_expected_id(
++        server, name, provider, None, workspace, tls, readiness,
++    )
++    .await
++}
++
++/// Save a provider detachment while binding the target name to an observed UUID.
++pub async fn sandbox_provider_detach_with_expected_id(
++    server: &str,
++    name: &str,
++    provider: &str,
++    expected_sandbox_id: Option<&str>,
++    workspace: &str,
++    tls: &TlsOptions,
++    readiness: ProviderWaitOptions<'_>,
+ ) -> Result<()> {
+     readiness.validate()?;
+     let mut client = grpc_client(server, tls).await?;
+@@ -229,21 +282,41 @@ pub async fn sandbox_provider_detach(
+         .into_inner()
+         .sandbox
+         .ok_or_else(|| miette::miette!("sandbox not found"))?;
++    if expected_sandbox_id.is_some_and(|expected| sandbox.object_id() != expected) {
++        return Err(miette!(
++            "sandbox name no longer identifies the expected sandbox UUID"
++        ));
++    }
+ 
+     let resource_version = sandbox.metadata.as_ref().map_or(0, |m| m.resource_version);
+ 
+-    let response = match client
+-        .detach_sandbox_provider(DetachSandboxProviderRequest {
+-            request_id: String::new(),
+-            sandbox: (name).to_string(),
+-            workspace_scope: Some(openshell_core::proto::workspace_selector(
+-                (workspace).to_string(),
+-            )),
+-            provider: provider.to_string(),
+-            expected_resource_version: resource_version,
+-        })
+-        .await
+-    {
++    let detach_result = if let Some(expected_sandbox_id) = expected_sandbox_id {
++        client
++            .detach_sandbox_provider_with_identity(DetachSandboxProviderWithIdentityRequest {
++                request_id: String::new(),
++                sandbox: (name).to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    (workspace).to_string(),
++                )),
++                provider: provider.to_string(),
++                expected_resource_version: resource_version,
++                expected_sandbox_id: expected_sandbox_id.to_string(),
++            })
++            .await
++    } else {
++        client
++            .detach_sandbox_provider(DetachSandboxProviderRequest {
++                request_id: String::new(),
++                sandbox: (name).to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++                provider: provider.to_string(),
++                expected_resource_version: resource_version,
++            })
++            .await
++    };
++    let response = match detach_result {
+         Ok(response) => response.into_inner(),
+         // Explicit post-save uncertainty takes precedence over a generic retry hint.
+         Err(status)
+diff --git a/crates/openshell-cli/src/main.rs b/crates/openshell-cli/src/main.rs
+index e5f1059..d777937 100644
+--- a/crates/openshell-cli/src/main.rs
++++ b/crates/openshell-cli/src/main.rs
+@@ -1639,6 +1639,10 @@ enum SandboxCommands {
+         /// Delete all sandboxes.
+         #[arg(long, conflicts_with = "names")]
+         all: bool,
++
++        /// Require the sandbox name to still identify this observed UUID.
++        #[arg(long)]
++        expected_sandbox_id: Option<String>,
+     },
+ 
+     /// Stop a sandbox while preserving its workspace.
+@@ -1647,6 +1651,10 @@ enum SandboxCommands {
+         /// Sandbox name (defaults to last-used sandbox).
+         #[arg(add = ArgValueCompleter::new(completers::complete_sandbox_names))]
+         name: Option<String>,
++
++        /// Require the sandbox name to still identify this observed UUID.
++        #[arg(long)]
++        expected_sandbox_id: Option<String>,
+     },
+ 
+     /// Start a stopped sandbox.
+@@ -1655,6 +1663,10 @@ enum SandboxCommands {
+         /// Sandbox name (defaults to last-used sandbox).
+         #[arg(add = ArgValueCompleter::new(completers::complete_sandbox_names))]
+         name: Option<String>,
++
++        /// Require the sandbox name to still identify this observed UUID.
++        #[arg(long)]
++        expected_sandbox_id: Option<String>,
+     },
+ 
+     /// Execute a command in a running sandbox.
+@@ -1675,6 +1687,10 @@ enum SandboxCommands {
+         #[arg(long, short = 'n', add = ArgValueCompleter::new(completers::complete_sandbox_names))]
+         name: Option<String>,
+ 
++        /// Require the sandbox name to still identify this observed UUID.
++        #[arg(long)]
++        expected_sandbox_id: Option<String>,
++
+         /// Working directory inside the sandbox.
+         #[arg(long)]
+         workdir: Option<String>,
+@@ -1843,6 +1859,10 @@ enum SandboxProviderCommands {
+         #[arg(add = ArgValueCompleter::new(completers::complete_provider_names))]
+         provider: String,
+ 
++        /// Require the sandbox name to still identify this observed UUID.
++        #[arg(long)]
++        expected_sandbox_id: Option<String>,
++
+         #[command(flatten)]
+         readiness: ProviderReadinessArgs,
+     },
+@@ -1858,6 +1878,10 @@ enum SandboxProviderCommands {
+         #[arg(add = ArgValueCompleter::new(completers::complete_provider_names))]
+         provider: String,
+ 
++        /// Require the sandbox name to still identify this observed UUID.
++        #[arg(long)]
++        expected_sandbox_id: Option<String>,
++
+         #[command(flatten)]
+         readiness: ProviderReadinessArgs,
+     },
+@@ -2072,6 +2096,10 @@ enum PolicyCommands {
+         #[arg(add = ArgValueCompleter::new(completers::complete_sandbox_names))]
+         name: Option<String>,
+ 
++        /// Require the sandbox name to still identify this observed UUID.
++        #[arg(long, conflicts_with = "global")]
++        expected_sandbox_id: Option<String>,
++
+         /// Path to the policy YAML file.
+         #[arg(long, value_hint = ValueHint::FilePath)]
+         policy: String,
+@@ -2100,6 +2128,10 @@ enum PolicyCommands {
+         #[arg(add = ArgValueCompleter::new(completers::complete_sandbox_names))]
+         name: Option<String>,
+ 
++        /// Require the sandbox name to still identify this observed UUID.
++        #[arg(long)]
++        expected_sandbox_id: Option<String>,
++
+         /// Add or merge an endpoint: host:port[:access[:protocol[:enforcement[:options]]]].
+         /// Options include allowed-ip=..., credential rewrite flags, and
+         /// allow-uninspected-credentials.
+@@ -2985,6 +3017,7 @@ async fn run_async() -> Result<()> {
+             match policy_cmd {
+                 PolicyCommands::Set {
+                     name,
++                    expected_sandbox_id,
+                     policy,
+                     global,
+                     yes,
+@@ -3010,10 +3043,11 @@ async fn run_async() -> Result<()> {
+                         .await?;
+                     } else {
+                         let name = resolve_sandbox_name(name, &ctx.name, &cli.workspace)?;
+-                        run::sandbox_policy_set(
++                        run::sandbox_policy_set_with_expected_id(
+                             &ctx.endpoint,
+                             &name,
+                             &policy,
++                            expected_sandbox_id.as_deref(),
+                             wait,
+                             timeout,
+                             &cli.workspace,
+@@ -3024,6 +3058,7 @@ async fn run_async() -> Result<()> {
+                 }
+                 PolicyCommands::Update {
+                     name,
++                    expected_sandbox_id,
+                     add_endpoints,
+                     remove_endpoints,
+                     add_allow,
+@@ -3038,7 +3073,7 @@ async fn run_async() -> Result<()> {
+                     timeout,
+                 } => {
+                     let name = resolve_sandbox_name(name, &ctx.name, &cli.workspace)?;
+-                    run::sandbox_policy_update(
++                    run::sandbox_policy_update_with_expected_id(
+                         &ctx.endpoint,
+                         &name,
+                         &add_endpoints,
+@@ -3051,6 +3086,7 @@ async fn run_async() -> Result<()> {
+                         any_binary,
+                         endpoint_path.as_deref(),
+                         dry_run,
++                        expected_sandbox_id.as_deref(),
+                         wait,
+                         timeout,
+                         &cli.workspace,
+@@ -3517,24 +3553,49 @@ async fn run_async() -> Result<()> {
+                             )
+                             .await?;
+                         }
+-                        SandboxCommands::Delete { names, all } => {
+-                            run::sandbox_delete(
++                        SandboxCommands::Delete {
++                            names,
++                            all,
++                            expected_sandbox_id,
++                        } => {
++                            run::sandbox_delete_with_expected_id(
+                                 endpoint,
+                                 &names,
+                                 all,
++                                expected_sandbox_id.as_deref(),
+                                 &cli.workspace,
+                                 &tls,
+                                 &ctx.name,
+                             )
+                             .await?;
+                         }
+-                        SandboxCommands::Stop { name } => {
++                        SandboxCommands::Stop {
++                            name,
++                            expected_sandbox_id,
++                        } => {
+                             let name = resolve_sandbox_name(name, &ctx.name, &cli.workspace)?;
+-                            run::sandbox_stop(endpoint, &name, &cli.workspace, &tls).await?;
++                            run::sandbox_stop_with_expected_id(
++                                endpoint,
++                                &name,
++                                expected_sandbox_id.as_deref(),
++                                &cli.workspace,
++                                &tls,
++                            )
++                            .await?;
+                         }
+-                        SandboxCommands::Start { name } => {
++                        SandboxCommands::Start {
++                            name,
++                            expected_sandbox_id,
++                        } => {
+                             let name = resolve_sandbox_name(name, &ctx.name, &cli.workspace)?;
+-                            run::sandbox_start(endpoint, &name, &cli.workspace, &tls).await?;
++                            run::sandbox_start_with_expected_id(
++                                endpoint,
++                                &name,
++                                expected_sandbox_id.as_deref(),
++                                &cli.workspace,
++                                &tls,
++                            )
++                            .await?;
+                         }
+                         SandboxCommands::Connect { name, editor } => {
+                             let name = resolve_sandbox_name(name, &ctx.name, &cli.workspace)?;
+@@ -3560,6 +3621,7 @@ async fn run_async() -> Result<()> {
+                         }
+                         SandboxCommands::Exec {
+                             name,
++                            expected_sandbox_id,
+                             workdir,
+                             timeout,
+                             tty,
+@@ -3578,7 +3640,7 @@ async fn run_async() -> Result<()> {
+                                 None // auto-detect
+                             };
+                             let env_map = run::parse_env_pairs(&envs)?;
+-                            let exit_code = run::sandbox_exec_grpc(
++                            let exit_code = run::sandbox_exec_grpc_with_expected_id(
+                                 endpoint,
+                                 &name,
+                                 &command,
+@@ -3587,6 +3649,7 @@ async fn run_async() -> Result<()> {
+                                 tty_override,
+                                 &env_map,
+                                 no_login_shell,
++                                expected_sandbox_id.as_deref(),
+                                 &tls,
+                                 &cli.workspace,
+                             )
+@@ -3622,12 +3685,14 @@ async fn run_async() -> Result<()> {
+                             SandboxProviderCommands::Attach {
+                                 name,
+                                 provider,
++                                expected_sandbox_id,
+                                 readiness,
+                             } => {
+-                                run::sandbox_provider_attach(
++                                run::sandbox_provider_attach_with_expected_id(
+                                     endpoint,
+                                     &name,
+                                     &provider,
++                                    expected_sandbox_id.as_deref(),
+                                     &cli.workspace,
+                                     &tls,
+                                     readiness.options(),
+@@ -3637,12 +3702,14 @@ async fn run_async() -> Result<()> {
+                             SandboxProviderCommands::Detach {
+                                 name,
+                                 provider,
++                                expected_sandbox_id,
+                                 readiness,
+                             } => {
+-                                run::sandbox_provider_detach(
++                                run::sandbox_provider_detach_with_expected_id(
+                                     endpoint,
+                                     &name,
+                                     &provider,
++                                    expected_sandbox_id.as_deref(),
+                                     &cli.workspace,
+                                     &tls,
+                                     readiness.options(),
+@@ -4396,6 +4463,27 @@ mod tests {
+ 
+         assert_eq!(name, "work-sandbox");
+         assert_eq!(provider, "work-github");
++
++        let guarded = Cli::try_parse_from([
++            "openshell",
++            "sandbox",
++            "provider",
++            "detach",
++            "work-sandbox",
++            "work-github",
++            "--expected-sandbox-id",
++            "observed-uuid",
++        ])
++        .expect("identity precondition should parse for provider mutation");
++        assert!(matches!(
++            guarded.command,
++            Some(Commands::Sandbox {
++                command: Some(SandboxCommands::Provider(SandboxProviderCommands::Detach {
++                    expected_sandbox_id: Some(ref id),
++                    ..
++                })),
++            }) if id == "observed-uuid"
++        ));
+     }
+ 
+     #[test]
+@@ -5367,7 +5455,7 @@ mod tests {
+         assert!(matches!(
+             stop.command,
+             Some(Commands::Sandbox {
+-                command: Some(SandboxCommands::Stop { name: Some(ref name) }),
++                command: Some(SandboxCommands::Stop { name: Some(ref name), .. }),
+             }) if name == "demo"
+         ));
+ 
+@@ -5376,9 +5464,28 @@ mod tests {
+         assert!(matches!(
+             start.command,
+             Some(Commands::Sandbox {
+-                command: Some(SandboxCommands::Start { name: None }),
++                command: Some(SandboxCommands::Start { name: None, .. }),
+             })
+         ));
++
++        let guarded = Cli::try_parse_from([
++            "openshell",
++            "sandbox",
++            "stop",
++            "demo",
++            "--expected-sandbox-id",
++            "observed-uuid",
++        ])
++        .expect("identity precondition flag should parse");
++        assert!(matches!(
++            guarded.command,
++            Some(Commands::Sandbox {
++                command: Some(SandboxCommands::Stop {
++                    expected_sandbox_id: Some(ref id),
++                    ..
++                }),
++            }) if id == "observed-uuid"
++        ));
+     }
+ 
+     #[test]
+diff --git a/crates/openshell-cli/src/run.rs b/crates/openshell-cli/src/run.rs
+index 15d91b5..ede3b74 100644
+--- a/crates/openshell-cli/src/run.rs
++++ b/crates/openshell-cli/src/run.rs
+@@ -31,7 +31,8 @@ pub use crate::commands::provider::{
+     provider_profile_export_text, provider_profile_import, provider_profile_lint,
+     provider_profile_update, provider_refresh_config, provider_refresh_delete,
+     provider_refresh_status, provider_rotate, provider_update, sandbox_provider_attach,
+-    sandbox_provider_detach, sandbox_provider_list,
++    sandbox_provider_attach_with_expected_id, sandbox_provider_detach,
++    sandbox_provider_detach_with_expected_id, sandbox_provider_list,
+ };
+ pub use crate::commands::provider_readiness::{ProviderWaitOptions, sandbox_provider_status};
+ 
+@@ -1820,6 +1821,37 @@ pub async fn sandbox_exec_grpc(
+     no_login_shell: bool,
+     tls: &TlsOptions,
+     workspace: &str,
++) -> Result<i32> {
++    sandbox_exec_grpc_with_expected_id(
++        server,
++        name,
++        command,
++        workdir,
++        timeout_seconds,
++        tty_override,
++        environment,
++        no_login_shell,
++        None,
++        tls,
++        workspace,
++    )
++    .await
++}
++
++/// Execute a command while binding the name lookup to the observed sandbox UUID.
++#[allow(clippy::too_many_arguments, clippy::implicit_hasher)]
++pub async fn sandbox_exec_grpc_with_expected_id(
++    server: &str,
++    name: &str,
++    command: &[String],
++    workdir: Option<&str>,
++    timeout_seconds: u32,
++    tty_override: Option<bool>,
++    environment: &HashMap<String, String>,
++    no_login_shell: bool,
++    expected_sandbox_id: Option<&str>,
++    tls: &TlsOptions,
++    workspace: &str,
+ ) -> Result<i32> {
+     let mut client = grpc_client(server, tls).await?;
+ 
+@@ -1845,6 +1877,11 @@ pub async fn sandbox_exec_grpc(
+             phase_name(sandbox.phase())
+         ));
+     }
++    if expected_sandbox_id.is_some_and(|expected| sandbox.object_id() != expected) {
++        return Err(miette::miette!(
++            "sandbox name no longer identifies the expected sandbox UUID"
++        ));
++    }
+ 
+     // Resolve TTY mode: explicit --tty / --no-tty wins, otherwise auto-detect.
+     let stdin_is_terminal = std::io::stdin().is_terminal();
+@@ -1905,6 +1942,11 @@ pub async fn sandbox_exec_grpc(
+         ));
+     }
+     if (tty && stdin_is_terminal) || request.encoded_len() > MAX_EXEC_REQUEST_BYTES {
++        if expected_sandbox_id.is_some() {
++            return Err(miette::miette!(
++                "identity-bound exec is only supported for non-interactive commands within the unary request limit"
++            ));
++        }
+         return sandbox_exec_streaming_grpc(
+             client,
+             &sandbox,
+@@ -1921,11 +1963,17 @@ pub async fn sandbox_exec_grpc(
+     }
+ 
+     // Make the streaming gRPC call.
+-    let mut stream = client
+-        .exec_sandbox(request)
+-        .await
+-        .into_diagnostic()?
+-        .into_inner();
++    let stream = if let Some(expected_sandbox_id) = expected_sandbox_id {
++        client
++            .exec_sandbox_with_identity(openshell_core::proto::ExecSandboxWithIdentityRequest {
++                request: Some(request),
++                expected_sandbox_id: expected_sandbox_id.to_string(),
++            })
++            .await
++    } else {
++        client.exec_sandbox(request).await
++    };
++    let mut stream = stream.into_diagnostic()?.into_inner();
+ 
+     // Stream output to terminal in real-time.
+     let mut exit_code = 0i32;
+@@ -3509,6 +3557,23 @@ pub async fn sandbox_delete(
+     tls: &TlsOptions,
+     gateway: &str,
+ ) -> Result<()> {
++    sandbox_delete_with_expected_id(server, names, all, None, workspace, tls, gateway).await
++}
++
++pub async fn sandbox_delete_with_expected_id(
++    server: &str,
++    names: &[String],
++    all: bool,
++    expected_sandbox_id: Option<&str>,
++    workspace: &str,
++    tls: &TlsOptions,
++    gateway: &str,
++) -> Result<()> {
++    if expected_sandbox_id.is_some() && (all || names.len() != 1) {
++        return Err(miette!(
++            "--expected-sandbox-id requires exactly one sandbox name"
++        ));
++    }
+     let mut client = grpc_client(server, tls).await?;
+ 
+     let names_to_delete: Vec<String> = if all {
+@@ -3545,27 +3610,33 @@ pub async fn sandbox_delete(
+ 
+     let mut failures = Vec::new();
+     for name in &names_to_delete {
+-        // Stop any background port forwards for this sandbox before deleting.
+-        if let Ok(stopped) = stop_forwards_for_sandbox(workspace, name) {
+-            for port in stopped {
+-                eprintln!(
+-                    "{} Stopped forward of port {port} for sandbox {name}",
+-                    "✓".green().bold(),
+-                );
+-            }
+-        }
+-
+-        let response = match client
+-            .delete_sandbox(DeleteSandboxRequest {
+-                request_id: String::new(),
+-                allow_missing: true,
+-                name: name.clone(),
+-                workspace_scope: Some(openshell_core::proto::workspace_selector(
+-                    workspace.to_string(),
+-                )),
+-            })
+-            .await
+-        {
++        let delete_result = if let Some(expected_sandbox_id) = expected_sandbox_id {
++            client
++                .delete_sandbox_with_identity(
++                    openshell_core::proto::DeleteSandboxWithIdentityRequest {
++                        request_id: String::new(),
++                        allow_missing: true,
++                        name: name.clone(),
++                        workspace_scope: Some(openshell_core::proto::workspace_selector(
++                            workspace.to_string(),
++                        )),
++                        expected_sandbox_id: expected_sandbox_id.to_string(),
++                    },
++                )
++                .await
++        } else {
++            client
++                .delete_sandbox(DeleteSandboxRequest {
++                    request_id: String::new(),
++                    allow_missing: true,
++                    name: name.clone(),
++                    workspace_scope: Some(openshell_core::proto::workspace_selector(
++                        workspace.to_string(),
++                    )),
++                })
++                .await
++        };
++        let response = match delete_result {
+             Ok(response) => response,
+             Err(status) => {
+                 eprintln!(
+@@ -3577,6 +3648,16 @@ pub async fn sandbox_delete(
+             }
+         };
+ 
++        // Only stop local forwards after the gateway accepted the targeted delete.
++        if let Ok(stopped) = stop_forwards_for_sandbox(workspace, name) {
++            for port in stopped {
++                eprintln!(
++                    "{} Stopped forward of port {port} for sandbox {name}",
++                    "✓".green().bold(),
++                );
++            }
++        }
++
+         match response.into_inner().outcome() {
+             DeletionOutcome::Completed => println!("{} Deleted sandbox {name}", "✓".green().bold()),
+             DeletionOutcome::Accepted => println!(
+@@ -3608,6 +3689,44 @@ pub async fn sandbox_stop(
+     workspace: &str,
+     tls: &TlsOptions,
+ ) -> Result<()> {
++    sandbox_stop_with_expected_id(server, name, None, workspace, tls).await
++}
++
++pub async fn sandbox_stop_with_expected_id(
++    server: &str,
++    name: &str,
++    expected_sandbox_id: Option<&str>,
++    workspace: &str,
++    tls: &TlsOptions,
++) -> Result<()> {
++    let mut client = grpc_client(server, tls).await?;
++    let stop_result = if let Some(expected_sandbox_id) = expected_sandbox_id {
++        client
++            .stop_sandbox_with_identity(openshell_core::proto::StopSandboxWithIdentityRequest {
++                request_id: String::new(),
++                name: name.to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++                expected_sandbox_id: expected_sandbox_id.to_string(),
++            })
++            .await
++    } else {
++        client
++            .stop_sandbox(StopSandboxRequest {
++                request_id: String::new(),
++                name: name.to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++            })
++            .await
++    };
++    let sandbox = stop_result
++        .into_diagnostic()?
++        .into_inner()
++        .sandbox
++        .ok_or_else(|| miette!("gateway returned no sandbox after stop"))?;
+     if let Ok(stopped) = stop_forwards_for_sandbox(workspace, name) {
+         for port in stopped {
+             eprintln!(
+@@ -3616,21 +3735,6 @@ pub async fn sandbox_stop(
+             );
+         }
+     }
+-
+-    let mut client = grpc_client(server, tls).await?;
+-    let sandbox = client
+-        .stop_sandbox(StopSandboxRequest {
+-            request_id: String::new(),
+-            name: name.to_string(),
+-            workspace_scope: Some(openshell_core::proto::workspace_selector(
+-                workspace.to_string(),
+-            )),
+-        })
+-        .await
+-        .into_diagnostic()?
+-        .into_inner()
+-        .sandbox
+-        .ok_or_else(|| miette!("gateway returned no sandbox after stop"))?;
+     wait_for_lifecycle_phase(&mut client, sandbox, SandboxPhase::Stopped).await?;
+     println!("{} Stopped sandbox {name}", "✓".green().bold());
+     Ok(())
+@@ -3642,17 +3746,41 @@ pub async fn sandbox_start(
+     name: &str,
+     workspace: &str,
+     tls: &TlsOptions,
++) -> Result<()> {
++    sandbox_start_with_expected_id(server, name, None, workspace, tls).await
++}
++
++pub async fn sandbox_start_with_expected_id(
++    server: &str,
++    name: &str,
++    expected_sandbox_id: Option<&str>,
++    workspace: &str,
++    tls: &TlsOptions,
+ ) -> Result<()> {
+     let mut client = grpc_client(server, tls).await?;
+-    let sandbox = client
+-        .start_sandbox(StartSandboxRequest {
+-            request_id: String::new(),
+-            name: name.to_string(),
+-            workspace_scope: Some(openshell_core::proto::workspace_selector(
+-                workspace.to_string(),
+-            )),
+-        })
+-        .await
++    let start_result = if let Some(expected_sandbox_id) = expected_sandbox_id {
++        client
++            .start_sandbox_with_identity(openshell_core::proto::StartSandboxWithIdentityRequest {
++                request_id: String::new(),
++                name: name.to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++                expected_sandbox_id: expected_sandbox_id.to_string(),
++            })
++            .await
++    } else {
++        client
++            .start_sandbox(StartSandboxRequest {
++                request_id: String::new(),
++                name: name.to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++            })
++            .await
++    };
++    let sandbox = start_result
+         .into_diagnostic()?
+         .into_inner()
+         .sandbox
+@@ -5055,6 +5183,29 @@ pub async fn sandbox_policy_set(
+     timeout_secs: u64,
+     workspace: &str,
+     tls: &TlsOptions,
++) -> Result<()> {
++    sandbox_policy_set_with_expected_id(
++        server,
++        name,
++        policy_path,
++        None,
++        wait,
++        timeout_secs,
++        workspace,
++        tls,
++    )
++    .await
++}
++
++pub async fn sandbox_policy_set_with_expected_id(
++    server: &str,
++    name: &str,
++    policy_path: &str,
++    expected_sandbox_id: Option<&str>,
++    wait: bool,
++    timeout_secs: u64,
++    workspace: &str,
++    tls: &TlsOptions,
+ ) -> Result<()> {
+     let policy = load_sandbox_policy(Some(policy_path))?
+         .ok_or_else(|| miette::miette!("No policy loaded from {policy_path}"))?;
+@@ -5076,17 +5227,31 @@ pub async fn sandbox_policy_set(
+         .and_then(|r| r.into_inner().revision)
+         .map_or(0, |r| r.version);
+ 
+-    let response = client
+-        .update_config(UpdateConfigRequest {
+-            sandbox: name.to_string(),
+-            workspace_scope: Some(openshell_core::proto::workspace_selector(
+-                workspace.to_string(),
+-            )),
+-            policy: Some(policy),
+-            ..Default::default()
+-        })
+-        .await
+-        .into_diagnostic()?;
++    let update_result = if let Some(expected_sandbox_id) = expected_sandbox_id {
++        client
++            .update_config_with_identity(openshell_core::proto::UpdateConfigWithIdentityRequest {
++                sandbox: name.to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++                policy: Some(policy),
++                expected_sandbox_id: expected_sandbox_id.to_string(),
++                ..Default::default()
++            })
++            .await
++    } else {
++        client
++            .update_config(UpdateConfigRequest {
++                sandbox: name.to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++                policy: Some(policy),
++                ..Default::default()
++            })
++            .await
++    };
++    let response = update_result.into_diagnostic()?;
+ 
+     let resp = response.into_inner();
+ 
+@@ -5193,6 +5358,49 @@ pub async fn sandbox_policy_update(
+     timeout_secs: u64,
+     workspace: &str,
+     tls: &TlsOptions,
++) -> Result<()> {
++    sandbox_policy_update_with_expected_id(
++        server,
++        name,
++        add_endpoints,
++        remove_endpoints,
++        add_deny,
++        add_allow,
++        remove_rules,
++        binaries,
++        rule_name,
++        any_binary,
++        endpoint_path,
++        dry_run,
++        None,
++        wait,
++        timeout_secs,
++        workspace,
++        tls,
++    )
++    .await
++}
++
++/// Preview or submit incremental policy changes bound to the observed sandbox UUID.
++#[allow(clippy::too_many_arguments)]
++pub async fn sandbox_policy_update_with_expected_id(
++    server: &str,
++    name: &str,
++    add_endpoints: &[String],
++    remove_endpoints: &[String],
++    add_deny: &[String],
++    add_allow: &[String],
++    remove_rules: &[String],
++    binaries: &[String],
++    rule_name: Option<&str>,
++    any_binary: bool,
++    endpoint_path: Option<&str>,
++    dry_run: bool,
++    expected_sandbox_id: Option<&str>,
++    wait: bool,
++    timeout_secs: u64,
++    workspace: &str,
++    tls: &TlsOptions,
+ ) -> Result<()> {
+     if dry_run && wait {
+         return Err(miette!("--wait cannot be combined with --dry-run"));
+@@ -5247,18 +5455,31 @@ pub async fn sandbox_policy_update(
+ 
+     let current_version = current.version;
+     let current_hash = current.policy_hash.clone();
+-    let response = client
+-        .update_config(UpdateConfigRequest {
+-            sandbox: name.to_string(),
+-            workspace_scope: Some(openshell_core::proto::workspace_selector(
+-                workspace.to_string(),
+-            )),
+-            merge_operations: plan.merge_operations,
+-            ..Default::default()
+-        })
+-        .await
+-        .into_diagnostic()?
+-        .into_inner();
++    let update_result = if let Some(expected_sandbox_id) = expected_sandbox_id {
++        client
++            .update_config_with_identity(openshell_core::proto::UpdateConfigWithIdentityRequest {
++                sandbox: name.to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++                merge_operations: plan.merge_operations,
++                expected_sandbox_id: expected_sandbox_id.to_string(),
++                ..Default::default()
++            })
++            .await
++    } else {
++        client
++            .update_config(UpdateConfigRequest {
++                sandbox: name.to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector(
++                    workspace.to_string(),
++                )),
++                merge_operations: plan.merge_operations,
++                ..Default::default()
++            })
++            .await
++    };
++    let response = update_result.into_diagnostic()?.into_inner();
+ 
+     print_policy_merge_warnings(&merged.warnings);
+ 
+diff --git a/crates/openshell-cli/tests/ensure_providers_integration.rs b/crates/openshell-cli/tests/ensure_providers_integration.rs
+index e7221e0..1d17b5d 100644
+--- a/crates/openshell-cli/tests/ensure_providers_integration.rs
++++ b/crates/openshell-cli/tests/ensure_providers_integration.rs
+@@ -554,6 +554,7 @@ impl OpenShell for TestOpenShell {
+         tokio_stream::wrappers::ReceiverStream<Result<SandboxStreamEvent, Status>>;
+     type ExecSandboxStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    type ExecSandboxWithIdentityStream = Self::ExecSandboxStream;
+     type ConnectSupervisorStream =
+         tokio_stream::wrappers::ReceiverStream<Result<GatewayMessage, Status>>;
+ 
+@@ -579,6 +580,57 @@ impl OpenShell for TestOpenShell {
+ 
+     type ExecSandboxInteractiveStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    async fn attach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::AttachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::AttachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn detach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DetachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DetachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn delete_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DeleteSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DeleteSandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn stop_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StopSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn start_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StartSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn exec_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::ExecSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<Self::ExecSandboxWithIdentityStream>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn update_config_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::UpdateConfigWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::UpdateConfigResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
+     async fn exec_sandbox_interactive(
+         &self,
+         _request: tonic::Request<tonic::Streaming<ExecSandboxInput>>,
+diff --git a/crates/openshell-cli/tests/mtls_integration.rs b/crates/openshell-cli/tests/mtls_integration.rs
+index ca969dd..70de62e 100644
+--- a/crates/openshell-cli/tests/mtls_integration.rs
++++ b/crates/openshell-cli/tests/mtls_integration.rs
+@@ -405,6 +405,7 @@ impl OpenShell for TestOpenShell {
+     >;
+     type ExecSandboxStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    type ExecSandboxWithIdentityStream = Self::ExecSandboxStream;
+     type ConnectSupervisorStream = tokio_stream::wrappers::ReceiverStream<
+         Result<openshell_core::proto::GatewayMessage, Status>,
+     >;
+@@ -431,6 +432,57 @@ impl OpenShell for TestOpenShell {
+ 
+     type ExecSandboxInteractiveStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    async fn attach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::AttachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::AttachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn detach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DetachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DetachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn delete_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DeleteSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DeleteSandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn stop_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StopSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn start_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StartSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn exec_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::ExecSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<Self::ExecSandboxWithIdentityStream>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn update_config_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::UpdateConfigWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::UpdateConfigResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
+     async fn exec_sandbox_interactive(
+         &self,
+         _request: tonic::Request<tonic::Streaming<ExecSandboxInput>>,
+diff --git a/crates/openshell-cli/tests/provider_commands_integration.rs b/crates/openshell-cli/tests/provider_commands_integration.rs
+index 2cbeaff..1f96ad1 100644
+--- a/crates/openshell-cli/tests/provider_commands_integration.rs
++++ b/crates/openshell-cli/tests/provider_commands_integration.rs
+@@ -1362,6 +1362,7 @@ impl OpenShell for TestOpenShell {
+         tokio_stream::wrappers::ReceiverStream<Result<SandboxStreamEvent, Status>>;
+     type ExecSandboxStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    type ExecSandboxWithIdentityStream = Self::ExecSandboxStream;
+     type ConnectSupervisorStream =
+         tokio_stream::wrappers::ReceiverStream<Result<GatewayMessage, Status>>;
+ 
+@@ -1387,6 +1388,57 @@ impl OpenShell for TestOpenShell {
+ 
+     type ExecSandboxInteractiveStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    async fn attach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::AttachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::AttachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn detach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DetachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DetachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn delete_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DeleteSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DeleteSandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn stop_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StopSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn start_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StartSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn exec_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::ExecSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<Self::ExecSandboxWithIdentityStream>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn update_config_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::UpdateConfigWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::UpdateConfigResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
+     async fn exec_sandbox_interactive(
+         &self,
+         _request: tonic::Request<tonic::Streaming<ExecSandboxInput>>,
+diff --git a/crates/openshell-cli/tests/sandbox_create_lifecycle_integration.rs b/crates/openshell-cli/tests/sandbox_create_lifecycle_integration.rs
+index 0b638d5..acb8bd4 100644
+--- a/crates/openshell-cli/tests/sandbox_create_lifecycle_integration.rs
++++ b/crates/openshell-cli/tests/sandbox_create_lifecycle_integration.rs
+@@ -657,6 +657,7 @@ impl OpenShell for TestOpenShell {
+         tokio_stream::wrappers::ReceiverStream<Result<SandboxStreamEvent, Status>>;
+     type ExecSandboxStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    type ExecSandboxWithIdentityStream = Self::ExecSandboxStream;
+     type ConnectSupervisorStream =
+         tokio_stream::wrappers::ReceiverStream<Result<GatewayMessage, Status>>;
+ 
+@@ -896,6 +897,57 @@ impl OpenShell for TestOpenShell {
+ 
+     type ExecSandboxInteractiveStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    async fn attach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::AttachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::AttachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn detach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DetachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DetachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn delete_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DeleteSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DeleteSandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn stop_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StopSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn start_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StartSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn exec_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::ExecSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<Self::ExecSandboxWithIdentityStream>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn update_config_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::UpdateConfigWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::UpdateConfigResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
+     async fn exec_sandbox_interactive(
+         &self,
+         _request: tonic::Request<tonic::Streaming<ExecSandboxInput>>,
+diff --git a/crates/openshell-cli/tests/sandbox_name_fallback_integration.rs b/crates/openshell-cli/tests/sandbox_name_fallback_integration.rs
+index 7a5780d..067cadd 100644
+--- a/crates/openshell-cli/tests/sandbox_name_fallback_integration.rs
++++ b/crates/openshell-cli/tests/sandbox_name_fallback_integration.rs
+@@ -460,6 +460,7 @@ impl OpenShell for TestOpenShell {
+         tokio_stream::wrappers::ReceiverStream<Result<SandboxStreamEvent, Status>>;
+     type ExecSandboxStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    type ExecSandboxWithIdentityStream = Self::ExecSandboxStream;
+     type ConnectSupervisorStream =
+         tokio_stream::wrappers::ReceiverStream<Result<GatewayMessage, Status>>;
+ 
+@@ -485,6 +486,57 @@ impl OpenShell for TestOpenShell {
+ 
+     type ExecSandboxInteractiveStream =
+         tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    async fn attach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::AttachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::AttachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn detach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DetachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DetachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn delete_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DeleteSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DeleteSandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn stop_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StopSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn start_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StartSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn exec_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::ExecSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<Self::ExecSandboxWithIdentityStream>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn update_config_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::UpdateConfigWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::UpdateConfigResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
+     async fn exec_sandbox_interactive(
+         &self,
+         _request: tonic::Request<tonic::Streaming<ExecSandboxInput>>,
+diff --git a/crates/openshell-sdk/tests/client_mock.rs b/crates/openshell-sdk/tests/client_mock.rs
+index 1c86ada..aab674c 100644
+--- a/crates/openshell-sdk/tests/client_mock.rs
++++ b/crates/openshell-sdk/tests/client_mock.rs
+@@ -604,6 +604,7 @@ impl OpenShell for TestOpenShell {
+ 
+     type ExecSandboxStream =
+         tokio_stream::wrappers::ReceiverStream<Result<proto::ExecSandboxEvent, Status>>;
++    type ExecSandboxWithIdentityStream = Self::ExecSandboxStream;
+ 
+     async fn exec_sandbox(
+         &self,
+@@ -666,6 +667,57 @@ impl OpenShell for TestOpenShell {
+     type ExecSandboxInteractiveStream =
+         tokio_stream::wrappers::ReceiverStream<Result<proto::ExecSandboxEvent, Status>>;
+ 
++    async fn attach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::AttachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::AttachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn detach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DetachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DetachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn delete_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DeleteSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DeleteSandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn stop_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StopSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn start_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StartSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn exec_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::ExecSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<Self::ExecSandboxWithIdentityStream>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn update_config_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::UpdateConfigWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::UpdateConfigResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
+     async fn exec_sandbox_interactive(
+         &self,
+         _: tonic::Request<tonic::Streaming<proto::ExecSandboxInput>>,
+diff --git a/crates/openshell-server/src/compute/mod.rs b/crates/openshell-server/src/compute/mod.rs
+index 4a38361..19b1308 100644
+--- a/crates/openshell-server/src/compute/mod.rs
++++ b/crates/openshell-server/src/compute/mod.rs
+@@ -1316,6 +1316,37 @@ impl ComputeRuntime {
+             .await
+             .map_err(|e| Status::internal(format!("fetch sandbox failed: {e}")))?
+             .ok_or_else(|| Status::not_found("sandbox not found"))?;
++        self.stop_sandbox_selected(candidate, None).await
++    }
++
++    /// Identity-bound stop resolves by immutable UUID. The name is only an
++    /// assertion that the caller's observation still describes that record.
++    pub(crate) async fn stop_sandbox_by_id(
++        &self,
++        workspace: &str,
++        name: &str,
++        sandbox_id: &str,
++    ) -> Result<Sandbox, Status> {
++        let candidate = self
++            .store
++            .get_message::<Sandbox>(sandbox_id)
++            .await
++            .map_err(|e| Status::internal(format!("fetch sandbox failed: {e}")))?
++            .ok_or_else(|| Status::aborted("expected sandbox identity is no longer present"))?;
++        if candidate.object_name() != name || candidate.object_workspace() != workspace {
++            return Err(Status::aborted(
++                "sandbox identity no longer matches the requested name and workspace",
++            ));
++        }
++        self.stop_sandbox_selected(candidate, Some((workspace, name)))
++            .await
++    }
++
++    async fn stop_sandbox_selected(
++        &self,
++        candidate: Sandbox,
++        expected_name: Option<(&str, &str)>,
++    ) -> Result<Sandbox, Status> {
+         let sandbox_id = candidate.object_id().to_string();
+         let sandbox_name = candidate.object_name().to_string();
+         let lifecycle_guard = self.lifecycle_gates.lock_for(&sandbox_id).await;
+@@ -1326,6 +1357,21 @@ impl ComputeRuntime {
+             .await
+             .map_err(|e| Status::internal(format!("fetch sandbox failed: {e}")))?
+             .ok_or_else(|| Status::not_found("sandbox not found"))?;
++        if let Some((workspace, name)) = expected_name {
++            let selected = self
++                .store
++                .get_message_by_name::<Sandbox>(workspace, name)
++                .await
++                .map_err(|e| Status::internal(format!("recheck sandbox identity failed: {e}")))?;
++            if selected
++                .as_ref()
++                .is_none_or(|sandbox| sandbox.object_id() != sandbox_id)
++            {
++                return Err(Status::aborted(
++                    "sandbox name no longer identifies the expected sandbox",
++                ));
++            }
++        }
+         if current.object_name() != sandbox_name {
+             return Err(Status::aborted(
+                 "sandbox name changed while the stop request was waiting; retry explicitly",
+@@ -1487,6 +1533,40 @@ impl ComputeRuntime {
+             .await
+             .map_err(|e| Status::internal(format!("fetch sandbox failed: {e}")))?
+             .ok_or_else(|| Status::not_found("sandbox not found"))?;
++        self.start_sandbox_authenticated_selected(candidate, authority, None)
++            .await
++    }
++
++    /// Identity-bound start resolves by immutable UUID rather than performing
++    /// a name lookup after the caller's identity has been checked.
++    pub(crate) async fn start_sandbox_authenticated_by_id(
++        &self,
++        workspace: &str,
++        name: &str,
++        sandbox_id: &str,
++        authority: Option<&crate::auth::sandbox_jwt::SandboxSessionJwtAuthority>,
++    ) -> Result<Sandbox, Status> {
++        let candidate = self
++            .store
++            .get_message::<Sandbox>(sandbox_id)
++            .await
++            .map_err(|e| Status::internal(format!("fetch sandbox failed: {e}")))?
++            .ok_or_else(|| Status::aborted("expected sandbox identity is no longer present"))?;
++        if candidate.object_name() != name || candidate.object_workspace() != workspace {
++            return Err(Status::aborted(
++                "sandbox identity no longer matches the requested name and workspace",
++            ));
++        }
++        self.start_sandbox_authenticated_selected(candidate, authority, Some((workspace, name)))
++            .await
++    }
++
++    async fn start_sandbox_authenticated_selected(
++        &self,
++        candidate: Sandbox,
++        authority: Option<&crate::auth::sandbox_jwt::SandboxSessionJwtAuthority>,
++        expected_name: Option<(&str, &str)>,
++    ) -> Result<Sandbox, Status> {
+         if provisioning_deadline::timed_out(&candidate)
+             && candidate
+                 .status
+@@ -1508,6 +1588,21 @@ impl ComputeRuntime {
+             .await
+             .map_err(|e| Status::internal(format!("fetch sandbox failed: {e}")))?
+             .ok_or_else(|| Status::not_found("sandbox not found"))?;
++        if let Some((workspace, name)) = expected_name {
++            let selected = self
++                .store
++                .get_message_by_name::<Sandbox>(workspace, name)
++                .await
++                .map_err(|e| Status::internal(format!("recheck sandbox identity failed: {e}")))?;
++            if selected
++                .as_ref()
++                .is_none_or(|sandbox| sandbox.object_id() != sandbox_id)
++            {
++                return Err(Status::aborted(
++                    "sandbox name no longer identifies the expected sandbox",
++                ));
++            }
++        }
+         if current.object_name() != sandbox_name {
+             return Err(Status::aborted(
+                 "sandbox name changed while the start request was waiting; retry explicitly",
+@@ -2155,6 +2250,44 @@ impl ComputeRuntime {
+         self.delete_sandbox_target(target).await
+     }
+ 
++    /// Identity-bound delete resolves and mutates only the caller-observed
++    /// sandbox UUID. A same-name replacement is never selected as a target.
++    pub(crate) async fn delete_sandbox_by_id_scoped(
++        &self,
++        workspace: &str,
++        name: &str,
++        sandbox_id: &str,
++        allow_missing: bool,
++    ) -> Result<DeleteSandboxResult, Status> {
++        let candidate = self
++            .store
++            .get_message::<Sandbox>(sandbox_id)
++            .await
++            .map_err(|e| Status::internal(format!("fetch sandbox failed: {e}")))?;
++        let Some(candidate) = candidate else {
++            if allow_missing {
++                return Ok(DeleteSandboxResult {
++                    sandbox_id: sandbox_id.to_string(),
++                    outcome: openshell_core::proto::DeletionOutcome::AlreadyAbsent,
++                });
++            }
++            return Err(Status::not_found("sandbox not found"));
++        };
++        if candidate.object_name() != name || candidate.object_workspace() != workspace {
++            return Err(Status::aborted(
++                "sandbox identity no longer matches the requested name and workspace",
++            ));
++        }
++        self.delete_sandbox_target_checked(
++            SandboxDeleteTarget {
++                sandbox_id: sandbox_id.to_string(),
++                sandbox_name: name.to_string(),
++            },
++            Some(workspace),
++        )
++        .await
++    }
++
+     pub(crate) async fn delete_sandbox_by_id(
+         &self,
+         sandbox_id: &str,
+@@ -2170,10 +2303,34 @@ impl ComputeRuntime {
+     async fn delete_sandbox_target(
+         &self,
+         target: SandboxDeleteTarget,
++    ) -> Result<DeleteSandboxResult, Status> {
++        self.delete_sandbox_target_checked(target, None).await
++    }
++
++    async fn delete_sandbox_target_checked(
++        &self,
++        target: SandboxDeleteTarget,
++        expected_workspace: Option<&str>,
+     ) -> Result<DeleteSandboxResult, Status> {
+         let delete_guard = self.lifecycle_gates.lock_for(&target.sandbox_id).await;
+         let global_guard = self.lock_global_for_lifecycle(&delete_guard).await;
+ 
++        if let Some(workspace) = expected_workspace {
++            let selected = self
++                .store
++                .get_message_by_name::<Sandbox>(workspace, &target.sandbox_name)
++                .await
++                .map_err(|e| Status::internal(format!("recheck sandbox identity failed: {e}")))?;
++            if selected
++                .as_ref()
++                .is_none_or(|sandbox| sandbox.object_id() != target.sandbox_id)
++            {
++                return Err(Status::aborted(
++                    "sandbox name no longer identifies the expected sandbox",
++                ));
++            }
++        }
++
+         // There is no await between acquiring the initial guards and spawning
+         // the worker. From this commitment point onward, request cancellation
+         // cannot stop the delete after it starts mutating durable state.
+@@ -9190,6 +9347,53 @@ mod tests {
+         assert_eq!(driver.start_calls(), 2, "ready start is idempotent");
+     }
+ 
++    #[tokio::test]
++    async fn identity_bound_stop_targets_the_observed_uuid_only() {
++        let driver = ControlledDriver::new();
++        let runtime = test_runtime(driver.clone()).await;
++        let mut observed = sandbox_record(
++            "sb-identity-original",
++            "sandbox-identity",
++            SandboxPhase::Ready,
++        );
++        observed.status.as_mut().unwrap().configuration_activated = Some(true);
++        runtime.store.put_message(&observed).await.unwrap();
++
++        let stopped = runtime
++            .stop_sandbox_by_id("default", observed.object_name(), observed.object_id())
++            .await
++            .unwrap();
++        assert_eq!(stopped.object_id(), observed.object_id());
++        assert_eq!(driver.stop_calls(), 1, "a matching UUID is accepted");
++
++        runtime
++            .store
++            .delete(Sandbox::object_type(), observed.object_id())
++            .await
++            .unwrap();
++        let mut replacement = sandbox_record(
++            "sb-identity-replacement",
++            "sandbox-identity",
++            SandboxPhase::Ready,
++        );
++        replacement.status.as_mut().unwrap().configuration_activated = Some(true);
++        runtime.store.put_message(&replacement).await.unwrap();
++
++        let error = runtime
++            .stop_sandbox_by_id("default", replacement.object_name(), observed.object_id())
++            .await
++            .unwrap_err();
++        assert_eq!(error.code(), tonic::Code::Aborted);
++        assert_eq!(driver.stop_calls(), 1, "stale UUID causes no driver call");
++        let current = runtime
++            .store
++            .get_message::<Sandbox>(replacement.object_id())
++            .await
++            .unwrap()
++            .unwrap();
++        assert_eq!(current.phase(), SandboxPhase::Ready as i32);
++    }
++
+     #[tokio::test]
+     async fn completed_sandbox_can_start_a_fresh_main_instance() {
+         let driver = ControlledDriver::new();
+diff --git a/crates/openshell-server/src/grpc/mod.rs b/crates/openshell-server/src/grpc/mod.rs
+index 5ac5830..9ed2f18 100644
+--- a/crates/openshell-server/src/grpc/mod.rs
++++ b/crates/openshell-server/src/grpc/mod.rs
+@@ -18,7 +18,8 @@ use openshell_core::extension_protocol::{ExtensionFamily, NegotiatedExtension};
+ use openshell_core::proto::{
+     AddWorkspaceMemberRequest, AddWorkspaceMemberResponse, ApproveAllDraftChunksRequest,
+     ApproveAllDraftChunksResponse, ApproveDraftChunkRequest, ApproveDraftChunkResponse,
+-    AttachSandboxProviderRequest, AttachSandboxProviderResponse, BeginRootfsTarStagingRequest,
++    AttachSandboxProviderRequest, AttachSandboxProviderResponse,
++    AttachSandboxProviderWithIdentityRequest, BeginRootfsTarStagingRequest,
+     BeginRootfsTarStagingResponse, ClearDraftChunksRequest, ClearDraftChunksResponse,
+     ComputeDriverCapabilities, ComputeDriverInfo, ConfigureProviderRefreshRequest,
+     ConfigureProviderRefreshResponse, CpuResourceCapabilities, CreateProviderRequest,
+@@ -27,12 +28,13 @@ use openshell_core::proto::{
+     DeleteProviderProfileRequest, DeleteProviderProfileResponse, DeleteProviderRefreshRequest,
+     DeleteProviderRefreshResponse, DeleteProviderRequest, DeleteProviderResponse,
+     DeleteSandboxRequest, DeleteSandboxResponse, DeleteSandboxTemplateRequest,
+-    DeleteSandboxTemplateResponse, DeleteServiceRequest, DeleteServiceResponse,
+-    DeleteWorkspaceRequest, DeleteWorkspaceResponse, DetachSandboxProviderRequest,
+-    DetachSandboxProviderResponse, EditDraftChunkRequest, EditDraftChunkResponse,
++    DeleteSandboxTemplateResponse, DeleteSandboxWithIdentityRequest, DeleteServiceRequest,
++    DeleteServiceResponse, DeleteWorkspaceRequest, DeleteWorkspaceResponse,
++    DetachSandboxProviderRequest, DetachSandboxProviderResponse,
++    DetachSandboxProviderWithIdentityRequest, EditDraftChunkRequest, EditDraftChunkResponse,
+     ExchangeProviderSubjectTokenRequest, ExchangeProviderSubjectTokenResponse, ExecSandboxEvent,
+-    ExecSandboxInput, ExecSandboxRequest, ExposeServiceRequest, ExtensionKind,
+-    FinalizeMainProcessExitRequest, FinalizeMainProcessExitResponse, GatewayMessage,
++    ExecSandboxInput, ExecSandboxRequest, ExecSandboxWithIdentityRequest, ExposeServiceRequest,
++    ExtensionKind, FinalizeMainProcessExitRequest, FinalizeMainProcessExitResponse, GatewayMessage,
+     GetCurrentUserRequest, GetCurrentUserResponse, GetDraftHistoryRequest, GetDraftHistoryResponse,
+     GetDraftPolicyRequest, GetDraftPolicyResponse, GetGatewayConfigRequest,
+     GetGatewayConfigResponse, GetGatewayInfoRequest, GetGatewayInfoResponse,
+@@ -60,11 +62,11 @@ use openshell_core::proto::{
+     ResourceCapabilities, RevokeSshSessionRequest, RevokeSshSessionResponse,
+     RotateProviderCredentialRequest, RotateProviderCredentialResponse, SandboxResponse,
+     SandboxTemplateResponse, ServiceEndpointResponse, ServiceStatus, StartSandboxRequest,
+-    StopSandboxRequest, SubmitPolicyAnalysisRequest, SubmitPolicyAnalysisResponse,
+-    SupervisorMessage, TcpForwardFrame, UndoDraftChunkRequest, UndoDraftChunkResponse,
+-    UpdateConfigRequest, UpdateConfigResponse, UpdateProviderProfilesRequest,
+-    UpdateProviderProfilesResponse, UpdateProviderRequest, WatchSandboxRequest,
+-    open_shell_server::OpenShell,
++    StartSandboxWithIdentityRequest, StopSandboxRequest, StopSandboxWithIdentityRequest,
++    SubmitPolicyAnalysisRequest, SubmitPolicyAnalysisResponse, SupervisorMessage, TcpForwardFrame,
++    UndoDraftChunkRequest, UndoDraftChunkResponse, UpdateConfigRequest, UpdateConfigResponse,
++    UpdateConfigWithIdentityRequest, UpdateProviderProfilesRequest, UpdateProviderProfilesResponse,
++    UpdateProviderRequest, WatchSandboxRequest, open_shell_server::OpenShell,
+ };
+ use serde::{Deserialize, Serialize};
+ use std::collections::BTreeMap;
+@@ -380,6 +382,13 @@ impl OpenShell for OpenShellService {
+         mutation_replay::run(&self.state, request).await
+     }
+ 
++    async fn attach_sandbox_provider_with_identity(
++        &self,
++        request: Request<AttachSandboxProviderWithIdentityRequest>,
++    ) -> Result<Response<AttachSandboxProviderResponse>, Status> {
++        mutation_replay::run(&self.state, request).await
++    }
++
+     async fn detach_sandbox_provider(
+         &self,
+         request: Request<DetachSandboxProviderRequest>,
+@@ -387,6 +396,13 @@ impl OpenShell for OpenShellService {
+         mutation_replay::run(&self.state, request).await
+     }
+ 
++    async fn detach_sandbox_provider_with_identity(
++        &self,
++        request: Request<DetachSandboxProviderWithIdentityRequest>,
++    ) -> Result<Response<DetachSandboxProviderResponse>, Status> {
++        mutation_replay::run(&self.state, request).await
++    }
++
+     async fn get_sandbox_provider_status(
+         &self,
+         request: Request<GetSandboxProviderStatusRequest>,
+@@ -408,6 +424,13 @@ impl OpenShell for OpenShellService {
+         mutation_replay::run(&self.state, request).await
+     }
+ 
++    async fn delete_sandbox_with_identity(
++        &self,
++        request: Request<DeleteSandboxWithIdentityRequest>,
++    ) -> Result<Response<DeleteSandboxResponse>, Status> {
++        mutation_replay::run(&self.state, request).await
++    }
++
+     async fn stop_sandbox(
+         &self,
+         request: Request<StopSandboxRequest>,
+@@ -415,6 +438,13 @@ impl OpenShell for OpenShellService {
+         mutation_replay::run(&self.state, request).await
+     }
+ 
++    async fn stop_sandbox_with_identity(
++        &self,
++        request: Request<StopSandboxWithIdentityRequest>,
++    ) -> Result<Response<SandboxResponse>, Status> {
++        mutation_replay::run(&self.state, request).await
++    }
++
+     async fn start_sandbox(
+         &self,
+         request: Request<StartSandboxRequest>,
+@@ -422,9 +452,17 @@ impl OpenShell for OpenShellService {
+         mutation_replay::run(&self.state, request).await
+     }
+ 
++    async fn start_sandbox_with_identity(
++        &self,
++        request: Request<StartSandboxWithIdentityRequest>,
++    ) -> Result<Response<SandboxResponse>, Status> {
++        mutation_replay::run(&self.state, request).await
++    }
++
+     // --- Exec ---
+ 
+     type ExecSandboxStream = ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    type ExecSandboxWithIdentityStream = Self::ExecSandboxStream;
+ 
+     async fn exec_sandbox(
+         &self,
+@@ -433,6 +471,13 @@ impl OpenShell for OpenShellService {
+         mutation_replay::run(&self.state, request).await
+     }
+ 
++    async fn exec_sandbox_with_identity(
++        &self,
++        request: Request<ExecSandboxWithIdentityRequest>,
++    ) -> Result<Response<Self::ExecSandboxWithIdentityStream>, Status> {
++        mutation_replay::run(&self.state, request).await
++    }
++
+     type ForwardTcpStream =
+         Pin<Box<dyn tokio_stream::Stream<Item = Result<TcpForwardFrame, Status>> + Send + 'static>>;
+ 
+@@ -640,6 +685,13 @@ impl OpenShell for OpenShellService {
+         mutation_replay::run(&self.state, request).await
+     }
+ 
++    async fn update_config_with_identity(
++        &self,
++        request: Request<UpdateConfigWithIdentityRequest>,
++    ) -> Result<Response<UpdateConfigResponse>, Status> {
++        mutation_replay::run(&self.state, request).await
++    }
++
+     async fn get_sandbox_policy_status(
+         &self,
+         request: Request<GetSandboxPolicyStatusRequest>,
+diff --git a/crates/openshell-server/src/grpc/mutation_replay/ordinary.rs b/crates/openshell-server/src/grpc/mutation_replay/ordinary.rs
+index 48c0146..9654ada 100644
+--- a/crates/openshell-server/src/grpc/mutation_replay/ordinary.rs
++++ b/crates/openshell-server/src/grpc/mutation_replay/ordinary.rs
+@@ -13,18 +13,21 @@ use std::sync::{Arc, Mutex};
+ use openshell_core::proto::{
+     ApproveAllDraftChunksRequest, ApproveAllDraftChunksResponse, ApproveDraftChunkRequest,
+     ApproveDraftChunkResponse, AttachSandboxProviderRequest, AttachSandboxProviderResponse,
+-    ClearDraftChunksRequest, ClearDraftChunksResponse, ConfigureProviderRefreshRequest,
+-    ConfigureProviderRefreshResponse, CreateProviderRequest, CreateSandboxRequest,
+-    DeleteProviderProfileRequest, DeleteProviderProfileResponse, DeleteProviderRefreshRequest,
+-    DeleteProviderRefreshResponse, DeleteProviderRequest, DeleteProviderResponse,
+-    DeleteSandboxRequest, DeleteSandboxResponse, DeleteServiceRequest, DeleteServiceResponse,
+-    DetachSandboxProviderRequest, DetachSandboxProviderResponse, EditDraftChunkRequest,
+-    EditDraftChunkResponse, ExposeServiceRequest, ImportProviderProfilesRequest,
+-    ImportProviderProfilesResponse, Provider, ProviderMutationReceipt, ProviderProfile,
+-    ProviderProfileDiagnostic, ProviderResponse, RejectDraftChunkRequest, RejectDraftChunkResponse,
+-    RotateProviderCredentialRequest, RotateProviderCredentialResponse, Sandbox, SandboxResponse,
+-    ServiceEndpointResponse, StartSandboxRequest, StopSandboxRequest, UndoDraftChunkRequest,
+-    UndoDraftChunkResponse, UpdateConfigRequest, UpdateConfigResponse,
++    AttachSandboxProviderWithIdentityRequest, ClearDraftChunksRequest, ClearDraftChunksResponse,
++    ConfigureProviderRefreshRequest, ConfigureProviderRefreshResponse, CreateProviderRequest,
++    CreateSandboxRequest, DeleteProviderProfileRequest, DeleteProviderProfileResponse,
++    DeleteProviderRefreshRequest, DeleteProviderRefreshResponse, DeleteProviderRequest,
++    DeleteProviderResponse, DeleteSandboxRequest, DeleteSandboxResponse,
++    DeleteSandboxWithIdentityRequest, DeleteServiceRequest, DeleteServiceResponse,
++    DetachSandboxProviderRequest, DetachSandboxProviderResponse,
++    DetachSandboxProviderWithIdentityRequest, EditDraftChunkRequest, EditDraftChunkResponse,
++    ExposeServiceRequest, ImportProviderProfilesRequest, ImportProviderProfilesResponse, Provider,
++    ProviderMutationReceipt, ProviderProfile, ProviderProfileDiagnostic, ProviderResponse,
++    RejectDraftChunkRequest, RejectDraftChunkResponse, RotateProviderCredentialRequest,
++    RotateProviderCredentialResponse, Sandbox, SandboxResponse, ServiceEndpointResponse,
++    StartSandboxRequest, StartSandboxWithIdentityRequest, StopSandboxRequest,
++    StopSandboxWithIdentityRequest, UndoDraftChunkRequest, UndoDraftChunkResponse,
++    UpdateConfigRequest, UpdateConfigResponse, UpdateConfigWithIdentityRequest,
+     UpdateProviderProfilesRequest, UpdateProviderProfilesResponse, UpdateProviderRequest,
+     WorkspaceSelector,
+ };
+@@ -482,6 +485,16 @@ sandbox_mutation!(
+     "StopSandbox",
+     sandbox::handle_stop_sandbox
+ );
++sandbox_mutation!(
++    StartSandboxWithIdentityRequest,
++    "StartSandboxWithIdentity",
++    sandbox::handle_start_sandbox_with_identity
++);
++sandbox_mutation!(
++    StopSandboxWithIdentityRequest,
++    "StopSandboxWithIdentity",
++    sandbox::handle_stop_sandbox_with_identity
++);
+ 
+ macro_rules! attachment_mutation {
+     ($req:ty, $resp:ident, $method:literal, $handler:path, $field:ident) => {
+@@ -538,6 +551,20 @@ attachment_mutation!(
+     sandbox::handle_detach_sandbox_provider,
+     detached
+ );
++attachment_mutation!(
++    AttachSandboxProviderWithIdentityRequest,
++    AttachSandboxProviderResponse,
++    "AttachSandboxProviderWithIdentity",
++    sandbox::handle_attach_sandbox_provider_with_identity,
++    attached
++);
++attachment_mutation!(
++    DetachSandboxProviderWithIdentityRequest,
++    DetachSandboxProviderResponse,
++    "DetachSandboxProviderWithIdentity",
++    sandbox::handle_detach_sandbox_provider_with_identity,
++    detached
++);
+ 
+ sandbox_scoped_mutation!(
+     DeleteSandboxRequest,
+@@ -560,6 +587,27 @@ sandbox_scoped_mutation!(
+     }
+ );
+ 
++sandbox_scoped_mutation!(
++    DeleteSandboxWithIdentityRequest,
++    DeleteSandboxResponse,
++    "DeleteSandboxWithIdentity",
++    sandbox::handle_delete_sandbox_with_identity,
++    User,
++    |response: &Response<DeleteSandboxResponse>| Ok(Outcome::SandboxDeletion {
++        id: response.get_ref().sandbox_id.clone(),
++        outcome: response.get_ref().outcome
++    }),
++    async |_store: &Store, value: Outcome| {
++        let Outcome::SandboxDeletion { id, outcome } = value else {
++            return Err(replay_unavailable());
++        };
++        Ok(DeleteSandboxResponse {
++            sandbox_id: id,
++            outcome,
++        })
++    }
++);
++
+ sandbox_scoped_mutation!(
+     ExposeServiceRequest,
+     ServiceEndpointResponse,
+@@ -942,6 +990,70 @@ mutation!(
+     }
+ );
+ 
++mutation!(
++    UpdateConfigWithIdentityRequest,
++    UpdateConfigResponse,
++    "UpdateConfigWithIdentity",
++    policy::handle_update_config_with_identity,
++    async |req: &UpdateConfigWithIdentityRequest, state: &ServerState, principal: &Principal| {
++        if req.global {
++            if req.workspace_scope.is_some() {
++                return Err(Status::invalid_argument(
++                    "workspace must be omitted when global is true",
++                ));
++            }
++            global_scope(state, principal)
++        } else {
++            sandbox_scope(
++                state,
++                principal,
++                req.workspace_scope.as_ref(),
++                MinWorkspaceRole::Admin,
++            )
++            .await
++        }
++    },
++    |response: &Response<UpdateConfigResponse>| {
++        let value = response.get_ref();
++        let facts = facts(response)?;
++        let references = facts.references;
++        if references.len() != usize::from(!facts.global) {
++            return Err(uncertain());
++        }
++        Ok(Outcome::Config {
++            sandbox_id: references.first().map(|r| r.id.clone()),
++            version: value.version,
++            policy_hash: value.policy_hash.clone(),
++            settings_revision: value.settings_revision,
++            deleted: value.deleted,
++            annotations: value.annotations.clone(),
++        })
++    },
++    async |store: &Store, outcome: Outcome| {
++        let Outcome::Config {
++            sandbox_id,
++            version,
++            policy_hash,
++            settings_revision,
++            deleted,
++            annotations,
++        } = outcome
++        else {
++            return Err(replay_unavailable());
++        };
++        if let Some(id) = sandbox_id {
++            let _: Sandbox = live(store, &id).await?;
++        }
++        Ok(UpdateConfigResponse {
++            version,
++            policy_hash,
++            settings_revision,
++            deleted,
++            annotations,
++        })
++    }
++);
++
+ macro_rules! policy_mutation {
+     ($req:ty, $resp:ty, $method:literal, $handler:path, $values:expr, $restore:expr) => {
+         sandbox_scoped_mutation!(
+diff --git a/crates/openshell-server/src/grpc/mutation_replay/streaming.rs b/crates/openshell-server/src/grpc/mutation_replay/streaming.rs
+index ba15aab..d24085a 100644
+--- a/crates/openshell-server/src/grpc/mutation_replay/streaming.rs
++++ b/crates/openshell-server/src/grpc/mutation_replay/streaming.rs
+@@ -9,7 +9,8 @@ mod tests;
+ use std::sync::Arc;
+ 
+ use openshell_core::proto::{
+-    ExecSandboxEvent, ExecSandboxInput, ExecSandboxRequest, WorkspaceSelector, exec_sandbox_input,
++    ExecSandboxEvent, ExecSandboxInput, ExecSandboxRequest, ExecSandboxWithIdentityRequest,
++    WorkspaceSelector, exec_sandbox_input,
+ };
+ use openshell_core::rpc_error;
+ use openshell_core::{ObjectId, ObjectWorkspace};
+@@ -108,6 +109,62 @@ impl Mutation for ExecSandboxRequest {
+     }
+ }
+ 
++#[tonic::async_trait]
++impl Mutation for ExecSandboxWithIdentityRequest {
++    type Output = ExecStream;
++    const METHOD: &'static str = "ExecSandboxWithIdentity";
++    const PROTECTED: bool = true;
++    const DEFERRED: bool = true;
++
++    fn request_id(&self) -> &str {
++        self.request
++            .as_ref()
++            .map_or("", |request| request.request_id.as_str())
++    }
++
++    fn target_selector(&self) -> Option<(&str, &WorkspaceSelector)> {
++        let request = self.request.as_ref()?;
++        request
++            .workspace_scope
++            .as_ref()
++            .map(|workspace| (request.sandbox.as_str(), workspace))
++    }
++
++    async fn authorize(&self, state: &ServerState, principal: &Principal) -> Result<Scope, Status> {
++        if self.expected_sandbox_id.is_empty() {
++            return Err(Status::invalid_argument(
++                "expected_sandbox_id is required for identity-bound execution",
++            ));
++        }
++        let request = self
++            .request
++            .as_ref()
++            .ok_or_else(|| Status::invalid_argument("exec request is required"))?;
++        let scope = authorize(state, principal, request).await?;
++        if scope.target_id.as_deref() != Some(self.expected_sandbox_id.as_str()) {
++            return Err(Status::aborted(
++                "sandbox name now identifies a different sandbox; retry with a fresh observation",
++            ));
++        }
++        Ok(scope)
++    }
++
++    async fn execute(
++        state: &Arc<ServerState>,
++        request: Request<Self>,
++    ) -> Result<Response<Self::Output>, Status> {
++        sandbox::handle_exec_sandbox_with_identity(state, request).await
++    }
++
++    fn capture(_: &Response<Self::Output>) -> Result<Success, Status> {
++        Err(uncertain())
++    }
++
++    async fn restore(_: &Store, success: Success) -> Result<Self::Output, Status> {
++        Err(stream_unavailable(success))
++    }
++}
++
+ #[tonic::async_trait]
+ impl Mutation for ExecSandboxInput {
+     type Output = ExecStream;
+diff --git a/crates/openshell-server/src/grpc/policy.rs b/crates/openshell-server/src/grpc/policy.rs
+index 74fac49..fc8c79f 100644
+--- a/crates/openshell-server/src/grpc/policy.rs
++++ b/crates/openshell-server/src/grpc/policy.rs
+@@ -57,7 +57,7 @@ use openshell_core::proto::{
+     RejectDraftChunkResponse, ReportPolicyStatusRequest, ReportPolicyStatusResponse,
+     SandboxLogLine, SandboxPolicyRevision, SettingScope, SettingValue, SubmitPolicyAnalysisRequest,
+     SubmitPolicyAnalysisResponse, UndoDraftChunkRequest, UndoDraftChunkResponse,
+-    UpdateConfigRequest, UpdateConfigResponse,
++    UpdateConfigRequest, UpdateConfigResponse, UpdateConfigWithIdentityRequest,
+ };
+ use openshell_core::proto::{
+     L7DenyRule, L7Rule, NetworkBinary, NetworkEndpoint, NetworkPolicyRule, Provider, Sandbox,
+@@ -3512,9 +3512,66 @@ pub(super) async fn load_sandbox_provider_environment(
+ // Update config handler (policy + settings mutations)
+ // ---------------------------------------------------------------------------
+ 
++async fn ensure_expected_sandbox_name_current(
++    state: &ServerState,
++    workspace: &str,
++    selected: &Sandbox,
++    expected_sandbox_id: &str,
++) -> Result<(), Status> {
++    let current = state
++        .store
++        .get_message_by_name::<Sandbox>(workspace, selected.object_name())
++        .await
++        .map_err(|e| Status::internal(format!("recheck sandbox identity failed: {e}")))?;
++    if current
++        .as_ref()
++        .is_none_or(|sandbox| sandbox.object_id() != expected_sandbox_id)
++    {
++        return Err(Status::aborted(
++            "sandbox name now identifies a different sandbox; retry with a fresh observation",
++        ));
++    }
++    Ok(())
++}
++
+ pub(super) async fn handle_update_config(
+     state: &Arc<ServerState>,
+     request: Request<UpdateConfigRequest>,
++) -> Result<Response<UpdateConfigResponse>, Status> {
++    handle_update_config_mode(state, request, false, "").await
++}
++
++pub(super) async fn handle_update_config_with_identity(
++    state: &Arc<ServerState>,
++    request: Request<UpdateConfigWithIdentityRequest>,
++) -> Result<Response<UpdateConfigResponse>, Status> {
++    let expected_sandbox_id = request.get_ref().expected_sandbox_id.clone();
++    super::sandbox::validate_identity_rpc_precondition(
++        true,
++        &expected_sandbox_id,
++        "UpdateConfigWithIdentity",
++    )?;
++    let request = request.map(|identity| UpdateConfigRequest {
++        workspace_scope: identity.workspace_scope,
++        policy: identity.policy,
++        setting_key: identity.setting_key,
++        setting_value: identity.setting_value,
++        delete_setting: identity.delete_setting,
++        global: identity.global,
++        merge_operations: identity.merge_operations,
++        expected_resource_version: identity.expected_resource_version,
++        annotations: identity.annotations,
++        sandbox: identity.sandbox,
++        request_id: identity.request_id,
++    });
++    handle_update_config_mode(state, request, true, &expected_sandbox_id).await
++}
++
++async fn handle_update_config_mode(
++    state: &Arc<ServerState>,
++    request: Request<UpdateConfigRequest>,
++    identity_bound: bool,
++    expected_sandbox_id: &str,
+ ) -> Result<Response<UpdateConfigResponse>, Status> {
+     let principal = super::extract_principal(&request)?;
+     let sandbox_caller = matches!(&principal, Principal::Sandbox(_));
+@@ -3526,6 +3583,8 @@ pub(super) async fn handle_update_config(
+         request,
+         &principal,
+         sandbox_caller,
++        identity_bound,
++        expected_sandbox_id,
+     ))
+     .await;
+     if result.is_err() && should_emit_policy_failure {
+@@ -3539,6 +3598,8 @@ async fn handle_update_config_inner(
+     request: Request<UpdateConfigRequest>,
+     principal: &Principal,
+     sandbox_caller: bool,
++    identity_bound: bool,
++    expected_sandbox_id: &str,
+ ) -> Result<Response<UpdateConfigResponse>, Status> {
+     let replay_facts = super::mutation_replay::ordinary::Facts::from_request(&request);
+     let req = request.into_inner();
+@@ -3571,6 +3632,20 @@ async fn handle_update_config_inner(
+             .await?,
+         )
+     };
++    if identity_bound && req.global {
++        return Err(Status::invalid_argument(
++            "expected_sandbox_id is only valid for sandbox-scoped updates",
++        ));
++    }
++    if identity_bound
++        && sandbox
++            .as_ref()
++            .is_some_and(|sandbox| sandbox.object_id() != expected_sandbox_id)
++    {
++        return Err(Status::aborted(
++            "sandbox name now identifies a different sandbox; retry with a fresh observation",
++        ));
++    }
+     let workspace = sandbox.as_ref().map_or_else(String::new, |sandbox| {
+         sandbox.object_workspace().to_string()
+     });
+@@ -3798,6 +3873,11 @@ async fn handle_update_config_inner(
+             super::persistence_error_to_status(error, "acquire policy mutation lock")
+         })?;
+ 
++        if identity_bound {
++            ensure_expected_sandbox_name_current(state, &workspace, &sandbox, expected_sandbox_id)
++                .await?;
++        }
++
+         if key == POLICY_SETTING_KEY {
+             return Err(Status::invalid_argument(
+                 "reserved key 'policy' must be set via policy commands",
+@@ -3894,6 +3974,10 @@ async fn handle_update_config_inner(
+     let _sandbox_sync_guard = state.compute.sandbox_sync_guard().await.map_err(|error| {
+         super::persistence_error_to_status(error, "acquire policy mutation lock")
+     })?;
++    if identity_bound {
++        ensure_expected_sandbox_name_current(state, &workspace, &sandbox, expected_sandbox_id)
++            .await?;
++    }
+     if has_merge_ops {
+         let global_settings = load_global_settings(state.store.as_ref()).await?;
+         if global_settings.settings.contains_key(POLICY_SETTING_KEY) {
+@@ -11873,6 +11957,61 @@ mod tests {
+         );
+     }
+ 
++    #[tokio::test]
++    async fn identity_policy_update_rejects_same_name_replacement_before_mutation() {
++        let state = test_server_state().await;
++        let observed = test_sandbox(
++            "sb-policy-observed",
++            "identity-policy-name",
++            ProtoSandboxPolicy::default(),
++            Vec::new(),
++        );
++        state.store.put_message(&observed).await.unwrap();
++        state
++            .store
++            .delete(Sandbox::object_type(), observed.object_id())
++            .await
++            .unwrap();
++        let replacement = test_sandbox(
++            "sb-policy-replacement",
++            "identity-policy-name",
++            ProtoSandboxPolicy::default(),
++            Vec::new(),
++        );
++        state.store.put_message(&replacement).await.unwrap();
++
++        let error = handle_update_config_with_identity(
++            &state,
++            with_user(Request::new(UpdateConfigWithIdentityRequest {
++                sandbox: "identity-policy-name".to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector("default")),
++                policy: Some(test_policy_with_rule("identity", "api.example.com")),
++                expected_sandbox_id: observed.object_id().to_string(),
++                ..Default::default()
++            })),
++        )
++        .await
++        .unwrap_err();
++
++        assert_eq!(error.code(), Code::Aborted);
++        assert!(
++            state
++                .store
++                .get_message::<Sandbox>(replacement.object_id())
++                .await
++                .unwrap()
++                .is_some()
++        );
++        assert!(
++            state
++                .store
++                .get_latest_policy(replacement.object_id())
++                .await
++                .unwrap()
++                .is_none()
++        );
++    }
++
+     #[tokio::test]
+     async fn update_config_rejects_credential_binding_to_unattached_provider() {
+         let state = test_server_state().await;
+diff --git a/crates/openshell-server/src/grpc/sandbox.rs b/crates/openshell-server/src/grpc/sandbox.rs
+index d8263e2..3563cf1 100644
+--- a/crates/openshell-server/src/grpc/sandbox.rs
++++ b/crates/openshell-server/src/grpc/sandbox.rs
+@@ -24,18 +24,21 @@ use futures::future;
+ use openshell_core::net::set_tcp_nodelay_best_effort;
+ use openshell_core::proto::datamodel::v1::ObjectMeta;
+ use openshell_core::proto::{
+-    AttachSandboxProviderRequest, AttachSandboxProviderResponse, CreateSandboxRequest,
+-    CreateSandboxTemplateRequest, CreateSshSessionRequest, CreateSshSessionResponse,
+-    DeleteSandboxRequest, DeleteSandboxResponse, DeleteSandboxTemplateRequest,
+-    DeleteSandboxTemplateResponse, DetachSandboxProviderRequest, DetachSandboxProviderResponse,
+-    ExecSandboxEvent, ExecSandboxExit, ExecSandboxInput, ExecSandboxRequest, ExecSandboxStderr,
+-    ExecSandboxStdout, GetSandboxRequest, GetSandboxTemplateRequest, ListSandboxProvidersRequest,
++    AttachSandboxProviderRequest, AttachSandboxProviderResponse,
++    AttachSandboxProviderWithIdentityRequest, CreateSandboxRequest, CreateSandboxTemplateRequest,
++    CreateSshSessionRequest, CreateSshSessionResponse, DeleteSandboxRequest, DeleteSandboxResponse,
++    DeleteSandboxTemplateRequest, DeleteSandboxTemplateResponse, DeleteSandboxWithIdentityRequest,
++    DetachSandboxProviderRequest, DetachSandboxProviderResponse,
++    DetachSandboxProviderWithIdentityRequest, ExecSandboxEvent, ExecSandboxExit, ExecSandboxInput,
++    ExecSandboxRequest, ExecSandboxStderr, ExecSandboxStdout, ExecSandboxWithIdentityRequest,
++    GetSandboxRequest, GetSandboxTemplateRequest, ListSandboxProvidersRequest,
+     ListSandboxProvidersResponse, ListSandboxTemplatesRequest, ListSandboxTemplatesResponse,
+     ListSandboxesRequest, ListSandboxesResponse, Provider, ProviderMutationKind,
+     ResourceRequirements, RevokeSshSessionRequest, RevokeSshSessionResponse, SandboxResources,
+     SandboxResponse, SandboxSpec, SandboxStreamEvent, SandboxTemplateResponse,
+     SandboxWorkloadTemplate, SandboxWorkloadTemplateProvenance, SshRelayTarget,
+-    StartSandboxRequest, StopSandboxRequest, TcpForwardFrame, TcpForwardInit, TcpRelayTarget,
++    StartSandboxRequest, StartSandboxWithIdentityRequest, StopSandboxRequest,
++    StopSandboxWithIdentityRequest, TcpForwardFrame, TcpForwardInit, TcpRelayTarget,
+     WatchSandboxRequest, relay_open, tcp_forward_init,
+ };
+ use openshell_core::proto::{
+@@ -1254,9 +1257,59 @@ pub(super) async fn handle_list_sandbox_providers(
+     }))
+ }
+ 
++async fn ensure_expected_sandbox_name_current(
++    state: &ServerState,
++    workspace: &str,
++    name: &str,
++    expected_sandbox_id: &str,
++) -> Result<(), Status> {
++    let selected = state
++        .store
++        .get_message_by_name::<Sandbox>(workspace, name)
++        .await
++        .map_err(|e| Status::internal(format!("recheck sandbox identity failed: {e}")))?;
++    if selected
++        .as_ref()
++        .is_none_or(|sandbox| sandbox.object_id() != expected_sandbox_id)
++    {
++        return Err(Status::aborted(
++            "sandbox name no longer identifies the expected sandbox",
++        ));
++    }
++    Ok(())
++}
++
+ pub(super) async fn handle_attach_sandbox_provider(
+     state: &Arc<ServerState>,
+     request: Request<AttachSandboxProviderRequest>,
++) -> Result<Response<AttachSandboxProviderResponse>, Status> {
++    handle_attach_sandbox_provider_inner(state, request, None).await
++}
++
++pub(super) async fn handle_attach_sandbox_provider_with_identity(
++    state: &Arc<ServerState>,
++    request: Request<AttachSandboxProviderWithIdentityRequest>,
++) -> Result<Response<AttachSandboxProviderResponse>, Status> {
++    let expected_sandbox_id = request.get_ref().expected_sandbox_id.clone();
++    if expected_sandbox_id.is_empty() {
++        return Err(Status::invalid_argument(
++            "expected_sandbox_id is required for identity-bound provider attachment",
++        ));
++    }
++    let request = request.map(|identity| AttachSandboxProviderRequest {
++        workspace_scope: identity.workspace_scope,
++        sandbox: identity.sandbox,
++        provider: identity.provider,
++        expected_resource_version: identity.expected_resource_version,
++        request_id: identity.request_id,
++    });
++    handle_attach_sandbox_provider_inner(state, request, Some(&expected_sandbox_id)).await
++}
++
++async fn handle_attach_sandbox_provider_inner(
++    state: &Arc<ServerState>,
++    request: Request<AttachSandboxProviderRequest>,
++    expected_sandbox_id: Option<&str>,
+ ) -> Result<Response<AttachSandboxProviderResponse>, Status> {
+     let principal = super::extract_principal(&request)?;
+     #[cfg(test)]
+@@ -1273,6 +1326,11 @@ pub(super) async fn handle_attach_sandbox_provider(
+         MinWorkspaceRole::User,
+     )
+     .await?;
++    if expected_sandbox_id.is_some_and(|expected| sandbox.object_id() != expected) {
++        return Err(Status::aborted(
++            "sandbox name now identifies a different sandbox; retry with a fresh observation",
++        ));
++    }
+     let workspace =
+         super::workspace::resolve_workspace(state.store.as_ref(), sandbox.object_workspace())
+             .await?
+@@ -1301,6 +1359,15 @@ pub(super) async fn handle_attach_sandbox_provider(
+         state.compute.sandbox_sync_guard().await.map_err(|err| {
+             super::persistence_error_to_status(err, "acquire sandbox mutation lock")
+         })?;
++    if let Some(expected_sandbox_id) = expected_sandbox_id {
++        ensure_expected_sandbox_name_current(
++            state,
++            sandbox.object_workspace(),
++            sandbox.object_name(),
++            expected_sandbox_id,
++        )
++        .await?;
++    }
+     let provider_record = get_provider_record(state.store.as_ref(), &workspace, &request.provider)
+         .await
+         .map_err(|err| {
+@@ -1445,6 +1512,34 @@ pub(super) async fn handle_attach_sandbox_provider(
+ pub(super) async fn handle_detach_sandbox_provider(
+     state: &Arc<ServerState>,
+     request: Request<DetachSandboxProviderRequest>,
++) -> Result<Response<DetachSandboxProviderResponse>, Status> {
++    handle_detach_sandbox_provider_inner(state, request, None).await
++}
++
++pub(super) async fn handle_detach_sandbox_provider_with_identity(
++    state: &Arc<ServerState>,
++    request: Request<DetachSandboxProviderWithIdentityRequest>,
++) -> Result<Response<DetachSandboxProviderResponse>, Status> {
++    let expected_sandbox_id = request.get_ref().expected_sandbox_id.clone();
++    if expected_sandbox_id.is_empty() {
++        return Err(Status::invalid_argument(
++            "expected_sandbox_id is required for identity-bound provider detachment",
++        ));
++    }
++    let request = request.map(|identity| DetachSandboxProviderRequest {
++        workspace_scope: identity.workspace_scope,
++        sandbox: identity.sandbox,
++        provider: identity.provider,
++        expected_resource_version: identity.expected_resource_version,
++        request_id: identity.request_id,
++    });
++    handle_detach_sandbox_provider_inner(state, request, Some(&expected_sandbox_id)).await
++}
++
++async fn handle_detach_sandbox_provider_inner(
++    state: &Arc<ServerState>,
++    request: Request<DetachSandboxProviderRequest>,
++    expected_sandbox_id: Option<&str>,
+ ) -> Result<Response<DetachSandboxProviderResponse>, Status> {
+     let principal = super::extract_principal(&request)?;
+     let request = request.into_inner();
+@@ -1456,6 +1551,11 @@ pub(super) async fn handle_detach_sandbox_provider(
+         MinWorkspaceRole::User,
+     )
+     .await?;
++    if expected_sandbox_id.is_some_and(|expected| sandbox.object_id() != expected) {
++        return Err(Status::aborted(
++            "sandbox name now identifies a different sandbox; retry with a fresh observation",
++        ));
++    }
+     let workspace = sandbox.object_workspace().to_string();
+     if request.provider.is_empty() {
+         return Err(Status::invalid_argument("provider_name is required"));
+@@ -1474,6 +1574,15 @@ pub(super) async fn handle_detach_sandbox_provider(
+         state.compute.sandbox_sync_guard().await.map_err(|err| {
+             super::persistence_error_to_status(err, "acquire sandbox mutation lock")
+         })?;
++    if let Some(expected_sandbox_id) = expected_sandbox_id {
++        ensure_expected_sandbox_name_current(
++            state,
++            sandbox.object_workspace(),
++            sandbox.object_name(),
++            expected_sandbox_id,
++        )
++        .await?;
++    }
+     let sandbox_name = sandbox.object_name().to_string();
+     let sandbox_id = sandbox
+         .metadata
+@@ -1567,7 +1676,7 @@ pub(super) async fn handle_delete_sandbox(
+     state: &Arc<ServerState>,
+     request: Request<DeleteSandboxRequest>,
+ ) -> Result<Response<DeleteSandboxResponse>, Status> {
+-    let result = handle_delete_sandbox_inner(state, request).await;
++    let result = handle_delete_sandbox_inner(state, request, false, "").await;
+     let outcome = match &result {
+         Ok(_) => TelemetryOutcome::Success,
+         _ => TelemetryOutcome::Failure,
+@@ -1580,9 +1689,54 @@ pub(super) async fn handle_delete_sandbox(
+     result
+ }
+ 
++pub(super) async fn handle_delete_sandbox_with_identity(
++    state: &Arc<ServerState>,
++    request: Request<DeleteSandboxWithIdentityRequest>,
++) -> Result<Response<DeleteSandboxResponse>, Status> {
++    let expected_sandbox_id = request.get_ref().expected_sandbox_id.clone();
++    validate_identity_rpc_precondition(true, &expected_sandbox_id, "DeleteSandboxWithIdentity")?;
++    let request = request.map(|identity| DeleteSandboxRequest {
++        name: identity.name,
++        workspace_scope: identity.workspace_scope,
++        allow_missing: identity.allow_missing,
++        request_id: identity.request_id,
++    });
++    let result = handle_delete_sandbox_inner(state, request, true, &expected_sandbox_id).await;
++    let outcome = match &result {
++        Ok(_) => TelemetryOutcome::Success,
++        _ => TelemetryOutcome::Failure,
++    };
++    openshell_core::telemetry::emit_lifecycle(
++        LifecycleResource::Sandbox,
++        LifecycleOperation::Delete,
++        outcome,
++    );
++    result
++}
++
++pub(super) fn validate_identity_rpc_precondition(
++    identity_bound: bool,
++    expected_sandbox_id: &str,
++    identity_method: &str,
++) -> Result<(), Status> {
++    if identity_bound && expected_sandbox_id.is_empty() {
++        return Err(Status::invalid_argument(
++            "expected_sandbox_id is required for identity-bound mutation",
++        ));
++    }
++    if !identity_bound && !expected_sandbox_id.is_empty() {
++        return Err(Status::failed_precondition(format!(
++            "use {identity_method} when supplying expected_sandbox_id"
++        )));
++    }
++    Ok(())
++}
++
+ async fn handle_delete_sandbox_inner(
+     state: &Arc<ServerState>,
+     request: Request<DeleteSandboxRequest>,
++    identity_bound: bool,
++    expected_sandbox_id: &str,
+ ) -> Result<Response<DeleteSandboxResponse>, Status> {
+     let principal = super::extract_principal(&request)?;
+     let req = request.into_inner();
+@@ -1609,10 +1763,41 @@ async fn handle_delete_sandbox_inner(
+         .await?
+         .name;
+ 
+-    let result = state
+-        .compute
+-        .delete_sandbox_allow_missing(&workspace, &name, req.allow_missing)
+-        .await?;
++    let result = if identity_bound {
++        match state
++            .store
++            .get_message_by_name::<Sandbox>(&workspace, &name)
++            .await
++            .map_err(|e| Status::internal(format!("fetch sandbox failed: {e}")))?
++        {
++            Some(selected) if selected.object_id() != expected_sandbox_id => {
++                return Err(Status::aborted(
++                    "sandbox name now identifies a different sandbox; retry with a fresh observation",
++                ));
++            }
++            Some(_) => {
++                state
++                    .compute
++                    .delete_sandbox_by_id_scoped(
++                        &workspace,
++                        &name,
++                        expected_sandbox_id,
++                        req.allow_missing,
++                    )
++                    .await?
++            }
++            None if req.allow_missing => crate::compute::DeleteSandboxResult {
++                sandbox_id: expected_sandbox_id.to_string(),
++                outcome: openshell_core::proto::DeletionOutcome::AlreadyAbsent,
++            },
++            None => return Err(Status::not_found("sandbox not found")),
++        }
++    } else {
++        state
++            .compute
++            .delete_sandbox_allow_missing(&workspace, &name, req.allow_missing)
++            .await?
++    };
+     if !result.sandbox_id.is_empty() {
+         state.telemetry.end_sandbox_session(&result.sandbox_id);
+     }
+@@ -1627,7 +1812,31 @@ pub(super) async fn handle_stop_sandbox(
+     state: &Arc<ServerState>,
+     request: Request<StopSandboxRequest>,
+ ) -> Result<Response<SandboxResponse>, Status> {
+-    let result = handle_stop_sandbox_inner(state, request).await;
++    let result = handle_stop_sandbox_inner(state, request, false, "").await;
++    openshell_core::telemetry::emit_lifecycle(
++        LifecycleResource::Sandbox,
++        LifecycleOperation::Stop,
++        if result.is_ok() {
++            TelemetryOutcome::Success
++        } else {
++            TelemetryOutcome::Failure
++        },
++    );
++    result
++}
++
++pub(super) async fn handle_stop_sandbox_with_identity(
++    state: &Arc<ServerState>,
++    request: Request<StopSandboxWithIdentityRequest>,
++) -> Result<Response<SandboxResponse>, Status> {
++    let expected_sandbox_id = request.get_ref().expected_sandbox_id.clone();
++    validate_identity_rpc_precondition(true, &expected_sandbox_id, "StopSandboxWithIdentity")?;
++    let request = request.map(|identity| StopSandboxRequest {
++        name: identity.name,
++        workspace_scope: identity.workspace_scope,
++        request_id: identity.request_id,
++    });
++    let result = handle_stop_sandbox_inner(state, request, true, &expected_sandbox_id).await;
+     openshell_core::telemetry::emit_lifecycle(
+         LifecycleResource::Sandbox,
+         LifecycleOperation::Stop,
+@@ -1643,6 +1852,8 @@ pub(super) async fn handle_stop_sandbox(
+ async fn handle_stop_sandbox_inner(
+     state: &Arc<ServerState>,
+     request: Request<StopSandboxRequest>,
++    identity_bound: bool,
++    expected_sandbox_id: &str,
+ ) -> Result<Response<SandboxResponse>, Status> {
+     let principal = super::extract_principal(&request)?;
+     let req = request.into_inner();
+@@ -1656,7 +1867,19 @@ async fn handle_stop_sandbox_inner(
+     .await?;
+     let workspace = resolved.object_workspace();
+     let name = resolved.object_name();
+-    let sandbox = state.compute.stop_sandbox(workspace, name).await?;
++    let sandbox = if identity_bound {
++        if resolved.object_id() != expected_sandbox_id {
++            return Err(Status::aborted(
++                "sandbox name now identifies a different sandbox; retry with a fresh observation",
++            ));
++        }
++        state
++            .compute
++            .stop_sandbox_by_id(workspace, name, expected_sandbox_id)
++            .await?
++    } else {
++        state.compute.stop_sandbox(workspace, name).await?
++    };
+     info!(sandbox_name = %name, "StopSandbox request completed successfully");
+     Ok(Response::new(SandboxResponse {
+         sandbox: Some(sandbox),
+@@ -1668,7 +1891,31 @@ pub(super) async fn handle_start_sandbox(
+     state: &Arc<ServerState>,
+     request: Request<StartSandboxRequest>,
+ ) -> Result<Response<SandboxResponse>, Status> {
+-    let result = handle_start_sandbox_inner(state, request).await;
++    let result = handle_start_sandbox_inner(state, request, false, "").await;
++    openshell_core::telemetry::emit_lifecycle(
++        LifecycleResource::Sandbox,
++        LifecycleOperation::Start,
++        if result.is_ok() {
++            TelemetryOutcome::Success
++        } else {
++            TelemetryOutcome::Failure
++        },
++    );
++    result
++}
++
++pub(super) async fn handle_start_sandbox_with_identity(
++    state: &Arc<ServerState>,
++    request: Request<StartSandboxWithIdentityRequest>,
++) -> Result<Response<SandboxResponse>, Status> {
++    let expected_sandbox_id = request.get_ref().expected_sandbox_id.clone();
++    validate_identity_rpc_precondition(true, &expected_sandbox_id, "StartSandboxWithIdentity")?;
++    let request = request.map(|identity| StartSandboxRequest {
++        name: identity.name,
++        workspace_scope: identity.workspace_scope,
++        request_id: identity.request_id,
++    });
++    let result = handle_start_sandbox_inner(state, request, true, &expected_sandbox_id).await;
+     openshell_core::telemetry::emit_lifecycle(
+         LifecycleResource::Sandbox,
+         LifecycleOperation::Start,
+@@ -1684,6 +1931,8 @@ pub(super) async fn handle_start_sandbox(
+ async fn handle_start_sandbox_inner(
+     state: &Arc<ServerState>,
+     request: Request<StartSandboxRequest>,
++    identity_bound: bool,
++    expected_sandbox_id: &str,
+ ) -> Result<Response<SandboxResponse>, Status> {
+     let principal = super::extract_principal(&request)?;
+     let req = request.into_inner();
+@@ -1697,14 +1946,31 @@ async fn handle_start_sandbox_inner(
+     .await?;
+     let workspace = resolved.object_workspace().to_string();
+     let name = resolved.object_name().to_string();
+-    let mut sandbox = state
+-        .compute
+-        .start_sandbox_authenticated(
+-            &workspace,
+-            &name,
+-            state.sandbox_session_jwt_authority.as_deref(),
+-        )
+-        .await?;
++    let mut sandbox = if identity_bound {
++        if resolved.object_id() != expected_sandbox_id {
++            return Err(Status::aborted(
++                "sandbox name now identifies a different sandbox; retry with a fresh observation",
++            ));
++        }
++        state
++            .compute
++            .start_sandbox_authenticated_by_id(
++                &workspace,
++                &name,
++                expected_sandbox_id,
++                state.sandbox_session_jwt_authority.as_deref(),
++            )
++            .await?
++    } else {
++        state
++            .compute
++            .start_sandbox_authenticated(
++                &workspace,
++                &name,
++                state.sandbox_session_jwt_authority.as_deref(),
++            )
++            .await?
++    };
+     let remote_authority =
+         crate::supervisor_session::remote_supervisor_owner(state, sandbox.object_id())
+             .await?
+@@ -2366,6 +2632,28 @@ fn pty_dimensions(cols: u32, rows: u32) -> (u32, u32) {
+ pub(super) async fn handle_exec_sandbox(
+     state: &Arc<ServerState>,
+     request: Request<ExecSandboxRequest>,
++) -> Result<Response<ReceiverStream<Result<ExecSandboxEvent, Status>>>, Status> {
++    handle_exec_sandbox_inner(state, request, None).await
++}
++
++pub(super) async fn handle_exec_sandbox_with_identity(
++    state: &Arc<ServerState>,
++    request: Request<ExecSandboxWithIdentityRequest>,
++) -> Result<Response<ReceiverStream<Result<ExecSandboxEvent, Status>>>, Status> {
++    let expected_sandbox_id = request.get_ref().expected_sandbox_id.clone();
++    if expected_sandbox_id.is_empty() {
++        return Err(Status::invalid_argument(
++            "expected_sandbox_id is required for identity-bound execution",
++        ));
++    }
++    let request = request.map(|identity| identity.request.unwrap_or_default());
++    handle_exec_sandbox_inner(state, request, Some(&expected_sandbox_id)).await
++}
++
++async fn handle_exec_sandbox_inner(
++    state: &Arc<ServerState>,
++    request: Request<ExecSandboxRequest>,
++    expected_sandbox_id: Option<&str>,
+ ) -> Result<Response<ReceiverStream<Result<ExecSandboxEvent, Status>>>, Status> {
+     use openshell_core::ObjectId;
+ 
+@@ -2386,6 +2674,12 @@ pub(super) async fn handle_exec_sandbox(
+     )
+     .await?;
+ 
++    if expected_sandbox_id.is_some_and(|expected| sandbox.object_id() != expected) {
++        return Err(Status::aborted(
++            "sandbox name now identifies a different sandbox; retry with a fresh observation",
++        ));
++    }
++
+     if let Some(completion) = &completion {
+         completion.ensure_target(sandbox.object_id())?;
+     }
+@@ -5415,6 +5709,8 @@ mod tests {
+                         "default".to_string(),
+                     )),
+                 }),
++                false,
++                "",
+             )
+             .await
+         });
+@@ -5455,6 +5751,202 @@ mod tests {
+         );
+     }
+ 
++    #[tokio::test]
++    async fn identity_delete_rejects_same_name_replacement_without_deleting_it() {
++        let state = test_server_state().await;
++        let mut observed = test_sandbox("identity-reused-name", Vec::new());
++        observed.metadata.as_mut().unwrap().id = "sandbox-observed-id".to_string();
++        state.store.put_message(&observed).await.unwrap();
++        state
++            .store
++            .delete(Sandbox::object_type(), observed.object_id())
++            .await
++            .unwrap();
++        let mut replacement = test_sandbox("identity-reused-name", Vec::new());
++        replacement.metadata.as_mut().unwrap().id = "sandbox-replacement-id".to_string();
++        state.store.put_message(&replacement).await.unwrap();
++
++        let error = handle_delete_sandbox_with_identity(
++            &state,
++            authed_request(DeleteSandboxWithIdentityRequest {
++                request_id: "identity-delete-test".to_string(),
++                allow_missing: false,
++                name: "identity-reused-name".to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector("default")),
++                expected_sandbox_id: observed.object_id().to_string(),
++            }),
++        )
++        .await
++        .unwrap_err();
++
++        assert_eq!(error.code(), Code::Aborted);
++        assert!(
++            state
++                .store
++                .get_message::<Sandbox>(replacement.object_id())
++                .await
++                .unwrap()
++                .is_some()
++        );
++        assert!(state.telemetry.ended_sandbox_sessions().is_empty());
++    }
++
++    #[tokio::test]
++    async fn identity_delete_requires_an_expected_uuid() {
++        let state = test_server_state().await;
++        let error = handle_delete_sandbox_with_identity(
++            &state,
++            Request::new(DeleteSandboxWithIdentityRequest::default()),
++        )
++        .await
++        .unwrap_err();
++        assert_eq!(error.code(), Code::InvalidArgument);
++    }
++
++    #[tokio::test]
++    async fn identity_provider_mutations_reject_same_name_replacement() {
++        let state = test_server_state().await;
++        let mut observed = test_sandbox("identity-provider", Vec::new());
++        observed.metadata.as_mut().unwrap().id = "sandbox-provider-observed".to_string();
++        state.store.put_message(&observed).await.unwrap();
++        state
++            .store
++            .delete(Sandbox::object_type(), observed.object_id())
++            .await
++            .unwrap();
++        let mut replacement = test_sandbox("identity-provider", Vec::new());
++        replacement.metadata.as_mut().unwrap().id = "sandbox-provider-replacement".to_string();
++        state.store.put_message(&replacement).await.unwrap();
++
++        let attach_error = handle_attach_sandbox_provider_with_identity(
++            &state,
++            authed_request(AttachSandboxProviderWithIdentityRequest {
++                request_id: "identity-provider-attach".to_string(),
++                sandbox: replacement.object_name().to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector("default")),
++                provider: "broker".to_string(),
++                expected_sandbox_id: observed.object_id().to_string(),
++                ..Default::default()
++            }),
++        )
++        .await
++        .unwrap_err();
++        assert_eq!(attach_error.code(), Code::Aborted);
++
++        let detach_error = handle_detach_sandbox_provider_with_identity(
++            &state,
++            authed_request(DetachSandboxProviderWithIdentityRequest {
++                request_id: "identity-provider-detach".to_string(),
++                sandbox: replacement.object_name().to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector("default")),
++                provider: "broker".to_string(),
++                expected_sandbox_id: observed.object_id().to_string(),
++                ..Default::default()
++            }),
++        )
++        .await
++        .unwrap_err();
++        assert_eq!(detach_error.code(), Code::Aborted);
++
++        let current = state
++            .store
++            .get_message::<Sandbox>(replacement.object_id())
++            .await
++            .unwrap()
++            .unwrap();
++        assert!(current.spec.unwrap().providers.is_empty());
++    }
++
++    #[tokio::test]
++    async fn identity_provider_attach_rechecks_name_after_waiting_for_mutation_lock() {
++        let state = test_server_state().await;
++        let mut observed = test_sandbox("identity-provider-race", Vec::new());
++        observed.metadata.as_mut().unwrap().id = "sandbox-provider-race-original".to_string();
++        state.store.put_message(&observed).await.unwrap();
++
++        let mutation_guard = state.compute.sandbox_sync_guard().await.unwrap();
++        let resolved = Arc::new(tokio::sync::Notify::new());
++        let attach_state = state.clone();
++        let resolved_probe = resolved.clone();
++        let observed_id = observed.object_id().to_string();
++        let attach = tokio::spawn(async move {
++            let mut request = authed_request(AttachSandboxProviderWithIdentityRequest {
++                request_id: "identity-provider-race".to_string(),
++                sandbox: "identity-provider-race".to_string(),
++                workspace_scope: Some(openshell_core::proto::workspace_selector("default")),
++                provider: "broker".to_string(),
++                expected_sandbox_id: observed_id,
++                ..Default::default()
++            });
++            request.extensions_mut().insert(resolved_probe);
++            handle_attach_sandbox_provider_with_identity(&attach_state, request).await
++        });
++        tokio::time::timeout(std::time::Duration::from_secs(5), resolved.notified())
++            .await
++            .expect("attach did not resolve its initial sandbox selection");
++
++        state
++            .store
++            .delete(Sandbox::object_type(), observed.object_id())
++            .await
++            .unwrap();
++        let mut replacement = test_sandbox("identity-provider-race", Vec::new());
++        replacement.metadata.as_mut().unwrap().id = "sandbox-provider-race-replacement".to_string();
++        state.store.put_message(&replacement).await.unwrap();
++        drop(mutation_guard);
++
++        let error = attach.await.unwrap().unwrap_err();
++        assert_eq!(error.code(), Code::Aborted);
++        let current = state
++            .store
++            .get_message::<Sandbox>(replacement.object_id())
++            .await
++            .unwrap()
++            .unwrap();
++        assert!(current.spec.unwrap().providers.is_empty());
++    }
++
++    #[tokio::test]
++    async fn identity_exec_rejects_same_name_replacement_before_opening_relay() {
++        let state = test_server_state().await;
++        let mut observed = test_sandbox("identity-exec", Vec::new());
++        observed.metadata.as_mut().unwrap().id = "sandbox-exec-observed".to_string();
++        state.store.put_message(&observed).await.unwrap();
++        state
++            .store
++            .delete(Sandbox::object_type(), observed.object_id())
++            .await
++            .unwrap();
++        let mut replacement = test_sandbox("identity-exec", Vec::new());
++        replacement.metadata.as_mut().unwrap().id = "sandbox-exec-replacement".to_string();
++        state.store.put_message(&replacement).await.unwrap();
++
++        let error = handle_exec_sandbox_with_identity(
++            &state,
++            authed_request(ExecSandboxWithIdentityRequest {
++                request: Some(ExecSandboxRequest {
++                    sandbox: "identity-exec".to_string(),
++                    workspace_scope: Some(openshell_core::proto::workspace_selector("default")),
++                    command: vec!["true".to_string()],
++                    ..Default::default()
++                }),
++                expected_sandbox_id: observed.object_id().to_string(),
++            }),
++        )
++        .await
++        .unwrap_err();
++
++        assert_eq!(error.code(), Code::Aborted);
++        assert!(
++            state
++                .store
++                .get_message::<Sandbox>(replacement.object_id())
++                .await
++                .unwrap()
++                .is_some()
++        );
++    }
++
+     #[tokio::test]
+     async fn attach_sandbox_provider_persists_current_provider_list() {
+         let state = test_server_state().await;
+diff --git a/crates/openshell-server/tests/common/mod.rs b/crates/openshell-server/tests/common/mod.rs
+index 4142517..6942ed1 100644
+--- a/crates/openshell-server/tests/common/mod.rs
++++ b/crates/openshell-server/tests/common/mod.rs
+@@ -435,6 +435,7 @@ impl OpenShell for TestOpenShell {
+ 
+     type WatchSandboxStream = ReceiverStream<Result<SandboxStreamEvent, Status>>;
+     type ExecSandboxStream = ReceiverStream<Result<ExecSandboxEvent, Status>>;
++    type ExecSandboxWithIdentityStream = Self::ExecSandboxStream;
+     type ConnectSupervisorStream = ReceiverStream<Result<GatewayMessage, Status>>;
+ 
+     async fn watch_sandbox(
+@@ -455,6 +456,57 @@ impl OpenShell for TestOpenShell {
+ 
+     type ExecSandboxInteractiveStream = ReceiverStream<Result<ExecSandboxEvent, Status>>;
+ 
++    async fn attach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::AttachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::AttachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn detach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DetachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DetachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn delete_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DeleteSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DeleteSandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn stop_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StopSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn start_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StartSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn exec_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::ExecSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<Self::ExecSandboxWithIdentityStream>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn update_config_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::UpdateConfigWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::UpdateConfigResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
+     async fn exec_sandbox_interactive(
+         &self,
+         _request: tonic::Request<tonic::Streaming<ExecSandboxInput>>,
+diff --git a/crates/openshell-server/tests/supervisor_relay_integration.rs b/crates/openshell-server/tests/supervisor_relay_integration.rs
+index 5856acb..52da260 100644
+--- a/crates/openshell-server/tests/supervisor_relay_integration.rs
++++ b/crates/openshell-server/tests/supervisor_relay_integration.rs
+@@ -176,6 +176,7 @@ impl OpenShell for RelayGateway {
+ 
+     type ExecSandboxStream =
+         ReceiverStream<Result<openshell_core::proto::ExecSandboxEvent, Status>>;
++    type ExecSandboxWithIdentityStream = Self::ExecSandboxStream;
+     async fn exec_sandbox(
+         &self,
+         _: tonic::Request<openshell_core::proto::ExecSandboxRequest>,
+@@ -194,6 +195,57 @@ impl OpenShell for RelayGateway {
+ 
+     type ExecSandboxInteractiveStream =
+         ReceiverStream<Result<openshell_core::proto::ExecSandboxEvent, Status>>;
++    async fn attach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::AttachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::AttachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn detach_sandbox_provider_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DetachSandboxProviderWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DetachSandboxProviderResponse>, tonic::Status>
++    {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn delete_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::DeleteSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::DeleteSandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn stop_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StopSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn start_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::StartSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn exec_sandbox_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::ExecSandboxWithIdentityRequest>,
++    ) -> Result<tonic::Response<Self::ExecSandboxWithIdentityStream>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
++    async fn update_config_with_identity(
++        &self,
++        _request: tonic::Request<openshell_core::proto::UpdateConfigWithIdentityRequest>,
++    ) -> Result<tonic::Response<openshell_core::proto::UpdateConfigResponse>, tonic::Status> {
++        Err(tonic::Status::unimplemented("not used by this test server"))
++    }
++
+     async fn exec_sandbox_interactive(
+         &self,
+         _: tonic::Request<tonic::Streaming<openshell_core::proto::ExecSandboxInput>>,
+diff --git a/proto/openshell.proto b/proto/openshell.proto
+index a836e16..f4f7973 100644
+--- a/proto/openshell.proto
++++ b/proto/openshell.proto
+@@ -148,6 +148,16 @@ service OpenShell {
+     };
+   }
+ 
++  // Attach a provider only when the sandbox name still identifies the caller-observed UUID.
++  rpc AttachSandboxProviderWithIdentity(AttachSandboxProviderWithIdentityRequest)
++      returns (AttachSandboxProviderResponse) {
++    option (openshell.options.v1.authorization) = {
++      auth_mode: "bearer"
++      scope: "sandbox:write"
++      workspace_role: "user"
++    };
++  }
++
+   // Detach a provider record from an existing sandbox.
+   rpc DetachSandboxProvider(DetachSandboxProviderRequest)
+       returns (DetachSandboxProviderResponse) {
+@@ -158,6 +168,16 @@ service OpenShell {
+     };
+   }
+ 
++  // Detach a provider only when the sandbox name still identifies the caller-observed UUID.
++  rpc DetachSandboxProviderWithIdentity(DetachSandboxProviderWithIdentityRequest)
++      returns (DetachSandboxProviderResponse) {
++    option (openshell.options.v1.authorization) = {
++      auth_mode: "bearer"
++      scope: "sandbox:write"
++      workspace_role: "user"
++    };
++  }
++
+   // Inspect the installed authority for one sandbox provider mutation.
+   rpc GetSandboxProviderStatus(GetSandboxProviderStatusRequest)
+       returns (GetSandboxProviderStatusResponse) {
+@@ -177,6 +197,17 @@ service OpenShell {
+     };
+   }
+ 
++  // Delete a sandbox only when its canonical name still identifies the
++  // caller-observed UUID. This distinct method is intentionally unavailable on
++  // older gateways that only support name-scoped deletion.
++  rpc DeleteSandboxWithIdentity(DeleteSandboxWithIdentityRequest) returns (DeleteSandboxResponse) {
++    option (openshell.options.v1.authorization) = {
++      auth_mode: "bearer"
++      scope: "sandbox:write"
++      workspace_role: "user"
++    };
++  }
++
+   // Stop a sandbox while retaining its persistent state.
+   rpc StopSandbox(StopSandboxRequest) returns (SandboxResponse) {
+     option (openshell.options.v1.authorization) = {
+@@ -186,6 +217,16 @@ service OpenShell {
+     };
+   }
+ 
++  // Stop a sandbox only when its canonical name still identifies the
++  // caller-observed UUID. Older gateways return UNIMPLEMENTED for this method.
++  rpc StopSandboxWithIdentity(StopSandboxWithIdentityRequest) returns (SandboxResponse) {
++    option (openshell.options.v1.authorization) = {
++      auth_mode: "bearer"
++      scope: "sandbox:write"
++      workspace_role: "user"
++    };
++  }
++
+   // Start a previously stopped sandbox.
+   rpc StartSandbox(StartSandboxRequest) returns (SandboxResponse) {
+     option (openshell.options.v1.authorization) = {
+@@ -195,6 +236,16 @@ service OpenShell {
+     };
+   }
+ 
++  // Start a sandbox only when its canonical name still identifies the
++  // caller-observed UUID. Older gateways return UNIMPLEMENTED for this method.
++  rpc StartSandboxWithIdentity(StartSandboxWithIdentityRequest) returns (SandboxResponse) {
++    option (openshell.options.v1.authorization) = {
++      auth_mode: "bearer"
++      scope: "sandbox:write"
++      workspace_role: "user"
++    };
++  }
++
+   // Create a short-lived SSH session for a sandbox.
+   rpc CreateSshSession(CreateSshSessionRequest) returns (CreateSshSessionResponse) {
+     option (openshell.options.v1.authorization) = {
+@@ -258,6 +309,16 @@ service OpenShell {
+     };
+   }
+ 
++  // Execute only when the sandbox name still identifies the caller-observed UUID.
++  // Older gateways return UNIMPLEMENTED for this identity-bound method.
++  rpc ExecSandboxWithIdentity(ExecSandboxWithIdentityRequest) returns (stream ExecSandboxEvent) {
++    option (openshell.options.v1.authorization) = {
++      auth_mode: "bearer"
++      scope: "sandbox:write"
++      workspace_role: "user"
++    };
++  }
++
+   // Forward one CLI-side TCP connection to a loopback TCP target in a sandbox.
+   rpc ForwardTcp(stream TcpForwardFrame) returns (stream TcpForwardFrame) {
+     option (openshell.options.v1.authorization) = {
+@@ -458,6 +519,17 @@ service OpenShell {
+     };
+   }
+ 
++  // Apply sandbox-scoped settings/policy only to the caller-observed UUID.
++  // Global updates are not accepted by this identity-bound method.
++  rpc UpdateConfigWithIdentity(UpdateConfigWithIdentityRequest)
++      returns (UpdateConfigResponse) {
++    option (openshell.options.v1.authorization) = {
++      auth_mode: "dual"
++      scope: "config:write"
++      workspace_role: "admin"
++    };
++  }
++
+   // Get the load status of a specific policy version.
+   rpc GetSandboxPolicyStatus(GetSandboxPolicyStatusRequest)
+       returns (GetSandboxPolicyStatusResponse) {
+@@ -1398,6 +1470,15 @@ message AttachSandboxProviderRequest {
+   string request_id = 5;
+ }
+ 
++message AttachSandboxProviderWithIdentityRequest {
++  openshell.datamodel.v1.WorkspaceSelector workspace_scope = 4;
++  string sandbox = 1;
++  string provider = 2;
++  uint64 expected_resource_version = 3;
++  string request_id = 5;
++  string expected_sandbox_id = 6;
++}
++
+ // Detach provider from sandbox request.
+ message DetachSandboxProviderRequest {
+   // Workspace scope. Only a named workspace selection is accepted.
+@@ -1415,6 +1496,15 @@ message DetachSandboxProviderRequest {
+   string request_id = 5;
+ }
+ 
++message DetachSandboxProviderWithIdentityRequest {
++  openshell.datamodel.v1.WorkspaceSelector workspace_scope = 4;
++  string sandbox = 1;
++  string provider = 2;
++  uint64 expected_resource_version = 3;
++  string request_id = 5;
++  string expected_sandbox_id = 6;
++}
++
+ // Delete sandbox request.
+ message DeleteSandboxRequest {
+   // Workspace scope. Only a named workspace selection is accepted.
+@@ -1429,6 +1519,17 @@ message DeleteSandboxRequest {
+   string request_id = 4;
+ }
+ 
++// Identity-bound counterpart to DeleteSandbox. The distinct request and RPC
++// names make older gateways fail with UNIMPLEMENTED instead of ignoring a
++// newly added precondition field.
++message DeleteSandboxWithIdentityRequest {
++  string name = 1;
++  openshell.datamodel.v1.WorkspaceSelector workspace_scope = 2;
++  bool allow_missing = 3;
++  string request_id = 4;
++  string expected_sandbox_id = 5;
++}
++
+ // Stop sandbox request.
+ message StopSandboxRequest {
+   // Workspace scope. Only a named workspace selection is accepted.
+@@ -1439,6 +1540,13 @@ message StopSandboxRequest {
+   string request_id = 3;
+ }
+ 
++message StopSandboxWithIdentityRequest {
++  string name = 1;
++  openshell.datamodel.v1.WorkspaceSelector workspace_scope = 2;
++  string request_id = 3;
++  string expected_sandbox_id = 4;
++}
++
+ // Start sandbox request.
+ message StartSandboxRequest {
+   // Workspace scope. Only a named workspace selection is accepted.
+@@ -1449,6 +1557,13 @@ message StartSandboxRequest {
+   string request_id = 3;
+ }
+ 
++message StartSandboxWithIdentityRequest {
++  string name = 1;
++  openshell.datamodel.v1.WorkspaceSelector workspace_scope = 2;
++  string request_id = 3;
++  string expected_sandbox_id = 4;
++}
++
+ // Sandbox response.
+ message SandboxResponse {
+   Sandbox sandbox = 1;
+@@ -1900,6 +2015,11 @@ message ExecSandboxRequest {
+   string request_id = 11;
+ }
+ 
++message ExecSandboxWithIdentityRequest {
++  ExecSandboxRequest request = 1;
++  string expected_sandbox_id = 2;
++}
++
+ // One stdout chunk from a sandbox exec.
+ message ExecSandboxStdout {
+   bytes data = 1;
+@@ -2696,6 +2816,21 @@ message UpdateConfigRequest {
+   string request_id = 11;
+ }
+ 
++message UpdateConfigWithIdentityRequest {
++  openshell.datamodel.v1.WorkspaceSelector workspace_scope = 10;
++  openshell.sandbox.v1.SandboxPolicy policy = 2;
++  string setting_key = 3;
++  openshell.sandbox.v1.SettingValue setting_value = 4;
++  bool delete_setting = 5;
++  bool global = 6;
++  repeated PolicyMergeOperation merge_operations = 7;
++  uint64 expected_resource_version = 8;
++  map<string, string> annotations = 9;
++  string sandbox = 1;
++  string request_id = 11;
++  string expected_sandbox_id = 12;
++}
++
+ message PolicyMergeOperation {
+   oneof operation {
+     AddNetworkRule add_rule = 1;

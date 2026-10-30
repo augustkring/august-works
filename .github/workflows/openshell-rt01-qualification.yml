@@ -1,0 +1,126 @@
+name: OpenShell RT-01 source qualification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/openshell-rt01-qualification.yml'
+      - 'third_party/openshell/rt01/**'
+      - 'scripts/openshell-rt01/**'
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/openshell-rt01-qualification.yml'
+      - 'third_party/openshell/rt01/**'
+      - 'scripts/openshell-rt01/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openshell-rt01-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-focused-tests:
+    name: Pinned source, generated protobuf, focused tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      RUSTUP_TOOLCHAIN: 1.95.0
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_INCREMENTAL: '0'
+      CARGO_BUILD_JOBS: '2'
+      CARGO_TERM_COLOR: never
+      RUST_BACKTRACE: '1'
+      RUST_TEST_THREADS: '2'
+    steps:
+      - name: Prepare short-lived qualification logs
+        run: mkdir -p "$RUNNER_TEMP/openshell-rt01-logs"
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install pinned minimal Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+
+      - name: Fetch pinned upstream and apply source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/openshell-rt01/fetch-and-apply.sh "$RUNNER_TEMP/openshell-rt01" 2>&1 \
+            | tee "$RUNNER_TEMP/openshell-rt01-logs/fetch-apply.log"
+
+      - name: Verify source pins and exact patched file set
+        run: python3 scripts/openshell-rt01/verify-source-pins.py "$RUNNER_TEMP/openshell-rt01"
+
+      - name: Check formatting
+        working-directory: ${{ runner.temp }}/openshell-rt01
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check 2>&1 \
+            | tee "$RUNNER_TEMP/openshell-rt01-logs/format.log"
+
+      - name: Compile server and CLI (including generated protobuf)
+        working-directory: ${{ runner.temp }}/openshell-rt01
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check --locked -p openshell-server -p openshell-cli 2>&1 \
+            | tee "$RUNNER_TEMP/openshell-rt01-logs/compile.log"
+
+      - name: Run exact focused identity-bound tests
+        working-directory: ${{ runner.temp }}/openshell-rt01
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_exact_test() {
+            local package="$1"
+            local short_name="$2"
+            local prefix="$3"
+            local list_log="$RUNNER_TEMP/openshell-rt01-logs/${prefix}-${short_name}-list.log"
+            local test_log="$RUNNER_TEMP/openshell-rt01-logs/${prefix}-${short_name}.log"
+            cargo test --locked -p "$package" -- --list 2>&1 | tee "$list_log"
+            local full_name
+            full_name="$(python3 -c '
+          import sys
+          wanted = sys.argv[1]
+          entries = []
+          for line in sys.stdin:
+              line = line.rstrip()
+              marker = ": test"
+              if line.endswith(marker):
+                  candidate = line[:-len(marker)]
+                  if candidate.split("::")[-1] == wanted:
+                      entries.append(candidate)
+          if len(entries) != 1:
+              raise SystemExit(f"expected exactly one listed test named {wanted!r}, found {entries!r}")
+          print(entries[0])
+          ' "$short_name" < "$list_log")"
+            cargo test --locked -p "$package" "$full_name" -- --exact --test-threads=2 2>&1 \
+              | tee "$test_log"
+            grep -Fq "test ${full_name} ... ok" "$test_log"
+            grep -Fq '1 passed; 0 failed; 0 ignored;' "$test_log"
+          }
+          run_exact_test openshell-server identity_bound_stop_targets_the_observed_uuid_only server
+          run_exact_test openshell-server identity_delete_rejects_same_name_replacement_without_deleting_it server
+          run_exact_test openshell-server identity_delete_requires_an_expected_uuid server
+          run_exact_test openshell-server identity_policy_update_rejects_same_name_replacement_before_mutation server
+          run_exact_test openshell-server identity_exec_rejects_same_name_replacement_before_opening_relay server
+          run_exact_test openshell-server identity_provider_mutations_reject_same_name_replacement server
+          run_exact_test openshell-server identity_provider_attach_rechecks_name_after_waiting_for_mutation_lock server
+          run_exact_test openshell-cli sandbox_stop_and_start_accept_optional_names cli
+          run_exact_test openshell-cli sandbox_provider_subcommands_parse cli
+
+      - name: Upload qualification logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: openshell-rt01-qualification-logs
+          path: ${{ runner.temp }}/openshell-rt01-logs/
+          if-no-files-found: ignore
+          retention-days: 7
