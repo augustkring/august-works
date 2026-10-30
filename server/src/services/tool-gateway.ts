@@ -1,3 +1,4 @@
+import { currentResourcePolicy } from "./resource-governance.js";
 import { assertPackageExecution } from "./agent-packages/execution-gate.js";
 import { assertExecutionGovernance } from "./ai-governance/execution-gate.js";
 import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
@@ -8093,6 +8094,21 @@ export function createToolGatewayService(
     method: McpGatewayProtocolMethod,
     clientMetadata: ReturnType<typeof safeClientMetadata>,
   ) {
+    // The original authenticated gateway request owns the existing durable
+    // counter. A configured company policy is additional to token/gateway
+    // limits; entitlement or a paid tier never bypasses either gate.
+    const resourceRate = (await currentResourcePolicy(db))?.rates.find(rule => rule.companyId === session.companyId);
+    if (resourceRate) {
+      const config = { max: resourceRate.hardLimit + resourceRate.burst, windowMs: resourceRate.windowMs };
+      const state = await consumeProtocolRateLimit({ companyId: session.companyId,
+        counterKey: "resource:gateway_request:company:v1", config });
+      if (state.limited) {
+        await writeProtocolRateLimitAudit({ session, method, limiterKeyClass: "gateway", count: state.count,
+          limit: config, retryAfterMs: state.retryAfterMs, clientMetadata });
+        throw new ToolGatewayHttpError(429, "Configured gateway request budget is occupied", "resource_gateway_request_limited",
+          { resource: "gateway_request", retryAfterMs: state.retryAfterMs });
+      }
+    }
     const action = protocolLimiterKeyClass(method);
     const tokenLimit =
       method === "initialize"

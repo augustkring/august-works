@@ -3935,6 +3935,13 @@
       "when": 1793299535413,
       "tag": "0563_wise_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 564,
+      "version": "7",
+      "when": 1793322768277,
+      "tag": "0564_broken_guardian",
+      "breakpoints": true
     }
   ]
 }

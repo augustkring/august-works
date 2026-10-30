@@ -1,3 +1,4 @@
+import { instanceSettingsService } from "../services/instance-settings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
 import express from "express";
@@ -1251,6 +1252,46 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     });
     expect(JSON.stringify(audits)).not.toContain(badToken);
     expect(JSON.stringify(audits)).not.toContain("authorization");
+  });
+
+  it("shares configured company request and burst counters across gateway instances without consuming another tenant", async () => {
+    const a = await createCompany(db), b = await createCompany(db);
+    let now = Date.now();
+    const first = createTestToolGatewayService(db, { now: () => now });
+    const second = createTestToolGatewayService(db, { now: () => now });
+    const clients = [];
+    for (const company of [a, b]) {
+      const [profile] = await db.insert(toolProfiles).values({ companyId: company.id, profileKey: randomUUID(),
+        name: "Configured request scope", defaultAction: "deny" }).returning();
+      const named = await first.createNamedGateway({ companyId: company.id, body: { name: "Configured request scope", profileId: profile.id } });
+      const token = await first.createNamedGatewayToken({ companyId: company.id, gatewayId: named.id,
+        body: { name: "Scoped client", clientLabel: "Scoped client" } });
+      clients.push({ endpoint: `/mcp/gateways/${named.gatewayPublicId}`, token: token.token });
+    }
+    const settings = instanceSettingsService(db), previous = (await settings.getGeneral()).resourceGovernance;
+    await settings.updateGeneral({ resourceGovernance: { version: 1, pools: [], rates: [a,b].map(company => ({
+      resource: "gateway_request", scope: "company", companyId: company.id, hardLimit: 1,
+      burst: company.id === a.id ? 1 : 0, windowMs: 60_000, onHardLimit: "reject", exceptionOwner: "Fixture operator" })) } });
+    const call = (service: ReturnType<typeof createTestToolGatewayService>, index: number) => request(createGatewayRouteApp(db, service))
+      .post(clients[index]!.endpoint).set("authorization", `Bearer ${clients[index]!.token}`)
+      .send({ jsonrpc: "2.0", id: 1, method: "initialize" });
+    try {
+      await call(first, 0).expect(200);
+      await call(second, 0).expect(200); // Explicit configured burst, same durable counter.
+      const denied = await call(first, 0).expect(429);
+      expect(denied.body.error.data).toMatchObject({ reasonCode: "resource_gateway_request_limited", resource: "gateway_request" });
+      expect(Number(denied.headers["retry-after"])).toBeGreaterThan(0);
+      await call(second, 1).expect(200);
+      await call(first, 1).expect(429);
+      const rows = await db.select().from(toolGatewayRateLimitCounters).where(eq(toolGatewayRateLimitCounters.counterKey, "resource:gateway_request:company:v1"));
+      expect(new Set(rows.map(row => row.companyId))).toEqual(new Set([a.id, b.id]));
+      expect(JSON.stringify(rows)).not.toContain(clients[0]!.token);
+      expect(JSON.stringify(rows)).not.toContain(clients[1]!.token);
+      now += 60_001;
+      await call(second, 0).expect(200);
+    } finally {
+      await settings.updateGeneral({ resourceGovernance: previous ?? { version: 1, pools: [], rates: [] } });
+    }
   });
 
   it("rate limits public named gateway session setup, discovery, and calls with redacted audits", async () => {

@@ -81,6 +81,8 @@ export const heartbeatRuns = pgTable(
     controllerBootId: uuid("controller_boot_id"),
     controllerLeaseExpiresAt: timestamp("controller_lease_expires_at", { withTimezone: true }),
     executionStage: text("execution_stage"),
+    // Original server-owned lifecycle projection; null is historical unknown.
+    nativeProcessCleanupPending: boolean("native_process_cleanup_pending"),
     processPid: integer("process_pid"),
     processGroupId: integer("process_group_id"),
     processStartedAt: timestamp("process_started_at", { withTimezone: true }),
@@ -108,6 +110,13 @@ export const heartbeatRuns = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    resourceLocalCleanupIdx: index("heartbeat_runs_resource_local_cleanup_idx").on(table.companyId, table.id)
+      .where(sql`${table.nativeProcessCleanupPending} is true or (${table.nativeProcessCleanupPending} is null and ${table.runtimeMode}='native'
+        and (${table.status}<>'queued' or ${table.startedAt} is not null or ${table.processStartedAt} is not null
+          or ${table.processPid} is not null or ${table.processGroupId} is not null or ${table.nativePhase} is not null
+          or ${table.sessionIdAfter} is not null))`),
+    resourceWorkspaceCleanupIdx: index("heartbeat_runs_resource_workspace_cleanup_idx").on(table.companyId, table.id)
+      .where(sql`${table.runnerProfileJson}->>'nativeWorkspaceFinalizationOwner' is not null`),
     nativeInputSourceProtocolCheck: check("heartbeat_runs_native_input_source_protocol_check", sql`${table.nativeInputSourceProtocolVersion} in (0,1)`),
     sourceContextBoundsCheck: check("heartbeat_runs_source_context_bounds_check", sql`cardinality(${table.sourceContextManifestIds}) <= 64
       and array_position(${table.sourceContextManifestIds},null) is null`),

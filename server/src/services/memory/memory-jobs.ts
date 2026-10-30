@@ -1,3 +1,4 @@
+import { currentResourcePolicy, isResourceAdmissionDeferred } from "../resource-governance.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -520,10 +521,45 @@ export function memoryJobService(
 
   async function claimNext(now = new Date(), companyId?: string): Promise<MemoryJob | null> {
     return db.transaction(async (tx) => {
+      const policy = await currentResourcePolicy(tx as unknown as Db, true);
+      const pool = policy?.pools.find(value => value.resource === "durable_execution");
+      let fairCandidate: string | null = null;
+      if (pool) {
+        // Use latest progress on a started original job (including settlement
+        // writes); this is a fairness recency signal, not an admission receipt.
+        const [row] = await tx.execute<{ id: string }>(sql`
+          with rules as materialized (select * from jsonb_to_recordset(${JSON.stringify(pool.companies)}::jsonb)
+            as r("companyId" uuid,"hardLimit" bigint,"fairnessClass" text,priority integer)),
+          queued_companies as materialized (select distinct company_id from memory_jobs where status='queued'
+            and (${companyId ?? null}::uuid is null or company_id=${companyId ?? null}::uuid)),
+          progress as materialized (select q.company_id,p.updated_at as progress_at from queued_companies q
+            left join lateral (select h.updated_at from memory_jobs h where h.company_id=q.company_id and h.started_at is not null
+              order by h.updated_at desc nulls last,h.id desc nulls last limit 1) p on true),
+          classes as (select coalesce(r."fairnessClass",h.company_id::text) as class,max(h.progress_at) as progress_at
+            from progress h left join rules r on r."companyId"=h.company_id group by 1),
+          eligible as (select m.id,m.company_id,m.submitted_at,m.created_at,
+            h.progress_at as company_progress_at,c.progress_at as class_progress_at,r.priority
+            from queued_companies q
+            left join rules r on r."companyId"=q.company_id
+            join lateral (select queued.id,queued.company_id,queued.submitted_at,queued.created_at
+              from memory_jobs queued where queued.company_id=q.company_id and queued.status='queued'
+                and (queued.operation_type='retention' or
+                  (public.aw_v10_resource_durable_occupancy(null)<${pool.hardLimit}
+                    and (r."hardLimit" is null or public.aw_v10_resource_durable_occupancy(q.company_id)<r."hardLimit")))
+              order by queued.submitted_at,queued.created_at,queued.id limit 1) m on true
+            left join progress h on h.company_id=m.company_id
+            left join classes c on c.class=coalesce(r."fairnessClass",m.company_id::text)
+          )
+          select id from eligible order by class_progress_at nulls first,company_progress_at nulls first,
+            priority desc nulls last,submitted_at,created_at,id limit 1`);
+        if (!row) return null;
+        fairCandidate = row.id;
+      }
       const candidate = await tx
         .select()
         .from(memoryJobs)
-        .where(companyId ? and(eq(memoryJobs.status, "queued"), eq(memoryJobs.companyId, companyId)) : eq(memoryJobs.status, "queued"))
+        .where(and(eq(memoryJobs.status, "queued"), companyId ? eq(memoryJobs.companyId, companyId) : undefined,
+          fairCandidate ? eq(memoryJobs.id, fairCandidate) : undefined))
         .orderBy(asc(memoryJobs.submittedAt), asc(memoryJobs.createdAt))
         .limit(1)
         .for("update", { skipLocked: true })
@@ -546,7 +582,7 @@ export function memoryJobService(
         )
         .returning();
       return claimed ?? null;
-    });
+    }).catch(error => { if (isResourceAdmissionDeferred(error)) return null; throw error; });
   }
 
   async function settle(

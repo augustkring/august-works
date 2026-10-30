@@ -63,6 +63,12 @@ export const memoryJobs = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    resourceActiveIdx: index("memory_jobs_resource_active_idx").on(table.companyId, table.id)
+      .where(sql`${table.status}='running'`),
+    resourceQueuedIdx: index("memory_jobs_resource_queued_idx").on(table.companyId, table.submittedAt, table.createdAt, table.id)
+      .where(sql`${table.status}='queued'`),
+    resourceProgressIdx: index("memory_jobs_resource_progress_idx").on(table.companyId, table.updatedAt.desc(), table.id.desc())
+      .where(sql`${table.startedAt} is not null`),
     companyIdIdUq: uniqueIndex("memory_jobs_company_id_id_uq").on(
       table.companyId,
       table.id,

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { Router, type Request } from "express";
 import { authUsers, companies, type Db } from "@paperclipai/db";
 import {
+  type InstanceGeneralSettings,
   patchInstanceSettingsSchema,
   patchInstanceExperimentalSettingsSchema,
   patchInstanceGeneralSettingsSchema,
@@ -174,9 +175,21 @@ export function instanceSettingsRoutes(
     });
   }
 
+  function canReadResourcePolicy(req: Request) {
+    return options?.deploymentProfile === "saas"
+      ? req.actor.type === "board" && req.actor.source === "session" && !!req.actor.userId && !!options.operatorUserIds?.includes(req.actor.userId)
+      : req.actor.type === "board" && (req.actor.source === "local_implicit" || req.actor.isInstanceAdmin === true);
+  }
+  function publicGeneral(req: Request, general: InstanceGeneralSettings): InstanceGeneralSettings {
+    if (canReadResourcePolicy(req)) return general;
+    const { resourceGovernance: _operatorOnly, ...visible } = general;
+    return visible;
+  }
+
   router.get("/instance/settings", async (req, res) => {
     await assertCanRead(req);
-    res.json(await withOperatorRead(req, reader => instanceSettingsService(reader).get()));
+    const settings = await withOperatorRead(req, reader => instanceSettingsService(reader).get());
+    res.json({ ...settings, general: publicGeneral(req, settings.general) });
   });
 
   router.patch(
@@ -243,7 +256,7 @@ export function instanceSettingsRoutes(
     // General settings (e.g. feedbackDataSharingPreference) are readable by any
     // authenticated org member or instance admin. Only PATCH requires instance-admin.
     await assertCanRead(req);
-    res.json(await withOperatorRead(req, reader => instanceSettingsService(reader).getGeneral()));
+    res.json(publicGeneral(req, await withOperatorRead(req, reader => instanceSettingsService(reader).getGeneral())));
   });
 
   router.patch(
@@ -281,6 +294,7 @@ export function instanceSettingsRoutes(
         await pinSaasOperatorMutation(tx, req);
         return settings;
       }) : await svc.updateGeneral(req.body);
+      const { resourceGovernance: _operatorResourcePolicy, ...auditableGeneral } = updated.general;
       const actor = getActorInfo(req);
       const companyIds = await svc.listCompanyIds();
       await Promise.all(
@@ -296,7 +310,7 @@ export function instanceSettingsRoutes(
             entityType: "instance_settings",
             entityId: updated.id,
             details: {
-              general: updated.general,
+              general: auditableGeneral,
               changedKeys: Object.keys(req.body).sort(),
             },
           }),

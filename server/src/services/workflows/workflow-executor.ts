@@ -1,3 +1,4 @@
+import { currentResourcePolicy, isResourceAdmissionDeferred, resourceAdmissionDeferredError } from "../resource-governance.js";
 import { automationArtifactService } from "../automation-artifacts/automation-artifact-service.js";
 import { withNativeAnalyticalReader, type NativeReadScope } from "../analytical-reader.js";
 import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
@@ -620,50 +621,56 @@ async function claimQueuedRun(
   actor: WorkflowRunActor,
 ) {
   const publications: ActivityPublication[] = [];
-  const claimed = await db.transaction(async (tx) => {
-    const [pending] = await tx.select().from(workflowRuns).where(and(
-      eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId), eq(workflowRuns.status, "queued"),
-    )).for("update");
-    if (!pending) return null;
-    await authorizePersistedWorkflowCoverage(tx, pending);
-    // Coverage and both principals' current rights may have waited behind
-    // concurrent transactions. Sample the execution lease clock only after
-    // those locks and authorization checks have settled.
-    const now = new Date();
-    const leaseExpiresAt = new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS);
-    const [row] = await tx
-      .update(workflowRuns)
-      .set({
-        status: "running",
-        executionOwnerId: ownerId,
-        leaseExpiresAt,
-        ownerHeartbeatAt: now,
-        startedAt: now,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(workflowRuns.companyId, companyId),
-          eq(workflowRuns.id, runId),
-          eq(workflowRuns.status, "queued"),
-        ),
-      )
-      .returning();
-    if (!row) return null;
-    const { publication } = await persistWorkflowActivity(
-      tx as unknown as Db,
-      actor,
-      {
-        companyId,
-        action: "workflow.run_started",
-        entityType: "workflow_run",
-        entityId: runId,
-        details: { executionOwnerId: ownerId, humanCoverageId: row.humanCoverageId ?? null },
-      },
-    );
-    publications.push(publication);
-    return row;
-  });
+  let claimed: typeof workflowRuns.$inferSelect | null;
+  try {
+    claimed = await db.transaction(async (tx) => {
+      const [pending] = await tx.select().from(workflowRuns).where(and(
+        eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId), eq(workflowRuns.status, "queued"),
+      )).for("update");
+      if (!pending) return null;
+      await authorizePersistedWorkflowCoverage(tx, pending);
+      // Coverage and both principals' current rights may have waited behind
+      // concurrent transactions. Sample the execution lease clock only after
+      // those locks and authorization checks have settled.
+      const now = new Date();
+      const leaseExpiresAt = new Date(now.getTime() + WORKFLOW_EXECUTION_LEASE_MS);
+      const [row] = await tx
+        .update(workflowRuns)
+        .set({
+          status: "running",
+          executionOwnerId: ownerId,
+          leaseExpiresAt,
+          ownerHeartbeatAt: now,
+          startedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowRuns.companyId, companyId),
+            eq(workflowRuns.id, runId),
+            eq(workflowRuns.status, "queued"),
+          ),
+        )
+        .returning();
+      if (!row) return null;
+      const { publication } = await persistWorkflowActivity(
+        tx as unknown as Db,
+        actor,
+        {
+          companyId,
+          action: "workflow.run_started",
+          entityType: "workflow_run",
+          entityId: runId,
+          details: { executionOwnerId: ownerId, humanCoverageId: row.humanCoverageId ?? null },
+        },
+      );
+      publications.push(publication);
+      return row;
+    });
+  } catch (error) {
+    if (isResourceAdmissionDeferred(error)) throw resourceAdmissionDeferredError();
+    throw error;
+  }
   publishActivities(publications);
   return claimed;
 }
@@ -6860,6 +6867,9 @@ async function executeWorkflowGraph(
         return;
       }
     } catch (error) {
+      // Capacity denial rolls back the original resume transaction; retain the
+      // existing queued/waiting checkpoint rather than failing its node.
+      if (isResourceAdmissionDeferred(error)) return;
       if (error instanceof WorkflowRetryableNodeError && runningStep) {
         const scheduled = await scheduleWorkflowStepRetry(
           db,
@@ -8962,25 +8972,65 @@ export function workflowExecutorService(
     }> => {
       const safeLimit = Math.min(Math.max(limit, 1), 100);
       const queuedBefore = new Date(now.getTime() - ABANDONED_QUEUED_RUN_AGE_MS);
-      const candidates = await db
-        .select()
-        .from(workflowRuns)
-        .where(
-          options.cancellationOnly ? eq(workflowRuns.status, "cancelling") : or(
-            and(
-              eq(workflowRuns.status, "queued"),
-              lt(workflowRuns.updatedAt, queuedBefore),
+      const queuedBeforeIso = queuedBefore.toISOString();
+      const resourcePolicy = options.cancellationOnly ? null : await currentResourcePolicy(db);
+      const durablePool = resourcePolicy?.pools.find(value => value.resource === "durable_execution");
+      let candidates: (typeof workflowRuns.$inferSelect)[];
+      if (durablePool) {
+        // Keep the existing queued run as the only queue owner. Under an
+        // explicit durable pool, pick at most the oldest stale run per company
+        // using latest progress from started rows; settlement touches count as
+        // progress recency, not as admission receipts.
+        const otherCandidates = await db.select().from(workflowRuns).where(or(
+          and(inArray(workflowRuns.status, ["running", "recovering"]), lt(workflowRuns.leaseExpiresAt, now)),
+          eq(workflowRuns.status, "waiting"), eq(workflowRuns.status, "cancelling"),
+        )).orderBy(asc(workflowRuns.updatedAt)).limit(safeLimit);
+        const ids = await db.execute<{ id: string }>(sql`
+          with rules as materialized (select * from jsonb_to_recordset(${JSON.stringify(durablePool.companies)}::jsonb)
+            as r("companyId" uuid,"hardLimit" bigint,"fairnessClass" text,priority integer)),
+          queued_companies as materialized (select distinct company_id from workflow_runs
+            where status='queued' and updated_at<${queuedBeforeIso}::timestamptz),
+          progress as materialized (select q.company_id,p.updated_at as progress_at from queued_companies q
+            left join lateral (select h.updated_at from workflow_runs h where h.company_id=q.company_id and h.started_at is not null
+              order by h.updated_at desc nulls last,h.id desc nulls last limit 1) p on true),
+          classes as (select coalesce(r."fairnessClass",h.company_id::text) as class,max(h.progress_at) as progress_at
+            from progress h left join rules r on r."companyId"=h.company_id group by 1),
+          eligible as (select m.id,m.company_id,m.updated_at,h.progress_at as company_progress_at,
+            c.progress_at as class_progress_at,r.priority from queued_companies q
+            join lateral (select queued.id,queued.company_id,queued.updated_at from workflow_runs queued
+              where queued.company_id=q.company_id and queued.status='queued' and queued.updated_at<${queuedBeforeIso}::timestamptz
+              order by queued.updated_at,queued.id limit 1) m on true
+            left join rules r on r."companyId"=m.company_id
+            left join progress h on h.company_id=m.company_id
+            left join classes c on c.class=coalesce(r."fairnessClass",m.company_id::text)
+            where public.aw_v10_resource_durable_occupancy(null)<${durablePool.hardLimit}
+              and (r."hardLimit" is null or public.aw_v10_resource_durable_occupancy(m.company_id)<r."hardLimit"))
+          select id from eligible order by class_progress_at nulls first,company_progress_at nulls first,
+            priority desc nulls last,updated_at,id limit ${safeLimit}`);
+        const queuedIds = ids.map(row => row.id);
+        const queuedRows = queuedIds.length ? await db.select().from(workflowRuns)
+          .where(inArray(workflowRuns.id, queuedIds)) : [];
+        const queuedById = new Map(queuedRows.map(row => [row.id, row]));
+        const orderedQueued = queuedIds.flatMap(id => queuedById.has(id) ? [queuedById.get(id)!] : []);
+        // Independent caps preserve the queue's existing budget and guarantee
+        // cleanup/cancellation a turn under a sustained stale-queue backlog.
+        // With the caller's 100-row cap this processes at most 200 rows.
+        candidates = [...otherCandidates, ...orderedQueued];
+      } else {
+        candidates = await db
+          .select()
+          .from(workflowRuns)
+          .where(
+            options.cancellationOnly ? eq(workflowRuns.status, "cancelling") : or(
+              and(eq(workflowRuns.status, "queued"), lt(workflowRuns.updatedAt, queuedBefore)),
+              and(inArray(workflowRuns.status, ["running", "recovering"]), lt(workflowRuns.leaseExpiresAt, now)),
+              eq(workflowRuns.status, "waiting"),
+              eq(workflowRuns.status, "cancelling"),
             ),
-            and(
-              inArray(workflowRuns.status, ["running", "recovering"]),
-              lt(workflowRuns.leaseExpiresAt, now),
-            ),
-            eq(workflowRuns.status, "waiting"),
-            eq(workflowRuns.status, "cancelling"),
-          ),
-        )
-        .orderBy(asc(workflowRuns.updatedAt))
-        .limit(safeLimit);
+          )
+          .orderBy(asc(workflowRuns.updatedAt))
+          .limit(safeLimit);
+      }
 
       let recovered = 0;
       let raced = 0;
@@ -8997,8 +9047,9 @@ export function workflowExecutorService(
           if (outcome === "recovered") recovered += 1;
           else if (outcome === "raced") raced += 1;
           else deferred += 1;
-        } catch {
-          failedRunIds.push(candidate.id);
+        } catch (error) {
+          if (isResourceAdmissionDeferred(error)) deferred += 1;
+          else failedRunIds.push(candidate.id);
         }
       }
       return {

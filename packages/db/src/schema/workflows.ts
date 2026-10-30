@@ -126,6 +126,12 @@ export const workflowRuns = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    resourceActiveIdx: index("workflow_runs_resource_active_idx").on(table.companyId, table.id)
+      .where(sql`${table.status} in ('running','recovering','cancelling')`),
+    resourceQueuedIdx: index("workflow_runs_resource_queued_idx").on(table.companyId, table.updatedAt, table.id)
+      .where(sql`${table.status}='queued'`),
+    resourceProgressIdx: index("workflow_runs_resource_progress_idx").on(table.companyId, table.updatedAt.desc(), table.id.desc())
+      .where(sql`${table.startedAt} is not null`),
     companyIdUq: unique("workflow_runs_company_id_uq").on(table.companyId, table.id),
     authoringSourcesIdx: index("workflow_runs_authoring_sources_idx").using("gin", table.authoringSourceWorkflowIds),
     authoringSourcesCheck: check("workflow_runs_authoring_sources_check",

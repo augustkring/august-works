@@ -214,6 +214,9 @@ async function handleMcpGatewayProtocol(
     res.status(404).json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } });
   } catch (err) {
     if (err instanceof ToolGatewayHttpError) {
+      if (err.status === 429 && typeof err.details.retryAfterMs === "number" && Number.isFinite(err.details.retryAfterMs)) {
+        res.setHeader("Retry-After", String(Math.max(1, Math.ceil(err.details.retryAfterMs / 1000))));
+      }
       const id = (req.body as { id?: unknown } | undefined)?.id ?? null;
       // Provider tool failures are MCP tool results, not successful calls or
       // protocol errors. The service has already recorded the failed invocation.
@@ -324,6 +327,9 @@ function outcomeCondition(outcome: string) {
 
 function sendGatewayError(res: import("express").Response, err: unknown) {
   if (err instanceof ToolGatewayHttpError) {
+    if (err.status === 429 && typeof err.details.retryAfterMs === "number" && Number.isFinite(err.details.retryAfterMs)) {
+      res.setHeader("Retry-After", String(Math.max(1, Math.ceil(err.details.retryAfterMs / 1000))));
+    }
     res.status(err.status).json({
       error: err.message,
       reasonCode: err.reasonCode,

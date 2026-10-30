@@ -21,6 +21,7 @@ import {
   PAPERCLIP_CLOUD_MANAGED_BY,
   applyCapabilityLifecycleAvailability,
   instanceGeneralSettingsSchema,
+  resourceGovernancePolicySchema,
   type InstanceGeneralSettings,
   instanceExperimentalSettingsSchema,
   type InstanceExperimentalSettings,
@@ -207,6 +208,8 @@ export async function resolveWorktreeRunExecutionActivationState(options: {
 
 function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
   const sticky = raw && typeof raw === "object" && "outputFeedbackPolicyVersion" in raw && raw.outputFeedbackPolicyVersion === "aw-v9-local-v1" ? {outputFeedbackPolicyVersion:"aw-v9-local-v1" as const} : {};
+  const resourceGovernance = raw && typeof raw === "object" && "resourceGovernance" in raw && raw.resourceGovernance !== undefined
+    ? resourceGovernancePolicySchema.parse(raw.resourceGovernance) : undefined;
   const parsed = instanceGeneralSettingsStorageSchema.safeParse(raw ?? {});
   if (parsed.success) {
     return {
@@ -218,6 +221,7 @@ function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
       ...sticky,
       // Absent => unrestricted; only carry through an explicit policy.
       ...(parsed.data.executionMode ? { executionMode: parsed.data.executionMode } : {}),
+      ...(parsed.data.resourceGovernance ? { resourceGovernance: parsed.data.resourceGovernance } : {}),
     };
   }
   return {
@@ -226,6 +230,7 @@ function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
     feedbackDataSharingPreference: DEFAULT_FEEDBACK_DATA_SHARING_PREFERENCE,
     backupRetention: DEFAULT_BACKUP_RETENTION,
     ...sticky,
+    ...(resourceGovernance ? { resourceGovernance } : {}),
   };
 }
 
@@ -631,7 +636,10 @@ export function instanceSettingsService(
         const [current] = await tx.select().from(instanceSettings)
           .where(eq(instanceSettings.id, row.id)).for("update");
         if (!current) throw new Error("Instance settings disappeared during update");
-        const storedGeneral = normalizeGeneralSettings(current.general);
+        // A current operator can repair an invalid restored policy, while
+        // unrelated settings writes cannot silently erase that protection.
+        const storedGeneral = normalizeGeneralSettings(patch.resourceGovernance === undefined ? current.general
+          : { ...current.general, resourceGovernance: patch.resourceGovernance });
         // A full-GET echo carries the overlaid operator value for a field the
         // user never chose; stripping it keeps the overlay strictly read-time,
         // so changing or unsetting the variable later still takes effect.

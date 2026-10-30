@@ -1,3 +1,4 @@
+import { isResourceAdmissionDeferred } from "./resource-governance.js";
 import { readTaskDrain, computeTaskDrain, applyTaskDrain, startTaskDrain, stopTaskDrain, idleWorkSnapshot } from "./task-admission.js";
 export { computeTaskDrain, applyTaskDrain, startTaskDrain, stopTaskDrain } from "./task-admission.js";
 import { isCompanyCapacityWait } from "./billing/capacity-admission.js";
@@ -17265,7 +17266,7 @@ export function heartbeatService(
 
   async function claimQueuedRun(run: typeof heartbeatRuns.$inferSelect, companyAgents?: AgentOrgRow[]) {
     try { return await claimQueuedRunCore(run, companyAgents); }
-    catch (error) { if (isCompanyCapacityWait(error)) return null; throw error; }
+    catch (error) { if (isCompanyCapacityWait(error) || isResourceAdmissionDeferred(error)) return null; throw error; }
   }
 
   async function claimQueuedRunCore(

@@ -1,3 +1,4 @@
+import { admitAnalyticalRequest } from "../resource-governance.js";
 import {assertAnalyticalReader,analyticalPrincipalId} from "../analytical-reader.js";
 import {randomUUID} from "node:crypto";
 import {and,asc,desc,eq,sql} from "drizzle-orm";
@@ -147,6 +148,7 @@ async function inspectArtifact(tx:Db,row:Root,actor:AuthorizationActor,pin:Await
  return {id:value.id,companyId:value.companyId,specId:value.specId,versionId:value.versionId,kind,result:value.result,series:value.series,contentHash:value.contentHash,cutoff:value.cutoff.toISOString(),createdAt:value.createdAt.toISOString(),expiresAt:value.expiresAt.toISOString(),currentQualification:stale?"needs_revalidation":value.result.status==="qualified"?"qualified":"inconclusive",reviewReason:stale?"The published metric definition or available measurement history changed; a new backtest and human publication are required.":null};
 }
 async function appendArtifact(tx:Db,row:Root,actor:AuthorizationActor,pin:Awaited<ReturnType<typeof version>>,input:BacktestBusinessForecast,kind:"backtest"|"run",options:{signal?:AbortSignal}={}) {
+ await admitAnalyticalRequest(tx,row.companyId);
  const cutoff=new Date(input.cutoff),captured=await capture(tx,row,actor,pin,input.observationIds,cutoff),createdAt=new Date(),id=randomUUID();
  if(await historyChanged(tx,row,pin.value,captured.series,cutoff)) throw conflict("Forecast history contains a newer measurement or correction; refresh native observation pins");
  const result=pin.value.definition.provider==="statsforecast"?await evaluateStatisticalBusinessForecast(pin.value.definition,captured.series,cutoff.toISOString(),options):evaluateNativeBusinessForecast(pin.value.definition,captured.series,cutoff.toISOString()),valueType=pin.authority.metric.version.definition.valueType;

@@ -81,6 +81,7 @@ export const HIDEABLE_GENERAL_SECTIONS = [
   "instance.general.censorUsernameInLogs",
   "instance.general.keyboardShortcuts",
   "instance.general.backupRetention",
+  "instance.general.resourceGovernance",
   "instance.general.feedbackDataSharingPreference",
   "instance.general.signOut",
 ] as const;

@@ -1,3 +1,4 @@
+import { admitAnalyticalRequest } from "./resource-governance.js";
 import {assertAnalyticalReader,analyticalPrincipalId,analyticalRequesterId} from "./analytical-reader.js";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
@@ -172,6 +173,7 @@ export function processAnalysisService(db: Db) {
         if (row.status !== "published" || row.publishedVersionId !== input.versionId) throw conflict("Execution requires the current human-published process version");
         const pin = await version(tx, companyId, id, input.versionId); await publication(tx, companyId, id, input.versionId);
         await current(tx, companyId, actor, pin);
+        await admitAnalyticalRequest(tx, companyId);
         const snapshot = await captureNativeProcessSnapshot(tx, companyId, actor, nativeProcessRequirements(pin.definition, input));
         const now = new Date(); const result = calculateNativeProcess(companyId, pin.definition, input, snapshot.events, snapshot.readiness, now);
         const policies = await current(tx, companyId, actor, pin);
