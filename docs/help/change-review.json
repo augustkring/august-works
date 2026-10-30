@@ -1461,10 +1461,10 @@
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "people-and-company-access",
-      "sourceSha256": "ef2e4a643a9e16b79de7228d038e8bfbda72fd70bd7b18c8a13c45117ba912d7",
+      "sourceSha256": "cb8e6e85bfa94a7ed88fca1b3d6881c5fee77ad044f84845ef78f59fdfe8d553",
       "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
-      "rationale": "Explains current Human-only contact settings, scope-change reloads and the bounded member responsibility/credential preflight, including that incomplete preflight never blocks security revocation."
+      "rationale": "The current member preflight hides prior evidence during refresh and after source denial while removal remains available. The described membership, temporary coverage and incomplete-review behavior remains accurate."
     },
     {
       "source": "ui/src/components/access/CompanySettingsNav.tsx",
@@ -1485,10 +1485,10 @@
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "people-and-company-access-da",
-      "sourceSha256": "ef2e4a643a9e16b79de7228d038e8bfbda72fd70bd7b18c8a13c45117ba912d7",
+      "sourceSha256": "cb8e6e85bfa94a7ed88fca1b3d6881c5fee77ad044f84845ef78f59fdfe8d553",
       "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
-      "rationale": "Explains current Human-only contact settings, scope-change reloads and the bounded member responsibility/credential preflight, including that incomplete preflight never blocks security revocation."
+      "rationale": "The current member preflight hides prior evidence during refresh and after source denial while removal remains available. The described membership, temporary coverage and incomplete-review behavior remains accurate."
     },
     {
       "source": "packages/shared/src/v9-feature-flags.ts",
@@ -2437,10 +2437,10 @@
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "workflows-preview",
-      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "sourceSha256": "cb8e6e85bfa94a7ed88fca1b3d6881c5fee77ad044f84845ef78f59fdfe8d553",
       "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
-      "rationale": "Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+      "rationale": "The current member preflight hides prior evidence during refresh and after source denial while removal remains available. The described membership, temporary coverage and incomplete-review behavior remains accurate."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -2493,10 +2493,10 @@
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
+      "sourceSha256": "cb8e6e85bfa94a7ed88fca1b3d6881c5fee77ad044f84845ef78f59fdfe8d553",
       "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+      "rationale": "The current member preflight hides prior evidence during refresh and after source denial while removal remains available. The described membership, temporary coverage and incomplete-review behavior remains accurate."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",

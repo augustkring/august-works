@@ -30948,7 +30948,7 @@
         "post:`/companies/${companyId}/members/${memberId}/archive`"
       ],
       "argumentsSignature": "input.receipt.companyId, input.memberId, {\n        reassignment,\n        routineResponsibleUserId: input.routineTarget.startsWith(\"user:\")\n          ? input.routineTarget.slice(\"user:\".length)\n          : null,\n      }",
-      "line": 446,
+      "line": 450,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "HUMAN_ONLY",
@@ -31056,7 +31056,7 @@
         "post:`/companies/${companyId}/members/${memberId}/security-suspend`"
       ],
       "argumentsSignature": "input.receipt.companyId, input.memberId, { reasonCode: input.reasonCode }, input.receipt.principalId, input.receipt.sessionId",
-      "line": 494,
+      "line": 498,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "HUMAN_ONLY",
