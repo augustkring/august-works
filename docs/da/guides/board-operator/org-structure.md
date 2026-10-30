@@ -9,7 +9,7 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-28
+last_verified_at: 2026-10-30
 review_trigger: Ændringer i virksomhedsstandarder, enterprise-identitet eller driftsforhold, medlemmer, invitationer, adgangsanmodninger, roller, status eller omfordeling
 security_or_privacy_sensitive: true
 linked_source_files: [ui/src/pages/CompanySettings.tsx, ui/src/components/AccountExperienceLanguageSelect.tsx, ui/src/components/routine-triggers/RoutineTriggers.tsx, ui/src/pages/Enterprise.tsx, server/src/services/enterprise/identity-policy.ts, server/src/services/routines.ts, ui/src/pages/CompanyAccess.tsx, ui/src/components/access/InvitesSection.tsx, ui/src/components/access/CompanySettingsNav.tsx]
@@ -29,7 +29,7 @@ Brug medlemmets redigeringshandling til at ændre den rolle eller status, siden 
 
 Ved et sikkerhedsproblem kan du bruge **Suspendér af sikkerhedshensyn**, hvis du har rettighed til at administrere medlemmer. Vælg en begrundelse, og bekræft suspensionen fra din nyligt godkendte konto. Handlingen suspenderer adgangen til denne virksomhed, tilbagekalder tilknyttede tilladelser og midlertidig dækning og sætter berørt arbejde på pause. Den kan suspendere den sidste aktive ejer; den vælger ikke en erstatning. Gennemgå beskeden om genopretning, før du forsøger at genoptage arbejdet. Medlemskaber i andre virksomheder er adskilte. En ekstern handling, der allerede er sendt, kan stadig kræve afklaring.
 
-Før du fjerner et medlem, skal du gennemgå valgene for omfordeling. Siden kan vise opgaver, der er tildelt personen, og rutiner, som vedkommende ejer. Vælg, hvad der skal ske med dem, før du bekræfter fjernelsen. Kontrollér de nye ejere og statusser bagefter.
+Før du fjerner et medlem, skal du gennemgå valgene for omfordeling og **Responsibility and credential preflight**, når den vises. Oversigten viser kun elementer, du aktuelt har adgang til, og dokumenterer ikke, at gennemgangen er fuldstændig. Følg op på ansvar og adgangsoplysninger via de enkelte elementers egne kontroller. Vælg, hvad der skal ske med tildelte opgaver og ejede rutiner, før du bekræfter fjernelsen. En utilgængelig eller ufuldstændig oversigt forhindrer ikke fjernelse eller sikkerhedssuspension. Kontrollér de nye ejere, adgangsoplysninger og statusser bagefter.
 
 Virksomhedsmedlemskab er adskilt fra en Co-workers plads i teamet. Se [Arbejd med Co-workers](/da/guides/board-operator/managing-agents) for arbejderstatus og [Eksport og sletning](/da/help/export-and-delete) for sletning af konto eller virksomhed.
 
@@ -42,6 +42,8 @@ Brug **Midlertidig workflow-dækning** under adgangsindstillinger til at lade en
 En autoriseret virksomhedsejer eller administrator kan vælge virksomhedens standardsprog og tidszone under **Company settings → General**. Dit udtrykkelige personlige sprogvalg har forrang. Virksomhedssproget bruges kun som reserve, når du ikke har et personligt valg, og det ændrer ikke andre personers gemte præferencer.
 
 Virksomhedens tidszone bruges, når en ny rutineplan oprettes uden en udtrykkelig tidszone. En tidszone, der allerede er gemt på en plan, eller som vælges udtrykkeligt for en ny plan, bevares. En ændring af virksomhedsstandarden omskriver ikke eksisterende planer.
+
+En aktuelt indlogget virksomhedsejer eller administrator kan også vælge virksomhedens **Security contact** og **Support and incident contact** under General. Kontakterne skal være berettigede, aktuelle menneskelige medlemmer. Valget registrerer ansvar og giver ingen rettigheder. Hvis adgangen eller den valgte virksomhed ændres, mens formularen er åben, skal du vente på den aktuelle kontaktliste, før du vælger og gemmer igen.
 
 ## Gennemgå enterprise-identitet og driftsforhold
 

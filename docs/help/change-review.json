@@ -128,7 +128,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
       "decision": "updated",
-      "rationale": "The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -216,7 +216,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "b2eb982600fe1588c23db79e564335e9e2ee3091d604b02a53c9060b527a8dba",
+      "sourceSha256": "a7ca8efe9f410220439480565dc53a91a992bc6189d65fa3897a32b6769ec1c2",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The generated English and Danish Help index now includes post-publication model-monitor guidance; the linked Help entry article still describes the same article search and navigation."
+      "rationale": "Generated search entries now reflect the updated English/Danish company-access Help article. Search remains current-authority scoped and this support article\u2019s navigation and privacy guidance remain accurate."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "b2eb982600fe1588c23db79e564335e9e2ee3091d604b02a53c9060b527a8dba",
+      "sourceSha256": "a7ca8efe9f410220439480565dc53a91a992bc6189d65fa3897a32b6769ec1c2",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "The generated English and Danish Help index now includes post-publication model-monitor guidance; the linked Help entry article still describes the same article search and navigation."
+      "rationale": "Generated search entries now reflect the updated English/Danish company-access Help article. Search remains current-authority scoped and this support article\u2019s navigation and privacy guidance remain accurate."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1446,7 +1446,7 @@
       "source": "ui/src/components/access/CompanySettingsNav.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "040df1c9b646731d1f21961f00b270a3929352ff9e8ffee5019c86bab160ea2d",
-      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
       "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
@@ -1454,23 +1454,23 @@
       "source": "ui/src/components/access/InvitesSection.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "35b22bd6cb76c56137d54bb454d75b1589927530f3f0ee9f9e7f082b1003e4f9",
-      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
       "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "people-and-company-access",
-      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
-      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "sourceSha256": "ef2e4a643a9e16b79de7228d038e8bfbda72fd70bd7b18c8a13c45117ba912d7",
+      "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
-      "rationale": "Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+      "rationale": "Explains current Human-only contact settings, scope-change reloads and the bounded member responsibility/credential preflight, including that incomplete preflight never blocks security revocation."
     },
     {
       "source": "ui/src/components/access/CompanySettingsNav.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "040df1c9b646731d1f21961f00b270a3929352ff9e8ffee5019c86bab160ea2d",
-      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
@@ -1478,17 +1478,17 @@
       "source": "ui/src/components/access/InvitesSection.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "35b22bd6cb76c56137d54bb454d75b1589927530f3f0ee9f9e7f082b1003e4f9",
-      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
       "articleId": "people-and-company-access-da",
-      "sourceSha256": "bd1f793eaa84c5be6931b4e1d4b27ae357e04fc3f076c291e1445f43a85ddb46",
-      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "sourceSha256": "ef2e4a643a9e16b79de7228d038e8bfbda72fd70bd7b18c8a13c45117ba912d7",
+      "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Temporary coverage and the distinct reasoned security-suspension action require the current account and session. The paired articles explain exact coverage scope and security suspension without a replacement owner or unrelated company revocation."
+      "rationale": "Explains current Human-only contact settings, scope-change reloads and the bounded member responsibility/credential preflight, including that incomplete preflight never blocks security revocation."
     },
     {
       "source": "packages/shared/src/v9-feature-flags.ts",
@@ -1624,7 +1624,7 @@
       "sourceSha256": "086106438a168ffb3a1ea34f01a9674ff4cfc00b889e9af97a49488d9061e53b",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Blocked-task notice wording now uses the Blentera brand; its recovery action and the article’s instructions are unchanged."
+      "rationale": "Blocked-task notice wording now uses the Blentera brand; its recovery action and the article\u2019s instructions are unchanged."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1632,7 +1632,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -1672,7 +1672,7 @@
       "sourceSha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Gennemgået den aktuelle heartbeat-kilde: fortsættelseskvitteringer bindes til den præcise virksomhed, agent, opgave, interaktion og status; afviste svar vækker kun agenten med politikken wake_assignee eller ved en afvist planændring. Artiklen vejleder fortsat om at kontrollere den oprindelige opgave og dens aktuelle kørsel før et nyt forsøg; brugerens genopretningsvejledning ændres ikke."
+      "rationale": "Gennemg\u00e5et den aktuelle heartbeat-kilde: forts\u00e6ttelseskvitteringer bindes til den pr\u00e6cise virksomhed, agent, opgave, interaktion og status; afviste svar v\u00e6kker kun agenten med politikken wake_assignee eller ved en afvist plan\u00e6ndring. Artiklen vejleder fortsat om at kontrollere den oprindelige opgave og dens aktuelle k\u00f8rsel f\u00f8r et nyt fors\u00f8g; brugerens genopretningsvejledning \u00e6ndres ikke."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1728,7 +1728,7 @@
       "sourceSha256": "086106438a168ffb3a1ea34f01a9674ff4cfc00b889e9af97a49488d9061e53b",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: blocked-task notice wording now uses the Blentera brand; its recovery action and the article’s instructions are unchanged."
+      "rationale": "Danish version checked against the same source delta: blocked-task notice wording now uses the Blentera brand; its recovery action and the article\u2019s instructions are unchanged."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1736,7 +1736,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -1976,7 +1976,7 @@
       "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
       "articleSha256": "633d9fb13ca883177cc38cdb915634144b48916e4c5e5e0e09360b179789f803",
       "decision": "updated",
-      "rationale": "The agents list changes Paperclip labels to Blentera; the article’s current team setup and activation guidance remains accurate."
+      "rationale": "The agents list changes Paperclip labels to Blentera; the article\u2019s current team setup and activation guidance remains accurate."
     },
     {
       "source": "server/src/services/agents.ts",
@@ -2000,7 +2000,7 @@
       "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
       "articleSha256": "f8c953c7d37db25af3ac45647d98b0a90c65a3afd1e133398110ed02c1c8b866",
       "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: the agents list changes Paperclip labels to Blentera; the article’s current team setup and activation guidance remains accurate."
+      "rationale": "Danish version checked against the same source delta: the agents list changes Paperclip labels to Blentera; the article\u2019s current team setup and activation guidance remains accurate."
     },
     {
       "source": "server/src/services/memory/memory-jobs.ts",
@@ -2056,7 +2056,7 @@
       "sourceSha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Reviewed the current heartbeat source: interaction wake idempotency changes task continuation only, including exact-source replay for eligible rejected responses. Native cleanup still carries current run/lease provenance and waits for confirmed process stop and storage removal, so the article’s export, deletion, retention, and managed-cleanup guidance remains accurate."
+      "rationale": "Reviewed the current heartbeat source: interaction wake idempotency changes task continuation only, including exact-source replay for eligible rejected responses. Native cleanup still carries current run/lease provenance and waits for confirmed process stop and storage removal, so the article\u2019s export, deletion, retention, and managed-cleanup guidance remains accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
@@ -2064,21 +2064,21 @@
       "sourceSha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Gennemgået den aktuelle heartbeat-kilde: idempotens for interaktionsvækninger ændrer kun opgavefortsættelse, herunder genbrug af præcis kilde for tilladte afviste svar. Native-oprydning viderefører fortsat aktuel kørsels- og lease-proveniens og afventer bekræftet processtop og fjernelse fra lageret, så artiklens vejledning om eksport, sletning, opbevaring og administreret oprydning fortsat er korrekt."
+      "rationale": "Gennemg\u00e5et den aktuelle heartbeat-kilde: idempotens for interaktionsv\u00e6kninger \u00e6ndrer kun opgaveforts\u00e6ttelse, herunder genbrug af pr\u00e6cis kilde for tilladte afviste svar. Native-oprydning videref\u00f8rer fortsat aktuel k\u00f8rsels- og lease-proveniens og afventer bekr\u00e6ftet processtop og fjernelse fra lageret, s\u00e5 artiklens vejledning om eksport, sletning, opbevaring og administreret oprydning fortsat er korrekt."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
       "articleId": "people-and-company-access",
-      "sourceSha256": "3063818fca9d6c7fad491f6134ff8c08a96323252bf2eb904cfc188c373609a6",
-      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "sourceSha256": "fe6e05de7f9e176e9a23650d613b9896a37fc05faeea3d8d41b6cd486dddbdc6",
+      "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
-      "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+      "rationale": "Explains current Human-only contact settings, scope-change reloads and the bounded member responsibility/credential preflight, including that incomplete preflight never blocks security revocation."
     },
     {
       "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "c092cbd38652b71157cc39e706140bfbe7a4e463d5c4897369842d399be8c1e3",
-      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
       "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
@@ -2086,7 +2086,7 @@
       "source": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "851e6d36f19e1e2fcc4e414dccdb4b5e230f57b86c7fab44c7f32ee77c84a800",
-      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
       "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
@@ -2094,7 +2094,7 @@
       "source": "ui/src/pages/Enterprise.tsx",
       "articleId": "people-and-company-access",
       "sourceSha256": "667e64f241169d7bef3ba8d886a12b70ced778af2bf57dcf34c94b4d2111576f",
-      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
       "rationale": "The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
@@ -2102,7 +2102,7 @@
       "source": "server/src/services/enterprise/identity-policy.ts",
       "articleId": "people-and-company-access",
       "sourceSha256": "66ab09946d66b5d5bd1d0e98f97355658e070e2a712fa805df8bb669d0332747",
-      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
       "rationale": "Identity-policy suspension retains current membership enforcement and revokes temporary workflow coverage; the article retains the separate identity activation qualification caveat."
     },
@@ -2110,23 +2110,23 @@
       "source": "server/src/services/routines.ts",
       "articleId": "people-and-company-access",
       "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
-      "articleSha256": "d61fa3231a836a30745ff74ee60c195df8c538ba4febb1f0ccfaa9091f5423a5",
+      "articleSha256": "1e804cb7e33fe610120d6f30d6fa556cd27e382028ad43d939378cc88e7ec8af",
       "decision": "updated",
       "rationale": "Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
       "articleId": "people-and-company-access-da",
-      "sourceSha256": "3063818fca9d6c7fad491f6134ff8c08a96323252bf2eb904cfc188c373609a6",
-      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "sourceSha256": "fe6e05de7f9e176e9a23650d613b9896a37fc05faeea3d8d41b6cd486dddbdc6",
+      "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
+      "rationale": "Explains current Human-only contact settings, scope-change reloads and the bounded member responsibility/credential preflight, including that incomplete preflight never blocks security revocation."
     },
     {
       "source": "ui/src/components/AccountExperienceLanguageSelect.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "c092cbd38652b71157cc39e706140bfbe7a4e463d5c4897369842d399be8c1e3",
-      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
@@ -2134,7 +2134,7 @@
       "source": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "851e6d36f19e1e2fcc4e414dccdb4b5e230f57b86c7fab44c7f32ee77c84a800",
-      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
@@ -2142,7 +2142,7 @@
       "source": "ui/src/pages/Enterprise.tsx",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "667e64f241169d7bef3ba8d886a12b70ced778af2bf57dcf34c94b4d2111576f",
-      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the current coverage/security access guidance or configured bounded Product changes history. This linked source is unchanged and its existing controls retain their documented behavior."
     },
@@ -2150,7 +2150,7 @@
       "source": "server/src/services/enterprise/identity-policy.ts",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "66ab09946d66b5d5bd1d0e98f97355658e070e2a712fa805df8bb669d0332747",
-      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. Identity-policy suspension retains current membership enforcement and revokes temporary workflow coverage; the article retains the separate identity activation qualification caveat."
     },
@@ -2158,7 +2158,7 @@
       "source": "server/src/services/routines.ts",
       "articleId": "people-and-company-access-da",
       "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
-      "articleSha256": "b2c45c4d7946e975386f05856f47a0a1a3a07d88602bce933e49740bdb992b10",
+      "articleSha256": "a5885bddfed301f22a7c86d5e7c45685fd1f9ea602296786e32451b6456e08e8",
       "decision": "updated",
       "rationale": "Danish counterpart checked against the same source behavior. Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
     },
