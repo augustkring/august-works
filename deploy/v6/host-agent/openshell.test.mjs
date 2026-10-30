@@ -31,6 +31,11 @@ const policyDocument = {
   network_policies: {},
 };
 const policyHash = "b".repeat(64);
+const resourceLimits = { cpuMillis: 1500, memoryBytes: 536870912, pidsLimit: 128 };
+const hostAdmission = (idempotencyKey, document = policyDocument, credentialProviderProfile) => ({
+  policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey, document,
+  resourceLimits, ...(credentialProviderProfile ? { credentialProviderProfile } : {}),
+});
 const deadline = () => new Date(Date.now() + 20000).toISOString();
 async function fixture(work, hooks = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "aw-v7-host-cli-"));
@@ -52,6 +57,7 @@ async function fixture(work, hooks = {}) {
     let sandboxId = randomUUID(),
       phase = hooks.phase ?? "Ready",
       wrongScope = false,
+      resourceConfig = { NanoCpus: 0, Memory: 0, MemorySwap: 0, PidsLimit: 0 },
       attached = [{ name: "fixture-provider" }],
       physical = hooks.physical ?? false,
       running = hooks.running ?? false,
@@ -59,7 +65,8 @@ async function fixture(work, hooks = {}) {
       configRevision = 1,
       wrongContainerLabels = hooks.wrongContainerLabels ?? false,
       containerImageDigest = hooks.containerImageDigest ?? input("inspect").imageDigest;
-    const containerId = "d".repeat(64),
+    let containerId = "d".repeat(64);
+    const originalContainerId = containerId,
       imageId = "sha256:" + "e".repeat(64);
     const run = async (file, args, options) => {
       calls.push({ args, options });
@@ -95,10 +102,20 @@ async function fixture(work, hooks = {}) {
                     "aw.generation": "1",
                   },
                 },
+                HostConfig: { ...resourceConfig },
                 State: { Running: running },
               },
             ]),
           };
+        if (args[0] === "update") {
+          const updateTarget = args.at(-1);
+          assert.equal(updateTarget, originalContainerId, "Docker resource updates must target the full pinned container ID");
+          if (updateTarget !== containerId) throw new Error("fixture-container-replaced");
+          const option = name => args[args.indexOf(name) + 1];
+          resourceConfig = { NanoCpus: Math.round(Number(option("--cpus")) * 1e9), Memory: Number(option("--memory")),
+            MemorySwap: Number(option("--memory-swap")), PidsLimit: Number(option("--pids-limit")) };
+          return { stdout: "fixture update" };
+        }
         throw new Error("fixture-unexpected-docker-command");
       }
       assert.equal(options.env.PATH, "/usr/bin:/bin");
@@ -190,6 +207,9 @@ async function fixture(work, hooks = {}) {
       setPhase: (value) => { phase = value; running = value === "Ready"; },
       setWrongContainerLabels: () => { wrongContainerLabels = true; },
       setContainerImageDigest: (value) => { containerImageDigest = value; },
+      resourceConfig: () => ({ ...resourceConfig }),
+      setResourceConfig: value => { resourceConfig = { ...value }; },
+      replaceContainerBeforeUpdate: () => { containerId = "f".repeat(64); },
       changePolicyRevision: () => { configRevision += 1; },
       swapScope: () => {
         wrongScope = true;
@@ -256,7 +276,7 @@ function brokerExecRequest() {
     policyHash: request.policyHash,
     brokerSessionId: request.requestId,
     endpointOrigin: "https://paperclip.example.test/",
-    bindings: [],
+    bindings: [{ binary: "/usr/bin/node" }],
     expiresAt,
   };
   const claims = {
@@ -551,7 +571,7 @@ test("apply and start use pinned OpenShell policy APIs plus exact Docker identit
     setPhase("Stopped");
     const applied = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "policy-test", document: policyDocument } },
+      { ...input("apply"), admission: hostAdmission("policy-test", policyDocument) },
       deadline(),
     );
     assert.equal(applied.reply.action, "apply");
@@ -579,11 +599,83 @@ test("apply and start use pinned OpenShell policy APIs plus exact Docker identit
     assert.ok(calls.some(({ args }) => args.includes("sandbox") && args.includes("start")));
   }));
 
+test("resource limits flow through a typed admission and are applied and observed on the pinned Docker ID", async () =>
+  fixture(async ({ engine, calls, enablePhysical, setPhase, resourceConfig, root }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    const result = await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("resource-bounds") }, deadline());
+    assert.equal(result.reply.action, "apply");
+    assert.equal(result.reply.applied, true);
+    assert.deepEqual(resourceConfig(), { NanoCpus: 1500000000, Memory: 536870912, MemorySwap: 536870912, PidsLimit: 128 });
+    const update = calls.find(call => call.args[0] === "update");
+    assert.ok(update);
+    assert.equal(update.args.at(-1), "d".repeat(64));
+    const journal = JSON.parse(await readFile(path.join(root, "openshell-journal.json"), "utf8"));
+    assert.deepEqual(journal.scopes[scope.bindingId].policy.resourceLimits, resourceLimits);
+    assert.ok(calls.some(call => call.args[0] === "inspect" && call.args[1] === "d".repeat(64)));
+  }));
+
+test("resource HostConfig drift blocks restart before the name-scoped OpenShell start call", async () =>
+  fixture(async ({ engine, calls, enablePhysical, setPhase, setResourceConfig }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    const applied = await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("resource-drift") }, deadline());
+    assert.equal(applied.success, true);
+    setResourceConfig({ NanoCpus: 250000000, Memory: 134217728, MemorySwap: 134217728, PidsLimit: 32 });
+    calls.length = 0;
+    const started = await engine.execute(randomUUID(), {
+      ...input("start"),
+      start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "resource-drift-start" },
+    }, deadline());
+    assert.equal(started.success, false);
+    assert.equal(started.errorCode, "sandbox_operation_unsupported");
+    assert.equal(calls.some(call => call.args.includes("sandbox") && call.args.includes("start")), false);
+  }));
+
+test("a same-name replacement between Docker observation and resource update never receives the update", async () => {
+  let replaceContainer;
+  await fixture(async ({ engine, calls, enablePhysical, setPhase, replaceContainerBeforeUpdate }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    replaceContainer = replaceContainerBeforeUpdate;
+    const result = await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("resource-replacement") }, deadline());
+    assert.notEqual(result.success, true);
+    const update = calls.find(call => call.args[0] === "update");
+    assert.ok(update);
+    assert.equal(update.args.at(-1), "d".repeat(64));
+    assert.notEqual(update.args.at(-1), "f".repeat(64));
+  }, { beforeCommand(file, args) { if (file === "docker" && args[0] === "update") replaceContainer?.(); } });
+});
+
+test("a broker profile with the exact authorized binary survives profile inspection", async () =>
+  fixture(async ({ engine, calls, enablePhysical, setPhase }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    const profileHash = createHash("sha256").update(JSON.stringify(canonical(brokerProfile))).digest("hex");
+    const result = await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("exact-binary-profile", policyDocument,
+      { id: brokerProfile.id, hash: profileHash, binaries: ["/usr/bin/node"] }) }, deadline());
+    assert.equal(result.success, true, JSON.stringify({ errorCode: result.errorCode, calls: calls.map(call => call.args) }));
+    assert.equal(result.reply.applied, true);
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes("profile describe paperclip-broker")));
+  }, { brokerProfile }));
+
+test("broker binary profile must exactly equal the authorized compiled executable set", async () =>
+  fixture(async ({ engine, calls, enablePhysical, setPhase }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    const profileHash = createHash("sha256").update(JSON.stringify(canonical(brokerProfile))).digest("hex");
+    const result = await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("wrong-binary-profile", policyDocument,
+      { id: brokerProfile.id, hash: profileHash, binaries: ["/usr/bin/other"] }) }, deadline());
+    assert.equal(result.success, false);
+    assert.equal(result.errorCode, "sandbox_operation_unsupported");
+    assert.equal(calls.some(call => call.args[0] === "update"), false);
+  }, { brokerProfile }));
+
 test("expired source policy deadlines fail before any host or CLI observation", async () =>
   fixture(async ({ engine, calls }) => {
     const expiredApply = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, expiresAt: new Date(0).toISOString(), idempotencyKey: "expired-apply", document: policyDocument } },
+      { ...input("apply"), admission: { ...hostAdmission("expired-apply"), expiresAt: new Date(0).toISOString() } },
       deadline(),
     );
     assert.equal(expiredApply.errorCode, "sandbox_scope_changed");
@@ -602,12 +694,7 @@ test("a persisted unknown command intent is never replayed after host restart", 
     const commandId = randomUUID();
     const request = {
       ...input("apply"),
-      admission: {
-        policyHash,
-        expiresAt: new Date(Date.now() + 50000).toISOString(),
-        idempotencyKey: "unknown-after-restart",
-        document: policyDocument,
-      },
+      admission: hostAdmission("unknown-after-restart"),
     };
     const journalPath = path.join(root, "openshell-journal.json");
     const journal = JSON.parse(await readFile(journalPath, "utf8"));
@@ -631,7 +718,7 @@ test("static policy changes require sandbox recreation before any policy mutatio
     candidate.process.run_as_user = "1001";
     const result = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "static-change", document: candidate } },
+      { ...input("apply"), admission: hostAdmission("static-change", candidate) },
       deadline(),
     );
     assert.equal(result.reply.applied, false);
@@ -646,7 +733,7 @@ test("foreign Docker labels block policy mutation before any effect", async () =
     setWrongContainerLabels();
     const result = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "foreign-label", document: policyDocument } },
+      { ...input("apply"), admission: hostAdmission("foreign-label", policyDocument) },
       deadline(),
     );
     assert.equal(result.success, false);
@@ -661,7 +748,7 @@ test("an image repository digest mismatch blocks policy mutation before any effe
     setContainerImageDigest("fixture.invalid/other@sha256:" + "f".repeat(64));
     const result = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "wrong-image", document: policyDocument } },
+      { ...input("apply"), admission: hostAdmission("wrong-image", policyDocument) },
       deadline(),
     );
     assert.equal(result.success, false);
@@ -675,7 +762,7 @@ test("a changed OpenShell policy revision blocks workload start", async () =>
     setPhase("Stopped");
     const applied = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "revision-test", document: policyDocument } },
+      { ...input("apply"), admission: hostAdmission("revision-test", policyDocument) },
       deadline(),
     );
     assert.equal(applied.reply.applied, true);
@@ -741,7 +828,7 @@ test("sandbox exec streams through pinned CLI argv without shell and journals no
     setPhase("Stopped");
     await engine.execute(randomUUID(), {
       ...input("apply"),
-      admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "exec-stream-policy", document: policyDocument },
+      admission: hostAdmission("exec-stream-policy", policyDocument),
     }, deadline());
     await engine.execute(randomUUID(), {
       ...input("start"),
@@ -787,7 +874,7 @@ test("sandbox broker capability enters through an expiring native provider, neve
     setPhase("Stopped");
     await engine.execute(randomUUID(), {
       ...input("apply"),
-      admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "broker-stream-policy", document: policyDocument },
+      admission: hostAdmission("broker-stream-policy", policyDocument),
     }, deadline());
     await engine.execute(randomUUID(), {
       ...input("start"),
@@ -812,6 +899,29 @@ test("sandbox broker capability enters through an expiring native provider, neve
   }, hooks);
 });
 
+test("broker use rejects a profile whose signed executable binding differs even when profile hash is current", async () => {
+  let spawned = 0;
+  const changedProfile = { ...brokerProfile, binaries: [{ path: "/usr/bin/python" }] };
+  const hooks = { brokerProfile: changedProfile, spawnProcess() { spawned += 1; throw new Error("should-not-spawn"); } };
+  await fixture(async ({ engine, enablePhysical, setPhase, calls }) => {
+    enablePhysical(); setPhase("Stopped");
+    await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("binary-token-policy") }, deadline());
+    await engine.execute(randomUUID(), { ...input("start"), start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "binary-token-start" } }, deadline());
+    const { request, token } = brokerExecRequest();
+    hooks.brokerToken = token;
+    request.brokerCredential.profileHash = createHash("sha256").update(JSON.stringify(canonical(changedProfile))).digest("hex");
+    request.commandDigest = createHash("sha256").update(JSON.stringify(canonical({ argv: request.argv, cwd: request.cwd, env: request.env,
+      stdinHash: createHash("sha256").update(Buffer.from(request.stdinBase64, "base64")).digest("hex"), timeoutDeadline: request.deadlineAt,
+      brokerCapabilityHash: createHash("sha256").update(token).digest("hex"),
+      brokerProviderProfile: { id: request.brokerCredential.profileId, hash: request.brokerCredential.profileHash },
+      modelBrokerCapabilityHash: null, modelBrokerProviderProfile: null }))).digest("hex");
+    const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
+    await assert.rejects(engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}), /sandbox_operation_unsupported/);
+    assert.equal(spawned, 0);
+    assert.equal(calls.some(call => call.args.slice(4).join(" ").includes("provider create")), false);
+  }, hooks);
+});
+
 test("managed model capability uses its exact Messages route profile and stays out of workload env and argv", async () => {
   let spawnedArgs = null;
   const hooks = {
@@ -825,7 +935,7 @@ test("managed model capability uses its exact Messages route profile and stays o
   };
   await fixture(async ({ engine, enablePhysical, setPhase, calls }) => {
     enablePhysical(); setPhase("Stopped");
-    await engine.execute(randomUUID(), { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "model-policy", document: policyDocument } }, deadline());
+    await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("model-policy", policyDocument) }, deadline());
     await engine.execute(randomUUID(), { ...input("start"), start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "model-start" } }, deadline());
     const { request, token } = modelBrokerExecRequest(); hooks.brokerToken = token;
     const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
@@ -878,7 +988,7 @@ test("sandbox exec preflight cancellation and deadline expiry never spawn the CL
     setPhase("Stopped");
     await engine.execute(randomUUID(), {
       ...input("apply"),
-      admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "exec-preflight-policy", document: policyDocument },
+      admission: hostAdmission("exec-preflight-policy", policyDocument),
     }, deadline());
     await engine.execute(randomUUID(), {
       ...input("start"),

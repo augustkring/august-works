@@ -72,6 +72,7 @@ export interface SandboxBrokerBindingClaim {
   gatewayPublicId: string;
   endpointPath: string;
   allowedTools: string[];
+  binary: string | null;
   destination: {
     hostname: string;
     port: number;
@@ -524,7 +525,8 @@ function parseSandboxBrokerCapabilityClaim(value: unknown): SandboxBrokerCapabil
     if (!destination || typeof destination !== "object" || Array.isArray(destination)) return false;
     const target = destination as Record<string, unknown>;
     const tools = binding.allowedTools;
-    return Object.keys(binding).sort().join(",") === "allowedTools,connectionId,destination,endpointPath,gatewayPublicId,grantVersionHash" &&
+    return Object.keys(binding).sort().join(",") === "allowedTools,binary,connectionId,destination,endpointPath,gatewayPublicId,grantVersionHash" &&
+      (binding.binary === null || typeof binding.binary === "string" && binding.binary.length <= 1000 && binding.binary.startsWith("/") && !binding.binary.includes("\\") && !binding.binary.includes("\0") && !binding.binary.split("/").some(part => part === "." || part === "..") && !/[\r\n*?]/.test(binding.binary) && !binding.binary.includes("//") && (binding.binary === "/" || !binding.binary.endsWith("/"))) &&
       typeof binding.connectionId === "string" && uuid.test(binding.connectionId) &&
       typeof binding.grantVersionHash === "string" && digest.test(binding.grantVersionHash) &&
       typeof binding.gatewayPublicId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(binding.gatewayPublicId) &&

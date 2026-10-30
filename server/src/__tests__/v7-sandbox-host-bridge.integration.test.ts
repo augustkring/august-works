@@ -251,7 +251,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         inspectWorkload: async () => ({ ...await bridge.inspect(identity), state, policyHash, controlsHealthy: true }),
         applyPolicy: async input => {
           const hash = nativeSha256(input.policy);
-          const result = await bridge.apply({ ...identity, document: projectOpenShellPolicy(input.policy.compiledPolicy).document, policyHash: hash, expiresAt: input.expiresAt, idempotencyKey: `v7-sandbox-policy:${identity.bindingId}:${identity.cellGeneration}:${hash}` });
+          const result = await bridge.apply({ ...identity, document: projectOpenShellPolicy(input.policy.compiledPolicy).document, policyHash: hash, expiresAt: input.expiresAt, idempotencyKey: `v7-sandbox-policy:${identity.bindingId}:${identity.cellGeneration}:${hash}`, resourceLimits: { cpuMillis: input.policy.compiledPolicy.resources.cpuMillis, memoryBytes: input.policy.compiledPolicy.resources.memoryBytes, pidsLimit: input.policy.compiledPolicy.resources.pidsLimit } });
           if (result.applied) { state = "ready"; policyHash = hash; }
           return { applied: result.applied, requiresRecreate: result.requiresRecreate, observedPolicyHash: result.policyHash, unsupportedFeatures: [] };
         },
@@ -365,8 +365,15 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         policyHash: "f".repeat(64),
         expiresAt: new Date(0).toISOString(),
         idempotencyKey: "expired-source-policy",
+        resourceLimits: { cpuMillis: 1000, memoryBytes: 536870912, pidsLimit: 256 },
       });
       await expect(expired).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, cell.id))).toHaveLength(0);
+      await expect(bridge.apply({
+        ...scope, document: projectOpenShellPolicy(policyFixture()).document,
+        policyHash: "f".repeat(64), expiresAt: new Date(Date.now() + 8000).toISOString(),
+        idempotencyKey: "invalid-resource-envelope", resourceLimits: { cpuMillis: 0, memoryBytes: 536870912, pidsLimit: 256 },
+      })).rejects.toThrow();
       expect(await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, cell.id))).toHaveLength(0);
 
       const expiresAt = new Date(Date.now() + 8000);
@@ -376,6 +383,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         policyHash: "e".repeat(64),
         expiresAt: expiresAt.toISOString(),
         idempotencyKey: "bounded-source-policy",
+        resourceLimits: { cpuMillis: 1000, memoryBytes: 536870912, pidsLimit: 256 },
       }).catch((error) => error);
       const command = await pending();
       expect(command.deadlineAt.getTime()).toBeLessThanOrEqual(expiresAt.getTime());

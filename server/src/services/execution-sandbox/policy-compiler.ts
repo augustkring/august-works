@@ -3,13 +3,14 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 
 function within(path: string, boundary: string) { return boundary === "/" || path === boundary || path.startsWith(`${boundary.replace(/\/$/, "")}/`); }
 function pathsWithin(candidate: string[], boundary: string[]) { return candidate.every(path => boundary.some(root => within(path, root))); }
+function pathOverlaps(candidate: string, root: string) { return within(candidate, root) || within(root, candidate); }
 function subset<T>(candidate: T[], boundary: T[]) { return candidate.every(value => boundary.includes(value)); }
 
 /** This structural subset proof is not a Linux enforcement test or a backend
  * prover. Callers supply current server-derived grants separately from policy. */
 export type ResolvedSandboxBrokerBinding = {
   connectionId: string; grantVersionHash: string; gatewayPublicId: string; endpointPath: string;
-  allowedTools: string[]; destination: { hostname: string; port: number; method: "POST"; path: string };
+  allowedTools: string[]; binary: string | null; destination: { hostname: string; port: number; method: "POST"; path: string };
 };
 export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate: SandboxPolicy; capabilities: SandboxCapabilitySnapshot | null; authorizedConnectionGrantHashes: Record<string, string>; credentialBrokerOrigin?: string | null; credentialBrokerBindings?: ResolvedSandboxBrokerBinding[]; sourcePolicyRefs: string[]; now?: Date }): SandboxPolicyCompilation {
   const boundary = sandboxPolicySchema.parse(input.boundary), candidate = sandboxPolicySchema.parse(input.candidate), failures: string[] = [], unsupported: string[] = [];
@@ -56,10 +57,26 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
       candidate.credentials.bindings.some(binding => !resolvedBrokerBindings.some(resolved =>
         resolved.connectionId === binding.connectionId && resolved.grantVersionHash === binding.grantVersionHash &&
         resolved.destination.hostname === binding.hostname && resolved.destination.port === binding.port &&
-        binding.methods.includes("POST") && pathsWithin([resolved.destination.path], binding.pathPrefixes)))) {
+        resolved.binary === binding.binary && binding.methods.includes("POST") && pathsWithin([resolved.destination.path], binding.pathPrefixes)))) {
       failures.push("credential_broker_binding_resolution_mismatch");
     }
-    if (candidate.credentials.bindings.some(binding => binding.binary !== null)) unsupported.push("credential_binary_binding_not_enforced");
+    const binaryBindings = candidate.credentials.bindings.map(binding => binding.binary);
+    if (binaryBindings.some(binary => binary !== null)) {
+      if (binaryBindings.some(binary => binary === null) || new Set(binaryBindings).size !== 1) {
+        unsupported.push("credential_binary_profile_not_separable");
+      } else {
+        const binary = binaryBindings[0];
+        if (typeof binary === "string") {
+          if (resolvedBrokerBindings.some(binding => binding.binary !== binary)) failures.push("credential_binary_grant_resolution_mismatch");
+          if (!candidate.process.allowedBinaries.includes(binary)) failures.push("credential_binary_not_in_process_boundary");
+          if (!pathsWithin([binary], candidate.filesystem.readPaths) ||
+            candidate.filesystem.writePaths.some(root => pathOverlaps(binary, root)) ||
+            candidate.filesystem.deniedPaths.some(root => within(binary, root))) failures.push("credential_binary_not_immutable");
+          if (!caps?.credentialBindingDimensions.includes("binary")) unsupported.push("credential_binary_binding_missing");
+          if (!caps?.credentialBrokerProviderProfile) unsupported.push("credential_binary_profile_unqualified");
+        }
+      }
+    }
     const endpoints: NonNullable<typeof input.credentialBrokerBindings> = [];
     for (const resolved of resolvedBrokerBindings) {
       const expectedPath = `/mcp/gateways/${resolved.gatewayPublicId}`;

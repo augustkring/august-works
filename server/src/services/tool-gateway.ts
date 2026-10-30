@@ -447,6 +447,7 @@ export interface SandboxCredentialBrokerBinding {
   gatewayPublicId: string;
   endpointPath: string;
   allowedTools: string[];
+  binary: string | null;
   destination: { hostname: string; port: number; method: "POST"; path: string };
 }
 
@@ -9941,7 +9942,7 @@ export function createToolGatewayService(
       const path = endpoint.pathname || "/";
       if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash ||
         endpoint.hostname !== binding.hostname || port !== binding.port || !binding.methods.includes("POST") ||
-        !binding.pathPrefixes.some(prefix => prefix === "/" || path === prefix || path.startsWith(`${prefix.replace(/\/$/, "")}/`)) || binding.binary !== null) {
+        !binding.pathPrefixes.some(prefix => prefix === "/" || path === prefix || path.startsWith(`${prefix.replace(/\/$/, "")}/`))) {
         throw new ToolGatewayHttpError(409, "Credential broker destination does not match the compiled connection endpoint", "sandbox_broker_destination_changed");
       }
       const secretVersions = await connectedCredentialVersionSnapshots(connection, grant, { requireResolved: true });
@@ -10048,6 +10049,7 @@ export function createToolGatewayService(
         gatewayPublicId: selected.gateway.gatewayPublicId,
         endpointPath: `/mcp/gateways/${selected.gateway.gatewayPublicId}`,
         allowedTools,
+        binary: binding.binary,
         destination: { hostname: endpoint.hostname, port, method: "POST", path },
       });
     }

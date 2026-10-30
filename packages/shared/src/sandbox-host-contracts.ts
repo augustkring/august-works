@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sandboxCapabilitySnapshotSchema } from "./execution-sandbox.js";
+import { sandboxCapabilitySnapshotSchema, sandboxPolicySchema } from "./execution-sandbox.js";
 import { runtimeGenerationSchema } from "./runtime-host-contracts.js";
 
 export const SANDBOX_HOST_COMMAND = "v7_openshell_rpc";
@@ -17,6 +17,13 @@ export const sandboxHostScopeSchema = z
 
 // This is the exact OpenShell v0.1.2 policy shape emitted by `policy get
 // --full --output json` for the subset the AW projection can currently use.
+// Shared policy units and limits are the source of truth; disk and wall-clock
+// are deliberately absent until this host has an enforcing/observable owner.
+const sandboxDockerResourceLimitsSchema = sandboxPolicySchema.shape.resources.pick({
+  cpuMillis: true,
+  memoryBytes: true,
+  pidsLimit: true,
+}).strict();
 const openShellObservedDocumentSchema = z
   .object({
     version: z.literal(1),
@@ -109,6 +116,12 @@ export const sandboxHostRequestSchema = z
         expiresAt: z.iso.datetime(),
         idempotencyKey: z.string().min(1).max(200),
         document: openShellObservedDocumentSchema,
+        resourceLimits: sandboxDockerResourceLimitsSchema,
+        credentialProviderProfile: z.object({
+          id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
+          hash,
+          binaries: z.array(z.string().min(1).max(1000).refine(value => value.startsWith('/') && !value.includes('\\') && !value.includes('\0') && !value.split('/').some(part => part === '.' || part === '..') && !/[\r\n*?]/.test(value) && !value.includes('//') && (value === '/' || !value.endsWith('/')))).max(32),
+        }).strict().optional(),
       })
       .strict()
       .optional(),

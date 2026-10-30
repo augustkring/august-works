@@ -13,7 +13,9 @@ export interface OpenShellHostBridge {
   prepare(scope: SandboxIdentity): Promise<PreparedSandbox>;
   inspect(scope: SandboxIdentity): Promise<SandboxObservation>;
   effectivePolicy(scope: SandboxIdentity): Promise<OpenShellPolicyDocument>;
-  apply(scope: SandboxIdentity & { document: OpenShellPolicyDocument; policyHash: string; expiresAt: string; idempotencyKey: string }): Promise<{ applied: boolean; policyHash: string | null; requiresRecreate?: boolean }>;
+  apply(scope: SandboxIdentity & { document: OpenShellPolicyDocument; policyHash: string; expiresAt: string; idempotencyKey: string;
+    resourceLimits: Pick<SandboxPolicy["resources"], "cpuMillis" | "memoryBytes" | "pidsLimit">;
+    credentialProviderProfile?: { id: string; hash: string; binaries: string[] } }): Promise<{ applied: boolean; policyHash: string | null; requiresRecreate?: boolean }>;
   start(scope: SandboxIdentity & { expiresAt: string; policyHash: string; idempotencyKey: string }): Promise<{ operationId: string }>;
   /** Revocation and native Stop must be independently available. */
   revokeProviders(scope: SandboxIdentity): Promise<void>;
@@ -89,7 +91,19 @@ export function openShellBackend(options: {
       if (boundary.unsupportedFeatures.length) return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: boundary.unsupportedFeatures };
       const requestedProof = await checkOpenShellBoundary({ ...options.prover, candidate: projection.document, boundary: boundary.document });
       if (requestedProof.result !== "within_boundary") return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: [`boundary:${requestedProof.result}`] };
-      const policyHash = nativeSha256(input.policy), receipt = await bridge.apply({ ...identity, document: projection.document, policyHash, expiresAt: input.expiresAt, idempotencyKey: `v7-sandbox-policy:${identity.bindingId}:${identity.cellGeneration}:${policyHash}` });
+      const policyHash = nativeSha256(input.policy);
+      const brokerBinaries = broker?.bindings.map(binding => binding.binary) ?? [];
+      const exactCredentialBinary = brokerBinaries.length > 0 && brokerBinaries.every(binary => binary !== null) &&
+        new Set(brokerBinaries).size === 1;
+      const credentialProviderProfile = exactCredentialBinary && currentCaps?.credentialBrokerProviderProfile
+        ? { id: currentCaps.credentialBrokerProviderProfile.id, hash: currentCaps.credentialBrokerProviderProfile.hash,
+            binaries: [...new Set(brokerBinaries as string[])].sort() }
+        : undefined;
+      const receipt = await bridge.apply({ ...identity, document: projection.document, policyHash, expiresAt: input.expiresAt,
+        idempotencyKey: `v7-sandbox-policy:${identity.bindingId}:${identity.cellGeneration}:${policyHash}`,
+        resourceLimits: { cpuMillis: input.policy.compiledPolicy.resources.cpuMillis,
+          memoryBytes: input.policy.compiledPolicy.resources.memoryBytes, pidsLimit: input.policy.compiledPolicy.resources.pidsLimit },
+        ...(credentialProviderProfile ? { credentialProviderProfile } : {}) });
       if (receipt.requiresRecreate) return { applied: false, requiresRecreate: true, observedPolicyHash: null, unsupportedFeatures: [] };
       if (!receipt.applied || receipt.policyHash !== policyHash) throw conflict("OpenShell did not observe the exact requested policy");
       try {

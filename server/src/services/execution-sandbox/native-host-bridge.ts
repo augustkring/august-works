@@ -611,6 +611,8 @@ export function nativeSandboxHostTransport(
               expiresAt: input.expiresAt,
               idempotencyKey: input.idempotencyKey,
               document: input.document,
+              resourceLimits: input.resourceLimits,
+              ...(input.credentialProviderProfile ? { credentialProviderProfile: input.credentialProviderProfile } : {}),
             },
             undefined,
             input.idempotencyKey,

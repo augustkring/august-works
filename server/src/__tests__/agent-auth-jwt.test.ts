@@ -144,7 +144,7 @@ describe("agent local JWT", () => {
       manifestId: "77777777-7777-4777-8777-777777777777", manifestHash: "a".repeat(64),
       policySnapshotId: "88888888-8888-4888-8888-888888888888", policyHash: "b".repeat(64),
       brokerSessionId: "99999999-9999-4999-8999-999999999999", endpointOrigin: "https://paperclip.example/",
-      bindings: [{ connectionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", grantVersionHash: "c".repeat(64), gatewayPublicId: "assigned-gateway", endpointPath: "/mcp/gateways/assigned-gateway", allowedTools: ["read_issue"], destination: { hostname: "api.example.com", port: 443, method: "POST" as const, path: "/v1/read" } }],
+      bindings: [{ connectionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", grantVersionHash: "c".repeat(64), gatewayPublicId: "assigned-gateway", endpointPath: "/mcp/gateways/assigned-gateway", allowedTools: ["read_issue"], binary: null, destination: { hostname: "api.example.com", port: 443, method: "POST" as const, path: "/v1/read" } }],
       expiresAt: new Date(now.getTime() + 30_000).toISOString(),
     };
     const token = createSandboxBrokerJwt({
@@ -157,6 +157,14 @@ describe("agent local JWT", () => {
     expect(verifyLocalAgentJwt(token!)).toBeNull();
     expect(verifySandboxExecJwt(token!)).toBeNull();
     expect(verifySandboxBrokerJwt(token!)).toMatchObject({ purpose: "sandbox_broker", aud: "paperclip-sandbox-broker", sandbox_broker: claim, exp: Math.floor((now.getTime() + 30_000) / 1000) });
+    const executableClaim = { ...claim, bindings: claim.bindings.map(binding => ({ ...binding, binary: "/usr/bin/node" })) };
+    const executableToken = createSandboxBrokerJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner", runId: claim.runId,
+      responsibleUserId: "user-1", claim: executableClaim,
+      parentExpiresAt: new Date(now.getTime() + 60_000), nativeLeaseExpiresAt: new Date(now.getTime() + 45_000),
+      execDeadlineAt: new Date(now.getTime() + 40_000),
+    });
+    expect(verifySandboxBrokerJwt(executableToken!)).toMatchObject({ sandbox_broker: executableClaim });
     const [header, body] = token!.split(".");
     const signingInput = `${header}.${body}`;
     const legacySignature = createHmac("sha256", process.env.PAPERCLIP_AGENT_JWT_SECRET!)

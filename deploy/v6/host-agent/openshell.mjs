@@ -133,7 +133,7 @@ export function openShellHostEngine({
     );
     return json ? JSON.parse(stdout) : stdout;
   }
-  async function inspectBrokerProviderProfile(request, deadlineAt, model = false) {
+  async function inspectBrokerProviderProfile(request, deadlineAt, model = false, expectedBinaries = null) {
     const broker = model ? request.modelBrokerCredential : request.brokerCredential;
     if (!broker) return null;
     const profile = await cli(["profile", "describe", broker.profileId, "--output", "json"], deadlineAt);
@@ -141,6 +141,13 @@ export function openShellHostEngine({
       !Array.isArray(profile.credentials) || profile.credentials.length !== 1 ||
       !Array.isArray(profile.endpoints) || profile.endpoints.length !== 1 ||
       !Array.isArray(profile.binaries)) throw new Error("sandbox_operation_unsupported");
+    if (expectedBinaries !== null) {
+      const actualBinaries = profile.binaries.map(value => value?.path).sort();
+      const wantedBinaries = [...expectedBinaries].sort();
+      if (profile.binaries.some(value => !value || Object.keys(value).length !== 1 || typeof value.path !== "string") ||
+        new Set(actualBinaries).size !== actualBinaries.length || new Set(wantedBinaries).size !== wantedBinaries.length ||
+        JSON.stringify(actualBinaries) !== JSON.stringify(wantedBinaries)) throw new Error("sandbox_operation_unsupported");
+    }
     const credential = profile.credentials[0];
     if (credential?.auth_style !== "bearer" || credential.header_name?.toLowerCase() !== "authorization" ||
       credential.env_vars?.length !== 1 || credential.env_vars[0] !== (model ? "PAPERCLIP_SANDBOX_MODEL_TOKEN" : "PAPERCLIP_SANDBOX_BROKER_TOKEN") ||
@@ -167,6 +174,8 @@ export function openShellHostEngine({
     })();
     const capability = decoded?.sandbox_broker;
     if (!decoded || decoded.purpose !== "sandbox_broker" || decoded.aud !== "paperclip-sandbox-broker" ||
+      !Array.isArray(capability?.bindings) || capability.bindings.some(binding => !binding ||
+        !(binding.binary === null || typeof binding.binary === "string" && binding.binary.startsWith("/"))) ||
       decoded.jti !== request.requestId || capability?.parentRequestId !== request.requestId ||
       capability.bindingId !== request.bindingId || capability.cellId !== scope.cellId ||
       capability.generation !== scope.cellGeneration || capability.hostEpoch !== request.hostEpoch ||
@@ -178,7 +187,13 @@ export function openShellHostEngine({
       Date.parse(capability?.expiresAt ?? "") !== Date.parse(broker.expiresAt) || decoded.exp * 1000 > Date.parse(broker.expiresAt) + 999 ||
       decoded.company_id !== scope.companyId || decoded.run_id !== request.runId || !Number.isFinite(decoded.exp) || decoded.exp * 1000 <= Date.now())
       throw new Error("sandbox_scope_changed");
-    const { origin } = await inspectBrokerProviderProfile(request, deadlineAt);
+    const binaries = capability.bindings.map(binding => binding.binary ?? null);
+    const expectedBinaries = binaries.some(binary => binary !== null)
+      ? (binaries.every(binary => binary !== null) && new Set(binaries).size === 1 ? [binaries[0]] : null)
+      : null;
+    if (binaries.some(binary => binary !== null) && expectedBinaries === null)
+      throw new Error("sandbox_operation_unsupported");
+    const { origin } = await inspectBrokerProviderProfile(request, deadlineAt, false, expectedBinaries);
     if (origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash)
       throw new Error("sandbox_operation_unsupported");
     const providerCredentialEnv = "PAPERCLIP_SANDBOX_BROKER_TOKEN";
@@ -251,6 +266,49 @@ export function openShellHostEngine({
       killSignal: "SIGKILL",
     });
     return json ? JSON.parse(stdout) : stdout;
+  }
+  function validResourceLimits(value) {
+    return value && Number.isSafeInteger(value.cpuMillis) && value.cpuMillis >= 100 && value.cpuMillis <= 64000 &&
+      Number.isSafeInteger(value.memoryBytes) && value.memoryBytes >= 67108864 && value.memoryBytes <= 137438953472 &&
+      Number.isSafeInteger(value.pidsLimit) && value.pidsLimit >= 16 && value.pidsLimit <= 16384;
+  }
+  function resourceHostConfigMatches(container, limits) {
+    const host = container?.HostConfig;
+    return validResourceLimits(limits) && host?.NanoCpus === limits.cpuMillis * 1_000_000 &&
+      host?.Memory === limits.memoryBytes && host?.MemorySwap === limits.memoryBytes && host?.PidsLimit === limits.pidsLimit;
+  }
+  function dockerResourceUpdateArgs(containerId, limits) {
+    if (!/^[a-f0-9]{64}$/.test(containerId ?? "") || !validResourceLimits(limits))
+      throw new Error("sandbox_scope_changed");
+    const cpus = (limits.cpuMillis / 1000).toFixed(3).replace(/\.?0+$/, "");
+    return ["update", "--cpus", cpus, "--memory", String(limits.memoryBytes), "--memory-swap", String(limits.memoryBytes),
+      "--pids-limit", String(limits.pidsLimit), containerId];
+  }
+  async function applyDockerResourceLimits(scope, sandbox, imageDigest, limits, deadlineAt, expectedContainerId) {
+    const before = await container(scope, sandbox, imageDigest, deadlineAt);
+    if (before.Id !== expectedContainerId || before.State.Running)
+      throw new Error("sandbox_scope_changed");
+    await docker(dockerResourceUpdateArgs(before.Id, limits), deadlineAt, false);
+    const after = await container(scope, sandbox, imageDigest, deadlineAt);
+    if (after.Id !== before.Id || !resourceHostConfigMatches(after, limits))
+      throw new Error("sandbox_observation_unavailable");
+    return after;
+  }
+  async function inspectCredentialProviderProfile(expected, deadlineAt) {
+    if (!expected || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(expected.id ?? "") ||
+      !/^[a-f0-9]{64}$/.test(expected.hash ?? "") || !Array.isArray(expected.binaries) || expected.binaries.length > 32)
+      throw new Error("sandbox_operation_unsupported");
+    const profile = await cli(["profile", "describe", expected.id, "--output", "json"], deadlineAt);
+    if (!profile || profile.id !== expected.id || hash(JSON.stringify(canonical(profile))) !== expected.hash ||
+      !Array.isArray(profile.binaries) || profile.binaries.length > 32 ||
+      profile.binaries.some(value => !value || Object.keys(value).length !== 1 || typeof value.path !== "string")) {
+      throw new Error("sandbox_operation_unsupported");
+    }
+    const actual = profile.binaries.map(value => value.path).sort();
+    const wanted = [...expected.binaries].sort();
+    if (new Set(actual).size !== actual.length || new Set(wanted).size !== wanted.length ||
+      JSON.stringify(actual) !== JSON.stringify(wanted))
+      throw new Error("sandbox_operation_unsupported");
   }
   async function sandboxExec(scope, argv, deadlineAt) {
     const remaining = Date.parse(deadlineAt) - Date.now();
@@ -587,7 +645,8 @@ export function openShellHostEngine({
         const pinnedPolicy = journal.scopes[scope.bindingId]?.policy;
         if (pinnedPolicy) {
           const currentPolicy = await policy(scope, deadlineAt);
-          if (samePolicyRevision(currentPolicy, pinnedPolicy))
+          if (samePolicyRevision(currentPolicy, pinnedPolicy) &&
+            resourceHostConfigMatches(workload, pinnedPolicy.resourceLimits))
             policyHash = pinnedPolicy.policyHash;
         }
         return {
@@ -640,6 +699,8 @@ export function openShellHostEngine({
       const workload = await container(scope, detail, request.imageDigest, deadlineAt);
       if (detail.phase !== "Stopped" || workload.State.Running)
         throw new Error("sandbox_operation_unsupported");
+      if (!validResourceLimits(admission.resourceLimits)) throw new Error("sandbox_scope_changed");
+      if (admission.credentialProviderProfile) await inspectCredentialProviderProfile(admission.credentialProviderProfile, deadlineAt);
       await revokeProviders(scope, deadlineAt);
       const before = await policy(scope, deadlineAt);
       if (!staticPolicyMatches(before.policy, admission.document))
@@ -650,6 +711,10 @@ export function openShellHostEngine({
           requiresRecreate: true,
           effectivePolicyHash: before.hash,
         };
+      const boundedWorkload = await applyDockerResourceLimits(scope, detail, request.imageDigest,
+        admission.resourceLimits, deadlineAt, workload.Id);
+      if (!resourceHostConfigMatches(boundedWorkload, admission.resourceLimits))
+        throw new Error("sandbox_observation_unavailable");
       const privateConfig = await privateConfiguration();
       const filename = path.join(privateConfig.stateHome, `policy-${randomUUID()}.json`);
       try {
@@ -694,6 +759,8 @@ export function openShellHostEngine({
               policyVersion: observedPolicy.version,
               configRevision: observedPolicy.config_revision,
               document: observedPolicy.policy,
+              resourceLimits: admission.resourceLimits,
+              ...(admission.credentialProviderProfile ? { credentialProviderProfile: admission.credentialProviderProfile } : {}),
               appliedAt: new Date().toISOString(),
             },
           };
@@ -729,6 +796,8 @@ export function openShellHostEngine({
           policyVersion: after.version,
           configRevision: after.config_revision,
           document: after.policy,
+          resourceLimits: admission.resourceLimits,
+          ...(admission.credentialProviderProfile ? { credentialProviderProfile: admission.credentialProviderProfile } : {}),
           appliedAt: new Date().toISOString(),
         },
       };
@@ -763,6 +832,8 @@ export function openShellHostEngine({
         deadlineAt,
       );
       if (detail.phase === "Ready" && beforeWorkload.State.Running) {
+        if (!resourceHostConfigMatches(beforeWorkload, pinnedPolicy.resourceLimits))
+          throw new Error("sandbox_observation_unavailable");
         return {
           action: "start",
           started: true,
@@ -774,7 +845,8 @@ export function openShellHostEngine({
           effectivePolicyHash: beforePolicy.hash,
         };
       }
-      if (detail.phase !== "Stopped" || beforeWorkload.State.Running)
+      if (detail.phase !== "Stopped" || beforeWorkload.State.Running ||
+        !resourceHostConfigMatches(beforeWorkload, pinnedPolicy.resourceLimits))
         throw new Error("sandbox_operation_unsupported");
       try {
         await cli(["sandbox", "start", scope.sandboxRef], deadlineAt, false);

@@ -639,10 +639,11 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
       companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId, presenceId,
       bindings: [{ ...policyBinding, hostname: "evil.example.test" }],
     })).rejects.toMatchObject({ reasonCode: "sandbox_broker_destination_changed" });
-    await expect(gateway.resolveSandboxCredentialBrokerBindings({
+    const executableResolved = await gateway.resolveSandboxCredentialBrokerBindings({
       companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId, presenceId,
       bindings: [{ ...policyBinding, binary: "/usr/bin/node" }],
-    })).rejects.toMatchObject({ reasonCode: "sandbox_broker_destination_changed" });
+    });
+    expect(executableResolved.bindings[0]?.binary).toBe("/usr/bin/node");
     expect(project.id).toBe(issue.projectId);
   });
 
