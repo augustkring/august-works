@@ -87,4 +87,32 @@ describe.skipIf(!support.supported)("required platform procedure admission", () 
     await expect(preparePlatformSkillAdmission(db, { ...f.input, requireExisting: true }, f.contracts)).rejects.toMatchObject({ status: 409 });
     await expect(assertPlatformSkillAdmission(db, f.actor, f.contracts)).rejects.toMatchObject({ status: 409 });
   });
+
+  it("keeps two company admissions isolated while delivering the same immutable release", async () => {
+    const first = await fixture(), second = await fixture();
+    const [firstPlatform, secondPlatform] = await Promise.all([
+      preparePlatformSkillAdmission(db, first.input, first.contracts),
+      preparePlatformSkillAdmission(db, second.input, second.contracts),
+    ]);
+    const runtimeEntries = async (f: Awaited<ReturnType<typeof fixture>>, platform: Awaited<ReturnType<typeof preparePlatformSkillAdmission>>) =>
+      companySkillService(db).listRuntimeSkillEntries(f.input.companyId, {
+        actor: f.actor,
+        readScope: "task",
+        selectedSkillKeys: new Set([platform.pin.key]),
+        versionSelections: new Map([[platform.pin.key, platform.pin.versionId]]),
+      });
+    const [firstEntries, secondEntries] = await Promise.all([
+      runtimeEntries(first, firstPlatform), runtimeEntries(second, secondPlatform),
+    ]);
+    expect(firstPlatform.identity).toEqual(secondPlatform.identity);
+    expect(firstPlatform.pin.skillId).not.toBe(secondPlatform.pin.skillId);
+    expect(firstPlatform.pin.versionId).not.toBe(secondPlatform.pin.versionId);
+    expect(firstEntries).toHaveLength(1);
+    expect(secondEntries).toHaveLength(1);
+    expect(firstEntries[0]).toMatchObject({ key: "blentera-platform", versionId: firstPlatform.pin.versionId, sourceStatus: "available" });
+    expect(secondEntries[0]).toMatchObject({ key: "blentera-platform", versionId: secondPlatform.pin.versionId, sourceStatus: "available" });
+    expect(path.resolve(firstEntries[0]!.source)).not.toBe(path.resolve(secondEntries[0]!.source));
+    await expect(assertPlatformSkillAdmission(db, first.actor, first.contracts)).resolves.toBeUndefined();
+    await expect(assertPlatformSkillAdmission(db, second.actor, second.contracts)).resolves.toBeUndefined();
+  });
 });
