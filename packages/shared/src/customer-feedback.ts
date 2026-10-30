@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PRODUCT_IDENTITY } from "./product-identity.js";
+import { customerProblemEvidenceProjectionBaseSchema } from "./customer-problem-evidence.js";
 
 export const FEEDBACK_CONTACTS = {
   support: `mailto:${PRODUCT_IDENTITY.supportEmail}`,
@@ -276,6 +277,11 @@ export const feedbackInternalListSchema = z
   .max(25);
 export const feedbackInternalDetailSchema = customerFeedbackSchema
   .extend({
+    customerProblemEvidence: customerProblemEvidenceProjectionBaseSchema.extend({
+      source: z.literal("product_feedback"), nativeCategory: feedbackCategorySchema,
+      nativeLifecycle: feedbackInternalStateSchema, reportedImpact: z.enum(["blocked", "limited", "question", "unknown"]),
+      linkCoverage: z.enum(["complete", "current_page", "unavailable"]),
+    }).optional(),
     internalState: feedbackInternalStateSchema,
     submittedByUserId: z.string().min(1).optional(),
     context: feedbackContextSchema.extend({

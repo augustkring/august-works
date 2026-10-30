@@ -18,10 +18,13 @@ import {
   customerFeedbackSchema,
   feedbackFollowUpSchema,
   feedbackInternalDetailSchema,
+  feedbackInternalStateSchema,
   customerFeedbackRequestReceiptSchema,
   feedbackTriageSchema,
   FEEDBACK_CUSTOMER_STATUS,
   FEEDBACK_CONTEXT_FEATURE_IDS,
+  customerProblemEvidencePointerSchema,
+  projectFeedbackProblemEvidence,
   v9FeatureEnabled,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, tooManyRequests } from "../errors.js";
@@ -92,6 +95,29 @@ export function customerFeedbackService(
       if (!current) throw forbidden("Active company membership required");
     }
     return principal;
+  }
+  async function currentIssueLinkVisibility(
+    reader: Db,
+    actor: AuthorizationActor,
+    companyId: string,
+    issueIds: readonly string[],
+  ) {
+    const visibility = new Map<string, boolean>();
+    for (const issueId of new Set(issueIds)) {
+      try {
+        await assertV5Authorization(reader, actor, companyId, "issue:read", {
+          type: "issue", companyId, issueId,
+        });
+        visibility.set(issueId, true);
+      } catch (error) {
+        if (error && typeof error === "object" && "status" in error && [403, 404].includes(Number(error.status))) {
+          visibility.set(issueId, false);
+          continue;
+        }
+        throw error;
+      }
+    }
+    return visibility;
   }
   async function budget(companyId: string, principal: string) {
     const key =
@@ -433,15 +459,34 @@ export function customerFeedbackService(
           randomUUID(),
         );
         const page = events.slice(0, 100);
+        const issueLinkVisibility = await currentIssueLinkVisibility(reader, actor, companyId,
+          page.flatMap((event) => event.linkType === "issue" && event.linkId ? [event.linkId] : []));
+        const visiblePage = page.map((event) => event.linkType === "issue" && event.linkId && !issueLinkVisibility.get(event.linkId)
+          ? { ...event, linkType: null, linkId: null }
+          : event);
+        const hiddenIssueLink = page.some((event) => event.linkType === "issue" && event.linkId && !issueLinkVisibility.get(event.linkId));
+        const feedbackReceipt = await receipt(reader, row);
+        const customerProblemEvidence = projectFeedbackProblemEvidence({
+          companyId,
+          sourceId: row.id,
+          category: feedbackReceipt.category,
+          internalState: feedbackInternalStateSchema.parse(row.internalState),
+          blocksWork: row.blocksWork,
+          linkedIssueIds: [...new Set(visiblePage.flatMap((event) =>
+            event.linkType === "issue" && event.linkId ? [event.linkId] : [],
+          ))],
+          linkCoverage: hiddenIssueLink ? "unavailable" : events.length > 100 ? "current_page" : "complete",
+        });
         const result = feedbackInternalDetailSchema.parse({
-          ...(await receipt(reader, row)),
+          ...feedbackReceipt,
           internalState: row.internalState,
+          customerProblemEvidence,
           ...(!row.omitName && row.submittedByUserId
             ? { submittedByUserId: row.submittedByUserId }
             : {}),
           context: row.context,
           diagnostics: row.diagnostics,
-          events: page.reverse().map((event) => ({
+          events: visiblePage.reverse().map((event) => ({
             ...event,
             createdAt: event.createdAt.toISOString(),
           })),
@@ -708,7 +753,28 @@ export function customerFeedbackService(
               ),
             );
           if (!linked) throw notFound("Linked work is unavailable");
+          if (input.link.type === "issue") {
+            try {
+              await assertV5Authorization(tx, actor, companyId, "issue:read", {
+                type: "issue", companyId, issueId: linked.id,
+              });
+            } catch (error) {
+              if (error && typeof error === "object" && "status" in error && [403, 404].includes(Number(error.status)))
+                throw notFound("Linked work is unavailable");
+              throw error;
+            }
+          }
         }
+        // Keep the existing feedback record as the authoritative source and
+        // use only a company-scoped pointer for the governed Issue handoff.
+        const issueEvidence = input.link?.type === "issue"
+          ? customerProblemEvidencePointerSchema.parse({
+              companyId,
+              source: "product_feedback",
+              sourceId: row.id,
+              issueId: input.link.id,
+            })
+          : null;
         const hash = digest(input),
           [prior] = await tx
             .select()
@@ -734,8 +800,8 @@ export function customerFeedbackService(
           kind: "product_message",
           body: input.customerMessage,
           internalNote: input.internalNote || null,
-          linkType: input.link?.type ?? null,
-          linkId: input.link?.id ?? null,
+          linkType: issueEvidence ? "issue" : input.link?.type ?? null,
+          linkId: issueEvidence?.issueId ?? input.link?.id ?? null,
           customerVisible: !!input.customerMessage,
           requestKey: input.idempotencyKey,
           requestHash: hash,

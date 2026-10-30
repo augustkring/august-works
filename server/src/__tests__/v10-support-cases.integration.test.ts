@@ -257,9 +257,17 @@ const policy = {
   it("links a visible support case to a current readable Issue without copying private text", async () => {
     const privateText = "Private support body stays in the support owner";
     const created = await create(companyA, "opener", privateText);
+    const foreignPrivateIssueId = randomUUID();
+    await db.insert(issues).values({ id: foreignPrivateIssueId, companyId: companyB, title: "Foreign private issue",
+      visibility: "private", privacyRootIssueId: foreignPrivateIssueId, responsibleUserId: users.foreign, createdByUserId: users.foreign });
+    const foreignLink = await request(app).post(`${path(companyA)}/cases/${created.body.id}/issue-links`).set(auth("opener"))
+      .send({ expectedUserId: users.opener, issueRef: foreignPrivateIssueId }).expect(404);
+    expect(JSON.stringify(foreignLink.body)).not.toContain(foreignPrivateIssueId);
+    const beforeLink = await detail(companyA, "opener", created.body.id);
+    expect(beforeLink.body.customerProblemEvidence).toMatchObject({ linkedIssueIds: [], linkCoverage: "unavailable" });
     const issueId = randomUUID();
     await db.insert(issues).values({ id: issueId, companyId: companyA, title: "Investigate sign-in failures",
-      identifier: "SUPA01-42", visibility: "open", description: "Human-authored investigation and root-cause notes" });
+      identifier: "SUPA01-42", visibility: "open", createdByUserId: users.opener, description: "Human-authored investigation and root-cause notes" });
     const link = await request(app).post(`${path(companyA)}/cases/${created.body.id}/issue-links`).set(auth("opener"))
       .send({ expectedUserId: users.opener, issueRef: "SUPA01-42" });
     expect(link.status, JSON.stringify(link.body)).toBe(201);
@@ -267,6 +275,11 @@ const policy = {
       issue: { id: issueId, identifier: "SUPA01-42" } });
     const linkedCase = await detail(companyA, "opener", created.body.id);
     expect(linkedCase.body.relatedIssue).toEqual({ id: issueId, identifier: "SUPA01-42" });
+    expect(linkedCase.body.customerProblemEvidence).toMatchObject({
+      source: "support_case", sourceId: created.body.id, nativeCategory: "other",
+      nativeLifecycle: "RECEIVED", reportedImpact: "unknown", classification: "unknown",
+      linkedIssueIds: [issueId], linkCoverage: "complete",
+    });
 
     const secondPrivateText = "A separate customer report of the same sign-in failure";
     const secondCase = await create(companyA, "member", secondPrivateText);
@@ -282,6 +295,12 @@ const policy = {
     expect(JSON.stringify(groupedCases)).not.toContain(secondPrivateText);
     const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
     expect(issue!.description).toBe("Human-authored investigation and root-cause notes");
+    await db.update(issues).set({ visibility: "private", privacyRootIssueId: issueId, responsibleUserId: users.opener })
+      .where(eq(issues.id, issueId));
+    const issueRestricted = await detail(companyA, "owner", created.body.id);
+    expect(issueRestricted.body.relatedIssue).toBeNull();
+    expect(issueRestricted.body.customerProblemEvidence).toMatchObject({ linkedIssueIds: [], linkCoverage: "unavailable" });
+    expect(JSON.stringify(issueRestricted.body)).not.toContain(issueId);
     expect((await request(app).post(`${path(companyA)}/cases/${created.body.id}/issue-links`).set(auth("member"))
       .send({ expectedUserId: users.member, issueRef: "SUPA01-42" })).status).toBe(404);
     expect((await request(app).post(`${path(companyA)}/cases/${created.body.id}/issue-links`).set(auth("opener"))

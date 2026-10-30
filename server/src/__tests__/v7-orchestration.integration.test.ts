@@ -21,6 +21,7 @@ import { nativeRuntimeContextFixture } from "../services/native-runtime/runtime-
 import { prepareNativeHeartbeatRun } from "../services/native-runtime/prepare-native-run.js";
 import { ensureNativeCompletionContract, nativeCompletionContractInput } from "../services/native-runtime/completion-contracts.js";
 import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { createHash } from "node:crypto";
 import { assertAgentRunWriteAllowed } from "../agent-run-cancellation.js";
@@ -64,14 +65,19 @@ const support = await getEmbeddedPostgresTestSupport();
     return { row: run!, input, prepare: () => agentRuntimeFabricService(db).prepare(input) };
   }
   async function retainedMemory(key: string, content: string, memoryType: "fact" | "outcome" = "fact", accepted = true) {
-    const service = memoryService(db), actor = { principal: { type: "user" as const, userId: f.userId } };
+    const sourceActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+    const sourceTask = await issueService(db).create(f.home, {
+      title: content, createdByUserId: f.userId, responsibleUserId: f.userId,
+    }, db, undefined, { manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor });
+    const service = memoryService(db), actor = { principal: { type: "user" as const, userId: f.userId }, authorizationActor: sourceActor };
     const binding = await service.createCompanyBinding(f.home, { key, name: "Current Human retained source", providerKey: "local" }, actor);
     const observedAt = new Date().toISOString();
     const candidate = await service.createCandidate(f.home, { bindingId: binding.id, memoryType,
       scope: { type: "company", id: null }, ownerAgentId: null, title: content, content, summary: null,
       sensitivity: "internal", observedAt, validFrom: null, validUntil: null, expiresAt: null, createdByOperationId: null,
-      evidence: [{ sourceClass: "task", sourceProvider: "native_orchestration_fixture", sourceType: "human_input",
-        sourceRef: `manual://${randomUUID()}`, sourceVersion: "1", sourceUpdatedAt: null, observedAt,
+      evidence: [{ sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue",
+        sourceRef: `issue://${sourceTask.id}`, sourceVersion: sourceTask.updatedAt.toISOString(),
+        sourceUpdatedAt: sourceTask.updatedAt.toISOString(), observedAt,
         excerptHash: createHash("sha256").update(content).digest("hex"), citation: { label: "Current Human fixture input" },
         trustLevel: "low", relation: "supports" }] }, actor);
     return accepted ? (await service.reviewCandidate(f.home, candidate.record.id, { decision: "accept" }, actor)).record : candidate.record;

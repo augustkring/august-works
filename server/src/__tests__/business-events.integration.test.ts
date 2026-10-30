@@ -376,13 +376,17 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
     const erased = await source();
     await service().backfill(companyId, actor, window);
     const unprojected = await source({ status: "done" });
+    // Include the original Human capture audit as well as projected and late activities.
+    const sourceIdentities = await db.select({ id: activityLog.id }).from(activityLog).where(and(
+      eq(activityLog.companyId, companyId), eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId)));
+    expect(sourceIdentities.map(row => row.id)).toEqual(expect.arrayContaining([erased.id, unprojected.id]));
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ business_events_v8: false });
     try {
       expect((await issueService(db).remove(issueId))?.id).toBe(issueId);
       expect(await stored()).toHaveLength(0);
       expect(await db.select().from(businessEventObjects).where(eq(businessEventObjects.companyId, companyId))).toHaveLength(0);
       const guards = await db.select().from(businessEventSuppressions).where(eq(businessEventSuppressions.companyId, companyId));
-      expect(guards.map(row => row.sourceRef).sort()).toEqual([erased.id, unprojected.id].sort());
+      expect(guards.map(row => row.sourceRef).sort()).toEqual(sourceIdentities.map(row => row.id).sort());
     } finally {
       await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ business_events_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true });
     }
@@ -482,7 +486,7 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       await tx.execute(sql`set local lock_timeout='1s'`);
       await eraseAnalyticalSourcesUnderMemory(tx, companyId, "issue", [issueId]);
       await eraseBusinessEventObjectUnderMemory(tx, companyId, "issue", issueId);
-      await tx.update(issues).set({ title: "Erased workflow task", description: null }).where(eq(issues.id, issueId));
+      await tx.update(issues).set({ title: "Erased workflow task", description: null, payloadSourceSnapshot: null }).where(eq(issues.id, issueId));
     });
     await held; const read = service().list(companyId, actor, timeWindow);
     try {
@@ -525,7 +529,7 @@ suite("Native V8 business event projection on migrated PostgreSQL", () => {
       const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, companyId);
       await eraseAnalyticalSourcesUnderMemory(tx, companyId, "issue", [issueId]);
       await eraseBusinessEventObjectUnderMemory(tx, companyId, "issue", issueId);
-      await tx.update(issues).set({ title: "Erased workflow task", description: null }).where(eq(issues.id, issueId));
+      await tx.update(issues).set({ title: "Erased workflow task", description: null, payloadSourceSnapshot: null }).where(eq(issues.id, issueId));
     });
     expect(await stored()).toHaveLength(0);
     const late = await source({ status: "done" });

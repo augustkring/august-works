@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { customerProblemEvidenceProjectionBaseSchema } from "./customer-problem-evidence.js";
 export const customerSupportHistorySchema = z
   .strictObject({
     companyId: z.uuid(),
@@ -233,6 +234,11 @@ export const supportCaseTimelineEntrySchema = z.strictObject({
 });
 export const supportCaseDetailSchema = z.strictObject({
   ...supportCaseSummarySchema.shape,
+  customerProblemEvidence: customerProblemEvidenceProjectionBaseSchema.extend({
+    source: z.literal("support_case"), nativeCategory: supportCaseCategorySchema,
+    nativeLifecycle: supportCaseStatusSchema, reportedImpact: z.enum(["blocked", "limited", "question", "unknown"]),
+    linkedIssueIds: z.array(z.uuid()).max(1), linkCoverage: z.enum(["complete", "unavailable"]),
+  }).optional(),
   description: z.string().min(1).max(SUPPORT_CASE_LIMITS.description), safeContext: supportCaseSafeContextSchema.nullable(),
   followUpOfId: z.uuid().nullable(), timeline: z.array(supportCaseTimelineEntrySchema).max(SUPPORT_CASE_LIMITS.timelinePage),
   relatedIssue: z.strictObject({ id: z.uuid(), identifier: z.string().min(1).max(100).nullable() }).nullable(),

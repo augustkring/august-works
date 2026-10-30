@@ -535,6 +535,60 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(customerFeedbackEvents.feedbackId, id)),
       ).rejects.toThrow();
     });
+    it("keeps the original feedback evidence intact when Human triage links an Issue", async () => {
+      const sourceBody = "The approval is blocked and the support team should investigate";
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
+        status: "active", membershipRole: "viewer" });
+      const submitted = await request(app())
+        .post(`/api/companies/${companyId}/customer-feedback`)
+        .send({ ...input(), body: sourceBody, blocksWork: true })
+        .expect(201);
+      const [issue] = await db.insert(issues).values({ companyId, title: "Investigate blocked approval",
+        createdByUserId: userId, responsibleUserId: userId }).returning();
+      const triage = await request(app(operatorId))
+        .post(`/api/internal/customer-feedback/${companyId}/${submitted.body.id}/triage`)
+        .send({
+          idempotencyKey: randomUUID(),
+          expectedVersion: 0,
+          internalState: "ACTIONABLE",
+          internalNote: "Human triage keeps the original source and context authoritative",
+          link: { type: "issue", id: issue!.id },
+        })
+        .expect(200);
+      expect(triage.body.status).toBe("REVIEWING");
+      const [source] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, submitted.body.id));
+      expect(source).toMatchObject({ category: "BUG", body: sourceBody, blocksWork: true, internalState: "ACTIONABLE" });
+      const [event] = await db.select().from(customerFeedbackEvents).where(eq(customerFeedbackEvents.feedbackId, source!.id));
+      expect(event).toMatchObject({ kind: "product_message", linkType: "issue", linkId: issue!.id });
+      const [linkedIssue] = await db.select().from(issues).where(eq(issues.id, issue!.id));
+      expect(linkedIssue!.description ?? "").not.toContain(sourceBody);
+      const internalDetail = await request(app(operatorId))
+        .get(`/api/internal/customer-feedback/${companyId}/${submitted.body.id}`)
+        .expect(200);
+      expect(internalDetail.body.customerProblemEvidence).toMatchObject({
+        source: "product_feedback", sourceId: submitted.body.id, nativeCategory: "BUG",
+        nativeLifecycle: "ACTIONABLE", reportedImpact: "blocked", classification: "unknown",
+        linkedIssueIds: [issue!.id], linkCoverage: "complete",
+      });
+      await db.update(issues).set({ visibility: "private", privacyRootIssueId: issue!.id })
+        .where(eq(issues.id, issue!.id));
+      const restrictedDetail = await request(app(operatorId))
+        .get(`/api/internal/customer-feedback/${companyId}/${submitted.body.id}`)
+        .expect(200);
+      expect(restrictedDetail.body.customerProblemEvidence).toMatchObject({
+        classification: "unknown", linkedIssueIds: [], linkCoverage: "unavailable",
+      });
+      expect(restrictedDetail.body.events.at(-1)).toMatchObject({ linkType: null, linkId: null });
+      expect(JSON.stringify(restrictedDetail.body)).not.toContain(issue!.id);
+      const deniedLink = await request(app(operatorId))
+        .post(`/api/internal/customer-feedback/${companyId}/${submitted.body.id}/triage`)
+        .send({ idempotencyKey: randomUUID(), expectedVersion: 1, internalState: "ACTIONABLE",
+          link: { type: "issue", id: issue!.id } })
+        .expect(404);
+      expect(JSON.stringify(deniedLink.body)).not.toContain(issue!.id);
+      const [unchanged] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, submitted.body.id));
+      expect(unchanged!.version).toBe(1);
+    });
     it("enforces compound tenant references and erases no-name feedback through native account deletion", async () => {
       const service = customerFeedbackService(db),
         result = await service.create(actor(), companyId, input());

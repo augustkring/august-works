@@ -662,9 +662,12 @@ describe("remote runner launch fingerprint compatibility", () => {
       const bin = join(root, "bin");
       await mkdir(bin);
       await symlink(process.execPath, join(bin, "node"));
-      for (const name of ["mkdir", "chmod", "date", "mv"]) await symlink(execFileSync("sh", ["-c", `command -v ${name}`], { encoding: "utf8" }).trim(), join(bin, name));
-      const marker = join(root, "identity");
-      const result = execFileSync("/bin/sh", ["-c", script, "launch", marker, "nonce", "runner", join(root, "diagnostics"), "/bin/sh", "-c", "printf launched"], { env: { ...process.env, PATH: bin }, encoding: "utf8" });
+      for (const name of ["mkdir", "chmod", "date", "mv", "dirname", "basename", "rmdir"]) await symlink(execFileSync("sh", ["-c", `command -v ${name}`], { encoding: "utf8" }).trim(), join(bin, name));
+      const sessionRoot = join(root, "sessions", "a".repeat(64));
+      const identityDirectory = join(sessionRoot, "runner");
+      await mkdir(identityDirectory, { recursive: true });
+      const marker = join(identityDirectory, "identity");
+      const result = execFileSync("/bin/sh", ["-c", script, "launch", marker, "nonce", "runner", join(sessionRoot, "diagnostics"), "/bin/sh", "-c", "printf launched"], { env: { ...process.env, PATH: bin }, encoding: "utf8" });
       expect(result).toBe("launched");
       const lines = (await readFile(marker, "utf8")).split("\n");
       expect(lines[4]).toBe(hasBootIdentity ? "linux:abcd-1234:1234" : "");

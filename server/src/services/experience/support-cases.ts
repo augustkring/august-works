@@ -10,7 +10,8 @@ import {
   nativeSupportCaseRequestSchema,
   supportCaseReadQuerySchema, supportCaseDetailSchema, supportCaseListSchema, supportCaseDataPolicySchema, supportCaseIntakePolicySchema,
   linkSupportCaseIssueSchema, supportCaseIssueLinkSchema,
-  SUPPORT_CASE_LIMITS, type SupportCaseDataPolicy, type SupportCaseDetail,
+  customerProblemEvidencePointerSchema, SUPPORT_CASE_LIMITS, type SupportCaseDataPolicy, type SupportCaseDetail,
+  supportCaseCategorySchema, supportCaseImpactSchema, supportCaseStatusSchema, projectSupportProblemEvidence,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, tooManyRequests, unprocessable } from "../../errors.js";
 import { pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
@@ -128,9 +129,20 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
     // No row/ID from a pre-wait snapshot becomes a reusable permission proof.
     await currentCase(tx, row.companyId, userId, administrator, row.id);
     const page = events.slice(0, SUPPORT_CASE_LIMITS.timelinePage), last = page.at(-1);
-    return supportCaseDetailSchema.parse({ ...await summary(tx, row), description: row.description,
+    const caseSummary = await summary(tx, row);
+    const relatedIssue = await readableIssueLink(tx, actor, userId, administrator, row.companyId, row.id);
+    const customerProblemEvidence = projectSupportProblemEvidence({
+      companyId: row.companyId,
+      sourceId: row.id,
+      category: supportCaseCategorySchema.parse(row.category),
+      status: supportCaseStatusSchema.parse(row.customerStatus),
+      impact: row.impact === null ? null : supportCaseImpactSchema.parse(row.impact),
+      linkedIssueId: relatedIssue?.id ?? null,
+      linkCoverage: relatedIssue ? "complete" : "unavailable",
+    });
+    return supportCaseDetailSchema.parse({ ...caseSummary, customerProblemEvidence, description: row.description,
       safeContext: row.safeContext, followUpOfId: row.followUpOfId,
-      relatedIssue: await readableIssueLink(tx, actor, userId, administrator, row.companyId, row.id),
+      relatedIssue,
       timeline: page.reverse().map(e => ({ id: e.id, kind: e.kind, body: e.body, status: e.customerStatus,
         author: ["request", "customer_reply"].includes(e.kind) ? "customer" : "support", safeContext: e.safeContext,
         delivery: delivery(e), createdAt: e.createdAt.toISOString() })),
@@ -298,7 +310,15 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
           return [candidate];
         });
         if (!issue) throw notFound("Issue not found");
-        const [linked] = await tx.insert(supportCaseIssueLinks).values({ companyId, caseId: source.id, issueId: issue.id, linkedByUserId: userId })
+        // Persist only the existing company-scoped source/Issue pointer. The
+        // case remains the owner of its private request and complaint context.
+        const evidencePointer = customerProblemEvidencePointerSchema.parse({
+          companyId,
+          source: "support_case",
+          sourceId: source.id,
+          issueId: issue.id,
+        });
+        const [linked] = await tx.insert(supportCaseIssueLinks).values({ companyId: evidencePointer.companyId, caseId: evidencePointer.sourceId, issueId: evidencePointer.issueId, linkedByUserId: userId })
           .onConflictDoNothing().returning({ id: supportCaseIssueLinks.id });
         if (!linked) {
           const [existingLink] = await tx.select({ issueId: supportCaseIssueLinks.issueId }).from(supportCaseIssueLinks)
