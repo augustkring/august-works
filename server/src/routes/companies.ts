@@ -433,6 +433,23 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     }
   }
 
+  async function assertHumanCompanyDefaultsAdmin(req: Request, companyId: string) {
+    const localTrusted = req.actor.type === "board" && req.actor.source === "local_implicit";
+    if (req.actor.type !== "board" || (!localTrusted && (req.actor.source !== "session" || !req.actor.userId))) {
+      throw forbidden("A current Human Board owner or administrator is required to manage responsibility contacts.");
+    }
+    const expectedUser = req.get("X-Blentera-Expected-User");
+    const expectedSession = req.get("X-Blentera-Expected-Session");
+    const actualUser = req.actor.userId ?? (localTrusted ? "local-board" : undefined);
+    if (expectedUser !== undefined && expectedUser !== actualUser) {
+      throw conflict("Account changed; review this request again", { code: "ACCOUNT_CHANGED" });
+    }
+    if (expectedSession !== undefined && expectedSession !== req.actor.sessionId) {
+      throw conflict("Sign-in changed; review this request again", { code: "AUTHENTICATION_STATE_CHANGED" });
+    }
+    await assertCompanyDefaultsAdmin(req, companyId);
+  }
+
   function assertSupportCaseExportAccess(req: Request, body: z.infer<typeof companyPortabilityExportSchema>) {
     if (!body.include?.supportCases) return;
     if (req.actor.type !== "board") {
@@ -1482,7 +1499,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
 
   router.get("/:companyId/responsibility-contacts", async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyDefaultsAdmin(req, companyId);
+    await assertHumanCompanyDefaultsAdmin(req, companyId);
     const [contacts] = await db.select({ securityContactUserId: companies.securityContactUserId,
       supportIncidentContactUserId: companies.supportIncidentContactUserId }).from(companies)
       .where(eq(companies.id, companyId)).limit(1);
@@ -1494,7 +1511,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
 
   router.patch("/:companyId/responsibility-contacts", validate(updateCompanyResponsibilityContactsSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
-    await assertCompanyDefaultsAdmin(req, companyId);
+    await assertHumanCompanyDefaultsAdmin(req, companyId);
     const contactIds = [req.body.securityContactUserId, req.body.supportIncidentContactUserId]
       .filter((value): value is string => typeof value === "string");
     await responsibilityContacts.assertEligible(companyId, contactIds);

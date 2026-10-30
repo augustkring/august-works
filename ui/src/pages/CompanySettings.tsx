@@ -1,10 +1,11 @@
-import { ChangeEvent, useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   type InteractionResolverGovernance,
   type IssueThreadInteractionKind,
+  type CompanyResponsibilityContacts,
 } from "@paperclipai/shared";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
@@ -14,6 +15,8 @@ import { resolveCompanyArchiveDeparture } from "../lib/company-selection";
 import { cloudPortfolioManageUrl } from "../lib/cloudLinks";
 import { navigateTopLevel } from "@/lib/browserNavigation";
 import { companiesApi } from "../api/companies";
+import { useV9CurrentAccount, hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { assetsApi } from "../api/assets";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
@@ -32,6 +35,21 @@ import {
 import { InstanceGeneralSettings } from "./InstanceGeneralSettings";
 import { JevSkillSuggestionSettings } from "../components/JevSkillSuggestionSettings";
 
+type ResponsibilityContactsEnvelope = {
+  value: CompanyResponsibilityContacts;
+  companyId: string;
+  principalId: string;
+  sessionId: string;
+  authorityEpoch: number;
+  scopeEpoch: number;
+};
+
+type ResponsibilityContactsDraft = {
+  scopeKey: string;
+  securityContactUserId: string;
+  supportIncidentContactUserId: string;
+};
+
 export function CompanySettings() {
   const { t } = useTranslation("experience");
   const {
@@ -42,6 +60,9 @@ export function CompanySettings() {
   } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
+  const account = useV9CurrentAccount();
+  const principalId = account.localImplicit ? "local-board" : account.userId ?? "";
+  const authority = useV9PrivateReadAuthority(principalId, true);
   const navigate = useNavigate();
   const toastActions = useOptionalToastActions();
   const cloud = useCloudInstance();
@@ -56,13 +77,80 @@ export function CompanySettings() {
   const [logoUrl, setLogoUrl] = useState("");
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [governance, setGovernance] = useState<InteractionResolverGovernance>({});
-  const [securityContactUserId, setSecurityContactUserId] = useState("");
-  const [supportIncidentContactUserId, setSupportIncidentContactUserId] = useState("");
-  const { data: responsibilityContacts, isSuccess: contactsLoaded, error: contactsError } = useQuery({
-    queryKey: ["company-responsibility-contacts", selectedCompanyId],
-    queryFn: () => companiesApi.responsibilityContacts(selectedCompanyId!),
-    enabled: Boolean(selectedCompanyId),
+  const [contactsDraft, setContactsDraft] = useState<ResponsibilityContactsDraft | null>(null);
+  const sessionId = account.sessionId;
+  const contactsReadReady = Boolean(selectedCompanyId && account.settled && principalId && sessionId &&
+    authority.readReady && authority.canRead() && hasCurrentV9Session(queryClient, principalId, sessionId, true));
+  const contactsScopeRef = useRef({ companyId: selectedCompanyId, principalId, sessionId,
+    localImplicit: account.localImplicit, authorityEpoch: authority.epoch, epoch: 0 });
+  if (contactsScopeRef.current.companyId !== selectedCompanyId || contactsScopeRef.current.principalId !== principalId ||
+    contactsScopeRef.current.sessionId !== sessionId || contactsScopeRef.current.localImplicit !== account.localImplicit ||
+    contactsScopeRef.current.authorityEpoch !== authority.epoch) {
+    contactsScopeRef.current = { companyId: selectedCompanyId, principalId, sessionId,
+      localImplicit: account.localImplicit, authorityEpoch: authority.epoch, epoch: contactsScopeRef.current.epoch + 1 };
+  }
+  const captureContactsScope = () => {
+    const captured = contactsScopeRef.current;
+    return { ...captured, isCurrent: () => contactsScopeRef.current.epoch === captured.epoch && authority.canRead() &&
+      hasCurrentV9Session(queryClient, captured.principalId, captured.sessionId ?? "", true) };
+  };
+  const contactsScopeEpoch = contactsScopeRef.current.epoch;
+  const contactsScopeKey = JSON.stringify([selectedCompanyId ?? "", principalId, sessionId ?? "", authority.epoch, contactsScopeEpoch]);
+  const contactsQueryKey = ["company-responsibility-contacts", selectedCompanyId ?? "", principalId,
+    sessionId ?? "", authority.epoch, contactsScopeEpoch] as const;
+  const responsibilityContactsQuery = useQuery<ResponsibilityContactsEnvelope>({
+    queryKey: contactsQueryKey,
+    queryFn: async ({ signal }) => {
+      if (!selectedCompanyId || !principalId || !sessionId || !account.settled || !authority.canRead() ||
+        !hasCurrentV9Session(queryClient, principalId, sessionId, true))
+        throw new Error("Current Human settings access is unavailable");
+      const receipt = captureContactsScope();
+      if (!receipt.companyId || !receipt.sessionId || !receipt.isCurrent())
+        throw new Error("Current Human settings access changed");
+      const value = await authority.read(() => companiesApi.responsibilityContacts(receipt.companyId!, receipt.principalId,
+        receipt.localImplicit ? null : receipt.sessionId, { signal }));
+      signal.throwIfAborted();
+      if (!receipt.isCurrent()) throw new Error("Current Human settings access changed");
+      return { value, companyId: receipt.companyId, principalId: receipt.principalId, sessionId: receipt.sessionId,
+        authorityEpoch: receipt.authorityEpoch, scopeEpoch: receipt.epoch };
+    },
+    enabled: Boolean(selectedCompanyId && account.settled && principalId && sessionId && authority.readReady &&
+      hasCurrentV9Session(queryClient, principalId, sessionId, true)),
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
   });
+  const contactsEnvelope = responsibilityContactsQuery.data;
+  const contactsSourceReady = contactsReadReady && responsibilityContactsQuery.isSuccess &&
+    responsibilityContactsQuery.fetchStatus === "idle" && !queryClient.getQueryState(contactsQueryKey)?.isInvalidated;
+  const responsibilityContacts = contactsSourceReady && contactsEnvelope &&
+    contactsEnvelope.companyId === selectedCompanyId && contactsEnvelope.principalId === principalId &&
+    contactsEnvelope.sessionId === sessionId && contactsEnvelope.authorityEpoch === authority.epoch &&
+    contactsEnvelope.scopeEpoch === contactsScopeRef.current.epoch
+    ? contactsEnvelope.value : undefined;
+  const contactsLoaded = Boolean(responsibilityContacts);
+  const contactsError = contactsReadReady ? responsibilityContactsQuery.error : null;
+  const contactsBaseline = responsibilityContacts;
+  const scopedDraft = contactsSourceReady && contactsDraft?.scopeKey === contactsScopeKey ? contactsDraft : null;
+  const securityContactUserId = scopedDraft?.securityContactUserId ?? contactsBaseline?.securityContactUserId ?? "";
+  const supportIncidentContactUserId = scopedDraft?.supportIncidentContactUserId ?? contactsBaseline?.supportIncidentContactUserId ?? "";
+  const updateContactsField = (field: "securityContactUserId" | "supportIncidentContactUserId", value: string) => {
+    setContactsDraft({
+      scopeKey: contactsScopeKey,
+      securityContactUserId: field === "securityContactUserId" ? value : securityContactUserId,
+      supportIncidentContactUserId: field === "supportIncidentContactUserId" ? value : supportIncidentContactUserId,
+    });
+  };
+  useEffect(() => { setContactsDraft(null); }, [contactsScopeKey]);
+  useEffect(() => { if (!contactsSourceReady) setContactsDraft(null); }, [contactsScopeKey, contactsSourceReady]);
+  useEffect(() => {
+    if (!responsibilityContacts) return;
+    setContactsDraft(previous => previous?.scopeKey === contactsScopeKey ? previous : {
+      scopeKey: contactsScopeKey,
+      securityContactUserId: responsibilityContacts.securityContactUserId ?? "",
+      supportIncidentContactUserId: responsibilityContacts.supportIncidentContactUserId ?? "",
+    });
+  }, [contactsScopeKey, responsibilityContacts]);
 
   // Sync local state from selected company
   useEffect(() => {
@@ -74,22 +162,30 @@ export function CompanySettings() {
     setLogoUrl(selectedCompany.logoUrl ?? "");
     setGovernance(selectedCompany.interactionResolverGovernance ?? {});
   }, [selectedCompany]);
-  useEffect(() => {
-    setSecurityContactUserId("");
-    setSupportIncidentContactUserId("");
-  }, [selectedCompanyId]);
-  useEffect(() => {
-    if (!responsibilityContacts) return;
-    setSecurityContactUserId(responsibilityContacts.securityContactUserId ?? "");
-    setSupportIncidentContactUserId(responsibilityContacts.supportIncidentContactUserId ?? "");
-  }, [responsibilityContacts]);
-
   const contactsMutation = useMutation({
-    mutationFn: () => companiesApi.updateResponsibilityContacts(selectedCompanyId!, {
-      securityContactUserId: securityContactUserId || null,
-      supportIncidentContactUserId: supportIncidentContactUserId || null,
-    }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["company-responsibility-contacts", selectedCompanyId] }),
+    mutationFn: async (input: { companyId: string; principalId: string; sessionId: string; authorityEpoch: number;
+      scopeEpoch: number; localImplicit: boolean; securityContactUserId: string; supportIncidentContactUserId: string }) => {
+      const receipt = captureContactsScope();
+      if (!receipt.isCurrent() || receipt.epoch !== input.scopeEpoch || receipt.companyId !== input.companyId ||
+        receipt.principalId !== input.principalId || receipt.sessionId !== input.sessionId ||
+        receipt.localImplicit !== input.localImplicit || receipt.authorityEpoch !== input.authorityEpoch)
+        throw new Error("Current Human settings access changed");
+      return authority.write(async () => {
+        await companiesApi.updateResponsibilityContacts(input.companyId, {
+          securityContactUserId: input.securityContactUserId || null,
+          supportIncidentContactUserId: input.supportIncidentContactUserId || null,
+        }, input.principalId, input.localImplicit ? null : input.sessionId);
+        if (!receipt.isCurrent()) throw new Error("Current Human settings access changed");
+        return { input, receipt };
+      });
+    },
+    onSuccess: async (acknowledgement) => {
+      if (!authority.confirmed(acknowledgement) || !acknowledgement.receipt.isCurrent()) return;
+      const { input } = acknowledgement;
+      const queryKey = ["company-responsibility-contacts", input.companyId, input.principalId,
+        input.sessionId, input.authorityEpoch, input.scopeEpoch] as const;
+      await queryClient.invalidateQueries({ queryKey, exact: true });
+    },
   });
 
   const generalDirty =
@@ -416,8 +512,8 @@ export function CompanySettings() {
         <Field label="Security contact" hint="A current Human member for company security follow-up.">
           <select aria-label="Security contact" data-testid="security-contact-select"
             className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm"
-            disabled={!contactsLoaded || contactsMutation.isPending}
-            value={securityContactUserId} onChange={event => setSecurityContactUserId(event.target.value)}>
+            disabled={!contactsReadReady || !contactsLoaded || contactsMutation.isPending}
+            value={securityContactUserId} onChange={event => updateContactsField("securityContactUserId", event.target.value)}>
             <option value="">No contact selected</option>
             {securityContactUserId && !responsibilityContacts?.eligibleUsers.some(user => user.id === securityContactUserId) &&
               <option value={securityContactUserId}>Current contact is no longer eligible; clear or replace it</option>}
@@ -428,8 +524,8 @@ export function CompanySettings() {
         <Field label="Support and incident contact" hint="A current Human member for customer support and incident coordination.">
           <select aria-label="Support and incident contact" data-testid="support-incident-contact-select"
             className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm"
-            disabled={!contactsLoaded || contactsMutation.isPending}
-            value={supportIncidentContactUserId} onChange={event => setSupportIncidentContactUserId(event.target.value)}>
+            disabled={!contactsReadReady || !contactsLoaded || contactsMutation.isPending}
+            value={supportIncidentContactUserId} onChange={event => updateContactsField("supportIncidentContactUserId", event.target.value)}>
             <option value="">No contact selected</option>
             {supportIncidentContactUserId && !responsibilityContacts?.eligibleUsers.some(user => user.id === supportIncidentContactUserId) &&
               <option value={supportIncidentContactUserId}>Current contact is no longer eligible; clear or replace it</option>}
@@ -437,14 +533,18 @@ export function CompanySettings() {
               <option key={entry.id} value={entry.id}>{entry.name || entry.email || entry.id}</option>)}
           </select>
         </Field>
+        {!contactsReadReady && <span className="text-xs text-muted-foreground">Waiting for current Human settings access.</span>}
         {contactsError && <span className="text-xs text-destructive">Could not load responsibility contacts.</span>}
-        {contactsLoaded && (securityContactUserId !== (responsibilityContacts?.securityContactUserId ?? "") ||
+        {contactsLoaded && contactsReadReady && (securityContactUserId !== (responsibilityContacts?.securityContactUserId ?? "") ||
           supportIncidentContactUserId !== (responsibilityContacts?.supportIncidentContactUserId ?? "")) && (
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => contactsMutation.mutate()} disabled={contactsMutation.isPending}>
+            <Button size="sm" onClick={() => contactsMutation.mutate({ companyId: selectedCompanyId!, principalId,
+              sessionId: sessionId!, authorityEpoch: authority.epoch, scopeEpoch: contactsScopeRef.current.epoch,
+              localImplicit: account.localImplicit, securityContactUserId, supportIncidentContactUserId })}
+              disabled={!contactsReadReady || contactsMutation.isPending}>
               {contactsMutation.isPending ? "Saving..." : "Save contacts"}
             </Button>
-            {contactsMutation.isError && <span className="text-xs text-destructive">{contactsMutation.error.message}</span>}
+            {contactsMutation.isError && contactsReadReady && <span className="text-xs text-destructive">{contactsMutation.error.message}</span>}
           </div>
         )}
       </div>

@@ -132,10 +132,30 @@ export const companiesApi = {
       >
     >,
   ) => api.patch<Company>(`/companies/${companyId}`, data),
-  responsibilityContacts: (companyId: string) =>
-    api.get<CompanyResponsibilityContacts>(`/companies/${companyId}/responsibility-contacts`, { cache: "no-store" }),
-  updateResponsibilityContacts: (companyId: string, data: UpdateCompanyResponsibilityContacts) =>
-    api.patch<{ ok: true }>(`/companies/${companyId}/responsibility-contacts`, data),
+  responsibilityContacts: (companyId: string, expectedUserId: string, expectedSessionId: string | null,
+    options?: RequestOptions) => {
+    const path = `/companies/${companyId}/responsibility-contacts`;
+    detachInflightGet(path);
+    return api.get<CompanyResponsibilityContacts>(path, {
+      ...options,
+      cache: "no-store",
+      headers: {
+        ...(options?.headers ?? {}),
+        "X-Blentera-Expected-User": expectedUserId,
+        ...(expectedSessionId ? { "X-Blentera-Expected-Session": expectedSessionId } : {}),
+      },
+    });
+  },
+  updateResponsibilityContacts: (companyId: string, data: UpdateCompanyResponsibilityContacts,
+    expectedUserId: string, expectedSessionId: string | null, options?: RequestOptions) =>
+    api.patch<{ ok: true }>(`/companies/${companyId}/responsibility-contacts`, data, {
+      ...options,
+      headers: {
+        ...(options?.headers ?? {}),
+        "X-Blentera-Expected-User": expectedUserId,
+        ...(expectedSessionId ? { "X-Blentera-Expected-Session": expectedSessionId } : {}),
+      },
+    }),
   updateBranding: (companyId: string, data: UpdateCompanyBranding) =>
     api.patch<Company>(`/companies/${companyId}/branding`, data),
   archive: (companyId: string) => api.post<Company>(`/companies/${companyId}/archive`, {}),

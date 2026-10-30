@@ -203,7 +203,12 @@ export const api = {
       headers: { "Content-Type": "application/octet-stream", ...(options?.headers ?? {}) },
     }),
   patch: <T>(path: string, body: unknown, options?: RequestOptions) =>
-    request<T>(path, { method: "PATCH", body: JSON.stringify(body), signal: options?.signal }),
+    request<T>(path, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+      signal: options?.signal,
+      ...(options?.headers ? { headers: options.headers } : {}),
+    }),
   delete: <T>(path: string, bodyOrOptions?: unknown, options?: RequestOptions) => {
     const requestOptions = isRequestOptions(bodyOrOptions) ? bodyOrOptions : options;
     const body = bodyOrOptions === undefined || isRequestOptions(bodyOrOptions) ? undefined : JSON.stringify(bodyOrOptions);
