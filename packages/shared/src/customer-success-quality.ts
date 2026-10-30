@@ -1,24 +1,11 @@
 import { z } from "zod";
 import { supportCaseCategorySchema, supportCaseImpactSchema, supportCaseStatusSchema } from "./customer-support.js";
-import { feedbackCategorySchema, feedbackInternalStateSchema } from "./customer-feedback.js";
-import { CUSTOMER_PROBLEM_EVIDENCE_SOURCES, customerProblemEvidenceProjectionBaseSchema } from "./customer-problem-evidence.js";
+import { customerFeedbackQualitySummarySchema, customerFeedbackStoredExperienceMeasureSchema, feedbackCategorySchema, feedbackEffortRatingSchema, feedbackInternalStateSchema, feedbackSatisfactionRatingSchema } from "./customer-feedback.js";
+import { CUSTOMER_PROBLEM_AREAS, CUSTOMER_PROBLEM_EVIDENCE_SOURCES, CUSTOMER_PROBLEM_IMPACTS, customerProblemEvidenceProjectionBaseSchema } from "./customer-problem-evidence.js";
 
 /** Shared classification for evidence linked to a customer problem. The
  * canonical feedback/support records remain with their existing owners. */
-export const CUSTOMER_PROBLEM_AREAS = [
-  "task_completion",
-  "activation_first_value",
-  "reliability_recovery",
-  "connections_maintenance",
-  "access_security_privacy",
-  "support_resolution",
-  "accessibility",
-  "billing_procurement",
-  "product_outcome",
-  "other",
-] as const;
-export const CUSTOMER_PROBLEM_IMPACTS = ["blocked", "limited", "question", "unknown"] as const;
-export { CUSTOMER_PROBLEM_EVIDENCE_SOURCES } from "./customer-problem-evidence.js";
+export { CUSTOMER_PROBLEM_AREAS, CUSTOMER_PROBLEM_EVIDENCE_SOURCES, CUSTOMER_PROBLEM_IMPACTS } from "./customer-problem-evidence.js";
 
 /** A content-free pointer. Source IDs are only useful inside their company;
  * this contract grants no access to the source or target Issue. */
@@ -29,15 +16,16 @@ export const customerProblemEvidencePointerSchema = z.strictObject({
   issueId: z.uuid(),
 });
 
-/** Authorized source-owner detail projections. Classification stays explicitly
- * unknown until a Human records it in an existing work/decision artifact. */
+/** Authorized source-owner detail projections. Feedback classification is an
+ * explicit Human triage field; other sources stay unknown until their owners classify them. */
 export const productFeedbackProblemEvidenceSchema = customerProblemEvidenceProjectionBaseSchema.extend({
   source: z.literal("product_feedback"), nativeCategory: feedbackCategorySchema,
   nativeLifecycle: feedbackInternalStateSchema, reportedImpact: z.enum(CUSTOMER_PROBLEM_IMPACTS),
+  triageImpact: z.enum(CUSTOMER_PROBLEM_IMPACTS).optional(),
   linkCoverage: z.enum(["complete", "current_page", "unavailable"]),
 });
 export const supportCaseProblemEvidenceSchema = customerProblemEvidenceProjectionBaseSchema.extend({
-  source: z.literal("support_case"), nativeCategory: supportCaseCategorySchema,
+  source: z.literal("support_case"), classification: z.literal("unknown"), nativeCategory: supportCaseCategorySchema,
   nativeLifecycle: supportCaseStatusSchema, reportedImpact: z.enum(CUSTOMER_PROBLEM_IMPACTS),
   linkedIssueIds: z.array(z.uuid()).max(1), linkCoverage: z.enum(["complete", "unavailable"]),
 });
@@ -50,12 +38,14 @@ export type CustomerProblemEvidenceProjection = z.infer<typeof customerProblemEv
 export function projectFeedbackProblemEvidence(input: {
   companyId: string; sourceId: string; category: z.infer<typeof feedbackCategorySchema>;
   internalState: z.infer<typeof feedbackInternalStateSchema>; blocksWork: boolean;
+  classification?: (typeof CUSTOMER_PROBLEM_AREAS)[number]; triageImpact?: (typeof CUSTOMER_PROBLEM_IMPACTS)[number];
   linkedIssueIds: string[]; linkCoverage: "complete" | "current_page" | "unavailable";
 }): CustomerProblemEvidenceProjection {
   return customerProblemEvidenceProjectionSchema.parse({
     companyId: input.companyId, source: "product_feedback", sourceId: input.sourceId,
     nativeCategory: input.category, nativeLifecycle: input.internalState,
-    reportedImpact: input.blocksWork ? "blocked" : "unknown", classification: "unknown",
+    reportedImpact: input.blocksWork ? "blocked" : "unknown", classification: input.classification ?? "unknown",
+    ...(input.triageImpact ? { triageImpact: input.triageImpact } : {}),
     linkedIssueIds: input.linkedIssueIds, linkCoverage: input.linkCoverage,
   });
 }
@@ -76,14 +66,14 @@ export function projectSupportProblemEvidence(input: {
 export const CUSTOMER_SUCCESS_MEASUREMENT_PACK = Object.freeze({
   id: "aw.customer-success-quality.v1",
   owner: "August Works product and privacy; each canonical source retains its existing owner",
-  collection: "No new collection, survey, telemetry, or stored analytics dataset is enabled by this contract.",
+  collection: "Optional satisfaction and effort ratings are collected only in the existing Feedback flow after explicit consent; this pack enables no passive telemetry or separate analytics dataset.",
   dimensions: Object.freeze({
     satisfaction: "Customer-reported or research evidence about satisfaction in a stated task and context; never inferred from activity volume or a resolved status alone.",
     effort: "Customer-reported or representative observed effort in a stated task and context; never inferred from visible time, clicks, activation setup buckets, or missing observations.",
   }),
   currentAvailability: Object.freeze({
-    satisfaction: "No structured satisfaction rating is currently recorded; optional feedback and support resolution are qualitative/process proxies only.",
-    effort: "No direct customer-effort measure is currently recorded by the application; activation and UI-observation buckets do not qualify as Human effort.",
+    satisfaction: "Optional product-feedback respondents can report a structured task satisfaction rating after explicit consent; support has no post-resolution rating yet.",
+    effort: "Optional product-feedback respondents can report a structured task effort rating after explicit consent; activation and UI-observation buckets are not Human effort.",
   }),
   proxies: Object.freeze([
     Object.freeze({
@@ -99,12 +89,12 @@ export const CUSTOMER_SUCCESS_MEASUREMENT_PACK = Object.freeze({
     Object.freeze({
       id: "optional_product_feedback",
       source: "packages/shared/src/customer-feedback.ts",
-      purpose: "Voluntary qualitative post-task evidence, not a satisfaction rating.",
+      purpose: "Voluntary qualitative evidence with optional direct satisfaction and effort ratings.",
       population: "Feedback voluntarily submitted under the existing product-feedback policy.",
-      denominator: "Submissions only; the eligible task/invitation denominator is unavailable, so response coverage is unknown.",
-      coverage: "Report source category and native triage state; no score or non-response inference.",
-      consentAndAccess: "Existing feedback submission, diagnostics consent, access, retention, and erasure controls.",
-      limits: "Optional feedback does not represent all customers or establish satisfaction or effort.",
+      denominator: "Current submissions carrying the optional-question offer marker; count consented, withdrawn and unconsented submissions separately. No task/invitation denominator exists.",
+      coverage: "Report offered submissions and consented response counts separately from satisfaction and effort distributions; withdrawn ratings are removed.",
+      consentAndAccess: "Ratings require separate explicit consent; the submitter can withdraw them in My feedback. Existing source access, retention, and erasure controls apply.",
+      limits: "Feedback respondents are self-selected and do not represent all customers or tasks; no population response rate is available.",
     }),
     Object.freeze({
       id: "support_case_resolution",
@@ -130,3 +120,31 @@ export const CUSTOMER_SUCCESS_MEASUREMENT_PACK = Object.freeze({
 } as const);
 
 export type CustomerProblemEvidencePointer = z.infer<typeof customerProblemEvidencePointerSchema>;
+
+/** Counts only explicitly offered submissions; dimensions retain separate
+ * denominators and distributions. No composite score or missingness inference. */
+export function summarizeCustomerFeedbackMeasures(input: {
+  from: string; to: string;
+  submissions: readonly { experienceMeasure?: z.infer<typeof customerFeedbackStoredExperienceMeasureSchema> }[];
+}) {
+  const satisfaction = Object.fromEntries(feedbackSatisfactionRatingSchema.options.map(value => [value, 0])) as Record<z.infer<typeof feedbackSatisfactionRatingSchema>, number>;
+  const effort = Object.fromEntries(feedbackEffortRatingSchema.options.map(value => [value, 0])) as Record<z.infer<typeof feedbackEffortRatingSchema>, number>;
+  let offeredFeedbackSubmissions = 0, consentedResponses = 0, withdrawnResponses = 0, unavailableResponses = 0;
+  for (const { experienceMeasure } of input.submissions) {
+    if (!experienceMeasure?.offered) continue;
+    offeredFeedbackSubmissions++;
+    if (experienceMeasure.availability === "withdrawn") { withdrawnResponses++; continue; }
+    if (experienceMeasure.availability === "unavailable") { unavailableResponses++; continue; }
+    if (experienceMeasure.consent !== "granted") continue;
+    consentedResponses++;
+    if (experienceMeasure.satisfaction) satisfaction[experienceMeasure.satisfaction]++;
+    if (experienceMeasure.effort) effort[experienceMeasure.effort]++;
+  }
+  const result = customerFeedbackQualitySummarySchema.parse({
+    period: { from: input.from, to: input.to }, source: "product_feedback",
+    denominator: { offeredFeedbackSubmissions, consentedResponses, withdrawnResponses, unconsentedSubmissions: offeredFeedbackSubmissions - consentedResponses - withdrawnResponses - unavailableResponses, unavailableResponses },
+    satisfaction: { count: Object.values(satisfaction).reduce((a, b) => a + b, 0), distribution: satisfaction },
+    effort: { count: Object.values(effort).reduce((a, b) => a + b, 0), distribution: effort },
+  });
+  return result;
+}

@@ -6,6 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import { createDb, closeRegisteredClients, companies, authUsers, authSessions, customerFeedback, customerFeedbackAccess,
   customerFeedbackEvents, customerFeedbackImages, feedbackRetentionErasures, feedbackImageDeletions, activityLog, companyMemberships,
+  customerFeedbackExperienceMeasures,
   customerFeedbackDeletionMarkers, applyPendingMigrations } from "@paperclipai/db";
 import { prepareRestoredQuarantine, assertDatabaseRestoreAdmission } from "../services/saas/quarantine.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
@@ -51,11 +52,12 @@ describe("native explicit feedback retention erasure", () => {
     storage = createStorageService(createLocalDiskStorageProvider(directory));
   });
   afterEach(async () => { if (directory) await rm(directory, { recursive: true, force: true }); });
-  async function historicalCase(createdDays = 150, closedDays: number | null = 100) {
+  async function historicalCase(createdDays = 150, closedDays: number | null = 100, consentedExperienceMeasures = false) {
     const id = randomUUID();
     await db.insert(customerFeedback).values({ id, companyId, category: "BUG", body: "OWNED-PRIVATE-HISTORICAL-FEEDBACK",
       omitName: true, status: closedDays === null ? "RECEIVED" : "CLOSED", createdAt: old(createdDays),
-      closedAt: closedDays === null ? null : old(closedDays), context: { surfaceKey: "home", locale: "en", timezone: "UTC", viewportClass: "wide" } });
+      closedAt: closedDays === null ? null : old(closedDays), context: { surfaceKey: "home", locale: "en", timezone: "UTC", viewportClass: "wide",
+        ...(consentedExperienceMeasures ? { experienceMeasure: { offered: true, consent: "granted" } } : {}) } });
     await db.insert(customerFeedbackAccess).values({ companyId, feedbackId: id, userId: operatorId, requestKey: randomUUID(), requestHash: hash("owned") });
     return id;
   }
@@ -98,7 +100,8 @@ describe("native explicit feedback retention erasure", () => {
     expect(await records()).toEqual([]);
   });
   it("erases expired closed text, replies and private access together, retaining one minimal replayable receipt", async () => {
-    const id = await historicalCase();
+    const id = await historicalCase(150, 100, true);
+    await db.insert(customerFeedbackExperienceMeasures).values({ companyId, feedbackId: id, satisfaction: "satisfied", effort: "easy" });
     await db.insert(customerFeedbackEvents).values({ companyId, feedbackId: id, kind: "customer_follow_up", body: "OWNED-PRIVATE-REPLY",
       customerVisible: true, requestKey: randomUUID(), requestHash: hash("reply") });
     const input = await command(id), result = await owner().execute(actor(), companyId, id, input);
@@ -106,6 +109,7 @@ describe("native explicit feedback retention erasure", () => {
     for (const table of [customerFeedbackAccess, customerFeedbackEvents])
       expect(await db.select().from(table).where(eq(table.feedbackId, id))).toEqual([]);
     expect(await db.select().from(customerFeedback).where(eq(customerFeedback.id, id))).toEqual([]);
+    expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, id))).toEqual([]);
     expect(await owner().execute(actor(), companyId, id, input)).toEqual(result);
     expect(await owner().get(actor(), companyId, id, result.id)).toEqual(result); expect(await records()).toHaveLength(1);
     expect(await owner().getRequest(actor(), companyId, id, input.requestKey)).toEqual(result);
@@ -290,9 +294,11 @@ describe("native explicit feedback retention erasure", () => {
   it("retains minimal original erasure identities and request receipts during company content purge", async () => {
     const id = await historicalCase(), image = await historicalImage(id);
     const receipt = await owner().execute(actor(), companyId, id, await command(id));
-    const another = await historicalCase();
+    const another = await historicalCase(150, 100, true);
+    await db.insert(customerFeedbackExperienceMeasures).values({ companyId, feedbackId: another, satisfaction: "satisfied", effort: "easy" });
     await purgeCompanyContent(db, companyId);
     expect(await db.select().from(customerFeedback).where(eq(customerFeedback.companyId, companyId))).toEqual([]);
+    expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.companyId, companyId))).toEqual([]);
     expect((await records()).map(row => row.id)).toEqual([receipt.id]);
     const markers = await db.select().from(customerFeedbackDeletionMarkers).where(eq(customerFeedbackDeletionMarkers.companyId, companyId));
     expect(markers.map(row => row.subjectId).sort()).toEqual([id, image.id, another].sort());

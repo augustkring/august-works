@@ -522,6 +522,11 @@ export async function eraseAccountAccess(
   // The same path covers no-name submissions without exposing them to triage.
   await tx.execute(sql`select f.id from customer_feedback f join customer_feedback_access a on a.company_id=f.company_id and a.feedback_id=f.id
     where a.user_id=${userId} order by f.id for update of f`);
+  // Optional direct ratings have a stricter erasure boundary than a complaint
+  // retained under an active legal/incident hold. Erase their bytes here even
+  // when the Feedback parent must remain for the native hold/DSR policy.
+  await tx.execute(sql`delete from customer_feedback_experience_measures m using customer_feedback_access a
+    where a.company_id=m.company_id and a.feedback_id=m.feedback_id and a.user_id=${userId}`);
   // Retain only a current legal/incident hold under its native private owner.
   // Required private DSR links remain for pending erasure, while membership,
   // sessions and keys are still revoked below and named product identity clears.

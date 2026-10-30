@@ -3,7 +3,7 @@ import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.j
 import { and, eq, inArray, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companySkills, companySkillVersions, rolePacks, rolePackVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, agentExecutionManifests, heartbeatRuns, issues, memoryDeletionMarkers, memoryRecords, type Db } from "@paperclipai/db";
+import { customerFeedback, customerFeedbackExperienceMeasures, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, automationArtifacts, automationArtifactVersions, companySkills, companySkillVersions, rolePacks, rolePackVersions, companies, companyDeletionOperations, orchestrationCompanyPurposeBudgets, orchestrationCompanyPurposeReservations, agentExecutionManifests, heartbeatRuns, issues, memoryDeletionMarkers, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
@@ -237,6 +237,9 @@ export async function purgeCompanyContent(
     // Original feedback roots must run their hold and allocation-erasure
     // triggers before the generic child-first FK planner. Private descendants
     // cascade; minimal physical-erasure receipts remain in their native owner.
+    // The separate optional rating payload has a stricter erasure boundary
+    // than the complaint root and is physically removed in the same purge.
+    await tx.delete(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.companyId, companyId));
     const feedbackRows = await tx.delete(customerFeedback).where(eq(customerFeedback.companyId, companyId)).returning({ id: customerFeedback.id });
     if (feedbackRows.length) deleted.push("customer_feedback");
     const tables = [

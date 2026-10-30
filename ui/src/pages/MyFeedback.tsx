@@ -229,6 +229,21 @@ export function MyFeedback() {
     gcTime: 0,
     retry: false,
   });
+  const withdrawKey = useRef(crypto.randomUUID()).current;
+  const withdrawMeasure = useMutation({
+    mutationKey: ["customer-feedback", selectedCompanyId, principal, selected, "experience-withdrawal"],
+    gcTime: 0, retry: false,
+    mutationFn: async () => {
+      if (!selected || !authority.canRead()) throw new Error("Feedback context changed");
+      const result = await authority.write(() => customerFeedbackApi.withdrawExperienceMeasure(selectedCompanyId!, principal!, selected, withdrawKey));
+      if (!authority.confirmed(result) || result.id !== selected) throw new Error("Withdrawal needs current confirmation");
+      return result;
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: prefix });
+      void client.invalidateQueries({ queryKey: ["customer-feedback", selectedCompanyId, principal, "detail", selected] });
+    },
+  });
   const failed =
     query.isError || (!!selected && detail.isError) || identity.failed;
   const loading =
@@ -296,6 +311,20 @@ export function MyFeedback() {
             {t(`feedback.statuses.${current.status}`)}
           </p>
           <p className="whitespace-pre-wrap break-words">{current.body}</p>
+          {current.experienceMeasureStatus === "granted" && <div className="space-y-2 rounded-md border border-border p-3">
+            <p>{t("feedback.experienceMeasure.withdrawNotice")}</p>
+            {current.experienceMeasure && <dl className="grid gap-2 sm:grid-cols-2">
+              <div><dt className="font-medium">{t("feedback.experienceMeasure.satisfaction")}</dt><dd>{t(`feedback.experienceMeasure.satisfactionOptions.${current.experienceMeasure.satisfaction}`)}</dd></div>
+              <div><dt className="font-medium">{t("feedback.experienceMeasure.effort")}</dt><dd>{t(`feedback.experienceMeasure.effortOptions.${current.experienceMeasure.effort}`)}</dd></div>
+            </dl>}
+            <Button type="button" variant="outline" className="min-h-11" disabled={withdrawMeasure.isPending || !authority.canRead()}
+              onClick={() => { if (window.confirm(t("feedback.experienceMeasure.withdrawConfirm"))) withdrawMeasure.mutate(); }}>
+              {t(withdrawMeasure.isPending ? "feedback.experienceMeasure.withdrawing" : "feedback.experienceMeasure.withdraw")}
+            </Button>
+            {withdrawMeasure.isError && <p role="alert">{t("feedback.experienceMeasure.withdrawFailed")}</p>}
+          </div>}
+          {current.experienceMeasureStatus === "withdrawn" && <p role="status">{t("feedback.experienceMeasure.withdrawn")}</p>}
+          {current.experienceMeasureStatus === "unavailable" && <p role="status">{t("feedback.experienceMeasure.unavailable")}</p>}
           {current.goal && (
             <p className="whitespace-pre-wrap break-words">{current.goal}</p>
           )}

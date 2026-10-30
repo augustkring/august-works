@@ -96,4 +96,9 @@ export const customerFeedbackApi = {
       companyId,
       id,
     ),
+  withdrawExperienceMeasure: async (companyId: string, principal: string, id: string, idempotencyKey: string) =>
+    receipt(await api.post(
+      `${report(companyId, id)}/experience-measure/withdraw?expectedUserId=${encodeURIComponent(principal)}`,
+      { idempotencyKey },
+    ), companyId, id),
 };
