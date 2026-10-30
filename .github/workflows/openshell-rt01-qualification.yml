@@ -1,4 +1,4 @@
-name: OpenShell RT-01 source qualification
+name: OpenShell RT-01 source qualification (R5)
 
 on:
   pull_request:
@@ -70,10 +70,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo check --locked -p openshell-server -p openshell-cli 2>&1 \
+          cargo check --locked -p openshell-server -p openshell-cli -p openshell-driver-docker -p openshell-sandbox 2>&1 \
             | tee "$RUNNER_TEMP/openshell-rt01-logs/compile.log"
 
-      - name: Run exact focused identity-bound tests
+      - name: Run exact focused identity and host-configuration tests
         working-directory: ${{ runner.temp }}/openshell-rt01
         shell: bash
         run: |
@@ -115,6 +115,12 @@ jobs:
           run_exact_test openshell-server identity_provider_attach_rechecks_name_after_waiting_for_mutation_lock server
           run_exact_test openshell-cli sandbox_stop_and_start_accept_optional_names cli
           run_exact_test openshell-cli sandbox_provider_subcommands_parse cli
+          run_exact_test openshell-cli identity_stop_unimplemented_does_not_fallback_to_legacy_stop cli
+          run_exact_test openshell-driver-docker docker_disk_limit_sets_create_time_writable_layer_storage_option driver
+          run_exact_test openshell-driver-docker docker_disk_limit_rejects_unbounded_external_mounts_and_image_volumes driver
+          run_exact_test openshell-driver-docker docker_disk_limit_rejects_values_outside_policy_range driver
+          run_exact_test openshell-sandbox behavioral_getpid_allowed sandbox
+          run_exact_test openshell-sandbox behavioral_memfd_create_blocked sandbox
 
       - name: Upload qualification logs
         if: always()

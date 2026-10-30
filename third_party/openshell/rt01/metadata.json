@@ -1,5 +1,5 @@
 {
-  "name": "v10-149-rt01-openshell-expected-sandbox-id-r4",
+  "name": "v10-149-rt01-openshell-r5-identity-and-runtime-guards",
   "status": "candidate-not-qualified",
   "profileAdmission": "closed",
   "upstream": {
@@ -8,27 +8,24 @@
     "commit": "6648bd0c290efbc41ba131ee9831ee45cd431f94"
   },
   "patch": {
-    "file": "openshell-rt01-expected-id.patch",
-    "sha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
-    "parentPatchSha256": "bc7ea25a9c23a562707297a00d0da3adcb5e5cb527e2afb158db1e8bcf899cdc"
+    "file": "openshell-rt01.patch",
+    "sha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e",
+    "parentR4PatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7"
   },
   "sourcePins": {
     "file": "source-pins.json",
-    "sha256": "fca800add807a6a135a10c062620e627cb6d211e15bbe892b3b8829d3e6aaf43",
-    "r3VendorSourcePinsSha256": "b0c81ee7d1871d8b48872e8a1f1d3e89f5d60a8b3169f342ad0edc7d4b2358b1"
+    "sha256": "7c48738c8872151ace5cb6c217a98e8881c7199b853028482d45aff493aff6db"
   },
   "license": {
     "spdx": "Apache-2.0",
     "upstreamFile": "LICENSE"
   },
   "qualification": {
-    "workflow": ".github/workflows/openshell-rt01-qualification.yml",
-    "r3CargoCheckServerCli": "passed; generated protobuf build included",
-    "r3FocusedTestBuild": "failed before tests: unresolved tonic Code in test module",
-    "r4GeneratedProtoBuild": "pending rerun",
-    "r4ServerCliCargoCheck": "pending rerun",
-    "r4FocusedTests": "pending remote CI",
-    "oldGatewayUnimplementedProbe": "pending",
-    "physicalTargetHostProbe": "pending"
+    "status": "pending remote qualification",
+    "serverCliGeneratedProtoCheck": "pending",
+    "driverSandboxCheck": "pending",
+    "focusedTests": "pending; exact tests and nonzero execution are enforced in workflow",
+    "physicalDockerQuotaProbe": "not run",
+    "physicalSeccompHostProbe": "not run"
   }
 }

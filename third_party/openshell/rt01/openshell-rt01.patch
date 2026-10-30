@@ -1263,10 +1263,37 @@ index 0b638d5..acb8bd4 100644
          &self,
          _request: tonic::Request<tonic::Streaming<ExecSandboxInput>>,
 diff --git a/crates/openshell-cli/tests/sandbox_name_fallback_integration.rs b/crates/openshell-cli/tests/sandbox_name_fallback_integration.rs
-index 7a5780d..067cadd 100644
+index 7a5780d..727431d 100644
 --- a/crates/openshell-cli/tests/sandbox_name_fallback_integration.rs
 +++ b/crates/openshell-cli/tests/sandbox_name_fallback_integration.rs
-@@ -460,6 +460,7 @@ impl OpenShell for TestOpenShell {
+@@ -25,6 +25,7 @@ use openshell_core::proto::{
+     ServiceStatus, SupervisorMessage, UpdateProviderRequest, WatchSandboxRequest,
+ };
+ use std::sync::Arc;
++use std::sync::atomic::{AtomicUsize, Ordering};
+ use tempfile::TempDir;
+ use tokio::net::TcpListener;
+ use tokio::sync::{Mutex, mpsc};
+@@ -38,6 +39,8 @@ use tonic::{Response, Status};
+ #[derive(Clone, Default)]
+ struct SandboxState {
+     last_get_name: Arc<Mutex<Option<String>>>,
++    identity_stop_calls: Arc<AtomicUsize>,
++    legacy_stop_calls: Arc<AtomicUsize>,
+ }
+ 
+ #[derive(Clone, Default)]
+@@ -133,7 +136,8 @@ impl OpenShell for TestOpenShell {
+         &self,
+         _request: tonic::Request<openshell_core::proto::StopSandboxRequest>,
+     ) -> Result<Response<SandboxResponse>, Status> {
+-        Err(Status::unimplemented("unused"))
++        self.state.legacy_stop_calls.fetch_add(1, Ordering::SeqCst);
++        Err(Status::unimplemented("legacy stop should not be reached"))
+     }
+ 
+     async fn start_sandbox(
+@@ -460,6 +464,7 @@ impl OpenShell for TestOpenShell {
          tokio_stream::wrappers::ReceiverStream<Result<SandboxStreamEvent, Status>>;
      type ExecSandboxStream =
          tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
@@ -1274,7 +1301,7 @@ index 7a5780d..067cadd 100644
      type ConnectSupervisorStream =
          tokio_stream::wrappers::ReceiverStream<Result<GatewayMessage, Status>>;
  
-@@ -485,6 +486,57 @@ impl OpenShell for TestOpenShell {
+@@ -485,6 +490,60 @@ impl OpenShell for TestOpenShell {
  
      type ExecSandboxInteractiveStream =
          tokio_stream::wrappers::ReceiverStream<Result<ExecSandboxEvent, Status>>;
@@ -1305,7 +1332,10 @@ index 7a5780d..067cadd 100644
 +        &self,
 +        _request: tonic::Request<openshell_core::proto::StopSandboxWithIdentityRequest>,
 +    ) -> Result<tonic::Response<openshell_core::proto::SandboxResponse>, tonic::Status> {
-+        Err(tonic::Status::unimplemented("not used by this test server"))
++        self.state
++            .identity_stop_calls
++            .fetch_add(1, Ordering::SeqCst);
++        Err(tonic::Status::unimplemented("simulate an older gateway"))
 +    }
 +
 +    async fn start_sandbox_with_identity(
@@ -1332,6 +1362,496 @@ index 7a5780d..067cadd 100644
      async fn exec_sandbox_interactive(
          &self,
          _request: tonic::Request<tonic::Streaming<ExecSandboxInput>>,
+@@ -1035,3 +1094,37 @@ async fn explicit_name_takes_precedence_over_persisted() {
+         "explicit name should be used, not the persisted one"
+     );
+ }
++
++/// An older server returns UNIMPLEMENTED for the identity RPC. The CLI must
++/// report that error without retrying the legacy name-only stop method.
++#[tokio::test]
++async fn identity_stop_unimplemented_does_not_fallback_to_legacy_stop() {
++    let ts = run_server().await;
++
++    let result = run::sandbox_stop_with_expected_id(
++        &ts.endpoint,
++        "my-sandbox",
++        Some("sandbox-expected-id"),
++        "default",
++        &ts.tls,
++    )
++    .await;
++
++    assert!(
++        result.is_err(),
++        "identity stop should preserve the older gateway's UNIMPLEMENTED status"
++    );
++    assert_eq!(
++        ts.openshell
++            .state
++            .identity_stop_calls
++            .load(Ordering::SeqCst),
++        1,
++        "the CLI should attempt the identity RPC exactly once"
++    );
++    assert_eq!(
++        ts.openshell.state.legacy_stop_calls.load(Ordering::SeqCst),
++        0,
++        "the CLI must not fall back to name-only stop after UNIMPLEMENTED"
++    );
++}
+diff --git a/crates/openshell-driver-docker/README.md b/crates/openshell-driver-docker/README.md
+index a25c455..0c2d7ea 100644
+--- a/crates/openshell-driver-docker/README.md
++++ b/crates/openshell-driver-docker/README.md
+@@ -101,7 +101,20 @@ fail closed; the driver does not run an older combined-supervisor layout.
+ ## Driver Config Mounts
+ 
+ The gateway forwards the `docker` block from `--driver-config-json`. Supported
+-mount types are:
++mount types and the optional disk cap are:
++
++- `disk_limit_bytes`: a canonical decimal byte string from 1 MiB through 1 TiB.
++  Docker sets this as the container writable-layer `StorageOpt.size` when it
++  creates the sandbox. The OCI workspace is on that writable layer, so its
++  writes are included in the cap. This does not cap separate writable mounts;
++  a disk-limited sandbox rejects image-declared volumes and writable
++  user-configured bind, volume, and tmpfs mounts. Read-only mounts remain
++  available. Docker must reject creation when the selected storage driver
++  cannot apply the requested limit. The V7 profile additionally accepts only
++  the observed `overlay2` driver with XFS backing and verifies the exact size
++  during policy apply and start; its admission remains closed until target-host
++  exhaustion and restart probes pass. The supported overlay2 configuration
++  requires XFS project quotas (`pquota`).
+ 
+ - `bind`: an absolute daemon-host path, allowed only when
+   `[openshell.drivers.docker].enable_bind_mounts = true` and label admission
+diff --git a/crates/openshell-driver-docker/src/lib.rs b/crates/openshell-driver-docker/src/lib.rs
+index 1f4c91f..8f72837 100644
+--- a/crates/openshell-driver-docker/src/lib.rs
++++ b/crates/openshell-driver-docker/src/lib.rs
+@@ -101,6 +101,7 @@ const SUPERVISOR_HEALTH_SOCKET_PATH: &str = "/run/openshell/health.sock";
+ const SUPERVISOR_UID: u32 = 65_534;
+ const SUPERVISOR_GID: u32 = 65_534;
+ const BOUNDARY_MOUNT_PATH: &str = "/.openshell/channel";
++const LABEL_SANDBOX_WORKSPACE_ROOT: &str = "openshell.ai/workspace-root";
+ const BOUNDARY_CONFIG_MOUNT_PATH: &str = "/.openshell/channel/sandbox/bootstrap.json";
+ const BOUNDARY_SOCKET_MOUNT_PATH: &str = "/.openshell/channel/sandbox/control.sock";
+ const BOUNDARY_CERTIFICATE_MOUNT_PATH: &str = "/.openshell/channel/sandbox/server.crt";
+@@ -706,9 +707,76 @@ struct DockerSandboxDriverConfig {
+         deserialize_with = "deserialize_optional_non_empty_string_list"
+     )]
+     cdi_devices: Option<Vec<String>>,
++    /// Optional create-time limit for the container writable layer. The
++    /// OpenShell workspace lives on this layer; this is supported only by
++    /// Docker storage drivers that enforce per-container size limits.
++    /// Decimal byte string avoids protobuf Struct's double-valued number
++    /// representation and preserves exact storage quota units.
++    disk_limit_bytes: Option<String>,
+     mounts: Vec<DockerDriverMountConfig>,
+ }
+ 
++const MIN_DOCKER_DISK_LIMIT_BYTES: u64 = 1_048_576;
++const MAX_DOCKER_DISK_LIMIT_BYTES: u64 = 1_099_511_627_776;
++
++fn parse_docker_disk_limit_bytes(value: Option<&str>) -> Result<Option<u64>, Status> {
++    let Some(value) = value else {
++        return Ok(None);
++    };
++    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
++        return Err(Status::failed_precondition(
++            "docker disk_limit_bytes must be a canonical decimal byte string",
++        ));
++    }
++    let bytes = value.parse::<u64>().map_err(|_| {
++        Status::failed_precondition("docker disk_limit_bytes is outside the supported range")
++    })?;
++    if !(MIN_DOCKER_DISK_LIMIT_BYTES..=MAX_DOCKER_DISK_LIMIT_BYTES).contains(&bytes)
++        || bytes.to_string() != value
++    {
++        return Err(Status::failed_precondition(format!(
++            "docker disk_limit_bytes must be a canonical decimal between {MIN_DOCKER_DISK_LIMIT_BYTES} and {MAX_DOCKER_DISK_LIMIT_BYTES}"
++        )));
++    }
++    Ok(Some(bytes))
++}
++
++fn validate_disk_limited_mounts(
++    disk_limited: bool,
++    mounts: &[DockerDriverMountConfig],
++    image_volumes: &[String],
++) -> Result<(), Status> {
++    if !disk_limited {
++        return Ok(());
++    }
++    if !image_volumes.is_empty() {
++        return Err(Status::failed_precondition(
++            "docker disk-limited sandboxes cannot use image-declared writable volumes",
++        ));
++    }
++    for mount in mounts {
++        let writable = match mount {
++            DockerDriverMountConfig::Bind { read_only, .. }
++            | DockerDriverMountConfig::Volume { read_only, .. }
++            | DockerDriverMountConfig::Image { read_only, .. } => !read_only,
++            DockerDriverMountConfig::Tmpfs { options, .. } => {
++                let read_only = options.iter().any(|option| option == "ro");
++                let explicitly_writable = options.iter().any(|option| option == "rw");
++                // Docker option order can make contradictory ro/rw flags
++                // ambiguous. A disk-limited profile admits only an explicit,
++                // unambiguous read-only tmpfs mount.
++                !read_only || explicitly_writable
++            }
++        };
++        if writable {
++            return Err(Status::failed_precondition(
++                "docker disk-limited sandboxes cannot use writable external mounts",
++            ));
++        }
++    }
++    Ok(())
++}
++
+ struct ValidatedDockerSandbox<'a> {
+     template: &'a DriverSandboxTemplate,
+     driver_config: DockerSandboxDriverConfig,
+@@ -721,8 +789,11 @@ impl DockerSandboxDriverConfig {
+             return Ok(Self::default());
+         };
+ 
+-        serde_json::from_value(struct_to_json_value(config))
+-            .map_err(|err| format!("invalid docker driver_config: {err}"))
++        let config: Self = serde_json::from_value(struct_to_json_value(config))
++            .map_err(|err| format!("invalid docker driver_config: {err}"))?;
++        parse_docker_disk_limit_bytes(config.disk_limit_bytes.as_deref())
++            .map_err(|error| error.message().to_string())?;
++        Ok(config)
+     }
+ }
+ 
+@@ -1046,6 +1117,11 @@ impl DockerComputeDriver {
+         let _ = docker_resource_limits(template)?;
+         let driver_config =
+             DockerSandboxDriverConfig::from_template(template).map_err(Status::invalid_argument)?;
++        validate_disk_limited_mounts(
++            driver_config.disk_limit_bytes.is_some(),
++            &driver_config.mounts,
++            &[],
++        )?;
+         validate_docker_driver_mounts(&driver_config.mounts, config.enable_bind_mounts)?;
+         for mount in &driver_config.mounts {
+             if matches!(
+@@ -5654,6 +5730,13 @@ fn build_container_create_body_for_image(
+     let resource_limits = docker_resource_limits(template)?;
+     let workspace_root = driver_mounts::resolve_oci_workspace_root(&image.working_dir)
+         .map_err(Status::failed_precondition)?;
++    let disk_limit_bytes =
++        parse_docker_disk_limit_bytes(driver_config.disk_limit_bytes.as_deref())?;
++    validate_disk_limited_mounts(
++        disk_limit_bytes.is_some(),
++        &driver_config.mounts,
++        &image.volumes,
++    )?;
+     driver_mounts::validate_workspace_control_path(&workspace_root, BOUNDARY_MOUNT_PATH)
+         .map_err(Status::failed_precondition)?;
+     for volume in &image.volumes {
+@@ -5726,6 +5809,10 @@ fn build_container_create_body_for_image(
+         LABEL_SANDBOX_WORKSPACE.to_string(),
+         sandbox.workspace.clone(),
+     );
++    labels.insert(
++        LABEL_SANDBOX_WORKSPACE_ROOT.to_string(),
++        workspace_root.clone(),
++    );
+     // The list/get/find paths filter by `config.sandbox_namespace`, so use
+     // the same value here. `DriverSandbox.namespace` is unset on the request
+     // path (the gateway elides it), and using it would produce containers
+@@ -5763,6 +5850,8 @@ fn build_container_create_body_for_image(
+         host_config: Some(HostConfig {
+             nano_cpus: resource_limits.nano_cpus,
+             memory: resource_limits.memory_bytes,
++            storage_opt: disk_limit_bytes
++                .map(|bytes| HashMap::from([("size".to_string(), format!("{bytes}B"))])),
+             pids_limit: docker_pids_limit(config.sandbox_pids_limit)?,
+             device_requests,
+             binds: {
+diff --git a/crates/openshell-driver-docker/src/tests.rs b/crates/openshell-driver-docker/src/tests.rs
+index c5036f4..43a9ca9 100644
+--- a/crates/openshell-driver-docker/src/tests.rs
++++ b/crates/openshell-driver-docker/src/tests.rs
+@@ -1739,6 +1739,144 @@ fn build_container_create_body_includes_driver_config_mounts() {
+     );
+ }
+ 
++#[test]
++fn docker_disk_limit_sets_create_time_writable_layer_storage_option() {
++    let config: DockerSandboxDriverConfig = serde_json::from_value(serde_json::json!({
++        "disk_limit_bytes": "1073741824"
++    }))
++    .unwrap();
++    let body = build_container_create_body_for_image(
++        &test_sandbox(),
++        &runtime_config(),
++        &config,
++        None,
++        &DockerImageMetadata {
++            id: "sha256:image".to_string(),
++            user: String::new(),
++            working_dir: "/workspace/project".to_string(),
++            volumes: Vec::new(),
++        },
++        &test_workload_identity(),
++    )
++    .unwrap();
++    assert_eq!(
++        body.labels
++            .as_ref()
++            .and_then(|labels| labels.get(LABEL_SANDBOX_WORKSPACE_ROOT))
++            .map(String::as_str),
++        Some("/workspace/project")
++    );
++    assert_eq!(
++        body.host_config
++            .unwrap()
++            .storage_opt
++            .unwrap()
++            .get("size")
++            .map(String::as_str),
++        Some("1073741824B")
++    );
++}
++
++#[test]
++fn docker_disk_limit_rejects_unbounded_external_mounts_and_image_volumes() {
++    let disk_limited = DockerSandboxDriverConfig {
++        disk_limit_bytes: Some("1073741824".to_string()),
++        ..Default::default()
++    };
++    let writable_volume = DockerDriverMountConfig::Volume {
++        source: "external".to_string(),
++        target: "/data".to_string(),
++        read_only: false,
++        subpath: None,
++    };
++    assert!(
++        validate_disk_limited_mounts(
++            disk_limited.disk_limit_bytes.is_some(),
++            &[writable_volume],
++            &[],
++        )
++        .is_err()
++    );
++    let writable_tmpfs = DockerDriverMountConfig::Tmpfs {
++        target: "/cache".to_string(),
++        options: vec!["size=1048576".to_string()],
++        size_bytes: Some(1_048_576.0),
++        mode: None,
++    };
++    assert!(
++        validate_disk_limited_mounts(
++            disk_limited.disk_limit_bytes.is_some(),
++            &[writable_tmpfs],
++            &[],
++        )
++        .is_err()
++    );
++    let contradictory_read_only_tmpfs = DockerDriverMountConfig::Tmpfs {
++        target: "/cache".to_string(),
++        options: vec!["ro".to_string(), "rw".to_string()],
++        size_bytes: Some(1_048_576.0),
++        mode: None,
++    };
++    assert!(
++        validate_disk_limited_mounts(
++            disk_limited.disk_limit_bytes.is_some(),
++            &[contradictory_read_only_tmpfs],
++            &[],
++        )
++        .is_err()
++    );
++    let read_only_tmpfs = DockerDriverMountConfig::Tmpfs {
++        target: "/cache".to_string(),
++        options: vec!["ro".to_string(), "size=1048576".to_string()],
++        size_bytes: Some(1_048_576.0),
++        mode: None,
++    };
++    assert!(
++        validate_disk_limited_mounts(
++            disk_limited.disk_limit_bytes.is_some(),
++            &[read_only_tmpfs],
++            &[],
++        )
++        .is_ok()
++    );
++    let read_only_volume = DockerDriverMountConfig::Volume {
++        source: "external".to_string(),
++        target: "/data".to_string(),
++        read_only: true,
++        subpath: None,
++    };
++    assert!(
++        validate_disk_limited_mounts(
++            disk_limited.disk_limit_bytes.is_some(),
++            &[read_only_volume],
++            &[],
++        )
++        .is_ok()
++    );
++    assert!(
++        validate_disk_limited_mounts(
++            disk_limited.disk_limit_bytes.is_some(),
++            &[],
++            &["/var/lib/data".to_string()],
++        )
++        .is_err()
++    );
++    assert!(
++        validate_disk_limited_mounts(disk_limited.disk_limit_bytes.is_some(), &[], &[],).is_ok()
++    );
++}
++
++#[test]
++fn docker_disk_limit_rejects_values_outside_policy_range() {
++    assert!(parse_docker_disk_limit_bytes(Some("1048575")).is_err());
++    assert!(parse_docker_disk_limit_bytes(Some("1099511627777")).is_err());
++    assert!(parse_docker_disk_limit_bytes(Some("1048576")).is_ok());
++    assert!(parse_docker_disk_limit_bytes(Some("1099511627776")).is_ok());
++    assert!(parse_docker_disk_limit_bytes(Some("001048576")).is_err());
++    assert!(parse_docker_disk_limit_bytes(Some("1048576.0")).is_err());
++    assert!(parse_docker_disk_limit_bytes(None).is_ok());
++}
++
+ #[test]
+ fn driver_config_defaults_volume_mounts_to_read_only() {
+     let mut sandbox = test_sandbox();
+diff --git a/crates/openshell-sandbox/src/main.rs b/crates/openshell-sandbox/src/main.rs
+index 4dad330..303641a 100644
+--- a/crates/openshell-sandbox/src/main.rs
++++ b/crates/openshell-sandbox/src/main.rs
+@@ -35,6 +35,7 @@ const SANDBOX_STATE_ROOT: &str = "/.openshell/state";
+ 
+ const VALIDATE_WORKSPACE_SUBCOMMAND: &str = "validate-workspace";
+ const CAPABILITY_PROBE_SUBCOMMAND: &str = "capability-probe";
++const RUNTIME_SECCOMP_PROBE_SUBCOMMAND: &str = "runtime-seccomp-probe";
+ const CAPABILITY_PROBE_LAUNCH_SUBCOMMAND: &str = "capability-probe-launch";
+ const CAPABILITY_SOCKET_CHILD_SUBCOMMAND: &str = "capability-socket-child";
+ const CAPABILITY_LANDLOCK_CHILD_SUBCOMMAND: &str = "capability-landlock-child";
+@@ -114,6 +115,63 @@ fn run_capability_probe() -> Result<()> {
+     Ok(())
+ }
+ 
++/// Probe the fixed built-in syscall filter from an ordinary sandbox exec
++/// child. The caller must launch this helper through the workload boundary;
++/// this command intentionally does not install its own filter, because doing
++/// so would only test the helper rather than the selected runtime.
++#[cfg(target_os = "linux")]
++#[allow(unsafe_code)]
++fn run_runtime_seccomp_probe() -> Result<()> {
++    use std::ffi::CString;
++
++    // getpid is an innocuous syscall the fixed workload filter must allow.
++    // SAFETY: getpid takes no arguments and has no memory side effects.
++    let allowed_pid = unsafe { libc::syscall(libc::SYS_getpid) };
++    if allowed_pid <= 0 {
++        return Err(miette::miette!(
++            "built-in seccomp allow probe failed: getpid returned {allowed_pid}"
++        ));
++    }
++
++    // memfd_create is unconditionally denied by the pinned built-in filter.
++    let name = CString::new("openshell-seccomp-probe").into_diagnostic()?;
++    // SAFETY: name is NUL terminated and remains live for the syscall; flags
++    // are a valid scalar. A successful descriptor is closed below.
++    let denied_fd =
++        unsafe { libc::syscall(libc::SYS_memfd_create, name.as_ptr(), libc::MFD_CLOEXEC) };
++    if denied_fd >= 0 {
++        // SAFETY: the kernel returned this descriptor to this process.
++        let descriptor = libc::c_int::try_from(denied_fd).into_diagnostic()?;
++        unsafe { libc::close(descriptor) };
++        return Err(miette::miette!(
++            "built-in seccomp deny probe failed: memfd_create unexpectedly succeeded"
++        ));
++    }
++    let errno = std::io::Error::last_os_error().raw_os_error();
++    if errno != Some(libc::EPERM) {
++        return Err(miette::miette!(
++            "built-in seccomp deny probe failed: memfd_create returned errno {errno:?}, expected EPERM"
++        ));
++    }
++
++    println!(
++        "{}",
++        serde_json::json!({
++            "version": 1,
++            "profile": "openshell-linux-built-in-seccomp-v1",
++            "getpid": "allowed",
++            "memfd_create": "denied",
++            "denied_errno": "EPERM"
++        })
++    );
++    Ok(())
++}
++
++#[cfg(not(target_os = "linux"))]
++fn run_runtime_seccomp_probe() -> Result<()> {
++    Err(miette::miette!("runtime seccomp probe requires Linux"))
++}
++
+ /// Actively qualify every kernel primitive used by the capability-free
+ /// sandbox. Callers decide whether to emit the resulting diagnostic report.
+ #[cfg(target_os = "linux")]
+@@ -1929,6 +1987,14 @@ fn main() -> Result<()> {
+     if raw_args.get(1).map(String::as_str) == Some(CAPABILITY_PROBE_SUBCOMMAND) {
+         return run_capability_probe();
+     }
++    if raw_args.get(1).map(String::as_str) == Some(RUNTIME_SECCOMP_PROBE_SUBCOMMAND) {
++        if raw_args.len() != 2 {
++            return Err(miette::miette!(
++                "usage: openshell-sandbox {RUNTIME_SECCOMP_PROBE_SUBCOMMAND}"
++            ));
++        }
++        return run_runtime_seccomp_probe();
++    }
+     if raw_args.get(1).map(String::as_str) == Some(CAPABILITY_PROBE_LAUNCH_SUBCOMMAND) {
+         return launch_capability_probe(&raw_args[2..]);
+     }
+diff --git a/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs b/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs
+index 81d0b16..2d40a8c 100644
+--- a/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs
++++ b/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs
+@@ -633,6 +633,32 @@ mod tests {
+         unsafe { assert_blocked_in_child(&filter, libc::SYS_memfd_create, libc::EPERM) };
+     }
+ 
++    #[test]
++    fn behavioral_getpid_allowed() {
++        let filter = build_filter(true).unwrap();
++        let pid = unsafe { libc::fork() };
++        assert!(pid >= 0, "fork failed");
++        if pid == 0 {
++            // SAFETY: PR_SET_NO_NEW_PRIVS is required before applying the
++            // filter and only tightens this forked test process.
++            if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } < 0 {
++                libc::_exit(1);
++            }
++            apply_filter(&filter).expect("apply_filter");
++            // SAFETY: getpid takes no arguments and has no memory side effects.
++            let result = unsafe { libc::syscall(libc::SYS_getpid) };
++            libc::_exit(if result > 0 { 0 } else { 1 });
++        }
++        let mut status: libc::c_int = 0;
++        // SAFETY: pid is the direct child returned by fork and status is
++        // writable storage for waitpid.
++        assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
++        assert!(
++            libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
++            "getpid was denied by the built-in filter"
++        );
++    }
++
+     #[test]
+     fn behavioral_ptrace_blocked() {
+         let filter = build_filter(true).unwrap();
 diff --git a/crates/openshell-sdk/tests/client_mock.rs b/crates/openshell-sdk/tests/client_mock.rs
 index 1c86ada..aab674c 100644
 --- a/crates/openshell-sdk/tests/client_mock.rs
