@@ -322,6 +322,54 @@ describe("GitHub external object provider", () => {
     }) });
   });
 
+  it("repairs a legacy ETag without a source version using a full canonical GET", async () => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(new Headers(init?.headers).has("if-none-match")).toBe(false);
+      return response({ state: "open", draft: false, merged: false, title: "Repaired legacy object", updated_at: "2026-04-24T01:03:00Z" });
+    });
+    const provider = createGitHubExternalObjectProvider({} as any, { fetch, tokenProvider: null });
+    const resolver = provider.resolvers.find((entry) => entry.objectType === "pull_request")!;
+    const object = githubObject("pull/42", "pull_request");
+    object.etag = '"legacy-without-version"';
+    object.remoteVersion = null;
+
+    const result = await resolver.resolve({ companyId: object.companyId, object });
+
+    expect(result).toMatchObject({ ok: true, snapshot: {
+      statusKey: "open", remoteVersion: "2026-04-24T01:03:00Z", etag: '"etag-1"',
+    } });
+  });
+
+  it("rejects an unsolicited 304 when a legacy ETag has no valid source version", async () => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(new Headers(init?.headers).has("if-none-match")).toBe(false);
+      return new Response(null, { status: 304 });
+    });
+    const provider = createGitHubExternalObjectProvider({} as any, { fetch, tokenProvider: null });
+    const resolver = provider.resolvers.find((entry) => entry.objectType === "pull_request")!;
+    const object = githubObject("pull/42", "pull_request");
+    object.etag = '"legacy-without-version"';
+    object.remoteVersion = "invalid-provider-time";
+
+    await expect(resolver.resolve({ companyId: object.companyId, object }))
+      .resolves.toMatchObject({ ok: false, errorCode: "github_unexpected_not_modified" });
+  });
+
+  it("rejects a 304 when an unsafe ETag was omitted from the request", async () => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(new Headers(init?.headers).has("if-none-match")).toBe(false);
+      return new Response(null, { status: 304 });
+    });
+    const provider = createGitHubExternalObjectProvider({} as any, { fetch, tokenProvider: null });
+    const resolver = provider.resolvers.find((entry) => entry.objectType === "pull_request")!;
+    const object = githubObject("pull/42", "pull_request");
+    object.etag = `"${"x".repeat(1_001)}"`;
+    object.remoteVersion = "2026-04-24T01:02:03.000Z";
+
+    await expect(resolver.resolve({ companyId: object.companyId, object }))
+      .resolves.toMatchObject({ ok: false, errorCode: "github_unexpected_not_modified" });
+  });
+
   it("requires a provider source version before accepting a canonical GitHub object response", async () => {
     const provider = createGitHubExternalObjectProvider({} as any, {
       fetch: async () => response({ state: "closed", merged: true }), tokenProvider: null,

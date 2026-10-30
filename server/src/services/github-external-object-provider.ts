@@ -30,6 +30,10 @@ interface GitHubObjectIdentity {
 
 const GITHUB_OBJECT_TTL_SECONDS = 300;
 
+function hasValidGitHubObjectVersion(value: string | null | undefined) {
+  return Boolean(value && Number.isFinite(Date.parse(value)));
+}
+
 function isGitHubHost(host: string) {
   const h = host.toLowerCase();
   return h === "github.com" || h === "www.github.com";
@@ -398,8 +402,12 @@ export function createGitHubExternalObjectProvider(
           "x-github-api-version": "2022-11-28",
         };
         if (token) headers.authorization = `Bearer ${token}`;
-        if (object.etag && object.etag.length <= 1_000 && !/[\r\n]/.test(object.etag)) {
-          headers["if-none-match"] = object.etag;
+        const storedValidator = object.etag && object.etag.length <= 1_000 && !/[\r\n]/.test(object.etag)
+          ? object.etag
+          : null;
+        const sentValidator = hasValidGitHubObjectVersion(object.remoteVersion) ? storedValidator : null;
+        if (sentValidator) {
+          headers["if-none-match"] = sentValidator;
         }
 
         const apiKind = objectType === "pull_request" ? "pulls" : "issues";
@@ -420,12 +428,12 @@ export function createGitHubExternalObjectProvider(
 
         const etag = response.headers.get("etag");
         if (response.status === 304) {
-          if (!object.etag) {
+          if (!sentValidator) {
             return {
               ok: false,
               liveness: "unreachable",
               errorCode: "github_unexpected_not_modified",
-              errorMessage: "GitHub returned an unchanged response without a stored object validator.",
+              errorMessage: "GitHub returned an unchanged response without a valid conditional object request.",
               retryAfterSeconds: GITHUB_OBJECT_TTL_SECONDS,
             };
           }
