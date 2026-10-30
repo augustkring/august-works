@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ConnectionGrant, ToolConnection } from "@paperclipai/shared";
-import { projectToolConnectionLifecycle } from "./tool-connection-lifecycle.js";
+import {
+  githubRepositoryAccessScopeHash,
+  githubRepositoryAccessSourceIdentityHash,
+  projectToolConnectionLifecycle,
+} from "./tool-connection-lifecycle.js";
 
 const connection = (overrides: Partial<ToolConnection> = {}): ToolConnection => ({
   id: "connection-1", companyId: "company-1", applicationId: "app-1", name: "GitHub", uid: "github",
@@ -28,8 +32,10 @@ describe("tool connection lifecycle projection", () => {
       state: "HEALTHY", action: null, grantStatus: "active", scopeNames: ["read:user", "repo"],
       credentialExpiresAt: "2026-10-28T02:00:00.000Z", credentialFreshness: "current",
       providerLifecycle: "not_reported", syncReconciliation: {
-        state: "not_reported", mode: "not_reported", accessRevision: null,
-        accessRevisionKind: "not_reported", lastFullReconciledAt: null, gapDetection: "not_reported",
+        domain: "not_reported", state: "not_reported", mode: "not_reported", accessRevision: null,
+        accessRevisionKind: "not_reported", lastSuccessAt: null, lastFullReconciledAt: null,
+        scopeHash: null, sourceIdentityHash: null, cursor: "not_reported", watermark: "not_reported",
+        gapDetection: "not_reported", rateLimitState: "not_reported",
       },
       operations: {
         credentialRefresh: "provider_dependent", subscriptionRenewal: "not_reported",
@@ -92,6 +98,74 @@ describe("tool connection lifecycle projection", () => {
     });
   });
 
+  it("projects a scope-bound repository access reconciliation without exposing provider identifiers", () => {
+    const repositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
+    const scopeHash = githubRepositoryAccessScopeHash(["repo", "read:user"], ["456"], repositories)!;
+    const sourceIdentityHash = githubRepositoryAccessSourceIdentityHash("123")!;
+    expect(githubRepositoryAccessScopeHash([], ["456"], repositories)).toMatch(/^[a-f0-9]{64}$/);
+    expect(githubRepositoryAccessScopeHash(undefined, ["456"], repositories)).toBeNull();
+    const result = projectToolConnectionLifecycle(connection(), grant({ providerTenant: {
+      oauth: { scopes: ["repo", "read:user"] },
+      github: {
+        userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        repositories, accessRevision: "revision-1", lastAccessRefreshAt: "2026-10-27T00:00:00.000Z", webhookHealth: "healthy",
+        repositoryAccessReconciliation: { state: "reconciled", mode: "full",
+          lastSuccessAt: "2026-10-27T00:00:01.000Z", lastFullReconciledAt: "2026-10-27T00:00:01.000Z",
+          scopeHash, sourceIdentityHash },
+      },
+    } }), now);
+    expect(result.syncReconciliation).toMatchObject({ domain: "repository_access", state: "reconciled",
+      mode: "github_repository_full_snapshot", lastSuccessAt: "2026-10-27T00:00:01.000Z",
+      lastFullReconciledAt: "2026-10-27T00:00:01.000Z", scopeHash, sourceIdentityHash,
+      cursor: "not_reported", watermark: "not_reported", gapDetection: "not_reported", rateLimitState: "not_reported" });
+    expect(JSON.stringify(result.syncReconciliation)).not.toContain("123");
+    expect(JSON.stringify(result.syncReconciliation)).not.toContain("789");
+    expect(JSON.stringify(result.syncReconciliation)).not.toContain("octo/project");
+    const changedScopes = projectToolConnectionLifecycle(connection(), grant({ providerTenant: {
+      oauth: { scopes: ["repo", "read:user", "workflow"] },
+      github: {
+        userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        repositories, accessRevision: "revision-1", webhookHealth: "healthy",
+        repositoryAccessReconciliation: { state: "reconciled", mode: "full",
+          lastSuccessAt: "2026-10-27T00:00:01.000Z", lastFullReconciledAt: "2026-10-27T00:00:01.000Z",
+          scopeHash, sourceIdentityHash },
+      },
+    } }), now);
+    expect(changedScopes.syncReconciliation.state).toBe("required");
+  });
+
+  it("keeps an old snapshot stale after a bounded reconciliation failure", () => {
+    const repositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
+    const scopeHash = githubRepositoryAccessScopeHash(["repo", "read:user"], ["456"], repositories)!;
+    const sourceIdentityHash = githubRepositoryAccessSourceIdentityHash("123")!;
+    const result = projectToolConnectionLifecycle(connection(), grant({ providerTenant: {
+      oauth: { scopes: ["repo", "read:user"] },
+      github: {
+        userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        repositories, accessRevision: "revision-1", lastAccessRefreshAt: "2026-10-27T00:00:00.000Z", webhookHealth: "healthy",
+        repositoryAccessReconciliation: { state: "required", mode: "full",
+          lastSuccessAt: "2026-10-26T00:00:00.000Z", lastFullReconciledAt: "2026-10-26T00:00:00.000Z",
+          scopeHash, sourceIdentityHash },
+      },
+    } }), now);
+    expect(result).toMatchObject({ state: "PERMISSION_CHANGED", action: "refresh_access" });
+    expect(result.syncReconciliation).toMatchObject({ state: "required",
+      lastSuccessAt: "2026-10-26T00:00:00.000Z", lastFullReconciledAt: "2026-10-26T00:00:00.000Z" });
+  });
+
+  it("requires a first complete snapshot even when no local revision exists yet", () => {
+    const result = projectToolConnectionLifecycle(connection(), grant({ providerTenant: { github: {
+      userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+      repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+    } } }), now);
+    expect(result.syncReconciliation).toMatchObject({ domain: "repository_access", state: "required",
+      mode: "github_repository_full_snapshot", accessRevision: null, lastSuccessAt: null,
+      lastFullReconciledAt: null, cursor: "not_reported", gapDetection: "not_reported" });
+  });
+
   it("does not claim verified GitHub health while access or webhook proof is pending", () => {
     const noMetadata = projectToolConnectionLifecycle(connection(), grant(), now);
     expect(noMetadata).toMatchObject({ state: "DEGRADED", reason: "provider_access_unverified", action: "refresh_access" });
@@ -117,7 +191,8 @@ describe("tool connection lifecycle projection", () => {
       webhook: { health: "unhealthy", lastDeliveryAt: "2026-10-27T01:00:00.000Z", expiry: "not_applicable" },
       syncReconciliation: {
         state: "required", mode: "github_repository_full_snapshot", accessRevision: "version-2",
-        accessRevisionKind: "local_access_revision", lastFullReconciledAt: null, gapDetection: "not_reported",
+        accessRevisionKind: "local_access_revision", lastSuccessAt: null, lastFullReconciledAt: null,
+        cursor: "not_reported", gapDetection: "not_reported", rateLimitState: "not_reported",
       },
       subscription: { state: "not_applicable", expiresAt: null, renewal: "not_applicable" },
     });
@@ -131,14 +206,16 @@ describe("tool connection lifecycle projection", () => {
       accessRevision: "version-2", lastAccessRefreshAt: "2026-10-27T00:00:00.000Z",
       webhookHealth: "healthy",
     } } });
-    expect(projectToolConnectionLifecycle(connection(), verifiedGitHub, now).syncReconciliation).toEqual({
-      state: "not_reported", mode: "github_repository_full_snapshot", accessRevision: "version-2",
-      accessRevisionKind: "local_access_revision", lastFullReconciledAt: "2026-10-27T00:00:00.000Z",
-      gapDetection: "not_reported",
+    expect(projectToolConnectionLifecycle(connection(), verifiedGitHub, now).syncReconciliation).toMatchObject({
+      domain: "repository_access", state: "not_reported", mode: "github_repository_full_snapshot", accessRevision: "version-2",
+      accessRevisionKind: "local_access_revision", lastSuccessAt: null, lastFullReconciledAt: null,
+      cursor: "not_reported", watermark: "not_reported", gapDetection: "not_reported", rateLimitState: "not_reported",
     });
     expect(projectToolConnectionLifecycle(connection({ config: {} }), grant(), now).syncReconciliation).toEqual({
-      state: "not_reported", mode: "not_reported", accessRevision: null,
-      accessRevisionKind: "not_reported", lastFullReconciledAt: null, gapDetection: "not_reported",
+      domain: "not_reported", state: "not_reported", mode: "not_reported", accessRevision: null,
+      accessRevisionKind: "not_reported", lastSuccessAt: null, lastFullReconciledAt: null,
+      scopeHash: null, sourceIdentityHash: null, cursor: "not_reported", watermark: "not_reported",
+      gapDetection: "not_reported", rateLimitState: "not_reported",
     });
   });
 

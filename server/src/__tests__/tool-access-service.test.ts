@@ -69,6 +69,7 @@ import {
   projectedConnectionHeaders,
   projectConnectionMethodToolInputSchema,
   projectConnectionMethodToolArguments,
+  loadGitHubGrantMetadata,
   toolAccessService,
 } from "../services/tool-access.js";
 import { accessService } from "../services/access.js";
@@ -801,6 +802,31 @@ async function createRemoteToolFixture(
 }
 
 describeEmbeddedPostgres("tool access service", () => {
+  it("bounds full GitHub repository access pagination before returning a partial snapshot", async () => {
+    let calls = 0;
+    const request = vi.fn(async (input: string | URL | Request) => {
+      calls += 1;
+      const url = new URL(String(input));
+      if (url.pathname === "/user") return new Response(JSON.stringify({ id: 42, login: "octocat" }), { status: 200 });
+      if (url.pathname === "/user/installations") {
+        return new Response(JSON.stringify({ installations: Array.from({ length: 100 }, (_, index) => ({
+          id: index + 1, repository_selection: "selected", html_url: `https://github.com/settings/installations/${index + 1}`,
+        })) }), { status: 200 });
+      }
+      if (/^\/user\/installations\/\d+\/repositories$/.test(url.pathname)) {
+        const page = Number(url.searchParams.get("page"));
+        return new Response(JSON.stringify({ repositories: [{ id: 900 + page, full_name: `octocat/repo-${page}` }] }), {
+          status: 200,
+          headers: page === 1 ? { link: `<${url.origin}${url.pathname}?per_page=100&page=2>; rel="next"` } : {},
+        });
+      }
+      throw new Error(`unexpected request ${url}`);
+    }) as typeof fetch;
+    await expect(loadGitHubGrantMetadata("opaque-test-token", request, "paperclip"))
+      .rejects.toMatchObject({ details: { code: "github_access_refresh_incomplete" } });
+    expect(calls).toBe(200);
+  });
+
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<
     ReturnType<typeof startEmbeddedPostgresTestDatabase>
@@ -4850,7 +4876,7 @@ describeEmbeddedPostgres("tool access service", () => {
       webhook: { health: "healthy", lastDeliveryAt: "2026-10-27T23:00:00.000Z", expiry: "not_applicable" },
       providerLifecycle: "not_reported", syncReconciliation: {
         state: "not_reported", mode: "github_repository_full_snapshot", accessRevision: "access-version-1",
-        accessRevisionKind: "local_access_revision", lastFullReconciledAt: "2026-10-28T00:00:00.000Z",
+        accessRevisionKind: "local_access_revision", lastSuccessAt: null, lastFullReconciledAt: null,
         gapDetection: "not_reported",
       },
     });
@@ -7289,7 +7315,7 @@ describeEmbeddedPostgres("tool access service", () => {
     ).toBe(false);
   });
 
-  it.each(["none", "event", "same-time-refresh", "one-conflict"])(
+  it.each(["none", "event", "same-time-refresh", "one-conflict", "incomplete"])(
     "binds a managed GitHub identity and protects refresh from concurrent access changes (%s)",
     async (concurrentChange) => {
       const company = await createCompany(db);
@@ -7309,6 +7335,7 @@ describeEmbeddedPostgres("tool access service", () => {
         platform_shared: true,
       };
       let beforeRepositoryResponse = async () => {};
+      let forcePaginationCycle = false;
       vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
         const href = String(url);
         if (href === "https://api.github.com/user") {
@@ -7336,6 +7363,12 @@ describeEmbeddedPostgres("tool access service", () => {
           )
         ) {
           await beforeRepositoryResponse();
+          if (forcePaginationCycle) {
+            return new Response(JSON.stringify({ total_count: 1, repositories: [{ id: 1, full_name: "paperclipai/repo-1" }] }), {
+              status: 200,
+              headers: { link: "<https://api.github.com/user/installations/101/repositories?per_page=100&page=2>; rel=\"next\"" },
+            });
+          }
           return mcpHttpResponse({
             total_count: 3,
             repositories: [1, 2, 3].map((id) => ({
@@ -7462,6 +7495,11 @@ describeEmbeddedPostgres("tool access service", () => {
         expect(
           grant!.credentialSecretRefs.map((ref) => ref.configPath),
         ).toEqual(["oauth.access_token"]);
+        expect(grant!.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+          state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+        });
+        expect(grant!.providerTenant?.github?.repositoryAccessReconciliation?.scopeHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(grant!.providerTenant?.github?.repositoryAccessReconciliation?.sourceIdentityHash).toMatch(/^[a-f0-9]{64}$/);
         expect(JSON.stringify(grant)).not.toContain("do-not-store");
         expect(connector.setWebhookBinding).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -7486,6 +7524,16 @@ describeEmbeddedPostgres("tool access service", () => {
             ),
         ).resolves.toHaveLength(1);
         vi.mocked(connector.setWebhookBinding).mockClear();
+        if (concurrentChange === "incomplete") {
+          forcePaginationCycle = true;
+          await expect(service.checkHealth(connected.connectionId, actor)).rejects.toMatchObject({ status: 502 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositories).toHaveLength(3);
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "required", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
+          return;
+        }
         if (concurrentChange !== "none") {
           beforeRepositoryResponse = async () => {
             if (concurrentChange === "one-conflict")
@@ -7529,6 +7577,9 @@ describeEmbeddedPostgres("tool access service", () => {
               .where(eq(connectionGrants.id, grant!.id));
             expect(latest?.status).toBe("active");
             expect(latest?.providerTenant?.github?.repositoryCount).toBe(3);
+            expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+              state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+            });
             return;
           }
           await expect(
@@ -7550,6 +7601,10 @@ describeEmbeddedPostgres("tool access service", () => {
             service.checkHealth(connected.connectionId, actor),
           ).resolves.toMatchObject({ connection: { healthStatus: "ok" } });
           expect(connector.setWebhookBinding).toHaveBeenCalled();
+          const [refreshedGrant] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(refreshedGrant?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
         }
       } finally {
         githubDefinition.ownershipAvailability = previousOwnershipAvailability;

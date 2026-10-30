@@ -308,8 +308,10 @@ describeEmbeddedPostgres.sequential("GitHub connection event delivery", () => {
     const [connection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connectionId));
     expect(projectToolConnectionLifecycle(connection!, grant!, currentTime).syncReconciliation).toMatchObject(
       refreshed
-        ? { state: "not_reported", mode: "github_repository_full_snapshot", lastFullReconciledAt: "2026-09-04T12:00:02.000Z", gapDetection: "not_reported" }
-        : { state: "required", mode: "github_repository_full_snapshot", accessRevisionKind: "local_access_revision", lastFullReconciledAt: null, gapDetection: "not_reported" },
+        ? { state: "required", mode: "github_repository_full_snapshot", accessRevision: null,
+          accessRevisionKind: "not_reported", lastSuccessAt: null, lastFullReconciledAt: null, gapDetection: "not_reported" }
+        : { state: "required", mode: "github_repository_full_snapshot", accessRevisionKind: "local_access_revision",
+          lastSuccessAt: null, lastFullReconciledAt: null, gapDetection: "not_reported" },
     );
     if (refreshed) {
       expect(grant?.providerTenant?.github?.repositories).toHaveLength(1);

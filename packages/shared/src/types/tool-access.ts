@@ -245,14 +245,21 @@ export interface ToolConnectionLifecycle {
   providerLifecycle: "not_reported";
   /** GitHub has a local full-snapshot revision; provider-feed completeness remains unreported. */
   syncReconciliation: {
-    state: "required" | "not_reported";
+    domain: "repository_access" | "not_reported";
+    state: "required" | "not_reported" | "reconciled";
     mode: "github_repository_full_snapshot" | "not_reported";
     accessRevision: string | null;
     accessRevisionKind: "local_access_revision" | "not_reported";
-    /** GitHub stores this only when its complete paginated access refresh succeeds. */
+    /** Completion time only; never a provider feed cursor or content-sync watermark. */
+    lastSuccessAt: string | null;
     lastFullReconciledAt: string | null;
+    scopeHash: string | null;
+    sourceIdentityHash: string | null;
+    cursor: "not_reported";
+    watermark: "not_reported";
     /** Opaque provider delivery IDs do not establish feed completeness. */
     gapDetection: "not_reported";
+    rateLimitState: "not_reported";
   };
 }
 
@@ -302,6 +309,14 @@ export interface ConnectionGrant {
       lastAccessRefreshAt?: string;
       lastWebhookAt?: string;
       webhookHealth?: "pending" | "healthy" | "unhealthy";
+      repositoryAccessReconciliation?: {
+        state: "reconciled" | "required";
+        mode: "full";
+        lastSuccessAt?: string;
+        lastFullReconciledAt?: string;
+        scopeHash?: string;
+        sourceIdentityHash?: string;
+      };
     };
   } | null;
   credentialSecretRefs: ToolCredentialSecretRef[];

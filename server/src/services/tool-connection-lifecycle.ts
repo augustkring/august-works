@@ -11,6 +11,67 @@ function normalizedScopes(value: unknown): string[] {
     .map((scope) => scope.trim()))].sort((left, right) => left.localeCompare(right));
 }
 
+function sha256(value: unknown): string {
+  return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
+}
+
+function providerId(value: unknown): value is string {
+  return typeof value === "string" && /^[1-9][0-9]{0,30}$/.test(value);
+}
+
+/** Hash the provider account identity without exposing the account ID. */
+export function githubRepositoryAccessSourceIdentityHash(userId: unknown): string | null {
+  return providerId(userId) ? sha256({ provider: "github", userId }) : null;
+}
+
+/** Bind a complete access snapshot to both OAuth scopes and its resource membership. */
+export function githubRepositoryAccessScopeHash(
+  scopes: unknown,
+  installationIds: unknown,
+  repositories: unknown,
+): string | null {
+  if (!Array.isArray(scopes) || !Array.isArray(installationIds) || installationIds.length === 0 ||
+    !installationIds.every(providerId) || !Array.isArray(repositories) || repositories.length === 0) return null;
+  const normalized = normalizedScopes(scopes);
+  const installations = [...new Set(installationIds as string[])].sort();
+  const repositoryScope = repositories.flatMap((value) => {
+    const item = record(value);
+    if (!providerId(item.id) || !providerId(item.installationId) || !installations.includes(item.installationId)) return [];
+    return [{ id: item.id, installationId: item.installationId }];
+  }).sort((left, right) => left.id.localeCompare(right.id) || left.installationId.localeCompare(right.installationId));
+  if (repositoryScope.length !== repositories.length) return null;
+  return sha256({ provider: "github", scopes: normalized, installations, repositories: repositoryScope });
+}
+
+/** Exact private progress pin used by the GitHub owner before its refresh CAS. */
+export function githubRepositoryAccessProgressHash(githubValue: unknown, scopes: unknown): string {
+  const github = record(githubValue);
+  const repositories = Array.isArray(github.repositories) ? github.repositories.map((value) => {
+    const item = record(value);
+    return { id: item.id ?? null, fullName: item.fullName ?? null, installationId: item.installationId ?? null, private: item.private ?? null };
+  }).sort((left, right) => String(left.id).localeCompare(String(right.id))) : null;
+  return sha256({
+    sourceIdentityHash: githubRepositoryAccessSourceIdentityHash(github.userId),
+    scopeHash: githubRepositoryAccessScopeHash(scopes, github.installationIds, github.repositories),
+    accessRevision: github.accessRevision ?? null,
+    lastAccessRefreshAt: github.lastAccessRefreshAt ?? null,
+    lastWebhookAt: github.lastWebhookAt ?? null,
+    webhookHealth: github.webhookHealth ?? null,
+    login: github.login ?? null,
+    avatarUrl: github.avatarUrl ?? null,
+    installationCount: github.installationCount ?? null,
+    repositoryCount: github.repositoryCount ?? null,
+    repositorySelection: github.repositorySelection ?? null,
+    installationIds: Array.isArray(github.installationIds) ? [...github.installationIds].sort() : null,
+    installationOwnerLogins: Array.isArray(github.installationOwnerLogins) ? [...github.installationOwnerLogins].sort() : null,
+    installationUrl: github.installationUrl ?? null,
+    managementUrl: github.managementUrl ?? null,
+    appSlug: github.appSlug ?? null,
+    repositorySnapshotHash: repositories === null ? null : sha256(repositories),
+    repositoryAccessReconciliation: record(github.repositoryAccessReconciliation),
+  });
+}
+
 /**
  * Customer-safe lifecycle projection over the current connection and grant.
  * It deliberately stores no lifecycle state of its own: grant status, health,
@@ -85,34 +146,56 @@ export function projectToolConnectionLifecycle(
           ? "expiring" as const
           : "current" as const;
   const githubConfigured = record(connection.config).sourceTemplateKey === "github";
-  // GitHub's local accessRevision changes on verified refresh and on an
-  // installation-membership webhook. A missing repository snapshot after a
-  // revision means the existing paginated full read must run. This is not a
-  // provider delivery cursor: opaque event IDs provide no completeness proof.
+  // A missing repository snapshot always requires the existing paginated full
+  // read, including for grants created before the local revision existed. This
+  // is not a provider delivery cursor: opaque event IDs provide no completeness proof.
   const localAccessRevision = typeof github?.accessRevision === "string" && github.accessRevision.length > 0
     ? github.accessRevision
     : null;
-  const hasFullRepositorySnapshot = Array.isArray(github?.repositories) && github.repositories.length > 0 &&
-    Array.isArray(github?.installationIds) && github.installationIds.length > 0;
-  const lastFullReconciledAtValue = github?.lastAccessRefreshAt;
-  const lastFullReconciledAt = hasFullRepositorySnapshot && typeof lastFullReconciledAtValue === "string" &&
-    Number.isFinite(Date.parse(lastFullReconciledAtValue))
-    ? new Date(lastFullReconciledAtValue).toISOString()
-    : null;
+  const repositorySnapshot = github?.repositories;
+  const installations = github?.installationIds;
+  const repositoryCount = github?.repositoryCount;
+  const hasFullRepositorySnapshot = Array.isArray(repositorySnapshot) && repositorySnapshot.length > 0 &&
+    repositorySnapshot.length === repositoryCount && Array.isArray(installations) && installations.length > 0;
+  const accessSync = record(github?.repositoryAccessReconciliation);
+  const currentRepositoryScopeHash = githubRepositoryAccessScopeHash(oauth?.scopes, installations, repositorySnapshot);
+  const currentRepositoryIdentityHash = githubRepositoryAccessSourceIdentityHash(github?.userId);
+  const recordedRepositoryScopeHash = typeof accessSync.scopeHash === "string" ? accessSync.scopeHash : null;
+  const recordedRepositoryIdentityHash = typeof accessSync.sourceIdentityHash === "string" ? accessSync.sourceIdentityHash : null;
+  const hashesMatch = Boolean(currentRepositoryScopeHash && currentRepositoryIdentityHash &&
+    currentRepositoryScopeHash === recordedRepositoryScopeHash && currentRepositoryIdentityHash === recordedRepositoryIdentityHash);
+  const parseTimestamp = (value: unknown) => typeof value === "string" && Number.isFinite(Date.parse(value))
+    ? new Date(Date.parse(value)).toISOString() : null;
+  const lastSuccessAt = parseTimestamp(accessSync.lastSuccessAt);
+  const lastFullReconciledAt = parseTimestamp(accessSync.lastFullReconciledAt);
+  const accessRefreshTimestamp = parseTimestamp(github?.lastAccessRefreshAt);
+  const repositoryAccessState = githubConfigured &&
+    (!hasFullRepositorySnapshot || accessSync.state === "required" || accessSync.state === "reconciled" && !hashesMatch)
+    ? "required" as const
+    : githubConfigured && accessSync.state === "reconciled" && hashesMatch && lastSuccessAt && lastFullReconciledAt
+      ? "reconciled" as const
+      : "not_reported" as const;
   const syncReconciliation: ToolConnectionLifecycle["syncReconciliation"] = {
-    state: githubConfigured && localAccessRevision && !hasFullRepositorySnapshot ? "required" : "not_reported",
+    domain: githubConfigured ? "repository_access" : "not_reported",
+    state: repositoryAccessState,
     mode: githubConfigured ? "github_repository_full_snapshot" : "not_reported",
     accessRevision: localAccessRevision,
     accessRevisionKind: localAccessRevision ? "local_access_revision" : "not_reported",
+    lastSuccessAt,
     lastFullReconciledAt,
+    scopeHash: recordedRepositoryScopeHash,
+    sourceIdentityHash: recordedRepositoryIdentityHash,
+    cursor: "not_reported",
+    watermark: "not_reported",
     gapDetection: "not_reported",
+    rateLimitState: "not_reported",
   };
   // GitHub App installation webhooks have no per-install expiry. Other
   // providers remain unknown until their lifecycle owner reports a contract.
   const subscriptionStatus = githubConfigured
     ? "not_applicable" as const
     : "not_reported" as const;
-  const githubAccessUnverified = githubConfigured && (!localAccessRevision || !lastFullReconciledAt || !hasFullRepositorySnapshot);
+  const githubAccessUnverified = githubConfigured && (!localAccessRevision || !accessRefreshTimestamp || !hasFullRepositorySnapshot || repositoryAccessState === "required");
   const githubWebhookUnverified = Boolean(github && github.webhookHealth !== "healthy");
   const connectionHealthUnverified = (connection.healthStatus === "ok" || connection.healthStatus === "healthy") && !connection.healthCheckedAt;
   const externallyRenewableIssuance = credentialExpirySource === "vercel_connect_issuance";
@@ -135,7 +218,7 @@ export function projectToolConnectionLifecycle(
     state = "REQUIRES_REAUTH";
     reason = "refresh_credential_expired";
     action = "reauthorize";
-  } else if (github && (github.webhookHealth === "unhealthy" || (localAccessRevision && !hasFullRepositorySnapshot))) {
+  } else if (github && (github.webhookHealth === "unhealthy" || repositoryAccessState === "required")) {
     state = "PERMISSION_CHANGED";
     reason = "provider_access_changed";
     action = "refresh_access";

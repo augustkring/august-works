@@ -4,7 +4,12 @@ import { instanceSettingsService } from "./instance-settings.js";
 import { assertActivationConnectionPurpose, assertActivationConnectionPurposeInTransaction } from "./saas/activation-owner.js";
 import { readDeferredActivationSetup, recordDeferredActivationCompletion } from "./saas/activation-connection-completion.js";
 import { originalOAuthGrantExpiration } from "./tool-oauth-grant-metadata.js";
-import { projectToolConnectionLifecycle } from "./tool-connection-lifecycle.js";
+import {
+  githubRepositoryAccessProgressHash,
+  githubRepositoryAccessScopeHash,
+  githubRepositoryAccessSourceIdentityHash,
+  projectToolConnectionLifecycle,
+} from "./tool-connection-lifecycle.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { withV7ActivityTransaction } from "./v7-mutations.js";
 import type { ActivityPublication } from "./activity-log.js";
@@ -2646,18 +2651,61 @@ export async function loadGitHubGrantMetadata(
 }> {
   let resolvedAppSlug = appSlug;
   const accessRefreshStartedAt = new Date().toISOString();
+  const reconciliationStartedAt = Date.now();
+  const requestBudget = 200;
+  const repositoryItemBudget = 10_000;
+  const requestDeadline = reconciliationStartedAt + 60_000;
+  let requestCount = 0;
+  let repositoryItems = 0;
+  const requestedUrls = new Set<string>();
+  const paginationTargets = new Set<string>();
+  const incomplete = () => unprocessable(
+    "GitHub repository access could not be completely reconciled within the local safety limits. Retry the refresh.",
+    { code: "github_access_refresh_incomplete" },
+  );
   const github = async (
     path: string,
-  ): Promise<{ data: Record<string, unknown>; hasNext: boolean }> => {
-    const response = await request(`https://api.github.com${path}`, {
-      headers: {
-        accept: "application/vnd.github+json",
-        authorization: `Bearer ${accessToken}`,
-        "user-agent": "Paperclip",
-        "x-github-api-version": "2022-11-28",
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
+  ): Promise<{ data: Record<string, unknown>; hasNext: boolean; nextUrl: string | null }> => {
+    const url = `https://api.github.com${path}`;
+    const remaining = requestDeadline - Date.now();
+    if (remaining <= 0 || requestCount >= requestBudget || requestedUrls.has(url)) throw incomplete();
+    requestCount += 1;
+    requestedUrls.add(url);
+    const timeoutMs = Math.max(1, Math.min(15_000, remaining));
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let response: Response;
+    let value: unknown;
+    try {
+      const completedRequest = await Promise.race([
+        (async () => {
+          const fetched = await request(url, {
+            headers: {
+              accept: "application/vnd.github+json",
+              authorization: `Bearer ${accessToken}`,
+              "user-agent": "Paperclip",
+              "x-github-api-version": "2022-11-28",
+            },
+            signal: controller.signal,
+          });
+          return { response: fetched, value: fetched.ok ? await fetched.json() as unknown : null };
+        })(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(incomplete());
+          }, timeoutMs);
+        }),
+      ]);
+      response = completedRequest.response;
+      value = completedRequest.value;
+    } catch (error) {
+      if (error instanceof HttpError && asRecord(error.details).code === "github_access_refresh_incomplete") throw error;
+      if (Date.now() >= requestDeadline) throw incomplete();
+      throw error;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
     if (!response.ok) {
       throw unprocessable(
         "GitHub could not verify this account's installation access",
@@ -2669,37 +2717,58 @@ export async function loadGitHubGrantMetadata(
         },
       );
     }
-    const value = (await response.json()) as unknown;
     if (!recordValue(value))
       throw unprocessable("GitHub returned invalid account metadata", {
         code: "github_bad_response",
       });
-    return {
-      data: value,
-      hasNext: /;\s*rel="next"/.test(response.headers.get("link") ?? ""),
-    };
+    const link = response.headers.get("link") ?? "";
+    const nextMatch = link.match(/<([^>]+)>\s*;\s*rel="?next"?/i);
+    if (link.includes("rel=\"next\"") && !nextMatch)
+      throw unprocessable("GitHub returned invalid pagination metadata", { code: "github_bad_response" });
+    let nextUrl: string | null = null;
+    if (nextMatch) {
+      try {
+        const parsed = new URL(nextMatch[1]!);
+        if (parsed.protocol !== "https:" || parsed.origin !== "https://api.github.com" || parsed.username || parsed.password)
+          throw new Error("invalid pagination origin");
+        nextUrl = parsed.toString();
+      } catch {
+        throw unprocessable("GitHub returned invalid pagination metadata", { code: "github_bad_response" });
+      }
+      if (paginationTargets.has(nextUrl)) throw incomplete();
+      paginationTargets.add(nextUrl);
+    }
+    return { data: value, hasNext: nextUrl !== null, nextUrl };
   };
   const list = async (
     path: string,
     key: string,
   ): Promise<Record<string, unknown>[]> => {
     const items: Record<string, unknown>[] = [];
-    for (let page = 1; ; page += 1) {
-      const { data, hasNext } = await github(
-        `${path}?per_page=100&page=${page}`,
-      );
+    let pageUrl = `https://api.github.com${path}?per_page=100&page=1`;
+    let priorPage = 0;
+    for (;;) {
+      const page = new URL(pageUrl).searchParams.get("page");
+      const pageNumber = Number(page);
+      if (!Number.isSafeInteger(pageNumber) || pageNumber <= priorPage || new URL(pageUrl).pathname !== path ||
+        new URL(pageUrl).searchParams.get("per_page") !== "100") throw incomplete();
+      priorPage = pageNumber;
+      const { data, hasNext, nextUrl } = await github(pageUrl.slice("https://api.github.com".length));
       const batch = data[key];
-      if (
-        !Array.isArray(batch) ||
-        !batch.every(recordValue) ||
-        (hasNext && batch.length === 0)
-      ) {
-        throw unprocessable("GitHub returned invalid access metadata", {
-          code: "github_bad_response",
-        });
+      if (!Array.isArray(batch) || !batch.every(recordValue)) {
+        throw unprocessable("GitHub returned invalid access metadata", { code: "github_bad_response" });
       }
+      if (hasNext && batch.length === 0) throw incomplete();
       items.push(...batch);
+      if (key === "installations" && items.length > 100) throw incomplete();
+      if (key === "repositories") {
+        repositoryItems += batch.length;
+        if (repositoryItems > repositoryItemBudget) throw incomplete();
+      }
       if (!hasNext) return items;
+      const next = new URL(nextUrl!);
+      if (next.pathname !== path || next.searchParams.get("per_page") !== "100" || !next.searchParams.get("page")) throw incomplete();
+      pageUrl = next.toString();
     }
   };
   const { data: user } = await github("/user");
@@ -2815,6 +2884,24 @@ export async function loadGitHubGrantMetadata(
     accessRevision: randomUUID(),
     lastAccessRefreshAt: accessRefreshStartedAt,
     webhookHealth: "pending",
+  };
+}
+
+function githubRepositoryAccessReconciliation(
+  metadata: { userId: string; installationIds: string[]; repositories: Array<{ id: string; installationId: string }> },
+  scopes: unknown,
+  completedAt: string,
+) {
+  const scopeHash = githubRepositoryAccessScopeHash(scopes, metadata.installationIds, metadata.repositories);
+  const sourceIdentityHash = githubRepositoryAccessSourceIdentityHash(metadata.userId);
+  if (!scopeHash || !sourceIdentityHash) return null;
+  return {
+    state: "reconciled" as const,
+    mode: "full" as const,
+    lastSuccessAt: completedAt,
+    lastFullReconciledAt: completedAt,
+    scopeHash,
+    sourceIdentityHash,
   };
 }
 
@@ -11744,6 +11831,46 @@ export function toolAccessService(
     };
     let metadata;
     let accessToken = await resolveAccessToken();
+    let expectedProgressHash = githubRepositoryAccessProgressHash(
+      grant.providerTenant?.github,
+      grant.providerTenant?.oauth?.scopes,
+    );
+    const markAccessRequiredIfCurrent = async () => db.transaction(async (tx) => {
+      const [currentGrant] = await tx.select().from(connectionGrants)
+        .where(and(
+          eq(connectionGrants.id, grant.id),
+          eq(connectionGrants.companyId, connection.companyId),
+          eq(connectionGrants.connectionId, connection.id),
+        )).for("update").limit(1);
+      if (!currentGrant || currentGrant.status !== "active" ||
+        githubRepositoryAccessProgressHash(currentGrant.providerTenant?.github, currentGrant.providerTenant?.oauth?.scopes) !== expectedProgressHash) return false;
+      const [currentConnection] = await tx.select().from(toolConnections)
+        .where(and(eq(toolConnections.id, connection.id), eq(toolConnections.companyId, connection.companyId)))
+        .for("update").limit(1);
+      if (!currentConnection || !currentConnection.enabled || currentConnection.status !== "active") return false;
+      const currentTenant = currentGrant.providerTenant;
+      const currentGitHub = currentTenant?.github;
+      if (!currentGitHub) return false;
+      const providerTenant = {
+        ...(currentTenant ?? {}),
+        github: {
+          ...currentGitHub,
+          repositoryAccessReconciliation: {
+            ...(currentGitHub.repositoryAccessReconciliation ?? {}),
+            state: "required" as const,
+            mode: "full" as const,
+          },
+        },
+      };
+      const [updated] = await tx.update(connectionGrants).set({ providerTenant, updatedAt: now() })
+        .where(and(
+          eq(connectionGrants.id, currentGrant.id),
+          eq(connectionGrants.companyId, currentGrant.companyId),
+          eq(connectionGrants.connectionId, currentGrant.connectionId),
+          eq(connectionGrants.status, "active"),
+        )).returning({ id: connectionGrants.id });
+      return Boolean(updated);
+    });
     try {
       metadata = await loadGitHubGrantMetadata(
         accessToken,
@@ -11753,6 +11880,7 @@ export function toolAccessService(
     } catch (error) {
       const providerCode =
         error instanceof HttpError ? asRecord(error.details).code : null;
+      if (providerCode === "github_access_refresh_incomplete") await markAccessRequiredIfCurrent();
       if (providerCode !== "oauth_reauthorization_required") throw error;
       // GitHub may invalidate an access token before its recorded expiry. If an
       // expiring token pair exists, rotate it once under the same durable lease
@@ -11764,6 +11892,10 @@ export function toolAccessService(
         forceRefresh: true,
         actor,
       });
+      expectedProgressHash = githubRepositoryAccessProgressHash(
+        grant.providerTenant?.github,
+        grant.providerTenant?.oauth?.scopes,
+      );
       accessToken = await resolveAccessToken();
       try {
         metadata = await loadGitHubGrantMetadata(
@@ -11776,6 +11908,7 @@ export function toolAccessService(
           retryError instanceof HttpError
             ? asRecord(retryError.details).code
             : null;
+        if (retryCode === "github_access_refresh_incomplete") await markAccessRequiredIfCurrent();
         if (retryCode === "oauth_reauthorization_required") {
           await db
             .update(connectionGrants)
@@ -11790,6 +11923,17 @@ export function toolAccessService(
         throw retryError;
       }
     }
+    const fetchedIdentityHash = githubRepositoryAccessSourceIdentityHash(metadata.userId);
+    const expectedIdentityHash = githubRepositoryAccessSourceIdentityHash(grant.providerTenant?.github?.userId);
+    const preflightReconciliation = githubRepositoryAccessReconciliation(
+      metadata,
+      grant.providerTenant?.oauth?.scopes,
+      now().toISOString(),
+    );
+    if (!preflightReconciliation || !expectedIdentityHash || fetchedIdentityHash !== expectedIdentityHash) {
+      await markAccessRequiredIfCurrent();
+      throw conflict("GitHub access changed during refresh. Try again.", { code: "github_access_changed" });
+    }
     const { updated, previousGitHub } = await db.transaction(async (tx) => {
       const [currentGrant] = await tx
         .select()
@@ -11802,26 +11946,29 @@ export function toolAccessService(
         )
         .for("update")
         .limit(1);
-      if (!currentGrant || currentGrant.status === "revoked")
+      if (!currentGrant || currentGrant.status !== "active")
         throw notFound("GitHub authorization not found");
+      const [currentConnection] = await tx.select().from(toolConnections)
+        .where(and(eq(toolConnections.id, connection.id), eq(toolConnections.companyId, connection.companyId)))
+        .for("update").limit(1);
+      if (!currentConnection || !currentConnection.enabled || currentConnection.status !== "active")
+        throw conflict("GitHub connection changed during refresh. Try again.", { code: "github_access_changed" });
       const previousGitHub = currentGrant.providerTenant?.github;
-      const initialGitHub = grant.providerTenant?.github;
-      // No lock is held during provider requests. Reject a snapshot if another
-      // refresh or webhook changed access while those requests were in flight.
-      if (
-        previousGitHub?.accessRevision !== initialGitHub?.accessRevision ||
-        previousGitHub?.lastWebhookAt !== initialGitHub?.lastWebhookAt ||
-        previousGitHub?.lastAccessRefreshAt !==
-          initialGitHub?.lastAccessRefreshAt
-      ) {
+      // No lock is held during provider requests. Pin identity, effective scope,
+      // snapshot bytes, webhook revision, and every prior progress field.
+      if (githubRepositoryAccessProgressHash(previousGitHub, currentGrant.providerTenant?.oauth?.scopes) !== expectedProgressHash) {
         throw conflict("GitHub access changed during refresh. Try again.", {
           code: "github_access_changed",
         });
       }
+      const currentIdentityHash = githubRepositoryAccessSourceIdentityHash(previousGitHub?.userId);
+      if (!currentIdentityHash || currentIdentityHash !== fetchedIdentityHash)
+        throw conflict("GitHub access changed during refresh. Try again.", { code: "github_access_changed" });
       const providerTenant = {
         ...(currentGrant.providerTenant ?? {}),
         github: {
           ...metadata,
+          repositoryAccessReconciliation: preflightReconciliation,
           ...(previousGitHub?.lastWebhookAt
             ? { lastWebhookAt: previousGitHub.lastWebhookAt }
             : {}),
@@ -15386,6 +15533,12 @@ export function toolAccessService(
         accessRef,
         ...(refreshRef ? [refreshRef] : []),
       ];
+      const callbackCompletedAt = now().toISOString();
+      const callbackGitHubReconciliation = githubMetadata
+        ? githubRepositoryAccessReconciliation(githubMetadata, credentials.scopes, callbackCompletedAt)
+        : null;
+      if (githubMetadata && !callbackGitHubReconciliation)
+        throw unprocessable("GitHub returned incomplete repository access metadata", { code: "github_access_refresh_incomplete" });
       const grantValues = {
         providerTenant: {
           name: githubMetadata?.login ?? providerName,
@@ -15402,7 +15555,10 @@ export function toolAccessService(
               ? { refreshedAt: now().toISOString() }
               : {}),
           },
-          ...(githubMetadata ? { github: githubMetadata } : {}),
+          ...(githubMetadata ? { github: {
+            ...githubMetadata,
+            repositoryAccessReconciliation: callbackGitHubReconciliation!,
+          } } : {}),
         },
         credentialSecretRefs,
         status: "active" as const,

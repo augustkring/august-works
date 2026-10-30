@@ -215,6 +215,14 @@ export const connectionGrants = pgTable(
         lastAccessRefreshAt?: string;
         lastWebhookAt?: string;
         webhookHealth?: "pending" | "healthy" | "unhealthy";
+        repositoryAccessReconciliation?: {
+          state: "reconciled" | "required";
+          mode: "full";
+          lastSuccessAt?: string;
+          lastFullReconciledAt?: string;
+          scopeHash?: string;
+          sourceIdentityHash?: string;
+        };
       };
     }>(),
     credentialSecretRefs: jsonb("credential_secret_refs").$type<ToolCredentialSecretRef[]>().notNull().default([]),
