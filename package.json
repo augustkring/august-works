@@ -31,7 +31,7 @@
     "test:platform-skill-migration-register": "node --test scripts/platform-skill-migration-register.test.mjs",
     "check:platform-skill-runtime-conformance": "node scripts/run-platform-skill-runtime-conformance.mjs --dry-run",
     "test:platform-skill-runtime-conformance": "node --test scripts/platform-skill-runtime-conformance.test.mjs",
-    "test:platform-skill-contracts": "pnpm run check:platform-skill-migration-register && pnpm run test:platform-skill-migration-register && pnpm run check:platform-skill-runtime-conformance && pnpm run test:platform-skill-runtime-conformance",
+    "test:platform-skill-contracts": "pnpm run check:platform-skill-migration-register && pnpm run test:platform-skill-migration-register && pnpm run check:platform-skill-runtime-conformance && pnpm run test:platform-skill-runtime-conformance && pnpm run check:agent-native-tool-alias-compatibility && pnpm run test:agent-native-tool-alias-compatibility",
     "check:v10-169-migration-phases": "node scripts/check-v10-169-migration-phase-register.mjs",
     "test:v10-169-migration-phases": "node --test scripts/check-v10-169-migration-phase-register.test.mjs",
     "evals:platform-skill": "node scripts/run-platform-skill-evals.mjs",
@@ -120,7 +120,9 @@
     "test:aw-v9-mcp-apps-poc": "node --test scripts/mcp-apps-poc/policy.test.mjs scripts/mcp-apps-poc/browser.test.mjs",
     "test:aw-v9-pilot": "node --test scripts/__tests__/aw-v9-pilot.test.mjs scripts/__tests__/aw-v9-pilot-files.test.mjs scripts/__tests__/aw-v9-attention.test.mjs scripts/__tests__/aw-v9-attention-files.test.mjs",
     "validate:aw-v9-pilot": "node scripts/validate-aw-v9-pilot.mjs",
-    "validate:aw-v9-attention": "node scripts/validate-aw-v9-attention.mjs"
+    "validate:aw-v9-attention": "node scripts/validate-aw-v9-attention.mjs",
+    "check:agent-native-tool-alias-compatibility": "node scripts/check-agent-native-tool-alias-compatibility.mjs",
+    "test:agent-native-tool-alias-compatibility": "node --test scripts/check-agent-native-tool-alias-compatibility.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

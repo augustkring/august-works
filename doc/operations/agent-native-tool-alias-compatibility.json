@@ -1,0 +1,1293 @@
+{
+  "schemaVersion": 1,
+  "contract": "v10-agent-native-tool-alias-compatibility-and-transition",
+  "briefBinding": {
+    "cataloguePath": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+    "catalogueLine": 6941,
+    "catalogueRequirement": "V10-122 canonical Blentera self-tool naming/metadata contract + safe paperclip-self:* compatibility/deprecation.",
+    "transitionClause": "\u00a756.6 MIG-06: deprecation, sunset, removal and retirement are separate; no universal fixed window; support replacement/consumer migration and observe actual cadence.",
+    "rawApiFallbackClause": "\u00a721B.25 applies to temporary raw REST/API/CLI fallbacks. These are canonical typed tool-name compatibility aliases and are not reclassified as raw API fallbacks."
+  },
+  "ownerPaths": [
+    "server/src/services/agent-native-operation-manifest.ts",
+    "server/src/services/tool-gateway.ts",
+    "server/src/services/native-runtime/paperclip-runner-tool-authority.ts"
+  ],
+  "currentPlatformSkillRelease": {
+    "registryPath": "skills-releases/blentera-platform/releases.json",
+    "metadata": {
+      "id": "v3",
+      "releaseName": "Blentera Platform V3",
+      "releasedAt": "2026-10-28T22:04:54Z",
+      "notes": "Same immutable operating-procedure bytes as V2, bound to the source-corrected existing-API operation manifest. API-only metadata does not register tools or qualify runtime profiles. Fresh admissions may bind V3; existing Run pins remain unchanged.",
+      "dir": "v3",
+      "skillKey": "blentera-platform",
+      "owner": "Blentera platform",
+      "mutableByCustomer": false,
+      "sourceSha": "0fcea368aa1ed3e4c7a20aaaf53be81c7dde5910",
+      "contentDigest": "sha256:25598388d69d9a7f5dd561a03fadfea63ad62aedff6bac12acf9e4cd7844e4b4",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "2a7741db4940ec0fc23d26f54148adf86de4a3275763534f00f07dbf577a0f3d"
+        },
+        {
+          "path": "references/advanced-boundaries.md",
+          "sha256": "619510e8ca025d1a63b6b136eacc0c42af93ee0c9d55d1eb960f701b9fec9f14"
+        },
+        {
+          "path": "references/approvals-and-governance.md",
+          "sha256": "6b5ec29c55e1260f044761d88f239ec42bf54f4260eea85a0d61e594f6e961fc"
+        },
+        {
+          "path": "references/apps-and-connections.md",
+          "sha256": "a6bb20de6095e5b81380731474e865baaee5b611ab349058d54989dd9a47f6b2"
+        },
+        {
+          "path": "references/artifacts-and-evidence.md",
+          "sha256": "22958bfd698139281a3c8370fbe561c0ea67301c3ddf79f6c3ae81536875cff0"
+        },
+        {
+          "path": "references/channels-and-representation.md",
+          "sha256": "a6f2cfd2e941e7d3148bffca5b035910824fe4e048ec89ac30ed3134de8920ee"
+        },
+        {
+          "path": "references/co-workers-and-delegation.md",
+          "sha256": "2b04113a175aade1f07768210e5220487611b08bb26c54fe6ed4312671245c39"
+        },
+        {
+          "path": "references/errors-retries-and-recovery.md",
+          "sha256": "8f0f439d35647814db0b75ae81f2f968b2dad73dcb835f97ecddd06cdff5ac30"
+        },
+        {
+          "path": "references/foundation-and-context.md",
+          "sha256": "9295f642aebceda3fb8d4de16e177e0ef59763432f9eba7f3a97e03bf73bb90b"
+        },
+        {
+          "path": "references/memory-and-learning.md",
+          "sha256": "c35964b611ec1ce7768ad72cf06fedd2238fbe5bf18d1a07343aee9f51d3d7bf"
+        },
+        {
+          "path": "references/support-and-service-status.md",
+          "sha256": "45f6642a8dd4b7321003cf9775ea48e08119d22a1705b065aa23cdc7998cb668"
+        },
+        {
+          "path": "references/terminology.md",
+          "sha256": "f2d9d2c4747500480c3e82b11234e797159fbcefd2ff0745b18672ce33ebadcd"
+        },
+        {
+          "path": "references/work.md",
+          "sha256": "6809117677f89e5a4a1080968ffccbb7cd771ed99942d185cfef947de475e2bf"
+        },
+        {
+          "path": "references/workflows-and-routines.md",
+          "sha256": "6ad51ab0400f491f6364f692aabd1fc49918da3701dc874815897d7ce8c68f52"
+        }
+      ],
+      "minimumControlPlaneVersion": "0.3.1",
+      "runtimeCompatibility": [
+        "qualified_blentera_native",
+        "qualified_agent_skills_adapter"
+      ],
+      "supersedes": "v2",
+      "operationManifestHash": "52fe608c583066221d3cee9562cd2216e17abdb9d0860ba74d9b9adf33e50e20",
+      "toolCatalogContractHash": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825"
+    },
+    "interpretation": "Exact read-only latest immutable release-registry record; not modified by this inventory."
+  },
+  "currentTransition": {
+    "state": "active_compatibility",
+    "deprecationAnnounced": false,
+    "sunsetVersion": null,
+    "sunsetDate": null,
+    "retirementApproved": false,
+    "reason": "Legacy aliases remain active. Actual external consumers and usage cadence are not measured; no expiry is invented.",
+    "actualUsage": "not_measured",
+    "externalConsumerInventory": "unknown",
+    "runtimeQualification": "source compatibility only; installed runtime/provider, external consumer and operator qualification remain open.",
+    "replacement": "The canonical `blentera.*` typed operation in each row; equivalent installed-runtime availability is not yet demonstrated for every profile.",
+    "cutoverRequirements": [
+      "Inventory actual in-repository and external consumers and measure use for their observed operating cadence; unknown is not zero.",
+      "Prove the canonical replacement is usable with equivalent authority, idempotency, current policy and recovery on every runtime/profile that still claims support.",
+      "Name the operation owner and rollout/operator owner; communicate a migration guide and approved sunset version only after evidence supports it.",
+      "Run a removal regression proving a retired alias is undiscoverable, rejected as tool_not_found, and cannot dispatch or produce an effect.",
+      "Preserve a tested rollback to the prior gateway/operation mapping before crossing the approved retirement point."
+    ],
+    "noAutomaticRetirement": true,
+    "fixedWindow": "none; the binding clause rejects a universal interval."
+  },
+  "rollback": {
+    "procedure": "Revert the gateway/operation mapping and this compatibility inventory together to the prior reviewed source bundle; restore its recorded operation/tool contract hashes. Keep prior immutable Platform Skill release bytes intact and admit its matching pins for new runs only.",
+    "doesNotClaim": "A rollback cannot undo external effects already performed under an alias."
+  },
+  "sourceScan": {
+    "roots": [
+      "server/src",
+      "packages",
+      "cli/src",
+      "ui/src",
+      "scripts",
+      "skills",
+      "skills-releases",
+      "server/src/onboarding-assets"
+    ],
+    "extensions": [
+      ".ts",
+      ".tsx",
+      ".js",
+      ".jsx",
+      ".mjs",
+      ".md"
+    ],
+    "purpose": "Literal alias path scan plus a separately enumerated runtime-instruction Markdown corpus; neither is usage telemetry or external consumer discovery.",
+    "runtimeInstructionSelection": [
+      "all SKILL.md under skills/ and skills-releases/",
+      "all Markdown under skills/blentera-platform/ and skills-releases/blentera-platform/",
+      "all Markdown under server/src/onboarding-assets/",
+      "all SKILL.md under server/src/ and packages/"
+    ]
+  },
+  "sourcePins": [
+    {
+      "path": "packages/adapters/hermes/skills/paperclip-task-bridge/SKILL.md",
+      "sha256": "1fb00a9e3f0e650c98ad28cbc3fce0255e9d4e1d03f092a629c7ec8f78c72058"
+    },
+    {
+      "path": "packages/plugins/plugin-llm-wiki/skills/index-refresh/SKILL.md",
+      "sha256": "0d015e9986e0320c6cfcd145235de9fc3797a935c0224a8dc1f2d95de9befd4a"
+    },
+    {
+      "path": "packages/plugins/plugin-llm-wiki/skills/paperclip-distill/SKILL.md",
+      "sha256": "ce0671362eabd720b241a4246668b4ac7933d215953a96cad7d8a8187812306b"
+    },
+    {
+      "path": "packages/plugins/plugin-llm-wiki/skills/wiki-ingest/SKILL.md",
+      "sha256": "476b87263892f41012d6291c53a9211915e49e15557dfbe267e905e9ca594e28"
+    },
+    {
+      "path": "packages/plugins/plugin-llm-wiki/skills/wiki-lint/SKILL.md",
+      "sha256": "9e94b5ed3d7cfed780162e3481245c134de09055e189dd838ec4ce9b687212ed"
+    },
+    {
+      "path": "packages/plugins/plugin-llm-wiki/skills/wiki-maintainer/SKILL.md",
+      "sha256": "9df088b7a6ac94e7a640461f0561c140188343053d03f6561cc9f86f771ab7db"
+    },
+    {
+      "path": "packages/plugins/plugin-llm-wiki/skills/wiki-query/SKILL.md",
+      "sha256": "73332d0b2d863efb99b1304f8fdc50d661ab7c664f40aaec07daaab12e187197"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/docs/doc-maintenance/SKILL.md",
+      "sha256": "fb0353386c5e5e5e13bcbb3233f044e3dccecf371f429d6328f26c26d7cb6169"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/paperclip-operations/issue-triage/SKILL.md",
+      "sha256": "df5bdc8bf5e017b7ba5f70a4b5323fad51d0c323278f386580f26cf43ad09160"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/paperclip-operations/reflection-coach/SKILL.md",
+      "sha256": "083d5fa8dc43c3ce7747e89c1afb6f6f42d0603a31808bffc5f8e56735f2d865"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/paperclip-operations/status-card-query/SKILL.md",
+      "sha256": "0c6140f51d503cbadc98723ce54c0def48e7e31ea159b0935b8ad6369291498a"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/paperclip-operations/summarize-status/SKILL.md",
+      "sha256": "4cb3d177f5d16e3cc2052d2f80e7fb245ab95e79c1e947abdc84cd4ee3d8c61e"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/paperclip-operations/task-planning/SKILL.md",
+      "sha256": "9c52a44a30ec8d306119da51bf298e9e3e6c382a9a9559ffd3054bf5e0c75f36"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/product/paperclip-capsules/SKILL.md",
+      "sha256": "dd659ccb46e105336eb00fbe689b1d5531347fc69493c3156390d40ee413c93e"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/product/wireframe/SKILL.md",
+      "sha256": "6992047cc97b67211cc8c1183718ab9aa26b8afc34c70d54d20558c215daaf48"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/quality/qa-acceptance/SKILL.md",
+      "sha256": "c631b437ab26d104af6cdb963d8f679a9341439041b3cb3ec8835f4ff551b378"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/bundled/software-development/github-pr-workflow/SKILL.md",
+      "sha256": "f498ec4ebb1779dea37adeb1db8a8b22316282798e35ee02e2fc5ff627d7e261"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/optional/browser/agent-browser/SKILL.md",
+      "sha256": "362f7b9d02297782bc6f0c093f495b8a0304a75bcf4b42e5c280a42b1f757b7d"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/optional/content/release-announcement/SKILL.md",
+      "sha256": "d745cca96350518fabae14f5c407d779e1df2c5d091b5b4a5c55bb888b569e5f"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/optional/content/simplified-english/SKILL.md",
+      "sha256": "a0f7385599873910e2fabf400346016a07dacbc7ece27c0e3616ae8fd94ebfbb"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/optional/finance/ramp/SKILL.md",
+      "sha256": "698cd69ebf2f2481ed83c8e9477b56ae78288cc4c751d7d35f649ff2483802a3"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/optional/product/design-critique/SKILL.md",
+      "sha256": "022e619baf6cc25725946279cb8052d22af090dd6cd6dc8c20f17867f71a5d8e"
+    },
+    {
+      "path": "packages/skills-catalog/catalog/optional/software-development/prepare-mcp-integration/SKILL.md",
+      "sha256": "5278d288a0cbfe10fdda4ef3d99cf61e6ed068f4b6c1282406b0e001c9f45253"
+    },
+    {
+      "path": "packages/teams-catalog/catalog/optional/content/content-machine/skills/content-calendar/SKILL.md",
+      "sha256": "aa62a332fc3149d6c0d58ca589c6b3910a373d542f16f749ec68ef2f3d7f29e9"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "sha256": "82823e883175b1d09bb2d4cd9a003a02d29d75f9e8bb1bf73c9bf685aacab9e2"
+    },
+    {
+      "path": "server/src/__tests__/helpers/native-private-memory-producer.ts",
+      "sha256": "4558e0de6b54923369980c41ec67deeddbcfa4fcad0814f9d6a442ab9108bed1"
+    },
+    {
+      "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "sha256": "ea4e872b6eb7dc4b01000dc47c5120aa5372cfdfeaa9ddbf1a563b89dde0e91c"
+    },
+    {
+      "path": "server/src/__tests__/tool-gateway-service.test.ts",
+      "sha256": "2e63de4131856f6e809e0af9d7664c9e44573cc01bc20d08ad3d46a5c32e098a"
+    },
+    {
+      "path": "server/src/__tests__/v9-agent-setup-conversation.integration.test.ts",
+      "sha256": "e8c6411e7ef1ef49d5190b039b5124c303a7615a54db355887112efc5b3b3111"
+    },
+    {
+      "path": "server/src/__tests__/v9-foundation-authoring.integration.test.ts",
+      "sha256": "2afb339684b11053497d5924d41eec57fd9b4cda249c02067ddf003e8b1c6fd7"
+    },
+    {
+      "path": "server/src/__tests__/v9-notification-proposals.integration.test.ts",
+      "sha256": "937a34ec3cf5ea629fece856e78c608b0ae512dd103d90404bd4f75f1a90cce0"
+    },
+    {
+      "path": "server/src/__tests__/v9-routine-authoring.integration.test.ts",
+      "sha256": "3c06ee6b2e78af6e8b9ad4090f28df6b30b5bf08a0bbcd32085763e40531cf14"
+    },
+    {
+      "path": "server/src/onboarding-assets/ceo/AGENTS.md",
+      "sha256": "044051009fd0947608bcaab2bb550472b57b3e03c9067be7109cc4714a0f209f"
+    },
+    {
+      "path": "server/src/onboarding-assets/ceo/HEARTBEAT.md",
+      "sha256": "c956a75e9878e0fb1f76a64c48a66ed47962f91dbc7094e5ca63e425e759a76a"
+    },
+    {
+      "path": "server/src/onboarding-assets/ceo/SOUL.md",
+      "sha256": "11d2175612842142cb54bca1430798dea69ee8854219fa7e0405216121f8508e"
+    },
+    {
+      "path": "server/src/onboarding-assets/ceo/TOOLS.md",
+      "sha256": "07f159beb98ccd64d39ceefd2674239b3120e021e6522ae61f0dd1de1971f62e"
+    },
+    {
+      "path": "server/src/onboarding-assets/default/AGENTS.md",
+      "sha256": "dd9b13ce54b7e1e0a5707cc3b5da22907f42b6ccdbf0086612bd5a73bdd7985a"
+    },
+    {
+      "path": "server/src/onboarding-assets/first-task/README.md",
+      "sha256": "a97344d11d4557a7ce69747f565f4e30c76d8dadc1e61a474d236d142614da01"
+    },
+    {
+      "path": "server/src/onboarding-assets/first-task/brief.md",
+      "sha256": "45f388ffb44ed784b02dcb5549c4eb291a53d9c875e7e12079c50e22a768de8c"
+    },
+    {
+      "path": "server/src/onboarding-assets/first-task/chief-of-staff/AGENTS.md",
+      "sha256": "986e1607ccd1faa80e2269afee1fc92e5b26eb89c8e76e38ab13b80ecd93f062"
+    },
+    {
+      "path": "server/src/onboarding-assets/first-task/greeting.md",
+      "sha256": "2e41972cc56fac436c5894107ea92ede2f5aa2428173a8c1312cfc9ee3ce3f14"
+    },
+    {
+      "path": "server/src/onboarding-assets/first-task/skills/first-task/SKILL.md",
+      "sha256": "30e1120d39901aa7e07f540f51e767c50b9317bb29c3ffe25a01bb214ad281ca"
+    },
+    {
+      "path": "server/src/services/agent-native-operation-manifest.ts",
+      "sha256": "8bfc90d76744eebd938c7f90348495b641119ba056b6beb1e78d6008098b59cc"
+    },
+    {
+      "path": "server/src/services/agent-setup-authoring-tools.ts",
+      "sha256": "5045387aea0bc7a725e30c2db737aeb559efaddae2b325f5a80e2f34d3e020a4"
+    },
+    {
+      "path": "server/src/services/agents.ts",
+      "sha256": "105a744ff385b3e34921f13331ae87bf10adeea163ed5d41e8b0b7ae4f743918"
+    },
+    {
+      "path": "server/src/services/context/context-engine-integration.test.ts",
+      "sha256": "02d26054d8a0710329181533365a137ed79e9207f59213349426971cf4fd944d"
+    },
+    {
+      "path": "server/src/services/decisions.ts",
+      "sha256": "37eef64615b32c72e314c0c8dda75e255df92f46be597b0de737fd690566d217"
+    },
+    {
+      "path": "server/src/services/experience/service-health.ts",
+      "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972"
+    },
+    {
+      "path": "server/src/services/experience/support-cases.ts",
+      "sha256": "aea590b7e2032042c8812c63a721576a84d2e888805f6e551b793c07e37263fc"
+    },
+    {
+      "path": "server/src/services/foundation-authoring-tools.ts",
+      "sha256": "0b44f0096f5667523217ed61f67e68cf5deeedaa9ec3a798bb43bb67e9061a8d"
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "sha256": "a8b4b40f4fc835e879d7401ee8bed7e921c6b7fd67a6c5deb4890f37b54c4d3c"
+    },
+    {
+      "path": "server/src/services/memory/memory-agent-tools.ts",
+      "sha256": "94bf9e477b3dd81637cb5a76fca6699a56e05fd8905287878a0719ed5f81adf2"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "aef38e88cbfb991c400a3bb519613f8a39eba6e81ab6886fe9cff2bf2db085f1"
+    },
+    {
+      "path": "server/src/services/native-direct-input.ts",
+      "sha256": "8dd0c70829503173f5de7aa924c5ab6a61db2ddfb2cd119701c95c227257f3f7"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "4e3d721fbccdf40cbe11305bbe70aa2e5112af36975647141bd13ca2573b63ae"
+    },
+    {
+      "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "sha256": "f33550530ce8edee95549f84aff6d4d9bf04c31155da70d7bb48f7e6b731c925"
+    },
+    {
+      "path": "server/src/services/notification-preference-proposals.ts",
+      "sha256": "77565b319d0c1c586b41d07566995b63ad0d11b8c9e9aea436ba9a3d2716cacf"
+    },
+    {
+      "path": "server/src/services/orchestration/worker-model-gateway.ts",
+      "sha256": "06935699dc5fe2411f661b3c70daf0f2d7f976342e710dcfa05ec1c2ccf67ee4"
+    },
+    {
+      "path": "server/src/services/process-findings.ts",
+      "sha256": "4f67e81293521b129b2a8b0744f0588d8b8aabe16bb1ed160b74760638baea55"
+    },
+    {
+      "path": "server/src/services/projects.ts",
+      "sha256": "ca343d047070351c1795b37f4899c3044548f8cca223bd804ed1c1874066fb9a"
+    },
+    {
+      "path": "server/src/services/routine-authoring-tools.ts",
+      "sha256": "7ece9883606f6741a4f25bfaab45bfd74c59bb0b562f94f5c5af80b8e10dc024"
+    },
+    {
+      "path": "server/src/services/tool-access-policy.ts",
+      "sha256": "2e3cb44b7a832fbba6b6f35f709666eb121f89120ebdae76bb2f3aa873e9111b"
+    },
+    {
+      "path": "server/src/services/tool-gateway.ts",
+      "sha256": "edb3c85b30c222ed4174891bf4cc8c08b036546dcce25ba05846fad14ec860b8"
+    },
+    {
+      "path": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "sha256": "c8aedc3a3d01b63600ac7a7b5c3fb900877834c69365b9b760c6440bdb712d79"
+    },
+    {
+      "path": "skills-releases/blentera-platform/releases.json",
+      "sha256": "a78fbb59c7a4f0c7258a53b1d3cc945482aee597293b6a429f8c16b47e5dbd31"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/SKILL.md",
+      "sha256": "2a7741db4940ec0fc23d26f54148adf86de4a3275763534f00f07dbf577a0f3d"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/advanced-boundaries.md",
+      "sha256": "619510e8ca025d1a63b6b136eacc0c42af93ee0c9d55d1eb960f701b9fec9f14"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/approvals-and-governance.md",
+      "sha256": "6b5ec29c55e1260f044761d88f239ec42bf54f4260eea85a0d61e594f6e961fc"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/apps-and-connections.md",
+      "sha256": "a6bb20de6095e5b81380731474e865baaee5b611ab349058d54989dd9a47f6b2"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/artifacts-and-evidence.md",
+      "sha256": "22958bfd698139281a3c8370fbe561c0ea67301c3ddf79f6c3ae81536875cff0"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/channels-and-representation.md",
+      "sha256": "a6f2cfd2e941e7d3148bffca5b035910824fe4e048ec89ac30ed3134de8920ee"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/co-workers-and-delegation.md",
+      "sha256": "2b04113a175aade1f07768210e5220487611b08bb26c54fe6ed4312671245c39"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/errors-retries-and-recovery.md",
+      "sha256": "8f0f439d35647814db0b75ae81f2f968b2dad73dcb835f97ecddd06cdff5ac30"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/foundation-and-context.md",
+      "sha256": "9295f642aebceda3fb8d4de16e177e0ef59763432f9eba7f3a97e03bf73bb90b"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/memory-and-learning.md",
+      "sha256": "c35964b611ec1ce7768ad72cf06fedd2238fbe5bf18d1a07343aee9f51d3d7bf"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/support-and-service-status.md",
+      "sha256": "45f6642a8dd4b7321003cf9775ea48e08119d22a1705b065aa23cdc7998cb668"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/terminology.md",
+      "sha256": "f2d9d2c4747500480c3e82b11234e797159fbcefd2ff0745b18672ce33ebadcd"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/work.md",
+      "sha256": "6809117677f89e5a4a1080968ffccbb7cd771ed99942d185cfef947de475e2bf"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v1/references/workflows-and-routines.md",
+      "sha256": "6ad51ab0400f491f6364f692aabd1fc49918da3701dc874815897d7ce8c68f52"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/SKILL.md",
+      "sha256": "2a7741db4940ec0fc23d26f54148adf86de4a3275763534f00f07dbf577a0f3d"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/advanced-boundaries.md",
+      "sha256": "619510e8ca025d1a63b6b136eacc0c42af93ee0c9d55d1eb960f701b9fec9f14"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/approvals-and-governance.md",
+      "sha256": "6b5ec29c55e1260f044761d88f239ec42bf54f4260eea85a0d61e594f6e961fc"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/apps-and-connections.md",
+      "sha256": "a6bb20de6095e5b81380731474e865baaee5b611ab349058d54989dd9a47f6b2"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/artifacts-and-evidence.md",
+      "sha256": "22958bfd698139281a3c8370fbe561c0ea67301c3ddf79f6c3ae81536875cff0"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/channels-and-representation.md",
+      "sha256": "a6f2cfd2e941e7d3148bffca5b035910824fe4e048ec89ac30ed3134de8920ee"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/co-workers-and-delegation.md",
+      "sha256": "2b04113a175aade1f07768210e5220487611b08bb26c54fe6ed4312671245c39"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/errors-retries-and-recovery.md",
+      "sha256": "8f0f439d35647814db0b75ae81f2f968b2dad73dcb835f97ecddd06cdff5ac30"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/foundation-and-context.md",
+      "sha256": "9295f642aebceda3fb8d4de16e177e0ef59763432f9eba7f3a97e03bf73bb90b"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/memory-and-learning.md",
+      "sha256": "c35964b611ec1ce7768ad72cf06fedd2238fbe5bf18d1a07343aee9f51d3d7bf"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/support-and-service-status.md",
+      "sha256": "45f6642a8dd4b7321003cf9775ea48e08119d22a1705b065aa23cdc7998cb668"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/terminology.md",
+      "sha256": "f2d9d2c4747500480c3e82b11234e797159fbcefd2ff0745b18672ce33ebadcd"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/work.md",
+      "sha256": "6809117677f89e5a4a1080968ffccbb7cd771ed99942d185cfef947de475e2bf"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v2/references/workflows-and-routines.md",
+      "sha256": "6ad51ab0400f491f6364f692aabd1fc49918da3701dc874815897d7ce8c68f52"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/SKILL.md",
+      "sha256": "2a7741db4940ec0fc23d26f54148adf86de4a3275763534f00f07dbf577a0f3d"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/advanced-boundaries.md",
+      "sha256": "619510e8ca025d1a63b6b136eacc0c42af93ee0c9d55d1eb960f701b9fec9f14"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/approvals-and-governance.md",
+      "sha256": "6b5ec29c55e1260f044761d88f239ec42bf54f4260eea85a0d61e594f6e961fc"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/apps-and-connections.md",
+      "sha256": "a6bb20de6095e5b81380731474e865baaee5b611ab349058d54989dd9a47f6b2"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/artifacts-and-evidence.md",
+      "sha256": "22958bfd698139281a3c8370fbe561c0ea67301c3ddf79f6c3ae81536875cff0"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/channels-and-representation.md",
+      "sha256": "a6f2cfd2e941e7d3148bffca5b035910824fe4e048ec89ac30ed3134de8920ee"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/co-workers-and-delegation.md",
+      "sha256": "2b04113a175aade1f07768210e5220487611b08bb26c54fe6ed4312671245c39"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/errors-retries-and-recovery.md",
+      "sha256": "8f0f439d35647814db0b75ae81f2f968b2dad73dcb835f97ecddd06cdff5ac30"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/foundation-and-context.md",
+      "sha256": "9295f642aebceda3fb8d4de16e177e0ef59763432f9eba7f3a97e03bf73bb90b"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/memory-and-learning.md",
+      "sha256": "c35964b611ec1ce7768ad72cf06fedd2238fbe5bf18d1a07343aee9f51d3d7bf"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/support-and-service-status.md",
+      "sha256": "45f6642a8dd4b7321003cf9775ea48e08119d22a1705b065aa23cdc7998cb668"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/terminology.md",
+      "sha256": "f2d9d2c4747500480c3e82b11234e797159fbcefd2ff0745b18672ce33ebadcd"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/work.md",
+      "sha256": "6809117677f89e5a4a1080968ffccbb7cd771ed99942d185cfef947de475e2bf"
+    },
+    {
+      "path": "skills-releases/blentera-platform/v3/references/workflows-and-routines.md",
+      "sha256": "6ad51ab0400f491f6364f692aabd1fc49918da3701dc874815897d7ce8c68f52"
+    },
+    {
+      "path": "skills-releases/paperclip/v0/SKILL.md",
+      "sha256": "5d5d6c01fa558870768fd2ab1250476912b9c7002099664b0ebdb3d0df283279"
+    },
+    {
+      "path": "skills-releases/paperclip/v7-roster/SKILL.md",
+      "sha256": "53ab290489684cbf116fdd1406a95f6b6f53c9c36358b1bf8bfeae481e253575"
+    },
+    {
+      "path": "skills/agentmail/SKILL.md",
+      "sha256": "c51aa39e31db07a354aa0904faa943a25ac20228bda1242974b8946d9f817aad"
+    },
+    {
+      "path": "skills/blentera-platform/SKILL.md",
+      "sha256": "2a7741db4940ec0fc23d26f54148adf86de4a3275763534f00f07dbf577a0f3d"
+    },
+    {
+      "path": "skills/blentera-platform/references/advanced-boundaries.md",
+      "sha256": "619510e8ca025d1a63b6b136eacc0c42af93ee0c9d55d1eb960f701b9fec9f14"
+    },
+    {
+      "path": "skills/blentera-platform/references/approvals-and-governance.md",
+      "sha256": "6b5ec29c55e1260f044761d88f239ec42bf54f4260eea85a0d61e594f6e961fc"
+    },
+    {
+      "path": "skills/blentera-platform/references/apps-and-connections.md",
+      "sha256": "a6bb20de6095e5b81380731474e865baaee5b611ab349058d54989dd9a47f6b2"
+    },
+    {
+      "path": "skills/blentera-platform/references/artifacts-and-evidence.md",
+      "sha256": "22958bfd698139281a3c8370fbe561c0ea67301c3ddf79f6c3ae81536875cff0"
+    },
+    {
+      "path": "skills/blentera-platform/references/channels-and-representation.md",
+      "sha256": "a6f2cfd2e941e7d3148bffca5b035910824fe4e048ec89ac30ed3134de8920ee"
+    },
+    {
+      "path": "skills/blentera-platform/references/co-workers-and-delegation.md",
+      "sha256": "2b04113a175aade1f07768210e5220487611b08bb26c54fe6ed4312671245c39"
+    },
+    {
+      "path": "skills/blentera-platform/references/errors-retries-and-recovery.md",
+      "sha256": "8f0f439d35647814db0b75ae81f2f968b2dad73dcb835f97ecddd06cdff5ac30"
+    },
+    {
+      "path": "skills/blentera-platform/references/foundation-and-context.md",
+      "sha256": "9295f642aebceda3fb8d4de16e177e0ef59763432f9eba7f3a97e03bf73bb90b"
+    },
+    {
+      "path": "skills/blentera-platform/references/memory-and-learning.md",
+      "sha256": "c35964b611ec1ce7768ad72cf06fedd2238fbe5bf18d1a07343aee9f51d3d7bf"
+    },
+    {
+      "path": "skills/blentera-platform/references/support-and-service-status.md",
+      "sha256": "45f6642a8dd4b7321003cf9775ea48e08119d22a1705b065aa23cdc7998cb668"
+    },
+    {
+      "path": "skills/blentera-platform/references/terminology.md",
+      "sha256": "f2d9d2c4747500480c3e82b11234e797159fbcefd2ff0745b18672ce33ebadcd"
+    },
+    {
+      "path": "skills/blentera-platform/references/work.md",
+      "sha256": "6809117677f89e5a4a1080968ffccbb7cd771ed99942d185cfef947de475e2bf"
+    },
+    {
+      "path": "skills/blentera-platform/references/workflows-and-routines.md",
+      "sha256": "6ad51ab0400f491f6364f692aabd1fc49918da3701dc874815897d7ce8c68f52"
+    },
+    {
+      "path": "skills/paperclip-board/SKILL.md",
+      "sha256": "9582cc1f46401a76d545ffb6c620254b42d382f770df3d6e53785171e55dd077"
+    },
+    {
+      "path": "skills/paperclip-converting-plans-to-tasks/SKILL.md",
+      "sha256": "08cb036df0e05b1d704dc0cd547c4e37b73078597c072a85ff982a2bb9b3a370"
+    },
+    {
+      "path": "skills/paperclip-create-agent/SKILL.md",
+      "sha256": "78b3a0ec8bb4484834045db89fc5662dae2dff40aa5cee1ac27ef785f87d11fd"
+    },
+    {
+      "path": "skills/paperclip/SKILL.md",
+      "sha256": "06d1e27065f1f87e4c1bee0cbce2842715cc7a88233d0b558ef9f9778f87d297"
+    },
+    {
+      "path": "skills/para-memory-files/SKILL.md",
+      "sha256": "51e8e591837fb8ab77c39be03d8b32b5e80124bb8af4cb88753f02c12ee05ed3"
+    },
+    {
+      "path": "skills/slack/SKILL.md",
+      "sha256": "41caeab020abf0d6fb80177610298767945c921c71cf6ae3782820f9aaa8e78a"
+    },
+    {
+      "path": "skills/task-planning/SKILL.md",
+      "sha256": "def6098353dd8b713d797cfd2541b2cfe641d2189a9bc7f3339c5161b74833bd"
+    }
+  ],
+  "aliases": [
+    {
+      "alias": "paperclip-self:add_step",
+      "operationId": "blentera.workflow.step.add",
+      "canonicalToolId": "blentera.workflow.step.add",
+      "owner": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:add_trigger",
+      "operationId": "blentera.workflow.trigger.add",
+      "canonicalToolId": "blentera.workflow.trigger.add",
+      "owner": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:connect_steps",
+      "operationId": "blentera.workflow.steps.connect",
+      "canonicalToolId": "blentera.workflow.steps.connect",
+      "owner": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:correct_memory",
+      "operationId": "blentera.memory.correct",
+      "canonicalToolId": "blentera.memory.correct",
+      "owner": "server/src/services/memory/memory-agent-tools.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:create_agent_setup_draft",
+      "operationId": "blentera.co-worker.setup.propose",
+      "canonicalToolId": "blentera.co-worker.setup.propose",
+      "owner": "server/src/services/agent-setup-authoring-tools.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/v9-agent-setup-conversation.integration.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:create_project",
+      "operationId": "blentera.project.create",
+      "canonicalToolId": "blentera.project.create",
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:create_routine_draft",
+      "operationId": "blentera.routine.draft.create",
+      "canonicalToolId": "blentera.routine.draft.create",
+      "owner": "server/src/services/routine-authoring-tools.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/v9-routine-authoring.integration.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:create_support_request",
+      "operationId": "blentera.support.case.request",
+      "canonicalToolId": "blentera.support.case.request",
+      "owner": "server/src/services/experience/support-cases.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:create_task",
+      "operationId": "blentera.task.create",
+      "canonicalToolId": "blentera.task.create",
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:create_workflow",
+      "operationId": "blentera.workflow.draft.create",
+      "canonicalToolId": "blentera.workflow.draft.create",
+      "owner": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:get_issue_context",
+      "operationId": "blentera.task.get_context",
+      "canonicalToolId": "blentera.task.get_context",
+      "owner": "server/src/services/issues.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:get_my_agent_context",
+      "operationId": "blentera.agent.get_self_context",
+      "canonicalToolId": "blentera.agent.get_self_context",
+      "owner": "server/src/services/agents.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:get_my_current_work",
+      "operationId": "blentera.work.get_current_task",
+      "canonicalToolId": "blentera.work.get_current_task",
+      "owner": "server/src/services/issues.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:get_project_context",
+      "operationId": "blentera.project.get_context",
+      "canonicalToolId": "blentera.project.get_context",
+      "owner": "server/src/services/projects.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:get_service_status",
+      "operationId": "blentera.support.service.status",
+      "canonicalToolId": "blentera.support.service.status",
+      "owner": "server/src/services/experience/service-health.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:get_support_intake_status",
+      "operationId": "blentera.support.intake.status",
+      "canonicalToolId": "blentera.support.intake.status",
+      "owner": "server/src/services/experience/support-cases.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:list_agent_setup_capabilities",
+      "operationId": "blentera.co-worker.capabilities.list",
+      "canonicalToolId": "blentera.co-worker.capabilities.list",
+      "owner": "server/src/services/agent-setup-authoring-tools.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/v9-agent-setup-conversation.integration.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:list_authorized_apps",
+      "operationId": "blentera.apps.list_authorized_tools",
+      "canonicalToolId": "blentera.apps.list_authorized_tools",
+      "owner": "server/src/services/tool-gateway.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:list_my_issues",
+      "operationId": "blentera.task.list_assigned",
+      "canonicalToolId": "blentera.task.list_assigned",
+      "owner": "server/src/services/issues.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:list_projects",
+      "operationId": "blentera.project.list",
+      "canonicalToolId": "blentera.project.list",
+      "owner": "server/src/services/projects.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:propose_completion",
+      "operationId": "blentera.task.completion.propose",
+      "canonicalToolId": "blentera.task.completion.propose",
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:propose_foundation_change",
+      "operationId": "blentera.foundation.change.propose",
+      "canonicalToolId": "blentera.foundation.change.propose",
+      "owner": "server/src/services/foundation-authoring-tools.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/v9-foundation-authoring.integration.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:propose_notification_preferences",
+      "operationId": "blentera.notification.preferences.propose",
+      "canonicalToolId": "blentera.notification.preferences.propose",
+      "owner": "server/src/services/notification-preference-proposals.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/v9-notification-proposals.integration.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:publish_workflow",
+      "operationId": "blentera.workflow.publish.prepare",
+      "canonicalToolId": "blentera.workflow.publish.prepare",
+      "owner": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "mode": "HUMAN_CONFIRMATION",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:reassign_task",
+      "operationId": "blentera.task.assign",
+      "canonicalToolId": "blentera.task.assign",
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:recall",
+      "operationId": "blentera.memory.recall",
+      "canonicalToolId": "blentera.memory.recall",
+      "owner": "server/src/services/memory/memory-agent-tools.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:remember",
+      "operationId": "blentera.memory.remember",
+      "canonicalToolId": "blentera.memory.remember",
+      "owner": "server/src/services/memory/memory-agent-tools.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "server/src/__tests__/helpers/native-private-memory-producer.ts",
+        "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/context/context-engine-integration.test.ts",
+        "server/src/services/memory/memory-privacy.ts",
+        "server/src/services/native-direct-input.ts",
+        "server/src/services/native-runtime/native-session-executor.ts",
+        "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+        "server/src/services/orchestration/worker-model-gateway.ts",
+        "server/src/services/tool-access-policy.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:remove_step",
+      "operationId": "blentera.workflow.step.remove",
+      "canonicalToolId": "blentera.workflow.step.remove",
+      "owner": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:report_progress",
+      "operationId": "blentera.task.comment.add",
+      "canonicalToolId": "blentera.task.comment.add",
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:request_human_input",
+      "operationId": "blentera.work.question.request",
+      "canonicalToolId": "blentera.work.question.request",
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:search_decisions",
+      "operationId": "blentera.decision.search",
+      "canonicalToolId": "blentera.decision.search",
+      "owner": "server/src/services/decisions.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:search_process_findings",
+      "operationId": "blentera.insight.findings.search",
+      "canonicalToolId": "blentera.insight.findings.search",
+      "owner": "server/src/services/process-findings.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:set_dependencies",
+      "operationId": "blentera.task.dependencies.replace",
+      "canonicalToolId": "blentera.task.dependencies.replace",
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:share_memory",
+      "operationId": "blentera.memory.share",
+      "canonicalToolId": "blentera.memory.share",
+      "owner": "server/src/services/memory/memory-agent-tools.ts",
+      "mode": "PROPOSAL_ONLY",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:test_step",
+      "operationId": "blentera.workflow.step.test",
+      "canonicalToolId": "blentera.workflow.step.test",
+      "owner": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:update_step",
+      "operationId": "blentera.workflow.step.update",
+      "canonicalToolId": "blentera.workflow.step.update",
+      "owner": "server/src/services/workflows/workflow-authoring-tools.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:update_task",
+      "operationId": "blentera.task.update",
+      "canonicalToolId": "blentera.task.update",
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/__tests__/tool-gateway-service.test.ts",
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    },
+    {
+      "alias": "paperclip-self:write_document",
+      "operationId": "blentera.work.document.write",
+      "canonicalToolId": "blentera.work.document.write",
+      "owner": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "mode": "DIRECT_AGENT",
+      "lifecycle": "active_compatibility",
+      "repositoryConsumerPaths": [
+        "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/tool-gateway.ts"
+      ]
+    }
+  ],
+  "repositoryConsumerPaths": [
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+    "server/src/__tests__/helpers/native-private-memory-producer.ts",
+    "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+    "server/src/__tests__/tool-gateway-service.test.ts",
+    "server/src/__tests__/v9-agent-setup-conversation.integration.test.ts",
+    "server/src/__tests__/v9-foundation-authoring.integration.test.ts",
+    "server/src/__tests__/v9-notification-proposals.integration.test.ts",
+    "server/src/__tests__/v9-routine-authoring.integration.test.ts",
+    "server/src/services/agent-native-operation-manifest.ts",
+    "server/src/services/context/context-engine-integration.test.ts",
+    "server/src/services/memory/memory-privacy.ts",
+    "server/src/services/native-direct-input.ts",
+    "server/src/services/native-runtime/native-session-executor.ts",
+    "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+    "server/src/services/orchestration/worker-model-gateway.ts",
+    "server/src/services/tool-access-policy.ts",
+    "server/src/services/tool-gateway.ts"
+  ],
+  "runtimeInstructionPaths": [
+    "packages/adapters/hermes/skills/paperclip-task-bridge/SKILL.md",
+    "packages/plugins/plugin-llm-wiki/skills/index-refresh/SKILL.md",
+    "packages/plugins/plugin-llm-wiki/skills/paperclip-distill/SKILL.md",
+    "packages/plugins/plugin-llm-wiki/skills/wiki-ingest/SKILL.md",
+    "packages/plugins/plugin-llm-wiki/skills/wiki-lint/SKILL.md",
+    "packages/plugins/plugin-llm-wiki/skills/wiki-maintainer/SKILL.md",
+    "packages/plugins/plugin-llm-wiki/skills/wiki-query/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/docs/doc-maintenance/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/paperclip-operations/issue-triage/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/paperclip-operations/reflection-coach/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/paperclip-operations/status-card-query/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/paperclip-operations/summarize-status/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/paperclip-operations/task-planning/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/product/paperclip-capsules/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/product/wireframe/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/quality/qa-acceptance/SKILL.md",
+    "packages/skills-catalog/catalog/bundled/software-development/github-pr-workflow/SKILL.md",
+    "packages/skills-catalog/catalog/optional/browser/agent-browser/SKILL.md",
+    "packages/skills-catalog/catalog/optional/content/release-announcement/SKILL.md",
+    "packages/skills-catalog/catalog/optional/content/simplified-english/SKILL.md",
+    "packages/skills-catalog/catalog/optional/finance/ramp/SKILL.md",
+    "packages/skills-catalog/catalog/optional/product/design-critique/SKILL.md",
+    "packages/skills-catalog/catalog/optional/software-development/prepare-mcp-integration/SKILL.md",
+    "packages/teams-catalog/catalog/optional/content/content-machine/skills/content-calendar/SKILL.md",
+    "server/src/onboarding-assets/ceo/AGENTS.md",
+    "server/src/onboarding-assets/ceo/HEARTBEAT.md",
+    "server/src/onboarding-assets/ceo/SOUL.md",
+    "server/src/onboarding-assets/ceo/TOOLS.md",
+    "server/src/onboarding-assets/default/AGENTS.md",
+    "server/src/onboarding-assets/first-task/README.md",
+    "server/src/onboarding-assets/first-task/brief.md",
+    "server/src/onboarding-assets/first-task/chief-of-staff/AGENTS.md",
+    "server/src/onboarding-assets/first-task/greeting.md",
+    "server/src/onboarding-assets/first-task/skills/first-task/SKILL.md",
+    "skills-releases/blentera-platform/v1/SKILL.md",
+    "skills-releases/blentera-platform/v1/references/advanced-boundaries.md",
+    "skills-releases/blentera-platform/v1/references/approvals-and-governance.md",
+    "skills-releases/blentera-platform/v1/references/apps-and-connections.md",
+    "skills-releases/blentera-platform/v1/references/artifacts-and-evidence.md",
+    "skills-releases/blentera-platform/v1/references/channels-and-representation.md",
+    "skills-releases/blentera-platform/v1/references/co-workers-and-delegation.md",
+    "skills-releases/blentera-platform/v1/references/errors-retries-and-recovery.md",
+    "skills-releases/blentera-platform/v1/references/foundation-and-context.md",
+    "skills-releases/blentera-platform/v1/references/memory-and-learning.md",
+    "skills-releases/blentera-platform/v1/references/support-and-service-status.md",
+    "skills-releases/blentera-platform/v1/references/terminology.md",
+    "skills-releases/blentera-platform/v1/references/work.md",
+    "skills-releases/blentera-platform/v1/references/workflows-and-routines.md",
+    "skills-releases/blentera-platform/v2/SKILL.md",
+    "skills-releases/blentera-platform/v2/references/advanced-boundaries.md",
+    "skills-releases/blentera-platform/v2/references/approvals-and-governance.md",
+    "skills-releases/blentera-platform/v2/references/apps-and-connections.md",
+    "skills-releases/blentera-platform/v2/references/artifacts-and-evidence.md",
+    "skills-releases/blentera-platform/v2/references/channels-and-representation.md",
+    "skills-releases/blentera-platform/v2/references/co-workers-and-delegation.md",
+    "skills-releases/blentera-platform/v2/references/errors-retries-and-recovery.md",
+    "skills-releases/blentera-platform/v2/references/foundation-and-context.md",
+    "skills-releases/blentera-platform/v2/references/memory-and-learning.md",
+    "skills-releases/blentera-platform/v2/references/support-and-service-status.md",
+    "skills-releases/blentera-platform/v2/references/terminology.md",
+    "skills-releases/blentera-platform/v2/references/work.md",
+    "skills-releases/blentera-platform/v2/references/workflows-and-routines.md",
+    "skills-releases/blentera-platform/v3/SKILL.md",
+    "skills-releases/blentera-platform/v3/references/advanced-boundaries.md",
+    "skills-releases/blentera-platform/v3/references/approvals-and-governance.md",
+    "skills-releases/blentera-platform/v3/references/apps-and-connections.md",
+    "skills-releases/blentera-platform/v3/references/artifacts-and-evidence.md",
+    "skills-releases/blentera-platform/v3/references/channels-and-representation.md",
+    "skills-releases/blentera-platform/v3/references/co-workers-and-delegation.md",
+    "skills-releases/blentera-platform/v3/references/errors-retries-and-recovery.md",
+    "skills-releases/blentera-platform/v3/references/foundation-and-context.md",
+    "skills-releases/blentera-platform/v3/references/memory-and-learning.md",
+    "skills-releases/blentera-platform/v3/references/support-and-service-status.md",
+    "skills-releases/blentera-platform/v3/references/terminology.md",
+    "skills-releases/blentera-platform/v3/references/work.md",
+    "skills-releases/blentera-platform/v3/references/workflows-and-routines.md",
+    "skills-releases/paperclip/v0/SKILL.md",
+    "skills-releases/paperclip/v7-roster/SKILL.md",
+    "skills/agentmail/SKILL.md",
+    "skills/blentera-platform/SKILL.md",
+    "skills/blentera-platform/references/advanced-boundaries.md",
+    "skills/blentera-platform/references/approvals-and-governance.md",
+    "skills/blentera-platform/references/apps-and-connections.md",
+    "skills/blentera-platform/references/artifacts-and-evidence.md",
+    "skills/blentera-platform/references/channels-and-representation.md",
+    "skills/blentera-platform/references/co-workers-and-delegation.md",
+    "skills/blentera-platform/references/errors-retries-and-recovery.md",
+    "skills/blentera-platform/references/foundation-and-context.md",
+    "skills/blentera-platform/references/memory-and-learning.md",
+    "skills/blentera-platform/references/support-and-service-status.md",
+    "skills/blentera-platform/references/terminology.md",
+    "skills/blentera-platform/references/work.md",
+    "skills/blentera-platform/references/workflows-and-routines.md",
+    "skills/paperclip-board/SKILL.md",
+    "skills/paperclip-converting-plans-to-tasks/SKILL.md",
+    "skills/paperclip-create-agent/SKILL.md",
+    "skills/paperclip/SKILL.md",
+    "skills/para-memory-files/SKILL.md",
+    "skills/slack/SKILL.md",
+    "skills/task-planning/SKILL.md"
+  ]
+}
