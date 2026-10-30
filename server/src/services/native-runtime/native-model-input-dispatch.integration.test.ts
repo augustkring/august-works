@@ -43,7 +43,7 @@ import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAck
   assertNativeRunReadSourceHistoryQualified } from "./native-session-executor.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
-import type { NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
+import { captureNativeProjectToolResult } from "./paperclip-runner-tool-authority.js";
 import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
 import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
@@ -706,10 +706,10 @@ describe("native model input dispatch intent", () => {
     await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, dispatchId, turnInput, turnId));
     await recordNativeToolCallDispatchAssociation({ ...args, turnId, callId, tool: "call_api" });
     const projectId = randomUUID();
-    const capture: NativeProjectToolResultSource = { turnId, callId, tool: "call_api",
-      operationId: "GET /api/projects/{id}", projectId, requestHash: "a".repeat(64),
+    const capture = captureNativeProjectToolResult({ companyId, turnId, callId,
+      requestedProjectId: projectId, requestHash: "a".repeat(64),
       pathAndQuery: `/api/projects/${projectId}`,
-      resultDigest: nativeSha256({ status: 200, unknown: true }), source: null };
+      result: { status: 200, unknown: true } });
     const { turnInput: _turnInput, ...binding } = args;
     await recordNativeProjectToolResultIntent({ ...binding, capture });
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));

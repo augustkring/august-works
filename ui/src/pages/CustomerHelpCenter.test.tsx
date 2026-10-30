@@ -247,9 +247,10 @@ it("requires an expiring admin grant before showing or downloading gated evidenc
   await vi.waitFor(() => expect(container!.textContent).toContain("Penetration test summary"));
   expect(container!.textContent).not.toContain("Restricted report body.");
   expect(trustMock.content).not.toHaveBeenCalled();
+  const expiresAtLocal = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
   const expiry = container!.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(expiry, "2026-10-29T12:00");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(expiry, expiresAtLocal);
     expiry.dispatchEvent(new Event("input", { bubbles: true }));
     expiry.dispatchEvent(new Event("change", { bubbles: true }));
   });
@@ -257,7 +258,7 @@ it("requires an expiring admin grant before showing or downloading gated evidenc
   await act(async () => grantButton.click());
   await vi.waitFor(() => expect(trustMock.grant).toHaveBeenCalledWith(state.companyId, expect.objectContaining({
     expectedUserId: state.userId, registryEntryId: gatedDocument.id, version: gatedDocument.version,
-    granteeUserId: state.userId, expiresAt: new Date("2026-10-29T12:00").toISOString(), surface: "trust_center_gated_evidence",
+    granteeUserId: state.userId, expiresAt: new Date(expiresAtLocal).toISOString(), surface: "trust_center_gated_evidence",
   })));
   await vi.waitFor(() => expect([...container!.querySelectorAll("button")]
     .some(button => button.textContent === "Review current document")).toBe(true));
