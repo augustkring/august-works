@@ -60,6 +60,7 @@ import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { crossCompanyContextService } from "../services/cross-company-context.js";
 import { aiConnectionService } from "../services/ai-connections.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import * as agentRunCancellation from "../agent-run-cancellation.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 import { createToolGatewayService } from "../services/tool-gateway.js";
 import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
@@ -1989,6 +1990,72 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         )[0],
       ).toMatchObject({ status: "paused", toolActionsUsed: 1 });
     });
+    it.each(["success", "revoked", "provider_error"] as const)(
+      "drains an in-flight authority watch before settling the caller: %s", async mode => {
+        const originalCheck = agentRunCancellation.assertAgentRunWriteAllowed;
+        const originalInterval = globalThis.setInterval;
+        let tick: (() => void) | undefined;
+        let blockWatch = false;
+        let releaseWatch!: () => void, watchEntered!: () => void;
+        const released = new Promise<void>(resolve => { releaseWatch = resolve; });
+        const entered = new Promise<void>(resolve => { watchEntered = resolve; });
+        const intervalSpy = vi.spyOn(globalThis, "setInterval").mockImplementation((callback, delay, ...args) => {
+          const timer = originalInterval(callback, delay, ...args);
+          if (!tick && delay === 1000 && typeof callback === "function") {
+            tick = () => { callback(...args); };
+            clearInterval(timer);
+          }
+          return timer;
+        });
+        const checkSpy = vi.spyOn(agentRunCancellation, "assertAgentRunWriteAllowed")
+          .mockImplementation(async (...args) => {
+            if (blockWatch) {
+              blockWatch = false;
+              watchEntered();
+              await released;
+            }
+            await originalCheck(...args);
+          });
+        duringCall = async () => {
+          if (!tick) throw new Error("The model authority watch was not registered");
+          blockWatch = true;
+          tick();
+          await entered;
+          if (mode === "provider_error") throw new Error("Fixture provider failed after the watch started");
+        };
+        let settled = false;
+        const response = gateway().call(claims, input()).then(
+          value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+        void response.then(() => { settled = true; });
+        try {
+          await Promise.race([entered, response.then(() => {
+            throw new Error("The model call ended before its authority watch entered");
+          })]);
+          await vi.waitFor(async () => {
+            expect((await ledger())[0]?.status).toBe(mode === "provider_error" ? "unknown" : "completed");
+          }, { timeout: 10000, interval: 20 });
+          // Allow the foreground completion to finish; the only deliberately
+          // held operation is the periodic real authority checker above.
+          await new Promise(resolve => setTimeout(resolve, 250));
+          expect(settled).toBe(false);
+          if (mode === "revoked") await db.delete(companyMemberships).where(and(
+            eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+          releaseWatch();
+          const result = await response;
+          if (mode === "success") {
+            expect(result.ok).toBe(true);
+            if (result.ok) expect(result.value.text).toBe("Retained bounded draft");
+          } else expect(result.ok).toBe(false);
+          expect(calls).toBe(1);
+          expect((await ledger())[0]?.status).toBe(mode === "provider_error" ? "unknown" : "completed");
+        } finally {
+          releaseWatch();
+          await response;
+          checkSpy.mockRestore();
+          intervalSpy.mockRestore();
+        }
+      },
+    );
     it("reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification", async () => {
       const beforeDispatch = (await db.select({ status: issues.status }).from(issues).where(eq(issues.id, task.id)))[0]!;
       expect(beforeDispatch.status).toBe("in_progress");

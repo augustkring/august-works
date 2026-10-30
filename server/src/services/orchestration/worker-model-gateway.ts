@@ -1989,7 +1989,7 @@ export function workerModelGateway(db: Db, options: Options) {
       );
       const cancel = () => controller.abort();
       callerSignal?.addEventListener("abort", cancel, { once: true });
-      let checking = false;
+      let checking: Promise<void> | null = null;
       const assertCurrent = async () => {
         controller.signal.throwIfAborted();
         const fresh = await current(db, bound);
@@ -1999,12 +1999,7 @@ export function workerModelGateway(db: Db, options: Options) {
       };
       const watch = setInterval(() => {
         if (checking) return;
-        checking = true;
-        void assertCurrent()
-          .catch(cancel)
-          .finally(() => {
-            checking = false;
-          });
+        checking = assertCurrent().then(() => {}).catch(cancel).finally(() => { checking = null; });
       }, 1000);
       let financiallySettled = false;
       try {
@@ -2141,6 +2136,10 @@ export function workerModelGateway(db: Db, options: Options) {
         financiallySettled = outcome.status === "completed";
         if (outcome.status !== "completed")
           throw conflict("Worker model charge could not be confirmed");
+        // A periodic reader may still own source locks. Drain it before the
+        // final authority fence and before returning executable model output.
+        clearInterval(watch);
+        await checking;
         await assertCurrent();
         if (result.text.length > 256000)
           throw conflict("The qualified worker inference envelope was exceeded");
@@ -2165,8 +2164,9 @@ export function workerModelGateway(db: Db, options: Options) {
           code: reasonCode,
         });
       } finally {
-        clearTimeout(timeout);
         clearInterval(watch);
+        await checking;
+        clearTimeout(timeout);
         callerSignal?.removeEventListener("abort", cancel);
       }
     },
@@ -2251,7 +2251,7 @@ export function workerModelGateway(db: Db, options: Options) {
       ));
       const cancel = () => controller.abort();
       callerSignal?.addEventListener("abort", cancel, { once: true });
-      let checking = false;
+      let checking: Promise<void> | null = null;
       const assertCurrent = async () => {
         controller.signal.throwIfAborted();
         const fresh = bound ? await current(db, bound) : await currentConversation(db, conversation!);
@@ -2261,8 +2261,7 @@ export function workerModelGateway(db: Db, options: Options) {
       };
       const watch = setInterval(() => {
         if (checking) return;
-        checking = true;
-        void assertCurrent().catch(cancel).finally(() => { checking = false; });
+        checking = assertCurrent().then(() => {}).catch(cancel).finally(() => { checking = null; });
       }, 1000);
       let financiallySettled = false;
       let managedFailureStage:
@@ -2490,6 +2489,8 @@ export function workerModelGateway(db: Db, options: Options) {
             .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
         });
         managedFailureStage = "post_response_recheck";
+        clearInterval(watch);
+        await checking;
         await assertCurrent();
         return { reservationId: reservation.id, sse: result.sse };
       } catch (error) {
@@ -2511,8 +2512,9 @@ export function workerModelGateway(db: Db, options: Options) {
           ...managedSqlFailureDetails(error),
         });
       } finally {
-        clearTimeout(timeout);
         clearInterval(watch);
+        await checking;
+        clearTimeout(timeout);
         callerSignal?.removeEventListener("abort", cancel);
       }
     },
