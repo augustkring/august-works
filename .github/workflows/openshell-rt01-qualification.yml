@@ -1,4 +1,4 @@
-name: OpenShell RT-01 source qualification (R5)
+name: OpenShell RT-01 source qualification (R6)
 
 on:
   pull_request:
@@ -57,6 +57,12 @@ jobs:
       - name: Verify source pins and exact patched file set
         run: python3 scripts/openshell-rt01/verify-source-pins.py "$RUNNER_TEMP/openshell-rt01"
 
+      - name: Restore pinned Rust dependency cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ${{ runner.temp }}/openshell-rt01 -> target
+          key: openshell-v0.1.2-rust-1.95.0-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Check formatting
         working-directory: ${{ runner.temp }}/openshell-rt01
         shell: bash
@@ -73,7 +79,7 @@ jobs:
           cargo check --locked -p openshell-server -p openshell-cli -p openshell-driver-docker -p openshell-sandbox 2>&1 \
             | tee "$RUNNER_TEMP/openshell-rt01-logs/compile.log"
 
-      - name: Run exact focused identity and host-configuration tests
+      - name: Run exact focused identity and resource-configuration tests
         working-directory: ${{ runner.temp }}/openshell-rt01
         shell: bash
         run: |
@@ -116,11 +122,14 @@ jobs:
           run_exact_test openshell-cli sandbox_stop_and_start_accept_optional_names cli
           run_exact_test openshell-cli sandbox_provider_subcommands_parse cli
           run_exact_test openshell-cli identity_stop_unimplemented_does_not_fallback_to_legacy_stop cli
+          run_exact_test openshell-driver-docker docker_per_sandbox_pid_limit_and_memory_swap_are_applied_at_create driver
+          run_exact_test openshell-driver-docker docker_per_sandbox_pid_limit_parses_through_protobuf_struct_without_float_loss driver
           run_exact_test openshell-driver-docker docker_disk_limit_sets_create_time_writable_layer_storage_option driver
           run_exact_test openshell-driver-docker docker_disk_limit_rejects_unbounded_external_mounts_and_image_volumes driver
           run_exact_test openshell-driver-docker docker_disk_limit_rejects_values_outside_policy_range driver
           run_exact_test openshell-sandbox behavioral_getpid_allowed sandbox
           run_exact_test openshell-sandbox behavioral_memfd_create_blocked sandbox
+          run_exact_test openshell-sandbox runtime_idle_absolute_expiry_returns_without_host_stress sandbox
 
       - name: Upload qualification logs
         if: always()

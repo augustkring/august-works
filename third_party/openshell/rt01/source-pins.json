@@ -8,9 +8,9 @@
   },
   "patch": {
     "path": "third_party/openshell/rt01/openshell-rt01.patch",
-    "sha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
-    "scope": "R4 identity-bound API plus R10 Docker disk limits, R11 validation correction, and CLI no-fallback transport regression; test-only unsafe annotations required for libc::_exit in behavioral_getpid_allowed",
-    "supersedesPatchSha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e"
+    "sha256": "9181ed297038877322ddb11991f819c4609d25205cf0905b8356447bb48383d5",
+    "scope": "R5.1 identity-bound API and CLI no-fallback regression, Quality R2 create-time PID/memory-swap policy with protobuf Struct precision guard, Resource R12 Docker log/quota and bounded runtime probes, plus R5.1 seccomp test safety annotations; R6 adds exact PID Struct and expired-idle tests to remote qualification.",
+    "supersedesPatchSha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227"
   },
   "parentR4PatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
   "toolchain": {
@@ -27,8 +27,8 @@
     "Cargo.toml": "6c467f300f12eeffba50628cab784fbeab718b497c40a003becca6748a1003ef",
     "LICENSE": "c4be3acebe12527d7de689933d98329b4065f8c50cd929d0365584eafe6c20dd",
     "crates/openshell-cli/src/commands/provider.rs": "9b32988d4f4eb7b14e89c392a65dafbd8bbfb0d5167acc59337fa833a5e32487",
-    "crates/openshell-cli/src/main.rs": "2c366d0b4167065bd1f8f9da2fd28b48dc00dac8c6ab7d41479f4f9c02494e47",
-    "crates/openshell-cli/src/run.rs": "04f0b1111f5c05c9b8e6a07655d20f3501e8dcf2c5e0130740068f9913e2e24d",
+    "crates/openshell-cli/src/main.rs": "a1078147a61c75d09e94e81fd1949e9a66ed8d28d9cca834f1631caf3e09fabb",
+    "crates/openshell-cli/src/run.rs": "6c19210fa5a234299504288cc427b04748105d4f700c0462aa82cfa71d4c7b8f",
     "crates/openshell-cli/tests/ensure_providers_integration.rs": "8d02e4f806c2f132ce7282648da31bf348352cf3ce58be4082514d482a8e8fa8",
     "crates/openshell-cli/tests/mtls_integration.rs": "4d154bd31be5bebbfc70833e1d6de4b44757cf44a7943dec342568e72d6e5290",
     "crates/openshell-cli/tests/provider_commands_integration.rs": "3e2d05066325c2172ecfd5682972281c07556dc2dfa02457abf5fd0172c40854",
@@ -36,9 +36,9 @@
     "crates/openshell-cli/tests/sandbox_name_fallback_integration.rs": "28c1d1828096597d8c30c2399e43755d3c2f6ebfdb5fc7a5147769fa54bb7210",
     "crates/openshell-core/build.rs": "556088b95812b705947d22a1d6613c5b876af811e3c8a7fa253b7aceecbb173d",
     "crates/openshell-driver-docker/README.md": "f9c6e1a907cf158e6bfd482afac81b48314b060a2f915b6ac030c1ce9b176e77",
-    "crates/openshell-driver-docker/src/lib.rs": "d6fddd6880b87668de96be791807a8f02b8a2aded46336bd84cd569241173488",
-    "crates/openshell-driver-docker/src/tests.rs": "837d788c31462c7e932237fbcc83056b962016bbd8c7159d801160fe178441e3",
-    "crates/openshell-sandbox/src/main.rs": "2e5b559b3efff0a6cd06a9623ee10091e463b799068f3ac65f2c1ca6b76e0aac",
+    "crates/openshell-driver-docker/src/lib.rs": "52e181c6d3bf3bd1ca326a0d83c456d6d2c51969b7e9f4f21533e0d38c3acd62",
+    "crates/openshell-driver-docker/src/tests.rs": "f12cb58d3c873015191d339ee4b3dfae5f0452443a85ab91a256c1233fe2d8e4",
+    "crates/openshell-sandbox/src/main.rs": "f06c3700725fdaf0b2efcf6c99950b1fc31e3ae01fa34cf5550cb721aa007aed",
     "crates/openshell-sandbox/src/sandbox/linux/seccomp.rs": "67f606f3d729dd45a2fa7c58c9e6b0c812a22813b20b8b9b473618d5dfbb81ff",
     "crates/openshell-sdk/tests/client_mock.rs": "97107c277baad5f5d26c97db205fbbca485e35197335e7ab05d6d3266c985e26",
     "crates/openshell-server/build.rs": "637aa140fe3fe2e3d8b171687ec1a23c435493c62540e3f1859e2a800c66052d",
@@ -79,11 +79,15 @@
     "proto/openshell.proto"
   ],
   "qualification": {
-    "status": "pending R5.1 remote rerun",
-    "previousR5Run": 41042077640,
-    "previousR5Outcome": "cargo check passed; 13 exact tests passed; sandbox lib-test compilation failed at two libc::_exit unsafe calls",
-    "currentFocusedTests": "pending remote rerun after test-only safety annotations",
+    "status": "pending dedicated R6 remote qualification",
+    "R5_1Run": 41044296826,
+    "R5_1Outcome": "cargo check passed for server, CLI, Docker driver, and sandbox; all 15 exact selected tests passed",
+    "R6FocusedTests": "18 exact tests configured; not yet run",
     "physicalDockerQuotaProbe": "not run",
-    "physicalSeccompHostProbe": "not run"
-  }
+    "physicalSeccompHostProbe": "not run",
+    "profileAdmission": "closed"
+  },
+  "parentR5_1PatchSha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
+  "resourceR12RustPatchSha256": "21b187786db26bedb858e24521b44a7e844864acab874cf9fdad317477c8642c",
+  "qualityProvisionR2PatchSha256": "cfae8322798266bdf895d4cb0a5115c1bdf329c133d9c7730cc52ff22885dcdf"
 }

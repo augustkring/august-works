@@ -1,6 +1,6 @@
 {
-  "name": "v10-149-rt01-openshell-r5-1-identity-and-runtime-guards",
-  "status": "source-qualified-physical-target-unqualified",
+  "name": "v10-149-rt01-openshell-r6-identity-resource-guards",
+  "status": "candidate-not-qualified",
   "profileAdmission": "closed",
   "upstream": {
     "repository": "https://github.com/NVIDIA/OpenShell.git",
@@ -9,28 +9,28 @@
   },
   "patch": {
     "file": "openshell-rt01.patch",
-    "sha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
+    "sha256": "9181ed297038877322ddb11991f819c4609d25205cf0905b8356447bb48383d5",
     "parentR4PatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
-    "supersedesPatchSha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e"
+    "supersedesPatchSha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e",
+    "parentR5_1PatchSha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
+    "resourceR12RustPatchSha256": "21b187786db26bedb858e24521b44a7e844864acab874cf9fdad317477c8642c",
+    "qualityProvisionR2PatchSha256": "cfae8322798266bdf895d4cb0a5115c1bdf329c133d9c7730cc52ff22885dcdf"
   },
   "sourcePins": {
     "file": "source-pins.json",
-    "sha256": "367336a2ef3c2ff2fb6a62934ac7addda5267d93c5f9d36ea4265b4f712353da"
+    "sha256": "536b57feda007eb98c087804f67e16c7efe9751bd0746c49fffb77293bd0403f"
   },
   "license": {
     "spdx": "Apache-2.0",
     "upstreamFile": "LICENSE"
   },
   "qualification": {
-    "status": "source-qualified",
-    "previousR5Run": 41042077640,
-    "previousR5Outcome": "cargo check passed; 13 exact tests passed; sandbox lib-test compilation failed at two libc::_exit unsafe calls",
-    "currentFocusedTests": "15 passed; 0 failed; 0 ignored",
+    "status": "pending dedicated R6 remote qualification",
+    "R5_1Run": 41044296826,
+    "R5_1Outcome": "cargo check passed for four packages; all 15 exact tests passed",
+    "R6ConfiguredExactTests": 18,
     "physicalDockerQuotaProbe": "not run",
     "physicalSeccompHostProbe": "not run",
-    "serverCliDriverSandboxCheck": "passed",
-    "qualifiedRepositoryHead": "af29df32d734c89310613df68051f389a2915c92",
-    "run": 41044296826,
-    "evidencePath": "doc/operations/aw-v10-evidence/openshell-rt01-runtime-guards-source-qualified-2026-10-30"
+    "profileAdmission": "closed"
   }
 }

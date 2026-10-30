@@ -185,10 +185,21 @@ index fca1d16..9f88355 100644
          // Explicit post-save uncertainty takes precedence over a generic retry hint.
          Err(status)
 diff --git a/crates/openshell-cli/src/main.rs b/crates/openshell-cli/src/main.rs
-index e5f1059..d777937 100644
+index e5f1059..a7f8d51 100644
 --- a/crates/openshell-cli/src/main.rs
 +++ b/crates/openshell-cli/src/main.rs
-@@ -1639,6 +1639,10 @@ enum SandboxCommands {
+@@ -1425,6 +1425,10 @@ enum SandboxCommands {
+         #[arg(long, add = ArgValueCompleter::new(completers::complete_sandbox_names))]
+         name: Option<String>,
+ 
++        /// Stable mutation replay key for trusted host-agent provisioning.
++        #[arg(long, hide = true)]
++        request_id: Option<String>,
++
+         /// Create the sandbox from a named sandbox template.
+         #[arg(long, conflicts_with_all = ["from", "gpu", "cpu", "memory", "driver_config_json", "envs"])]
+         template: Option<String>,
+@@ -1639,6 +1643,10 @@ enum SandboxCommands {
          /// Delete all sandboxes.
          #[arg(long, conflicts_with = "names")]
          all: bool,
@@ -199,7 +210,7 @@ index e5f1059..d777937 100644
      },
  
      /// Stop a sandbox while preserving its workspace.
-@@ -1647,6 +1651,10 @@ enum SandboxCommands {
+@@ -1647,6 +1655,10 @@ enum SandboxCommands {
          /// Sandbox name (defaults to last-used sandbox).
          #[arg(add = ArgValueCompleter::new(completers::complete_sandbox_names))]
          name: Option<String>,
@@ -210,7 +221,7 @@ index e5f1059..d777937 100644
      },
  
      /// Start a stopped sandbox.
-@@ -1655,6 +1663,10 @@ enum SandboxCommands {
+@@ -1655,6 +1667,10 @@ enum SandboxCommands {
          /// Sandbox name (defaults to last-used sandbox).
          #[arg(add = ArgValueCompleter::new(completers::complete_sandbox_names))]
          name: Option<String>,
@@ -221,7 +232,7 @@ index e5f1059..d777937 100644
      },
  
      /// Execute a command in a running sandbox.
-@@ -1675,6 +1687,10 @@ enum SandboxCommands {
+@@ -1675,6 +1691,10 @@ enum SandboxCommands {
          #[arg(long, short = 'n', add = ArgValueCompleter::new(completers::complete_sandbox_names))]
          name: Option<String>,
  
@@ -232,7 +243,7 @@ index e5f1059..d777937 100644
          /// Working directory inside the sandbox.
          #[arg(long)]
          workdir: Option<String>,
-@@ -1843,6 +1859,10 @@ enum SandboxProviderCommands {
+@@ -1843,6 +1863,10 @@ enum SandboxProviderCommands {
          #[arg(add = ArgValueCompleter::new(completers::complete_provider_names))]
          provider: String,
  
@@ -243,7 +254,7 @@ index e5f1059..d777937 100644
          #[command(flatten)]
          readiness: ProviderReadinessArgs,
      },
-@@ -1858,6 +1878,10 @@ enum SandboxProviderCommands {
+@@ -1858,6 +1882,10 @@ enum SandboxProviderCommands {
          #[arg(add = ArgValueCompleter::new(completers::complete_provider_names))]
          provider: String,
  
@@ -254,7 +265,7 @@ index e5f1059..d777937 100644
          #[command(flatten)]
          readiness: ProviderReadinessArgs,
      },
-@@ -2072,6 +2096,10 @@ enum PolicyCommands {
+@@ -2072,6 +2100,10 @@ enum PolicyCommands {
          #[arg(add = ArgValueCompleter::new(completers::complete_sandbox_names))]
          name: Option<String>,
  
@@ -265,7 +276,7 @@ index e5f1059..d777937 100644
          /// Path to the policy YAML file.
          #[arg(long, value_hint = ValueHint::FilePath)]
          policy: String,
-@@ -2100,6 +2128,10 @@ enum PolicyCommands {
+@@ -2100,6 +2132,10 @@ enum PolicyCommands {
          #[arg(add = ArgValueCompleter::new(completers::complete_sandbox_names))]
          name: Option<String>,
  
@@ -276,7 +287,7 @@ index e5f1059..d777937 100644
          /// Add or merge an endpoint: host:port[:access[:protocol[:enforcement[:options]]]].
          /// Options include allowed-ip=..., credential rewrite flags, and
          /// allow-uninspected-credentials.
-@@ -2985,6 +3017,7 @@ async fn run_async() -> Result<()> {
+@@ -2985,6 +3021,7 @@ async fn run_async() -> Result<()> {
              match policy_cmd {
                  PolicyCommands::Set {
                      name,
@@ -284,7 +295,7 @@ index e5f1059..d777937 100644
                      policy,
                      global,
                      yes,
-@@ -3010,10 +3043,11 @@ async fn run_async() -> Result<()> {
+@@ -3010,10 +3047,11 @@ async fn run_async() -> Result<()> {
                          .await?;
                      } else {
                          let name = resolve_sandbox_name(name, &ctx.name, &cli.workspace)?;
@@ -297,7 +308,7 @@ index e5f1059..d777937 100644
                              wait,
                              timeout,
                              &cli.workspace,
-@@ -3024,6 +3058,7 @@ async fn run_async() -> Result<()> {
+@@ -3024,6 +3062,7 @@ async fn run_async() -> Result<()> {
                  }
                  PolicyCommands::Update {
                      name,
@@ -305,7 +316,7 @@ index e5f1059..d777937 100644
                      add_endpoints,
                      remove_endpoints,
                      add_allow,
-@@ -3038,7 +3073,7 @@ async fn run_async() -> Result<()> {
+@@ -3038,7 +3077,7 @@ async fn run_async() -> Result<()> {
                      timeout,
                  } => {
                      let name = resolve_sandbox_name(name, &ctx.name, &cli.workspace)?;
@@ -314,7 +325,7 @@ index e5f1059..d777937 100644
                          &ctx.endpoint,
                          &name,
                          &add_endpoints,
-@@ -3051,6 +3086,7 @@ async fn run_async() -> Result<()> {
+@@ -3051,6 +3090,7 @@ async fn run_async() -> Result<()> {
                          any_binary,
                          endpoint_path.as_deref(),
                          dry_run,
@@ -322,7 +333,32 @@ index e5f1059..d777937 100644
                          wait,
                          timeout,
                          &cli.workspace,
-@@ -3517,24 +3553,49 @@ async fn run_async() -> Result<()> {
+@@ -3296,6 +3336,7 @@ async fn run_async() -> Result<()> {
+             match command {
+                 SandboxCommands::Create {
+                     name,
++                    request_id,
+                     template,
+                     from,
+                     upload,
+@@ -3389,7 +3430,7 @@ async fn run_async() -> Result<()> {
+                     let endpoint = &ctx.endpoint;
+                     let mut tls = tls.with_gateway_name(&ctx.name);
+                     apply_auth(&mut tls, &ctx.name)?;
+-                    let exit_code = Box::pin(run::sandbox_create(
++                    let exit_code = Box::pin(run::sandbox_create_with_request_id(
+                         endpoint,
+                         &ctx.name,
+                         run::SandboxCreateConfig {
+@@ -3417,6 +3458,7 @@ async fn run_async() -> Result<()> {
+                             detach,
+                             suppress_credential_warnings: no_credential_warnings,
+                         },
++                        request_id.as_deref(),
+                         &cli.workspace,
+                         &tls,
+                     ))
+@@ -3517,24 +3559,49 @@ async fn run_async() -> Result<()> {
                              )
                              .await?;
                          }
@@ -378,7 +414,7 @@ index e5f1059..d777937 100644
                          }
                          SandboxCommands::Connect { name, editor } => {
                              let name = resolve_sandbox_name(name, &ctx.name, &cli.workspace)?;
-@@ -3560,6 +3621,7 @@ async fn run_async() -> Result<()> {
+@@ -3560,6 +3627,7 @@ async fn run_async() -> Result<()> {
                          }
                          SandboxCommands::Exec {
                              name,
@@ -386,7 +422,7 @@ index e5f1059..d777937 100644
                              workdir,
                              timeout,
                              tty,
-@@ -3578,7 +3640,7 @@ async fn run_async() -> Result<()> {
+@@ -3578,7 +3646,7 @@ async fn run_async() -> Result<()> {
                                  None // auto-detect
                              };
                              let env_map = run::parse_env_pairs(&envs)?;
@@ -395,7 +431,7 @@ index e5f1059..d777937 100644
                                  endpoint,
                                  &name,
                                  &command,
-@@ -3587,6 +3649,7 @@ async fn run_async() -> Result<()> {
+@@ -3587,6 +3655,7 @@ async fn run_async() -> Result<()> {
                                  tty_override,
                                  &env_map,
                                  no_login_shell,
@@ -403,7 +439,7 @@ index e5f1059..d777937 100644
                                  &tls,
                                  &cli.workspace,
                              )
-@@ -3622,12 +3685,14 @@ async fn run_async() -> Result<()> {
+@@ -3622,12 +3691,14 @@ async fn run_async() -> Result<()> {
                              SandboxProviderCommands::Attach {
                                  name,
                                  provider,
@@ -419,7 +455,7 @@ index e5f1059..d777937 100644
                                      &cli.workspace,
                                      &tls,
                                      readiness.options(),
-@@ -3637,12 +3702,14 @@ async fn run_async() -> Result<()> {
+@@ -3637,12 +3708,14 @@ async fn run_async() -> Result<()> {
                              SandboxProviderCommands::Detach {
                                  name,
                                  provider,
@@ -435,7 +471,7 @@ index e5f1059..d777937 100644
                                      &cli.workspace,
                                      &tls,
                                      readiness.options(),
-@@ -4396,6 +4463,27 @@ mod tests {
+@@ -4396,6 +4469,27 @@ mod tests {
  
          assert_eq!(name, "work-sandbox");
          assert_eq!(provider, "work-github");
@@ -463,7 +499,7 @@ index e5f1059..d777937 100644
      }
  
      #[test]
-@@ -5367,7 +5455,7 @@ mod tests {
+@@ -5367,7 +5461,7 @@ mod tests {
          assert!(matches!(
              stop.command,
              Some(Commands::Sandbox {
@@ -472,7 +508,7 @@ index e5f1059..d777937 100644
              }) if name == "demo"
          ));
  
-@@ -5376,9 +5464,28 @@ mod tests {
+@@ -5376,9 +5470,28 @@ mod tests {
          assert!(matches!(
              start.command,
              Some(Commands::Sandbox {
@@ -502,8 +538,33 @@ index e5f1059..d777937 100644
      }
  
      #[test]
+@@ -6008,6 +6121,24 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn sandbox_create_accepts_hidden_stable_request_id() {
++        let request_id = "12345678-1234-5234-9234-123456789abc";
++        let cli =
++            Cli::try_parse_from(["openshell", "sandbox", "create", "--request-id", request_id])
++                .expect("trusted provisioning request ID should parse");
++        match cli.command {
++            Some(Commands::Sandbox {
++                command:
++                    Some(SandboxCommands::Create {
++                        request_id: parsed, ..
++                    }),
++                ..
++            }) => assert_eq!(parsed.as_deref(), Some(request_id)),
++            other => panic!("expected sandbox create, got: {other:?}"),
++        }
++    }
++
+     #[test]
+     fn sandbox_create_detach_parses_with_main_command() {
+         let cli = Cli::try_parse_from([
 diff --git a/crates/openshell-cli/src/run.rs b/crates/openshell-cli/src/run.rs
-index 15d91b5..ede3b74 100644
+index 15d91b5..5e87320 100644
 --- a/crates/openshell-cli/src/run.rs
 +++ b/crates/openshell-cli/src/run.rs
 @@ -31,7 +31,8 @@ pub use crate::commands::provider::{
@@ -516,7 +577,36 @@ index 15d91b5..ede3b74 100644
  };
  pub use crate::commands::provider_readiness::{ProviderWaitOptions, sandbox_provider_status};
  
-@@ -1820,6 +1821,37 @@ pub async fn sandbox_exec_grpc(
+@@ -491,6 +492,19 @@ pub async fn sandbox_create(
+     config: SandboxCreateConfig<'_>,
+     workspace: &str,
+     tls: &TlsOptions,
++) -> Result<i32> {
++    sandbox_create_with_request_id(server, gateway_name, config, None, workspace, tls).await
++}
++
++/// Create a sandbox with an optional stable request ID for a trusted caller.
++/// The public legacy helper above keeps its original signature and semantics.
++pub async fn sandbox_create_with_request_id(
++    server: &str,
++    gateway_name: &str,
++    config: SandboxCreateConfig<'_>,
++    request_id: Option<&str>,
++    workspace: &str,
++    tls: &TlsOptions,
+ ) -> Result<i32> {
+     let SandboxCreateConfig {
+         name,
+@@ -657,7 +671,7 @@ pub async fn sandbox_create(
+         )])
+     };
+     let request = CreateSandboxRequest {
+-        request_id: String::new(),
++        request_id: request_id.unwrap_or_default().to_string(),
+         spec: Some(SandboxSpec {
+             resource_requirements,
+             environment: if template.is_none() {
+@@ -1820,6 +1834,37 @@ pub async fn sandbox_exec_grpc(
      no_login_shell: bool,
      tls: &TlsOptions,
      workspace: &str,
@@ -554,7 +644,7 @@ index 15d91b5..ede3b74 100644
  ) -> Result<i32> {
      let mut client = grpc_client(server, tls).await?;
  
-@@ -1845,6 +1877,11 @@ pub async fn sandbox_exec_grpc(
+@@ -1845,6 +1890,11 @@ pub async fn sandbox_exec_grpc(
              phase_name(sandbox.phase())
          ));
      }
@@ -566,7 +656,7 @@ index 15d91b5..ede3b74 100644
  
      // Resolve TTY mode: explicit --tty / --no-tty wins, otherwise auto-detect.
      let stdin_is_terminal = std::io::stdin().is_terminal();
-@@ -1905,6 +1942,11 @@ pub async fn sandbox_exec_grpc(
+@@ -1905,6 +1955,11 @@ pub async fn sandbox_exec_grpc(
          ));
      }
      if (tty && stdin_is_terminal) || request.encoded_len() > MAX_EXEC_REQUEST_BYTES {
@@ -578,7 +668,7 @@ index 15d91b5..ede3b74 100644
          return sandbox_exec_streaming_grpc(
              client,
              &sandbox,
-@@ -1921,11 +1963,17 @@ pub async fn sandbox_exec_grpc(
+@@ -1921,11 +1976,17 @@ pub async fn sandbox_exec_grpc(
      }
  
      // Make the streaming gRPC call.
@@ -601,7 +691,7 @@ index 15d91b5..ede3b74 100644
  
      // Stream output to terminal in real-time.
      let mut exit_code = 0i32;
-@@ -3509,6 +3557,23 @@ pub async fn sandbox_delete(
+@@ -3509,6 +3570,23 @@ pub async fn sandbox_delete(
      tls: &TlsOptions,
      gateway: &str,
  ) -> Result<()> {
@@ -625,7 +715,7 @@ index 15d91b5..ede3b74 100644
      let mut client = grpc_client(server, tls).await?;
  
      let names_to_delete: Vec<String> = if all {
-@@ -3545,27 +3610,33 @@ pub async fn sandbox_delete(
+@@ -3545,27 +3623,33 @@ pub async fn sandbox_delete(
  
      let mut failures = Vec::new();
      for name in &names_to_delete {
@@ -680,7 +770,7 @@ index 15d91b5..ede3b74 100644
              Ok(response) => response,
              Err(status) => {
                  eprintln!(
-@@ -3577,6 +3648,16 @@ pub async fn sandbox_delete(
+@@ -3577,6 +3661,16 @@ pub async fn sandbox_delete(
              }
          };
  
@@ -697,7 +787,7 @@ index 15d91b5..ede3b74 100644
          match response.into_inner().outcome() {
              DeletionOutcome::Completed => println!("{} Deleted sandbox {name}", "✓".green().bold()),
              DeletionOutcome::Accepted => println!(
-@@ -3608,6 +3689,44 @@ pub async fn sandbox_stop(
+@@ -3608,6 +3702,44 @@ pub async fn sandbox_stop(
      workspace: &str,
      tls: &TlsOptions,
  ) -> Result<()> {
@@ -742,7 +832,7 @@ index 15d91b5..ede3b74 100644
      if let Ok(stopped) = stop_forwards_for_sandbox(workspace, name) {
          for port in stopped {
              eprintln!(
-@@ -3616,21 +3735,6 @@ pub async fn sandbox_stop(
+@@ -3616,21 +3748,6 @@ pub async fn sandbox_stop(
              );
          }
      }
@@ -764,7 +854,7 @@ index 15d91b5..ede3b74 100644
      wait_for_lifecycle_phase(&mut client, sandbox, SandboxPhase::Stopped).await?;
      println!("{} Stopped sandbox {name}", "✓".green().bold());
      Ok(())
-@@ -3642,17 +3746,41 @@ pub async fn sandbox_start(
+@@ -3642,17 +3759,41 @@ pub async fn sandbox_start(
      name: &str,
      workspace: &str,
      tls: &TlsOptions,
@@ -815,7 +905,7 @@ index 15d91b5..ede3b74 100644
          .into_diagnostic()?
          .into_inner()
          .sandbox
-@@ -5055,6 +5183,29 @@ pub async fn sandbox_policy_set(
+@@ -5055,6 +5196,29 @@ pub async fn sandbox_policy_set(
      timeout_secs: u64,
      workspace: &str,
      tls: &TlsOptions,
@@ -845,7 +935,7 @@ index 15d91b5..ede3b74 100644
  ) -> Result<()> {
      let policy = load_sandbox_policy(Some(policy_path))?
          .ok_or_else(|| miette::miette!("No policy loaded from {policy_path}"))?;
-@@ -5076,17 +5227,31 @@ pub async fn sandbox_policy_set(
+@@ -5076,17 +5240,31 @@ pub async fn sandbox_policy_set(
          .and_then(|r| r.into_inner().revision)
          .map_or(0, |r| r.version);
  
@@ -888,7 +978,7 @@ index 15d91b5..ede3b74 100644
  
      let resp = response.into_inner();
  
-@@ -5193,6 +5358,49 @@ pub async fn sandbox_policy_update(
+@@ -5193,6 +5371,49 @@ pub async fn sandbox_policy_update(
      timeout_secs: u64,
      workspace: &str,
      tls: &TlsOptions,
@@ -938,7 +1028,7 @@ index 15d91b5..ede3b74 100644
  ) -> Result<()> {
      if dry_run && wait {
          return Err(miette!("--wait cannot be combined with --dry-run"));
-@@ -5247,18 +5455,31 @@ pub async fn sandbox_policy_update(
+@@ -5247,18 +5468,31 @@ pub async fn sandbox_policy_update(
  
      let current_version = current.version;
      let current_hash = current.policy_hash.clone();
@@ -1427,9 +1517,20 @@ index a25c455..0c2d7ea 100644
  - `bind`: an absolute daemon-host path, allowed only when
    `[openshell.drivers.docker].enable_bind_mounts = true` and label admission
 diff --git a/crates/openshell-driver-docker/src/lib.rs b/crates/openshell-driver-docker/src/lib.rs
-index 1f4c91f..8f72837 100644
+index 1f4c91f..32c6aa2 100644
 --- a/crates/openshell-driver-docker/src/lib.rs
 +++ b/crates/openshell-driver-docker/src/lib.rs
+@@ -13,8 +13,8 @@ use bollard::errors::Error as BollardError;
+ use bollard::models::{
+     ContainerCreateBody, ContainerState, ContainerStateStatusEnum, ContainerSummary,
+     ContainerSummaryStateEnum, CreateImageInfo, DeviceRequest, HealthConfig, HealthStatusEnum,
+-    HostConfig, Mount, MountTmpfsOptions, MountTypeEnum, MountVolumeOptions, ProgressDetail,
+-    SystemInfo, VolumeCreateRequest,
++    HostConfig, LogConfig, Mount, MountTmpfsOptions, MountTypeEnum, MountVolumeOptions,
++    ProgressDetail, SystemInfo, VolumeCreateRequest,
+ };
+ use bollard::query_parameters::{
+     CreateContainerOptionsBuilder, CreateImageOptions, DownloadFromContainerOptionsBuilder,
 @@ -101,6 +101,7 @@ const SUPERVISOR_HEALTH_SOCKET_PATH: &str = "/run/openshell/health.sock";
  const SUPERVISOR_UID: u32 = 65_534;
  const SUPERVISOR_GID: u32 = 65_534;
@@ -1438,7 +1539,7 @@ index 1f4c91f..8f72837 100644
  const BOUNDARY_CONFIG_MOUNT_PATH: &str = "/.openshell/channel/sandbox/bootstrap.json";
  const BOUNDARY_SOCKET_MOUNT_PATH: &str = "/.openshell/channel/sandbox/control.sock";
  const BOUNDARY_CERTIFICATE_MOUNT_PATH: &str = "/.openshell/channel/sandbox/server.crt";
-@@ -706,9 +707,76 @@ struct DockerSandboxDriverConfig {
+@@ -706,9 +707,103 @@ struct DockerSandboxDriverConfig {
          deserialize_with = "deserialize_optional_non_empty_string_list"
      )]
      cdi_devices: Option<Vec<String>>,
@@ -1448,6 +1549,11 @@ index 1f4c91f..8f72837 100644
 +    /// Decimal byte string avoids protobuf Struct's double-valued number
 +    /// representation and preserves exact storage quota units.
 +    disk_limit_bytes: Option<String>,
++    /// Exact per-sandbox PID cap supplied by the trusted controller. It may
++    /// tighten but never exceed the daemon-wide safety ceiling.
++    /// Canonical decimal string avoids protobuf Struct's f64 conversion for
++    /// JSON numbers and preserves the exact controller-selected PID ceiling.
++    pids_limit: Option<String>,
      mounts: Vec<DockerDriverMountConfig>,
  }
  
@@ -1474,6 +1580,28 @@ index 1f4c91f..8f72837 100644
 +        )));
 +    }
 +    Ok(Some(bytes))
++}
++
++fn parse_docker_sandbox_pids_limit(
++    value: Option<&str>,
++) -> Result<Option<std::num::NonZeroI64>, Status> {
++    let Some(value) = value else {
++        return Ok(None);
++    };
++    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
++        return Err(Status::failed_precondition(
++            "docker pids_limit must be a canonical decimal process count",
++        ));
++    }
++    let count = value.parse::<i64>().map_err(|_| {
++        Status::failed_precondition("docker pids_limit is outside the supported range")
++    })?;
++    if !(16..=16_384).contains(&count) || count.to_string() != value {
++        return Err(Status::failed_precondition(
++            "docker pids_limit must be a canonical decimal between 16 and 16384",
++        ));
++    }
++    Ok(std::num::NonZeroI64::new(count))
 +}
 +
 +fn validate_disk_limited_mounts(
@@ -1515,7 +1643,7 @@ index 1f4c91f..8f72837 100644
  struct ValidatedDockerSandbox<'a> {
      template: &'a DriverSandboxTemplate,
      driver_config: DockerSandboxDriverConfig,
-@@ -721,8 +789,11 @@ impl DockerSandboxDriverConfig {
+@@ -721,8 +816,13 @@ impl DockerSandboxDriverConfig {
              return Ok(Self::default());
          };
  
@@ -1525,11 +1653,13 @@ index 1f4c91f..8f72837 100644
 +            .map_err(|err| format!("invalid docker driver_config: {err}"))?;
 +        parse_docker_disk_limit_bytes(config.disk_limit_bytes.as_deref())
 +            .map_err(|error| error.message().to_string())?;
++        parse_docker_sandbox_pids_limit(config.pids_limit.as_deref())
++            .map_err(|error| error.message().to_string())?;
 +        Ok(config)
      }
  }
  
-@@ -1046,6 +1117,11 @@ impl DockerComputeDriver {
+@@ -1046,6 +1146,11 @@ impl DockerComputeDriver {
          let _ = docker_resource_limits(template)?;
          let driver_config =
              DockerSandboxDriverConfig::from_template(template).map_err(Status::invalid_argument)?;
@@ -1541,12 +1671,48 @@ index 1f4c91f..8f72837 100644
          validate_docker_driver_mounts(&driver_config.mounts, config.enable_bind_mounts)?;
          for mount in &driver_config.mounts {
              if matches!(
-@@ -5654,6 +5730,13 @@ fn build_container_create_body_for_image(
+@@ -4880,6 +4985,7 @@ async fn stage_docker_supervisor_bundle(
+                     LABEL_ISOLATION_ROLE_STAGING,
+                 )),
+                 host_config: Some(HostConfig {
++                    log_config: Some(docker_no_persistent_logs()),
+                     network_mode: Some("none".to_string()),
+                     mounts: Some(vec![Mount {
+                         target: Some(SUPERVISOR_STATE_MOUNT_PATH.to_string()),
+@@ -4952,8 +5058,19 @@ fn docker_auxiliary_container_labels(
+     ])
+ }
+ 
++// Docker-managed logs live outside HostConfig.StorageOpt. Disable persisted
++// Docker logs for workload and auxiliary containers; bounded exec/control
++// output continues through the authenticated stream owner.
++fn docker_no_persistent_logs() -> LogConfig {
++    LogConfig {
++        type_: Some("none".to_string()),
++        config: Some(HashMap::new()),
++    }
++}
++
+ fn docker_supervisor_host_config(mounts: Vec<Mount>, grpc_endpoint: &str) -> HostConfig {
+     HostConfig {
++        log_config: Some(docker_no_persistent_logs()),
+         // The supervisor is trusted infrastructure and originates every
+         // approved upstream connection. Host networking lets it reach the
+         // configured gateway and host-side services directly; the workload
+@@ -5654,6 +5771,21 @@ fn build_container_create_body_for_image(
      let resource_limits = docker_resource_limits(template)?;
      let workspace_root = driver_mounts::resolve_oci_workspace_root(&image.working_dir)
          .map_err(Status::failed_precondition)?;
 +    let disk_limit_bytes =
 +        parse_docker_disk_limit_bytes(driver_config.disk_limit_bytes.as_deref())?;
++    if parse_docker_sandbox_pids_limit(driver_config.pids_limit.as_deref())?
++        .zip(config.sandbox_pids_limit)
++        .is_some_and(|(requested, ceiling)| requested.get() > ceiling.get())
++    {
++        return Err(Status::failed_precondition(
++            "docker per-sandbox pids_limit exceeds the daemon safety ceiling",
++        ));
++    }
 +    validate_disk_limited_mounts(
 +        disk_limit_bytes.is_some(),
 +        &driver_config.mounts,
@@ -1555,7 +1721,7 @@ index 1f4c91f..8f72837 100644
      driver_mounts::validate_workspace_control_path(&workspace_root, BOUNDARY_MOUNT_PATH)
          .map_err(Status::failed_precondition)?;
      for volume in &image.volumes {
-@@ -5726,6 +5809,10 @@ fn build_container_create_body_for_image(
+@@ -5726,6 +5858,10 @@ fn build_container_create_body_for_image(
          LABEL_SANDBOX_WORKSPACE.to_string(),
          sandbox.workspace.clone(),
      );
@@ -1566,20 +1732,120 @@ index 1f4c91f..8f72837 100644
      // The list/get/find paths filter by `config.sandbox_namespace`, so use
      // the same value here. `DriverSandbox.namespace` is unset on the request
      // path (the gateway elides it), and using it would produce containers
-@@ -5763,6 +5850,8 @@ fn build_container_create_body_for_image(
+@@ -5761,9 +5897,16 @@ fn build_container_create_body_for_image(
+         ]),
+         labels: Some(labels),
          host_config: Some(HostConfig {
++            log_config: Some(docker_no_persistent_logs()),
              nano_cpus: resource_limits.nano_cpus,
              memory: resource_limits.memory_bytes,
+-            pids_limit: docker_pids_limit(config.sandbox_pids_limit)?,
++            memory_swap: resource_limits.memory_bytes,
 +            storage_opt: disk_limit_bytes
 +                .map(|bytes| HashMap::from([("size".to_string(), format!("{bytes}B"))])),
-             pids_limit: docker_pids_limit(config.sandbox_pids_limit)?,
++            pids_limit: docker_pids_limit(
++                parse_docker_sandbox_pids_limit(driver_config.pids_limit.as_deref())?
++                    .or(config.sandbox_pids_limit),
++            )?,
              device_requests,
              binds: {
+                 let mut binds = build_binds(sandbox, config);
 diff --git a/crates/openshell-driver-docker/src/tests.rs b/crates/openshell-driver-docker/src/tests.rs
-index c5036f4..43a9ca9 100644
+index c5036f4..fb468e2 100644
 --- a/crates/openshell-driver-docker/src/tests.rs
 +++ b/crates/openshell-driver-docker/src/tests.rs
-@@ -1739,6 +1739,144 @@ fn build_container_create_body_includes_driver_config_mounts() {
+@@ -1176,6 +1176,90 @@ fn container_create_body_sets_driver_owned_pids_limit() {
+     );
+ }
+ 
++#[test]
++fn docker_per_sandbox_pid_limit_and_memory_swap_are_applied_at_create() {
++    let config: DockerSandboxDriverConfig = serde_json::from_value(serde_json::json!({
++        "pids_limit": "256",
++        "disk_limit_bytes": "1073741824"
++    }))
++    .unwrap();
++    let mut runtime = runtime_config();
++    runtime.sandbox_pids_limit = std::num::NonZeroI64::new(1024);
++    let mut sandbox = test_sandbox();
++    sandbox
++        .spec
++        .as_mut()
++        .unwrap()
++        .template
++        .as_mut()
++        .unwrap()
++        .resources = Some(DriverResourceRequirements {
++        cpu_limit: "500m".into(),
++        memory_limit: "256Mi".into(),
++        ..Default::default()
++    });
++    let body = build_container_create_body_for_image(
++        &sandbox,
++        &runtime,
++        &config,
++        None,
++        &DockerImageMetadata {
++            id: "sha256:image".into(),
++            user: String::new(),
++            working_dir: "/workspace/project".into(),
++            volumes: Vec::new(),
++        },
++        &test_workload_identity(),
++    )
++    .unwrap();
++    let host = body.host_config.expect("host config");
++    assert_eq!(host.pids_limit, Some(256));
++    assert_eq!(host.memory, Some(268_435_456));
++    assert_eq!(host.memory_swap, host.memory);
++    let excessive: DockerSandboxDriverConfig =
++        serde_json::from_value(serde_json::json!({ "pids_limit": "2048" })).unwrap();
++    assert!(
++        build_container_create_body_for_image(
++            &sandbox,
++            &runtime,
++            &excessive,
++            None,
++            &DockerImageMetadata {
++                id: "sha256:image".into(),
++                user: String::new(),
++                working_dir: "/workspace/project".into(),
++                volumes: Vec::new()
++            },
++            &test_workload_identity(),
++        )
++        .is_err()
++    );
++}
++
++#[test]
++fn docker_per_sandbox_pid_limit_parses_through_protobuf_struct_without_float_loss() {
++    let template = DriverSandboxTemplate {
++        driver_config: Some(json_struct(serde_json::json!({ "pids_limit": "256" }))),
++        ..Default::default()
++    };
++    let parsed = DockerSandboxDriverConfig::from_template(&template).unwrap();
++    assert_eq!(
++        parse_docker_sandbox_pids_limit(parsed.pids_limit.as_deref()).unwrap(),
++        std::num::NonZeroI64::new(256)
++    );
++
++    // protobuf Struct numbers are f64. Reject them instead of depending on
++    // serde's integer coercion for a security limit sent through that wire.
++    let numeric = DriverSandboxTemplate {
++        driver_config: Some(json_struct(serde_json::json!({ "pids_limit": 256 }))),
++        ..Default::default()
++    };
++    assert!(DockerSandboxDriverConfig::from_template(&numeric).is_err());
++    for invalid in ["0", "15", "16385", "0256", "256.0", "-1"] {
++        assert!(parse_docker_sandbox_pids_limit(Some(invalid)).is_err());
++    }
++}
++
+ #[test]
+ fn docker_child_environment_strips_supervisor_control_keys() {
+     let mut sandbox = test_sandbox();
+@@ -1739,6 +1823,151 @@ fn build_container_create_body_includes_driver_config_mounts() {
      );
  }
  
@@ -1610,15 +1876,22 @@ index c5036f4..43a9ca9 100644
 +            .map(String::as_str),
 +        Some("/workspace/project")
 +    );
++    let host = body.host_config.unwrap();
 +    assert_eq!(
-+        body.host_config
-+            .unwrap()
-+            .storage_opt
-+            .unwrap()
-+            .get("size")
-+            .map(String::as_str),
++        host.storage_opt.unwrap().get("size").map(String::as_str),
 +        Some("1073741824B")
 +    );
++    let log_config = host.log_config.unwrap();
++    assert_eq!(log_config.type_.as_deref(), Some("none"));
++    assert!(log_config.config.unwrap().is_empty());
++}
++
++#[test]
++fn docker_supervisor_host_config_disables_persistent_docker_logs() {
++    let host = docker_supervisor_host_config(Vec::new(), "http://127.0.0.1:8080");
++    let log_config = host.log_config.unwrap();
++    assert_eq!(log_config.type_.as_deref(), Some("none"));
++    assert!(log_config.config.unwrap().is_empty());
 +}
 +
 +#[test]
@@ -1725,18 +1998,40 @@ index c5036f4..43a9ca9 100644
  fn driver_config_defaults_volume_mounts_to_read_only() {
      let mut sandbox = test_sandbox();
 diff --git a/crates/openshell-sandbox/src/main.rs b/crates/openshell-sandbox/src/main.rs
-index 4dad330..303641a 100644
+index 4dad330..dfe9ec1 100644
 --- a/crates/openshell-sandbox/src/main.rs
 +++ b/crates/openshell-sandbox/src/main.rs
-@@ -35,6 +35,7 @@ const SANDBOX_STATE_ROOT: &str = "/.openshell/state";
+@@ -5,6 +5,8 @@
+ 
+ #[cfg(target_os = "linux")]
+ use std::mem::size_of;
++#[cfg(target_os = "linux")]
++use std::os::unix::fs::OpenOptionsExt;
+ use std::path::Path;
+ 
+ use clap::Parser;
+@@ -35,6 +37,20 @@ const SANDBOX_STATE_ROOT: &str = "/.openshell/state";
  
  const VALIDATE_WORKSPACE_SUBCOMMAND: &str = "validate-workspace";
  const CAPABILITY_PROBE_SUBCOMMAND: &str = "capability-probe";
 +const RUNTIME_SECCOMP_PROBE_SUBCOMMAND: &str = "runtime-seccomp-probe";
++const RUNTIME_PRIVILEGE_PROBE_SUBCOMMAND: &str = "runtime-privilege-probe";
++const RUNTIME_IDLE_UNTIL_SUBCOMMAND: &str = "runtime-idle-until";
++const RUNTIME_PIDS_PROBE_SUBCOMMAND: &str = "runtime-pids-probe";
++const RUNTIME_CPU_PROBE_SUBCOMMAND: &str = "runtime-cpu-probe";
++const RUNTIME_MEMORY_PROBE_SUBCOMMAND: &str = "runtime-memory-probe";
++const RUNTIME_MEMORY_CHILD_SUBCOMMAND: &str = "runtime-memory-child";
++const RUNTIME_DISK_PROBE_SUBCOMMAND: &str = "runtime-disk-probe";
++const RUNTIME_IDLE_MAX_SECONDS: u64 = 86_400;
++const RUNTIME_PIDS_PROBE_MAX: u32 = 256;
++const RUNTIME_CPU_PROBE_MAX_WORKERS: u32 = 4;
++const RUNTIME_CPU_PROBE_MAX_MILLIS: u64 = 500;
++const RUNTIME_MEMORY_PROBE_MAX_BYTES: u64 = 268_435_456;
++const RUNTIME_DISK_PROBE_MAX_BYTES: u64 = 33_554_432;
  const CAPABILITY_PROBE_LAUNCH_SUBCOMMAND: &str = "capability-probe-launch";
  const CAPABILITY_SOCKET_CHILD_SUBCOMMAND: &str = "capability-socket-child";
  const CAPABILITY_LANDLOCK_CHILD_SUBCOMMAND: &str = "capability-landlock-child";
-@@ -114,6 +115,63 @@ fn run_capability_probe() -> Result<()> {
+@@ -114,6 +130,645 @@ fn run_capability_probe() -> Result<()> {
      Ok(())
  }
  
@@ -1797,10 +2092,592 @@ index 4dad330..303641a 100644
 +    Err(miette::miette!("runtime seccomp probe requires Linux"))
 +}
 +
++/// Observe the actual workload UID/capability state and verify that the
++/// ordinary, policy-bound child cannot reacquire root. This command does not
++/// alter the sandbox or install a substitute security boundary.
++#[cfg(target_os = "linux")]
++#[allow(unsafe_code)]
++fn run_runtime_privilege_probe() -> Result<()> {
++    let uid = unsafe { libc::geteuid() };
++    let status = match std::fs::read_to_string("/proc/self/status") {
++        Ok(status) => status,
++        Err(_) => {
++            println!(
++                "{}",
++                serde_json::json!({"version":1,"verdict":"unsupported"})
++            );
++            return Ok(());
++        }
++    };
++    let effective_capabilities = status
++        .lines()
++        .find_map(|line| line.strip_prefix("CapEff:	"))
++        .and_then(|value| u64::from_str_radix(value.trim(), 16).ok());
++    let Some(effective_capabilities) = effective_capabilities else {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    };
++    if uid == 0 || effective_capabilities != 0 {
++        println!(
++            "{}",
++            serde_json::json!({
++                "version": 1,
++                "verdict": "fail",
++                "uid_nonroot": uid != 0,
++                "effective_capabilities_zero": effective_capabilities == 0
++            })
++        );
++        return Ok(());
++    }
++
++    // SAFETY: this one-shot probe runs as a non-root workload child with an
++    // empty effective capability set. If the unexpected transition succeeds,
++    // immediately restore the original UID before emitting only a fixed report.
++    let transition = unsafe { libc::setuid(0) };
++    if transition == 0 {
++        let restored = unsafe { libc::setuid(uid) } == 0;
++        if !restored {
++            unsafe { libc::_exit(70) };
++        }
++        println!(
++            "{}",
++            serde_json::json!({
++                "version": 1,
++                "verdict": "fail",
++                "uid_nonroot": true,
++                "effective_capabilities_zero": true,
++                "setuid_root": "allowed"
++            })
++        );
++        return Ok(());
++    }
++    let errno = std::io::Error::last_os_error().raw_os_error();
++    let denied = errno == Some(libc::EPERM);
++    println!(
++        "{}",
++        serde_json::json!({
++            "version": 1,
++            "verdict": if denied { "pass" } else { "unsupported" },
++            "uid_nonroot": true,
++            "effective_capabilities_zero": true,
++            "setuid_root": if denied { "denied" } else { "unknown" },
++            "errno": if denied { "EPERM" } else { "other" }
++        })
++    );
++    Ok(())
++}
++
++#[cfg(not(target_os = "linux"))]
++fn run_runtime_privilege_probe() -> Result<()> {
++    println!(
++        "{}",
++        serde_json::json!({"version":1,"verdict":"unsupported"})
++    );
++    Ok(())
++}
++
++fn runtime_idle_duration(expiry_unix_secs: u64, now_unix_secs: u64) -> Result<std::time::Duration> {
++    let remaining = expiry_unix_secs.saturating_sub(now_unix_secs);
++    if remaining > RUNTIME_IDLE_MAX_SECONDS {
++        return Err(miette::miette!(
++            "runtime idle expiry exceeds the bounded one-day maximum"
++        ));
++    }
++    Ok(std::time::Duration::from_secs(remaining))
++}
++
++fn run_runtime_idle_until(args: &[String]) -> Result<()> {
++    if args.len() != 2
++        || args[0] != "--unix-seconds"
++        || args[1].is_empty()
++        || !args[1].bytes().all(|byte| byte.is_ascii_digit())
++        || (args[1].len() > 1 && args[1].starts_with('0'))
++    {
++        return Err(miette::miette!(
++            "usage: openshell-sandbox {RUNTIME_IDLE_UNTIL_SUBCOMMAND} --unix-seconds <canonical-expiry>"
++        ));
++    }
++    let expiry_unix_secs = args[1]
++        .parse::<u64>()
++        .map_err(|_| miette::miette!("runtime idle expiry is invalid"))?;
++    let now_unix_secs = std::time::SystemTime::now()
++        .duration_since(std::time::UNIX_EPOCH)
++        .map_err(|_| miette::miette!("system clock predates Unix epoch"))?
++        .as_secs();
++    let remaining = runtime_idle_duration(expiry_unix_secs, now_unix_secs)?;
++    if !remaining.is_zero() {
++        std::thread::sleep(remaining);
++    }
++    Ok(())
++}
++
++/// Saturate only the sandbox's own bounded PID cgroup, then kill and reap
++/// every child before returning. The expected limit is supplied by the host
++/// only after it has independently inspected the same immutable container.
++#[cfg(target_os = "linux")]
++#[allow(unsafe_code)]
++fn run_runtime_pids_probe(args: &[String]) -> Result<()> {
++    if args.len() != 2
++        || args[0] != "--limit"
++        || args[1].is_empty()
++        || !args[1].bytes().all(|byte| byte.is_ascii_digit())
++        || (args[1].len() > 1 && args[1].starts_with('0'))
++    {
++        return Err(miette::miette!(
++            "usage: openshell-sandbox {RUNTIME_PIDS_PROBE_SUBCOMMAND} --limit <canonical-pids-limit>"
++        ));
++    }
++    let expected_limit = args[1]
++        .parse::<u32>()
++        .map_err(|_| miette::miette!("runtime PID limit is invalid"))?;
++    if !(1..=RUNTIME_PIDS_PROBE_MAX).contains(&expected_limit) {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    }
++    let actual_limit = match std::fs::read_to_string("/sys/fs/cgroup/pids.max") {
++        Ok(value) => value.trim().parse::<u32>().ok(),
++        Err(_) => None,
++    };
++    let baseline = match std::fs::read_to_string("/sys/fs/cgroup/pids.current") {
++        Ok(value) => value.trim().parse::<u32>().ok(),
++        Err(_) => None,
++    };
++    let (Some(actual_limit), Some(baseline)) = (actual_limit, baseline) else {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    };
++    if actual_limit != expected_limit || baseline >= actual_limit {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    }
++
++    let attempts = actual_limit.saturating_sub(baseline).saturating_add(1);
++    let mut children = Vec::with_capacity(attempts as usize);
++    let mut denied_errno = None;
++    for _ in 0..attempts {
++        // SAFETY: each child runs only pause() and exits after the parent
++        // sends SIGKILL. The parent owns every returned PID and reaps it.
++        let pid = unsafe { libc::fork() };
++        if pid == 0 {
++            loop {
++                unsafe {
++                    libc::pause();
++                }
++            }
++        }
++        if pid < 0 {
++            denied_errno = std::io::Error::last_os_error().raw_os_error();
++            break;
++        }
++        children.push(pid);
++    }
++    for pid in &children {
++        unsafe {
++            libc::kill(*pid, libc::SIGKILL);
++        }
++    }
++    let mut reaped = 0_u32;
++    for pid in &children {
++        let mut status = 0;
++        if unsafe { libc::waitpid(*pid, &mut status, 0) } == *pid {
++            reaped += 1;
++        }
++    }
++    let after = std::fs::read_to_string("/sys/fs/cgroup/pids.current")
++        .ok()
++        .and_then(|value| value.trim().parse::<u32>().ok());
++    let contained = denied_errno == Some(libc::EAGAIN)
++        && children.len() < attempts as usize
++        && reaped as usize == children.len()
++        && after.is_some_and(|count| count <= baseline);
++    println!(
++        "{}",
++        serde_json::json!({
++            "version": 1,
++            "verdict": if contained { "pass" } else { "fail" },
++            "limit": actual_limit,
++            "baseline": baseline,
++            "attempted": children.len() + usize::from(denied_errno.is_some()),
++            "denied_errno": if denied_errno == Some(libc::EAGAIN) { "EAGAIN" } else { "other" },
++            "reaped": reaped,
++            "baseline_restored": after.is_some_and(|count| count <= baseline)
++        })
++    );
++    Ok(())
++}
++
++#[cfg(not(target_os = "linux"))]
++fn run_runtime_pids_probe(_args: &[String]) -> Result<()> {
++    println!(
++        "{}",
++        serde_json::json!({"version":1,"verdict":"unsupported"})
++    );
++    Ok(())
++}
++
++fn parse_canonical_u64(value: &str, label: &str) -> Result<u64> {
++    if value.is_empty()
++        || !value.bytes().all(|byte| byte.is_ascii_digit())
++        || (value.len() > 1 && value.starts_with('0'))
++    {
++        return Err(miette::miette!("{label} is not canonical"));
++    }
++    value
++        .parse::<u64>()
++        .map_err(|_| miette::miette!("{label} is invalid"))
++}
++
++#[cfg(target_os = "linux")]
++fn read_cgroup_counter(path: &str, key: Option<&str>) -> Option<u64> {
++    let contents = std::fs::read_to_string(path).ok()?;
++    match key {
++        Some(key) => contents.lines().find_map(|line| {
++            let mut fields = line.split_ascii_whitespace();
++            (fields.next()? == key)
++                .then(|| fields.next()?.parse::<u64>().ok())
++                .flatten()
++        }),
++        None => contents.trim().parse::<u64>().ok(),
++    }
++}
++
++#[cfg(target_os = "linux")]
++fn read_cgroup_oom_kill() -> Option<u64> {
++    read_cgroup_counter("/sys/fs/cgroup/memory.events", Some("oom_kill"))
++}
++
++#[cfg(target_os = "linux")]
++fn read_cgroup_nr_throttled() -> Option<u64> {
++    read_cgroup_counter("/sys/fs/cgroup/cpu.stat", Some("nr_throttled"))
++}
++
++#[cfg(target_os = "linux")]
++fn run_runtime_cpu_probe(args: &[String]) -> Result<()> {
++    if args.len() != 4 || args[0] != "--workers" || args[2] != "--millis" {
++        return Err(miette::miette!(
++            "usage: openshell-sandbox {RUNTIME_CPU_PROBE_SUBCOMMAND} --workers <1-4> --millis <1-500>"
++        ));
++    }
++    let workers = parse_canonical_u64(&args[1], "CPU workers")?;
++    let millis = parse_canonical_u64(&args[3], "CPU probe duration")?;
++    if !(1..=u64::from(RUNTIME_CPU_PROBE_MAX_WORKERS)).contains(&workers)
++        || !(1..=RUNTIME_CPU_PROBE_MAX_MILLIS).contains(&millis)
++    {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    }
++    let quota = std::fs::read_to_string("/sys/fs/cgroup/cpu.max").ok();
++    let before = read_cgroup_nr_throttled();
++    let Some((quota, period)) = quota.and_then(|value| {
++        let mut fields = value.split_ascii_whitespace();
++        Some((
++            fields.next()?.parse::<u64>().ok()?,
++            fields.next()?.parse::<u64>().ok()?,
++        ))
++    }) else {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    };
++    if quota == 0 || period == 0 || before.is_none() {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    }
++    let started = std::time::Instant::now();
++    let deadline = started + std::time::Duration::from_millis(millis);
++    let mut tasks = Vec::with_capacity(workers as usize);
++    for _ in 0..workers {
++        tasks.push(std::thread::spawn(move || {
++            let mut value = 1_u64;
++            while std::time::Instant::now() < deadline {
++                value =
++                    std::hint::black_box(value.wrapping_mul(1_664_525).wrapping_add(1_013_904_223));
++            }
++            std::hint::black_box(value);
++        }));
++    }
++    for task in tasks {
++        task.join()
++            .map_err(|_| miette::miette!("CPU probe worker failed"))?;
++    }
++    let after = read_cgroup_nr_throttled();
++    let Some(after) = after else {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    };
++    let throttled = after > before.unwrap_or(after);
++    println!(
++        "{}",
++        serde_json::json!({
++            "version": 1, "verdict": if throttled { "pass" } else { "unsupported" },
++            "quota_us": quota, "period_us": period, "workers": workers,
++            "duration_ms": millis, "throttled_increased": throttled
++        })
++    );
++    Ok(())
++}
++
++#[cfg(not(target_os = "linux"))]
++fn run_runtime_cpu_probe(_args: &[String]) -> Result<()> {
++    println!(
++        "{}",
++        serde_json::json!({"version":1,"verdict":"unsupported"})
++    );
++    Ok(())
++}
++
++#[cfg(target_os = "linux")]
++fn run_runtime_memory_probe(args: &[String]) -> Result<()> {
++    if args.len() != 2 || args[0] != "--limit-bytes" {
++        return Err(miette::miette!(
++            "usage: openshell-sandbox {RUNTIME_MEMORY_PROBE_SUBCOMMAND} --limit-bytes <canonical-limit>"
++        ));
++    }
++    let expected = parse_canonical_u64(&args[1], "memory limit")?;
++    let actual = read_cgroup_counter("/sys/fs/cgroup/memory.max", None);
++    let before = read_cgroup_oom_kill();
++    let oom_group = std::fs::read_to_string("/sys/fs/cgroup/memory.oom.group")
++        .ok()
++        .map(|value| value.trim().to_string());
++    if expected < 16 * 1024 * 1024
++        || expected > RUNTIME_MEMORY_PROBE_MAX_BYTES
++        || actual != Some(expected)
++        || before.is_none()
++        || oom_group.as_deref() != Some("0")
++    {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    }
++    // Spawn the same pinned executable instead of forking this multithreaded
++    // Tokio process. The child rechecks its cgroup limit before allocating,
++    // raises only its own OOM score, and touches at most one page beyond the
++    // explicitly bounded throwaway cgroup ceiling.
++    let executable = std::env::current_exe().into_diagnostic()?;
++    let mut child = match std::process::Command::new(executable)
++        .arg(RUNTIME_MEMORY_CHILD_SUBCOMMAND)
++        .arg("--limit-bytes")
++        .arg(expected.to_string())
++        .stdout(std::process::Stdio::null())
++        .stderr(std::process::Stdio::null())
++        .spawn()
++    {
++        Ok(child) => child,
++        Err(_) => {
++            println!(
++                "{}",
++                serde_json::json!({"version":1,"verdict":"unsupported"})
++            );
++            return Ok(());
++        }
++    };
++    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
++    let mut timed_out = false;
++    let status = loop {
++        match child.try_wait() {
++            Ok(Some(status)) => break Some(status),
++            Ok(None) if std::time::Instant::now() < deadline => {
++                std::thread::sleep(std::time::Duration::from_millis(10));
++            }
++            _ => {
++                timed_out = true;
++                let _ = child.kill();
++                break child.wait().ok();
++            }
++        }
++    };
++    let waited = status.is_some();
++    let after = read_cgroup_oom_kill();
++    let killed_by_oom = !timed_out
++        && status
++            .as_ref()
++            .and_then(std::os::unix::process::ExitStatusExt::signal)
++            == Some(libc::SIGKILL)
++        && after.is_some_and(|count| count > before.unwrap_or(count));
++    println!(
++        "{}",
++        serde_json::json!({
++            "version":1, "verdict":if killed_by_oom { "pass" } else { "unsupported" },
++            "limit_bytes":expected, "oom_kill_increased":killed_by_oom,
++            "child_reaped":waited, "oom_group_disabled":true
++        })
++    );
++    Ok(())
++}
++
++#[cfg(target_os = "linux")]
++fn run_runtime_memory_child(args: &[String]) -> Result<()> {
++    if args.len() != 2 || args[0] != "--limit-bytes" {
++        return Err(miette::miette!("invalid memory-probe child arguments"));
++    }
++    let expected = parse_canonical_u64(&args[1], "memory limit")?;
++    if !(16 * 1024 * 1024..=RUNTIME_MEMORY_PROBE_MAX_BYTES).contains(&expected)
++        || read_cgroup_counter("/sys/fs/cgroup/memory.max", None) != Some(expected)
++        || std::fs::read_to_string("/sys/fs/cgroup/memory.oom.group")
++            .ok()
++            .map(|value| value.trim().to_string())
++            .as_deref()
++            != Some("0")
++    {
++        std::process::exit(72);
++    }
++    if std::fs::write("/proc/self/oom_score_adj", "1000").is_err() {
++        std::process::exit(73);
++    }
++    let requested = usize::try_from(expected + 4096).into_diagnostic()?;
++    let mut bytes = Vec::<u8>::new();
++    if bytes.try_reserve_exact(requested).is_err() {
++        std::process::exit(74);
++    }
++    bytes.resize(requested, 0);
++    for offset in (0..requested).step_by(4096) {
++        bytes[offset] = 1;
++    }
++    std::hint::black_box(bytes);
++    std::process::exit(0);
++}
++
++#[cfg(not(target_os = "linux"))]
++fn run_runtime_memory_probe(_args: &[String]) -> Result<()> {
++    println!(
++        "{}",
++        serde_json::json!({"version":1,"verdict":"unsupported"})
++    );
++    Ok(())
++}
++
++#[cfg(target_os = "linux")]
++fn run_runtime_disk_probe(args: &[String]) -> Result<()> {
++    if args.len() != 4 || args[0] != "--limit-bytes" || args[2] != "--path" {
++        return Err(miette::miette!(
++            "usage: openshell-sandbox {RUNTIME_DISK_PROBE_SUBCOMMAND} --limit-bytes <canonical-limit> --path <workspace-marker>"
++        ));
++    }
++    let limit = parse_canonical_u64(&args[1], "disk limit")?;
++    let target = Path::new(&args[3]);
++    if !(1..=RUNTIME_DISK_PROBE_MAX_BYTES).contains(&limit)
++        || !target.is_absolute()
++        || target
++            .file_name()
++            .is_none_or(|name| !name.to_string_lossy().starts_with(".aw-v7-disk-probe-"))
++        || target.components().any(|part| {
++            matches!(
++                part,
++                std::path::Component::ParentDir | std::path::Component::CurDir
++            )
++        })
++    {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    }
++    let Some(parent) = target.parent() else {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    };
++    let parent_metadata = std::fs::symlink_metadata(parent);
++    let canonical_parent = std::fs::canonicalize(parent);
++    if !parent_metadata
++        .is_ok_and(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
++        || !canonical_parent.is_ok_and(|canonical| canonical == parent)
++    {
++        println!(
++            "{}",
++            serde_json::json!({"version":1,"verdict":"unsupported"})
++        );
++        return Ok(());
++    }
++    let mut file = match std::fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
++        .open(target)
++    {
++        Ok(file) => file,
++        Err(_) => {
++            println!(
++                "{}",
++                serde_json::json!({"version":1,"verdict":"unsupported"})
++            );
++            return Ok(());
++        }
++    };
++    let chunk = [0x5a_u8; 65_536];
++    let mut written = 0_u64;
++    let mut exhausted = false;
++    while written <= limit {
++        let count =
++            usize::try_from((limit + 1 - written).min(chunk.len() as u64)).unwrap_or(chunk.len());
++        match std::io::Write::write_all(&mut file, &chunk[..count]) {
++            Ok(()) => written += count as u64,
++            Err(error)
++                if matches!(
++                    error.raw_os_error(),
++                    Some(libc::ENOSPC) | Some(libc::EDQUOT)
++                ) =>
++            {
++                exhausted = true;
++                break;
++            }
++            Err(_) => break,
++        }
++    }
++    drop(file);
++    let removed = std::fs::remove_file(target).is_ok() && !target.exists();
++    let contained = exhausted && written <= limit && removed;
++    println!(
++        "{}",
++        serde_json::json!({
++            "version":1,"verdict":if contained { "pass" } else { "unsupported" },
++            "limit_bytes":limit,"quota_exhaustion_observed":exhausted,"temporary_file_removed":removed
++        })
++    );
++    Ok(())
++}
++
++#[cfg(not(target_os = "linux"))]
++fn run_runtime_disk_probe(_args: &[String]) -> Result<()> {
++    println!(
++        "{}",
++        serde_json::json!({"version":1,"verdict":"unsupported"})
++    );
++    Ok(())
++}
++
  /// Actively qualify every kernel primitive used by the capability-free
  /// sandbox. Callers decide whether to emit the resulting diagnostic report.
  #[cfg(target_os = "linux")]
-@@ -1929,6 +1987,14 @@ fn main() -> Result<()> {
+@@ -1929,6 +2584,40 @@ fn main() -> Result<()> {
      if raw_args.get(1).map(String::as_str) == Some(CAPABILITY_PROBE_SUBCOMMAND) {
          return run_capability_probe();
      }
@@ -1812,9 +2689,96 @@ index 4dad330..303641a 100644
 +        }
 +        return run_runtime_seccomp_probe();
 +    }
++    if raw_args.get(1).map(String::as_str) == Some(RUNTIME_PRIVILEGE_PROBE_SUBCOMMAND) {
++        if raw_args.len() != 2 {
++            return Err(miette::miette!(
++                "usage: openshell-sandbox {RUNTIME_PRIVILEGE_PROBE_SUBCOMMAND}"
++            ));
++        }
++        return run_runtime_privilege_probe();
++    }
++    if raw_args.get(1).map(String::as_str) == Some(RUNTIME_IDLE_UNTIL_SUBCOMMAND) {
++        return run_runtime_idle_until(&raw_args[2..]);
++    }
++    if raw_args.get(1).map(String::as_str) == Some(RUNTIME_PIDS_PROBE_SUBCOMMAND) {
++        return run_runtime_pids_probe(&raw_args[2..]);
++    }
++    if raw_args.get(1).map(String::as_str) == Some(RUNTIME_CPU_PROBE_SUBCOMMAND) {
++        return run_runtime_cpu_probe(&raw_args[2..]);
++    }
++    if raw_args.get(1).map(String::as_str) == Some(RUNTIME_MEMORY_PROBE_SUBCOMMAND) {
++        return run_runtime_memory_probe(&raw_args[2..]);
++    }
++    if raw_args.get(1).map(String::as_str) == Some(RUNTIME_MEMORY_CHILD_SUBCOMMAND) {
++        return run_runtime_memory_child(&raw_args[2..]);
++    }
++    if raw_args.get(1).map(String::as_str) == Some(RUNTIME_DISK_PROBE_SUBCOMMAND) {
++        return run_runtime_disk_probe(&raw_args[2..]);
++    }
      if raw_args.get(1).map(String::as_str) == Some(CAPABILITY_PROBE_LAUNCH_SUBCOMMAND) {
          return launch_capability_probe(&raw_args[2..]);
      }
+@@ -1951,6 +2640,60 @@ mod tests {
+     use super::*;
+     use std::os::unix::fs::PermissionsExt;
+ 
++    #[test]
++    fn runtime_idle_deadline_is_bounded_and_past_expiry_exits_immediately() {
++        assert_eq!(runtime_idle_duration(110, 100).unwrap().as_secs(), 10);
++        assert_eq!(runtime_idle_duration(99, 100).unwrap().as_secs(), 0);
++        assert_eq!(
++            runtime_idle_duration(100 + RUNTIME_IDLE_MAX_SECONDS, 100)
++                .unwrap()
++                .as_secs(),
++            RUNTIME_IDLE_MAX_SECONDS
++        );
++        assert!(runtime_idle_duration(101 + RUNTIME_IDLE_MAX_SECONDS, 100).is_err());
++    }
++
++    #[test]
++    fn runtime_idle_absolute_expiry_returns_without_host_stress() {
++        let args = ["--unix-seconds".to_string(), "1".to_string()];
++        run_runtime_idle_until(&args)
++            .expect("an already-expired absolute deadline returns at once");
++    }
++
++    #[test]
++    fn runtime_idle_command_rejects_noncanonical_or_extra_arguments() {
++        assert!(run_runtime_idle_until(&[]).is_err());
++        assert!(run_runtime_idle_until(&["--unix-seconds".to_string(), "01".to_string()]).is_err());
++        assert!(run_runtime_idle_until(&["--unix-seconds".to_string(), "+1".to_string()]).is_err());
++        assert!(
++            run_runtime_idle_until(&[
++                "--unix-seconds".to_string(),
++                "18446744073709551616".to_string()
++            ])
++            .is_err()
++        );
++        assert!(
++            run_runtime_idle_until(&[
++                "--unix-seconds".to_string(),
++                "1".to_string(),
++                "extra".to_string()
++            ])
++            .is_err()
++        );
++    }
++
++    #[test]
++    fn runtime_probe_numeric_inputs_must_be_canonical_and_bounded() {
++        assert_eq!(parse_canonical_u64("256", "limit").unwrap(), 256);
++        assert!(parse_canonical_u64("0256", "limit").is_err());
++        assert!(parse_canonical_u64("+256", "limit").is_err());
++        assert!(parse_canonical_u64("256x", "limit").is_err());
++        assert!(RUNTIME_PIDS_PROBE_MAX <= 256);
++        assert!(RUNTIME_CPU_PROBE_MAX_WORKERS <= 4);
++        assert!(RUNTIME_MEMORY_PROBE_MAX_BYTES <= 256 * 1024 * 1024);
++        assert!(RUNTIME_DISK_PROBE_MAX_BYTES <= 32 * 1024 * 1024);
++    }
++
+     #[test]
+     fn kubernetes_bootstrap_stages_private_memory_bundle() {
+         if nix::unistd::geteuid().is_root() || nix::unistd::getegid().as_raw() == 0 {
 diff --git a/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs b/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs
 index 81d0b16..a5fc39b 100644
 --- a/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs
