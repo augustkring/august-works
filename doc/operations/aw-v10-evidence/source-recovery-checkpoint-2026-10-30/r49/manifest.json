@@ -1,0 +1,683 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T10:53:21.497076+00:00",
+  "baseCommit": "169f1b6dec2b8a7845b18ec6cee20217ef82ec1c",
+  "priorRecoveryCommit": "de909d89ae14f18f65f0b7a4d6851c65bb67a7a6",
+  "patchBytes": 1919683,
+  "patchSha256": "b7562436d42388742cd6be5aadca4aa79365e43c1e207366f20e20e88e761341",
+  "archiveSha256": "11705060f99ab70539877c656a3bf1b180d1ad4c21db775ce12ef50f8a069c31",
+  "untrackedSourceFiles": [],
+  "privateCandidateFiles": [
+    {
+      "path": "preparation/build-v10-safe-change-inventory-draft-current.py",
+      "bytes": 17353,
+      "sha256": "99b12b23013ae3df86896e7e410027adbbb29ce5e56caf4a8ed58bb254abb802"
+    },
+    {
+      "path": "preparation/merge-safe-change-inventory-current.py",
+      "bytes": 4915,
+      "sha256": "6841b7dffd7537d8aa86e43dcb346f9f3298ad9c16cf4fcf1caaa735c5b83220"
+    },
+    {
+      "path": "preparation/native-ambient-prefix-r61-candidate/candidate.diff",
+      "bytes": 3682,
+      "sha256": "9c160a562cf7ebee90bbef3ba194b05353eb9e1a15aaaa4c7bff8daed1bffcd8"
+    },
+    {
+      "path": "preparation/native-ambient-prefix-r61-candidate/manifest.json",
+      "bytes": 234,
+      "sha256": "4a35b3fc2cb955fa95ef36da8350f818f3ed5d74dfff9c906bc3d8e94578710f"
+    },
+    {
+      "path": "preparation/native-context-task-owner-r59-candidate/candidate.diff",
+      "bytes": 1068,
+      "sha256": "5c92d3c9509a44d567fea62c36b3ed8606e990a42fa89dd48fc50bb4a4eeaeef"
+    },
+    {
+      "path": "preparation/native-context-task-owner-r59-candidate/manifest.json",
+      "bytes": 234,
+      "sha256": "b3a0a80bbd9785588439cd734a7317eed6588cc2f5188731d05bd8200b68c90b"
+    },
+    {
+      "path": "preparation/native-node-work-r60-candidate/candidate.diff",
+      "bytes": 7483,
+      "sha256": "b28c9088df87d268c8bd8ea5b503d805ff7640da6e300d5df3bc541e430c13f4"
+    },
+    {
+      "path": "preparation/native-node-work-r60-candidate/manifest.json",
+      "bytes": 234,
+      "sha256": "d677c114202e6e2a50c569e4363bdaff1f379ca5516ef871d9904f66a6f00cc2"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/.github/workflows/openshell-rt01-qualification.yml",
+      "bytes": 5818,
+      "sha256": "9b40a68047695c2299d4b0f897bb10760da54c18c05107f20f43293e3a99ff72"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/README.md",
+      "bytes": 2683,
+      "sha256": "e2deb6b9cc37fed3d40165e05be630048ce2c111dc84be0e38fb6ca910840d01"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/STAGE-LIST.txt",
+      "bytes": 485,
+      "sha256": "d74b96cb687668c5108423fa49dba954c332e544fd0923670b982d364bbf076e"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/scripts/openshell-rt01/apply-patch.sh",
+      "bytes": 924,
+      "sha256": "96fb0fc8bf5c2080446688bd7a78273375df87c23036f113e71a1d3d35690268"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/scripts/openshell-rt01/fetch-and-apply.sh",
+      "bytes": 706,
+      "sha256": "e69fb84cdd22bcd9841514be8c677067f5fcecd6b634aa1cd4acd0f248ba47a4"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/scripts/openshell-rt01/verify-source-pins.py",
+      "bytes": 2222,
+      "sha256": "ce4511957a7482039b5c1361d645d30edd2f8e7bef1ed909bd42d4f99ae73a98"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/third_party/openshell/rt01/LICENSE",
+      "bytes": 11437,
+      "sha256": "c4be3acebe12527d7de689933d98329b4065f8c50cd929d0365584eafe6c20dd"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/third_party/openshell/rt01/NOTICE.md",
+      "bytes": 764,
+      "sha256": "73fdd0209290891b98fb8a1e8362323ef765689d31abd31fd0ef6eb2d05982a8"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/third_party/openshell/rt01/README.md",
+      "bytes": 831,
+      "sha256": "f4c3bcf9386f7b6f05c7a591cb2c2b50c769e0a1d829ae39ae7bb92a786c9db9"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/third_party/openshell/rt01/metadata.json",
+      "bytes": 1079,
+      "sha256": "3c561664d28b97b0f24101310669fdfc8b8d0af41ca912612173147205afc4b6"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/third_party/openshell/rt01/openshell-rt01.patch",
+      "bytes": 159438,
+      "sha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e"
+    },
+    {
+      "path": "preparation/openshell-rt01-repo-integration-candidate-r5/third_party/openshell/rt01/source-pins.json",
+      "bytes": 5834,
+      "sha256": "7c48738c8872151ace5cb6c217a98e8881c7199b853028482d45aff493aff6db"
+    },
+    {
+      "path": "preparation/pr42-body-current-20261030-1025.md",
+      "bytes": 8762,
+      "sha256": "7168f01ab0f1cfad7e8c090baa94cecccc7b7402798d2d0e88eb935ec5d95eef"
+    },
+    {
+      "path": "preparation/prepare-native-ambient-prefix-r61.py",
+      "bytes": 2415,
+      "sha256": "7eb32811579952baa5d6267c31d1bd53195b071876633bbc87ba11a151d76c86"
+    },
+    {
+      "path": "preparation/prepare-native-node-work-r60.py",
+      "bytes": 6026,
+      "sha256": "cc550db71de72857506961e90a058d58d7207a8602f3e24560a7a72ce7f43767"
+    },
+    {
+      "path": "preparation/prepare-v10-169-phase-pins-after-freeze.py",
+      "bytes": 5277,
+      "sha256": "bedf35936e03ba382b5b3fb8f40b60a3735d0cf220951229630b5fa8dbee8e8c"
+    },
+    {
+      "path": "preparation/preserve-r49.py",
+      "bytes": 3641,
+      "sha256": "178433b6f63ba8853c35e80283c096bfd446010e96cfa3f6c3c7b5ff415821e2"
+    },
+    {
+      "path": "preparation/publish-openshell-r5.py",
+      "bytes": 1624,
+      "sha256": "26afe8750c0d92e7561383cc95d891383ab6985cd5da2294a8622e05b22a968a"
+    },
+    {
+      "path": "preparation/qualification-capability-clock-r2/candidate.diff",
+      "bytes": 4241,
+      "sha256": "bdc948ba8cfdb52722b19dce9722e90a717995cdf4a783594e1a5634cfd33f74"
+    },
+    {
+      "path": "preparation/qualification-capability-clock-r2/parents.json",
+      "bytes": 265,
+      "sha256": "54c68f8c713c5b68bcb1bf12620c0eb12d56cfad312c6a0ff4872b7d25d9cbea"
+    },
+    {
+      "path": "preparation/qualification-capability-clock-r2/prior-attempt.json",
+      "bytes": 295,
+      "sha256": "7f2f2b35df26458f894bb16efa4214249ebf33aab429155a543cb47d62064ce0"
+    },
+    {
+      "path": "preparation/qualification-capability-clock-r2/publish.py",
+      "bytes": 3222,
+      "sha256": "be5464a4b35008cb4a28d455ddfb19ee1df269c771894b31c1d6440b701019c1"
+    },
+    {
+      "path": "preparation/qualification-capability-clock-r2/run.py",
+      "bytes": 2124,
+      "sha256": "ddf6aee16e423619a97cce3e5410e2295cc02bdac58ecb157a96199655aab4d2"
+    },
+    {
+      "path": "preparation/qualification-capability-clock-r2/server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+      "bytes": 8289,
+      "sha256": "fd7c4c0bc3344b90a53e8265f4465ecf501a35efe4c69278b0502cec557853ec"
+    },
+    {
+      "path": "preparation/qualification-capability-clock-r2/server/src/services/execution-sandbox/qualification.ts",
+      "bytes": 5033,
+      "sha256": "d72f6782c808570e9b80681f62e7c16f99088723b0725faa85b54200edb851bf"
+    },
+    {
+      "path": "preparation/root-continuation-20261030-1045.md",
+      "bytes": 13450,
+      "sha256": "d8ef4ae254407cc7c6f765a5def6387f058162ef2d10972d761988aeaf060d73"
+    },
+    {
+      "path": "preparation/root-continuation-latest.md",
+      "bytes": 13450,
+      "sha256": "d8ef4ae254407cc7c6f765a5def6387f058162ef2d10972d761988aeaf060d73"
+    },
+    {
+      "path": "preparation/run-final-workspace-aggregate-20261030.sh",
+      "bytes": 11037,
+      "sha256": "b6e67d94e4b704ef9cc1ba531d874987a17b06966f3fe308ed8089923b79a369"
+    },
+    {
+      "path": "preparation/snapshot-current-source-for-dependency-check.py",
+      "bytes": 7027,
+      "sha256": "df80e1647511fef43169a05eac7447309bc41223aadbbd9647e8ab246dec0003"
+    },
+    {
+      "path": "preparation/temporal9-node-work-r60-20261030-primary-accounting.txt",
+      "bytes": 32837,
+      "sha256": "3002a8a856bf7ca9fdec184df6df169006265906e907cf611c2f24754fa8f5af"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/README.md",
+      "bytes": 2709,
+      "sha256": "3acac688992f2570bbf25b86ab4f321388a475749e228740c282bc649d5dbf65"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/exact-stage-paths.txt",
+      "bytes": 626,
+      "sha256": "12a73e6f3f897998efffbd788face953fd45f88ba5827bc54dd99fb87526d5d0"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/packages/db/src/schema/execution_sandbox.ts",
+      "bytes": 5754,
+      "sha256": "5c6df7469351be5acbba9c9840af654aca3ecdc30ed387e5318d3da780365669"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/packages/shared/src/execution-sandbox.ts",
+      "bytes": 8324,
+      "sha256": "69593158e8da8526f3aba08b07e097b47dc3746a557aa0bcca9b71baf5e9e0c7"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 9983,
+      "sha256": "d926c2f76aa0a26dff2e8be5ddb9c5745cbd098439d15cf248c4e77957694ef5"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "bytes": 82722,
+      "sha256": "4bcfe10a76910f96cd453f2b637062a6d66470fb5dd22f156e4b1fad90db3246"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/server/src/services/execution-sandbox/backend.ts",
+      "bytes": 4999,
+      "sha256": "8bd76ca40d11972d535c3cccc19d326d67956d0f5a62f433686a63c27e16aa40"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/server/src/services/execution-sandbox/native-host-bridge.ts",
+      "bytes": 42088,
+      "sha256": "e87a358e070dfd7e8416dfef63e2bbbea6ee618ad1a20b57bfe6ff96fd8ed02d"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 18119,
+      "sha256": "9802867980a36ec962a18fe67e787930467c0334a6c66d2c1f5f7373033e9ff1"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/server/src/services/execution-sandbox/openshell-policy.ts",
+      "bytes": 4990,
+      "sha256": "f569638ba6ac9c3d3b40f08885f7cb1ce9d24319a3e80baffe23a3f07df64dae"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/server/src/services/execution-sandbox/qualification.ts",
+      "bytes": 5570,
+      "sha256": "6f7b4587636fc71a2b20f23e4fa43d0fb104d95c2ef1af306830c8ac81e016c3"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/files/server/src/services/execution-sandbox/sandbox-service.ts",
+      "bytes": 78482,
+      "sha256": "32a76df249dd6ecc41e07b44008ee0eb0cfeb7730c64253daf39d4bbe34c334e"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/patch-check.log",
+      "bytes": 343,
+      "sha256": "9cf57ee140855ee23bd28a600ae92701368f08378d2843913c155d759f0790ed"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/rustfmt.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/rustfmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/source-pins.json",
+      "bytes": 5083,
+      "sha256": "e2a6c92b6be1b357ed3e0da2634d9f04676682ff1c0b057b6648b3a77cab33fe"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check-r3/packages/db/src/schema/execution_sandbox.ts",
+      "bytes": 5754,
+      "sha256": "5c6df7469351be5acbba9c9840af654aca3ecdc30ed387e5318d3da780365669"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check-r3/packages/shared/src/execution-sandbox.ts",
+      "bytes": 8324,
+      "sha256": "69593158e8da8526f3aba08b07e097b47dc3746a557aa0bcca9b71baf5e9e0c7"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check-r3/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 9983,
+      "sha256": "d926c2f76aa0a26dff2e8be5ddb9c5745cbd098439d15cf248c4e77957694ef5"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check-r3/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "bytes": 82244,
+      "sha256": "c29b292ef50da4a671fd8d8b936af61251f3238a287628ba491543a5b13f9d02"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check-r3/server/src/services/execution-sandbox/backend.ts",
+      "bytes": 4999,
+      "sha256": "8bd76ca40d11972d535c3cccc19d326d67956d0f5a62f433686a63c27e16aa40"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check-r3/server/src/services/execution-sandbox/native-host-bridge.ts",
+      "bytes": 42088,
+      "sha256": "e87a358e070dfd7e8416dfef63e2bbbea6ee618ad1a20b57bfe6ff96fd8ed02d"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check-r3/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 17945,
+      "sha256": "e6aceba4193328ced5911b281ea205602fbc572476d46e7be30f3618ef193d75"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check-r3/server/src/services/execution-sandbox/qualification.ts",
+      "bytes": 5570,
+      "sha256": "6f7b4587636fc71a2b20f23e4fa43d0fb104d95c2ef1af306830c8ac81e016c3"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check-r3/server/src/services/execution-sandbox/sandbox-service.ts",
+      "bytes": 77959,
+      "sha256": "5dd7995fc3a3c43e03ecba9ed86bd072bbbc2cf1d7485c1e1eb399ceca64b091"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check/packages/db/src/schema/execution_sandbox.ts",
+      "bytes": 5754,
+      "sha256": "5c6df7469351be5acbba9c9840af654aca3ecdc30ed387e5318d3da780365669"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check/packages/shared/src/execution-sandbox.ts",
+      "bytes": 8324,
+      "sha256": "69593158e8da8526f3aba08b07e097b47dc3746a557aa0bcca9b71baf5e9e0c7"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 9983,
+      "sha256": "d926c2f76aa0a26dff2e8be5ddb9c5745cbd098439d15cf248c4e77957694ef5"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "bytes": 82244,
+      "sha256": "c29b292ef50da4a671fd8d8b936af61251f3238a287628ba491543a5b13f9d02"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check/server/src/services/execution-sandbox/backend.ts",
+      "bytes": 4999,
+      "sha256": "8bd76ca40d11972d535c3cccc19d326d67956d0f5a62f433686a63c27e16aa40"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check/server/src/services/execution-sandbox/native-host-bridge.ts",
+      "bytes": 42088,
+      "sha256": "e87a358e070dfd7e8416dfef63e2bbbea6ee618ad1a20b57bfe6ff96fd8ed02d"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 17945,
+      "sha256": "e6aceba4193328ced5911b281ea205602fbc572476d46e7be30f3618ef193d75"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check/server/src/services/execution-sandbox/qualification.ts",
+      "bytes": 5158,
+      "sha256": "a251f788b9dfa646a817c10c3d295e8c42d8aedc6043827faec35658264f621f"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-patch-check/server/src/services/execution-sandbox/sandbox-service.ts",
+      "bytes": 77959,
+      "sha256": "5dd7995fc3a3c43e03ecba9ed86bd072bbbc2cf1d7485c1e1eb399ceca64b091"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/v7-provision.patch",
+      "bytes": 47306,
+      "sha256": "85dab9b19d14ef47bcbbaf93ebb20bccc1b411d0524c60d85fcd57c9b9b5b3b2"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor-patch-check-r2/crates/openshell-cli/src/main.rs",
+      "bytes": 251316,
+      "sha256": "a1078147a61c75d09e94e81fd1949e9a66ed8d28d9cca834f1631caf3e09fabb"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor-patch-check-r2/crates/openshell-cli/src/run.rs",
+      "bytes": 281179,
+      "sha256": "6c19210fa5a234299504288cc427b04748105d4f700c0462aa82cfa71d4c7b8f"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor-patch-check-r2/crates/openshell-driver-docker/src/lib.rs",
+      "bytes": 245536,
+      "sha256": "065a71154500d70ce64bd7c19695838a111af2ba2e6a84173c22bd0bcd1fabb8"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor-patch-check-r2/crates/openshell-driver-docker/src/tests.rs",
+      "bytes": 124947,
+      "sha256": "8de01ef995648686e158c45f929fc37b6118f1f479fad218cc51e93e242f57f1"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor-patch-check/crates/openshell-cli/src/main.rs",
+      "bytes": 251218,
+      "sha256": "4277a161a04187bff23198227e4a4f59518a3b398449fa09dbfe9475a39d5512"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor-patch-check/crates/openshell-cli/src/run.rs",
+      "bytes": 281179,
+      "sha256": "6c19210fa5a234299504288cc427b04748105d4f700c0462aa82cfa71d4c7b8f"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor-patch-check/crates/openshell-driver-docker/src/lib.rs",
+      "bytes": 245549,
+      "sha256": "d4ebbb872bcc2c9e5178ea1f8322ef3e0939c769abcc7bc8ceddfa7b5bb12a46"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor-patch-check/crates/openshell-driver-docker/src/tests.rs",
+      "bytes": 124618,
+      "sha256": "cae67a9c0f79677ec9efdb2ec8a2f0e82ac537734298ec81773e1d0524919ca1"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor-provision.patch",
+      "bytes": 7465,
+      "sha256": "8edb3e7d125a727df9f7861d0ba7e29729826267d2ca76337a9bdd848089ae77"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor/crates/openshell-cli/src/main.rs",
+      "bytes": 251316,
+      "sha256": "a1078147a61c75d09e94e81fd1949e9a66ed8d28d9cca834f1631caf3e09fabb"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor/crates/openshell-cli/src/run.rs",
+      "bytes": 281179,
+      "sha256": "6c19210fa5a234299504288cc427b04748105d4f700c0462aa82cfa71d4c7b8f"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor/crates/openshell-driver-docker/src/lib.rs",
+      "bytes": 245536,
+      "sha256": "065a71154500d70ce64bd7c19695838a111af2ba2e6a84173c22bd0bcd1fabb8"
+    },
+    {
+      "path": "preparation/v10-149-native-provision-r1/vendor/crates/openshell-driver-docker/src/tests.rs",
+      "bytes": 124947,
+      "sha256": "8de01ef995648686e158c45f929fc37b6118f1f479fad218cc51e93e242f57f1"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/README.md",
+      "bytes": 2829,
+      "sha256": "93e84b2d6a6bb6733ee50a4797aeaf55143e5f6ad38a1275c20241d1c7ceaa9c"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/exact-stage-paths.txt",
+      "bytes": 585,
+      "sha256": "83d9bfb082a37ef502567318f1b0e4eb0c785b53312638cc37f0701d2bbc80b0"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/crates/openshell-driver-docker/README.md",
+      "bytes": 9629,
+      "sha256": "f9c6e1a907cf158e6bfd482afac81b48314b060a2f915b6ac030c1ce9b176e77"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/crates/openshell-driver-docker/src/lib.rs",
+      "bytes": 245509,
+      "sha256": "3dd31298d11d4cf64a501b3273a2a4f046275b82159491f32291cd0576511006"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/crates/openshell-driver-docker/src/tests.rs",
+      "bytes": 123548,
+      "sha256": "74899b94c834da80af54821900b481e684af354c6c5768a4761b6b393ad39cdc"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/crates/openshell-sandbox/src/main.rs",
+      "bytes": 105299,
+      "sha256": "d1b22c998ca47ac05effed0a5ae821c7f443c245a7497764c045d316692df647"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs",
+      "bytes": 35389,
+      "sha256": "42b19f9cfbdc67454275dcb1d95195ec5ebdaf59a63cba2442a68b34e876c577"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/deploy/v6/host-agent/journal.mjs",
+      "bytes": 1017,
+      "sha256": "7d67063084c9865c3b6fdcf00201cff85a2f54dd75c8caed31bd363361f9fe46"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/deploy/v6/host-agent/openshell.mjs",
+      "bytes": 110255,
+      "sha256": "884eb21707e945152a3890702be521b7f855305e3b93a9db1f8aee85c52cab9a"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/deploy/v6/host-agent/openshell.test.mjs",
+      "bytes": 82775,
+      "sha256": "cb7250a7b1d9ec9f270f9a7989f2eebd231378dd7440174f5d859f44bd267d3b"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/packages/shared/src/sandbox-host-contracts.ts",
+      "bytes": 8700,
+      "sha256": "b79e814565d54a4d0ef084531355eab012a7cbc50eea4edb7a5aa9388ad8b6ae"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/__tests__/agent-auth-jwt.test.ts",
+      "bytes": 24937,
+      "sha256": "52d3b1da64efc0e681e9b64257266acc8cb24dbcf8ee95718275973acf052b2b"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "bytes": 68121,
+      "sha256": "e881addf55c39f165573df0349a869c03a11fbce3a02f853fffa6dc7729dda88"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/__tests__/tool-gateway.test.ts",
+      "bytes": 231163,
+      "sha256": "4e36d85b34fb0753cfbee934f65bf5eb8abaaff62d2f2456dc207f40856aedd3"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/__tests__/v7-openshell-backend.test.ts",
+      "bytes": 7640,
+      "sha256": "07fb442a1c86f3678070922da568b6d0ba9c8d414b9989c8eccaf6760320affc"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "bytes": 75518,
+      "sha256": "590eae6bcb2620143bd8c53ecf45889b2b87b78bdfc2a9cf965f022487a4a7c6"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/__tests__/v7-sandbox-policy.test.ts",
+      "bytes": 20362,
+      "sha256": "2c1df9660f6233ccd0650e4a8d01dbb3ff34b6a710d2d18ee295dda5df7bc6e9"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/agent-auth-jwt.ts",
+      "bytes": 29634,
+      "sha256": "753c992e1007a1962f34ae7378610a118732f051f1c7f3657fff9f5f5357056d"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/services/execution-sandbox/native-host-bridge.ts",
+      "bytes": 38787,
+      "sha256": "4f554bb3676cae5fe1a265930a559d7121ee5ef341f534e6f6a4636c214616a8"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/services/execution-sandbox/openshell-backend.ts",
+      "bytes": 14677,
+      "sha256": "cb15177fa8c4051efbf205c887c5f49330c1820889fda7acc211a75c0653ee2a"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/services/execution-sandbox/policy-compiler.ts",
+      "bytes": 16372,
+      "sha256": "3a1deb2b514dab123eb0c764a3f98f5e6599a4e1e3a935d903c909287c7c16b3"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/files/server/src/services/tool-gateway.ts",
+      "bytes": 510584,
+      "sha256": "c1d339d683e14ceaa441f18ab9b72af9cfd7e1ac8fb3e9c4579fcd3ad69b6428"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/host-r10.patch",
+      "bytes": 50339,
+      "sha256": "ae885e778238311a56fc261e71ec267cf97ac884fdf877ae52076d2fd5193135"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/qualifier-r10.sh",
+      "bytes": 8253,
+      "sha256": "6836eeaad14b25fbab3ec49d9c892a501e2f8aa21d368d6ec6a21f3dce21e0af"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/r11/README.md",
+      "bytes": 823,
+      "sha256": "b9c0ecbb0262861e333a21717fd96e80d0945fbe0bb7797a512b84c42cfd2203"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/r11/exact-stage-paths.txt",
+      "bytes": 86,
+      "sha256": "e03930954e9ead1502050013818d1c4944ed11a72b55db4be5e17ded4cb9ed8d"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/r11/r11-rust-correction.patch",
+      "bytes": 2496,
+      "sha256": "611e330d2f09399f30e823c881afb34744318efe238145da686b07f5007d0afc"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/r11/source-pins.json",
+      "bytes": 5080,
+      "sha256": "7914fd7056b96bbdd50703c67ff604be24de21e0902db4eb8f49138258920076"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/source-pins.json",
+      "bytes": 5029,
+      "sha256": "022e9baf343b7be3bdcc1414935334682c6ca30a3e9216975be0ec154eed3805"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/source.patch",
+      "bytes": 78836,
+      "sha256": "1ed9b131034c407a48a543327a86c6ae2af0bdebfccf0441c7711b2e3561d8e3"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/static-checks.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/static-checks.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/v7-fixtures-r10.patch",
+      "bytes": 12377,
+      "sha256": "e16ad717251230dcafdba38172047bb58d852be2707804584a7c3721ef974c97"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/vendor-docker-disk.patch",
+      "bytes": 10880,
+      "sha256": "35d1daa37ef1b8b589a704c26ef9e1e3dc8dab0b9f5a8a541d3a1ab0c82e21c0"
+    },
+    {
+      "path": "preparation/v10-149-rt01-outer-disk-syscall-r12/vendor-syscall-probe.patch",
+      "bytes": 5240,
+      "sha256": "2b040fe4832331a5c63b1895b57e1e6bfcc2ff0efd67bf256ee5ec0014535267"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/README.md",
+      "bytes": 1110,
+      "sha256": "375818344f612e2ee9b2e725efde13269613bf1881d1c3df7c45659ed8cacc4d"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/SHA256SUMS",
+      "bytes": 1009,
+      "sha256": "58a58b3d6881a4e4afdd9d50c922d15cce6eaa5ad1334f36f2e13d91b95bb287"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/generator/build-v10-final-claim-reconciliation-r2.py",
+      "bytes": 40144,
+      "sha256": "9888e78948d92ac33f92b07a7f6f1505e4c4fb9ed11222e3ba5a58518cd029c0"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/generator/build-v10-final-claim-reconciliation-r3.py",
+      "bytes": 40144,
+      "sha256": "3733ce1e94949fb7f1f5eab7affa175ef41055c6de9a73726d47388621f03ae9"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/generator/extend-v10-final-claim-reconciliation-r3.py",
+      "bytes": 32673,
+      "sha256": "c2ff2d79a80dee03d3b9c4ca0244e6d6b0e8d1c22f475b5054ed10cf60f8577c"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/generator/portable-refresh-v10-final-claim-reconciliation-r2.py",
+      "bytes": 10822,
+      "sha256": "631da35d04ffd1948e8e79e64f589fa273a558f1acfabdd9363beccd17be3662"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/generator/portable-refresh-v10-final-claim-reconciliation-r3.py",
+      "bytes": 10822,
+      "sha256": "b9a0ff046c90e8d63872311a66346e1d1e2e3f93609d592f8f4b484a6ece0209"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/launch-claim-matrix.json",
+      "bytes": 1557058,
+      "sha256": "ce70199fe2c7a55b39a694462d8002309793eade0103f55e31125a8087707186"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/portable-source-map.json",
+      "bytes": 39245,
+      "sha256": "21fe47cafd3f484b31119b0a1ffd360872a73c8089970796d091a593132c63e9"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/predecessor-claim-crosswalk.json",
+      "bytes": 481268,
+      "sha256": "66e99eb994610f207e7a39c80af1ce1fce8342ca2a6560dea8f19d72c5f639d7"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/reconciliation.json",
+      "bytes": 3956035,
+      "sha256": "3fdc471d6e92a2a83588e216c363c4017121ca2d32e761331a9bcd08fcc16572"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/source-bundle.tar.gz",
+      "bytes": 4744912,
+      "sha256": "dc83b4a4b7a740b39831567fa5acc7993c74d902711f47eb1c91884617f56ef2"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-r3-20261030/v10-149-current-implementation-updates.json",
+      "bytes": 34321,
+      "sha256": "f8a96cd318103f0faed23200f5084c43c4a98d8ffaf29e7d98f5ca6e9b47fa1d"
+    }
+  ],
+  "privateCandidateArchiveSha256": "16670f704b3e95e4e57a203dba015745ad58abba434ac6d44e50aad808822298"
+}
