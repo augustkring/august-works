@@ -803,7 +803,8 @@ describePg("Workflow executor V1", () => {
 
   async function seedSubworkflowParent(child: Awaited<ReturnType<typeof seedPublishedManualWorkflow>>) {
     const svc = workflowService(db);
-    const actor = { principal: { type: "user" as const, userId: child.userId } };
+    const actor = { principal: { type: "user" as const, userId: child.userId },
+      authorizationActor: { type: "board" as const, source: "session" as const, userId: child.userId } };
     const parent = await svc.create(child.companyId, { name: "Pinned parent" }, actor);
     const draft = await svc.updateDraft(child.companyId, parent.id, { expectedRevisionId: parent.draftRevisionId!, graph: {
       version: 1, nodes: [
@@ -844,7 +845,11 @@ describePg("Workflow executor V1", () => {
     const restarted = workflowExecutorService(db);
     await restarted.recoverExpiredRuns(20, new Date(Date.now() + 2_000));
     await restarted.recoverExpiredRuns();
-    expect((await restarted.getRun(child.companyId, waiting.run.id))?.run.status).toBe("succeeded");
+    // Background recovery may finish the child, but it cannot read/copy the
+    // child's result under the initiator's authority. The current verified
+    // Human session resumes the same idempotent parent request.
+    expect((await restarted.getRun(child.companyId, waiting.run.id))?.run.status).toBe("waiting");
+    expect((await executor.startManualRun(child.companyId, parent.id, { input: { value: 1 } }, actor, "child-wait")).run.status).toBe("succeeded");
     const cancelled = await executor.startManualRun(child.companyId, parent.id, { input: { value: 2 } }, actor, "child-cancel");
     const cancelledChildId = cancelled.steps.find((item) => item.nodeId === "child")!.childWorkflowRunId!;
     expect((await executor.cancelRun(child.companyId, cancelled.run.id, { reason: "Stop parent and child" }, actor)).run.status).toBe("cancelled");

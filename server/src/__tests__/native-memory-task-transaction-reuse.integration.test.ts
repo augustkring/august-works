@@ -198,7 +198,9 @@ describe("Native Memory Task source checks preserve readers when reusing one tra
       eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalType, "user"),
       eq(companyMemberships.principalId, fixture.aliceUserId)));
     expect(await compareReader(fixture.aliceActor)).toBe(false);
-    expect(await comparePerTask(fixture.aliceActor)).toBe(false);
+    // The live Memory read denies the suspended current Human at its Native
+    // output-reader boundary with 403 rather than returning a boolean verdict.
+    await expect(comparePerTask(fixture.aliceActor)).rejects.toMatchObject({ status: 403 });
     await expect(memoryService(db).get(fixture.companyId, memoryId!,
       { principal: { type: "user", userId: fixture.aliceUserId } })).rejects.toMatchObject({ status: 403 });
   }, 180_000);

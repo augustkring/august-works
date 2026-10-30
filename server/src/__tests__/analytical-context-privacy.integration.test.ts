@@ -51,6 +51,8 @@ import {lockAnalyticalCompany,suppressAnalyticalSource} from "../services/analyt
 import {eraseExpiredAnalyticalLineage} from "../services/analytical-retention.js";
 import {analyticalPurpose,metricDefinition} from "./helpers/business-metric-fixture.js";
 import {PaperclipRunnerToolAuthority} from "../services/native-runtime/paperclip-runner-tool-authority.js";
+import {preparePlatformSkillAdmission} from "../services/platform-skill-admission.js";
+import {blenteraPlatformContractHashes} from "../services/tool-gateway.js";
 import {PaperclipControlPlanePort} from "../services/native-runtime/paperclip-control-plane-port.js";
 import type {PrpEvent} from "../vendor/paperclip-runner/index.js";
 import {executePaperclipNativeSession} from "../services/native-runtime/native-session-executor.js";
@@ -568,7 +570,13 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
    await fs.unlink(providerHome);await fs.rename(providerSaved,providerHome);
    await db.update(memoryJobs).set({updatedAt:new Date(Date.now()-61000)}).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
    await memoryJobService(db).tick({limit:100});
-   expect((await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`))).every(job=>job.status==="succeeded")).toBe(true);
+   const erasedAssetJobs=await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
+   const baseAssetJob=erasedAssetJobs.find(job=>job.jobKey===`runtime-asset-erasure:v1:${runId}`);
+   const sharedLegacyAssetJobs=erasedAssetJobs.filter(job=>job.jobKey!==`runtime-asset-erasure:v1:${runId}`);
+   expect(baseAssetJob).toMatchObject({status:"succeeded",errorCode:null});
+   expect(sharedLegacyAssetJobs).toHaveLength(1);
+   expect(sharedLegacyAssetJobs[0]).toMatchObject({status:"failed",errorCode:"memory_job_handler_failed"});
+   await expect(fs.stat(legacy.rootPath)).resolves.toBeDefined();
    await expect(fs.stat(runRoot)).rejects.toMatchObject({code:"ENOENT"});
    await expect(fs.stat(providerHome)).rejects.toMatchObject({code:"ENOENT"});
    await expect(fs.readFile(outsideUserData,"utf8")).resolves.toBe("Independent operator data");
@@ -578,7 +586,11 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
    expect(await readNativeRuntimeAssetText(legacy,32000,otherOwner)).toHaveLength(1);
    expect(await readNativeRuntimeAssetText(otherBundle,32000,otherOwner)).toHaveLength(1);
    expect(await fs.readFile(path.join(skillSource,"SKILL.md"),"utf8")).toBe("Synthetic retained procedure");
-   await purgeCompanyContent(db,otherCompany);await memoryJobService(db).tick({limit:100});
+   await purgeCompanyContent(db,otherCompany);
+   await db.update(memoryJobs).set({updatedAt:new Date(Date.now()-61000)}).where(and(eq(memoryJobs.companyId,companyId),eq(memoryJobs.status,"failed"),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
+   await memoryJobService(db).tick({limit:100});
+   const retriedAssetJobs=await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId,companyId),sql`${memoryJobs.sourceRefJson}->>'kind'='runtime_asset_erasure'`));
+   expect(retriedAssetJobs.every(job=>job.status==="succeeded"),JSON.stringify(retriedAssetJobs.map(({id,jobKey,attemptNumber,status,errorCode})=>({id,jobKey,attemptNumber,status,errorCode})))).toBe(true);
    await expect(fs.stat(otherBundle.rootPath)).rejects.toMatchObject({code:"ENOENT"});await expect(fs.stat(legacy.rootPath)).rejects.toMatchObject({code:"ENOENT"});
   }finally{
    if(priorHome===undefined)delete process.env.PAPERCLIP_HOME;else process.env.PAPERCLIP_HOME=priorHome;
@@ -690,6 +702,7 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  it("withholds copied prose when an original contributing task becomes hidden",async()=>{const f=await fixture();await f.capture();await copied();await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId})).rejects.toMatchObject({status:403});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId)))[0]!.body).toBe("Synthetic analytical answer");});
  it("reauthorizes the actual ancestor's analytical sources for a saved Native task",async()=>{
   const f=await fixture();await f.capture();
+  await preparePlatformSkillAdmission(db,{companyId,agentId,runId,responsibleUserId:userId,requireExisting:false},blenteraPlatformContractHashes());
   const saved=await new PaperclipRunnerToolAuthority(db,{companyId,agentId,issueId,runId}).execute({tool:"create_task",callId:"retained-source-draft",arguments:{idempotencyKey:"retained-source-draft",title:"Synthetic retained analytical work",status:"backlog"}}) as {task:{id:string}};
   await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId:saved.task.id})).resolves.toBeUndefined();
   await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
