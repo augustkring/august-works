@@ -1,6 +1,6 @@
 {
   "name": "v10-149-rt01-openshell-r5-1-identity-and-runtime-guards",
-  "status": "candidate-not-qualified",
+  "status": "source-qualified-physical-target-unqualified",
   "profileAdmission": "closed",
   "upstream": {
     "repository": "https://github.com/NVIDIA/OpenShell.git",
@@ -22,11 +22,15 @@
     "upstreamFile": "LICENSE"
   },
   "qualification": {
-    "status": "pending R5.1 remote rerun",
+    "status": "source-qualified",
     "previousR5Run": 41042077640,
     "previousR5Outcome": "cargo check passed; 13 exact tests passed; sandbox lib-test compilation failed at two libc::_exit unsafe calls",
-    "currentFocusedTests": "pending remote rerun after test-only safety annotations",
+    "currentFocusedTests": "15 passed; 0 failed; 0 ignored",
     "physicalDockerQuotaProbe": "not run",
-    "physicalSeccompHostProbe": "not run"
+    "physicalSeccompHostProbe": "not run",
+    "serverCliDriverSandboxCheck": "passed",
+    "qualifiedRepositoryHead": "af29df32d734c89310613df68051f389a2915c92",
+    "run": 41044296826,
+    "evidencePath": "doc/operations/aw-v10-evidence/openshell-rt01-runtime-guards-source-qualified-2026-10-30"
   }
 }
