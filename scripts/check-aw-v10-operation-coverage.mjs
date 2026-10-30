@@ -43,10 +43,7 @@ export function collectMountedUiSources(rootPath = root) {
   return mountedSources;
 }
 
-export async function checkOperationCoverage(rootPath = root) {
-  const inventory = JSON.parse(readFileSync(resolve(rootPath, "doc/operations/agent-native-ui-operation-coverage.json"), "utf8"));
-  createRequire(resolve(rootPath, "cli/package.json"))("tsx/esm/api").register();
-  const { AGENT_NATIVE_OPERATION_MANIFEST } = await import(pathToFileURL(resolve(rootPath, "server/src/services/agent-native-operation-manifest.ts")).href);
+export function collectMountedUiOperations(rootPath = root) {
   const mountedSources = collectMountedUiSources(rootPath);
   const apiClientVerbs = new Map();
   for (const source of mountedSources) {
@@ -65,6 +62,14 @@ export async function checkOperationCoverage(rootPath = root) {
     const calls = extractUiClientOperations(readFileSync(resolve(rootPath, source), "utf8"), source, apiClientVerbs);
     if (calls.length) mountedUiOperations.set(source, calls);
   }
+  return { mountedSources, mountedUiOperations };
+}
+
+export async function checkOperationCoverage(rootPath = root) {
+  const inventory = JSON.parse(readFileSync(resolve(rootPath, "doc/operations/agent-native-ui-operation-coverage.json"), "utf8"));
+  createRequire(resolve(rootPath, "cli/package.json"))("tsx/esm/api").register();
+  const { AGENT_NATIVE_OPERATION_MANIFEST } = await import(pathToFileURL(resolve(rootPath, "server/src/services/agent-native-operation-manifest.ts")).href);
+  const { mountedSources, mountedUiOperations } = collectMountedUiOperations(rootPath);
   const failures = validateOperationCoverage({
     manifestEntries: AGENT_NATIVE_OPERATION_MANIFEST,
     inventory,

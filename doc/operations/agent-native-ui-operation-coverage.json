@@ -72,6 +72,20 @@
       "sourceAnchor": "workflowsApi.publish",
       "owner": "server/src/services/workflows/workflow-service.ts",
       "reason": "The Human publish command commits a reviewed revision through workflowService; the Agent manifest operation only prepares a confirmation request and cannot publish."
+    },
+    {
+      "actionId": "member.responsibility.preflight",
+      "source": "ui/src/pages/CompanyAccess.tsx",
+      "sourceAnchor": "getMemberResponsibilityPreflight",
+      "owner": "server/src/routes/access.ts",
+      "reason": "This bounded read is Human-only: the current session Board actor and live member-management permission are checked at the route and again by the service, which returns only responsibilities the viewer can read; it neither grants access nor delays security suspension."
+    },
+    {
+      "actionId": "company.responsibility.contacts.read",
+      "source": "ui/src/pages/CompanySettings.tsx",
+      "sourceAnchor": "companiesApi.responsibilityContacts",
+      "owner": "server/src/routes/companies.ts",
+      "reason": "The current contact roster is a Human-only read: the route requires a current Human Board actor and company owner/admin authority before returning eligible same-company Human names and email for the existing chooser; no Agent read or tool is exposed."
     }
   ],
   "clientOperations": [
@@ -6562,7 +6576,7 @@
         "post:scope(companyId, principal)"
       ],
       "argumentsSignature": "companyId, principal, input",
-      "line": 112,
+      "line": 115,
       "occurrence": 0,
       "owner": "server/src/services/customer-feedback.ts",
       "classification": "HUMAN_ONLY",
@@ -6625,7 +6639,7 @@
         "postForm:path(company, feedback) + account(principal)"
       ],
       "argumentsSignature": "companyId, principal, receipt.id, image.requestKey, image.file",
-      "line": 120,
+      "line": 123,
       "occurrence": 0,
       "owner": "server/src/services/customer-feedback-images.ts",
       "classification": "HUMAN_ONLY",
@@ -30348,7 +30362,7 @@
         "patch:`/companies/${companyId}/members/${memberId}`"
       ],
       "argumentsSignature": "input.receipt.companyId, input.memberId, {\n        membershipRole: input.membershipRole,\n        status: input.status,\n      }",
-      "line": 249,
+      "line": 257,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "HUMAN_ONLY",
@@ -30456,7 +30470,7 @@
         "post:`/companies/${companyId}/workflow-coverages`"
       ],
       "argumentsSignature": "input.receipt.companyId, input.value, input.receipt.principalId, input.receipt.sessionId",
-      "line": 277,
+      "line": 285,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "HUMAN_ONLY",
@@ -30584,7 +30598,7 @@
         "delete:`/companies/${companyId}/workflow-coverages/${coverageId}`"
       ],
       "argumentsSignature": "input.receipt.companyId, input.coverageId, input.receipt.principalId, input.receipt.sessionId",
-      "line": 299,
+      "line": 307,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "HUMAN_ONLY",
@@ -30712,7 +30726,7 @@
         "post:`/companies/${companyId}/join-requests/${requestId}/approve`"
       ],
       "argumentsSignature": "input.receipt.companyId, input.requestId",
-      "line": 315,
+      "line": 323,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "DIRECT_AGENT",
@@ -30823,7 +30837,7 @@
         "post:`/companies/${companyId}/join-requests/${requestId}/reject`"
       ],
       "argumentsSignature": "input.receipt.companyId, input.requestId",
-      "line": 337,
+      "line": 345,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "DIRECT_AGENT",
@@ -30934,7 +30948,7 @@
         "post:`/companies/${companyId}/members/${memberId}/archive`"
       ],
       "argumentsSignature": "input.receipt.companyId, input.memberId, {\n        reassignment,\n        routineResponsibleUserId: input.routineTarget.startsWith(\"user:\")\n          ? input.routineTarget.slice(\"user:\".length)\n          : null,\n      }",
-      "line": 401,
+      "line": 446,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "HUMAN_ONLY",
@@ -31042,7 +31056,7 @@
         "post:`/companies/${companyId}/members/${memberId}/security-suspend`"
       ],
       "argumentsSignature": "input.receipt.companyId, input.memberId, { reasonCode: input.reasonCode }, input.receipt.principalId, input.receipt.sessionId",
-      "line": 449,
+      "line": 494,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "HUMAN_ONLY",
@@ -33551,57 +33565,77 @@
       "source": "ui/src/pages/CompanySettings.tsx",
       "clientCall": "companiesApi.updateResponsibilityContacts",
       "apiVerb": "write",
-      "pathSignature": "selectedCompanyId!",
+      "pathSignature": "input.companyId",
       "routeSignatures": [
         "patch:`/companies/${companyId}/responsibility-contacts`"
       ],
-      "argumentsSignature": "selectedCompanyId!, {\n      securityContactUserId: securityContactUserId || null,\n      supportIncidentContactUserId: supportIncidentContactUserId || null,\n    }",
-      "line": 88,
+      "argumentsSignature": "input.companyId, {\n          securityContactUserId: input.securityContactUserId || null,\n          supportIncidentContactUserId: input.supportIncidentContactUserId || null,\n        }, input.principalId, input.localImplicit ? null : input.sessionId",
+      "line": 174,
       "occurrence": 0,
       "owner": "server/src/routes/companies.ts",
-      "classification": "AGENT_ACCESSIBLE_UNMAPPED",
+      "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "The route permits same-company CEO Agents through the defaults-admin gate, but this API call has no Agent tool or existing API manifest mapping; it records reachability without adding a capability.",
+      "reviewRationale": "V10 §17.2 makes security/support contacts accountable responsible objects, and §17.7 says no generic Agent may reassign material ownership by itself. This endpoint now requires a current Human Board session plus current company owner/admin authority; company-defaults permission alone is insufficient.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 1495,
-            "claim": "The mounted route handles responsibility-contact updates."
+            "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+            "line": 2673,
+            "claim": "V10 §17.2 lists security contact as an accountable responsible object."
+          },
+          {
+            "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+            "line": 2674,
+            "claim": "V10 §17.2 lists support/incident contact as an accountable responsible object."
+          },
+          {
+            "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+            "line": 2753,
+            "claim": "No generic agent is authorized to reassign material ownership by itself."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1497,
-            "claim": "The route invokes the company defaults-admin gate."
+            "line": 1514,
+            "claim": "The PATCH handler checks the current Human company owner/admin gate before eligibility validation or persistence."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 428,
-            "claim": "The defaults-admin helper delegates to same-company CEO Agent or Board authorization."
+            "line": 439,
+            "claim": "The dedicated contact gate denies Agent actors and non-session Board credentials before company-defaults authorization."
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 450,
+            "claim": "After Human identity/account checks, the route applies current company-defaults owner/admin authorization."
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 431,
-            "claim": "The additional owner/admin membership restriction applies to Board actors."
+            "claim": "The underlying company gate requires active owner/admin membership unless the existing local-trusted or instance-admin exception applies."
           },
           {
-            "path": "server/src/services/authorization.ts",
-            "line": 131,
-            "claim": "A same-company CEO Agent passes the role check."
+            "path": "server/src/routes/companies.ts",
+            "line": 444,
+            "claim": "The optional expected-user header is checked against the current named Human or explicit local-board identity."
           },
           {
-            "path": "server/src/services/company-responsibility-contacts.ts",
-            "line": 23,
-            "claim": "Selected contacts must be active verified Human company members."
+            "path": "server/src/routes/companies.ts",
+            "line": 447,
+            "claim": "The optional expected-session header is checked against the current session."
           }
         ]
       },
-      "materialityRationale": "The route updates company responsibility contact labels; the source explicitly keeps those labels separate from permissions.",
+      "materialityRationale": "These fields assign the accountable security and support/incident contact, the responsible objects named by V10 §17.2; the labels do not grant access, but changing those assignments is material ownership work.",
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1501,
-          "claim": "The route persists the company responsibility contact identifiers."
+          "line": 1518,
+          "claim": "The route persists only the security and support contact labels."
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 1522,
+          "claim": "The audit event is scoped to responsibility-contact changes."
         },
         {
           "path": "server/src/services/company-responsibility-contacts.ts",
@@ -33619,7 +33653,7 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, data",
-      "line": 108,
+      "line": 204,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "HUMAN_ONLY",
@@ -33677,7 +33711,7 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, {\n        requireBoardApprovalForNewAgents: requireApproval\n      }",
-      "line": 116,
+      "line": 212,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "HUMAN_ONLY",
@@ -33735,7 +33769,7 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, { interactionResolverGovernance: next }",
-      "line": 126,
+      "line": 222,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "HUMAN_ONLY",
@@ -33793,7 +33827,7 @@
         "postForm:`/companies/${companyId}/logo`"
       ],
       "argumentsSignature": "selectedCompanyId!, file",
-      "line": 150,
+      "line": 246,
       "occurrence": 0,
       "owner": "server/src/routes/assets.ts",
       "classification": "DIRECT_AGENT",
@@ -33854,7 +33888,7 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, { logoAssetId: asset.assetId }",
-      "line": 152,
+      "line": 248,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "DIRECT_AGENT",
@@ -33910,7 +33944,7 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, { logoAssetId: null }",
-      "line": 160,
+      "line": 256,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "DIRECT_AGENT",
@@ -33966,7 +34000,7 @@
         "post:`/companies/${companyId}/archive`"
       ],
       "argumentsSignature": "companyId",
-      "line": 181,
+      "line": 277,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "HUMAN_ONLY",
@@ -38188,7 +38222,7 @@
         "post:`/internal/customer-feedback/${companyId}/${request.id}/triage?expectedUserId=${encodeURIComponent(principal)}`"
       ],
       "argumentsSignature": "`/internal/customer-feedback/${companyId}/${request.id}/triage?expectedUserId=${encodeURIComponent(principal)}`, request.input",
-      "line": 130,
+      "line": 151,
       "occurrence": 0,
       "owner": "server/src/services/customer-feedback.ts",
       "classification": "OPERATOR_ONLY",
@@ -44496,6 +44530,114 @@
           "path": "server/src/services/customer-feedback.ts",
           "line": 603,
           "claim": "async followUp("
+        }
+      ]
+    },
+    {
+      "source": "ui/src/pages/MyFeedback.tsx",
+      "clientCall": "customerFeedbackApi.withdrawExperienceMeasure",
+      "apiVerb": "write",
+      "pathSignature": "selectedCompanyId!",
+      "routeSignatures": [
+        "post:`${report(companyId, id)}/experience-measure/withdraw?expectedUserId=${encodeURIComponent(principal)}`"
+      ],
+      "argumentsSignature": "selectedCompanyId!, principal!, selected, withdrawKey",
+      "line": 238,
+      "occurrence": 0,
+      "owner": "server/src/services/customer-feedback.ts",
+      "classification": "HUMAN_ONLY",
+      "materiality": "launchcritical",
+      "reviewRationale": "The route requires a Board actor and binds expectedUserId to that principal (including the explicit local-board identity for local-implicit sessions), then checks company access. The service rechecks current source ownership for the same principal. This is a submitter-controlled privacy action; no Agent operation is established.",
+      "authorityEvidence": {
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 49,
+            "claim": "identity(req) asserts a Board actor before the withdrawal handler continues."
+          },
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 50,
+            "claim": "identity(req) maps local-implicit Board session to the explicit local-board principal; this is not a persisted verified user."
+          },
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 53,
+            "claim": "identity(req) rejects expectedUserId when it does not match the current Board principal."
+          },
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 60,
+            "claim": "context(req) rechecks Board identity before resolving company context."
+          },
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 66,
+            "claim": "context(req) requires current company access."
+          },
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 239,
+            "claim": "POST withdrawal endpoint is bound to companyId and feedbackId path parameters."
+          },
+          {
+            "path": "server/src/routes/customer-feedback.ts",
+            "line": 241,
+            "claim": "withdrawal handler passes current actor, checked company context, feedback ID and body to the canonical service."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 108,
+            "claim": "service derives the current Human principal from the actor."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 118,
+            "claim": "service rechecks active company membership for persisted Human actors."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 242,
+            "claim": "owned feedback lookup is tied to the current principal and company."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 261,
+            "claim": "owned feedback query requires customer_feedback_access.user_id to equal the current principal."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 850,
+            "claim": "withdrawExperienceMeasure is the canonical service owner for this action."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 855,
+            "claim": "withdrawal locks and rechecks current source access inside its transaction."
+          },
+          {
+            "path": "server/src/services/customer-feedback.ts",
+            "line": 856,
+            "claim": "withdrawal resolves only the current principal’s owned feedback row."
+          }
+        ]
+      },
+      "materialityRationale": "The mutation removes consented personal satisfaction/effort values and records a content-free withdrawal marker; it changes privacy/consent state.",
+      "materialityEvidence": [
+        {
+          "path": "server/src/services/customer-feedback.ts",
+          "line": 870,
+          "claim": "withdrawal deletes the scoped rating sidecar values."
+        },
+        {
+          "path": "server/src/services/customer-feedback.ts",
+          "line": 875,
+          "claim": "withdrawal appends a content-free marker rather than restoring rating values."
+        },
+        {
+          "path": "server/src/services/customer-feedback.ts",
+          "line": 887,
+          "claim": "withdrawal records a source-owner audit event."
         }
       ]
     },
