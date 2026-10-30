@@ -1,0 +1,3 @@
+Member removal now has a separate, read-only responsibility and credential preview. It checks the current verified Human manager and target member, uses each source owner for visibility, and always identifies its bounded coverage. Access removal remains available while the preview is pending. Query isolation and response guards prevent stale private counts after a session change.
+
+Validation: targeted PostgreSQL2/2 and UI2/2, full CompanyAccess UI36/36, server/UI typechecks, Oxc and exact mirror/output restoration passed. The archive preserves current seven-file source copies, private deltas, hashes and logs; it does not claim complete production population or Human qualification.

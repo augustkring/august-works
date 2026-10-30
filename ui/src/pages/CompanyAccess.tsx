@@ -10,7 +10,7 @@ import {
 } from "@paperclipai/shared";
 import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Shield, ShieldCheck, Trash2, UserPlus } from "lucide-react";
-import { accessApi, type CompanyMember } from "@/api/access";
+import { accessApi, type CompanyMember, type MemberContinuityPreflight } from "@/api/access";
 import { workflowsApi } from "@/api/workflows";
 import { useAccountIdentity } from "@/api/companies-query";
 import { useV9PrivateReadAuthority } from "@/hooks/useV9PrivateReadAuthority";
@@ -49,6 +49,14 @@ import { useSecondTick } from "@/hooks/useSecondTick";
 const reassignmentIssueStatuses = "backlog,todo,in_progress,in_review,blocked,failed,timed_out";
 type EditableMemberStatus = "pending" | "active" | "suspended";
 type SecuritySuspensionReasonCode = SecuritySuspendCompanyMember["reasonCode"];
+type MemberPreflightEnvelope = {
+  result: MemberContinuityPreflight;
+  companyId: string;
+  memberId: string;
+  principalId: string;
+  sessionId: string;
+  authorityEpoch: number;
+};
 
 export function CompanyAccess() {
   const { t } = useTranslation("experience");
@@ -384,6 +392,43 @@ export function CompanyAccess() {
     queryFn: () => routinesApi.list(selectedCompanyId!),
     enabled: !!selectedCompanyId && !!removingMember,
   });
+  const memberPreflightReadReady = Boolean(selectedCompanyId && removingMember && identity.userId &&
+    !identity.localImplicit && currentAccount.settled && currentAccount.sessionId && authority.readReady &&
+    authority.canRead() && membersQuery.data?.access.canManageMembers &&
+    hasCurrentV9Session(queryClient, identity.userId, currentAccount.sessionId));
+  const continuityPreflightQuery = useQuery({
+    queryKey: ["access", "member-responsibility-preflight", selectedCompanyId ?? "", identity.userId ?? "",
+      currentAccount.sessionId ?? "", authority.epoch, removingMember?.id ?? ""],
+    queryFn: async ({ signal }): Promise<MemberPreflightEnvelope> => {
+      if (!memberPreflightReadReady || !identity.userId || !currentAccount.sessionId || !removingMember)
+        throw new Error("Current Human member-management access is unavailable");
+      const receipt = captureAccess();
+      if (!receipt.isCurrent() || !receipt.sessionId || !receipt.isOriginalSessionCurrent() ||
+        !hasCurrentV9Session(queryClient, identity.userId, currentAccount.sessionId))
+        throw new Error("Current account access changed");
+      const memberId = removingMember.id;
+      const result = await accessApi.getMemberResponsibilityPreflight(receipt.companyId, memberId,
+        identity.userId, currentAccount.sessionId, { signal });
+      signal.throwIfAborted();
+      if (!receipt.isCurrent() || !receipt.isOriginalSessionCurrent() || !authority.canRead() ||
+        selectedCompanyId !== receipt.companyId || removingMemberId !== memberId ||
+        !hasCurrentV9Session(queryClient, identity.userId, currentAccount.sessionId))
+        throw new Error("Current Human member-management access changed");
+      return { result, companyId: receipt.companyId, memberId, principalId: identity.userId,
+        sessionId: currentAccount.sessionId, authorityEpoch: authority.epoch };
+    },
+    enabled: memberPreflightReadReady,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+  const preflightEnvelope = continuityPreflightQuery.data;
+  const continuityPreflightData = preflightEnvelope && memberPreflightReadReady &&
+    preflightEnvelope.companyId === selectedCompanyId && preflightEnvelope.memberId === removingMember?.id &&
+    preflightEnvelope.principalId === identity.userId && preflightEnvelope.sessionId === currentAccount.sessionId &&
+    preflightEnvelope.authorityEpoch === authority.epoch && authority.canRead() &&
+    hasCurrentV9Session(queryClient, preflightEnvelope.principalId, preflightEnvelope.sessionId)
+    ? preflightEnvelope.result : undefined;
   const ownedRoutines = (routinesQuery.data ?? []).filter(
     (routine) => ["active", "paused"].includes(routine.status) && routine.responsibleUserId === removingMember?.principalId,
   );
@@ -1062,6 +1107,36 @@ export function CompanyAccess() {
                   {privateOwnedRoutineCount} private conversation routine{privateOwnedRoutineCount === 1 ? "" : "s"} will keep their original responsible user. Active private routines will be paused; resolve the owner action through a supported private handoff.
                 </div>
               ) : null}
+              <div className="space-y-2 rounded-lg border border-border p-3" data-testid="member-continuity-preflight">
+                <div className="text-sm font-medium">Responsibility and credential preflight</div>
+                {continuityPreflightQuery.isLoading ? (
+                  <div className="text-sm text-muted-foreground">Checking currently readable responsibilities…</div>
+                ) : null}
+                {continuityPreflightQuery.isError || (preflightEnvelope && !continuityPreflightData) ||
+                  continuityPreflightData?.freshness === "unknown" ? (
+                  <div className="text-sm text-muted-foreground">
+                    Some responsibilities could not be fully verified. This preview does not delay access removal; review remaining owner actions afterward.
+                  </div>
+                ) : null}
+                {continuityPreflightData?.items.length ? (
+                  <div className="space-y-1">
+                    {continuityPreflightData.items.map((item) => (
+                      <div key={`${item.kind}:${item.classification}`} className="flex flex-wrap justify-between gap-2 text-sm">
+                        <span>{item.kind.replaceAll("_", " ")}</span>
+                        <span className="text-muted-foreground">
+                          {item.count} · {item.classification.replaceAll("_", " ").toLowerCase()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {continuityPreflightData && continuityPreflightData.items.length === 0 && continuityPreflightData.freshness === "current" ? (
+                  <div className="text-sm text-muted-foreground">No additional currently readable responsibilities were found.</div>
+                ) : null}
+                <div className="text-xs text-muted-foreground">
+                  Counts include only objects the current manager can read. They do not grant access. Security suspension revokes access immediately without waiting for this preview.
+                </div>
+              </div>
               {routinesQuery.isError ? (
                 <div className="text-sm text-destructive">Could not verify routine responsibility. Retry before removing this member.</div>
               ) : null}

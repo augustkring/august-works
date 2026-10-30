@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { agents, authUsers, boardApiKeys, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, principalPermissionGrants, supportCases } from "@paperclipai/db";
+import { agentApiKeys, agents, authUsers, boardApiKeys, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, principalPermissionGrants, supportCases } from "@paperclipai/db";
 import { updateCompanySchema } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { RESPONSIBILITY_SCAN_KINDS, runResponsibilityScanOnce, type NativeResponsibilityMetadataSource } from "../services/experience/private-0565/responsibility-scan.js";
@@ -18,6 +18,7 @@ import { accessService } from "../services/access.js";
 import { authorizationService } from "../services/authorization.js";
 import { companyResponsibilityContactsService } from "../services/company-responsibility-contacts.js";
 import { companyService } from "../services/companies.js";
+import { readMemberContinuityPreflight } from "../services/experience/private-0565/member-continuity-preflight.js";
 
 const supportDataPolicy = { schemaVersion: 1, policyVersion: "test.support.0565.v1", recipientName: "Test Support",
   privacyNoticeUrl: "https://example.test/privacy", processingRegion: "test region",
@@ -438,6 +439,109 @@ describe("PRIVATE 0565 responsibility scan store", () => {
     expect(JSON.stringify(hidden)).not.toContain(openerId);
   });
 
+  it("preflights a departing member through current native visibility and hides unauthorized support-case existence", async () => {
+    const companyId = await company(), now = new Date();
+    const managerId = `preflight-manager-${randomUUID()}`, targetId = `preflight-target-${randomUUID()}`;
+    await db.insert(authUsers).values([managerId, targetId].map(id => ({ id, name: id,
+      email: `${id}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now })));
+    const [manager, target] = await db.insert(companyMemberships).values([
+      { companyId, principalType: "user", principalId: managerId, status: "active", membershipRole: "owner" },
+      { companyId, principalType: "user", principalId: targetId, status: "active", membershipRole: "operator" },
+    ]).returning();
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+      companyId, principalType: "user" as const, principalId: managerId, ...grant,
+    })));
+    await db.update(companies).set({ securityContactUserId: targetId }).where(eq(companies.id, companyId));
+    const lastMessageAt = new Date(now.getTime() + 60_000);
+    const [privateCase] = await db.insert(supportCases).values({ companyId, openedByUserId: targetId,
+      subject: "private preflight case canary", description: "private preflight details canary",
+      customerStatus: "RECEIVED", dataPolicy: supportDataPolicy as never, lastMessageAt,
+      expiresAt: new Date(lastMessageAt.getTime() + 30 * 86_400_000),
+    }).returning({ id: supportCases.id });
+
+    const actor = { type: "board" as const, source: "session" as const, userId: managerId,
+      isInstanceAdmin: false, ignoreInstanceAdmin: true };
+    const [visibleCredentialAgent] = await db.insert(agents).values({ companyId, name: "visible credential fixture", role: "general", status: "idle" })
+      .returning({ id: agents.id });
+    const [visibleCredential] = await db.insert(agentApiKeys).values({ companyId, agentId: visibleCredentialAgent!.id,
+      responsibleUserId: targetId, name: "private credential name canary", keyHash: "private-key-hash-canary" })
+      .returning({ id: agentApiKeys.id });
+    const visibleCredentialResult = await readMemberContinuityPreflight({ db, actor, companyId, memberId: target!.id, operatorUserIds: [] });
+    expect(visibleCredentialResult.items).toEqual(expect.arrayContaining([expect.objectContaining({
+      kind: "credentials", classification: "MUST_REVOKE", count: 1,
+    })]));
+    const visibleCredentialJson = JSON.stringify(visibleCredentialResult);
+    for (const secret of [visibleCredential!.id, "private credential name canary", "private-key-hash-canary"])
+      expect(visibleCredentialJson).not.toContain(secret);
+    await db.update(agentApiKeys).set({ revokedAt: now }).where(eq(agentApiKeys.id, visibleCredential!.id));
+
+    const result = await readMemberContinuityPreflight({ db, actor, companyId, memberId: target!.id, operatorUserIds: [] });
+    expect(result).toMatchObject({ freshness: "unknown", coverage: "currently_authorized_subset" });
+    expect(result.items).toEqual([expect.objectContaining({ kind: "security_contact", classification: "MUST_REASSIGN", count: 1 })]);
+    const visiblePayload = (value: typeof result) => ({ freshness: value.freshness, coverage: value.coverage, items: value.items });
+    const serialized = JSON.stringify(result);
+    for (const hidden of [targetId, privateCase!.id, "private preflight case canary", "private preflight details canary"])
+      expect(serialized).not.toContain(hidden);
+
+    const [credentialAgent] = await db.insert(agents).values({ companyId, name: "inaccessible credential fixture", role: "general", status: "idle" })
+      .returning({ id: agents.id });
+    const hiddenCases = Array.from({ length: 40 }, (_, index) => ({
+      companyId, openedByUserId: targetId, subject: `private case canary ${index}`, description: "private case body canary",
+      customerStatus: "RECEIVED" as const, dataPolicy: supportDataPolicy as never, lastMessageAt,
+      expiresAt: new Date(lastMessageAt.getTime() + 30 * 86_400_000),
+    }));
+    const addedCases = await db.insert(supportCases).values(hiddenCases).returning({ id: supportCases.id });
+    const hiddenCredentials = Array.from({ length: 41 }, (_, index) => ({ companyId, agentId: credentialAgent!.id,
+      responsibleUserId: targetId, name: `private key ${index}`, keyHash: randomUUID() }));
+    const addedKeys = await db.insert(agentApiKeys).values(hiddenCredentials).returning({ id: agentApiKeys.id });
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, companyId),
+      eq(principalPermissionGrants.principalType, "user"), eq(principalPermissionGrants.principalId, managerId),
+      eq(principalPermissionGrants.permissionKey, "agents:configure")));
+    const afterHiddenOverflow = await readMemberContinuityPreflight({ db, actor, companyId, memberId: target!.id, operatorUserIds: [] });
+    expect(visiblePayload(afterHiddenOverflow)).toEqual(visiblePayload(result));
+    const hiddenCanaries = JSON.stringify(afterHiddenOverflow);
+    for (const hidden of [...addedCases.map(row => row.id), ...addedKeys.map(row => row.id), ...hiddenCases.map(row => row.subject)])
+      expect(hiddenCanaries).not.toContain(hidden);
+
+    // Suspend the actual viewer during candidate enumeration. No partially
+    // collected preview may be returned after current authority is revoked.
+    let revoked = false;
+    const wrapQuery = (query: any, revokeBeforeAwait: boolean): any => new Proxy(query, {
+      get(target, property) {
+        if (property === "then") return (onFulfilled: unknown, onRejected: unknown) => {
+          const execute = () => Reflect.get(target, "then").call(target, onFulfilled, onRejected);
+          if (revokeBeforeAwait && !revoked) {
+            revoked = true;
+          return db.update(companyMemberships).set({ status: "suspended" }).where(and(
+            eq(companyMemberships.companyId, companyId), eq(companyMemberships.id, manager!.id),
+            eq(companyMemberships.principalId, managerId), eq(companyMemberships.status, "active"),
+          )).then(execute);
+          }
+          return execute();
+        };
+        const value = Reflect.get(target, property, target);
+        if (typeof value !== "function") return value;
+        return (...args: unknown[]) => wrapQuery(Reflect.apply(value, target, args),
+          revokeBeforeAwait || property === "from" && args[0] === supportCases);
+      },
+    });
+    const revokingDb = new Proxy(db, { get(target, property) {
+      const value = Reflect.get(target, property, target);
+      if (property === "select") return (...args: unknown[]) => wrapQuery(Reflect.apply(value, target, args), false);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) as typeof db;
+    await expect(readMemberContinuityPreflight({ db: revokingDb, actor, companyId, memberId: target!.id, operatorUserIds: [] }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(revoked).toBe(true);
+    const [revokedViewer] = await db.select({ status: companyMemberships.status }).from(companyMemberships)
+      .where(eq(companyMemberships.id, manager!.id)).limit(1);
+    expect(revokedViewer?.status).toBe("suspended");
+    await expect(readMemberContinuityPreflight({ db,
+      actor: { type: "board", source: "session", userId: targetId }, companyId, memberId: target!.id, operatorUserIds: [] }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(manager!.principalId).toBe(managerId);
+  });
+
   it("rejects duplicate/missing per-kind native readers instead of rendering partial coverage", () => {
     const ports = Object.fromEntries(RESPONSIBILITY_SCAN_KINDS.map(kind => [kind, async () => ({ state: "hidden" as const })]));
     const bound = bindNativeResponsibilityReaders(ports as Parameters<typeof bindNativeResponsibilityReaders>[0]);
@@ -484,6 +588,12 @@ describe("PRIVATE 0565 responsibility scan store", () => {
     ]);
     await db.update(companies).set({ defaultResponsibleUserId: defaultHolderId, securityContactUserId: securityHolderId,
       supportIncidentContactUserId: memberId }).where(eq(companies.id, companyId));
+    const [agent] = await db.insert(agents).values({ companyId, name: "member-owned credential agent", role: "general", status: "idle" })
+      .returning({ id: agents.id });
+    const [memberCredential] = await db.insert(agentApiKeys).values({ companyId, agentId: agent!.id,
+      responsibleUserId: memberId, name: "member credential fixture", keyHash: randomUUID() }).returning({ id: agentApiKeys.id });
+    const [retainedCredential] = await db.insert(agentApiKeys).values({ companyId, agentId: agent!.id,
+      responsibleUserId: defaultHolderId, name: "other member credential fixture", keyHash: randomUUID() }).returning({ id: agentApiKeys.id });
     await db.execute(sql`alter table responsibility_scan_runs rename to responsibility_scan_runs_offboard_failure`);
     try {
       await expect(accessService(db).updateMember(companyId, member!.id, { status: "suspended" }, ownerId)).resolves.toMatchObject({ status: "suspended" });
@@ -495,6 +605,12 @@ describe("PRIVATE 0565 responsibility scan store", () => {
         .from(companies).where(eq(companies.id, companyId));
       expect(companyRow).toEqual({ defaultResponsibleUserId: defaultHolderId, securityContactUserId: securityHolderId,
         supportIncidentContactUserId: null });
+      const [revokedCredential] = await db.select({ revokedAt: agentApiKeys.revokedAt }).from(agentApiKeys)
+        .where(eq(agentApiKeys.id, memberCredential!.id)).limit(1);
+      const [retained] = await db.select({ revokedAt: agentApiKeys.revokedAt }).from(agentApiKeys)
+        .where(eq(agentApiKeys.id, retainedCredential!.id)).limit(1);
+      expect(revokedCredential?.revokedAt).toBeInstanceOf(Date);
+      expect(retained?.revokedAt).toBeNull();
       const denied = await authorizationService(db).decide({ actor: responsibilityPolicySubject(memberId),
         action: "company_scope:read", resource: { type: "company", companyId } });
       expect(denied.allowed).toBe(false);

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
+  agentApiKeys,
   companyMemberships,
   companies,
   humanWorkflowCoverages,
@@ -197,6 +198,12 @@ export function accessService(db: Db) {
     userId: string,
     now: Date,
   ) {
+    // Agent credentials are company-scoped and bind a responsible Human. Once
+    // that membership is withdrawn they are irreversibly fenced in the same
+    // transaction; a later membership restoration cannot revive old tokens.
+    await tx.update(agentApiKeys).set({ revokedAt: now }).where(and(
+      eq(agentApiKeys.companyId, companyId), eq(agentApiKeys.responsibleUserId, userId), isNull(agentApiKeys.revokedAt),
+    ));
     const departingAudienceRows = await tx.select({
       grantId: connectionGrantMembers.grantId,
     }).from(connectionGrantMembers).where(and(

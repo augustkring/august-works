@@ -157,6 +157,19 @@ export type CompanyUserDirectoryResponse = {
   users: CompanyUserDirectoryEntry[];
 };
 
+export type MemberContinuityPreflight = {
+  generatedAt: string;
+  freshness: "current" | "unknown";
+  coverage: "currently_authorized_subset";
+  items: Array<{
+    kind: string;
+    classification: "MUST_REASSIGN" | "CAN_FALL_BACK_TO_AUTHORIZED_GROUP" | "CAN_BE_UNOWNED_TEMPORARILY" | "MUST_REVOKE";
+    count: number;
+    sourceVersion: string;
+    freshness: "current";
+  }>;
+};
+
 export type CompanyInviteRecord = {
   id: string;
   companyId: string | null;
@@ -347,6 +360,21 @@ export const accessApi = {
 
   listUserDirectory: (companyId: string) =>
     api.get<CompanyUserDirectoryResponse>(`/companies/${companyId}/user-directory`),
+
+  getMemberResponsibilityPreflight: (companyId: string, memberId: string, expectedUserId: string,
+    expectedSessionId: string, options?: RequestOptions) => {
+    const path = `/companies/${companyId}/members/${memberId}/responsibility-preflight`;
+    detachInflightGet(path);
+    return api.get<MemberContinuityPreflight>(path, {
+      ...options,
+      cache: "no-store",
+      headers: {
+        ...(options?.headers ?? {}),
+        "X-Blentera-Expected-User": expectedUserId,
+        "X-Blentera-Expected-Session": expectedSessionId,
+      },
+    });
+  },
 
   updateMember: (
     companyId: string,

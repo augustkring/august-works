@@ -62,6 +62,7 @@ import {
 } from "../errors.js";
 import { getHiddenSettings } from "../services/settings-visibility.js";
 import { runtimeCanonicalOrigin } from "../services/cloud-runtime-identity.js";
+import { readMemberContinuityPreflight } from "../services/experience/private-0565/member-continuity-preflight.js";
 
 
 /**
@@ -4528,6 +4529,23 @@ export function accessRoutes(
     assertCompanyAccess(req, companyId);
     const users = await loadCompanyUserDirectory(db, companyId);
     res.json({ users });
+  });
+
+  router.get("/companies/:companyId/members/:memberId/responsibility-preflight", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    const memberId = req.params.memberId as string;
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId) {
+      throw forbidden("A current Human session is required for member continuity preview.", { code: "member_preflight_session_required" });
+    }
+    assertExpectedBoardActor(req);
+    await assertCompanyPermission(req, companyId, "users:manage_permissions");
+    const member = await access.getMemberById(companyId, memberId);
+    if (!member) throw notFound("Member not found");
+    await assertCanManageCompanyMember(req, access, companyId, member, "archive");
+    const preflight = await readMemberContinuityPreflight({ db, actor: req.actor, companyId, memberId,
+      operatorUserIds: opts.operatorUserIds });
+    res.set("Cache-Control", "private, no-store");
+    res.json(preflight);
   });
 
   router.patch(

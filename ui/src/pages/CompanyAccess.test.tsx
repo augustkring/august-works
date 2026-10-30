@@ -30,6 +30,7 @@ const securitySuspendMemberMock = vi.hoisted(() => vi.fn());
 const listAgentsMock = vi.hoisted(() => vi.fn());
 const listIssuesMock = vi.hoisted(() => vi.fn());
 const listRoutinesMock = vi.hoisted(() => vi.fn());
+const getMemberResponsibilityPreflightMock = vi.hoisted(() => vi.fn());
 const mockUsePluginSlots = vi.hoisted(() => vi.fn());
 const mockNavigate = vi.hoisted(() => vi.fn());
 const listInvitesMock = vi.hoisted(() => vi.fn());
@@ -44,6 +45,9 @@ vi.mock("@/api/access", () => ({
   accessApi: {
     listWorkflowCoverages: (...args: unknown[]) => listWorkflowCoveragesMock(...args),
     listMembers: (companyId: string) => listMembersMock(companyId),
+    getMemberResponsibilityPreflight: (companyId: string, memberId: string, expectedUserId: string,
+      expectedSessionId: string, options: unknown) =>
+      getMemberResponsibilityPreflightMock(companyId, memberId, expectedUserId, expectedSessionId, options),
     listJoinRequests: (companyId: string, status: string) => listJoinRequestsMock(companyId, status),
     updateMember: (companyId: string, memberId: string, input: unknown) =>
       updateMemberMock(companyId, memberId, input),
@@ -147,6 +151,10 @@ describe("CompanyAccess", () => {
     listInvitesMock.mockResolvedValue({ invites: [], nextOffset: null });
     listWorkflowCoveragesMock.mockResolvedValue({ coverages: [] });
     listRoutinesMock.mockResolvedValue([]);
+    getMemberResponsibilityPreflightMock.mockResolvedValue({
+      generatedAt: "2026-10-30T00:00:00.000Z", freshness: "current", coverage: "currently_authorized_subset",
+      items: [{ kind: "routine", classification: "MUST_REASSIGN", count: 2, sourceVersion: "opaque-version", freshness: "current" }],
+    });
     listMembersMock.mockResolvedValue({
       members: [
         {
@@ -579,6 +587,9 @@ describe("CompanyAccess", () => {
   });
 
   it("removes a member with an issue reassignment target", async () => {
+    // The preflight is intentionally held: membership removal stays available
+    // because this evidence is advisory and never on the revocation path.
+    getMemberResponsibilityPreflightMock.mockReturnValueOnce(new Promise(() => {}));
     listRoutinesMock.mockResolvedValue([
       { id: "routine-1", title: "Owned routine", status: "active", responsibleUserId: "user-1" },
     ]);
@@ -609,6 +620,10 @@ describe("CompanyAccess", () => {
 
     expect(document.body.textContent).toContain("Remove member");
     expect(document.body.textContent).toContain("Assigned to removed user");
+    expect(document.body.textContent).toContain("Responsibility and credential preflight");
+    expect(document.body.textContent).toContain("Checking currently readable responsibilities");
+    expect(getMemberResponsibilityPreflightMock).toHaveBeenCalledWith("company-1", "member-1", "user-1",
+      v9SessionFixture("user-1").session.id, expect.objectContaining({ signal: expect.any(AbortSignal) }));
 
     const reassignmentSelects = Array.from(document.body.querySelectorAll("select")).filter((select) =>
       select.querySelector('option[value="__unassigned"]'),
@@ -639,6 +654,34 @@ describe("CompanyAccess", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("hides a late member-preflight response after the Human session changes", async () => {
+    let resolvePreflight!: (result: unknown) => void;
+    getMemberResponsibilityPreflightMock.mockReturnValueOnce(new Promise((resolve) => { resolvePreflight = resolve; }));
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1"));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+    const remove = [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Remove"));
+    await act(async () => { remove!.click(); });
+    await flushReact();
+    expect(document.body.textContent).toContain("Checking currently readable responsibilities");
+
+    getMemberResponsibilityPreflightMock.mockReturnValue(new Promise(() => {}));
+    await act(async () => { client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-2")); });
+    await flushReact();
+    await act(async () => { resolvePreflight({ generatedAt: "2026-10-30T00:00:00.000Z", freshness: "unknown",
+      coverage: "currently_authorized_subset", items: [{ kind: "credentials", classification: "MUST_REVOKE",
+        count: 73, sourceVersion: "stale-session-private-canary", freshness: "current" }] }); });
+    await flushReact();
+    expect(document.body.textContent).not.toContain("73");
+    expect(document.body.textContent).not.toContain("stale-session-private-canary");
+    expect(document.body.textContent).toContain("Checking currently readable responsibilities");
+    await act(async () => { root.unmount(); });
+    client.clear();
   });
 
   it.each(["account", "renewed session", "withdraw and restore", "company", "unmount", "unchanged", "local trusted unchanged"])(
