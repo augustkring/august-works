@@ -8,9 +8,9 @@
   },
   "patch": {
     "path": "third_party/openshell/rt01/openshell-rt01.patch",
-    "sha256": "9181ed297038877322ddb11991f819c4609d25205cf0905b8356447bb48383d5",
-    "scope": "R5.1 identity-bound API and CLI no-fallback regression, Quality R2 create-time PID/memory-swap policy with protobuf Struct precision guard, Resource R12 Docker log/quota and bounded runtime probes, plus R5.1 seccomp test safety annotations; R6 adds exact PID Struct and expired-idle tests to remote qualification.",
-    "supersedesPatchSha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227"
+    "sha256": "c5571c1418ccc23866b399682b4d9f6f48242103970bffb470c8c45b968c810b",
+    "scope": "R6.1 corrects the Docker host log configuration to Bollard\u2019s pinned HostConfigLogConfig API (typ field); retains R5.1 identity-bound API and no-fallback regression, Quality R2 PID/memory-swap provisioning, Resource R12 Rust helpers and R5.1 seccomp test safety annotations.",
+    "supersedesPatchSha256": "9181ed297038877322ddb11991f819c4609d25205cf0905b8356447bb48383d5"
   },
   "parentR4PatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
   "toolchain": {
@@ -36,8 +36,8 @@
     "crates/openshell-cli/tests/sandbox_name_fallback_integration.rs": "28c1d1828096597d8c30c2399e43755d3c2f6ebfdb5fc7a5147769fa54bb7210",
     "crates/openshell-core/build.rs": "556088b95812b705947d22a1d6613c5b876af811e3c8a7fa253b7aceecbb173d",
     "crates/openshell-driver-docker/README.md": "f9c6e1a907cf158e6bfd482afac81b48314b060a2f915b6ac030c1ce9b176e77",
-    "crates/openshell-driver-docker/src/lib.rs": "52e181c6d3bf3bd1ca326a0d83c456d6d2c51969b7e9f4f21533e0d38c3acd62",
-    "crates/openshell-driver-docker/src/tests.rs": "f12cb58d3c873015191d339ee4b3dfae5f0452443a85ab91a256c1233fe2d8e4",
+    "crates/openshell-driver-docker/src/lib.rs": "c02ce132b17f2dd0deef7cfaaed71fe6e7c452f93b3851a1332409f95ba9031b",
+    "crates/openshell-driver-docker/src/tests.rs": "f5b2484c22ed5e1aa3a3362a71dfa35050fdd97ae39c543ce4814759eda523b3",
     "crates/openshell-sandbox/src/main.rs": "f06c3700725fdaf0b2efcf6c99950b1fc31e3ae01fa34cf5550cb721aa007aed",
     "crates/openshell-sandbox/src/sandbox/linux/seccomp.rs": "67f606f3d729dd45a2fa7c58c9e6b0c812a22813b20b8b9b473618d5dfbb81ff",
     "crates/openshell-sdk/tests/client_mock.rs": "97107c277baad5f5d26c97db205fbbca485e35197335e7ab05d6d3266c985e26",
@@ -79,15 +79,30 @@
     "proto/openshell.proto"
   ],
   "qualification": {
-    "status": "pending dedicated R6 remote qualification",
-    "R5_1Run": 41044296826,
-    "R5_1Outcome": "cargo check passed for server, CLI, Docker driver, and sandbox; all 15 exact selected tests passed",
-    "R6FocusedTests": "18 exact tests configured; not yet run",
+    "status": "pending dedicated R6.1 remote qualification",
+    "previousR6Run": 41049715574,
+    "previousR6Outcome": "source verification and formatting passed; four-package cargo check failed because R12 code used nonexistent bollard::models::LogConfig/type_ instead of HostConfigLogConfig/typ; focused tests did not run",
+    "R6_1FocusedTests": "18 exact tests configured; pending",
     "physicalDockerQuotaProbe": "not run",
     "physicalSeccompHostProbe": "not run",
-    "profileAdmission": "closed"
+    "profileAdmission": "closed",
+    "previousR6FocusedTests": {
+      "configured": 18,
+      "executed": 0,
+      "skipped": 18
+    },
+    "previousR6FullRunLog": {
+      "runUrl": "https://github.com/augustkring/august-works/actions/runs/41049715574",
+      "localPreparationRelativePath": "openshell-r6-run-41049715574/full-run.log",
+      "sha256": "59648fa9317171bf7e18330e6c4b7730278749c516845bff8865f2b7268f79de"
+    },
+    "previousR6FullRunLogGzip": {
+      "localPreparationRelativePath": "openshell-r6-run-41049715574/full-run.log.gz",
+      "sha256": "43bdb23fc471936be3c931ea54bd9eeaaf9e48a4c2c30a2f2a02395939cc3b0b"
+    }
   },
   "parentR5_1PatchSha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
   "resourceR12RustPatchSha256": "21b187786db26bedb858e24521b44a7e844864acab874cf9fdad317477c8642c",
-  "qualityProvisionR2PatchSha256": "cfae8322798266bdf895d4cb0a5115c1bdf329c133d9c7730cc52ff22885dcdf"
+  "qualityProvisionR2PatchSha256": "cfae8322798266bdf895d4cb0a5115c1bdf329c133d9c7730cc52ff22885dcdf",
+  "parentR6PatchSha256": "9181ed297038877322ddb11991f819c4609d25205cf0905b8356447bb48383d5"
 }

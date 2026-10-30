@@ -1517,7 +1517,7 @@ index a25c455..0c2d7ea 100644
  - `bind`: an absolute daemon-host path, allowed only when
    `[openshell.drivers.docker].enable_bind_mounts = true` and label admission
 diff --git a/crates/openshell-driver-docker/src/lib.rs b/crates/openshell-driver-docker/src/lib.rs
-index 1f4c91f..32c6aa2 100644
+index 1f4c91f..cf96367 100644
 --- a/crates/openshell-driver-docker/src/lib.rs
 +++ b/crates/openshell-driver-docker/src/lib.rs
 @@ -13,8 +13,8 @@ use bollard::errors::Error as BollardError;
@@ -1526,7 +1526,7 @@ index 1f4c91f..32c6aa2 100644
      ContainerSummaryStateEnum, CreateImageInfo, DeviceRequest, HealthConfig, HealthStatusEnum,
 -    HostConfig, Mount, MountTmpfsOptions, MountTypeEnum, MountVolumeOptions, ProgressDetail,
 -    SystemInfo, VolumeCreateRequest,
-+    HostConfig, LogConfig, Mount, MountTmpfsOptions, MountTypeEnum, MountVolumeOptions,
++    HostConfig, HostConfigLogConfig, Mount, MountTmpfsOptions, MountTypeEnum, MountVolumeOptions,
 +    ProgressDetail, SystemInfo, VolumeCreateRequest,
  };
  use bollard::query_parameters::{
@@ -1686,9 +1686,9 @@ index 1f4c91f..32c6aa2 100644
 +// Docker-managed logs live outside HostConfig.StorageOpt. Disable persisted
 +// Docker logs for workload and auxiliary containers; bounded exec/control
 +// output continues through the authenticated stream owner.
-+fn docker_no_persistent_logs() -> LogConfig {
-+    LogConfig {
-+        type_: Some("none".to_string()),
++fn docker_no_persistent_logs() -> HostConfigLogConfig {
++    HostConfigLogConfig {
++        typ: Some("none".to_string()),
 +        config: Some(HashMap::new()),
 +    }
 +}
@@ -1751,7 +1751,7 @@ index 1f4c91f..32c6aa2 100644
              binds: {
                  let mut binds = build_binds(sandbox, config);
 diff --git a/crates/openshell-driver-docker/src/tests.rs b/crates/openshell-driver-docker/src/tests.rs
-index c5036f4..fb468e2 100644
+index c5036f4..2270c40 100644
 --- a/crates/openshell-driver-docker/src/tests.rs
 +++ b/crates/openshell-driver-docker/src/tests.rs
 @@ -1176,6 +1176,90 @@ fn container_create_body_sets_driver_owned_pids_limit() {
@@ -1882,7 +1882,7 @@ index c5036f4..fb468e2 100644
 +        Some("1073741824B")
 +    );
 +    let log_config = host.log_config.unwrap();
-+    assert_eq!(log_config.type_.as_deref(), Some("none"));
++    assert_eq!(log_config.typ.as_deref(), Some("none"));
 +    assert!(log_config.config.unwrap().is_empty());
 +}
 +
@@ -1890,7 +1890,7 @@ index c5036f4..fb468e2 100644
 +fn docker_supervisor_host_config_disables_persistent_docker_logs() {
 +    let host = docker_supervisor_host_config(Vec::new(), "http://127.0.0.1:8080");
 +    let log_config = host.log_config.unwrap();
-+    assert_eq!(log_config.type_.as_deref(), Some("none"));
++    assert_eq!(log_config.typ.as_deref(), Some("none"));
 +    assert!(log_config.config.unwrap().is_empty());
 +}
 +

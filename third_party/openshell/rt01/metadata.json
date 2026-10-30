@@ -1,5 +1,5 @@
 {
-  "name": "v10-149-rt01-openshell-r6-identity-resource-guards",
+  "name": "v10-149-rt01-openshell-r6-1-identity-resource-guards",
   "status": "candidate-not-qualified",
   "profileAdmission": "closed",
   "upstream": {
@@ -9,28 +9,36 @@
   },
   "patch": {
     "file": "openshell-rt01.patch",
-    "sha256": "9181ed297038877322ddb11991f819c4609d25205cf0905b8356447bb48383d5",
+    "sha256": "c5571c1418ccc23866b399682b4d9f6f48242103970bffb470c8c45b968c810b",
     "parentR4PatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
     "supersedesPatchSha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e",
     "parentR5_1PatchSha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
     "resourceR12RustPatchSha256": "21b187786db26bedb858e24521b44a7e844864acab874cf9fdad317477c8642c",
-    "qualityProvisionR2PatchSha256": "cfae8322798266bdf895d4cb0a5115c1bdf329c133d9c7730cc52ff22885dcdf"
+    "qualityProvisionR2PatchSha256": "cfae8322798266bdf895d4cb0a5115c1bdf329c133d9c7730cc52ff22885dcdf",
+    "parentR6PatchSha256": "9181ed297038877322ddb11991f819c4609d25205cf0905b8356447bb48383d5"
   },
   "sourcePins": {
     "file": "source-pins.json",
-    "sha256": "536b57feda007eb98c087804f67e16c7efe9751bd0746c49fffb77293bd0403f"
+    "sha256": "4b644b8cdbded54775f229dbccb5c75f9df919819e17a7502556cdba2587822e"
   },
   "license": {
     "spdx": "Apache-2.0",
     "upstreamFile": "LICENSE"
   },
   "qualification": {
-    "status": "pending dedicated R6 remote qualification",
-    "R5_1Run": 41044296826,
-    "R5_1Outcome": "cargo check passed for four packages; all 15 exact tests passed",
-    "R6ConfiguredExactTests": 18,
+    "status": "pending dedicated R6.1 remote qualification",
+    "previousR6Run": 41049715574,
+    "previousR6Outcome": "source verification and formatting passed; four-package cargo check failed on incorrect Bollard HostConfig log model; tests skipped",
+    "R6_1ConfiguredExactTests": 18,
     "physicalDockerQuotaProbe": "not run",
     "physicalSeccompHostProbe": "not run",
-    "profileAdmission": "closed"
+    "profileAdmission": "closed",
+    "previousR6FocusedTests": {
+      "configured": 18,
+      "executed": 0,
+      "skipped": 18
+    },
+    "previousR6RunUrl": "https://github.com/augustkring/august-works/actions/runs/41049715574",
+    "previousR6FullRunLogGzipSha256": "43bdb23fc471936be3c931ea54bd9eeaaf9e48a4c2c30a2f2a02395939cc3b0b"
   }
 }
