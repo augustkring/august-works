@@ -1,5 +1,5 @@
 {
-  "name": "v10-149-rt01-openshell-expected-sandbox-id-r3",
+  "name": "v10-149-rt01-openshell-expected-sandbox-id-r4",
   "status": "candidate-not-qualified",
   "profileAdmission": "closed",
   "upstream": {
@@ -9,32 +9,25 @@
   },
   "patch": {
     "file": "openshell-rt01-expected-id.patch",
-    "sha256": "bc7ea25a9c23a562707297a00d0da3adcb5e5cb527e2afb158db1e8bcf899cdc",
-    "parentPatchSha256": "5d1556c605d4ea33cc896a718e179d985d33645f505a31c8f1c7719838a5542a"
+    "sha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
+    "parentPatchSha256": "bc7ea25a9c23a562707297a00d0da3adcb5e5cb527e2afb158db1e8bcf899cdc"
   },
   "sourcePins": {
     "file": "source-pins.json",
-    "sha256": "4e2bdd107c10326c3589d081fae37ec18af725aedd6c61f3a231794aa639d4db",
-    "vendorCandidatePinsSha256": "b0c81ee7d1871d8b48872e8a1f1d3e89f5d60a8b3169f342ad0edc7d4b2358b1"
+    "sha256": "fca800add807a6a135a10c062620e627cb6d211e15bbe892b3b8829d3e6aaf43",
+    "r3VendorSourcePinsSha256": "b0c81ee7d1871d8b48872e8a1f1d3e89f5d60a8b3169f342ad0edc7d4b2358b1"
   },
   "license": {
     "spdx": "Apache-2.0",
     "upstreamFile": "LICENSE"
   },
-  "identityBoundOperations": [
-    "Start",
-    "Stop",
-    "Delete",
-    "policy update",
-    "unary Exec",
-    "provider attach",
-    "provider detach"
-  ],
   "qualification": {
     "workflow": ".github/workflows/openshell-rt01-qualification.yml",
-    "generatedProtoBuild": "pending",
-    "serverCliBuild": "pending",
-    "focusedTests": "pending",
+    "r3CargoCheckServerCli": "passed; generated protobuf build included",
+    "r3FocusedTestBuild": "failed before tests: unresolved tonic Code in test module",
+    "r4GeneratedProtoBuild": "pending rerun",
+    "r4ServerCliCargoCheck": "pending rerun",
+    "r4FocusedTests": "pending remote CI",
     "oldGatewayUnimplementedProbe": "pending",
     "physicalTargetHostProbe": "pending"
   }

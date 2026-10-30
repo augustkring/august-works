@@ -2272,7 +2272,7 @@ index 74fac49..fc8c79f 100644
      async fn update_config_rejects_credential_binding_to_unattached_provider() {
          let state = test_server_state().await;
 diff --git a/crates/openshell-server/src/grpc/sandbox.rs b/crates/openshell-server/src/grpc/sandbox.rs
-index d8263e2..3563cf1 100644
+index d8263e2..2556a58 100644
 --- a/crates/openshell-server/src/grpc/sandbox.rs
 +++ b/crates/openshell-server/src/grpc/sandbox.rs
 @@ -24,18 +24,21 @@ use futures::future;
@@ -2752,7 +2752,15 @@ index d8263e2..3563cf1 100644
      if let Some(completion) = &completion {
          completion.ensure_target(sandbox.object_id())?;
      }
-@@ -5415,6 +5709,8 @@ mod tests {
+@@ -3872,6 +4166,7 @@ async fn run_exec_with_russh(
+ mod tests {
+     use super::*;
+     use crate::compute::NoopTestDriver;
++    use tonic::Code;
+ 
+     #[test]
+     fn exec_requires_ssh_channel_close_after_exit_status() {
+@@ -5415,6 +5710,8 @@ mod tests {
                          "default".to_string(),
                      )),
                  }),
@@ -2761,7 +2769,7 @@ index d8263e2..3563cf1 100644
              )
              .await
          });
-@@ -5455,6 +5751,202 @@ mod tests {
+@@ -5455,6 +5752,202 @@ mod tests {
          );
      }
  

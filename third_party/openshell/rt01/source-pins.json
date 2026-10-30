@@ -8,10 +8,11 @@
   },
   "patch": {
     "path": "third_party/openshell/rt01/openshell-rt01-expected-id.patch",
-    "sha256": "bc7ea25a9c23a562707297a00d0da3adcb5e5cb527e2afb158db1e8bcf899cdc",
-    "parentPatchSha256": "5d1556c605d4ea33cc896a718e179d985d33645f505a31c8f1c7719838a5542a"
+    "sha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
+    "parentPatchSha256": "bc7ea25a9c23a562707297a00d0da3adcb5e5cb527e2afb158db1e8bcf899cdc"
   },
-  "candidateSourcePins": {
+  "parentSourcePins": {
+    "path": "R3 vendor source-pins.json",
     "sha256": "b0c81ee7d1871d8b48872e8a1f1d3e89f5d60a8b3169f342ad0edc7d4b2358b1"
   },
   "toolchain": {
@@ -34,7 +35,7 @@
     "crates/openshell-server/src/grpc/mutation_replay/ordinary.rs": "db268584fa32180e8f7260f3cda67ac4abc3c4594669acf92883aae8c799930e",
     "crates/openshell-server/src/grpc/mutation_replay/streaming.rs": "8f6dd383453249ac1bd32afbe38e994646c3c886a587931f1c7cfdca9bf7822f",
     "crates/openshell-server/src/grpc/policy.rs": "5d48bd29575f3ccb0b3c1113fd2a8120ec76aa6287dcef5639fd09ba631e1e1b",
-    "crates/openshell-server/src/grpc/sandbox.rs": "8a231f48bf204a41dddae409243f5456155b63a08d6e8c00ced772402e549f57",
+    "crates/openshell-server/src/grpc/sandbox.rs": "1f9001d72ccf4770005d4bd1a93390292d28d1819d34771d1d253ffb2319aa5d",
     "crates/openshell-server/tests/common/mod.rs": "7de4b153aa9b6494c7041bb92828fbd9a1f1f1343c0ed0c469e18cba7e4c1e98",
     "crates/openshell-server/tests/supervisor_relay_integration.rs": "b4c84155292bf013cee9368b1b4019c3b5ee641d7efc1b1a0644d06b9e0d70fb",
     "proto/openshell.proto": "9a0e207c87d116e4410caeb8e0054113b308f879fc72c69df09d9cfaeeb47abf",
