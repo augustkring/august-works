@@ -81,11 +81,13 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
     markDiagnosticStage?: (stage: string) => void,
   ) => Promise<void>;
   readonly #onDuplicateEvent?: (event: PrpEvent) => Promise<void>;
+  readonly #serializeTransaction: <T>(operation: () => Promise<T>) => Promise<T>;
 
   constructor(
     db: Db,
     binding: PaperclipControlPlaneBinding,
     options: {
+      serializeTransaction?: <T>(operation: () => Promise<T>) => Promise<T>;
       onCommittedEvent?: (
         event: PrpEvent,
         markDiagnosticStage?: (stage: string) => void,
@@ -97,6 +99,7 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
     this.#binding = structuredClone(binding);
     this.#onCommittedEvent = options.onCommittedEvent;
     this.#onDuplicateEvent = options.onDuplicateEvent;
+    this.#serializeTransaction = options.serializeTransaction ?? (operation => operation());
   }
 
   #matchesPersistedBinding(run: typeof heartbeatRuns.$inferSelect): boolean {
@@ -262,7 +265,7 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
     }
     try {
       const transactionStartedAt = Date.now();
-      const persisted = await this.#db.transaction(async rawTx => {
+      const persisted = await this.#serializeTransaction(() => this.#db.transaction(async rawTx => {
         const tx = rawTx as unknown as Db;
         markDiagnosticStage("transaction_source_access_check");
         if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId) {
@@ -294,7 +297,7 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
         eventWriteElapsedMs = Date.now() - eventWriteStartedAt;
         markDiagnosticStage("transaction_callback_return");
         return result;
-      });
+      }));
       transactionElapsedMs = Date.now() - transactionStartedAt;
       markDiagnosticStage("after_db_commit");
       const callbackStartedAt = Date.now();

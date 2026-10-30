@@ -437,6 +437,17 @@ describe("PaperclipControlPlanePort conformance", () => {
         .from(heartbeatRunEvents)
         .where(eq(heartbeatRunEvents.runId, runId));
     });
+    let operationChain: Promise<void> = Promise.resolve();
+    const serializeTransaction = <T>(operation: () => Promise<T>): Promise<T> => {
+      const pending = operationChain.then(operation, operation);
+      operationChain = pending.then(() => undefined, () => undefined);
+      return pending;
+    };
+    await expect(serializeTransaction(async () => { throw new Error("prior_operation_failed"); }))
+      .rejects.toThrow("prior_operation_failed");
+    let releaseTool!: () => void;
+    const toolHeld = new Promise<void>(resolve => { releaseTool = resolve; });
+    const priorTool = serializeTransaction(() => toolHeld);
     const port = new PaperclipControlPlanePort(db, {
       companyId: identity.companyId,
       issueId,
@@ -448,8 +459,10 @@ describe("PaperclipControlPlanePort conformance", () => {
       sourceInstanceId: runnerInstanceId,
       controlPlaneSourceInstanceId: `safe-progress-control-${runId}`,
     }, {
+      serializeTransaction,
       onCommittedEvent: async (event) => {
-        committedCallbacks.push(event.sourceEventId);
+        // Reentry must run after the append transaction releases its slot.
+        await serializeTransaction(async () => { committedCallbacks.push(event.sourceEventId); });
       },
     });
     await port.openRun({
@@ -490,9 +503,15 @@ describe("PaperclipControlPlanePort conformance", () => {
       },
     };
     try {
-      await expect(port.appendEvent(progressEvent)).resolves.toMatchObject({
-        disposition: "committed",
-      });
+      let appendSettled = false;
+      const append = port.appendEvent(progressEvent).finally(() => { appendSettled = true; });
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(appendSettled).toBe(false);
+      expect(await observerDb.select().from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId, runId)))
+        .toHaveLength(0);
+      releaseTool();
+      await priorTool;
+      await expect(append).resolves.toMatchObject({ disposition: "committed" });
       await expect(visibilityCheck).resolves.toEqual([
         { eventType: "tool.execution.started" },
       ]);
@@ -545,6 +564,7 @@ describe("PaperclipControlPlanePort conformance", () => {
         "safe-progress-signal:3",
       ]);
     } finally {
+      releaseTool();
       unsubscribe();
     }
   });

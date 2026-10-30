@@ -1540,7 +1540,8 @@ class SessionToolAuthorityEpoch {
     private readonly onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>,
     private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>,
     private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>,
-    private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null }) {
+    private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null },
+    private readonly serializeManagedOperation?: <T>(operation: () => Promise<T>) => Promise<T>) {
     this.runId = runId;
     this.#authority = authority;
   }
@@ -1668,9 +1669,12 @@ class SessionToolAuthorityEpoch {
       // The source capture is mutable server state on this authority; serialize
       // the entire verify/effect/receipt path so one call cannot inherit the
       // next call's exact provider arguments or source set.
-      const pending = this.#managedToolCallChain.then(run, run);
-      this.#managedToolCallChain = pending.then(() => undefined, () => undefined);
-      result = await pending;
+      if (this.serializeManagedOperation) result = await this.serializeManagedOperation(run);
+      else {
+        const pending = this.#managedToolCallChain.then(run, run);
+        this.#managedToolCallChain = pending.then(() => undefined, () => undefined);
+        result = await pending;
+      }
     } else result = await run();
     if (call.tool === "read_document") this.#assertCurrent();
     return result;
@@ -9942,6 +9946,14 @@ async function executePaperclipNativeSessionWithinScope(
     binding: { ...input.execution.binding, normalizedSessionId: nativeSessionKey(input.execution), runnerSourceInstanceId: effectiveRunnerInstanceId },
     resolve: resolveNativeRuntimeRequest,
   });
+  // Event source reviews and managed tool effects update the same Run. Keep
+  // their transactions ordered from startup; post-commit callbacks run outside.
+  let sourceOperationChain: Promise<void> = Promise.resolve();
+  const serializeSourceOperation = <T>(operation: () => Promise<T>): Promise<T> => {
+    const pending = sourceOperationChain.then(operation, operation);
+    sourceOperationChain = pending.then(() => undefined, () => undefined);
+    return pending;
+  };
   let completedConversationReply: PrpEvent | null = null;
   const controlPlane = new PaperclipControlPlanePort(
     input.db,
@@ -9960,6 +9972,7 @@ async function executePaperclipNativeSessionWithinScope(
         : {}),
     },
     {
+      serializeTransaction: serializeSourceOperation,
       onCommittedEvent: async (event, markAppendDiagnosticStage) => {
         markAppendDiagnosticStage?.("callback_tool_trace_observe");
         await toolTrace.observe(event);
@@ -10444,6 +10457,7 @@ async function executePaperclipNativeSessionWithinScope(
             managedNativeContextReadCapture: managedContextReadCaptureRef,
             trace,
             toolTrace,
+            serializeManagedOperation: serializeSourceOperation,
             onDocumentRead: async capture => {
               if (launchEventSeq === null) throw new Error("native_document_tool_capture_binding_invalid");
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
@@ -13131,6 +13145,7 @@ export async function createRunnerdBackend(input: {
   runnerRemoteProviderPackPath?: string | null;
   trace?: NativeRunTrace;
   toolTrace?: NativeToolTrace;
+  serializeManagedOperation?: <T>(operation: () => Promise<T>) => Promise<T>;
   onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
   onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
   onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
@@ -13369,6 +13384,7 @@ async function createRunnerdBackendWithinSessionClaim(
     input.onNativeToolCall,
     input.onManagedOpenCodeToolResult,
     input.managedNativeContextReadCapture,
+    input.serializeManagedOperation,
   );
   const logRunnerDiagnostic = createRunnerDiagnosticLogSink({
     runId: input.execution.binding.runId,
