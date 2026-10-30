@@ -30156,58 +30156,28 @@
       "owner": "server/src/services/companies.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "The route requires a same-company CEO Agent or Board. For Agent actor it parses only updateCompanyBrandingSchema; broader settings and lifecycle fields are only parsed for Board. Archive/delete are separate Board-only routes. This is direct Agent branding/settings-limited work under the source contract.",
+      "reviewRationale": "The route admits a same-company CEO Agent or Board, and the call payload uses fields accepted by the strict Agent branding schema.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1398,
-            "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-          },
-          {
-            "path": "server/src/services/authorization.ts",
-            "line": 118,
-            "claim": "CEO Agent or Board is the exact principal gate."
+            "line": 1403,
+            "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1412,
+            "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
-            "claim": "assertInstanceAdmin(req);"
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 73,
+            "claim": "The Agent branding schema declares name, description, and logoAssetId."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 416,
-            "claim": "assertCompanyAccess(req, target.companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 420,
-            "claim": "assertCompanyAccess(req, companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 426,
-            "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 83,
-            "claim": ".update(agents)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 106,
-            "claim": ".update(agentWakeupRequests)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 337,
-            "claim": "update: async ("
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 79,
+            "claim": "The Agent branding schema is strict."
           }
         ]
       },
@@ -30215,53 +30185,13 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1398,
-          "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-        },
-        {
-          "path": "server/src/services/authorization.ts",
-          "line": 118,
-          "claim": "CEO Agent or Board is the exact principal gate."
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 416,
-          "claim": "assertCompanyAccess(req, target.companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 420,
-          "claim": "assertCompanyAccess(req, companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 426,
-          "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 83,
-          "claim": ".update(agents)"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 106,
-          "claim": ".update(agentWakeupRequests)"
+          "line": 1418,
+          "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
           "line": 337,
-          "claim": "update: async ("
+          "claim": "The company service owns the canonical update effect."
         }
       ],
       "operationIds": [
@@ -30363,60 +30293,35 @@
       "line": 84,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
-      "classification": "DIRECT_AGENT",
+      "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "The route requires a same-company CEO Agent or Board. For Agent actor it parses only updateCompanyBrandingSchema; broader settings and lifecycle fields are only parsed for Board. Archive/delete are separate Board-only routes. This is direct Agent branding/settings-limited work under the source contract.",
+      "reviewRationale": "The UI sends company fields outside the Agent branch strict branding schema; the route parses those settings or lifecycle fields only through the Board update schema.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1398,
-            "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-          },
-          {
-            "path": "server/src/services/authorization.ts",
-            "line": 118,
-            "claim": "CEO Agent or Board is the exact principal gate."
+            "line": 1403,
+            "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1412,
+            "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 413,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1415,
+            "claim": "Board requests use the broader updateCompanySchema."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 416,
-            "claim": "assertCompanyAccess(req, target.companyId);"
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 73,
+            "claim": "The Agent branding schema declares the supported fields."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 420,
-            "claim": "assertCompanyAccess(req, companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 426,
-            "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 83,
-            "claim": ".update(agents)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 106,
-            "claim": ".update(agentWakeupRequests)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 337,
-            "claim": "update: async ("
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 79,
+            "claim": "The Agent branding schema is strict and rejects other fields."
           }
         ]
       },
@@ -30424,57 +30329,14 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1398,
-          "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-        },
-        {
-          "path": "server/src/services/authorization.ts",
-          "line": 118,
-          "claim": "CEO Agent or Board is the exact principal gate."
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 416,
-          "claim": "assertCompanyAccess(req, target.companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 420,
-          "claim": "assertCompanyAccess(req, companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 426,
-          "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 83,
-          "claim": ".update(agents)"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 106,
-          "claim": ".update(agentWakeupRequests)"
+          "line": 1418,
+          "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
           "line": 337,
-          "claim": "update: async ("
+          "claim": "The company service owns the canonical update effect."
         }
-      ],
-      "operationIds": [
-        "existing-api:fd743521a0004e818733"
       ]
     },
     {
@@ -33687,6 +33549,69 @@
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
+      "clientCall": "companiesApi.updateResponsibilityContacts",
+      "apiVerb": "write",
+      "pathSignature": "selectedCompanyId!",
+      "routeSignatures": [
+        "patch:`/companies/${companyId}/responsibility-contacts`"
+      ],
+      "argumentsSignature": "selectedCompanyId!, {\n      securityContactUserId: securityContactUserId || null,\n      supportIncidentContactUserId: supportIncidentContactUserId || null,\n    }",
+      "line": 88,
+      "occurrence": 0,
+      "owner": "server/src/routes/companies.ts",
+      "classification": "AGENT_ACCESSIBLE_UNMAPPED",
+      "materiality": "ordinary",
+      "reviewRationale": "The route permits same-company CEO Agents through the defaults-admin gate, but this API call has no Agent tool or existing API manifest mapping; it records reachability without adding a capability.",
+      "authorityEvidence": {
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 1495,
+            "claim": "The mounted route handles responsibility-contact updates."
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 1497,
+            "claim": "The route invokes the company defaults-admin gate."
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 428,
+            "claim": "The defaults-admin helper delegates to same-company CEO Agent or Board authorization."
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 431,
+            "claim": "The additional owner/admin membership restriction applies to Board actors."
+          },
+          {
+            "path": "server/src/services/authorization.ts",
+            "line": 131,
+            "claim": "A same-company CEO Agent passes the role check."
+          },
+          {
+            "path": "server/src/services/company-responsibility-contacts.ts",
+            "line": 23,
+            "claim": "Selected contacts must be active verified Human company members."
+          }
+        ]
+      },
+      "materialityRationale": "The route updates company responsibility contact labels; the source explicitly keeps those labels separate from permissions.",
+      "materialityEvidence": [
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 1501,
+          "claim": "The route persists the company responsibility contact identifiers."
+        },
+        {
+          "path": "server/src/services/company-responsibility-contacts.ts",
+          "line": 5,
+          "claim": "The service states that a contact label never grants permissions."
+        }
+      ]
+    },
+    {
+      "source": "ui/src/pages/CompanySettings.tsx",
       "clientCall": "companiesApi.update",
       "apiVerb": "write",
       "pathSignature": "selectedCompanyId!",
@@ -33694,63 +33619,38 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, data",
-      "line": 84,
+      "line": 108,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
-      "classification": "DIRECT_AGENT",
+      "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "The route requires a same-company CEO Agent or Board. For Agent actor it parses only updateCompanyBrandingSchema; broader settings and lifecycle fields are only parsed for Board. Archive/delete are separate Board-only routes. This is direct Agent branding/settings-limited work under the source contract.",
+      "reviewRationale": "The UI sends company fields outside the Agent branch strict branding schema; the route parses those settings or lifecycle fields only through the Board update schema.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1398,
-            "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-          },
-          {
-            "path": "server/src/services/authorization.ts",
-            "line": 118,
-            "claim": "CEO Agent or Board is the exact principal gate."
+            "line": 1403,
+            "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1412,
+            "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 413,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1415,
+            "claim": "Board requests use the broader updateCompanySchema."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 416,
-            "claim": "assertCompanyAccess(req, target.companyId);"
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 73,
+            "claim": "The Agent branding schema declares the supported fields."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 420,
-            "claim": "assertCompanyAccess(req, companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 426,
-            "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 83,
-            "claim": ".update(agents)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 106,
-            "claim": ".update(agentWakeupRequests)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 337,
-            "claim": "update: async ("
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 79,
+            "claim": "The Agent branding schema is strict and rejects other fields."
           }
         ]
       },
@@ -33758,57 +33658,14 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1398,
-          "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-        },
-        {
-          "path": "server/src/services/authorization.ts",
-          "line": 118,
-          "claim": "CEO Agent or Board is the exact principal gate."
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 416,
-          "claim": "assertCompanyAccess(req, target.companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 420,
-          "claim": "assertCompanyAccess(req, companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 426,
-          "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 83,
-          "claim": ".update(agents)"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 106,
-          "claim": ".update(agentWakeupRequests)"
+          "line": 1418,
+          "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
           "line": 337,
-          "claim": "update: async ("
+          "claim": "The company service owns the canonical update effect."
         }
-      ],
-      "operationIds": [
-        "existing-api:fd743521a0004e818733"
       ]
     },
     {
@@ -33820,63 +33677,38 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, {\n        requireBoardApprovalForNewAgents: requireApproval\n      }",
-      "line": 92,
+      "line": 116,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
-      "classification": "DIRECT_AGENT",
+      "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "The route requires a same-company CEO Agent or Board. For Agent actor it parses only updateCompanyBrandingSchema; broader settings and lifecycle fields are only parsed for Board. Archive/delete are separate Board-only routes. This is direct Agent branding/settings-limited work under the source contract.",
+      "reviewRationale": "The UI sends company fields outside the Agent branch strict branding schema; the route parses those settings or lifecycle fields only through the Board update schema.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1398,
-            "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-          },
-          {
-            "path": "server/src/services/authorization.ts",
-            "line": 118,
-            "claim": "CEO Agent or Board is the exact principal gate."
+            "line": 1403,
+            "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1412,
+            "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 413,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1415,
+            "claim": "Board requests use the broader updateCompanySchema."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 416,
-            "claim": "assertCompanyAccess(req, target.companyId);"
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 73,
+            "claim": "The Agent branding schema declares the supported fields."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 420,
-            "claim": "assertCompanyAccess(req, companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 426,
-            "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 83,
-            "claim": ".update(agents)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 106,
-            "claim": ".update(agentWakeupRequests)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 337,
-            "claim": "update: async ("
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 79,
+            "claim": "The Agent branding schema is strict and rejects other fields."
           }
         ]
       },
@@ -33884,57 +33716,14 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1398,
-          "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-        },
-        {
-          "path": "server/src/services/authorization.ts",
-          "line": 118,
-          "claim": "CEO Agent or Board is the exact principal gate."
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 416,
-          "claim": "assertCompanyAccess(req, target.companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 420,
-          "claim": "assertCompanyAccess(req, companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 426,
-          "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 83,
-          "claim": ".update(agents)"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 106,
-          "claim": ".update(agentWakeupRequests)"
+          "line": 1418,
+          "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
           "line": 337,
-          "claim": "update: async ("
+          "claim": "The company service owns the canonical update effect."
         }
-      ],
-      "operationIds": [
-        "existing-api:fd743521a0004e818733"
       ]
     },
     {
@@ -33946,63 +33735,38 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, { interactionResolverGovernance: next }",
-      "line": 102,
+      "line": 126,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
-      "classification": "DIRECT_AGENT",
+      "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "The route requires a same-company CEO Agent or Board. For Agent actor it parses only updateCompanyBrandingSchema; broader settings and lifecycle fields are only parsed for Board. Archive/delete are separate Board-only routes. This is direct Agent branding/settings-limited work under the source contract.",
+      "reviewRationale": "The UI sends company fields outside the Agent branch strict branding schema; the route parses those settings or lifecycle fields only through the Board update schema.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1398,
-            "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-          },
-          {
-            "path": "server/src/services/authorization.ts",
-            "line": 118,
-            "claim": "CEO Agent or Board is the exact principal gate."
+            "line": 1403,
+            "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1412,
+            "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 413,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1415,
+            "claim": "Board requests use the broader updateCompanySchema."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 416,
-            "claim": "assertCompanyAccess(req, target.companyId);"
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 73,
+            "claim": "The Agent branding schema declares the supported fields."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 420,
-            "claim": "assertCompanyAccess(req, companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 426,
-            "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 83,
-            "claim": ".update(agents)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 106,
-            "claim": ".update(agentWakeupRequests)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 337,
-            "claim": "update: async ("
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 79,
+            "claim": "The Agent branding schema is strict and rejects other fields."
           }
         ]
       },
@@ -34010,57 +33774,14 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1398,
-          "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-        },
-        {
-          "path": "server/src/services/authorization.ts",
-          "line": 118,
-          "claim": "CEO Agent or Board is the exact principal gate."
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 416,
-          "claim": "assertCompanyAccess(req, target.companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 420,
-          "claim": "assertCompanyAccess(req, companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 426,
-          "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 83,
-          "claim": ".update(agents)"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 106,
-          "claim": ".update(agentWakeupRequests)"
+          "line": 1418,
+          "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
           "line": 337,
-          "claim": "update: async ("
+          "claim": "The company service owns the canonical update effect."
         }
-      ],
-      "operationIds": [
-        "existing-api:fd743521a0004e818733"
       ]
     },
     {
@@ -34072,7 +33793,7 @@
         "postForm:`/companies/${companyId}/logo`"
       ],
       "argumentsSignature": "selectedCompanyId!, file",
-      "line": 126,
+      "line": 150,
       "occurrence": 0,
       "owner": "server/src/routes/assets.ts",
       "classification": "DIRECT_AGENT",
@@ -34133,63 +33854,33 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, { logoAssetId: asset.assetId }",
-      "line": 128,
+      "line": 152,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "The route requires a same-company CEO Agent or Board. For Agent actor it parses only updateCompanyBrandingSchema; broader settings and lifecycle fields are only parsed for Board. Archive/delete are separate Board-only routes. This is direct Agent branding/settings-limited work under the source contract.",
+      "reviewRationale": "The route admits a same-company CEO Agent or Board, and the call payload uses fields accepted by the strict Agent branding schema.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1398,
-            "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-          },
-          {
-            "path": "server/src/services/authorization.ts",
-            "line": 118,
-            "claim": "CEO Agent or Board is the exact principal gate."
+            "line": 1403,
+            "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1412,
+            "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
-            "claim": "assertInstanceAdmin(req);"
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 73,
+            "claim": "The Agent branding schema declares name, description, and logoAssetId."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 416,
-            "claim": "assertCompanyAccess(req, target.companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 420,
-            "claim": "assertCompanyAccess(req, companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 426,
-            "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 83,
-            "claim": ".update(agents)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 106,
-            "claim": ".update(agentWakeupRequests)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 337,
-            "claim": "update: async ("
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 79,
+            "claim": "The Agent branding schema is strict."
           }
         ]
       },
@@ -34197,53 +33888,13 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1398,
-          "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-        },
-        {
-          "path": "server/src/services/authorization.ts",
-          "line": 118,
-          "claim": "CEO Agent or Board is the exact principal gate."
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 416,
-          "claim": "assertCompanyAccess(req, target.companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 420,
-          "claim": "assertCompanyAccess(req, companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 426,
-          "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 83,
-          "claim": ".update(agents)"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 106,
-          "claim": ".update(agentWakeupRequests)"
+          "line": 1418,
+          "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
           "line": 337,
-          "claim": "update: async ("
+          "claim": "The company service owns the canonical update effect."
         }
       ],
       "operationIds": [
@@ -34259,63 +33910,33 @@
         "patch:`/companies/${companyId}`"
       ],
       "argumentsSignature": "selectedCompanyId!, { logoAssetId: null }",
-      "line": 136,
+      "line": 160,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "The route requires a same-company CEO Agent or Board. For Agent actor it parses only updateCompanyBrandingSchema; broader settings and lifecycle fields are only parsed for Board. Archive/delete are separate Board-only routes. This is direct Agent branding/settings-limited work under the source contract.",
+      "reviewRationale": "The route admits a same-company CEO Agent or Board, and the call payload uses fields accepted by the strict Agent branding schema.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1398,
-            "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-          },
-          {
-            "path": "server/src/services/authorization.ts",
-            "line": 118,
-            "claim": "CEO Agent or Board is the exact principal gate."
+            "line": 1403,
+            "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
+            "line": 1412,
+            "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
-            "claim": "assertInstanceAdmin(req);"
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 73,
+            "claim": "The Agent branding schema declares name, description, and logoAssetId."
           },
           {
-            "path": "server/src/routes/companies.ts",
-            "line": 416,
-            "claim": "assertCompanyAccess(req, target.companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 420,
-            "claim": "assertCompanyAccess(req, companyId);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 426,
-            "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 83,
-            "claim": ".update(agents)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 106,
-            "claim": ".update(agentWakeupRequests)"
-          },
-          {
-            "path": "server/src/services/companies.ts",
-            "line": 337,
-            "claim": "update: async ("
+            "path": "packages/shared/src/validators/company.ts",
+            "line": 79,
+            "claim": "The Agent branding schema is strict."
           }
         ]
       },
@@ -34323,53 +33944,13 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1398,
-          "claim": "update handler calls assertSameCompanyCeoAgentOrBoard; Agent branch parses updateCompanyBrandingSchema."
-        },
-        {
-          "path": "server/src/services/authorization.ts",
-          "line": 118,
-          "claim": "CEO Agent or Board is the exact principal gate."
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 416,
-          "claim": "assertCompanyAccess(req, target.companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 420,
-          "claim": "assertCompanyAccess(req, companyId);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 426,
-          "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 83,
-          "claim": ".update(agents)"
-        },
-        {
-          "path": "server/src/services/companies.ts",
-          "line": 106,
-          "claim": ".update(agentWakeupRequests)"
+          "line": 1418,
+          "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
           "line": 337,
-          "claim": "update: async ("
+          "claim": "The company service owns the canonical update effect."
         }
       ],
       "operationIds": [
@@ -34385,7 +33966,7 @@
         "post:`/companies/${companyId}/archive`"
       ],
       "argumentsSignature": "companyId",
-      "line": 157,
+      "line": 181,
       "occurrence": 0,
       "owner": "server/src/services/companies.ts",
       "classification": "HUMAN_ONLY",
@@ -34420,12 +34001,12 @@
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1506,
+            "line": 1539,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1507,
+            "line": 1540,
             "claim": "assertBoard(req);"
           },
           {
@@ -34435,7 +34016,7 @@
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1504,
+            "line": 1537,
             "claim": "router.post(\"/:companyId/archive\", async (req, res) => {"
           }
         ]
@@ -34469,12 +34050,12 @@
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1506,
+          "line": 1539,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1507,
+          "line": 1540,
           "claim": "assertBoard(req);"
         },
         {
@@ -34484,7 +34065,7 @@
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1504,
+          "line": 1537,
           "claim": "router.post(\"/:companyId/archive\", async (req, res) => {"
         }
       ]
