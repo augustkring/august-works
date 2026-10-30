@@ -20943,7 +20943,7 @@
         "post:scoped(\"/saas/companies\", userId)"
       ],
       "argumentsSignature": "principal, creationAttempt.current",
-      "line": 201,
+      "line": 206,
       "occurrence": 0,
       "owner": "server/src/services/saas/onboarding.ts",
       "classification": "HUMAN_ONLY",
@@ -20984,7 +20984,7 @@
         "post:path(companyId, principal)"
       ],
       "argumentsSignature": "companyId!, principal, commandAttempt.current",
-      "line": 239,
+      "line": 244,
       "occurrence": 0,
       "owner": "server/src/services/saas/activation.ts",
       "classification": "HUMAN_ONLY",
@@ -21009,7 +21009,7 @@
           },
           {
             "path": "server/src/services/saas/activation.ts",
-            "line": 205,
+            "line": 214,
             "claim": "async command(actor: AuthorizationActor, companyId: string, raw: unknown) {"
           }
         ]
@@ -21033,7 +21033,7 @@
         },
         {
           "path": "server/src/services/saas/activation.ts",
-          "line": 205,
+          "line": 214,
           "claim": "async command(actor: AuthorizationActor, companyId: string, raw: unknown) {"
         }
       ]

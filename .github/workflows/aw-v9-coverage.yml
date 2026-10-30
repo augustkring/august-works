@@ -7,6 +7,8 @@ on:
       - 'packages/shared/src/**'
       - 'packages/teams-catalog/generated/catalog.json'
       - 'packages/skills-catalog/generated/catalog.json'
+      - 'skills-releases/blentera-platform/**'
+      - 'evals/platform-skill/**'
       - 'packages/db/src/client.ts'
       - 'packages/db/src/migrations/0554_company_import_fenced_effects.sql'
       - 'packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql'
@@ -15,10 +17,15 @@ on:
       - 'ui/src/**'
       - 'doc/reference/aw-v9/brief/**'
       - 'scripts/check-aw-v9-coverage.mjs'
+      - 'scripts/platform-skill-operating-knowledge.mjs'
+      - 'scripts/check-platform-skill-operating-knowledge.mjs'
+      - 'scripts/platform-skill-operating-knowledge.test.mjs'
+      - 'scripts/run-platform-skill-evals.mjs'
       - 'scripts/check-aw-v10-operation-coverage.mjs'
       - 'scripts/aw-v10-operation-coverage.mjs'
       - 'scripts/check-aw-v10-operation-coverage.test.mjs'
       - 'doc/operations/agent-native-ui-operation-coverage.json'
+      - 'package.json'
       - 'doc/operations/v10-capability-projection.json'
       - 'doc/operations/v10-security-fast-path.json'
       - 'doc/operations/v10-safe-change-graph.json'
@@ -70,6 +77,8 @@ jobs:
           run_install: false
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: node scripts/check-aw-v9-coverage.mjs
+      - name: Test Operating Knowledge coverage and field-regression gate
+        run: node --test scripts/platform-skill-operating-knowledge.test.mjs
       - name: Test fail-closed V10 coverage inventory
         run: node --test scripts/check-aw-v10-operation-coverage.test.mjs
       - name: Verify generated V10 capability projection

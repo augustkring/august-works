@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { resolve, relative, isAbsolute } from "node:path";
 import { v9ReleasePrerequisiteFailures } from "./aw-v9-release-prerequisites.mjs";
 import { checkOperationCoverage } from "./check-aw-v10-operation-coverage.mjs";
+import { checkPlatformSkillOperatingKnowledge } from "./platform-skill-operating-knowledge.mjs";
 const root = resolve(import.meta.dirname, "..");
 const manifest = JSON.parse(
   readFileSync(resolve(root, "doc/experience/v9/coverage.json"), "utf8"),
@@ -183,6 +184,7 @@ const pending = manifest.screens.filter(
   (s) => s.implementationStatus !== "implemented",
 ).length;
 failures.push(...(await checkOperationCoverage(root)).failures);
+failures.push(...(await checkPlatformSkillOperatingKnowledge(root)));
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exitCode = 1;

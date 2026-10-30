@@ -1,0 +1,13 @@
+✔ V10-145 audit binds the required source domains to the current immutable release and bounded Promptfoo scenarios (105.016331ms)
+✔ field regressions require reviewed provenance and reject raw customer paths, identifiers, and transcript fields (1.20148ms)
+✔ efficiency observations are diagnostic only and unqualified runtimes are not asserted as GA (0.536779ms)
+✔ provider parsing rejects configuration fields that the eval runner cannot preserve (0.863181ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 177.85525
+exit=0
