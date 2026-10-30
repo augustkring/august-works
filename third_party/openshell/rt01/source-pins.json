@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "status": "source-pinned-not-qualified",
+  "status": "source-qualified",
   "upstream": {
     "repository": "https://github.com/NVIDIA/OpenShell.git",
     "version": "v0.1.2",
@@ -79,26 +79,40 @@
     "proto/openshell.proto"
   ],
   "qualification": {
-    "status": "pending dedicated R6.1 remote qualification",
-    "previousR6Run": 41049715574,
-    "previousR6Outcome": "source verification and formatting passed; four-package cargo check failed because R12 code used nonexistent bollard::models::LogConfig/type_ instead of HostConfigLogConfig/typ; focused tests did not run",
-    "R6_1FocusedTests": "18 exact tests configured; pending",
-    "physicalDockerQuotaProbe": "not run",
-    "physicalSeccompHostProbe": "not run",
-    "profileAdmission": "closed",
+    "status": "source qualification passed; runtime/physical qualification remains open",
+    "R6_1Run": 41051549768,
+    "R6_1RunUrl": "https://github.com/augustkring/august-works/actions/runs/41051549768",
+    "R6_1HeadSha": "4f7894452d67dc76d7349c940217bdb0be39fb40",
+    "R6_1Outcome": "pinned source/apply and source verification passed; formatting passed; cargo check passed for server, CLI, Docker driver, and sandbox; all 18 exact focused tests passed",
+    "R6_1FocusedTests": {
+      "configured": 18,
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    "R6_1FullRunLog": {
+      "localPreparationRelativePath": "openshell-r6-1-run-41051549768/full-run.log",
+      "sha256": "cd07c8ee132fe6474c38df36fc049d8f3986ee5b76c79fae7af9fb225963f993"
+    },
+    "R6_1FullRunLogGzip": {
+      "localPreparationRelativePath": "openshell-r6-1-run-41051549768/full-run.log.gz",
+      "sha256": "9dc69ec6cb802420f59ab5b61be02cdc53b841fd2f10521d1fb154c5078bac85"
+    },
+    "R5_1Run": 41044296826,
+    "previousR6FailedRun": 41049715574,
     "previousR6FocusedTests": {
       "configured": 18,
       "executed": 0,
       "skipped": 18
     },
-    "previousR6FullRunLog": {
-      "runUrl": "https://github.com/augustkring/august-works/actions/runs/41049715574",
-      "localPreparationRelativePath": "openshell-r6-run-41049715574/full-run.log",
-      "sha256": "59648fa9317171bf7e18330e6c4b7730278749c516845bff8865f2b7268f79de"
-    },
-    "previousR6FullRunLogGzip": {
-      "localPreparationRelativePath": "openshell-r6-run-41049715574/full-run.log.gz",
-      "sha256": "43bdb23fc471936be3c931ea54bd9eeaaf9e48a4c2c30a2f2a02395939cc3b0b"
+    "previousR6RunUrl": "https://github.com/augustkring/august-works/actions/runs/41049715574",
+    "previousR6FullRunLogGzipSha256": "43bdb23fc471936be3c931ea54bd9eeaaf9e48a4c2c30a2f2a02395939cc3b0b",
+    "physicalDockerQuotaProbe": "not run",
+    "physicalSeccompHostProbe": "not run",
+    "profileAdmission": "closed",
+    "R6_1PortableReceiptArchive": {
+      "localPreparationRelativePath": "openshell-r6-1-run-41051549768/qualification.tar.gz",
+      "sha256": "8be6460d60743a37ca8e6e3451e05b0fffe5f018a1b3581e8dd7b9936d50520a"
     }
   },
   "parentR5_1PatchSha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",

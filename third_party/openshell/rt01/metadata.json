@@ -1,6 +1,6 @@
 {
   "name": "v10-149-rt01-openshell-r6-1-identity-resource-guards",
-  "status": "candidate-not-qualified",
+  "status": "source-qualified",
   "profileAdmission": "closed",
   "upstream": {
     "repository": "https://github.com/NVIDIA/OpenShell.git",
@@ -19,26 +19,33 @@
   },
   "sourcePins": {
     "file": "source-pins.json",
-    "sha256": "4b644b8cdbded54775f229dbccb5c75f9df919819e17a7502556cdba2587822e"
+    "sha256": "d1eba31372c0fc3768949527b21dd6adc762b62f0a913bdb1ebe784cb9081239"
   },
   "license": {
     "spdx": "Apache-2.0",
     "upstreamFile": "LICENSE"
   },
   "qualification": {
-    "status": "pending dedicated R6.1 remote qualification",
-    "previousR6Run": 41049715574,
-    "previousR6Outcome": "source verification and formatting passed; four-package cargo check failed on incorrect Bollard HostConfig log model; tests skipped",
-    "R6_1ConfiguredExactTests": 18,
-    "physicalDockerQuotaProbe": "not run",
-    "physicalSeccompHostProbe": "not run",
-    "profileAdmission": "closed",
+    "status": "source qualification passed; runtime/physical qualification remains open",
+    "R6_1Run": 41051549768,
+    "R6_1RunUrl": "https://github.com/augustkring/august-works/actions/runs/41051549768",
+    "R6_1HeadSha": "4f7894452d67dc76d7349c940217bdb0be39fb40",
+    "R6_1Outcome": "format and four-package cargo check passed; all 18 exact focused tests passed",
+    "R6_1FocusedTests": {
+      "configured": 18,
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    "portableReceiptArchiveSha256": "8be6460d60743a37ca8e6e3451e05b0fffe5f018a1b3581e8dd7b9936d50520a",
+    "previousR6FailedRun": 41049715574,
     "previousR6FocusedTests": {
       "configured": 18,
       "executed": 0,
       "skipped": 18
     },
-    "previousR6RunUrl": "https://github.com/augustkring/august-works/actions/runs/41049715574",
-    "previousR6FullRunLogGzipSha256": "43bdb23fc471936be3c931ea54bd9eeaaf9e48a4c2c30a2f2a02395939cc3b0b"
+    "physicalDockerQuotaProbe": "not run",
+    "physicalSeccompHostProbe": "not run",
+    "profileAdmission": "closed"
   }
 }
