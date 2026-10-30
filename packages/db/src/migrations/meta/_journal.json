@@ -3942,6 +3942,13 @@
       "when": 1793322768277,
       "tag": "0564_broken_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 565,
+      "version": "7",
+      "when": 1793328910442,
+      "tag": "0565_first_gorgon",
+      "breakpoints": true
     }
   ]
 }

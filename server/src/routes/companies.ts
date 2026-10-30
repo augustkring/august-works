@@ -3,13 +3,14 @@ import { canonicalJson } from "@paperclipai/shared/portability-hash";
 import { companyImportJobService, companyImportOperationReceipt, type CompanyImportJob } from "../services/company-import-jobs.js";
 import { assertCompanyCeoAgentOrBoard, authorizationService, canActorReadProjectPrivacy } from "../services/authorization.js";
 import { routineService } from "../services/routines.js";
+import { companyResponsibilityContactsService } from "../services/company-responsibility-contacts.js";
 import { isSaasDeployment } from "../deployment-profile.js";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import { and, count as countFn, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { agents as agentsTable } from "@paperclipai/db";
+import { agents as agentsTable, companies } from "@paperclipai/db";
 import type { CompanyPortabilityImportResult } from "@paperclipai/shared";
 import {
   MAX_ZIP_ENTRY_DECOMPRESSED_BYTES,
@@ -29,6 +30,7 @@ import {
   feedbackVoteValueSchema,
   hidesCompanyPage,
   updateCompanyBrandingSchema,
+  updateCompanyResponsibilityContactsSchema,
   updateCompanySchema,
 } from "@paperclipai/shared";
 import {
@@ -285,6 +287,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   const importTransferSpoolRoot =
     options?.importTransferSpoolRoot ?? resolveDefaultImportTransferSpoolRoot();
   const svc = companyService(db);
+  const responsibilityContacts = companyResponsibilityContactsService(db);
   const agents = agentService(db);
   const portability = companyPortabilityService(db, storage);
   const access = accessService(db);
@@ -1418,6 +1421,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       return;
     }
 
+
     if (req.actor.type !== "agent") {
       if (body.feedbackDataSharingEnabled === true && !existingCompany.feedbackDataSharingEnabled) {
         body = {
@@ -1474,6 +1478,35 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       });
     }
     res.json(company);
+  });
+
+  router.get("/:companyId/responsibility-contacts", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyDefaultsAdmin(req, companyId);
+    const [contacts] = await db.select({ securityContactUserId: companies.securityContactUserId,
+      supportIncidentContactUserId: companies.supportIncidentContactUserId }).from(companies)
+      .where(eq(companies.id, companyId)).limit(1);
+    if (!contacts) throw notFound("Company not found");
+    const eligibleUsers = await responsibilityContacts.listEligibleUsers(companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json({ ...contacts, eligibleUsers });
+  });
+
+  router.patch("/:companyId/responsibility-contacts", validate(updateCompanyResponsibilityContactsSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertCompanyDefaultsAdmin(req, companyId);
+    const contactIds = [req.body.securityContactUserId, req.body.supportIncidentContactUserId]
+      .filter((value): value is string => typeof value === "string");
+    await responsibilityContacts.assertEligible(companyId, contactIds);
+    const [updated] = await db.update(companies).set({ ...req.body, updatedAt: new Date() })
+      .where(eq(companies.id, companyId)).returning({ id: companies.id });
+    if (!updated) throw notFound("Company not found");
+    const actor = getActorInfo(req);
+    await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId,
+      action: "company.responsibility_contacts_updated", entityType: "company", entityId: companyId,
+      details: { securityContactSet: Boolean(req.body.securityContactUserId),
+        supportIncidentContactSet: Boolean(req.body.supportIncidentContactUserId) } });
+    res.json({ ok: true });
   });
 
   router.patch("/:companyId/branding", async (req, res) => {

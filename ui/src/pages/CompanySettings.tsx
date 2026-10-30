@@ -1,6 +1,6 @@
 import { ChangeEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   type InteractionResolverGovernance,
@@ -56,6 +56,13 @@ export function CompanySettings() {
   const [logoUrl, setLogoUrl] = useState("");
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [governance, setGovernance] = useState<InteractionResolverGovernance>({});
+  const [securityContactUserId, setSecurityContactUserId] = useState("");
+  const [supportIncidentContactUserId, setSupportIncidentContactUserId] = useState("");
+  const { data: responsibilityContacts, isSuccess: contactsLoaded, error: contactsError } = useQuery({
+    queryKey: ["company-responsibility-contacts", selectedCompanyId],
+    queryFn: () => companiesApi.responsibilityContacts(selectedCompanyId!),
+    enabled: Boolean(selectedCompanyId),
+  });
 
   // Sync local state from selected company
   useEffect(() => {
@@ -67,6 +74,23 @@ export function CompanySettings() {
     setLogoUrl(selectedCompany.logoUrl ?? "");
     setGovernance(selectedCompany.interactionResolverGovernance ?? {});
   }, [selectedCompany]);
+  useEffect(() => {
+    setSecurityContactUserId("");
+    setSupportIncidentContactUserId("");
+  }, [selectedCompanyId]);
+  useEffect(() => {
+    if (!responsibilityContacts) return;
+    setSecurityContactUserId(responsibilityContacts.securityContactUserId ?? "");
+    setSupportIncidentContactUserId(responsibilityContacts.supportIncidentContactUserId ?? "");
+  }, [responsibilityContacts]);
+
+  const contactsMutation = useMutation({
+    mutationFn: () => companiesApi.updateResponsibilityContacts(selectedCompanyId!, {
+      securityContactUserId: securityContactUserId || null,
+      supportIncidentContactUserId: supportIncidentContactUserId || null,
+    }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["company-responsibility-contacts", selectedCompanyId] }),
+  });
 
   const generalDirty =
     !!selectedCompany &&
@@ -384,6 +408,46 @@ export function CompanySettings() {
           )}
         </div>
       )}
+
+      {/* Hiring */}
+      <div className="max-w-2xl space-y-4" data-testid="company-responsibility-contacts">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Responsibility contacts</div>
+        <p className="text-sm text-muted-foreground">These contacts are accountable people for follow-up. Selecting someone does not grant access or change their permissions.</p>
+        <Field label="Security contact" hint="A current Human member for company security follow-up.">
+          <select aria-label="Security contact" data-testid="security-contact-select"
+            className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm"
+            disabled={!contactsLoaded || contactsMutation.isPending}
+            value={securityContactUserId} onChange={event => setSecurityContactUserId(event.target.value)}>
+            <option value="">No contact selected</option>
+            {securityContactUserId && !responsibilityContacts?.eligibleUsers.some(user => user.id === securityContactUserId) &&
+              <option value={securityContactUserId}>Current contact is no longer eligible; clear or replace it</option>}
+            {(responsibilityContacts?.eligibleUsers ?? []).map(entry =>
+              <option key={entry.id} value={entry.id}>{entry.name || entry.email || entry.id}</option>)}
+          </select>
+        </Field>
+        <Field label="Support and incident contact" hint="A current Human member for customer support and incident coordination.">
+          <select aria-label="Support and incident contact" data-testid="support-incident-contact-select"
+            className="w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm"
+            disabled={!contactsLoaded || contactsMutation.isPending}
+            value={supportIncidentContactUserId} onChange={event => setSupportIncidentContactUserId(event.target.value)}>
+            <option value="">No contact selected</option>
+            {supportIncidentContactUserId && !responsibilityContacts?.eligibleUsers.some(user => user.id === supportIncidentContactUserId) &&
+              <option value={supportIncidentContactUserId}>Current contact is no longer eligible; clear or replace it</option>}
+            {(responsibilityContacts?.eligibleUsers ?? []).map(entry =>
+              <option key={entry.id} value={entry.id}>{entry.name || entry.email || entry.id}</option>)}
+          </select>
+        </Field>
+        {contactsError && <span className="text-xs text-destructive">Could not load responsibility contacts.</span>}
+        {contactsLoaded && (securityContactUserId !== (responsibilityContacts?.securityContactUserId ?? "") ||
+          supportIncidentContactUserId !== (responsibilityContacts?.supportIncidentContactUserId ?? "")) && (
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => contactsMutation.mutate()} disabled={contactsMutation.isPending}>
+              {contactsMutation.isPending ? "Saving..." : "Save contacts"}
+            </Button>
+            {contactsMutation.isError && <span className="text-xs text-destructive">{contactsMutation.error.message}</span>}
+          </div>
+        )}
+      </div>
 
       {/* Hiring */}
       <div className="max-w-2xl space-y-4" data-testid="company-settings-team-section">

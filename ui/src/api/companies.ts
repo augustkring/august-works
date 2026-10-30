@@ -1,5 +1,7 @@
 import type {
   Company,
+  CompanyResponsibilityContacts,
+  UpdateCompanyResponsibilityContacts,
   CustomerOperationReceipt,
   CompanyPortabilityExportRequest,
   CompanyPortabilityExportPreviewResult,
@@ -130,6 +132,10 @@ export const companiesApi = {
       >
     >,
   ) => api.patch<Company>(`/companies/${companyId}`, data),
+  responsibilityContacts: (companyId: string) =>
+    api.get<CompanyResponsibilityContacts>(`/companies/${companyId}/responsibility-contacts`, { cache: "no-store" }),
+  updateResponsibilityContacts: (companyId: string, data: UpdateCompanyResponsibilityContacts) =>
+    api.patch<{ ok: true }>(`/companies/${companyId}/responsibility-contacts`, data),
   updateBranding: (companyId: string, data: UpdateCompanyBranding) =>
     api.patch<Company>(`/companies/${companyId}/branding`, data),
   archive: (companyId: string) => api.post<Company>(`/companies/${companyId}/archive`, {}),

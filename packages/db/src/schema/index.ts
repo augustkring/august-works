@@ -1,5 +1,6 @@
 export { customerOperations } from "./customer_operations.js";
 export { companies } from "./companies.js";
+export { responsibilityScanCandidates, responsibilityScanRuns } from "./responsibility_scan.js";
 export { agentConfigurationRuntimeCandidates, agentRuntimeCandidateConformanceRequests } from "./agent_configuration_runtime_candidates.js";
 export { decisionContexts, decisionContextVersions, decisionContextPreparations, decisionContextBindings,
   decisionEvidenceLinks, decisionCalculationPins, decisionExperimentPins, decisionCausalPins, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes } from "./decision_intelligence.js";

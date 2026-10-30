@@ -23,6 +23,9 @@ export const companies = pgTable(
     budgetMonthlyCents: integer("budget_monthly_cents").notNull().default(0),
     spentMonthlyCents: integer("spent_monthly_cents").notNull().default(0),
     defaultResponsibleUserId: text("default_responsible_user_id"),
+    /** Optional accountable tenant contacts; these labels do not grant access. */
+    securityContactUserId: text("security_contact_user_id"),
+    supportIncidentContactUserId: text("support_incident_contact_user_id"),
     requireBoardApprovalForNewAgents: boolean("require_board_approval_for_new_agents")
       .notNull()
       .default(false),

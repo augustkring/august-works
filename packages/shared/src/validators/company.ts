@@ -59,7 +59,14 @@ export const updateCompanySchema = objectWithoutDefaults(
       feedbackDataSharingTermsVersion: feedbackDataSharingTermsVersionSchema,
       logoAssetId: logoAssetIdSchema,
     }),
-);
+).strict();
+
+export const updateCompanyResponsibilityContactsSchema = z.object({
+  securityContactUserId: z.string().min(1).nullable(),
+  supportIncidentContactUserId: z.string().min(1).nullable(),
+}).strict();
+
+export type UpdateCompanyResponsibilityContacts = z.infer<typeof updateCompanyResponsibilityContactsSchema>;
 
 export type UpdateCompany = z.infer<typeof updateCompanySchema>;
 

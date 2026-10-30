@@ -439,8 +439,14 @@ export function companyService(db: Db) {
           await tx.delete(assets).where(eq(assets.id, existing.logoAssetId));
         }
 
+        // Private responsibility-contact IDs are exposed only by the dedicated
+        // no-store owner settings route, never in generic Company responses.
+        const { securityContactUserId: _securityContactUserId,
+          supportIncidentContactUserId: _supportIncidentContactUserId, ...publicUpdated } = updated;
+        void _securityContactUserId;
+        void _supportIncidentContactUserId;
         const [hydrated] = await hydrateCompanySpend([{
-          ...updated,
+          ...publicUpdated,
           logoAssetId: logoAssetId === undefined ? existing.logoAssetId : logoAssetId,
         }], tx);
 

@@ -19,6 +19,7 @@ export type {
 } from "./connection-intent.js";
 export type {
   Company,
+  CompanyResponsibilityContacts,
   InteractionResolverGovernance,
   InteractionResolverKindGovernance,
 } from "./company.js";

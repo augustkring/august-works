@@ -51,6 +51,7 @@ import { nativeSandboxHostTransport } from "../execution-sandbox/native-host-bri
 import { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { registerNativeDraftGateway } from "../orchestration/native-draft-runtime.js";
 import { nativeDraftConformanceService, registerNativeDraftConformance } from "../native-draft-conformance.js";
+import { runResponsibilityScanMaintenanceTick } from "../experience/private-0565/maintenance-runner.js";
 
 export function saasPlatform(
   db: Db,
@@ -252,6 +253,12 @@ export function saasPlatform(
       flag: "saas_deployment_profile_v6",
       interval: 10000,
       run: () => accountDeletion.processOne(),
+    },
+    {
+      key: "company-responsibility-scan",
+      flag: "saas_deployment_profile_v6",
+      interval: 2000,
+      run: () => runResponsibilityScanMaintenanceTick({ db, worker: owner }),
     },
     {
       key: "approved-feedback-erasure",

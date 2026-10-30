@@ -27,6 +27,7 @@ import {
 import { sha256 } from "./crypto.js";
 import { accessService } from "../access.js";
 import { parseAccountDeletionSsoChallenge } from "../../auth/account-deletion-sso-proof.js";
+import { enqueueResponsibilityScan } from "../experience/private-0565/responsibility-scan-store.js";
 
 export function accountDeletionService(
   db: Db,
@@ -38,6 +39,12 @@ export function accountDeletionService(
     operatorUserIds?: readonly string[];
   },
 ) {
+  async function enqueueAfterAccessRevocation(companyIds: readonly string[]) {
+    for (const companyId of new Set(companyIds)) {
+      try { await enqueueResponsibilityScan(db, companyId); }
+      catch { /* access revocation already committed; periodic scan remains due */ }
+    }
+  }
   async function request(userId: string, raw: unknown, now = new Date(), actor?: AuthorizationActor) {
     const input = accountDeletionRequestSchema.parse(raw);
     if (actor?.type !== "board" || actor.source !== "session" || actor.userId !== userId || !actor.sessionId)
@@ -61,7 +68,7 @@ export function accountDeletionService(
       throw tooManyRequests(
         "Account confirmation attempts exceeded; try again later",
       );
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [user] = await tx
         .select()
         .from(authUsers)
@@ -74,7 +81,7 @@ export function accountDeletionService(
       if (existing) {
         if (existing.idempotencyKey !== sha256(input.idempotencyKey))
           throw conflict("Account deletion is already requested");
-        return receipt(existing);
+        return { receipt: receipt(existing), responsibilityCompanyIds: [] as string[] };
       }
       let pendingSsoProof: {
         rowId: string;
@@ -289,7 +296,7 @@ export function accountDeletionService(
           notBefore: now,
         })
         .returning();
-      await eraseAccountAccess(tx, userId, user.email, now, pendingSsoProof?.rowId);
+      const responsibilityCompanyIds = await eraseAccountAccess(tx, userId, user.email, now, pendingSsoProof?.rowId);
       // Account erasure intentionally disables/removes native factors and
       // therefore advances the generation through the database-owned trigger.
       // The user row has stayed locked since request start, so pin this exact
@@ -330,8 +337,10 @@ export function accountDeletionService(
         await tx.delete(authVerifications).where(eq(authVerifications.id, pendingSsoProof.rowId));
       }
       if (pendingNativeProof) await assertPinnedAuthenticationDeadline(tx, pendingNativeProof);
-      return receipt(operation!);
+      return { receipt: receipt(operation!), responsibilityCompanyIds };
     });
+    await enqueueAfterAccessRevocation(result.responsibilityCompanyIds);
+    return result.receipt;
   }
   async function processOne(now = new Date()) {
     const operation = await db.transaction(async (tx) => {
@@ -408,7 +417,8 @@ export function accountDeletionService(
       if (remainingSecret) throw Error("account_secret_erasure_pending");
       // Request-time access revocation is immediate. A current feedback legal
       // hold or an uncertain protected object must not be reported as erasure.
-      await db.transaction(tx => eraseAccountAccess(tx, operation.userId, undefined, now));
+      const responsibilityCompanyIds = await db.transaction(tx => eraseAccountAccess(tx, operation.userId, undefined, now));
+      await enqueueAfterAccessRevocation(responsibilityCompanyIds);
       const held = await db.execute(sql`select 1 from customer_feedback_access where user_id=${operation.userId} limit 1`);
       if (held.length) throw Error("account_feedback_hold_pending");
       await effects.removeFeedbackImages?.(operation.id);
@@ -416,8 +426,8 @@ export function accountDeletionService(
         eq(feedbackImageDeletions.accountDeletionId, operation.id), sql`${feedbackImageDeletions.deletedAt} is null`,
       )).limit(1);
       if (pendingImage) throw Error("account_feedback_image_erasure_pending");
-      await db.transaction(async (tx) => {
-        await eraseAccountAccess(tx, operation.userId, undefined, now);
+      const completedResponsibilityCompanyIds = await db.transaction(async (tx) => {
+        const responsibilityCompanyIds = await eraseAccountAccess(tx, operation.userId, undefined, now);
         // Recheck after the final native erase: a hold can expire or be
         // released between attempts, creating a new protected-object outbox.
         // Completing the account must never outrun that physical erasure.
@@ -432,7 +442,9 @@ export function accountDeletionService(
           .update(accountDeletionOperations)
           .set({ status: "completed", errorCode: null, completedAt: now })
           .where(eq(accountDeletionOperations.userId, operation.userId));
+        return responsibilityCompanyIds;
       });
+      await enqueueAfterAccessRevocation(completedResponsibilityCompanyIds);
     } catch {
       await db
         .update(accountDeletionOperations)
@@ -470,7 +482,8 @@ export async function eraseAccountAccess(
   // Reuse the company access owner before removing membership rows: revocation
   // pauses user-owned routines, withdraws connection access/coverage and clears
   // explicit responsible-human defaults in the same erasure transaction.
-  await accessService(tx as unknown as Db).prepareMemberForOffboardingInTransaction(tx, userId, null, now);
+  const responsibilityCompanyIds = await accessService(tx as unknown as Db)
+    .prepareMemberForOffboardingInTransaction(tx, userId, null, now);
   // Coverage authority ends as soon as account deletion begins. Keep the
   // immutable receipt row for audit, but erase its user-authored reason while
   // a support or legal hold keeps the account row pending physical deletion.
@@ -563,4 +576,5 @@ export async function eraseAccountAccess(
   await tx.execute(sql`update "user" set name='Deleted account',
     email=${"deleted+" + sha256(userId) + "@account.invalid"},email_verified=false,
     image=null,locale=null,two_factor_enabled=false,updated_at=${now.toISOString()}::timestamptz where id=${userId}`);
+  return responsibilityCompanyIds;
 }

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { act } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
@@ -12,6 +13,8 @@ import { CompanySettings } from "./CompanySettings";
 const mockCompaniesApi = vi.hoisted(() => ({
   update: vi.fn(),
   archive: vi.fn(),
+  responsibilityContacts: vi.fn(),
+  updateResponsibilityContacts: vi.fn(),
 }));
 
 const mockAssetsApi = vi.hoisted(() => ({
@@ -85,6 +88,7 @@ describe("CompanySettings rename hint", () => {
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
+    mockCompaniesApi.responsibilityContacts.mockResolvedValue({ securityContactUserId: null, supportIncidentContactUserId: null, eligibleUsers: [] });
   });
 
   afterEach(() => {
@@ -130,6 +134,26 @@ describe("CompanySettings rename hint", () => {
   it("stays silent on a self-hosted instance, where a rename keeps the prefix", () => {
     const root = render(SELF_HOSTED_HEALTH);
     expect(hintText()).toBeUndefined();
+    flushSync(() => root.unmount());
+  });
+
+  it("offers only server-validated contacts and lets the owner clear an ineligible saved contact", async () => {
+    mockCompaniesApi.responsibilityContacts.mockResolvedValue({ securityContactUserId: "inactive-human",
+      supportIncidentContactUserId: null, eligibleUsers: [{ id: "eligible-human", name: "Current Human", email: null }] });
+    const root = render(SELF_HOSTED_HEALTH);
+    await vi.waitFor(() => expect(mockCompaniesApi.responsibilityContacts).toHaveBeenCalledWith("company-1"));
+    await vi.waitFor(() => {
+      const select = container.querySelector<HTMLSelectElement>("[data-testid='security-contact-select']")!;
+      expect(Array.from(select.options).map(option => option.value)).toEqual(["", "inactive-human", "eligible-human"]);
+    });
+    const select = container.querySelector<HTMLSelectElement>("[data-testid='security-contact-select']")!;
+    expect(select.options[1]?.textContent).toContain("no longer eligible");
+    expect(select.value).toBe("inactive-human");
+    await act(async () => {
+      select.value = "";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(Array.from(container.querySelectorAll("button")).some(button => button.textContent?.includes("Save contacts"))).toBe(true);
     flushSync(() => root.unmount());
   });
 });

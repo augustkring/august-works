@@ -30,6 +30,7 @@ import { ensureHumanRoleDefaultGrants } from "./principal-access-compatibility.j
 import { routineService } from "./routines.js";
 import { isUniqueViolation } from "../db-errors.js";
 import { assertHumanAuthentication, assertPinnedAuthenticationDeadline } from "../auth/authenticator-assurance.js";
+import { enqueueResponsibilityScan } from "./experience/private-0565/responsibility-scan-store.js";
 
 type MembershipRow = typeof companyMemberships.$inferSelect;
 export type AccessTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -49,6 +50,13 @@ type SecuritySuspensionReason = SecuritySuspendCompanyMember["reasonCode"] | "en
 
 export function accessService(db: Db) {
   const authorization = authorizationService(db);
+
+  async function queueResponsibilityAfterOffboarding(companyIds: readonly string[]) {
+    for (const companyId of new Set(companyIds)) {
+      try { await enqueueResponsibilityScan(db, companyId); }
+      catch { /* access is already revoked; the fair scheduler will retry */ }
+    }
+  }
 
   function workflowCoverageActor(userId: string): AuthorizationActor {
     return { type: "board", source: "session", userId, ignoreInstanceAdmin: true };
@@ -542,8 +550,14 @@ export function accessService(db: Db) {
     userId: string,
     now: Date,
   ) {
-    await tx.update(companies).set({ defaultResponsibleUserId: null, updatedAt: now }).where(and(
-      eq(companies.id, companyId), eq(companies.defaultResponsibleUserId, userId),
+    await tx.update(companies).set({
+      defaultResponsibleUserId: sql<string | null>`case when ${companies.defaultResponsibleUserId} = ${userId} then null else ${companies.defaultResponsibleUserId} end`,
+      securityContactUserId: sql<string | null>`case when ${companies.securityContactUserId} = ${userId} then null else ${companies.securityContactUserId} end`,
+      supportIncidentContactUserId: sql<string | null>`case when ${companies.supportIncidentContactUserId} = ${userId} then null else ${companies.supportIncidentContactUserId} end`,
+      updatedAt: now,
+    }).where(and(
+      eq(companies.id, companyId), or(eq(companies.defaultResponsibleUserId, userId),
+        eq(companies.securityContactUserId, userId), eq(companies.supportIncidentContactUserId, userId)),
     ));
   }
 
@@ -556,16 +570,28 @@ export function accessService(db: Db) {
     const memberships = await tx.select({ companyId: companyMemberships.companyId, status: companyMemberships.status })
       .from(companyMemberships).where(and(eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)))
       .orderBy(asc(companyMemberships.companyId)).for("update");
+    const affectedCompanyIds = memberships.map(row => row.companyId);
+    const staleDefaults = await tx.select({ companyId: companies.id }).from(companies)
+      .where(or(eq(companies.defaultResponsibleUserId, userId), eq(companies.securityContactUserId, userId),
+        eq(companies.supportIncidentContactUserId, userId)));
+    affectedCompanyIds.push(...staleDefaults.map(row => row.companyId));
     for (const membership of memberships) {
       await sweepMemberConnectionAccess(tx, membership.companyId, userId, now);
       await pauseActiveOwnedRoutinesForWithdrawal(tx, membership.companyId, userId, actorUserId);
       await revokeWorkflowCoveragesForMember(tx, membership.companyId, userId, actorUserId, now);
       await clearCompanyResponsibleHuman(tx, membership.companyId, userId, now);
     }
-    // Also clear a stale explicit default if its membership row was already
+    // Also clear stale defaults or contacts whose membership row was already
     // removed by an earlier offboarding attempt.
-    await tx.update(companies).set({ defaultResponsibleUserId: null, updatedAt: now })
-      .where(eq(companies.defaultResponsibleUserId, userId));
+    await tx.update(companies).set({
+      defaultResponsibleUserId: sql<string | null>`case when ${companies.defaultResponsibleUserId} = ${userId} then null else ${companies.defaultResponsibleUserId} end`,
+      securityContactUserId: sql<string | null>`case when ${companies.securityContactUserId} = ${userId} then null else ${companies.securityContactUserId} end`,
+      supportIncidentContactUserId: sql<string | null>`case when ${companies.supportIncidentContactUserId} = ${userId} then null else ${companies.supportIncidentContactUserId} end`,
+      updatedAt: now,
+    })
+      .where(or(eq(companies.defaultResponsibleUserId, userId), eq(companies.securityContactUserId, userId),
+        eq(companies.supportIncidentContactUserId, userId)));
+    return [...new Set(affectedCompanyIds)];
   }
 
   async function suspendMemberForSecurityInTransaction(
@@ -639,9 +665,7 @@ export function accessService(db: Db) {
       eq(principalPermissionGrants.principalType, "user"),
       eq(principalPermissionGrants.principalId, targetMembership.principalId),
     ));
-    await tx.update(companies).set({ defaultResponsibleUserId: null, updatedAt: now }).where(and(
-      eq(companies.id, companyId), eq(companies.defaultResponsibleUserId, targetMembership.principalId),
-    ));
+    await clearCompanyResponsibleHuman(tx, companyId, targetMembership.principalId, now);
     const [updated] = await tx.update(companyMemberships).set({ status: "suspended", updatedAt: now })
       .where(eq(companyMemberships.id, targetMembership.id)).returning();
     const remainingOwners = targetMembership.membershipRole === "owner"
@@ -841,7 +865,7 @@ export function accessService(db: Db) {
     },
     grantedByUserId: string | null,
   ) {
-    return db.transaction(async (tx) => {
+    const updated = await db.transaction(async (tx) => {
       await tx.execute(sql`
         select ${companyMemberships.id}
         from ${companyMemberships}
@@ -937,6 +961,8 @@ export function accessService(db: Db) {
 
       return updated;
     });
+    if (updated?.status !== "active") await queueResponsibilityAfterOffboarding([companyId]);
+    return updated;
   }
 
   async function assertCanRemoveActiveOwner(
@@ -1003,7 +1029,7 @@ export function accessService(db: Db) {
   }
 
   async function archiveMember(companyId: string, memberId: string, input: MemberArchiveInput = {}, actorUserId = "system") {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       await tx.execute(sql`
         select ${companyMemberships.id}
         from ${companyMemberships}
@@ -1199,6 +1225,8 @@ export function accessService(db: Db) {
         ownerActionRoutineCount,
       };
     });
+    if (result?.member.status === "archived") await queueResponsibilityAfterOffboarding([companyId]);
+    return result;
   }
 
   async function promoteInstanceAdmin(userId: string) {
@@ -1240,6 +1268,7 @@ export function accessService(db: Db) {
     options: { actorUserId?: string | null } = {},
   ) {
     const target = new Set(companyIds);
+    const revokedCompanyIds: string[] = [];
 
     await db.transaction(async (tx) => {
       // Serialize every company-access removal/reactivation with personal OAuth
@@ -1251,6 +1280,7 @@ export function accessService(db: Db) {
         .for("update");
       const existingByCompany = new Map(existing.map((row) => [row.companyId, row]));
       const toArchive = existing.filter((row) => !target.has(row.companyId) && row.status !== "archived");
+      revokedCompanyIds.push(...toArchive.map(row => row.companyId));
       if (toArchive.length > 0 && options.actorUserId && options.actorUserId === userId) {
         throw conflict("You cannot remove yourself");
       }
@@ -1336,6 +1366,8 @@ export function accessService(db: Db) {
         });
       }
     });
+
+    if (revokedCompanyIds.length > 0) await queueResponsibilityAfterOffboarding(revokedCompanyIds);
 
     return listUserCompanyAccess(userId);
   }
@@ -1668,7 +1700,7 @@ export function accessService(db: Db) {
     },
     actorUserId: string | null = null,
   ) {
-    return db.transaction(async (tx) => {
+    const updated = await db.transaction(async (tx) => {
       await tx.execute(sql`
         select ${companyMemberships.id}
         from ${companyMemberships}
@@ -1742,6 +1774,8 @@ export function accessService(db: Db) {
         await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, actorUserId, now);
       return updated;
     });
+    if (updated && updated.status !== "active") await queueResponsibilityAfterOffboarding([companyId]);
+    return updated;
   }
 
   return {
@@ -1771,8 +1805,11 @@ export function accessService(db: Db) {
     updateMember,
     prepareMemberForOffboardingInTransaction,
     suspendMemberForSecurityInTransaction,
-    suspendMemberForSecurity: (companyId: string, memberId: string, actor: AuthorizationActor, reason: SecuritySuspensionReason) =>
-      db.transaction((tx) => suspendMemberForSecurityInTransaction(tx, companyId, memberId, actor, reason)),
+    suspendMemberForSecurity: async (companyId: string, memberId: string, actor: AuthorizationActor, reason: SecuritySuspensionReason) => {
+      const result = await db.transaction((tx) => suspendMemberForSecurityInTransaction(tx, companyId, memberId, actor, reason));
+      if (result?.changed) await queueResponsibilityAfterOffboarding([companyId]);
+      return result;
+    },
     createWorkflowCoverage,
     listWorkflowCoverages,
     revokeWorkflowCoverage,

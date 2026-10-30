@@ -970,7 +970,7 @@ export async function createApp(
   api.use(processAnalysisRoutes(db));
   api.use(decisionIntelligenceRoutes(db));
   api.use(dashboardRoutes(db));
-  api.use(experienceRoutes(db));
+  api.use(experienceRoutes(db, { operatorUserIds: opts.saasPlatform?.config.operatorUserIds ?? [] }));
   api.use(agentAuthoringRoutes(db, opts.saasPlatform?.config));
   api.use(conversationAuthoringRoutes(db));
   api.use(agentMonitorRoutes(db));

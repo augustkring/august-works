@@ -39,3 +39,10 @@ export interface Company {
   createdAt: Date;
   updatedAt: Date;
 }
+
+/** Contact IDs are returned only by the company-owner settings endpoint. */
+export interface CompanyResponsibilityContacts {
+  securityContactUserId: string | null;
+  supportIncidentContactUserId: string | null;
+  eligibleUsers: Array<{ id: string; name: string | null; email: string | null }>;
+}

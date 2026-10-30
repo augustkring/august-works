@@ -785,6 +785,7 @@ export {
 
 export type {
   Company,
+  CompanyResponsibilityContacts,
   InteractionResolverGovernance,
   InteractionResolverKindGovernance,
   GenerateSummarySlotRequest,
@@ -1878,6 +1879,7 @@ export {
   interactionResolverGovernanceSchema,
   updateCompanySchema,
   updateCompanyBrandingSchema,
+  updateCompanyResponsibilityContactsSchema,
   feedbackTargetTypeSchema,
   feedbackTraceStatusSchema,
   feedbackVoteValueSchema,
@@ -1894,6 +1896,7 @@ export {
   type CreateCompany,
   type UpdateCompany,
   type UpdateCompanyBranding,
+  type UpdateCompanyResponsibilityContacts,
   type UpsertIssueFeedbackVote,
   type ExternalObjectCanonicalIdentityInput,
   type ExternalObjectMentionSourceInput,

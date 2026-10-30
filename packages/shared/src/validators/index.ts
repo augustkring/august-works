@@ -79,9 +79,11 @@ export {
   companyTimeZoneSchema,
   interactionResolverGovernanceSchema,
   updateCompanySchema,
+  updateCompanyResponsibilityContactsSchema,
   updateCompanyBrandingSchema,
   type CreateCompany,
   type UpdateCompany,
+  type UpdateCompanyResponsibilityContacts,
   type UpdateCompanyBranding,
 } from "./company.js";
 export {
