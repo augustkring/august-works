@@ -243,7 +243,7 @@ export async function readMemberContinuityPreflight(input: {
         .where(and(eq(connectionGrants.companyId, companyId), eq(connectionGrants.kind, "user"),
           eq(connectionGrants.subjectUserId, userId), eq(connectionGrants.status, "active")))
         .orderBy(asc(connectionGrants.id)).limit(PAGE_LIMIT + 1);
-      
+
       for (const grant of grants.slice(0, PAGE_LIMIT)) {
         if (!await actionAllowed(db, actor.userId, companyId, "tools:manage_connections")) break;
         try { await toolAccessService(db).getConnection(grant.connectionId, companyId, actor.userId); }
