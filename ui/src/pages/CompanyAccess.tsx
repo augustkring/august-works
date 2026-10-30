@@ -396,9 +396,10 @@ export function CompanyAccess() {
     !identity.localImplicit && currentAccount.settled && currentAccount.sessionId && authority.readReady &&
     authority.canRead() && membersQuery.data?.access.canManageMembers &&
     hasCurrentV9Session(queryClient, identity.userId, currentAccount.sessionId));
+  const continuityPreflightQueryKey = ["access", "member-responsibility-preflight", selectedCompanyId ?? "", identity.userId ?? "",
+    currentAccount.sessionId ?? "", authority.epoch, removingMember?.id ?? ""] as const;
   const continuityPreflightQuery = useQuery({
-    queryKey: ["access", "member-responsibility-preflight", selectedCompanyId ?? "", identity.userId ?? "",
-      currentAccount.sessionId ?? "", authority.epoch, removingMember?.id ?? ""],
+    queryKey: continuityPreflightQueryKey,
     queryFn: async ({ signal }): Promise<MemberPreflightEnvelope> => {
       if (!memberPreflightReadReady || !identity.userId || !currentAccount.sessionId || !removingMember)
         throw new Error("Current Human member-management access is unavailable");
@@ -423,7 +424,10 @@ export function CompanyAccess() {
     retry: false,
   });
   const preflightEnvelope = continuityPreflightQuery.data;
-  const continuityPreflightData = preflightEnvelope && memberPreflightReadReady &&
+  const continuityPreflightSourceReady = continuityPreflightQuery.isSuccess &&
+    continuityPreflightQuery.fetchStatus === "idle" && !continuityPreflightQuery.isFetching &&
+    !continuityPreflightQuery.isError && queryClient.getQueryState(continuityPreflightQueryKey)?.isInvalidated !== true;
+  const continuityPreflightData = continuityPreflightSourceReady && preflightEnvelope && memberPreflightReadReady &&
     preflightEnvelope.companyId === selectedCompanyId && preflightEnvelope.memberId === removingMember?.id &&
     preflightEnvelope.principalId === identity.userId && preflightEnvelope.sessionId === currentAccount.sessionId &&
     preflightEnvelope.authorityEpoch === authority.epoch && authority.canRead() &&

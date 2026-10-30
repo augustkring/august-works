@@ -3,14 +3,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { agentApiKeys, agents, authUsers, boardApiKeys, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, principalPermissionGrants, supportCases } from "@paperclipai/db";
+import { agentApiKeys, agents, authUsers, boardApiKeys, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, principalPermissionGrants, supportCases, routines, toolPolicies, workflows } from "@paperclipai/db";
 import { updateCompanySchema } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { RESPONSIBILITY_SCAN_KINDS, runResponsibilityScanOnce, type NativeResponsibilityMetadataSource } from "../services/experience/private-0565/responsibility-scan.js";
 import { enqueueResponsibilityScan, enqueueNextFairResponsibilityScan, postgresResponsibilityScanStore, readResponsibilityPointersForResolution } from "../services/experience/private-0565/responsibility-scan-store.js";
 import { readAuthorizedResponsibilitySubset, type NativeResponsibilityReader } from "../services/experience/private-0565/authorized-subset-reader.js";
 import { bindNativeResponsibilityReaders } from "../services/experience/private-0565/native-reader-ports.js";
-import { bindKnownNativeResponsibilityPorts, nativeAgentResponsibilityReader } from "../services/experience/private-0565/native-reader-adapters.js";
+import { bindKnownNativeResponsibilityPorts, nativeAgentResponsibilityReader, nativeRoutineResponsibilityReader, nativeToolPolicyResponsibilityReader, nativeWorkflowResponsibilityReader } from "../services/experience/private-0565/native-reader-adapters.js";
 import { nativeResponsibilityMetadataSources } from "../services/experience/private-0565/native-metadata-sources.js";
 import { canSubjectPerformNativeRead, responsibilityPolicySubject } from "../services/experience/private-0565/native-subject-policy.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
@@ -239,6 +239,81 @@ describe("PRIVATE 0565 responsibility scan store", () => {
     expect(JSON.stringify(afterRevocation)).not.toContain(agentId);
     expect(JSON.stringify(afterRevocation)).not.toContain("viewer");
     expect(afterRevocation.coverage).toBe("currently_authorized_subset");
+  });
+
+  it("uses current native Routine ACL and owner membership without exposing hidden routines", async () => {
+    const companyId = await company(), now = new Date();
+    const managerId = `routine-manager-${randomUUID()}`, departedId = `routine-departed-${randomUUID()}`;
+    await db.insert(authUsers).values([managerId, departedId].map(id => ({ id, name: id,
+      email: `${id}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now })));
+    await db.insert(companyMemberships).values([
+      { companyId, principalType: "user", principalId: managerId, status: "active", membershipRole: "owner" },
+      { companyId, principalType: "user", principalId: departedId, status: "archived", membershipRole: "owner" },
+    ]);
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+      companyId, principalType: "user" as const, principalId: managerId, ...grant,
+    })));
+    const privateName = `routine-private-canary-${randomUUID()}`;
+    const [routine] = await db.insert(routines).values({ companyId, title: privateName, status: "active",
+      responsibleUserId: departedId }).returning({ id: routines.id });
+    const privateDraftName = `conversation-draft-private-${randomUUID()}`;
+    const [privateDraft] = await db.insert(routines).values({ companyId, title: privateDraftName, status: "paused",
+      originKind: "conversation_draft", originId: randomUUID(), responsibleUserId: departedId }).returning({ id: routines.id });
+    const actor = { type: "board" as const, source: "session" as const, userId: managerId,
+      isInstanceAdmin: false, ignoreInstanceAdmin: true };
+    const reader = nativeRoutineResponsibilityReader(db);
+
+    const unresolved = await reader(actor, companyId, routine!.id);
+    expect(unresolved).toMatchObject({ state: "visible", coveredByAuthorizedHumanOrNativeGroup: false,
+      classification: "MUST_REASSIGN" });
+    const hidden = await reader(actor, companyId, privateDraft!.id);
+    expect(hidden).toEqual({ state: "hidden" });
+    for (const secret of [routine!.id, privateDraft!.id, privateName, privateDraftName, departedId])
+      expect(JSON.stringify({ unresolved, hidden })).not.toContain(secret);
+
+    await db.update(routines).set({ responsibleUserId: managerId }).where(eq(routines.id, routine!.id));
+    expect(await reader(actor, companyId, routine!.id)).toMatchObject({
+      state: "visible", coveredByAuthorizedHumanOrNativeGroup: true,
+    });
+  });
+
+  it("requires current native workflow and policy authority for visible coverage and fallback", async () => {
+    const companyId = await company(), now = new Date();
+    const managerId = "workflow-policy-manager-" + randomUUID(), viewerId = "workflow-policy-viewer-" + randomUUID();
+    await db.insert(authUsers).values([managerId, viewerId].map(id => ({ id, name: id,
+      email: id + "@test.invalid", emailVerified: true, createdAt: now, updatedAt: now })));
+    const [manager, viewer] = await db.insert(companyMemberships).values([
+      { companyId, principalType: "user", principalId: managerId, status: "active", membershipRole: "owner" },
+      { companyId, principalType: "user", principalId: viewerId, status: "active", membershipRole: "viewer" },
+    ]).returning();
+    await db.insert(principalPermissionGrants).values([
+      ...grantsForHumanRole("owner").map(grant => ({ companyId, principalType: "user" as const, principalId: managerId, ...grant })),
+      { companyId, principalType: "user", principalId: managerId, permissionKey: "tools:manage_profiles", scope: null },
+    ]);
+    const [workflow] = await db.insert(workflows).values({ companyId, name: "workflow-responsibility-" + randomUUID() })
+      .returning({ id: workflows.id, name: workflows.name });
+    const [policy] = await db.insert(toolPolicies).values({ companyId, name: "policy-responsibility-" + randomUUID(), policyType: "block" })
+      .returning({ id: toolPolicies.id, name: toolPolicies.name });
+    const actor = { type: "board" as const, source: "session" as const, userId: managerId,
+      isInstanceAdmin: false, ignoreInstanceAdmin: true };
+    const workflowReader = nativeWorkflowResponsibilityReader(db), policyReader = nativeToolPolicyResponsibilityReader(db);
+
+    for (const result of [await workflowReader(actor, companyId, workflow!.id), await policyReader(actor, companyId, policy!.id)])
+      expect(result).toMatchObject({ state: "visible", coveredByAuthorizedHumanOrNativeGroup: false, classification: "MUST_REASSIGN" });
+    await db.update(companies).set({ defaultResponsibleUserId: viewerId }).where(eq(companies.id, companyId));
+    for (const result of [await workflowReader(actor, companyId, workflow!.id), await policyReader(actor, companyId, policy!.id)])
+      expect(result).toMatchObject({ state: "visible", coveredByAuthorizedHumanOrNativeGroup: false, classification: "MUST_REASSIGN" });
+    await db.update(companies).set({ defaultResponsibleUserId: managerId }).where(eq(companies.id, companyId));
+    for (const result of [await workflowReader(actor, companyId, workflow!.id), await policyReader(actor, companyId, policy!.id)])
+      expect(result).toMatchObject({ state: "visible", coveredByAuthorizedHumanOrNativeGroup: true });
+    const observed = JSON.stringify([await workflowReader(actor, companyId, workflow!.id), await policyReader(actor, companyId, policy!.id)]);
+    for (const secret of [workflow!.id, workflow!.name, policy!.id, policy!.name, managerId, viewerId])
+      expect(observed).not.toContain(secret);
+
+    await db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.id, manager!.id));
+    expect(await workflowReader(actor, companyId, workflow!.id)).toEqual({ state: "hidden" });
+    expect(await policyReader(actor, companyId, policy!.id)).toEqual({ state: "hidden" });
+    expect(viewer!.principalId).toBe(viewerId);
   });
 
   it("binds a concrete native source reader for every applicable §17 kind", () => {

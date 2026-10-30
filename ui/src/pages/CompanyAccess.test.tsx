@@ -684,6 +684,48 @@ describe("CompanyAccess", () => {
     client.clear();
   });
 
+  it("hides cached responsibility evidence during and after a 403 refetch while member removal stays available", async () => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1"));
+    const staleEnvelope = { generatedAt: "2026-10-30T00:00:00.000Z", freshness: "current", coverage: "currently_authorized_subset",
+      items: [{ kind: "support_case", classification: "MUST_REASSIGN", count: 971, sourceVersion: "cached-preflight-private-canary", freshness: "current" }] };
+    getMemberResponsibilityPreflightMock.mockResolvedValueOnce(staleEnvelope);
+    let rejectRefresh!: (error: Error) => void;
+    getMemberResponsibilityPreflightMock.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectRefresh = reject; }));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+    const remove = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Remove"));
+    await act(async () => { remove!.click(); });
+    await vi.waitFor(() => expect(document.body.textContent).toContain("971"));
+    expect(document.body.textContent).toContain("support case");
+
+    const preflight = client.getQueryCache().find({
+      queryKey: ["access", "member-responsibility-preflight"], exact: false,
+    });
+    expect(preflight).toBeTruthy();
+    await act(async () => { void client.invalidateQueries({ queryKey: preflight!.queryKey, exact: true }); });
+    await vi.waitFor(() => expect(document.body.textContent).not.toContain("971"));
+    expect(document.body.textContent).not.toContain("support case");
+    expect(document.body.textContent).toContain("Some responsibilities could not be fully verified");
+
+    await act(async () => { rejectRefresh(new Error("403 Forbidden")); });
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Some responsibilities could not be fully verified"));
+    expect(document.body.textContent).not.toContain("971");
+    expect(document.body.textContent).not.toContain("support case");
+    const confirm = [...document.body.querySelectorAll("button")].find(button => button.textContent === "Remove member");
+    expect(confirm).toBeTruthy();
+    expect(confirm!.hasAttribute("disabled")).toBe(false);
+    await act(async () => { confirm!.click(); });
+    await flushReact();
+    expect(archiveMemberMock).toHaveBeenCalledWith("company-1", "member-1", {
+      reassignment: null, routineResponsibleUserId: null,
+    });
+    await act(async () => { root.unmount(); });
+    client.clear();
+  });
+
   it.each(["account", "renewed session", "withdraw and restore", "company", "unmount", "unchanged", "local trusted unchanged"])(
     "fences a removal count after held access refresh: %s", async (change) => {
       const root = createRoot(container);

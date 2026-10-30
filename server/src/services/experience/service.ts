@@ -1,4 +1,3 @@
-import { readRoutineResponsibilityAttention } from "./routine-responsibility-attention.js";
 import { readCompanyResponsibilityAttention } from "./company-responsibility-attention.js";
 import { readCoreMaintenance } from "./core-maintenance.js";
 import { readMemoryMaintenanceAttention } from "./memory-maintenance-attention.js";
@@ -474,12 +473,10 @@ export function experienceService(db: Db, configuredOperatorUserIds: readonly st
                   let responsibilityCards: ExperienceCard[] = [];
                   let responsibilityUnavailable: "source_stale" | "source_unavailable" | "overflow" | null = null;
                   try {
-                    const responsibility = await readRoutineResponsibilityAttention(db, actor, companyId, signal);
                     const companyResponsibility = await readCompanyResponsibilityAttention(db, actor, companyId, signal, configuredOperatorUserIds);
-                    responsibilityCards = [...responsibility.needsYou, ...companyResponsibility.needsYou];
-                    const companyResponsibilityPartialReason = typeof companyResponsibility.coverage === "object"
+                    responsibilityCards = [...companyResponsibility.needsYou];
+                    responsibilityUnavailable = typeof companyResponsibility.coverage === "object"
                       ? companyResponsibility.coverage.reason : null;
-                    responsibilityUnavailable = responsibility.coverage?.reason ?? companyResponsibilityPartialReason ?? null;
                   } catch {
                     signal.throwIfAborted();
                     responsibilityUnavailable = "source_stale";
@@ -675,23 +672,6 @@ export function experienceService(db: Db, configuredOperatorUserIds: readonly st
                 (card) => card.source.domain !== "attention",
               ),
             ];
-          }
-          if (result.needsYou.some(card => card.source.domain === "routine")) {
-            try {
-              const current = await readRoutineResponsibilityAttention(db, actor, companyId, admittedSignal);
-              const cards = new Map(current.needsYou.map(card => [card.id, card]));
-              result.needsYou = result.needsYou.flatMap(card => {
-                if (card.source.domain !== "routine") return [card];
-                const fresh = cards.get(card.id);
-                if (fresh?.source.version === card.source.version) return [fresh];
-                markPartial("attention", "source_stale");
-                return [];
-              });
-            } catch {
-              admittedSignal.throwIfAborted();
-              result.needsYou = result.needsYou.filter(card => card.source.domain !== "routine");
-              markPartial("attention", "denied");
-            }
           }
           if (result.needsYou.some(card => card.source.domain === "company_responsibility")) {
             try {

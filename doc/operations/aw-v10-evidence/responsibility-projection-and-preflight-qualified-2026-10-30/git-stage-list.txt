@@ -1,0 +1,8 @@
+server/src/services/experience/service.ts
+server/src/__tests__/private-0565-responsibility-scan.integration.test.ts
+server/src/services/experience/routine-responsibility-attention.ts
+server/src/__tests__/routine-responsibility-attention.integration.test.ts
+packages/shared/src/experience.ts
+server/src/services/experience/projection.ts
+ui/src/pages/CompanyAccess.tsx
+ui/src/pages/CompanyAccess.test.tsx
