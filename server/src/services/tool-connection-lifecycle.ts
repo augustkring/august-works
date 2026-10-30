@@ -72,6 +72,9 @@ export function githubRepositoryAccessProgressHash(githubValue: unknown, scopes:
   });
 }
 
+/** GitHub's current periodic owner cadence for repository-access full snapshots. */
+export const GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS = 60 * 60_000;
+
 /**
  * Customer-safe lifecycle projection over the current connection and grant.
  * It deliberately stores no lifecycle state of its own: grant status, health,
@@ -168,9 +171,30 @@ export function projectToolConnectionLifecycle(
     ? new Date(Date.parse(value)).toISOString() : null;
   const lastSuccessAt = parseTimestamp(accessSync.lastSuccessAt);
   const lastFullReconciledAt = parseTimestamp(accessSync.lastFullReconciledAt);
+  const lastAttemptAt = parseTimestamp(accessSync.lastAttemptAt);
+  const nextAttemptAt = parseTimestamp(accessSync.nextAttemptAt);
+  const rateLimitRetryAt = parseTimestamp(accessSync.rateLimitRetryAt);
   const accessRefreshTimestamp = parseTimestamp(github?.lastAccessRefreshAt);
+  const refreshDueAt = nextAttemptAt
+    ? Date.parse(nextAttemptAt)
+    : lastFullReconciledAt
+      ? Date.parse(lastFullReconciledAt) + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS
+      : Number.NEGATIVE_INFINITY;
+  const snapshotStale = refreshDueAt <= now.getTime();
+  const rateLimitActive = rateLimitRetryAt !== null && Date.parse(rateLimitRetryAt) > now.getTime() ||
+    accessSync.lastErrorCode === "github_rate_limited" && nextAttemptAt !== null && Date.parse(nextAttemptAt) > now.getTime();
+  let requiredReason: ToolConnectionLifecycle["syncReconciliation"]["requiredReason"] = "not_reported";
+  if (githubConfigured) {
+    if (accessSync.state === "required" && [
+      "snapshot_missing", "periodic_reconcile_due", "source_event_invalidated", "source_or_scope_mismatch", "provider_failure",
+    ].includes(String(accessSync.requiredReason))) requiredReason = accessSync.requiredReason as typeof requiredReason;
+    else if (accessSync.state === "required") requiredReason = "provider_failure";
+    else if (!hasFullRepositorySnapshot) requiredReason = "snapshot_missing";
+    else if (accessSync.state === "reconciled" && !hashesMatch) requiredReason = "source_or_scope_mismatch";
+    else if (accessSync.state === "reconciled" && snapshotStale) requiredReason = "periodic_reconcile_due";
+  }
   const repositoryAccessState = githubConfigured &&
-    (!hasFullRepositorySnapshot || accessSync.state === "required" || accessSync.state === "reconciled" && !hashesMatch)
+    (!hasFullRepositorySnapshot || accessSync.state === "required" || accessSync.state === "reconciled" && !hashesMatch || snapshotStale)
     ? "required" as const
     : githubConfigured && accessSync.state === "reconciled" && hashesMatch && lastSuccessAt && lastFullReconciledAt
       ? "reconciled" as const
@@ -179,17 +203,38 @@ export function projectToolConnectionLifecycle(
     domain: githubConfigured ? "repository_access" : "not_reported",
     state: repositoryAccessState,
     mode: githubConfigured ? "github_repository_full_snapshot" : "not_reported",
+    requiredReason,
     accessRevision: localAccessRevision,
     accessRevisionKind: localAccessRevision ? "local_access_revision" : "not_reported",
     lastSuccessAt,
     lastFullReconciledAt,
+    lastAttemptAt,
+    nextAttemptAt,
+    lastErrorCode: typeof accessSync.lastErrorCode === "string" && /^[a-z0-9_]{1,64}$/.test(accessSync.lastErrorCode)
+      ? accessSync.lastErrorCode : null,
+    rateLimitState: rateLimitActive ? "limited" : "not_reported",
+    rateLimitRetryAt,
     scopeHash: recordedRepositoryScopeHash,
     sourceIdentityHash: recordedRepositoryIdentityHash,
     cursor: "not_reported",
     watermark: "not_reported",
     gapDetection: "not_reported",
-    rateLimitState: "not_reported",
   };
+  const knownObjectRefresh: ToolConnectionLifecycle["knownObjectRefresh"] = githubConfigured
+    ? {
+        domain: "github_known_issue_or_pull_request",
+        mode: "conditional_canonical_get",
+        versionKind: "github_updated_at_and_object_etag",
+        completeness: "known_objects_only",
+        cursor: "not_reported",
+      }
+    : {
+        domain: "not_reported",
+        mode: "not_reported",
+        versionKind: "not_reported",
+        completeness: "not_reported",
+        cursor: "not_reported",
+      };
   // GitHub App installation webhooks have no per-install expiry. Other
   // providers remain unknown until their lifecycle owner reports a contract.
   const subscriptionStatus = githubConfigured
@@ -298,5 +343,6 @@ export function projectToolConnectionLifecycle(
     },
     providerLifecycle: "not_reported",
     syncReconciliation,
+    knownObjectRefresh,
   };
 }

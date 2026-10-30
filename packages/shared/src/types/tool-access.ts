@@ -248,18 +248,31 @@ export interface ToolConnectionLifecycle {
     domain: "repository_access" | "not_reported";
     state: "required" | "not_reported" | "reconciled";
     mode: "github_repository_full_snapshot" | "not_reported";
+    requiredReason: "snapshot_missing" | "periodic_reconcile_due" | "source_event_invalidated" | "source_or_scope_mismatch" | "provider_failure" | "not_reported";
     accessRevision: string | null;
     accessRevisionKind: "local_access_revision" | "not_reported";
     /** Completion time only; never a provider feed cursor or content-sync watermark. */
     lastSuccessAt: string | null;
     lastFullReconciledAt: string | null;
+    lastAttemptAt: string | null;
+    nextAttemptAt: string | null;
+    lastErrorCode: string | null;
+    rateLimitState: "not_reported" | "limited";
+    rateLimitRetryAt: string | null;
     scopeHash: string | null;
     sourceIdentityHash: string | null;
     cursor: "not_reported";
     watermark: "not_reported";
     /** Opaque provider delivery IDs do not establish feed completeness. */
     gapDetection: "not_reported";
-    rateLimitState: "not_reported";
+  };
+  /** Object GET versioning is not a feed cursor and covers known IDs only. */
+  knownObjectRefresh: {
+    domain: "github_known_issue_or_pull_request" | "not_reported";
+    mode: "conditional_canonical_get" | "not_reported";
+    versionKind: "github_updated_at_and_object_etag" | "not_reported";
+    completeness: "known_objects_only" | "not_reported";
+    cursor: "not_reported";
   };
 }
 
@@ -312,8 +325,15 @@ export interface ConnectionGrant {
       repositoryAccessReconciliation?: {
         state: "reconciled" | "required";
         mode: "full";
+        requiredReason?: "snapshot_missing" | "periodic_reconcile_due" | "source_event_invalidated" | "source_or_scope_mismatch" | "provider_failure";
         lastSuccessAt?: string;
         lastFullReconciledAt?: string;
+        lastAttemptAt?: string;
+        nextAttemptAt?: string;
+        lastErrorCode?: string;
+        rateLimitRetryAt?: string;
+        reconcileLeaseId?: string;
+        reconcileLeaseUntil?: string;
         scopeHash?: string;
         sourceIdentityHash?: string;
       };

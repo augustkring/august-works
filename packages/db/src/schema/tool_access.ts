@@ -218,8 +218,15 @@ export const connectionGrants = pgTable(
         repositoryAccessReconciliation?: {
           state: "reconciled" | "required";
           mode: "full";
+          requiredReason?: "snapshot_missing" | "periodic_reconcile_due" | "source_event_invalidated" | "source_or_scope_mismatch" | "provider_failure";
           lastSuccessAt?: string;
           lastFullReconciledAt?: string;
+          lastAttemptAt?: string;
+          nextAttemptAt?: string;
+          lastErrorCode?: string;
+          rateLimitRetryAt?: string;
+          reconcileLeaseId?: string;
+          reconcileLeaseUntil?: string;
           scopeHash?: string;
           sourceIdentityHash?: string;
         };

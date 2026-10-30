@@ -5,6 +5,7 @@ import { assertActivationConnectionPurpose, assertActivationConnectionPurposeInT
 import { readDeferredActivationSetup, recordDeferredActivationCompletion } from "./saas/activation-connection-completion.js";
 import { originalOAuthGrantExpiration } from "./tool-oauth-grant-metadata.js";
 import {
+  GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS,
   githubRepositoryAccessProgressHash,
   githubRepositoryAccessScopeHash,
   githubRepositoryAccessSourceIdentityHash,
@@ -2707,13 +2708,17 @@ export async function loadGitHubGrantMetadata(
       if (timer !== undefined) clearTimeout(timer);
     }
     if (!response.ok) {
+      const rateLimited = response.status === 429 ||
+        response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0";
+      const retryAt = rateLimited ? githubRateLimitRetryAt(response, new Date()) : null;
       throw unprocessable(
         "GitHub could not verify this account's installation access",
         {
           code:
             response.status === 401
               ? "oauth_reauthorization_required"
-              : "github_access_check_failed",
+              : rateLimited ? "github_rate_limited" : "github_access_check_failed",
+          ...(retryAt ? { retryAt } : {}),
         },
       );
     }
@@ -2887,6 +2892,36 @@ export async function loadGitHubGrantMetadata(
   };
 }
 
+function githubRateLimitRetryAt(response: Response, observedAt: Date): string | null {
+  const maxRetryDelayMs = 7 * 24 * 60 * 60_000;
+  const maxRetryAt = observedAt.getTime() + maxRetryDelayMs;
+  const candidates: number[] = [];
+  const retryAfterHeader = response.headers.get("retry-after");
+  const retryAfter = retryAfterHeader && retryAfterHeader.length <= 128 ? retryAfterHeader.trim() : null;
+  if (retryAfter && /^[0-9]{1,10}$/.test(retryAfter)) {
+    const seconds = Number(retryAfter);
+    const at = observedAt.getTime() + seconds * 1_000;
+    if (Number.isSafeInteger(seconds) && Number.isFinite(at) && at > observedAt.getTime() &&
+      at <= maxRetryAt && Number.isFinite(new Date(at).getTime())) {
+      candidates.push(at);
+    }
+  } else if (retryAfter) {
+    const at = Date.parse(retryAfter);
+    if (Number.isFinite(at) && at > observedAt.getTime() && at <= maxRetryAt) candidates.push(at);
+  }
+  const resetHeader = response.headers.get("x-ratelimit-reset");
+  const reset = resetHeader && resetHeader.length <= 32 ? resetHeader.trim() : null;
+  if (reset && /^[0-9]{1,10}$/.test(reset)) {
+    const seconds = Number(reset);
+    const at = seconds * 1_000;
+    if (Number.isSafeInteger(seconds) && Number.isFinite(at) && at > observedAt.getTime() &&
+      at <= maxRetryAt && Number.isFinite(new Date(at).getTime())) {
+      candidates.push(at);
+    }
+  }
+  return candidates.length ? new Date(Math.max(...candidates)).toISOString() : null;
+}
+
 function githubRepositoryAccessReconciliation(
   metadata: { userId: string; installationIds: string[]; repositories: Array<{ id: string; installationId: string }> },
   scopes: unknown,
@@ -2900,6 +2935,8 @@ function githubRepositoryAccessReconciliation(
     mode: "full" as const,
     lastSuccessAt: completedAt,
     lastFullReconciledAt: completedAt,
+    lastAttemptAt: completedAt,
+    nextAttemptAt: new Date(Date.parse(completedAt) + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS).toISOString(),
     scopeHash,
     sourceIdentityHash,
   };
@@ -11805,6 +11842,13 @@ export function toolAccessService(
     initialGrant: typeof connectionGrants.$inferSelect,
     actor?: ActorInfo,
   ) {
+    const retryAt = initialGrant.providerTenant?.github?.repositoryAccessReconciliation?.rateLimitRetryAt;
+    if (retryAt && Number.isFinite(Date.parse(retryAt)) && Date.parse(retryAt) > now().getTime()) {
+      throw unprocessable("GitHub asked this connection to wait before its next access refresh", {
+        code: "github_rate_limited",
+        retryAt: new Date(Date.parse(retryAt)).toISOString(),
+      });
+    }
     let grant = await refreshOAuthGrantCredentials({
       companyId: connection.companyId,
       connectionId: connection.id,
@@ -11859,6 +11903,12 @@ export function toolAccessService(
             ...(currentGitHub.repositoryAccessReconciliation ?? {}),
             state: "required" as const,
             mode: "full" as const,
+            requiredReason: "provider_failure" as const,
+            lastAttemptAt: now().toISOString(),
+            nextAttemptAt: new Date(now().getTime() + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS).toISOString(),
+            lastErrorCode: "github_access_refresh_incomplete",
+            reconcileLeaseId: undefined,
+            reconcileLeaseUntil: undefined,
           },
         },
       };
@@ -12035,70 +12085,219 @@ export function toolAccessService(
     return updated;
   }
 
-  async function sweepGitHubConnectionContinuity() {
-    if (now().getTime() < nextGitHubContinuitySweepAt) {
-      return { checked: 0, due: 0, refreshed: 0, failed: 0 };
+  async function sweepGitHubConnectionContinuity(options: { force?: boolean } = {}) {
+    const startedAt = Date.now();
+    if (!options.force && now().getTime() < nextGitHubContinuitySweepAt) {
+      return { checked: 0, due: 0, refreshed: 0, failed: 0, deferred: 0 };
     }
-    nextGitHubContinuitySweepAt = now().getTime() + 60 * 60_000;
-    const cutoff = now().getTime() - 30 * 24 * 60 * 60_000;
+    nextGitHubContinuitySweepAt = now().getTime() + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS;
+    const at = now();
+    const atIso = at.toISOString();
+    const cutoffIso = new Date(at.getTime() - GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS).toISOString();
+    const expiresSoonIso = new Date(at.getTime() + 60 * 60_000).toISOString();
+    const state = sql`${connectionGrants.providerTenant} #>> '{github,repositoryAccessReconciliation,state}'`;
+    const lastFull = sql`${connectionGrants.providerTenant} #>> '{github,repositoryAccessReconciliation,lastFullReconciledAt}'`;
+    const nextAttempt = sql`${connectionGrants.providerTenant} #>> '{github,repositoryAccessReconciliation,nextAttemptAt}'`;
+    const rateLimitRetry = sql`${connectionGrants.providerTenant} #>> '{github,repositoryAccessReconciliation,rateLimitRetryAt}'`;
+    const tokenExpiry = sql`${connectionGrants.providerTenant} #>> '{oauth,accessTokenExpiresAt}'`;
+    const timestampPattern = "^\\d{4}-\\d{2}-\\d{2}T";
     const rows = await db
       .select({ grant: connectionGrants, connection: toolConnections })
       .from(connectionGrants)
-      .innerJoin(
-        toolConnections,
-        and(
-          eq(toolConnections.id, connectionGrants.connectionId),
-          eq(toolConnections.companyId, connectionGrants.companyId),
-        ),
-      )
-      .where(
-        and(
-          eq(connectionGrants.status, "active"),
-          eq(toolConnections.status, "active"),
-          eq(toolConnections.enabled, true),
-        ),
-      );
-    const due = rows.filter(({ grant, connection }) => {
-      const config = asRecord(connection.config);
-      const oauth = asRecord(config.oauth);
-      if (
-        config.sourceTemplateKey !== "github" ||
-        oauth.connectorProfile !== "github.code" ||
-        !grant.providerTenant?.github
-      )
-        return false;
-      const expiresAt = grant.providerTenant.oauth?.accessTokenExpiresAt;
-      const refreshedAt = grant.providerTenant.oauth?.refreshedAt
-        ? Date.parse(grant.providerTenant.oauth.refreshedAt)
-        : Number.NaN;
-      const accessCheckedAt = grant.providerTenant.github.lastAccessRefreshAt
-        ? Date.parse(grant.providerTenant.github.lastAccessRefreshAt)
-        : Number.NaN;
-      if (typeof expiresAt === "string") {
-        const expiry = Date.parse(expiresAt);
-        return (
-          !Number.isFinite(expiry) ||
-          expiry <= now().getTime() + 60 * 60_000 ||
-          !Number.isFinite(refreshedAt) ||
-          refreshedAt <= cutoff
-        );
-      }
-      return !Number.isFinite(accessCheckedAt) || accessCheckedAt <= cutoff;
-    });
+      .innerJoin(toolConnections, and(
+        eq(toolConnections.id, connectionGrants.connectionId),
+        eq(toolConnections.companyId, connectionGrants.companyId),
+      ))
+      .where(and(
+        eq(connectionGrants.status, "active"),
+        eq(toolConnections.status, "active"),
+        eq(toolConnections.enabled, true),
+        sql`${toolConnections.config}->>'sourceTemplateKey' = 'github'`,
+        sql`${toolConnections.config}->'oauth'->>'connectorProfile' = 'github.code'`,
+        sql`${connectionGrants.providerTenant}->'github' IS NOT NULL`,
+        sql`(
+          (${nextAttempt} IS NULL OR ${nextAttempt} !~ ${timestampPattern} OR ${nextAttempt} <= ${atIso})
+          AND (${rateLimitRetry} IS NULL OR ${rateLimitRetry} !~ ${timestampPattern} OR ${rateLimitRetry} <= ${atIso})
+          AND (
+            ${state} = 'required'
+            OR ${lastFull} IS NULL OR ${lastFull} !~ ${timestampPattern} OR ${lastFull} <= ${cutoffIso}
+            OR (${tokenExpiry} IS NOT NULL AND (${tokenExpiry} !~ ${timestampPattern} OR ${tokenExpiry} <= ${expiresSoonIso}))
+          )
+        )`,
+      ))
+      .orderBy(asc(connectionGrants.updatedAt), asc(connectionGrants.id))
+      .limit(100);
+
+    const maxRefreshes = 5;
+    const maxPassMs = 5 * 60_000;
     let refreshed = 0;
     let failed = 0;
-    for (const row of due) {
+    let deferred = 0;
+    let attempted = 0;
+    for (const row of rows) {
+      if (attempted >= maxRefreshes || Date.now() - startedAt >= maxPassMs) {
+        deferred += 1;
+        continue;
+      }
+      const claim = await claimGitHubRepositoryAccessReconciliation(row.grant, row.connection, at);
+      if (!claim) {
+        deferred += 1;
+        continue;
+      }
+      attempted += 1;
       try {
-        await refreshManagedGitHubGrantAccess(row.connection, row.grant, {
+        await refreshManagedGitHubGrantAccess(claim.connection, claim.grant, {
           actorType: "system",
           actorId: "github-connection-continuity",
         });
         refreshed += 1;
-      } catch {
+      } catch (error) {
         failed += 1;
+        await recordGitHubRepositoryAccessFailure(claim, error, now());
       }
     }
-    return { checked: rows.length, due: due.length, refreshed, failed };
+    if (deferred > 0) {
+      // Keep the one-hour per-grant freshness/backoff and bounded pass size,
+      // but revisit a deferred backlog on the next minute scheduler tick. This
+      // also cools down when every eligible row is currently leased.
+      nextGitHubContinuitySweepAt = now().getTime() + 60_000;
+    }
+    return { checked: rows.length, due: rows.length, refreshed, failed, deferred };
+  }
+
+  async function claimGitHubRepositoryAccessReconciliation(
+    initialGrant: typeof connectionGrants.$inferSelect,
+    initialConnection: typeof toolConnections.$inferSelect,
+    at: Date,
+  ) {
+    const leaseId = randomUUID();
+    const atIso = at.toISOString();
+    return db.transaction(async (tx) => {
+      const [grant] = await tx.select().from(connectionGrants).where(and(
+        eq(connectionGrants.id, initialGrant.id),
+        eq(connectionGrants.companyId, initialGrant.companyId),
+        eq(connectionGrants.connectionId, initialConnection.id),
+        eq(connectionGrants.status, "active"),
+      )).for("update").limit(1);
+      if (!grant?.providerTenant?.github) return null;
+      const [connection] = await tx.select().from(toolConnections).where(and(
+        eq(toolConnections.id, initialConnection.id),
+        eq(toolConnections.companyId, initialConnection.companyId),
+        eq(toolConnections.status, "active"),
+        eq(toolConnections.enabled, true),
+      )).for("update").limit(1);
+      if (!connection) return null;
+      const github = grant.providerTenant.github;
+      const previous = github.repositoryAccessReconciliation;
+      const nextAt = previous?.nextAttemptAt ? Date.parse(previous.nextAttemptAt) : Number.NaN;
+      const rateRetryAt = previous?.rateLimitRetryAt ? Date.parse(previous.rateLimitRetryAt) : Number.NaN;
+      const leaseUntil = previous?.reconcileLeaseUntil ? Date.parse(previous.reconcileLeaseUntil) : Number.NaN;
+      if ((Number.isFinite(nextAt) && nextAt > at.getTime()) ||
+        (Number.isFinite(rateRetryAt) && rateRetryAt > at.getTime()) ||
+        (Number.isFinite(leaseUntil) && leaseUntil > at.getTime())) return null;
+      const sourceHash = githubRepositoryAccessSourceIdentityHash(github.userId);
+      const scopeHash = githubRepositoryAccessScopeHash(
+        grant.providerTenant.oauth?.scopes,
+        github.installationIds,
+        github.repositories,
+      );
+      const previousFullAt = previous?.lastFullReconciledAt ? Date.parse(previous.lastFullReconciledAt) : Number.NaN;
+      const expiryAt = grant.providerTenant.oauth?.accessTokenExpiresAt
+        ? Date.parse(grant.providerTenant.oauth.accessTokenExpiresAt)
+        : Number.NaN;
+      const identityOrScopeChanged = !sourceHash || !scopeHash ||
+        previous?.sourceIdentityHash !== sourceHash || previous?.scopeHash !== scopeHash;
+      const due = previous?.state === "required" || identityOrScopeChanged ||
+        !Number.isFinite(previousFullAt) || previousFullAt <= at.getTime() - GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS ||
+        Number.isFinite(expiryAt) && expiryAt <= at.getTime() + 60 * 60_000;
+      if (!due) return null;
+      const reconciliation = {
+        ...previous,
+        state: "required" as const,
+        mode: "full" as const,
+        requiredReason: identityOrScopeChanged ? "source_or_scope_mismatch" as const
+          : previous?.state === "required" ? previous.requiredReason ?? "provider_failure" as const
+            : "periodic_reconcile_due" as const,
+        lastAttemptAt: atIso,
+        nextAttemptAt: new Date(at.getTime() + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS).toISOString(),
+        reconcileLeaseId: leaseId,
+        reconcileLeaseUntil: new Date(at.getTime() + 3 * 60_000).toISOString(),
+      };
+      const providerTenant = {
+        ...grant.providerTenant,
+        github: { ...github, repositoryAccessReconciliation: reconciliation },
+      };
+      const [claimed] = await tx.update(connectionGrants).set({ providerTenant, updatedAt: at })
+        .where(and(eq(connectionGrants.id, grant.id), eq(connectionGrants.companyId, grant.companyId),
+          eq(connectionGrants.connectionId, connection.id), eq(connectionGrants.status, "active")))
+        .returning();
+      if (!claimed) return null;
+      return {
+        grant: claimed,
+        connection,
+        leaseId,
+        pin: {
+          sourceHash,
+          scopeHash,
+          accessRevision: github.accessRevision ?? null,
+          lastAccessRefreshAt: github.lastAccessRefreshAt ?? null,
+        },
+      };
+    });
+  }
+
+  async function recordGitHubRepositoryAccessFailure(
+    claim: NonNullable<Awaited<ReturnType<typeof claimGitHubRepositoryAccessReconciliation>>>,
+    error: unknown,
+    at: Date,
+  ) {
+    const details = error instanceof HttpError ? asRecord(error.details) : {};
+    const candidateCode = details.code;
+    const errorCode = typeof candidateCode === "string" && /^[a-z0-9_]{1,64}$/.test(candidateCode)
+      ? candidateCode : "github_access_refresh_failed";
+    const retryAt = errorCode === "github_rate_limited" && typeof details.retryAt === "string" &&
+      Number.isFinite(Date.parse(details.retryAt)) && Date.parse(details.retryAt) > at.getTime()
+      ? new Date(Date.parse(details.retryAt)).toISOString() : null;
+    const normalRetryAt = at.getTime() + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS;
+    const nextAttemptAt = new Date(Math.max(normalRetryAt, retryAt ? Date.parse(retryAt) : normalRetryAt)).toISOString();
+    await db.transaction(async (tx) => {
+      const [grant] = await tx.select().from(connectionGrants).where(and(
+        eq(connectionGrants.id, claim.grant.id),
+        eq(connectionGrants.companyId, claim.grant.companyId),
+        eq(connectionGrants.connectionId, claim.connection.id),
+        eq(connectionGrants.status, "active"),
+      )).for("update").limit(1);
+      if (!grant?.providerTenant?.github) return;
+      const github = grant.providerTenant.github;
+      const current = github.repositoryAccessReconciliation;
+      const sourceHash = githubRepositoryAccessSourceIdentityHash(github.userId);
+      const scopeHash = githubRepositoryAccessScopeHash(
+        grant.providerTenant.oauth?.scopes,
+        github.installationIds,
+        github.repositories,
+      );
+      if (current?.reconcileLeaseId !== claim.leaseId ||
+        sourceHash !== claim.pin.sourceHash || scopeHash !== claim.pin.scopeHash ||
+        (github.accessRevision ?? null) !== claim.pin.accessRevision ||
+        (github.lastAccessRefreshAt ?? null) !== claim.pin.lastAccessRefreshAt) return;
+      const reconciliation = {
+        ...current,
+        state: "required" as const,
+        mode: "full" as const,
+        requiredReason: "provider_failure" as const,
+        lastAttemptAt: current.lastAttemptAt ?? at.toISOString(),
+        nextAttemptAt,
+        lastErrorCode: errorCode,
+        ...(retryAt ? { rateLimitRetryAt: retryAt } : { rateLimitRetryAt: undefined }),
+      };
+      delete (reconciliation as { reconcileLeaseId?: string }).reconcileLeaseId;
+      delete (reconciliation as { reconcileLeaseUntil?: string }).reconcileLeaseUntil;
+      const providerTenant = { ...grant.providerTenant, github: { ...github, repositoryAccessReconciliation: reconciliation } };
+      await tx.update(connectionGrants).set({ providerTenant, updatedAt: at }).where(and(
+        eq(connectionGrants.id, grant.id), eq(connectionGrants.companyId, grant.companyId),
+        eq(connectionGrants.connectionId, claim.connection.id), eq(connectionGrants.status, "active"),
+      ));
+    });
   }
 
   function policyNameForApp(

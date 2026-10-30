@@ -74,6 +74,7 @@ import {
 } from "../services/tool-access.js";
 import { accessService } from "../services/access.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { projectToolConnectionLifecycle } from "../services/tool-connection-lifecycle.js";
 import { toolAccessPolicyService } from "../services/tool-access-policy.js";
 import { secretService } from "../services/secrets.js";
 import {
@@ -4875,7 +4876,7 @@ describeEmbeddedPostgres("tool access service", () => {
       credentialExpiresAt: expiresAt, accessVersion: "access-version-1",
       webhook: { health: "healthy", lastDeliveryAt: "2026-10-27T23:00:00.000Z", expiry: "not_applicable" },
       providerLifecycle: "not_reported", syncReconciliation: {
-        state: "not_reported", mode: "github_repository_full_snapshot", accessRevision: "access-version-1",
+        state: "required", mode: "github_repository_full_snapshot", accessRevision: "access-version-1",
         accessRevisionKind: "local_access_revision", lastSuccessAt: null, lastFullReconciledAt: null,
         gapDetection: "not_reported",
       },
@@ -7315,7 +7316,7 @@ describeEmbeddedPostgres("tool access service", () => {
     ).toBe(false);
   });
 
-  it.each(["none", "event", "same-time-refresh", "one-conflict", "incomplete"])(
+  it.each(["none", "event", "identity", "same-time-refresh", "one-conflict", "incomplete", "missed-webhook", "rate-limit", "bounded-fair", "leased-backoff"])(
     "binds a managed GitHub identity and protects refresh from concurrent access changes (%s)",
     async (concurrentChange) => {
       const company = await createCompany(db);
@@ -7323,8 +7324,10 @@ describeEmbeddedPostgres("tool access service", () => {
       await grantBoardUser(db, company.id, userId, [], "owner");
       const agent = await createAgent(db, company.id);
       const connector = fakeGitHubConnector(company.id, `agent:${agent.id}`);
+      let sweepNow = new Date();
       const service = createTestToolAccessService(db, {
         paperclipCloudConnector: connector,
+        now: () => sweepNow,
       });
       const actor = { actorType: "user" as const, actorId: userId };
       const githubDefinition = getConnectableAppDefinition("github")!;
@@ -7336,6 +7339,8 @@ describeEmbeddedPostgres("tool access service", () => {
       };
       let beforeRepositoryResponse = async () => {};
       let forcePaginationCycle = false;
+      let forceRateLimit = false;
+      let repositoryIds = [1, 2, 3];
       vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
         const href = String(url);
         if (href === "https://api.github.com/user") {
@@ -7363,6 +7368,13 @@ describeEmbeddedPostgres("tool access service", () => {
           )
         ) {
           await beforeRepositoryResponse();
+          if (forceRateLimit) {
+            return new Response("rate limited", { status: 429, headers: {
+              "retry-after": "x".repeat(129),
+              "x-ratelimit-remaining": "0",
+              "x-ratelimit-reset": String(Math.floor(Date.now() / 1_000) + 7_200),
+            } });
+          }
           if (forcePaginationCycle) {
             return new Response(JSON.stringify({ total_count: 1, repositories: [{ id: 1, full_name: "paperclipai/repo-1" }] }), {
               status: 200,
@@ -7371,7 +7383,7 @@ describeEmbeddedPostgres("tool access service", () => {
           }
           return mcpHttpResponse({
             total_count: 3,
-            repositories: [1, 2, 3].map((id) => ({
+            repositories: repositoryIds.map((id) => ({
               id,
               full_name: `paperclipai/repo-${id}`,
               description: "do-not-store",
@@ -7527,11 +7539,133 @@ describeEmbeddedPostgres("tool access service", () => {
         if (concurrentChange === "incomplete") {
           forcePaginationCycle = true;
           await expect(service.checkHealth(connected.connectionId, actor)).rejects.toMatchObject({ status: 502 });
-          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          let [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          const priorFullAt = latest?.providerTenant?.github?.repositoryAccessReconciliation?.lastFullReconciledAt;
           expect(latest?.providerTenant?.github?.repositories).toHaveLength(3);
           expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
-            state: "required", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+            state: "required", mode: "full", requiredReason: "provider_failure",
+            lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
           });
+          forcePaginationCycle = false;
+          sweepNow = new Date(Date.parse(latest!.providerTenant!.github!.repositoryAccessReconciliation!.nextAttemptAt!) + 1);
+          await expect(service.sweepGitHubConnectionContinuity({ force: true })).resolves.toMatchObject({ refreshed: 1, failed: 0 });
+          [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
+          expect(Date.parse(latest!.providerTenant!.github!.repositoryAccessReconciliation!.lastFullReconciledAt!))
+            .toBeGreaterThan(Date.parse(priorFullAt!));
+          const [currentConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connected.connectionId));
+          expect(projectToolConnectionLifecycle(currentConnection!, latest!, sweepNow).syncReconciliation)
+            .toMatchObject({ state: "reconciled", cursor: "not_reported", watermark: "not_reported", gapDetection: "not_reported" });
+          return;
+        }
+        if (concurrentChange === "missed-webhook") {
+          const oldFullAt = grant!.providerTenant?.github?.repositoryAccessReconciliation?.lastFullReconciledAt;
+          repositoryIds = [4, 5];
+          sweepNow = new Date(Date.parse(grant!.providerTenant!.github!.repositoryAccessReconciliation!.nextAttemptAt!) + 1);
+          await expect(service.sweepGitHubConnectionContinuity({ force: true })).resolves.toMatchObject({ refreshed: 1, failed: 0 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositories?.map((repository) => repository.id)).toEqual(["4", "5"]);
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
+          expect(Date.parse(latest!.providerTenant!.github!.repositoryAccessReconciliation!.lastFullReconciledAt!))
+            .toBeGreaterThan(Date.parse(oldFullAt!));
+          expect(latest?.providerTenant?.github?.lastWebhookAt).toBe(grant!.providerTenant?.github?.lastWebhookAt);
+          return;
+        }
+        if (concurrentChange === "bounded-fair") {
+          const [baseConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connected.connectionId));
+          const priorTenant = grant!.providerTenant!;
+          const dueTenant = { ...priorTenant, github: { ...priorTenant.github!, repositoryAccessReconciliation: {
+            ...priorTenant.github!.repositoryAccessReconciliation!, state: "required" as const,
+            requiredReason: "source_event_invalidated" as const, nextAttemptAt: sweepNow.toISOString(),
+            lastAttemptAt: new Date(sweepNow.getTime() - 1_000).toISOString(),
+          } } };
+          await db.update(connectionGrants).set({ providerTenant: dueTenant, updatedAt: new Date(sweepNow.getTime() - 1_000) })
+            .where(eq(connectionGrants.id, grant!.id));
+          for (let index = 0; index < 5; index += 1) {
+            const { id: _connectionId, createdAt: _connectionCreatedAt, updatedAt: _connectionUpdatedAt, ...connectionValues } = baseConnection!;
+            const [cloneConnection] = await db.insert(toolConnections).values({
+              ...connectionValues, uid: randomUUID(), name: `GitHub bounded fairness ${index}`,
+              createdAt: sweepNow, updatedAt: sweepNow,
+            }).returning();
+            const { id: _grantId, createdAt: _grantCreatedAt, updatedAt: _grantUpdatedAt, ...grantValues } = grant!;
+            await db.insert(connectionGrants).values({
+              ...grantValues, connectionId: cloneConnection!.id, credentialSecretRefs: [],
+              providerTenant: dueTenant, createdAt: sweepNow, updatedAt: sweepNow,
+            });
+          }
+          const firstSweepAt = new Date(sweepNow);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ refreshed: 1, failed: 4, deferred: 1 });
+          const grants = await db.select().from(connectionGrants).where(and(
+            eq(connectionGrants.companyId, company.id), eq(connectionGrants.kind, "agent"),
+          ));
+          const dueAgain = grants.filter((item) => Date.parse(item.providerTenant?.github?.repositoryAccessReconciliation?.nextAttemptAt ?? "") <= sweepNow.getTime());
+          expect(dueAgain).toHaveLength(1);
+          const attemptTimes = grants.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === firstSweepAt.toISOString());
+          expect(attemptTimes).toHaveLength(5);
+          sweepNow = new Date(firstSweepAt.getTime() + 59_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 0, refreshed: 0, failed: 0, deferred: 0 });
+          const beforeRetry = await db.select().from(connectionGrants).where(and(
+            eq(connectionGrants.companyId, company.id), eq(connectionGrants.kind, "agent"),
+          ));
+          expect(beforeRetry.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === firstSweepAt.toISOString())).toHaveLength(5);
+          sweepNow = new Date(firstSweepAt.getTime() + 60_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 0, failed: 1 });
+          const settled = await db.select().from(connectionGrants).where(and(
+            eq(connectionGrants.companyId, company.id), eq(connectionGrants.kind, "agent"),
+          ));
+          expect(settled.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === firstSweepAt.toISOString()))
+            .toHaveLength(5);
+          expect(settled.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === sweepNow.toISOString()))
+            .toHaveLength(1);
+          return;
+        }
+        if (concurrentChange === "leased-backoff") {
+          const prior = grant!.providerTenant!.github!.repositoryAccessReconciliation!;
+          const firstSweepAt = new Date(sweepNow);
+          const leasedTenant = { ...grant!.providerTenant!, github: { ...grant!.providerTenant!.github!, repositoryAccessReconciliation: {
+            ...prior, state: "required" as const, requiredReason: "source_event_invalidated" as const,
+            nextAttemptAt: firstSweepAt.toISOString(), lastAttemptAt: new Date(firstSweepAt.getTime() - 1_000).toISOString(),
+            reconcileLeaseId: "another-worker", reconcileLeaseUntil: new Date(firstSweepAt.getTime() + 120_000).toISOString(),
+          } } };
+          await db.update(connectionGrants).set({ providerTenant: leasedTenant, updatedAt: new Date(firstSweepAt.getTime() - 1_000) })
+            .where(eq(connectionGrants.id, grant!.id));
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 0, failed: 0, deferred: 1 });
+          sweepNow = new Date(firstSweepAt.getTime() + 59_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 0, refreshed: 0, failed: 0, deferred: 0 });
+          sweepNow = new Date(firstSweepAt.getTime() + 60_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 0, failed: 0, deferred: 1 });
+          sweepNow = new Date(firstSweepAt.getTime() + 120_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 1, failed: 0, deferred: 0 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", lastAttemptAt: sweepNow.toISOString(),
+          });
+          return;
+        }
+        if (concurrentChange === "rate-limit") {
+          const prior = grant!.providerTenant!.github!.repositoryAccessReconciliation!;
+          await db.update(connectionGrants).set({ providerTenant: {
+            ...grant!.providerTenant!, github: { ...grant!.providerTenant!.github!, repositoryAccessReconciliation: {
+              ...prior, state: "required", requiredReason: "source_event_invalidated", nextAttemptAt: sweepNow.toISOString(),
+            } },
+          } }).where(eq(connectionGrants.id, grant!.id));
+          forceRateLimit = true;
+          await expect(service.sweepGitHubConnectionContinuity({ force: true })).resolves.toMatchObject({ refreshed: 0, failed: 1 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          const sync = latest!.providerTenant!.github!.repositoryAccessReconciliation!;
+          expect(sync).toMatchObject({ state: "required", requiredReason: "provider_failure", lastErrorCode: "github_rate_limited" });
+          expect(sync.lastFullReconciledAt).toBe(prior.lastFullReconciledAt);
+          expect(Date.parse(sync.rateLimitRetryAt!)).toBeGreaterThan(Date.now());
+          expect(Date.parse(sync.nextAttemptAt!)).toBeGreaterThanOrEqual(Date.parse(sync.rateLimitRetryAt!));
+          const [currentConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connected.connectionId));
+          const lifecycle = projectToolConnectionLifecycle(currentConnection!, latest!, sweepNow);
+          expect(lifecycle.syncReconciliation).toMatchObject({ state: "required", rateLimitState: "limited" });
+          expect(JSON.stringify(lifecycle)).not.toContain("retry-after");
+          expect(JSON.stringify(lifecycle)).not.toContain("x".repeat(129));
           return;
         }
         if (concurrentChange !== "none") {
@@ -7555,6 +7689,7 @@ describeEmbeddedPostgres("tool access service", () => {
                     ...(concurrentChange === "event"
                       ? { lastWebhookAt: new Date().toISOString() }
                       : {}),
+                    ...(concurrentChange === "identity" ? { userId: "99" } : {}),
                     installationIds: [],
                     installationCount: 0,
                     repositoryCount: 0,

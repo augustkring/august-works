@@ -10,7 +10,25 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { readConnectorRecovery } from "../services/experience/connector-recovery.js";
 import { experienceService } from "../services/experience/service.js";
 import { toolAccessService } from "../services/tool-access.js";
+import {
+  githubRepositoryAccessScopeHash,
+  githubRepositoryAccessSourceIdentityHash,
+} from "../services/tool-connection-lifecycle.js";
 import * as recovery from "../services/experience/connector-recovery.js";
+
+function verifiedGitHubRepositoryAccess(repositories: Array<{ id: string; fullName: string; installationId: string }>) {
+  const completedAt = new Date().toISOString();
+  return {
+    state: "reconciled" as const,
+    mode: "full" as const,
+    lastSuccessAt: completedAt,
+    lastFullReconciledAt: completedAt,
+    lastAttemptAt: completedAt,
+    nextAttemptAt: new Date(Date.parse(completedAt) + 60 * 60_000).toISOString(),
+    scopeHash: githubRepositoryAccessScopeHash(["repo", "read:user"], ["456"], repositories)!,
+    sourceIdentityHash: githubRepositoryAccessSourceIdentityHash("123")!,
+  };
+}
 
 describe("V9 Original connector recovery projection", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -74,10 +92,11 @@ describe("V9 Original connector recovery projection", () => {
     const row = await connection(fixture.home, { healthStatus: "ok", healthCheckedAt: new Date(), credentialPolicy: "per_user", config: { sourceTemplateKey: "github" } });
     await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: row.id, kind: "user", subjectUserId: "other-native-user", status: "active" });
     expect((await read()).needsYou[0]?.evidence).toEqual(["connector_access_review"]);
+    const repositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
     await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: row.id, kind: "user", subjectUserId: fixture.userId, status: "active",
-      providerTenant: { github: { userId: "123", login: "current-user", installationCount: 1, repositoryCount: 1,
+      providerTenant: { oauth: { scopes: ["repo", "read:user"] }, github: { userId: "123", login: "current-user", installationCount: 1, repositoryCount: 1,
         repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
-        repositories: [{ id: "789", fullName: "octo/project", installationId: "456" }], accessRevision: "verified-version",
+        repositories, accessRevision: "verified-version", repositoryAccessReconciliation: verifiedGitHubRepositoryAccess(repositories),
         lastAccessRefreshAt: new Date().toISOString(), webhookHealth: "healthy" } } });
     expect((await read()).needsYou).toEqual([]);
   });
@@ -112,6 +131,7 @@ describe("V9 Original connector recovery projection", () => {
   it("projects the current personal grant's GitHub access invalidation until the verified repository snapshot returns", async () => {
     const row = await connection(fixture.home, { healthStatus: "ok", healthCheckedAt: new Date(), credentialPolicy: "per_user", createdByUserId: fixture.userId,
       config: { sourceTemplateKey: "github" } });
+    const repositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
     const [grant] = await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: row.id,
       kind: "user", subjectUserId: fixture.userId, status: "active",
       providerTenant: { github: { userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
@@ -128,14 +148,15 @@ describe("V9 Original connector recovery projection", () => {
     expect(value.needsYou.filter(card => card.source.resourceId === row.id)).toHaveLength(1);
     expect(value.needsYou.find(card => card.source.resourceId === row.id)?.evidence).toEqual(["connector_access_review"]);
     expect(JSON.stringify(value)).not.toContain("octocat");
-    await db.update(connectionGrants).set({ providerTenant: { github: { userId: "123", login: "octocat", installationCount: 1,
+    await db.update(connectionGrants).set({ providerTenant: { oauth: { scopes: ["repo", "read:user"] }, github: { userId: "123", login: "octocat", installationCount: 1,
       repositoryCount: 1, repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
-      repositories: [{ id: "789", fullName: "octo/project", installationId: "456" }], accessRevision: "verified-version",
+      repositories, accessRevision: "verified-version", repositoryAccessReconciliation: verifiedGitHubRepositoryAccess(repositories),
       lastAccessRefreshAt: new Date().toISOString(), webhookHealth: "healthy" } }, updatedAt: new Date() })
       .where(eq(connectionGrants.id, grant!.id));
     expect((await toolAccessService(db).personalReconnectIdentity(fixture.home, row.id, fixture.userId))?.grant?.lifecycle)
-      .toMatchObject({ syncReconciliation: { state: "not_reported", mode: "github_repository_full_snapshot",
-        accessRevision: "verified-version", accessRevisionKind: "local_access_revision", gapDetection: "not_reported" } });
+      .toMatchObject({ syncReconciliation: { state: "reconciled", mode: "github_repository_full_snapshot",
+        accessRevision: "verified-version", accessRevisionKind: "local_access_revision", lastFullReconciledAt: expect.any(String),
+        gapDetection: "not_reported" } });
     expect((await read()).needsYou.some(card => card.source.resourceId === row.id)).toBe(false);
   });
   it("uses the Original manager role/grant policy and denies viewer/admin bypass", async () => {
