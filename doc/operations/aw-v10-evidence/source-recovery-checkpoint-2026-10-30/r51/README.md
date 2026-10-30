@@ -1,0 +1,3 @@
+# Recoverable source checkpoint r51
+
+Recovery only; R65 Native continuation, exact qualification-at-create policy, credential response sanitization and resource-memory candidates remain under development. R6.1 vendor source checks are separately qualified at committed evidence. Apply the working patch at the exact manifest base. Private candidates use preparation/ paths and require review; archived source-pin/patch files inside an unfinished candidate may describe its older parent. The full current files/ tree is saved independently. Prior checkpoint r50 retains older candidate history. No software, physical-host or release acceptance is inferred.
