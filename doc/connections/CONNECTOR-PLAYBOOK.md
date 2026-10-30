@@ -1057,6 +1057,23 @@ that a connector supports renewal, missed-event detection, or backfill from its
 OAuth status. Add those operations only with a provider-owned subscription or
 sync contract and corresponding lifecycle tests.
 
+There is a narrower per-object GitHub owner for Issue/Pull Request links already
+mentioned in a Paperclip task or document. Its periodic refresh is bounded per
+company and re-reads known objects; GitHub `updated_at` orders event snapshots
+for one object, while its ETag/304 validator applies only to that exact object.
+This can reconcile a missed webhook for a known linked object and rejects an
+older event that arrives after a newer provider version. It does not enumerate
+new repository objects, provide a repository-wide content-feed cursor, or prove
+that no webhook was missed. Closed-but-unmerged Issues and Pull Requests remain
+refreshable because GitHub permits them to reopen. Older stored closed GitHub
+objects may still carry the former terminal flag; the bounded scheduler treats
+closed Issue/PR snapshots as refreshable while keeping merged PRs and canonical
+not-found objects terminal. This compatibility path requires no migration.
+Slack Connected Knowledge is live retrieval; its search/page cursors are scoped
+to a request and are not persisted sync watermarks. Keep connection lifecycle
+cursor, watermark, and gap detection `not_reported` for these feed-completeness
+questions.
+
 For a customer report, use the connection's **Permissions** view and current
 `GET /api/tool-connections/:connectionId/grants` response. Check the exact
 grant's state, scope list/hash, expiry, version and verification timestamp,

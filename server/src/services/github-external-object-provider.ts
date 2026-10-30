@@ -210,6 +210,8 @@ function pullRequestSnapshot(identity: GitHubObjectIdentity, body: Record<string
   let statusLabel = state === "open" ? "Open" : state === "closed" ? "Closed" : "Unknown";
   let statusCategory: ExternalObjectResolverSnapshot["statusCategory"] = state === "open" ? "open" : "unknown";
   let statusTone: ExternalObjectResolverSnapshot["statusTone"] = state === "open" ? "info" : "neutral";
+  // GitHub permits closing and reopening an unmerged PR; only a merged PR is
+  // terminal for this refresh scheduler.
   let isTerminal = false;
 
   if (merged) {
@@ -223,7 +225,7 @@ function pullRequestSnapshot(identity: GitHubObjectIdentity, body: Record<string
     statusLabel = "Closed";
     statusCategory = "closed";
     statusTone = "muted";
-    isTerminal = true;
+    isTerminal = false;
   } else if (draft) {
     statusKey = "draft";
     statusLabel = "Draft";
@@ -293,7 +295,8 @@ function issueSnapshot(identity: GitHubObjectIdentity, body: Record<string, unkn
     statusIconKey: state === "closed" ? "circle" : "circle-dot",
     statusCategory: state === "open" ? "open" : state === "closed" ? "closed" : "unknown",
     statusTone: state === "open" ? "info" : state === "closed" ? "muted" : "neutral",
-    isTerminal: state === "closed",
+    // Issues can be reopened, so a closed issue still receives bounded refreshes.
+    isTerminal: false,
     remoteVersion: asString(body.updated_at),
     etag,
     ttlSeconds: GITHUB_OBJECT_TTL_SECONDS,
@@ -395,6 +398,9 @@ export function createGitHubExternalObjectProvider(
           "x-github-api-version": "2022-11-28",
         };
         if (token) headers.authorization = `Bearer ${token}`;
+        if (object.etag && object.etag.length <= 1_000 && !/[\r\n]/.test(object.etag)) {
+          headers["if-none-match"] = object.etag;
+        }
 
         const apiKind = objectType === "pull_request" ? "pulls" : "issues";
         const url = `${gitHubApiBase(identity.host)}/repos/${encodeURIComponent(identity.owner)}/${encodeURIComponent(identity.repo)}/${apiKind}/${identity.number}`;
@@ -413,6 +419,35 @@ export function createGitHubExternalObjectProvider(
         }
 
         const etag = response.headers.get("etag");
+        if (response.status === 304) {
+          if (!object.etag) {
+            return {
+              ok: false,
+              liveness: "unreachable",
+              errorCode: "github_unexpected_not_modified",
+              errorMessage: "GitHub returned an unchanged response without a stored object validator.",
+              retryAfterSeconds: GITHUB_OBJECT_TTL_SECONDS,
+            };
+          }
+          return {
+            ok: true,
+            snapshot: {
+              displayKey: object.displayKey,
+              iconKey: object.iconKey,
+              displayTitle: object.displayTitle,
+              statusKey: object.statusKey,
+              statusLabel: object.statusLabel,
+              statusIconKey: object.statusIconKey,
+              statusCategory: object.statusCategory,
+              statusTone: object.statusTone,
+              isTerminal: object.isTerminal,
+              data: object.data,
+              remoteVersion: object.remoteVersion,
+              etag: etag ?? object.etag,
+              ttlSeconds: GITHUB_OBJECT_TTL_SECONDS,
+            },
+          };
+        }
         if (response.status === 404) {
           return { ok: true, snapshot: notFoundSnapshot(identity, etag) };
         }
@@ -436,6 +471,16 @@ export function createGitHubExternalObjectProvider(
             liveness: "unreachable",
             errorCode: "github_invalid_response",
             errorMessage: "GitHub returned an invalid object response.",
+            retryAfterSeconds: GITHUB_OBJECT_TTL_SECONDS,
+          };
+        }
+        const updatedAt = asString(body.updated_at);
+        if (!updatedAt || !Number.isFinite(Date.parse(updatedAt))) {
+          return {
+            ok: false,
+            liveness: "unreachable",
+            errorCode: "github_missing_object_version",
+            errorMessage: "GitHub did not return a valid object update version.",
             retryAfterSeconds: GITHUB_OBJECT_TTL_SECONDS,
           };
         }

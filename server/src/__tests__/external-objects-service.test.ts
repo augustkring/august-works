@@ -213,7 +213,7 @@ describe("GitHub external object provider", () => {
     [
       "closed",
       { state: "closed", draft: false, merged: false, title: "Closed PR", updated_at: "2026-04-24T01:02:03Z" },
-      { statusKey: "closed", statusLabel: "Closed", statusIconKey: "x-circle", statusCategory: "closed", statusTone: "muted", isTerminal: true },
+      { statusKey: "closed", statusLabel: "Closed", statusIconKey: "x-circle", statusCategory: "closed", statusTone: "muted", isTerminal: false },
     ],
     [
       "merged",
@@ -265,7 +265,7 @@ describe("GitHub external object provider", () => {
     [
       "closed",
       { state: "closed", title: "Issue", state_reason: "completed", updated_at: "2026-04-24T01:02:03Z" },
-      { statusKey: "closed_completed", statusLabel: "Closed: completed", statusIconKey: "circle", statusCategory: "closed", statusTone: "muted", isTerminal: true },
+      { statusKey: "closed_completed", statusLabel: "Closed: completed", statusIconKey: "circle", statusCategory: "closed", statusTone: "muted", isTerminal: false },
     ],
   ])("resolves a %s issue snapshot", async (_name, body, expected) => {
     const fetch = vi.fn(async () => response(body));
@@ -294,10 +294,47 @@ describe("GitHub external object provider", () => {
     });
   });
 
+  it("uses a GitHub object ETag only to conditionally refresh that known object", async () => {
+    const fetch = vi.fn(async () => new Response(null, {
+      status: 304,
+      headers: { etag: '"etag-current"' },
+    }));
+    const provider = createGitHubExternalObjectProvider({} as any, { fetch, tokenProvider: null });
+    const resolver = provider.resolvers.find((entry) => entry.objectType === "pull_request")!;
+    const object = githubObject("pull/42", "pull_request");
+    object.etag = '"etag-current"';
+    object.remoteVersion = "2026-04-24T01:02:03.000Z";
+    object.statusKey = "open";
+    object.statusLabel = "Open";
+    object.statusCategory = "open";
+    object.statusTone = "info";
+    object.data = { state: "open", marker: "kept" };
+
+    const result = await resolver.resolve({ companyId: object.companyId, object });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.github.com/repos/acme/app/pulls/42",
+      expect.objectContaining({ headers: expect.objectContaining({ "if-none-match": '"etag-current"' }) }),
+    );
+    expect(result).toEqual({ ok: true, snapshot: expect.objectContaining({
+      statusKey: "open", remoteVersion: object.remoteVersion, etag: '"etag-current"',
+      data: { state: "open", marker: "kept" },
+    }) });
+  });
+
+  it("requires a provider source version before accepting a canonical GitHub object response", async () => {
+    const provider = createGitHubExternalObjectProvider({} as any, {
+      fetch: async () => response({ state: "closed", merged: true }), tokenProvider: null,
+    });
+    const resolver = provider.resolvers.find((entry) => entry.objectType === "pull_request")!;
+    await expect(resolver.resolve({ companyId: "company-1", object: githubObject("pull/42", "pull_request") }))
+      .resolves.toMatchObject({ ok: false, errorCode: "github_missing_object_version" });
+  });
+
   it("uses a configured token without storing it in the resolved snapshot", async () => {
     const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
       expect(init?.headers).toEqual(expect.objectContaining({ authorization: "Bearer ghp_secret" }));
-      return response({ state: "open", draft: false, merged: false, title: "Private PR" });
+      return response({ state: "open", draft: false, merged: false, title: "Private PR", updated_at: "2026-04-24T01:02:03Z" });
     });
     const provider = createGitHubExternalObjectProvider({} as any, {
       fetch,
@@ -527,6 +564,75 @@ describeEmbeddedPostgres("externalObjectService", () => {
 
     expect(refreshed).toHaveLength(1);
     expect(resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it("recovers a missed reopen for a legacy terminal GitHub object while skipping merged PRs", async () => {
+    const { companyId, issueId } = await createIssue();
+    const fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(new Headers(init?.headers).get("if-none-match")).toBe('"before-missed-event"');
+      return new Response(JSON.stringify({
+        state: "open", state_reason: null, title: "Reopened after a missed webhook",
+        updated_at: "2026-10-30T10:02:00Z",
+      }), { status: 200, headers: { "content-type": "application/json", etag: '"after-missed-event"' } });
+    });
+    const svc = externalObjectService(db, { github: { fetch, tokenProvider: null } });
+    await svc.syncIssue(issueId);
+    const [object] = await db.select().from(externalObjects).where(eq(externalObjects.companyId, companyId));
+    await db.update(externalObjects).set({
+      statusKey: "closed_completed", statusLabel: "Closed: completed", statusCategory: "closed", statusTone: "muted",
+      // Older provider snapshots stored every closed Issue/PR as terminal.
+      isTerminal: true, data: { state: "closed" }, remoteVersion: "2026-10-30T10:00:00Z",
+      etag: '"before-missed-event"', nextRefreshAt: new Date(0),
+    }).where(eq(externalObjects.id, object!.id));
+    const mergedId = randomUUID();
+    await db.insert(externalObjects).values({
+      id: mergedId,
+      companyId,
+      providerKey: "github",
+      objectType: "pull_request",
+      externalId: "acme/app#pull/43",
+      statusKey: "merged",
+      statusCategory: "succeeded",
+      statusTone: "success",
+      isTerminal: true,
+      data: { provider: "github", owner: "acme", repo: "app", number: 43, state: "closed", merged: true },
+      remoteVersion: "2026-10-30T09:00:00Z",
+      etag: '"merged-etag"',
+      nextRefreshAt: new Date(-1),
+    });
+
+    // There is intentionally no webhook receipt. The existing per-object
+    // bounded full GET is the recovery owner for this known linked object.
+    // The merged PR is older in the due order, but remains terminal and excluded.
+    const result = await svc.refreshDueObjects(companyId, 1, new Date("2026-10-30T10:03:00Z"));
+    const [reconciled] = await db.select().from(externalObjects).where(eq(externalObjects.id, object!.id));
+    const [stillMerged] = await db.select().from(externalObjects).where(eq(externalObjects.id, mergedId));
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ refreshed: true, reason: "resolved" });
+    expect(reconciled).toMatchObject({
+      statusKey: "open", statusCategory: "open", isTerminal: false,
+      remoteVersion: "2026-10-30T10:02:00Z", etag: '"after-missed-event"', liveness: "fresh",
+    });
+    expect(stillMerged).toMatchObject({ statusKey: "merged", isTerminal: true, remoteVersion: "2026-10-30T09:00:00Z" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a canonical GitHub 404 for a known object without inventing a source version", async () => {
+    const { companyId, issueId } = await createIssue();
+    const svc = externalObjectService(db, {
+      github: { fetch: async () => new Response(null, { status: 404 }), tokenProvider: null },
+    });
+    await svc.syncIssue(issueId);
+    const [object] = await db.select().from(externalObjects).where(eq(externalObjects.companyId, companyId));
+    await db.update(externalObjects).set({ nextRefreshAt: new Date(0) })
+      .where(eq(externalObjects.id, object!.id));
+
+    const [result] = await svc.refreshDueObjects(companyId, 1, new Date("2026-10-30T10:03:00Z"));
+    const [refreshed] = await db.select().from(externalObjects).where(eq(externalObjects.id, object!.id));
+
+    expect(result).toMatchObject({ refreshed: true, reason: "resolved" });
+    expect(refreshed).toMatchObject({ statusKey: "not_found", statusCategory: "archived", isTerminal: true });
+    expect(refreshed?.remoteVersion).toBeNull();
   });
 
   it("coalesces automatic and manual refreshes for the same object", async () => {
