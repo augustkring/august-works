@@ -1816,10 +1816,10 @@ index 4dad330..303641a 100644
          return launch_capability_probe(&raw_args[2..]);
      }
 diff --git a/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs b/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs
-index 81d0b16..2d40a8c 100644
+index 81d0b16..a5fc39b 100644
 --- a/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs
 +++ b/crates/openshell-sandbox/src/sandbox/linux/seccomp.rs
-@@ -633,6 +633,32 @@ mod tests {
+@@ -633,6 +633,34 @@ mod tests {
          unsafe { assert_blocked_in_child(&filter, libc::SYS_memfd_create, libc::EPERM) };
      }
  
@@ -1832,12 +1832,14 @@ index 81d0b16..2d40a8c 100644
 +            // SAFETY: PR_SET_NO_NEW_PRIVS is required before applying the
 +            // filter and only tightens this forked test process.
 +            if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } < 0 {
-+                libc::_exit(1);
++                // SAFETY: this is the child process; _exit terminates only it.
++                unsafe { libc::_exit(1) };
 +            }
 +            apply_filter(&filter).expect("apply_filter");
 +            // SAFETY: getpid takes no arguments and has no memory side effects.
 +            let result = unsafe { libc::syscall(libc::SYS_getpid) };
-+            libc::_exit(if result > 0 { 0 } else { 1 });
++            // SAFETY: this is the child process; the status is a plain exit code.
++            unsafe { libc::_exit(if result > 0 { 0 } else { 1 }) };
 +        }
 +        let mut status: libc::c_int = 0;
 +        // SAFETY: pid is the direct child returned by fork and status is

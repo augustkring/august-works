@@ -1,5 +1,5 @@
-# OpenShell RT-01 R5 source bundle
+# OpenShell RT-01 R5.1 source bundle
 
 The cumulative R5 patch is pinned against NVIDIA/OpenShell v0.1.2 commit `6648bd0c290efbc41ba131ee9831ee45cd431f94`. It combines the R4 identity-bound sandbox RPC/CLI changes, R10 Docker disk-limit and syscall-probe changes, the R11 contradictory mount-mode validation correction, and a CLI transport regression that rejects legacy fallback after identity RPC `UNIMPLEMENTED`.
 
-The exact source tree and patch are bound by `source-pins.json`. The dedicated repository workflow checks formatting, compiles the server/CLI/driver/sandbox packages, and executes selected tests. No tests are represented as passing by the source artifact itself. The test evidence, old-gateway runtime compatibility, physical disk quota and target-host syscall behavior are pending. Profile admission remains closed.
+The exact source tree and patch are bound by `source-pins.json`. The prior R5 run passed 13 focused cases, then found two test-only unsafe-call errors in the new seccomp behavior test; R5.1 fixes those test annotations. The complete focused rerun is pending. The dedicated repository workflow checks formatting, compiles the server/CLI/driver/sandbox packages, and executes selected tests. No tests are represented as passing by the source artifact itself. The test evidence, old-gateway runtime compatibility, physical disk quota and target-host syscall behavior are pending. Profile admission remains closed.

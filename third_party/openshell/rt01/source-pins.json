@@ -8,8 +8,9 @@
   },
   "patch": {
     "path": "third_party/openshell/rt01/openshell-rt01.patch",
-    "sha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e",
-    "scope": "R4 identity-bound API plus R10 Docker disk limits, R11 validation correction, and CLI no-fallback transport regression"
+    "sha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
+    "scope": "R4 identity-bound API plus R10 Docker disk limits, R11 validation correction, and CLI no-fallback transport regression; test-only unsafe annotations required for libc::_exit in behavioral_getpid_allowed",
+    "supersedesPatchSha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e"
   },
   "parentR4PatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
   "toolchain": {
@@ -38,7 +39,7 @@
     "crates/openshell-driver-docker/src/lib.rs": "d6fddd6880b87668de96be791807a8f02b8a2aded46336bd84cd569241173488",
     "crates/openshell-driver-docker/src/tests.rs": "837d788c31462c7e932237fbcc83056b962016bbd8c7159d801160fe178441e3",
     "crates/openshell-sandbox/src/main.rs": "2e5b559b3efff0a6cd06a9623ee10091e463b799068f3ac65f2c1ca6b76e0aac",
-    "crates/openshell-sandbox/src/sandbox/linux/seccomp.rs": "42b19f9cfbdc67454275dcb1d95195ec5ebdaf59a63cba2442a68b34e876c577",
+    "crates/openshell-sandbox/src/sandbox/linux/seccomp.rs": "67f606f3d729dd45a2fa7c58c9e6b0c812a22813b20b8b9b473618d5dfbb81ff",
     "crates/openshell-sdk/tests/client_mock.rs": "97107c277baad5f5d26c97db205fbbca485e35197335e7ab05d6d3266c985e26",
     "crates/openshell-server/build.rs": "637aa140fe3fe2e3d8b171687ec1a23c435493c62540e3f1859e2a800c66052d",
     "crates/openshell-server/src/compute/mod.rs": "ba0ccbd197d30de27dc86818fe1f9ce7693e9fe545ab2116fdeeaa57ade38f79",
@@ -78,10 +79,10 @@
     "proto/openshell.proto"
   ],
   "qualification": {
-    "status": "pending remote qualification",
-    "serverCliGeneratedProtoCheck": "pending",
-    "driverSandboxCheck": "pending",
-    "focusedTests": "pending; exact tests and nonzero execution are enforced in workflow",
+    "status": "pending R5.1 remote rerun",
+    "previousR5Run": 41042077640,
+    "previousR5Outcome": "cargo check passed; 13 exact tests passed; sandbox lib-test compilation failed at two libc::_exit unsafe calls",
+    "currentFocusedTests": "pending remote rerun after test-only safety annotations",
     "physicalDockerQuotaProbe": "not run",
     "physicalSeccompHostProbe": "not run"
   }

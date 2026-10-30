@@ -1,5 +1,5 @@
 {
-  "name": "v10-149-rt01-openshell-r5-identity-and-runtime-guards",
+  "name": "v10-149-rt01-openshell-r5-1-identity-and-runtime-guards",
   "status": "candidate-not-qualified",
   "profileAdmission": "closed",
   "upstream": {
@@ -9,22 +9,23 @@
   },
   "patch": {
     "file": "openshell-rt01.patch",
-    "sha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e",
-    "parentR4PatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7"
+    "sha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
+    "parentR4PatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
+    "supersedesPatchSha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e"
   },
   "sourcePins": {
     "file": "source-pins.json",
-    "sha256": "7c48738c8872151ace5cb6c217a98e8881c7199b853028482d45aff493aff6db"
+    "sha256": "367336a2ef3c2ff2fb6a62934ac7addda5267d93c5f9d36ea4265b4f712353da"
   },
   "license": {
     "spdx": "Apache-2.0",
     "upstreamFile": "LICENSE"
   },
   "qualification": {
-    "status": "pending remote qualification",
-    "serverCliGeneratedProtoCheck": "pending",
-    "driverSandboxCheck": "pending",
-    "focusedTests": "pending; exact tests and nonzero execution are enforced in workflow",
+    "status": "pending R5.1 remote rerun",
+    "previousR5Run": 41042077640,
+    "previousR5Outcome": "cargo check passed; 13 exact tests passed; sandbox lib-test compilation failed at two libc::_exit unsafe calls",
+    "currentFocusedTests": "pending remote rerun after test-only safety annotations",
     "physicalDockerQuotaProbe": "not run",
     "physicalSeccompHostProbe": "not run"
   }
