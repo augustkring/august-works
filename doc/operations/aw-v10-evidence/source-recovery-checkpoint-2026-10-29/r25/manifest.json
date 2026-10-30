@@ -1,0 +1,79 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T20:48:44.715145+00:00",
+  "baseCommit": "bc9ac00874634442e034f7fcff06a10919b21141",
+  "patchBytes": 1712980,
+  "patchSha256": "c8764830cc9c0f495c2773b42b400040e4602416fa767cddc0d307c8f7941c22",
+  "archiveSha256": "a24418b958697e961496c10e41369719a0da2c69b0b0776538331d62b52f7071",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0563_wise_yellow_claw.sql",
+      "bytes": 3167,
+      "sha256": "3a657358183cd499efba154831c969c49dda4d1f7df69a5d0236eb2358a4e57d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0563_snapshot.json",
+      "bytes": 2785918,
+      "sha256": "2cda86e5db45b3f55304bcbfbb9afd3bd6cdb405b138de8ef0d3039c86567e71"
+    },
+    {
+      "path": "packages/db/src/schema/agent_model_migration_monitor_receipts.ts",
+      "bytes": 3030,
+      "sha256": "25b781862fb45a42ef09de0802c0665234c83d8d7373e98652661a0670110d85"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.test.ts",
+      "bytes": 2094,
+      "sha256": "d840e1f3dc02097ae59d5acd5ecf1af41cbccb1b92a9827cf0dde253e81b850e"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.ts",
+      "bytes": 2289,
+      "sha256": "625c3d11b0eb727393bd99943fb4d099d88eced84b8d23949b231badfb8bea83"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 11181,
+      "sha256": "6f4082377ae0735990d175b0650c3f081bcdb975b6f26227efbd2f0ae30c11d9"
+    },
+    {
+      "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
+      "bytes": 19902,
+      "sha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "bytes": 3921,
+      "sha256": "e65b91fedf0b9449069d3522eda2d9d03cac40292de50caef1d3527da989fb93"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.test.tsx",
+      "bytes": 13214,
+      "sha256": "d8a8081dce9557f53068e8d1c0311b41334db0dff99786500a62d5608f80948a"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.tsx",
+      "bytes": 8297,
+      "sha256": "0546990a73919d9195d3f76929f306b1c14c303fbca8c6144f7c390a1a4ec9ff"
+    }
+  ],
+  "unappliedDraftSources": [
+    {
+      "sourceWorkspacePath": "/workspace/v10-preparation/b-resource-governance-current.sql",
+      "archive": "unapplied-resource-governance-draft.sql.gz",
+      "purpose": "recovery_only_unapplied_unqualified_not_the_authoritative_generated_migration",
+      "rawSha256": "902f380360d9d27968df8f668600f7aea54a6b9dbe6e1d523128f360148db894",
+      "archiveSha256": "d8f10855bfd1b53cf8d53255e613c0da86b02799380736ec8a237b38dc340b71"
+    }
+  ]
+}

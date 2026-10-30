@@ -47,6 +47,7 @@ export function grantsForHumanRole(
         { permissionKey: "workflows:edit", scope: null },
         { permissionKey: "workflows:publish", scope: null },
         { permissionKey: "workflows:run", scope: null },
+        { permissionKey: "pipelines:write", scope: null },
       ];
     case "admin":
       return [

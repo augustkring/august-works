@@ -26,6 +26,8 @@ import {
 } from "../../errors.js";
 import { logActivity } from "../activity-log.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
+import type { AuthorizationActor } from "../authorization.js";
+import type { NativeModelOutputCapture } from "../native-runtime/native-execution-input.js";
 import {
   memorySubjectScopeId,
   resolveMemoryRetrievalScopes,
@@ -41,6 +43,11 @@ export interface MemoryAgentToolContext {
   issueId: string | null;
   projectId: string | null;
   responsibleUserId?: string | null;
+  /** Server-held verified actor captured when this Tool Gateway session was minted. */
+  authorizationActor?: AuthorizationActor;
+  /** Server-only Native output binding supplied by the scoped Gateway call. */
+  nativeModelOutputCapture?: NativeModelOutputCapture;
+  nativeToolInvocationId?: string;
   allowShared: boolean;
   allowPrivate: boolean;
 }
@@ -48,6 +55,18 @@ export interface MemoryAgentToolContext {
 type ScopeKind = "private" | "company" | "project" | "subject";
 
 function actorFor(context: MemoryAgentToolContext): MemoryMutationActor {
+  const authorizationActor = context.authorizationActor;
+  if (authorizationActor && (
+    authorizationActor.type !== "agent" ||
+    authorizationActor.companyId !== context.companyId ||
+    authorizationActor.agentId !== context.agentId ||
+    (authorizationActor.runId ?? null) !== (context.runId ?? null) ||
+    (authorizationActor.onBehalfOfUserId ?? null) !== (context.responsibleUserId ?? null)
+  )) {
+    throw forbidden("Current verified Agent Memory authority is unavailable", {
+      code: "memory_agent_authority_unavailable",
+    });
+  }
   return {
     principal: {
       type: "agent",
@@ -55,6 +74,9 @@ function actorFor(context: MemoryAgentToolContext): MemoryMutationActor {
       responsibleUserId: context.responsibleUserId ?? null,
     },
     runId: context.runId,
+    ...(authorizationActor ? { authorizationActor } : {}),
+    ...(context.nativeModelOutputCapture ? { nativeModelOutputCapture: context.nativeModelOutputCapture } : {}),
+    ...(context.nativeToolInvocationId ? { nativeToolInvocationId: context.nativeToolInvocationId } : {}),
   };
 }
 
@@ -795,6 +817,11 @@ export function memoryAgentToolsService(db: Db) {
       const parsed = memoryAgentShareInputSchema.safeParse(rawInput);
       if (!parsed.success) {
         throw unprocessable("Invalid Memory share input", parsed.error.issues);
+      }
+      if (!context.runId || !context.issueId) {
+        throw forbidden("Remembering or correcting memory requires a task-bound agent run", {
+          code: "memory_task_context_required",
+        });
       }
       if (!context.allowShared || !context.allowPrivate) {
         throw forbidden("Sharing Memory requires private and shared Memory to be enabled", {

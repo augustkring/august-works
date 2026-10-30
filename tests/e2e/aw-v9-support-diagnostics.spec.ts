@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { expect, test, type APIResponse } from "@playwright/test";
@@ -15,6 +17,8 @@ test("support report previews and downloads only current native workflow metadat
   request,
 }, info) => {
   test.setTimeout(120000);
+  const session = await json(await request.get("/api/auth/get-session"));
+  const currentUserId = session.user.id as string;
   const original = await json(
     await request.get("/api/instance/settings/experimental"),
   );
@@ -64,7 +68,7 @@ test("support report previews and downloads only current native workflow metadat
     );
     const admitted = await json(
       await request.post(
-        `${base}/workflows/${draft.id}/experience/test?expectedUserId=local-board`,
+        `${base}/workflows/${draft.id}/experience/test?expectedUserId=${encodeURIComponent(currentUserId)}`,
         {
           data: {
             requestId: crypto.randomUUID(),
@@ -113,7 +117,7 @@ test("support report previews and downloads only current native workflow metadat
       verification: "recorded_execution_only",
     });
     expect(JSON.stringify(preview)).not.toContain("Private");
-    expect(JSON.stringify(preview)).not.toContain("local-board");
+    expect(JSON.stringify(preview)).not.toContain(currentUserId);
     await expect(dialog).toContainText(
       "Nothing is sent to support automatically",
     );

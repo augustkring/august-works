@@ -1,8 +1,8 @@
 import { AgentAvatar } from "../AgentAvatar";
 import { AgentIdentity } from "../AgentIdentity";
 import { memo, type ComponentType, type SVGProps } from "react";
-import { Bot, FileText, Hexagon, MessageSquare, Paperclip, Quote } from "lucide-react";
-import type { Agent, CompanySearchResult } from "@paperclipai/shared";
+import { Bot, BookOpen, FileText, Hexagon, MessageSquare, Paperclip, Quote } from "lucide-react";
+import type { Agent, CompanySearchFederatedResult, CompanySearchResult } from "@paperclipai/shared";
 import { Link } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { StatusIcon } from "../StatusIcon";
@@ -107,6 +107,37 @@ function SearchResultRowImpl({
           ) : null}
         </div>
       </Link>
+    );
+  }
+
+  if (result.type === "help") {
+    const maturity = result.helpArticle?.maturity === "ga" ? "GA" : "Preview";
+    const versions = result.helpArticle?.applicableProductVersions.join(", ") ?? "";
+    return (
+      <a
+        href={result.href}
+        target="_blank"
+        rel="noreferrer"
+        className={cn(ROW_BASE, "py-3", isActive && "bg-muted/40", className)}
+        data-result-type="help"
+      >
+        <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2">
+            <span className="truncate text-sm font-medium">{result.title}</span>
+            <span className="text-xs text-muted-foreground">{maturity}{versions ? ` · ${versions}` : ""}</span>
+          </div>
+          {result.snippet ? (
+            <SnippetLine
+              text={result.snippets[0]?.text ?? result.snippet}
+              highlights={result.snippets[0]?.highlights}
+              field="help"
+              fallbackLabel="Help article"
+              multiline
+            />
+          ) : null}
+        </div>
+      </a>
     );
   }
 
@@ -234,6 +265,53 @@ function SearchResultRowImpl({
 }
 
 export const SearchResultRow = memo(SearchResultRowImpl);
+
+export function FederatedSearchResultRow({ result, isActive, className }: {
+  result: CompanySearchFederatedResult;
+  isActive?: boolean;
+  className?: string;
+}) {
+  const content = (
+    <>
+      <Hexagon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2">
+          <span className="truncate text-sm font-medium">{result.title}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{result.type}</span>
+          {result.updatedAt ? <span className="ml-auto shrink-0 text-xs text-muted-foreground">{formatRelativeTime(result.updatedAt)}</span> : null}
+        </div>
+        {result.summary ? <SnippetLine text={result.summary} field={result.type} fallbackLabel={result.breadcrumb ?? result.domain} /> : null}
+      </div>
+    </>
+  );
+  const classNames = cn(ROW_BASE, "py-3", isActive && "bg-muted/40", className);
+  if (result.action.kind === "open_external") {
+    return (
+      <a
+        href={result.action.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={classNames}
+        data-result-type={result.type}
+        data-result-domain={result.domain}
+        aria-label={`${result.title}, ${result.breadcrumb ?? result.domain}, opens external link`}
+      >
+        {content}
+      </a>
+    );
+  }
+  return (
+    <Link
+      to={result.action.href}
+      className={classNames}
+      data-result-type={result.type}
+      data-result-domain={result.domain}
+      aria-label={`${result.title}, ${result.breadcrumb ?? result.domain}`}
+    >
+      {content}
+    </Link>
+  );
+}
 
 interface SnippetLineProps {
   text: string;

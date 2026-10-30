@@ -726,6 +726,14 @@ export const v7ApiPaths: V7ApiOperation[] = [
     201,
     "operator",
   ),
+  op(
+    "post",
+    `${company}/runtime-sandboxes/{id}/admit`,
+    "Apply the exact qualified policy and start the original live manifest under its original deadline",
+    shared.sandboxAdmissionSchema,
+    200,
+    "operator",
+  ),
 
   {
     ...op(

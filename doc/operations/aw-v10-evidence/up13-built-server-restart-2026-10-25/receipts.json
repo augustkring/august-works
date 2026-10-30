@@ -1,0 +1,44 @@
+{
+  "schema": "aw.scoped-software-acceptance.v1",
+  "capturedAt": "2026-10-25T22:23:12.347938+00:00",
+  "gitHeadAtReceipt": "3185a7b1598f4efc9e91957536d16f22ab8eba08",
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 flock -x /workspace/v10-preparation/v10-pg-tests.lock pnpm --dir server exec vitest run src/__tests__/scheduled-work-server-restart.integration.test.ts --maxWorkers=1 --reporter=verbose",
+  "exitCode": 0,
+  "testFilesPassed": 1,
+  "testsPassed": 1,
+  "testsSkipped": 0,
+  "durationSeconds": 33.5,
+  "processClosed": true,
+  "embeddedPostgresCleanedUp": true,
+  "stdoutSha256": "92769845bd1bdcaa0d1528f95872cd860e43b364d4863ee9b74e928735ff19fe",
+  "sourcePins": "source-pins.json",
+  "sourceDrift": {},
+  "bundleDrift": {},
+  "pinnedSourcesUnchangedAtExit": true,
+  "bundleModuleCount": 130,
+  "journey": "journey.json",
+  "earnedSoftwareBehavior": [
+    "Three actual assembled built index.ts processes against the same PostgreSQL/home, each reaching real startupRecovery.ready and graceful SIGTERM exit 0",
+    "Original Routine/createTrigger owners persist the schedule and immutable revision; a deadline written while the server is stopped recovers through the actual startup scheduling owner",
+    "Exactly one canonical schedule occurrence, original Routine Task and original coalesced disabled-wake receipt retaining the requested routine-assignment key",
+    "Third full server restart retains the consumed next deadline and exact canonical occurrence/Task IDs; no duplicate or heartbeat run",
+    "All pinned compiled runtime modules and original scheduled Source files remain unchanged throughout the journey"
+  ],
+  "limitations": [
+    "Offline software acceptance: independent Agent wake policy is disabled and the actual original heartbeat owner records the skipped gate. No paid/model/provider invocation is made or qualified.",
+    "The third restart preserves the advanced saved deadline; this does not claim replay semantics after an operator rewinds an already consumed deadline.",
+    "This scoped test does not rerun the earlier full 158-case schedule suite, qualify physical/provider enforcement, or establish final whole-workspace/production deployment acceptance."
+  ],
+  "priorAttempts": [
+    {
+      "rawLog": "/workspace/v10-preparation/b-up13-built-server-restart-current-1.log",
+      "exitCode": 1,
+      "reason": "Fixture omitted canonical V5 feature prerequisites, before child startup."
+    },
+    {
+      "rawLog": "/workspace/v10-preparation/b-up13-built-server-restart-current-2.log",
+      "exitCode": 1,
+      "reason": "Fixture expected uncoalesced wake key instead of original execution-wait retained requested key; real canonical Routine Task had already recovered."
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/paperclip-control-plane-port.test.ts (15 tests | 1 failed | 14 skipped) 19980ms
+     × P6-23 materializes native review through the authorized interaction service 2804ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/paperclip-control-plane-port.test.ts > PaperclipControlPlanePort conformance > P6-23 materializes native review through the authorized interaction service
+AssertionError: promise resolved "{ interaction: { …(31) }, …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "continuationIssue": {
++     "assigneeAgentId": "00000000-0000-4000-8000-000000000002",
++     "assigneeUserId": null,
++     "id": "30000000-0000-4000-8000-000000000024",
++     "status": "done",
++   },
++   "createdIssues": [],
++   "interaction": {
++     "addresseeAgentId": "34000000-0000-4000-8000-000000000024",
++     "addresseeUserId": null,
++     "companyId": "00000000-0000-4000-8000-000000000001",
++     "continuationPolicy": "wake_assignee",
++     "createdAt": 2026-10-24T14:31:05.754Z,
++     "createdByAgentId": null,
++     "createdByUserId": null,
++     "effectiveResolverPolicy": "anyone",
++     "effectiveResolverPolicySource": "requested",
++     "id": "55070150-d980-4595-9020-159703b1204a",
++     "idempotencyKey": "native-review:0d0b3cd9-671d-428b-b6c2-cc59d456b2b6:attention-1",
++     "issueId": "30000000-0000-4000-8000-000000000024",
++     "kind": "request_confirmation",
++     "legacyResolverPolicyAliases": {
++       "effective": "board_or_agents",
++       "requested": "board_or_agents",
++     },
++     "originCommentIds": [],
++     "payload": {
++       "acceptLabel": "Approve completion",
++       "allowDeclineReason": true,
++       "detailsMarkdown": "Standalone conformance task completed.",
++       "prompt": "Review release notes",
++       "rejectLabel": "Continue work",
++       "rejectRequiresReason": true,
++       "supersedeOnUserComment": false,
++       "target": {
++         "key": "native_completion_review",
++         "label": "Completion decision",
++         "revisionId": "0d0b3cd9-671d-428b-b6c2-cc59d456b2b6",
++         "type": "custom",
++       },
++       "version": 1,
++     },
++     "requestedResolverPolicy": "anyone",
++     "resolvedAt": 2026-10-24T14:31:07.503Z,
++     "resolvedByAgentId": "34000000-0000-4000-8000-000000000024",
++     "resolvedByRunId": "35000000-0000-4000-8000-000000000024",
++     "resolvedByUserId": null,
++     "resolverPolicy": "anyone",
++     "resolverPolicyProvenance": "explicit",
++     "result": {
++       "outcome": "accepted",
++       "version": 1,
++     },
++     "sourceCommentId": null,
++     "sourceIdentityContextId": null,
++     "sourceRunId": "32000000-0000-4000-8000-000000000024",
++     "status": "accepted",
++     "summary": "Review release notes",
++     "title": "Review requested",
++     "updatedAt": 2026-10-24T14:31:07.503Z,
++   },
+  }
+
+ ❯ src/services/native-runtime/paperclip-control-plane-port.test.ts:1313:9
+    1311|         secondReview.id, {}, { agentId: reviewerAgentId, runId: review…
+    1312|           companyId: identity.companyId, agentId: reviewerAgentId, run…
+    1313|       )).rejects.toMatchObject({ status: 403 });
+       |         ^
+    1314|       expect(await db.select({ status: issueThreadInteractions.status …
+    1315|         .where(eq(issueThreadInteractions.id, secondReview.id))).toEqu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 skipped (15)
+   Start at  14:29:40
+   Duration  87.73s (transform 48.45s, setup 248ms, import 66.64s, tests 19.98s, environment 0ms)
+

@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > captures a new manual Task before rechecking its ordinary current write authority 226ms
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > captures only the first stored native revision and exposes no proof through document DTOs 2198ms
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > does not manufacture known inputs for edits or restoration of an old revision 1105ms
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > keeps attribution constructor history unknown 22ms
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > keeps board_key constructor history unknown 24ms
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > rejects a fresh source with expired authority 21ms
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > rejects a fresh source with different_user authority 32ms
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > rejects a fresh source with viewer authority 21ms
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > rolls back document, revision and link when the capture audit fails 181ms
+ ✓ src/__tests__/manual-document-payload-source.integration.test.ts > fresh direct Human document revision sources > denies expired source authority after an actual observed privacy lock wait 1833ms
+ ✓ src/__tests__/v6-public-origin.test.ts > SaaS origin ingress > accepts same-origin proxied API calls and rejects attacker origin even with valid Referer 28ms
+ ✓ src/__tests__/v6-public-origin.test.ts > SaaS origin ingress > does not let trusted proxy fields introduce an unconfigured host or protocol 7ms
+ ✓ src/__tests__/v6-public-origin.test.ts > SaaS origin ingress > ignores forged forwarding authority from an untrusted immediate peer 0ms
+ ✓ src/__tests__/v6-public-origin.test.ts > SaaS origin ingress > requires same-origin evidence for browser mutations without an Origin 5ms
+ ✓ src/__tests__/v6-public-origin.test.ts > SaaS origin ingress > dual-serves old/new origins without allowing cross-origin session mutations 3ms
+ ✓ src/__tests__/v6-public-origin.test.ts > SaaS origin ingress > guards real WebSocket upgrades before session lookup and retains company authorization 10ms
+ ↓ src/__tests__/v7-openshell-prover.integration.test.ts > actual pinned OpenShell 0.1.2 standalone prover (formal evidence only) > checks a complete-root filesystem subset and returns bounded content-free evidence
+ ↓ src/__tests__/v7-openshell-prover.integration.test.ts > actual pinned OpenShell 0.1.2 standalone prover (formal evidence only) > rejects a new write path with the actual nonzero prover exit
+ ↓ src/__tests__/v7-openshell-prover.integration.test.ts > actual pinned OpenShell 0.1.2 standalone prover (formal evidence only) > retains unsupported path-resolution semantics instead of approving a lexical prefix
+ ↓ src/__tests__/v7-openshell-prover.integration.test.ts > actual pinned OpenShell 0.1.2 standalone prover (formal evidence only) > rejects a swapped executable before invoking it
+ ✓ src/__tests__/v7-openshell-prover.integration.test.ts > OpenShell authored-policy projection > does not equate network binary selectors with process or syscall enforcement 9ms
+ ✓ src/__tests__/v7-openshell-prover.integration.test.ts > OpenShell authored-policy projection > does not widen exact path prefixes into sibling prefixes 1ms
+ ✓ src/__tests__/v7-openshell-prover.integration.test.ts > OpenShell authored-policy projection > rejects denial holes in Landlock allowlists and keeps an unbound broker projection unsupported 1ms
+
+ Test Files  3 passed (3)
+      Tests  19 passed | 4 skipped (23)
+   Start at  01:01:48
+   Duration  25.73s (transform 10.11s, setup 176ms, import 15.50s, tests 9.67s, environment 0ms)
+

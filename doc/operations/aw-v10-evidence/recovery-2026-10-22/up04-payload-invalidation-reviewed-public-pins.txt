@@ -1,0 +1,4 @@
+bd37818a58921a422934458569968d4c3a6906fa00585933305dab0e1afa3800  server/src/routes/issues.ts
+92a53b18623a2bd432d0a64690c93e51a311b9ca4604b138ee90a4679344a049  server/src/services/issues.ts
+4000f69e22034250c6d6a05acc6799b57efeeb39135080c1fc922825ac1b5902  server/src/services/native-payload-public.ts
+46eaa5a47733a063f7478525b6d2a7ebcd9fb8fe4fa6548cb44a4d8a93d4f46f  server/src/__tests__/native-payload-public-response.integration.test.ts

@@ -115,7 +115,9 @@ async function capture(tx:Db,row:Decision,actor:AuthorizationActor,definition:De
 }
 
 async function inspectRetained(tx:Db,row:Decision,actor:AuthorizationActor,pin:Version) {
-  await purpose(tx,row.companyId,actor,pin.definition);await decisionAuthority(tx,row,actor,pin.definition.sensitivity);await scopeAuthority(tx,row.companyId,actor,pin.definition);
+  await purpose(tx,row.companyId,actor,pin.definition);
+  await decisionAuthority(tx,row,actor,pin.definition.sensitivity);
+  await scopeAuthority(tx,row.companyId,actor,pin.definition);
   const revalidationRequiredEvidenceKeys:string[]=[];
   for(const link of pin.definition.evidence) {
     if(link.source.type==="metric_observation") {
@@ -165,7 +167,7 @@ async function inspectRetained(tx:Db,row:Decision,actor:AuthorizationActor,pin:V
   const causalPins=await tx.select().from(decisionCausalPins).where(and(eq(decisionCausalPins.companyId,row.companyId),eq(decisionCausalPins.contextVersionId,pin.id))).for("share");
   const causal=pin.evidence.filter(item=>item.source.type==="causal_analysis");
   if(causalPins.length!==causal.length||causal.some(item=>{const ref=item.source;return ref.type!=="causal_analysis"||!causalPins.some(p=>p.decisionId===row.id&&p.key===item.key&&p.sourceHash===item.sourceHash&&p.runId===ref.id&&p.claimId===ref.claimId&&p.claimVersionId===ref.versionId&&p.reviewId===ref.reviewId);}))throw notFound("Decision causal source pins are unavailable");
-  return revalidationRequiredEvidenceKeys;
+  return {revalidationRequiredEvidenceKeys,sourceEdges:material};
   // No recomputation with today's metric values, no replacement of January's
   // process interpretation and no retrospective evidence enrichment.
 }
@@ -177,7 +179,7 @@ async function inspect(tx:Db,row:Decision,actor:AuthorizationActor):Promise<Deci
   const selected=rows.slice(0,5);
   if(binding && !selected.some(pin=>pin.id===binding.versionId)) selected.push(await pinnedVersion(tx,row.companyId,row.id,binding.versionId));
   for(const candidate of selected) {
-    checkTime(deadline);const pin=await pinnedVersion(tx,row.companyId,row.id,candidate.id),revalidationRequiredEvidenceKeys=await inspectRetained(tx,row,actor,pin);
+    checkTime(deadline);const pin=await pinnedVersion(tx,row.companyId,row.id,candidate.id),retained=await inspectRetained(tx,row,actor,pin),revalidationRequiredEvidenceKeys=retained.revalidationRequiredEvidenceKeys;
     versions.push({id:pin.id,companyId:pin.companyId,decisionId:pin.decisionId,revision:pin.revision,definition:pin.definition,evidence:pin.evidence,contentHash:pin.contentHash,
       decisionSpecHash:pin.decisionSpecHash,createdAt:pin.createdAt.toISOString(),expiresAt:pin.expiresAt.toISOString(),
       state:binding?.versionId===pin.id?"frozen_for_decision":row.status!=="open" || pin.id!==rows[0]?.id?"superseded":"draft",revalidationRequiredEvidenceKeys});
@@ -195,9 +197,10 @@ export async function inspectBoundDecisionContext(tx:Db,companyId:string,actor:A
   const row=await decision(tx,companyId,id);
   const [binding]=await tx.select().from(decisionContextBindings).where(and(eq(decisionContextBindings.companyId,companyId),eq(decisionContextBindings.decisionId,id))).for("share");
   if(!binding || row.status!=="decided" || row.chosenOptionId!==binding.optionId || !row.decidedAt || row.decidedAt.getTime()!==binding.frozenAt.getTime()) throw notFound("Outcome review requires the surviving prospective native decision binding");
-  const pin=await pinnedVersion(tx,companyId,id,binding.versionId);await inspectRetained(tx,row,actor,pin);
+  const pin=await pinnedVersion(tx,companyId,id,binding.versionId);
+  const retained=await inspectRetained(tx,row,actor,pin);
   if(pin.contentHash!==binding.contextHash || pin.decisionSpecHash!==binding.decisionSpecHash || decisionContextSpecHash(row)!==binding.decisionSpecHash) throw conflict("Outcome review baseline no longer agrees with its native decision");
-  return {decision:row,binding,version:pin};
+  return {decision:row,binding,version:pin,sourceEdges:retained.sourceEdges};
 }
 export {inspectAuthorityEdges as inspectDecisionSourceAuthority};
 export function decisionIntelligenceService(db:Db) {

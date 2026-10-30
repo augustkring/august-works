@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/company-portability-import-batching.test.ts (15 tests | 1 failed | 1 skipped) 43850ms
+     × copies an authorized conversation-private source with retained ownership and roots 34ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-import-batching.test.ts > company import batches inserts > copies an authorized conversation-private source with retained ownership and roots
+Error: Failed query: update "issues" set "conversation_user_id" = $1, "visibility" = $2, "privacy_root_issue_id" = $3, "created_by_user_id" = $4, "responsible_user_id" = $5 where "issues"."id" = $6
+params: 52c914e2-ef3f-44f4-a863-41be29210569,open,,52c914e2-ef3f-44f4-a863-41be29210569,52c914e2-ef3f-44f4-a863-41be29210569,ab37454d-2b18-44b9-87eb-e1c6ba3c85de
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/company-portability-import-batching.test.ts:670:5
+    668|     const visibility = kind === "explicit" ? "private" : "open";
+    669|     const rootId = kind === "explicit" ? sourceId : null;
+    670|     await db.update(issues).set({ visibility, privacyRootIssueId: root…
+       |     ^
+    671|       createdByUserId: userId, ...(kind === "conversation" ? { convers…
+    672|     bundle.files[".paperclip.yaml"] = renderPaperclipYaml({ schemaVers…
+
+Caused by: PostgresError: new row for relation "issues" violates check constraint "issues_conversation_identity_check"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', detail: 'Failing row contains (ab37454d-2b18-44b9-87eb-e1c6ba3c85de, 9b9b87e2-7a1b-4593-8514-9f96f51e416c, null, null, null, Native source fixture, null, backlog, medium, null, null, 52c914e2-ef3f-44f4-a863-41be29210569, 0, null, null, null, null, 2026-10-22 22:11:32.497442+00, 2026-10-22 22:11:32.497442+00, null, null, null, null, null, null, null, null, null, null, null, null, null, manual, null, null, null, null, default, null, null, null, 0, null, null, standard, null, 52c914e2-ef3f-44f4-a863-41be29210569, null, null, null, null, null, 0, null, null, null, null, 52c914e2-ef3f-44f4-a863-41be29210569, null, 0, null, null, null, null, null, null, null, null, null, null, open, null, null).', schema_name: 'public', table_name: 'issues', constraint_name: 'issues_conversation_identity_check', file: 'execMain.c', routine: 'ExecConstraints', query: 'update "issues" set "conversation_user_id" = $1, "visibility" = $2, "privacy_root_issue_id" = $3, "created_by_user_id" = $4, "responsible_user_id" = $5 where "issues"."id" = $6', parameters: [ '52c914e2-ef3f-44f4-a863-41be29210569', 'open', null, '52c914e2-ef3f-44f4-a863-41be29210569', '52c914e2-ef3f-44f4-a863-41be29210569', 'ab37454d-2b18-44b9-87eb-e1c6ba3c85de' ], args: [ '52c914e2-ef3f-44f4-a863-41be29210569', 'open', null, '52c914e2-ef3f-44f4-a863-41be29210569', '52c914e2-ef3f-44f4-a863-41be29210569', 'ab37454d-2b18-44b9-87eb-e1c6ba3c85de' ], types: [ 25, 25, 2950, 25, 25, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 52 passed | 1 skipped (54)
+   Start at  22:09:51
+   Duration  168.58s (transform 42.60s, setup 593ms, import 75.18s, tests 91.36s, environment 1ms)
+

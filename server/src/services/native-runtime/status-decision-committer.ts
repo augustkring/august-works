@@ -749,10 +749,13 @@ async function materializeDecisionEffect(input: {
   }
   if (effect.kind === "bind_blocker") {
     failAt("blocker_materialization", input.failpoint);
+    const unblockDescriptor = { owner: effect.owner, action: effect.action };
     const [bound] = await input.tx
       .update(issues)
       .set({
-        unblockDescriptor: { owner: effect.owner, action: effect.action },
+        unblockDescriptor,
+        payloadSourceSnapshot: sql`case when ${issues.unblockDescriptor} is distinct from ${JSON.stringify(unblockDescriptor)}::jsonb
+          then null else ${issues.payloadSourceSnapshot} end`,
         updatedAt: new Date(),
       })
       .where(

@@ -1,0 +1,64 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/routine-source-identity.integration.test.ts (4 tests | 2 failed) 26669ms
+     × keeps the service-pinned older revision through routine updates and run completion 672ms
+     × preserves ON DELETE SET NULL for stale revision, creator run, and creator Agent references 614ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routine-source-identity.integration.test.ts > Routine run and revision source identity > keeps the service-pinned older revision through routine updates and run completion
+AssertionError: expected { …(20) } to match object { …(4) }
+(16 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "companyId": "a5ff9e48-c513-4ba0-96be-ab8390e825ae",
+    "routineId": "e47bdb75-6914-46a7-a708-48612dacb1c5",
+    "routineRevisionId": "c6c99777-9eac-496b-b8d0-24bb09a6b32e",
+-   "status": "issue_created",
++   "status": "failed",
+  }
+
+ ❯ src/__tests__/routine-source-identity.integration.test.ts:66:17
+     64|     const originalRevisionId = routine.latestRevisionId!;
+     65|     const run = await owner.service.runRoutine(routine.id, { source: "…
+     66|     expect(run).toMatchObject({ companyId: owner.companyId, routineId:…
+       |                 ^
+     67|       routineRevisionId: originalRevisionId, status: "issue_created" }…
+     68|     expect(run.linkedIssueId).toBeTruthy();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routine-source-identity.integration.test.ts > Routine run and revision source identity > preserves ON DELETE SET NULL for stale revision, creator run, and creator Agent references
+Error: Failed query: delete from "companies" where "companies"."id" = $1
+params: 5caea9a3-d0bc-434a-b2a6-681350afa57a
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/routine-source-identity.integration.test.ts:204:5
+    202|     expect(afterAgentDelete?.title).toBe(beforeDelete.title);
+    203|
+    204|     await db.delete(companies).where(eq(companies.id, owner.companyId)…
+       |     ^
+    205|     expect(await db.select().from(routines).where(eq(routines.companyI…
+    206|     expect(await db.select().from(routineRevisions).where(eq(routineRe…
+
+Caused by: PostgresError: update or delete on table "companies" violates foreign key constraint "company_memberships_company_id_companies_id_fk" on table "company_memberships"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23503', detail: 'Key (id)=(5caea9a3-d0bc-434a-b2a6-681350afa57a) is still referenced from table "company_memberships".', schema_name: 'public', table_name: 'company_memberships', constraint_name: 'company_memberships_company_id_companies_id_fk', file: 'ri_triggers.c', routine: 'ri_ReportViolation', query: 'delete from "companies" where "companies"."id" = $1', parameters: [ '5caea9a3-d0bc-434a-b2a6-681350afa57a' ], args: [ '5caea9a3-d0bc-434a-b2a6-681350afa57a' ], types: [ 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 26 passed (28)
+   Start at  15:52:16
+   Duration  219.46s (transform 52.95s, setup 553ms, import 118.39s, tests 99.52s, environment 0ms)
+

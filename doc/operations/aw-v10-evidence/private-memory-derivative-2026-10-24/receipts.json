@@ -1,0 +1,57 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "a3ded6997608cea89397210479987ac9fff6b460",
+  "meaning": "Before log reproduces actual selected private Memory derivative leak through native SQL list/count/search/extract/detail. After mixed run preserves two pre-existing temporal failures and an own-query echo test defect. Final bounded14PASS includes owner-positive native search, cross-Human denial, original public Task and manual Task source controls. Necessary negative private ownership fence only: not complete transitive Memory/Source provenance, snapshots, lifecycle, current query transaction or V10 qualification. Test now searches a public prefix rather than including its entire secret in the caller query.",
+  "logs": [
+    {
+      "name": "private-memory-owner-before",
+      "exitCode": 1,
+      "rawSha256": "600105a8e8069fd46ee6c165f3f8501ea7717b6f0d0f6b705c71ac3a75928ab9",
+      "sanitizedSha256": "600105a8e8069fd46ee6c165f3f8501ea7717b6f0d0f6b705c71ac3a75928ab9",
+      "archiveSha256": "03022820676fa634a000a579adfc04d6be1132be69bc7c301c6ded013ce4e256",
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed (1)",
+        "Duration  17.04s (transform 9.16s, setup 80ms, import 12.54s, tests 4.29s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "private-memory-owner-after",
+      "exitCode": 1,
+      "rawSha256": "d4e0fe7e532fe1e6de242393cc90aebcf51b2f1612ac178c93b060ba52f4d01f",
+      "sanitizedSha256": "d4e0fe7e532fe1e6de242393cc90aebcf51b2f1612ac178c93b060ba52f4d01f",
+      "archiveSha256": "642d2a76e4c2859c7971203965e2e9001ffeedd513d000b38ef0c1de357ed7e8",
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 3 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  2 failed (2)",
+        "Tests  3 failed | 1 passed (4)",
+        "Duration  30.19s (transform 11.04s, setup 168ms, import 18.23s, tests 11.55s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "private-memory-owner-final",
+      "exitCode": 0,
+      "rawSha256": "925d11640a0e24e215aacba561c5ef3064ed3ccf36f6c193eeaae65239e7a94d",
+      "sanitizedSha256": "925d11640a0e24e215aacba561c5ef3064ed3ccf36f6c193eeaae65239e7a94d",
+      "archiveSha256": "1abf587f648ac0278e2e5f643e6421cc614e46a6655f9b0a7e28194c362088ff",
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  20.86s (transform 11.63s, setup 71ms, import 15.61s, tests 5.04s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "private-memory-owner-controls",
+      "exitCode": 0,
+      "rawSha256": "944f7c1ea6bc7675c940494030c122ad5369e9fce4cfb6895a993e0a516a13d3",
+      "sanitizedSha256": "944f7c1ea6bc7675c940494030c122ad5369e9fce4cfb6895a993e0a516a13d3",
+      "archiveSha256": "fc3d41791471406e45ceec5f577537e78683f39a003732ed32d63cf347bb77a9",
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  14 passed (14)",
+        "Duration  28.55s (transform 9.38s, setup 125ms, import 16.34s, tests 11.85s, environment 0ms)"
+      ]
+    }
+  ]
+}

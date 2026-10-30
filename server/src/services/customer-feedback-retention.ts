@@ -82,7 +82,7 @@ export function customerFeedbackRetentionService(db: Db, options: {
         await reader.insert(activityLog).values({ companyId, actorType: "user", actorId: principal,
           action: "customer_feedback.retention_changed", entityType: "customer_feedback_access", entityId: randomUUID(), details: null });
         return result;
-      });
+      }, true);
     },
     plan: (actor: AuthorizationActor, companyId: string, feedbackId: string) =>
       feedback.withInternalRetention(actor, companyId, feedbackId, async (reader, _principal, owner) => {

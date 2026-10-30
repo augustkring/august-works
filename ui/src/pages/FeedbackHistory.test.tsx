@@ -184,6 +184,23 @@ it("replays the frozen customer reply after a lost acknowledgement despite a ref
   expect(send.mock.calls[1]![3]).toEqual(first);
   expect(first.expectedVersion).toBe(1);
 });
+it("shows the submitter's consented ratings in their detail and reflects withdrawal without values", async () => {
+  const rated: CustomerFeedback = { ...item, status: "RECEIVED", version: 0, experienceMeasureStatus: "granted",
+    experienceMeasure: { satisfaction: "satisfied", effort: "difficult" } };
+  const withdrawn: CustomerFeedback = { ...rated, experienceMeasureStatus: "withdrawn", experienceMeasure: undefined };
+  vi.spyOn(customerFeedbackApi, "list").mockResolvedValue([rated]);
+  vi.spyOn(customerFeedbackApi, "get").mockResolvedValueOnce(rated).mockResolvedValue(withdrawn);
+  const withdraw = vi.spyOn(customerFeedbackApi, "withdrawExperienceMeasure").mockResolvedValue(withdrawn);
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  await mount("customer");
+  await vi.waitFor(() => expect(container.textContent).toContain("Satisfied"));
+  expect(container.textContent).toContain("Difficult");
+  await click("Withdraw optional ratings");
+  await vi.waitFor(() => expect(withdraw).toHaveBeenCalledWith(companyId, context.principal, id, expect.any(String)));
+  await vi.waitFor(() => expect(container.textContent).toContain("Your optional ratings were withdrawn and removed."));
+  expect(container.textContent).not.toContain("Satisfied");
+  expect(container.textContent).not.toContain("Difficult");
+});
 it("rejects late private history after a native access-loss event", async () => {
   vi.spyOn(customerFeedbackApi, "list").mockResolvedValue([item]);
   const get = vi.spyOn(customerFeedbackApi, "get").mockResolvedValue(item);

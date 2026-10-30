@@ -15,9 +15,8 @@ import { createStorageService } from "../../storage/service.js";
 import { runtimeCommercialService } from "../runtime/commercial.js";
 import { notificationService } from "../notifications/notifications.js";
 import { randomUUID } from "node:crypto";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
-  authSecurityEvents,
   platformSchedulerLeases,
   type Db,
 } from "@paperclipai/db";
@@ -52,6 +51,7 @@ import { nativeSandboxHostTransport } from "../execution-sandbox/native-host-bri
 import { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { registerNativeDraftGateway } from "../orchestration/native-draft-runtime.js";
 import { nativeDraftConformanceService, registerNativeDraftConformance } from "../native-draft-conformance.js";
+import { runResponsibilityScanMaintenanceTick } from "../experience/private-0565/maintenance-runner.js";
 
 export function saasPlatform(
   db: Db,
@@ -91,6 +91,8 @@ export function saasPlatform(
   );
   const onboarding = saasOnboardingService(db);
   const accountDeletion = accountDeletionService(db, {
+    enterpriseSourceSha: config.deployment.sourceSha,
+    operatorUserIds: config.operatorUserIds,
     removeFeedbackImages: async operationId => {
       for (let count = 0; count < 3; count++)
         if (!(await processFeedbackImageDeletion(db, storage, operationId))) break;
@@ -109,16 +111,20 @@ export function saasPlatform(
   );
   const catalog = runtimeCatalogService(db, config);
   const costs = saasCostService(db, config);
-  const runtime = runtimeControlService(
-    db,
-    config,
-    notifications.notifyCompany,
-  );
-  const sandboxHosts = nativeSandboxHostTransport(db, { suspectSeconds: config.runtime.suspectSeconds });
   const workerModels = config.workerModelProfiles?.length ? workerModelGateway(db, {
     profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
     protectedEvidenceOrigin: origins.primaryAppOrigin,
   }) : undefined;
+  const runtime = runtimeControlService(
+    db,
+    config,
+    notifications.notifyCompany,
+    { credentialBrokerOrigin: origins.primaryAppOrigin, workerModels },
+  );
+  const sandboxHosts = nativeSandboxHostTransport(db, {
+    suspectSeconds: config.runtime.suspectSeconds,
+    operatorUserIds: config.operatorUserIds,
+  });
   registerNativeDraftGateway(db, workerModels);
   registerNativeDraftConformance(db, config.workerModelProfiles?.length ? nativeDraftConformanceService(db, {
     profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
@@ -249,6 +255,12 @@ export function saasPlatform(
       run: () => accountDeletion.processOne(),
     },
     {
+      key: "company-responsibility-scan",
+      flag: "saas_deployment_profile_v6",
+      interval: 2000,
+      run: () => runResponsibilityScanMaintenanceTick({ db, worker: owner }),
+    },
+    {
       key: "approved-feedback-erasure",
       flag: "saas_deployment_profile_v6",
       interval: 10000,
@@ -354,15 +366,6 @@ export function saasPlatform(
       flag: "billing_v6",
       interval: 300000,
       run: () => billing.reconcileSubscriptions(),
-    },
-    {
-      key: "auth-event-retention",
-      flag: "transactional_email_v6",
-      interval: 3600000,
-      run: () =>
-        db
-          .delete(authSecurityEvents)
-          .where(lt(authSecurityEvents.expiresAt, new Date())),
     },
   ];
   async function tick() {

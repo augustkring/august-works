@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createLocalAgentJwt, verifyLocalAgentJwt } from "../agent-auth-jwt.js";
+import { createLocalAgentJwt, createSandboxBrokerJwt, createSandboxExecJwt, verifyLocalAgentJwt, verifySandboxBrokerJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
 
 describe("agent local JWT", () => {
   const secretEnv = "PAPERCLIP_AGENT_JWT_SECRET";
@@ -67,6 +67,120 @@ describe("agent local JWT", () => {
     });
   });
 
+  it("issues a short, exact sandbox-exec audience that ordinary API auth rejects", () => {
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(now);
+    const claim = {
+      requestId: "11111111-1111-4111-8111-111111111111",
+      bindingId: "22222222-2222-4222-8222-222222222222",
+      cellId: "33333333-3333-4333-8333-333333333333",
+      generation: "7",
+      hostId: "44444444-4444-4444-8444-444444444444",
+      hostEpoch: 9,
+      runId: "55555555-5555-4555-8555-555555555555",
+      attemptId: "66666666-6666-4666-8666-666666666666",
+      attempt: 1,
+      manifestId: "77777777-7777-4777-8777-777777777777",
+      manifestHash: "a".repeat(64),
+      policySnapshotId: "88888888-8888-4888-8888-888888888888",
+      policyHash: "b".repeat(64),
+      commandDigest: "c".repeat(64),
+      deadlineAt: new Date(now.getTime() + 30_000).toISOString(),
+    };
+    const token = createSandboxExecJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner",
+      runId: claim.runId, responsibleUserId: "user-1", claim,
+      parentExpiresAt: new Date(now.getTime() + 60_000),
+      nativeLeaseExpiresAt: new Date(now.getTime() + 45_000),
+    });
+    expect(token).toBeTruthy();
+    expect(verifyLocalAgentJwt(token!)).toBeNull();
+    expect(verifySandboxExecJwt(token!)).toMatchObject({
+      purpose: "sandbox_exec", aud: "paperclip-sandbox-exec", sandbox_exec: claim,
+      exp: Math.floor((now.getTime() + 30_000) / 1000),
+    });
+    const [header, body, signature] = token!.split(".");
+    const tampered = JSON.parse(Buffer.from(body!, "base64url").toString("utf8"));
+    tampered.sandbox_exec.commandDigest = "d".repeat(64);
+    expect(verifySandboxExecJwt(`${header}.${Buffer.from(JSON.stringify(tampered)).toString("base64url")}.${signature}`)).toBeNull();
+  });
+
+  it("does not allow dedicated sandbox capabilities through legacy master-secret fallback or another instance", () => {
+    const claim = {
+      requestId: "11111111-1111-4111-8111-111111111111",
+      bindingId: "22222222-2222-4222-8222-222222222222",
+      cellId: "33333333-3333-4333-8333-333333333333",
+      generation: "7", hostId: "44444444-4444-4444-8444-444444444444", hostEpoch: 9,
+      runId: "55555555-5555-4555-8555-555555555555", attemptId: null, attempt: 1,
+      manifestId: "77777777-7777-4777-8777-777777777777", manifestHash: "a".repeat(64),
+      policySnapshotId: "88888888-8888-4888-8888-888888888888", policyHash: "b".repeat(64),
+      commandDigest: "c".repeat(64), deadlineAt: new Date(Date.now() + 30_000).toISOString(),
+    };
+    process.env.PAPERCLIP_INSTANCE_ID = "sandbox-capability-other-instance";
+    const forkToken = createSandboxExecJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner", runId: claim.runId,
+      responsibleUserId: "user-1", claim, parentExpiresAt: new Date(Date.now() + 60_000),
+      nativeLeaseExpiresAt: new Date(Date.now() + 45_000),
+    })!;
+    process.env.PAPERCLIP_INSTANCE_ID = "sandbox-capability-current-instance";
+    expect(verifySandboxExecJwt(forkToken)).toBeNull();
+
+    const [header, body] = forkToken.split(".");
+    const signingInput = `${header}.${body}`;
+    const legacySignature = createHmac("sha256", process.env.PAPERCLIP_AGENT_JWT_SECRET!)
+      .update(signingInput).digest("base64url");
+    expect(verifySandboxExecJwt(`${signingInput}.${legacySignature}`)).toBeNull();
+  });
+
+  it("issues a short sandbox broker capability bound to an exact gateway destination and rejects API auth", () => {
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(now);
+    const claim = {
+      parentRequestId: "11111111-1111-4111-8111-111111111111",
+      bindingId: "22222222-2222-4222-8222-222222222222",
+      cellId: "33333333-3333-4333-8333-333333333333",
+      generation: "7", hostId: "44444444-4444-4444-8444-444444444444", hostEpoch: 9,
+      runId: "55555555-5555-4555-8555-555555555555", attemptId: null, attempt: 1,
+      manifestId: "77777777-7777-4777-8777-777777777777", manifestHash: "a".repeat(64),
+      policySnapshotId: "88888888-8888-4888-8888-888888888888", policyHash: "b".repeat(64),
+      brokerSessionId: "99999999-9999-4999-8999-999999999999", endpointOrigin: "https://paperclip.example/",
+      bindings: [{ connectionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", grantVersionHash: "c".repeat(64), gatewayPublicId: "assigned-gateway", endpointPath: "/mcp/gateways/assigned-gateway", allowedTools: ["read_issue"], binary: null, destination: { hostname: "api.example.com", port: 443, method: "POST" as const, path: "/v1/read" } }],
+      expiresAt: new Date(now.getTime() + 30_000).toISOString(),
+    };
+    const token = createSandboxBrokerJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner", runId: claim.runId,
+      responsibleUserId: "user-1", claim,
+      parentExpiresAt: new Date(now.getTime() + 60_000), nativeLeaseExpiresAt: new Date(now.getTime() + 45_000),
+      execDeadlineAt: new Date(now.getTime() + 40_000),
+    });
+    expect(token).toBeTruthy();
+    expect(verifyLocalAgentJwt(token!)).toBeNull();
+    expect(verifySandboxExecJwt(token!)).toBeNull();
+    expect(verifySandboxBrokerJwt(token!)).toMatchObject({ purpose: "sandbox_broker", aud: "paperclip-sandbox-broker", sandbox_broker: claim, exp: Math.floor((now.getTime() + 30_000) / 1000) });
+    const executableClaim = { ...claim, bindings: claim.bindings.map(binding => ({ ...binding, binary: "/usr/bin/node" })) };
+    const executableToken = createSandboxBrokerJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner", runId: claim.runId,
+      responsibleUserId: "user-1", claim: executableClaim,
+      parentExpiresAt: new Date(now.getTime() + 60_000), nativeLeaseExpiresAt: new Date(now.getTime() + 45_000),
+      execDeadlineAt: new Date(now.getTime() + 40_000),
+    });
+    expect(verifySandboxBrokerJwt(executableToken!)).toMatchObject({ sandbox_broker: executableClaim });
+    const [header, body] = token!.split(".");
+    const signingInput = `${header}.${body}`;
+    const legacySignature = createHmac("sha256", process.env.PAPERCLIP_AGENT_JWT_SECRET!)
+      .update(signingInput).digest("base64url");
+    expect(verifySandboxBrokerJwt(`${signingInput}.${legacySignature}`)).toBeNull();
+    process.env.PAPERCLIP_INSTANCE_ID = "sandbox-broker-other-instance";
+    const otherInstanceToken = createSandboxBrokerJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner", runId: claim.runId,
+      responsibleUserId: "user-1", claim,
+      parentExpiresAt: new Date(now.getTime() + 60_000), nativeLeaseExpiresAt: new Date(now.getTime() + 45_000),
+      execDeadlineAt: new Date(now.getTime() + 40_000),
+    })!;
+    process.env.PAPERCLIP_INSTANCE_ID = "sandbox-broker-current-instance";
+    expect(verifySandboxBrokerJwt(otherInstanceToken)).toBeNull();
+  });
+
   it("round-trips a skill_test run scope", () => {
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     const issueId = "11111111-1111-4111-8111-111111111111";
@@ -77,6 +191,38 @@ describe("agent local JWT", () => {
 
     const claims = verifyLocalAgentJwt(token!);
     expect(claims?.key_scope).toEqual({ kind: "skill_test", issueId });
+  });
+
+  it("round-trips only a closed native HTTP effect claim and rejects malformed claim extensions", () => {
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const native_tool_effect = {
+      dispatchId: "11111111-1111-4111-8111-111111111111", eventSeq: 7, attempt: 3,
+      turnId: "provider-turn", callId: "provider-call", tool: "call_api" as const,
+      operationId: "POST /api/issues", method: "POST", pathAndQuery: "/api/issues?x=1", bodyPresent: true,
+      bodyHash: "a".repeat(64), apiReceiptDigest: "b".repeat(64), leaseOwner: "lease-owner",
+      leaseExpiresAt: "2026-01-01T00:01:00.000Z", controllerBootId: "controller-boot", controllerPid: 42,
+      controllerProcessStartedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const token = createLocalAgentJwt("agent-1", "company-1", "paperclip_runner", "run-1", "user-1", { kind: "standard" }, native_tool_effect);
+    expect(verifyLocalAgentJwt(token!)?.native_tool_effect).toEqual(native_tool_effect);
+    const [header, encoded, signature] = token!.split(".");
+    const body = JSON.parse(Buffer.from(encoded!, "base64url").toString("utf8"));
+    body.native_tool_effect.pathAndQuery = "/api/other";
+    const changed = Buffer.from(JSON.stringify(body)).toString("base64url");
+    expect(verifyLocalAgentJwt(`${header}.${changed}.${signature}`)).toBeNull();
+  });
+
+  it("will not mint a native effect token that outlives its pinned lease deadline", () => {
+    vi.setSystemTime(new Date("2026-01-01T00:00:05.000Z"));
+    const claim = {
+      dispatchId: "11111111-1111-4111-8111-111111111111", eventSeq: 7, attempt: 3,
+      turnId: "provider-turn", callId: "provider-call", tool: "call_api" as const,
+      operationId: "POST /api/issues", method: "POST", pathAndQuery: "/api/issues", bodyPresent: false,
+      bodyHash: "a".repeat(64), apiReceiptDigest: "b".repeat(64), leaseOwner: "lease-owner",
+      leaseExpiresAt: "2026-01-01T00:00:04.000Z", controllerBootId: "controller-boot", controllerPid: 42,
+      controllerProcessStartedAt: "2026-01-01T00:00:00.000Z",
+    };
+    expect(createLocalAgentJwt("agent-1", "company-1", "paperclip_runner", "run-1", "user-1", { kind: "standard" }, claim)).toBeNull();
   });
 
   it("returns null when secret is missing", () => {
@@ -108,6 +254,16 @@ describe("agent local JWT", () => {
     const token = createLocalAgentJwt("agent-1", "company-1", "claude_local", "run-1");
 
     vi.setSystemTime(new Date("2026-01-01T00:00:05.000Z"));
+    expect(verifyLocalAgentJwt(token!)).toBeNull();
+  });
+
+  it("rejects at the exact expiry instant after a valid pre-expiry read", () => {
+    process.env[ttlEnv] = "1";
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const token = createLocalAgentJwt("agent-1", "company-1", "claude_local", "run-1");
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.999Z"));
+    expect(verifyLocalAgentJwt(token!)).not.toBeNull();
+    vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
     expect(verifyLocalAgentJwt(token!)).toBeNull();
   });
 
@@ -266,12 +422,24 @@ describe("agent local JWT", () => {
     expect(claims!.exp - claims!.iat).toBe(60 * 60 * 48);
   });
 
+  it.each([{}, { kind: "unknown" }, { kind: "skill_test", issueId: "invalid" },
+    { kind: "task_bridge", parentIssueIds: [] }])("rejects a valid signature with malformed key scope %j", scope => {
+    const token = craftLegacyMasterSecretToken("test-secret", "company-1", scope);
+    expect(verifyLocalAgentJwt(token)).toBeNull();
+  });
+
+  it("preserves documented legacy absent and null standard scope", () => {
+    expect(verifyLocalAgentJwt(craftLegacyMasterSecretToken("test-secret", "company-1"))).not.toBeNull();
+    expect(verifyLocalAgentJwt(craftLegacyMasterSecretToken("test-secret", "company-1", null))?.key_scope).toEqual({ kind: "standard" });
+  });
+
   // Helper: hand-craft a token signed with the raw master secret (legacy path).
-  function craftLegacyMasterSecretToken(masterSecret: string, companyId: string) {
+  function craftLegacyMasterSecretToken(masterSecret: string, companyId: string, scope?: unknown) {
     const now = Math.floor(Date.now() / 1000);
     const header = { alg: "HS256", typ: "JWT" };
     const claims = {
       sub: "agent-legacy",
+      ...(scope === undefined ? {} : { key_scope: scope }),
       company_id: companyId,
       adapter_type: "claude_local",
       run_id: "run-legacy",

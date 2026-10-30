@@ -102,6 +102,80 @@ afterAll(async () => {
 });
 
 describe("OpenCodeServerDriver", () => {
+  it("routes only the explicitly selected Anthropic managed profile to the fixed Paperclip model broker", () => {
+    expect(openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "anthropic/claude-fixture-2026",
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example",
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024" },
+    )).toEqual({
+      anthropic: {
+        options: {
+          baseURL: "https://paperclip.example/runtime-tools/model/v1",
+          apiKey: "paperclip-managed-model-broker",
+        },
+        models: { "claude-fixture-2026": { name: "claude-fixture-2026", tool_call: true,
+          limit: { context: 101024, output: 1024 } } },
+      },
+    });
+    expect(openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "openrouter/deepseek/deepseek-v4-flash-0731",
+      {},
+    )).toEqual({ openrouter: { models: { "deepseek/deepseek-v4-flash-0731": { name: "deepseek/deepseek-v4-flash-0731" } } } });
+    expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "openrouter/arbitrary",
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example" },
+    )).toThrow("managed_model_broker_requires_anthropic");
+    expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "anthropic/arbitrary",
+      { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example/untrusted",
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024" },
+    )).toThrow("managed_model_broker_origin_invalid");
+    expect(() => openCodeServerDriverInternals.resolveManagedModelProviderConfiguration(
+      "anthropic/arbitrary", { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example" },
+    )).toThrow("managed_model_profile_limits_invalid");
+  });
+  it("pins the managed source plugin and removes OpenCode built-ins from actual prompt payloads", async () => {
+    await chmod(fixture, 0o755);
+    const root = await mkdtemp(join(tmpdir(), "paperclip-opencode-managed-source-"));
+    const workspace = await mkdtemp(join(tmpdir(), "paperclip-opencode-managed-workspace-"));
+    roots.push(root, workspace);
+    let promptPayload: Record<string, unknown> | null = null;
+    const driver = new OpenCodeServerDriver({
+      model: "anthropic/claude-fixture-2026",
+      systemInstructions: "CANONICAL_FROZEN_SOURCE_PROMPT",
+      runtimeDirectory: root,
+      command: fixture,
+      fetch: async (input, init) => {
+        if (String(input).endsWith("/prompt_async")) promptPayload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return fetch(input, init);
+      },
+      environment: { PATH: process.env.PATH, PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://paperclip.example.test",
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024" },
+    });
+    const session = await driver.openSession({ runId: "managed-source", normalizedSessionId: "managed-source", workingDirectory: workspace });
+    const config = JSON.parse(await readFile(join(root, "managed-source", "config", "opencode", "opencode.json"), "utf8"));
+    const pluginPath = join(root, "managed-source", "config", "opencode", "plugins", "paperclip-source-witness.js");
+    const plugin = await readFile(pluginPath, "utf8");
+    expect(config.tools).toEqual({ "*": false, "paperclip_*": true });
+    expect(config.permission).toMatchObject({ "*": "deny", "paperclip_*": "allow", "external_directory": "deny" });
+    expect(plugin).toContain("CANONICAL_FROZEN_SOURCE_PROMPT");
+    expect(plugin).toContain("experimental.chat.messages.transform");
+    expect(plugin).toContain("experimental.chat.system.transform");
+    expect(plugin).toContain("tool.definition");
+    expect(plugin).toContain("tool.execute.before");
+    expect(plugin).toContain("tool.execute.after");
+    expect(plugin).toContain("x-paperclip-opencode-source-witness");
+    expect(plugin).toContain('sourceClosure: "unsupported"');
+    expect(plugin).toContain('missingSourceFamilies: ["task", "history", "tool_result", "tool_schema"]');
+    expect((await stat(pluginPath)).mode & 0o777).toBe(0o400);
+    await session.startTurn({ message: { role: "user", text: "finish" } });
+    expect(promptPayload).not.toHaveProperty("tools");
+    expect(promptPayload).toMatchObject({ parts: [{ type: "text", text: "finish" }] });
+    await session.close();
+  });
   it("advertises within-turn plans as unsupported", async () => {
     const driver = new OpenCodeServerDriver({
       model: "openrouter/deepseek/deepseek-v4-flash-0731",
@@ -691,7 +765,7 @@ describe("OpenCodeServerDriver", () => {
     expect(
       (await stat(join(sessionRoot, "config", "opencode", "opencode.json")))
         .mode & 0o777,
-    ).toBe(0o600);
+    ).toBe(0o400);
     const config = await readFile(
       join(sessionRoot, "config", "opencode", "opencode.json"),
       "utf8",
@@ -863,9 +937,11 @@ describe("OpenCodeServerDriver", () => {
       environment: {
         PATH: process.env.PATH,
         OPENROUTER_API_KEY: "fixture-key",
-        PAPERCLIP_NATIVE_MCP_NAME: "paperclip-assigned",
-        PAPERCLIP_NATIVE_MCP_URL: "https://paperclip.example/mcp",
-        PAPERCLIP_NATIVE_MCP_TOKEN: "x".repeat(40),
+      },
+      assignedMcp: {
+        name: "paperclip-assigned",
+        url: "https://paperclip.example/mcp",
+        token: "x".repeat(40),
       },
       fetch: async (input, init) => {
         if (String(input).endsWith("/prompt_async"))

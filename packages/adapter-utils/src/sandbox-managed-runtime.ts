@@ -1063,6 +1063,13 @@ export async function prepareSandboxManagedRuntime(input: {
   /** Durable snapshots supplied when reconstructing an interrupted restore. */
   workspaceBaseline?: DirectorySnapshot;
   workspaceGitSnapshot?: GitWorkspaceSnapshot | null;
+  /**
+   * Server-derived proof that this isolated task root has no configured
+   * repository owner. This is only valid after the caller verifies the exact
+   * server-owned, projectless task workspace; ordinary workspaces must leave
+   * discovery enabled so Git ignore rules continue to fail closed.
+   */
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
   workspaceExclude?: string[];
   preserveAbsentOnRestore?: string[];
   assets?: SandboxManagedRuntimeAsset[];
@@ -1135,8 +1142,14 @@ export async function prepareSandboxManagedRuntime(input: {
   // The git enumeration (`git status --ignored`, the HEAD diffs, `ls-files`).
   // It reads git's own bookkeeping to decide what to include/exclude, so it is
   // usually fast, but on a large working tree the `--ignored` walk is not free.
+  const verifiedNoRepository = input.workspaceRepositoryMode === "server_verified_none";
+  if (verifiedNoRepository && input.workspaceGitSnapshot != null) {
+    throw new Error("workspace_repository_mode_conflicts_with_git_snapshot");
+  }
   const gitSnapshot = syncWorkspace
-    ? input.workspaceGitSnapshot !== undefined
+    ? verifiedNoRepository
+      ? null
+      : input.workspaceGitSnapshot !== undefined
       ? input.workspaceGitSnapshot
       : await runStepSpan("snapshot.git", () =>
           readGitWorkspaceSnapshot(input.workspaceLocalDir),
@@ -1145,7 +1158,7 @@ export async function prepareSandboxManagedRuntime(input: {
   // A selected subfolder has no cloneable Git snapshot, but its parent
   // repository's ignore rules still govern which files may leave the host.
   // Use the same bounded, path-relative resolver as referenced project trees.
-  const directoryIgnore = syncWorkspace && !gitSnapshot
+  const directoryIgnore = syncWorkspace && !gitSnapshot && !verifiedNoRepository
     ? await resolveReferencedSourceIgnore(input.workspaceLocalDir)
     : null;
   if (directoryIgnore?.kind === "failed") {

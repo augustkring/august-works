@@ -16,7 +16,8 @@ for (const direct of [false, true])
     page,
     request,
   }) => {
-    const f = await setup(request);
+    const f = await setup(request, page);
+    request = f.request;
     try {
       await page.goto(f.route);
       await send(page, {
@@ -83,7 +84,8 @@ test("split handoff commits relevant plans before execution and never creates ch
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await send(page, {
@@ -167,7 +169,8 @@ for (const bad of [
     page,
     request,
   }) => {
-    const f = await setup(request);
+    const f = await setup(request, page);
+    request = f.request;
     try {
       await page.goto(f.route);
       await send(page, { action: "project", ...bad });
@@ -193,7 +196,8 @@ test("first upload creates the chat without invoking its agent; shared attachmen
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await page
@@ -253,7 +257,8 @@ for (const mode of ["Ask", "Plan"])
     page,
     request,
   }) => {
-    const f = await setup(request);
+    const f = await setup(request, page);
+    request = f.request;
     try {
       await page.goto(f.route);
       await page.getByTestId("task-chat-composer-mode").click();
@@ -317,7 +322,8 @@ for (const selection of [
     page,
     request,
   }) => {
-    const f = await setup(request);
+    const f = await setup(request, page);
+    request = f.request;
     try {
       const secret = await json(
         await request.post(`/api/companies/${f.company.id}/secrets`, {
@@ -394,7 +400,8 @@ test("plan approval hands the preserved revision to an assigned project task", a
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await page.getByTestId("task-chat-composer-mode").click();
@@ -462,7 +469,8 @@ test("shared questions resume and existing project reuse creates no project card
   page,
   request,
 }) => {
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     const project = await json(
       await request.post(`/api/companies/${f.company.id}/projects`, {
@@ -471,6 +479,21 @@ test("shared questions resume and existing project reuse creates no project card
     );
     await page.goto(f.route);
     await send(page, { action: "question" });
+    // This turn performs several authenticated tools before producing its
+    // question. Observe that real owner effect before timing its live UI.
+    // API reads do not reload the page or invalidate the browser's queries.
+    await expect.poll(async () => {
+      const chat = await json(await request.get(f.chatPath));
+      if (!chat) return false;
+      const response = await request.get(`/api/issues/${chat.id}/interactions`);
+      // Before the first authenticated comment commits, the shell intentionally
+      // exposes no interaction payload. Keep waiting for the actual producer.
+      if (response.status() === 404) return false;
+      const interactions = await json(response);
+      return interactions.some((interaction: any) => interaction.kind === "ask_user_questions" &&
+        interaction.status === "pending" && Boolean(interaction.sourceRunId) &&
+        interaction.payload.questions.some((question: any) => question.id === "audience"));
+    }, { timeout: 60_000 }).toBe(true);
     await expect(
       page.getByRole("radio", { name: "Garden club", exact: true }).last(),
     ).toBeVisible();
@@ -529,11 +552,16 @@ test("shared history loads older messages without replacing the latest turn", as
   page,
   request,
 }) => {
-  const f = await setup(request);
+  test.setTimeout(180_000);
+  const f = await setup(request, page);
+  request = f.request;
   try {
     await page.goto(f.route);
     await send(page, { action: "history" });
-    await idle(request, f.chatPath, 65);
+    // This pagination fixture performs 65 sequential, authenticated writes.
+    // The Native lane measured about 1.25s per write; wait for the complete
+    // history before checking pagination rather than stopping its live run.
+    await idle(request, f.chatPath, 65, 120_000);
     await page.reload();
     await expect(
       page.getByText("History message 64", { exact: true }),
@@ -566,12 +594,10 @@ test("disabling the experiment lets an active turn settle and keeps idle history
   page,
   request,
 }) => {
-  const original = await json(
-    await request.get("/api/instance/settings/experimental"),
-  );
-  expect(original.enableAgentChat).toBe(false);
-  const f = await setup(request);
+  const f = await setup(request, page);
+  request = f.request;
   try {
+    expect(f.initialAgentChatEnabled).toBe(false);
     await page.goto(f.route);
     await send(page, { action: "delayed" });
     await expect(

@@ -3,7 +3,9 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { saasAuthAction } from "@/api/saas";
 import { Button } from "@/components/ui/button";
+import { ExperienceLanguageSelect } from "@/components/ExperienceLanguageSelect";
 import { Link, useSearchParams } from "@/lib/router";
+import { hasValidNewLocalPasswordLength, LOCAL_PASSWORD_MAX_UTF16_LENGTH, LOCAL_PASSWORD_MIN_LENGTH } from "@paperclipai/shared/local-password-policy";
 
 export function SaasResetPasswordPage() {
   const [params] = useSearchParams();
@@ -33,10 +35,20 @@ function PasswordResetForm({ token }: { token: string | null }) {
     else if (mutation.isSuccess) receipt.current?.focus();
     else if (mutation.isIdle) heading.current?.focus();
   }, [mutation.status]);
+  const errorCode = mutation.error && typeof mutation.error === "object" && "code" in mutation.error
+    ? mutation.error.code : null;
+  const passwordErrorKey = errorCode === "PASSWORD_TOO_COMMON" ? "passwordTooCommon"
+    : errorCode === "PASSWORD_TOO_SHORT" ? "passwordTooShort"
+      : errorCode === "PASSWORD_TOO_LONG" ? "passwordTooLong" : null;
   return <main className="saas-page">
-    <h1 ref={heading} tabIndex={-1} className="saas-title outline-none">{t(token ? "passwordReset.setTitle" : "passwordReset.requestTitle")}</h1>
+    <header className="flex flex-wrap items-center justify-between gap-3">
+      <h1 ref={heading} tabIndex={-1} className="saas-title outline-none">{t(token ? "passwordReset.setTitle" : "passwordReset.requestTitle")}</h1>
+      <ExperienceLanguageSelect />
+    </header>
     {mutation.isError && <p ref={error} tabIndex={-1} role="alert" className="saas-error outline-none">
-      {t(token ? "passwordReset.changeUnconfirmed" : "passwordReset.requestUnconfirmed")}
+      {token && passwordErrorKey
+        ? t(`passwordReset.${passwordErrorKey}`)
+        : t(token ? "passwordReset.changeUnconfirmed" : "passwordReset.requestUnconfirmed")}
     </p>}
     {mutation.isSuccess ? <p ref={receipt} tabIndex={-1} role="status" className="outline-none">
       {t(token ? "passwordReset.changed" : "passwordReset.requested")}
@@ -45,12 +57,13 @@ function PasswordResetForm({ token }: { token: string | null }) {
       if (submitting.current || mutation.isPending) return;
       // Native authentication remains authoritative; never send an empty or
       // undersized value through a programmatically dispatched submission.
-      if (token ? password.length < 12 || password.length > 128 : !email.trim()) return;
+      if (token ? !hasValidNewLocalPasswordLength(password) : !email.trim()) return;
       submitting.current = true; mutation.mutate();
     }}>
       {token ? <label className="saas-label">{t("passwordReset.password")}
-        <input className="saas-input" type="password" autoComplete="new-password" minLength={12} maxLength={128}
+        <input className="saas-input" type="password" autoComplete="new-password" minLength={LOCAL_PASSWORD_MIN_LENGTH} maxLength={LOCAL_PASSWORD_MAX_UTF16_LENGTH}
           required disabled={mutation.isPending} value={password} onChange={event => setPassword(event.target.value)} />
+        <span className="saas-muted">{t("passwordReset.passwordMinimum")}</span>
       </label> : <label className="saas-label">{t("passwordReset.email")}
         <input className="saas-input" type="email" autoComplete="email" required disabled={mutation.isPending}
           value={email} onChange={event => setEmail(event.target.value)} />

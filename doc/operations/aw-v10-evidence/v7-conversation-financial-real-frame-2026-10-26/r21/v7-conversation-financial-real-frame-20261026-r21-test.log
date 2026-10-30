@@ -1,0 +1,101 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 6 failed | 25 skipped) 91156ms
+     × binds live reservations to the actual Human session and current conversation generation 15451ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 14447ms
+     × allows the last exact-budget dispatch and rejects the next reservation 14292ms
+     × dispatches the 64th actual funded call and refuses the 65th 14077ms
+     × rolls back settlement if an actual reservation receipt is preempted, then settles once 14040ms
+     × retains an actual unknown conversation hold and blocks canonical company purge 14354ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > binds live reservations to the actual Human session and current conversation generation
+AssertionError: expected 0 to be greater than 0
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:349:40
+    347|         budgetMonthlyCents, ...(conversationTariff ? { tariff: convers…
+    348|         afterRunSettledBeforeTeardown });
+    349|       expect(result.providerCallCount).toBeGreaterThan(0);
+       |                                        ^
+    350|       expect(result.providerKeyMatched).toBe(true);
+    351|       expect(result.issuerFacts).toHaveLength(1);
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:667:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_provider_frame_missing_for_purge
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:697:37
+    695|         async facts => {
+    696|           const providerFrame = factsHolder.value;
+    697|           if (!providerFrame) throw new Error("conversation_provider_f…
+       |                                     ^
+    698|           const [run] = await db.select().from(heartbeatRuns).where(an…
+    699|             eq(heartbeatRuns.id, providerFrame.run.id))).limit(1);
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:440:19
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:694:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > allows the last exact-budget dispatch and rejects the next reservation
+AssertionError: expected 0 to be greater than 0
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:349:40
+    347|         budgetMonthlyCents, ...(conversationTariff ? { tariff: convers…
+    348|         afterRunSettledBeforeTeardown });
+    349|       expect(result.providerCallCount).toBeGreaterThan(0);
+       |                                        ^
+    350|       expect(result.providerKeyMatched).toBe(true);
+    351|       expect(result.issuerFacts).toHaveLength(1);
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:773:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > dispatches the 64th actual funded call and refuses the 65th
+AssertionError: expected 0 to be greater than 0
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:349:40
+    347|         budgetMonthlyCents, ...(conversationTariff ? { tariff: convers…
+    348|         afterRunSettledBeforeTeardown });
+    349|       expect(result.providerCallCount).toBeGreaterThan(0);
+       |                                        ^
+    350|       expect(result.providerKeyMatched).toBe(true);
+    351|       expect(result.issuerFacts).toHaveLength(1);
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:788:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > rolls back settlement if an actual reservation receipt is preempted, then settles once
+AssertionError: expected 0 to be greater than 0
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:349:40
+    347|         budgetMonthlyCents, ...(conversationTariff ? { tariff: convers…
+    348|         afterRunSettledBeforeTeardown });
+    349|       expect(result.providerCallCount).toBeGreaterThan(0);
+       |                                        ^
+    350|       expect(result.providerKeyMatched).toBe(true);
+    351|       expect(result.issuerFacts).toHaveLength(1);
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:810:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains an actual unknown conversation hold and blocks canonical company purge
+Error: conversation_unknown_frame_missing_for_purge
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:837:53
+    835|         throw new Error("fixture_transport_lost_after_actual_dispatch"…
+    836|       }, 2000, undefined, async facts => {
+    837|         if (!facts.run || !facts.reservation) throw new Error("convers…
+       |                                                     ^
+    838|         await assertConversationNativeStopBeforeErasure(facts);
+    839|         const { operation } = await startConversationOffboarding(facts…
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:440:19
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:834:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 25 skipped (31)
+   Start at  17:28:41
+   Duration  107.29s (transform 11.23s, setup 77ms, import 15.93s, tests 91.16s, environment 0ms)
+

@@ -40,7 +40,7 @@ type RpcMessage = {
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const pending = new Map<
   string,
-  { resolve(value: unknown): void; reject(error: Error): void }
+  { method: string; resolve(value: unknown): void; reject(error: Error): void }
 >();
 let nextServerRequestId = 1;
 let driver: OpenCodeServerDriver | null = null;
@@ -61,8 +61,33 @@ function requestController(method: string, params: unknown): Promise<unknown> {
   const id = `opencode-${nextServerRequestId++}`;
   send({ id, method, params });
   return new Promise((resolveValue, reject) =>
-    pending.set(id, { resolve: resolveValue, reject }),
+    pending.set(id, { method, resolve: resolveValue, reject }),
   );
+}
+
+function unwrapDynamicToolResponse(value: unknown): unknown {
+  const response = record(value);
+  if (response.success !== true) {
+    const items = response.contentItems;
+    return response.success === false && Array.isArray(items)
+      ? (items[0] ?? value)
+      : value;
+  }
+  const items = response.contentItems;
+  if (Object.keys(response).sort().join(",") !== "contentItems,success" ||
+    !Array.isArray(items) || items.length !== 1) {
+    throw new Error("Native tool response envelope is invalid");
+  }
+  const item = record(items[0]);
+  if (Object.keys(item).sort().join(",") !== "text,type" || item.type !== "inputText" ||
+    typeof item.text !== "string" || Buffer.byteLength(item.text, "utf8") > 256_000) {
+    throw new Error("Native tool response content is invalid");
+  }
+  try {
+    return JSON.parse(item.text);
+  } catch {
+    throw new Error("Native tool response JSON is invalid");
+  }
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -314,7 +339,9 @@ async function handle(message: RpcMessage): Promise<void> {
     pending.delete(String(message.id));
     if (message.error !== undefined)
       waiter.reject(new Error(JSON.stringify(message.error)));
-    else {
+    else if (waiter.method === "item/tool/call") {
+      waiter.resolve(unwrapDynamicToolResponse(message.result));
+    } else {
       const contentItems = record(message.result).contentItems;
       waiter.resolve(
         Array.isArray(contentItems)

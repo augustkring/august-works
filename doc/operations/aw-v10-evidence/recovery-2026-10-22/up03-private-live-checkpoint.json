@@ -1,0 +1,119 @@
+{
+  "recordedAt": "2026-10-22T22:06:50.072981+00:00",
+  "status": "bounded native realtime source-filter checkpoint; complete UP03/V10 remains open",
+  "changes": [
+    "Drop inaccessible source events instead of broadcasting private Task/run IDs in access_lost placeholders.",
+    "Check both explicit Task and native persisted run sources; neither overwrites the other.",
+    "Narrow explicit project references through the original canonical current project privacy owner.",
+    "Withhold malformed explicit source references; actual WebSocket skips withheld events and continues authorized serial delivery."
+  ],
+  "actualChecks": [
+    {
+      "log": "up03-private-live-red.log",
+      "result": "FAIL6/6: actual private Task placeholder, explicit Task overwritten by public run, two unguarded project references, malformed source, real socket disclosure. Private project fixture initially omitted explicit owner ACL membership; the unauthorized-reader negative still genuinely failed."
+    },
+    {
+      "log": "up03-private-live-green.log",
+      "result": "FAIL overall:10 pass,2 fail. Fixed helper correctly withheld projects from incomplete owner fixture; add actual owner project_access_members row, preserving all assertions."
+    },
+    {
+      "log": "up03-private-live-green-2.log",
+      "result": "PASS12/12:6 real migrated PostgreSQL/live socket cases +6 original WebSocket upgrade tests."
+    },
+    {
+      "log": "up03-private-live-analytical.log",
+      "result": "PASS3 selected original analytical conversation/WebSocket cases;52 explicitly deselected. Actual owner session fixture replaces local anonymous operator context; positive event names its actual persisted Task. Denial now requires complete event withholding, checked by next authorized serial barrier."
+    }
+  ],
+  "sourcePins": {
+    "up03-private-live-red-source-pins.json": {
+      "recordedDuringCapture": "2026-10-22T21:58:17.002504+00:00",
+      "files": {
+        "server/src/__tests__/v10-private-live-events.integration.test.ts": "471b19540e3191260dd5f90816aec09777a8067ba0338160c19b6748aed13423",
+        "server/src/services/analytical-live-events.ts": "e6a04a28cc21e8bc3fbf2d74a0a896155b57c3a5495a41e1338f99637f0425e3",
+        "server/src/realtime/live-events-ws.ts": "911de20b546d57d7a1c4602430b8bf6e63a02e9b97af36f75c4e0f47133cfe8f",
+        "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+        "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502",
+        "server/src/services/memory/memory-privacy.ts": "fed411e5c8715992c4a487d7487675cfdd0d96e64c140041680c2ea89b8565b0"
+      },
+      "stillMatchingAtCheckpoint": {
+        "server/src/__tests__/v10-private-live-events.integration.test.ts": false,
+        "server/src/services/analytical-live-events.ts": false,
+        "server/src/realtime/live-events-ws.ts": false,
+        "server/src/services/authorization.ts": true,
+        "server/src/services/analytical-context-authority.ts": true,
+        "server/src/services/memory/memory-privacy.ts": true
+      }
+    },
+    "up03-private-live-green-source-pins.json": {
+      "recordedDuringCapture": "2026-10-22T22:01:37.173815+00:00",
+      "files": {
+        "server/src/__tests__/v10-private-live-events.integration.test.ts": "471b19540e3191260dd5f90816aec09777a8067ba0338160c19b6748aed13423",
+        "server/src/services/analytical-live-events.ts": "ee9cc8779aa53db463601bb9b6b5b4a16871d390e103a24eac36802fc7fa7bc5",
+        "server/src/realtime/live-events-ws.ts": "6b8e1b35a770f776e2c387561440cde8fb2f4f4c9c1dd0f52a5937f1095c14ea",
+        "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+        "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502",
+        "server/src/services/memory/memory-privacy.ts": "fed411e5c8715992c4a487d7487675cfdd0d96e64c140041680c2ea89b8565b0"
+      },
+      "stillMatchingAtCheckpoint": {
+        "server/src/__tests__/v10-private-live-events.integration.test.ts": false,
+        "server/src/services/analytical-live-events.ts": true,
+        "server/src/realtime/live-events-ws.ts": true,
+        "server/src/services/authorization.ts": true,
+        "server/src/services/analytical-context-authority.ts": true,
+        "server/src/services/memory/memory-privacy.ts": true
+      }
+    },
+    "up03-private-live-green2-source-pins.json": {
+      "recordedDuringCapture": "2026-10-22T22:02:34.965471+00:00",
+      "files": {
+        "server/src/__tests__/v10-private-live-events.integration.test.ts": "19ded32d1c3edc9633101ad64fc31029b051fcec8911313262d88329c0739343",
+        "server/src/__tests__/live-events-ws.test.ts": "a56d533e3f852cfc23f73d961b1c5d3701e631dbe7a80682d571f5b69f5851f2",
+        "server/src/services/analytical-live-events.ts": "ee9cc8779aa53db463601bb9b6b5b4a16871d390e103a24eac36802fc7fa7bc5",
+        "server/src/realtime/live-events-ws.ts": "6b8e1b35a770f776e2c387561440cde8fb2f4f4c9c1dd0f52a5937f1095c14ea",
+        "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+        "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502",
+        "server/src/services/memory/memory-privacy.ts": "fed411e5c8715992c4a487d7487675cfdd0d96e64c140041680c2ea89b8565b0"
+      },
+      "stillMatchingAtCheckpoint": {
+        "server/src/__tests__/v10-private-live-events.integration.test.ts": true,
+        "server/src/__tests__/live-events-ws.test.ts": true,
+        "server/src/services/analytical-live-events.ts": true,
+        "server/src/realtime/live-events-ws.ts": true,
+        "server/src/services/authorization.ts": true,
+        "server/src/services/analytical-context-authority.ts": true,
+        "server/src/services/memory/memory-privacy.ts": true
+      }
+    },
+    "up03-private-live-analytical-source-pins.json": {
+      "recordedDuringCapture": "2026-10-22T22:03:57.505080+00:00",
+      "files": {
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts": "ec497854e414526b433a38e1b61666e80a3c9d6438e593d98e41fb6bbde5270e",
+        "server/src/services/analytical-live-events.ts": "ee9cc8779aa53db463601bb9b6b5b4a16871d390e103a24eac36802fc7fa7bc5",
+        "server/src/realtime/live-events-ws.ts": "6b8e1b35a770f776e2c387561440cde8fb2f4f4c9c1dd0f52a5937f1095c14ea",
+        "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+        "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502",
+        "server/src/services/memory/memory-privacy.ts": "fed411e5c8715992c4a487d7487675cfdd0d96e64c140041680c2ea89b8565b0",
+        "server/src/services/memory/memory-service.ts": "2ec4a5ea5efa4a90bba274dedea89f26e6520fb8885683a7ad4679a7571b6164"
+      },
+      "stillMatchingAtCheckpoint": {
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts": true,
+        "server/src/services/analytical-live-events.ts": true,
+        "server/src/realtime/live-events-ws.ts": true,
+        "server/src/services/authorization.ts": true,
+        "server/src/services/analytical-context-authority.ts": true,
+        "server/src/services/memory/memory-privacy.ts": true,
+        "server/src/services/memory/memory-service.ts": true
+      }
+    }
+  },
+  "pinLimits": "Pins recorded during capture. Original RED/first GREEN test hashes differ after explicit project owner ACL prerequisite correction, not assertion removal. The matching maps describe current files, not retroactive replacement of historical hashes.",
+  "open": [
+    "Original session/key lifetime qualification and current credentials after every wait",
+    "Unknown/nested/plugin event source ownership and the full producer inventory",
+    "Recipient event-ID/count and timing metadata review",
+    "Native Task/Project SQL Memory/Foundation closure and temporal provenance",
+    "Revoked current-view UI refresh without broadcasting private source identities",
+    "Full server typecheck after this newer source wave, whole repo checks and all V10 gates"
+  ]
+}

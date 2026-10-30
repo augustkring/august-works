@@ -1,0 +1,174 @@
+{
+  "scope": "CE03 nullable explicit account language preference at original native user/preferences owner; partial V10-166/167",
+  "sources": {
+    "AGENTS.md": "15d78015148aef4dd9efd2e195d00ca8a5110bcfbbd215e31cc6c33d6c255df9",
+    "packages/db/src/migrations/0514_abandoned_hex.sql": "9165b31400c351ff521a39a024d29793e189174d2fb9436f8186a64a63a9eff4",
+    "packages/db/src/migrations/meta/0514_snapshot.json": "ae8afabaaa7884ae0d5585517c77e92f19cc268d72397e689713228276ad9914",
+    "packages/db/src/migrations/meta/_journal.json": "5768e5e7143fbdd1bfa91ccab7e9cd425d0b6b1351371bba5abc0c00df030141",
+    "packages/db/src/schema/auth.ts": "e98676d67411af1ed20c751680abe52ad19eac7c3e9178a9322552f69f623214",
+    "packages/shared/src/validators/access.ts": "bdd81375075bbac207cbae77661f9d49c26a28a7f2e57a67c9cbc40ddbd9edad",
+    "server/src/__tests__/auth-routes.test.ts": "cbe7f7e1795428c5264b0acecc7b8d69b7ad2c0b57e608783b50ff7676ef80d0",
+    "server/src/__tests__/v6-saas-auth.integration.test.ts": "39f95c1f26a275a95b014cd558eb21fe75e9b9d599892b251c380bfde0efc1fe",
+    "server/src/auth/better-auth.ts": "532afde36f475886e0e51648f2bc3eb08e9f536d17a7544b7b64e542dd40c569",
+    "server/src/routes/auth.ts": "f835c00946931c638fb51d25ee28011a26c05a611abc55af1d57000a3894378f",
+    "ui/src/components/AccountExperienceLanguageSelect.test.tsx": "58e2cde1107ff74b6c0057fbb7c16768088a86df3508dad0ea662dfc3edfb002",
+    "ui/src/components/AccountExperienceLanguageSelect.tsx": "4f57d3bf64a232ff3c549299fef78ca2c2611c4b9925e50975aa58f44d280860",
+    "ui/src/components/ExperienceLanguageSelect.tsx": "ad5793e8a1fb04b11504a502e40eacec5da06c15ceb7bc3613d187c9e1087261",
+    "ui/src/components/ExperienceUtilities.tsx": "a563363d551393ff4be781c71a997e41e12fbc89fd68366e11ec718891c52c2f",
+    "ui/src/hooks/useUserPreferences.ts": "db43e62d778864f89cd7ac1b9a96ee8c78f96771390556ac82ba1a1134aba34c",
+    "ui/src/i18n/experience-locale-preference.test.ts": "d68607a388a1f8af8d6352df8c349a82289401c8771f1ea05d05d122152731cc",
+    "ui/src/i18n/experience-locale-preference.ts": "eae54f8a2accbf971dd6e7577acd88d3b3c68b2cdf7b9201abea95863a4a9234",
+    "ui/src/i18n/experience/da.json": "8b2287da22b2180b423b23536186c54b5cce565d9d46c2b37a3f490996d9067d",
+    "ui/src/i18n/experience/en.json": "848c73aa19539071d06890a2a768851b5d2cfc4c2101f6eeae0d1727379f0793",
+    "ui/src/pages/Activation.tsx": "e62bddf303170a0d7f9cc21f4973eaff934e97b91afa7f26e5f2dbeeef57fb52",
+    "ui/src/pages/SaasWelcome.test.tsx": "22a1e5ed429b1fb1e9c49e058c42faec9051b10bffd243f1eb785e9859687596",
+    "ui/src/pages/SaasWelcome.tsx": "c0c2f29263f80cf2ab97a9a255fc1f0d361733eb134c40ff70232c421ed50954"
+  },
+  "implementation": [
+    "Generated migration0514 adds nullable user.locale constrained to en/da, preserving absence of an explicit preference. Canonical BetterAuth additionalField is input:false/returned:false; raw callback user retains DB preference without precommit lookup.",
+    "Original preferences API binds expectedUserId, partially updates supplied fields only and allows locale-only precompany writes. Existing keyboard company membership/audit/rollback/publication preserved. Any supplied locale audit company still requires membership. AGENTS documents personal language exception.",
+    "Authenticated selectors reuse original account-keyed preferences; public/recovery selector stays browser-only. Account hydration yields to explicit browser/mail choice and intervening language changes. Bound account keys ignore late old-account responses; save failure preserves chosen UI with safe localized feedback.",
+    "Known checked parent user disables redundant child session fetch to preserve original fresh-session admission; default existing preference/session observer behavior remains.",
+    "First visit supports da/da-DK and en/en-* browser fallback; account preference precedes that fallback, explicit user choice remains first. Company output language/timezone unchanged."
+  ],
+  "migration": {
+    "generator": "pnpm --filter @paperclipai/db generate",
+    "exit": 0,
+    "file": "packages/db/src/migrations/0514_abandoned_hex.sql",
+    "snapshotDriftTestPassed": true,
+    "prunedSnapshots": [
+      "packages/db/src/migrations/meta/0459_snapshot.json",
+      "packages/db/src/migrations/meta/0460_snapshot.json",
+      "packages/db/src/migrations/meta/0461_snapshot.json",
+      "packages/db/src/migrations/meta/0462_snapshot.json",
+      "packages/db/src/migrations/meta/0463_snapshot.json",
+      "packages/db/src/migrations/meta/0464_snapshot.json",
+      "packages/db/src/migrations/meta/0465_snapshot.json",
+      "packages/db/src/migrations/meta/0466_snapshot.json",
+      "packages/db/src/migrations/meta/0467_snapshot.json",
+      "packages/db/src/migrations/meta/0468_snapshot.json",
+      "packages/db/src/migrations/meta/0469_snapshot.json",
+      "packages/db/src/migrations/meta/0470_snapshot.json",
+      "packages/db/src/migrations/meta/0471_snapshot.json",
+      "packages/db/src/migrations/meta/0472_snapshot.json",
+      "packages/db/src/migrations/meta/0473_snapshot.json",
+      "packages/db/src/migrations/meta/0474_snapshot.json",
+      "packages/db/src/migrations/meta/0475_snapshot.json",
+      "packages/db/src/migrations/meta/0476_snapshot.json",
+      "packages/db/src/migrations/meta/0477_snapshot.json",
+      "packages/db/src/migrations/meta/0478_snapshot.json",
+      "packages/db/src/migrations/meta/0479_snapshot.json",
+      "packages/db/src/migrations/meta/0480_snapshot.json",
+      "packages/db/src/migrations/meta/0481_snapshot.json",
+      "packages/db/src/migrations/meta/0482_snapshot.json",
+      "packages/db/src/migrations/meta/0483_snapshot.json",
+      "packages/db/src/migrations/meta/0484_snapshot.json",
+      "packages/db/src/migrations/meta/0485_snapshot.json",
+      "packages/db/src/migrations/meta/0486_snapshot.json",
+      "packages/db/src/migrations/meta/0487_snapshot.json",
+      "packages/db/src/migrations/meta/0488_snapshot.json",
+      "packages/db/src/migrations/meta/0489_snapshot.json",
+      "packages/db/src/migrations/meta/0490_snapshot.json",
+      "packages/db/src/migrations/meta/0491_snapshot.json",
+      "packages/db/src/migrations/meta/0492_snapshot.json",
+      "packages/db/src/migrations/meta/0493_snapshot.json",
+      "packages/db/src/migrations/meta/0494_snapshot.json",
+      "packages/db/src/migrations/meta/0495_snapshot.json",
+      "packages/db/src/migrations/meta/0496_snapshot.json",
+      "packages/db/src/migrations/meta/0497_snapshot.json",
+      "packages/db/src/migrations/meta/0498_snapshot.json",
+      "packages/db/src/migrations/meta/0499_snapshot.json",
+      "packages/db/src/migrations/meta/0500_snapshot.json",
+      "packages/db/src/migrations/meta/0501_snapshot.json",
+      "packages/db/src/migrations/meta/0502_snapshot.json",
+      "packages/db/src/migrations/meta/0503_snapshot.json",
+      "packages/db/src/migrations/meta/0504_snapshot.json",
+      "packages/db/src/migrations/meta/0505_snapshot.json",
+      "packages/db/src/migrations/meta/0506_snapshot.json",
+      "packages/db/src/migrations/meta/0507_snapshot.json",
+      "packages/db/src/migrations/meta/0508_snapshot.json",
+      "packages/db/src/migrations/meta/0509_snapshot.json"
+    ],
+    "pruning": "Original generator prune:snapshots retains newest five. These exact prior snapshots remain in git at 14117bbf7; no SQL migration history removed."
+  },
+  "verification": {
+    "originalRouteSuites": {
+      "files": 2,
+      "passed": 38,
+      "seconds": 37.8,
+      "exit": 0,
+      "log": "account-locale-routes.log"
+    },
+    "initialNative": {
+      "files": 3,
+      "passed": 19,
+      "failed": 1,
+      "seconds": 149.29,
+      "log": "account-locale-native-first.log",
+      "failure": "Root expected raw PostgreSQL code; actual DrizzleQueryError wraps 23514 in cause. Real constraint rejected invalid locale. Corrected only assertion nesting; failed source/pins retained."
+    },
+    "finalNative": {
+      "files": 3,
+      "passed": 23,
+      "seconds": 133.17,
+      "exit": 0,
+      "log": "account-locale-native-final.log",
+      "scope": "Actual original HTTP cookie actor and preferences route, precompany save, swapped user rejection, blocked native update-user locale, real CHECK rejection, encrypted reset mail persisted account EN over DA request. Original auth/cookie/password lifecycle retained; native credential/delivery suites passed in initial run. Snapshot drift passed."
+    },
+    "initialUI": {
+      "files": 9,
+      "passed": 55,
+      "failed": 22,
+      "seconds": 162.25,
+      "log": "account-locale-ui.log.gz",
+      "rawLogSha256": "5c8f96d2ae5a938b815cd6b8456e8b7c5f068615892da8e12a846405c92b6f39",
+      "failure": "New child stale-session observer repeatedly refetched, unmounted by original Activation freshness gate, then remounted (20 Activation failures). Root reuses parent checked user. Two wrapper fixture failures: leaked mock call counts and selection before session owner resolved; reset mocks and await actual own preference read. Failed sources/pins retained."
+    },
+    "finalChangedUI": {
+      "files": 4,
+      "passed": 28,
+      "seconds": 60.57,
+      "exit": 0,
+      "log": "account-locale-ui-reviewed.log"
+    },
+    "browserFallbackAndAccount": {
+      "files": 2,
+      "passed": 19,
+      "seconds": 7.56,
+      "exit": 0,
+      "log": "account-locale-browser.log"
+    },
+    "types": {
+      "shared": {
+        "exit": 0,
+        "log": "account-locale-shared-types.log"
+      },
+      "db": {
+        "exit": 0,
+        "log": "account-locale-db-types.log"
+      },
+      "server": {
+        "exit": 0,
+        "log": "account-locale-server-types-final.log"
+      },
+      "ui": {
+        "exit": 0,
+        "log": "account-locale-ui-types.log"
+      }
+    },
+    "firstCompilerFailure": "BetterAuth config field type widened to string. Root retains literal with as const; TypeScript-only annotation, no runtime change. Failed source/log retained; final server/UI compilers pass. Shared/DB unchanged.",
+    "pinTiming": "Browser fallback changed during server phase before UI phase. Complete final22 pins match. Native runtime checked before type-only literal annotation; runtime behavior unchanged.",
+    "tokenGates": {
+      "exit": 0,
+      "log": "account-locale-token-gates.log"
+    },
+    "pinsMatch": true,
+    "processesClosed": true,
+    "counts": "Distinct runs overlap; do not add rerun totals."
+  },
+  "limits": [
+    "No complete cross-device browser/email-client/provider journey or hosted qualification; service/component tests are bounded software evidence.",
+    "Full account lifecycle MFA/reauthentication/recovery and invitation return-context still open; legacy native inputs/source graph/privacy/temporal regressions and complete V10 remain open.",
+    "Latest full recursive workspace tests/typecheck/build and release gates remain open."
+  ]
+}

@@ -1,0 +1,60 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+[12:52:06] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"workflows:edit","resourceType":"company","companyId":"f839a3db-1c2f-43d3-bf9b-cb012093dc59","actorAgentId":"3ba6e8f0-1767-47ce-9e9d-31df7c401029","responsibleUserId":"user-b8dd8c76-d289-45f2-b73b-c671a8e5921c"}[39m
+[12:52:06] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"workflows:edit","resourceType":"company","companyId":"a8adc62a-0e64-4b1e-9818-bfa74450bad0","actorAgentId":"7b0792b4-95a8-4d3d-ba09-7a598fbcd826","responsibleUserId":"user-b1a8c7fa-00b5-4d0c-bd07-9164991752b2"}[39m
+[12:52:06] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"workflows:edit","resourceType":"company","companyId":"2f78f3a3-a49e-48de-8a24-d76d45d44323","actorAgentId":"dc3028d6-b30a-41b0-9292-10e95ca63621","responsibleUserId":"user-fb38f143-3d0b-4b5d-9f33-cc0a67bdc9de"}[39m
+ ❯ src/__tests__/plugin-agent-runtime-state.integration.test.ts (7 tests | 1 failed) 8279ms
+     × uses only the current source manifest produced by the runtime admission path 2063ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/plugin-agent-runtime-state.integration.test.ts > plugin agent runtime state authorization > uses only the current source manifest produced by the runtime admission path
+AssertionError: expected { revision: '54', …(6) } to match object { …(3) }
+(6 matching properties omitted from actual)
+
+- Expected
++ Received
+
+@@ -2,12 +2,24 @@
+    "agent": {
+      "id": "e2486293-fc88-408a-9831-baa710bc10a5",
+    },
+    "skills": [
+      {
++       "currentVersionId": "f968762d-8717-492b-910c-2b8566472ae1",
++       "key": "blentera-platform",
++       "missingDetail": null,
++       "runtimeName": "blentera-platform",
++       "source": "/tmp/paperclip-plugin-runtime-state-home-DhsP6a/instances/default/skills/a7d5a06c-0dbf-4b81-ad78-6c2e75917e37/__versions__/8c362532-341c-4bc5-9851-ec46d4667b18/f968762d-8717-492b-910c-2b8566472ae1",
++       "sourceStatus": "available",
++       "versionId": "f968762d-8717-492b-910c-2b8566472ae1",
++     },
++     {
+        "currentVersionId": "18d0a2d2-70e0-41a3-89f5-97ffaac1775c",
+        "key": "company/a7d5a06c-0dbf-4b81-ad78-6c2e75917e37/runtime-pin-fixture",
++       "missingDetail": null,
++       "runtimeName": "runtime-pin-fixture--9ce014d16d",
++       "source": "/tmp/paperclip-plugin-runtime-state-home-DhsP6a/instances/default/skills/a7d5a06c-0dbf-4b81-ad78-6c2e75917e37/__versions__/86995bd3-ea62-4ca0-86c1-8b84a8931956/18d0a2d2-70e0-41a3-89f5-97ffaac1775c",
+        "sourceStatus": "available",
+        "versionId": "18d0a2d2-70e0-41a3-89f5-97ffaac1775c",
+      },
+    ],
+    "skillsReady": true,
+
+ ❯ src/__tests__/plugin-agent-runtime-state.integration.test.ts:191:19
+    189|     });
+    190|     const state = await pluginAgentRuntimeState(db, pluginId, home, ag…
+    191|     expect(state).toMatchObject({
+       |                   ^
+    192|       agent: { id: agentId }, skillsReady: true,
+    193|       skills: [expect.objectContaining({ key: skill.key, versionId: pi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 42 passed (43)
+   Start at  12:51:16
+   Duration  86.67s (transform 11.30s, setup 232ms, import 25.00s, tests 60.99s, environment 0ms)
+

@@ -1,0 +1,3 @@
+984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774  server/src/services/authorization.ts
+420591dd9d994cff5bd1a46d16c0f5a89f701c7cb49ff6fa5517709b6dcf275d  server/src/__tests__/foundation-read-source-authority.integration.test.ts
+3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470  server/src/services/memory/memory-privacy.ts

@@ -17,12 +17,13 @@ import {
   type Db,
 } from "@paperclipai/db";
 import { orchestrationCompletionSchema } from "@paperclipai/shared";
-import { badRequest, conflict, forbidden } from "../../errors.js";
+import { badRequest, conflict, forbidden, HttpError } from "../../errors.js";
 import {
   assertAgentRunWriteAllowed,
   agentRunWritesRevoked,
 } from "../../agent-run-cancellation.js";
 import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import {
   heartbeatMemoryPayloadRetained,
   lockMemoryPrivacy,
@@ -33,6 +34,8 @@ import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
 import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
+import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
+import type { AuthorizationActor } from "../authorization.js";
 
 type Binding = {
   companyId: string;
@@ -41,16 +44,27 @@ type Binding = {
   runId: string;
 };
 type Call = { tool: string; callId: string; arguments: unknown };
+
+function nativeToolWireResult(value: unknown): unknown {
+  // Native tool results cross a JSON protocol boundary. Hash and return the
+  // exact JSON value the runner can observe (not pre-serialization Date or
+  // class instances whose canonical hashes differ from their wire form).
+  const serialized = JSON.stringify(value);
+  return serialized === undefined ? null : JSON.parse(serialized);
+}
 const reads = new Set([
   "get_task_context",
   "get_task_history",
   "list_documents",
   "read_document",
+  "read_context",
   "list_document_revisions",
   "paperclip_search_assigned_tools",
 ]);
 const draftWrites = new Set([
   "write_document",
+  "create_task",
+  "create_project",
   "report_progress",
   "request_human_input",
 ]);
@@ -111,11 +125,12 @@ async function scope(db: Db, b: Binding) {
   return null;
 }
 
-/** Called before Task/run mutation locks, preserving Memory -> plan -> Task -> run order. */
+/** Acquire source locks in the shared analytical -> Memory -> plan -> Task/run order. */
 export async function lockNativeToolPlan(db: Db, b: Binding) {
+  await lockAnalyticalCompany(db, b.companyId);
+  await lockMemoryPrivacy(db, b.companyId);
   const bound = await scope(db, b);
   if (!bound) return null;
-  await lockMemoryPrivacy(db, b.companyId);
   const [plan] = await db
     .select()
     .from(orchestrationPlans)
@@ -189,6 +204,20 @@ export async function assertNativeToolPlanCurrent(
     .innerJoin(agentIdentities, eq(agentIdentities.id, agents.agentIdentityId))
     .innerJoin(companies, eq(companies.id, agents.companyId))
     .where(and(eq(agents.companyId, b.companyId), eq(agents.id, b.agentId)));
+  const delegatedScopes = manifest?.manifest.executionScope.delegatedScopes ?? [];
+  const delegatedRefs = manifest?.manifest.contextManifests.filter(ref => ref.companyId !== b.companyId) ?? [];
+  if (delegatedScopes.length) {
+    const scopedCompanies = delegatedScopes.map(scope => scope.companyId).sort();
+    const contextCompanies = delegatedRefs.map(ref => ref.companyId).sort();
+    if (!userId || userId !== run?.responsibleUserId || delegatedScopes.some(scope => scope.accessMode === "act") ||
+      delegatedRefs.length !== delegatedScopes.length || JSON.stringify(scopedCompanies) !== JSON.stringify(contextCompanies))
+      throw forbidden("Native bounded tools require exact delegated read/contribute Context and cannot use guest act scope");
+    const runtimeActor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: b.companyId,
+      agentId: b.agentId, runId: b.runId, onBehalfOfUserId: userId };
+    await resolveDelegatedContextManifestBindings(db, { homeCompanyId: b.companyId, homeAgentId: b.agentId,
+      homeRunId: b.runId, responsibleUserId: userId, actor: runtimeActor,
+      manifestIds: delegatedRefs.map(ref => ref.contextManifestId) });
+  } else if (delegatedRefs.length) throw forbidden("Native bounded tools have guest Context without its execution scope");
   if (
     !run ||
     run.status !== "running" ||
@@ -204,7 +233,6 @@ export async function assertNativeToolPlanCurrent(
     ["done", "cancelled"].includes(task.status) ||
     !manifest ||
     manifest.manifest.responsibleUserId !== run.responsibleUserId ||
-    manifest.manifest.executionScope.delegatedScopes.length ||
     !presence ||
     presence.identity.status !== "active" ||
     presence.company.status !== "active" ||
@@ -337,6 +365,7 @@ export async function assertNativeToolPlanCurrent(
 
 async function fence(db: Db, b: Binding, planId: string, reasonCode: string) {
   await withV7ActivityTransaction(db, async (tx, publications) => {
+    await lockAnalyticalCompany(tx, b.companyId);
     await lockMemoryPrivacy(tx, b.companyId);
     const [plan] = await tx
       .select()
@@ -402,13 +431,13 @@ async function fence(db: Db, b: Binding, planId: string, reasonCode: string) {
 
 /** Native Task builtins share tool_invocations and its SQL charge guard with
  * connected tools. No second ledger, result cache, queue or automatic resend. */
-export async function withOrchestrationNativeTool<T>(
+export async function withOrchestrationNativeTool(
   db: Db,
   b: Binding,
   call: Call,
-  effect: () => Promise<T>,
+  effect: () => Promise<unknown>,
   externallyMetered = false,
-): Promise<T> {
+): Promise<unknown> {
   const preliminary = await scope(db, b);
   if (!preliminary) return effect();
   if (!/^[\x21-\x7e]{1,240}$/.test(call.callId))
@@ -436,7 +465,6 @@ export async function withOrchestrationNativeTool<T>(
   let exhausted = false;
   const reservation = await db.transaction(async (tx) => {
     const t = tx as unknown as Db;
-    await lockMemoryPrivacy(t, b.companyId);
     await lockNativeToolPlan(t, b);
     const bound = await assertNativeToolPlanCurrent(
       t,
@@ -453,6 +481,24 @@ export async function withOrchestrationNativeTool<T>(
         throw forbidden(
           "Native draft writes cannot bypass a material action contract",
         );
+      if (call.tool === "create_task") {
+        const args = call.arguments && typeof call.arguments === "object"
+          ? call.arguments as Record<string, unknown>
+          : {};
+        const allowedDraftKeys = new Set(["idempotencyKey", "title", "description", "status"]);
+        // A plan may create only a backlog draft without caller-selected
+        // assignment under its own C0 internal-draft authority. Todo work, delegation, project
+        // placement, dependencies, and initial plans require their own
+        // qualified workflow/action path.
+        if (
+          bound.plan.riskClass !== "C0" ||
+          args.status !== "backlog" ||
+          Object.keys(args).some((key) => !allowedDraftKeys.has(key))
+        )
+          throw forbidden(
+            "Native plan Task creation is limited to C0 backlog drafts without caller-selected assignment",
+          );
+      }
       if (call.tool === "write_document") {
         const retained = await retainedOrchestrationContract(
           t,
@@ -470,6 +516,14 @@ export async function withOrchestrationNativeTool<T>(
           throw forbidden(
             "Native draft writes must use a declared completion output",
           );
+      }
+      if (call.tool === "create_project") {
+        if (bound.plan.actionClass !== "internal_draft" || bound.plan.riskClass !== "C0")
+          throw forbidden("Managed Project creation is limited to C0 internal draft plans");
+        const retained = await retainedOrchestrationContract(t, b.companyId, b.issueId);
+        const contract = orchestrationCompletionSchema.parse(retained!.row.contractJson.v7);
+        if (!contract.requiredOutputs.some((output) => output.kind === "private_project"))
+          throw forbidden("Managed Project creation requires a declared private Project output");
       }
     }
     const [existing] = await t
@@ -520,14 +574,18 @@ export async function withOrchestrationNativeTool<T>(
     await fence(db, b, preliminary.plan.id, "native_tool_budget_exhausted");
     throw forbidden("The cumulative native tool budget is exhausted");
   }
+  let failureStage = "effect";
   try {
-    const result = await effect();
+    const effectResult = await effect();
+    failureStage = "wire_result";
+    const result = nativeToolWireResult(effectResult);
+    failureStage = "plan_recheck";
     await db.transaction(async (tx) => {
       const t = tx as unknown as Db;
-      await lockMemoryPrivacy(t, b.companyId);
       await lockNativeToolPlan(t, b);
       await assertNativeToolPlanCurrent(t, b, draftWrites.has(call.tool));
     });
+    failureStage = "persist_success";
     if (reservation)
       await db
         .update(toolInvocations)
@@ -558,6 +616,26 @@ export async function withOrchestrationNativeTool<T>(
         );
     return result;
   } catch (error) {
+    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+      const facts = error && typeof error === "object"
+        ? error as { status?: unknown; stack?: unknown; details?: unknown } : {};
+      const details = facts.details && typeof facts.details === "object"
+        ? facts.details as Record<string, unknown> : {};
+      const providerKey = ["foundation", "memory", "task"].includes(String(details.providerKey))
+        ? String(details.providerKey) : null;
+      const providerReason = ["timeout", "provider_failed", "context_deadline"].includes(String(details.reason))
+        ? String(details.reason) : null;
+      const frames = typeof facts.stack === "string" ? facts.stack.split("\n").flatMap(line => {
+        const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+        return match ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 5) : [];
+      console.warn("native_orchestration_tool_failure_stage", JSON.stringify({ tool: call.tool,
+        stage: failureStage, errorClass: error instanceof HttpError ? "HttpError" :
+          error instanceof ReferenceError ? "ReferenceError" : error instanceof TypeError ? "TypeError" :
+          error instanceof Error ? "Error" : "NonError", status: typeof facts.status === "number" ? facts.status : null,
+        providerKey, providerReason, frames }));
+    }
+    failureStage = "persist_failure";
     if (reservation)
       await db
         .update(toolInvocations)
@@ -573,6 +651,7 @@ export async function withOrchestrationNativeTool<T>(
             eq(toolInvocations.id, reservation.id),
           ),
         );
+    failureStage = "fence_plan";
     await fence(db, b, preliminary.plan.id, "native_tool_result_unsettled");
     throw error;
   }

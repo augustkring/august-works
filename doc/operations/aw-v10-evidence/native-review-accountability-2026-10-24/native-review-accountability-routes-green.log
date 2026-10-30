@@ -1,0 +1,37 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[15:13:39] [33mWARN[39m: [36mnative question withdrawal cancellation deferred to recovery sweep[39m [90m{"runId":"d1111111-1111-4111-8111-111111111111","interactionId":"interaction-withdraw"}[39m
+    err: {
+      "type": "Error",
+      "message": "process unavailable",
+      "stack":
+          Error: process unavailable
+              at /workspace/blentera-v10/server/src/__tests__/issue-thread-interaction-routes.test.ts:1017:58
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+              at new Promise (<anonymous>)
+              at runWithCancel (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+              at new Promise (<anonymous>)
+              at runWithTimeout (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:2956:64
+    }
+[15:16:49] [33mWARN[39m: [36mcross-issue influence cap exceeded[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":21,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":false}[39m
+[15:16:52] [33mWARN[39m: [36mcross-issue influence cap exceeded[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":21,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":false}[39m
+[15:16:57] [33mWARN[39m: [36mcross-issue influence cap exceeded[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":21,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":false}[39m
+[15:17:02] [33mWARN[39m: [36mcross-issue influence cap exceeded[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":21,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":false}[39m
+[15:17:05] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[15:17:08] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[15:17:10] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+[15:17:14] [32mINFO[39m: [36mcross-issue influence observed[39m [90m{"event":"cross_issue_influence_cap","companyId":"company-1","runId":"d2222222-2222-4222-8222-222222222222","agentId":"11111111-1111-4111-8111-111111111111","sourceIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","targetIssueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","kind":"interaction_resolution","count":1,"cap":20,"mode":"enforce","enforceAt":"2026-08-11T00:00:00.000Z","allowed":true}[39m
+
+ Test Files  1 passed (1)
+      Tests  82 passed (82)
+   Start at  15:12:02
+   Duration  316.69s (transform 40.69s, setup 386ms, import 1.12s, tests 314.66s, environment 1ms)
+

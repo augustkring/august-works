@@ -1,7 +1,13 @@
-import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
+  agentApiKeys,
   companyMemberships,
+  companies,
+  humanWorkflowCoverages,
+  activityLog,
+  authUsers,
+  accountDeletionOperations,
   companySecretBindings,
   companySecrets,
   connectionGrantDelegations,
@@ -9,18 +15,26 @@ import {
   connectionGrants,
   instanceUserRoles,
   issues,
+  routines,
   principalPermissionGrants,
   toolAccessAuditEvents,
   toolConnections,
   userSecretDeclarations,
+  workflowRevisions,
+  workflows,
 } from "@paperclipai/db";
-import type { PermissionKey, PrincipalType } from "@paperclipai/shared";
-import { conflict } from "../errors.js";
+import type { CreateHumanWorkflowCoverage, HumanWorkflowCoverage, PermissionKey, PrincipalType, SecuritySuspendCompanyMember } from "@paperclipai/shared";
+import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
 import { authorizationService, type AuthorizationActor, type AuthorizationResource } from "./authorization.js";
 import { ensureHumanRoleDefaultGrants } from "./principal-access-compatibility.js";
+import { routineService } from "./routines.js";
+import { isUniqueViolation } from "../db-errors.js";
+import { assertHumanAuthentication, assertPinnedAuthenticationDeadline } from "../auth/authenticator-assurance.js";
+import { enqueueResponsibilityScan } from "./experience/private-0565/responsibility-scan-store.js";
 
 type MembershipRow = typeof companyMemberships.$inferSelect;
+export type AccessTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type GrantInput = {
   permissionKey: PermissionKey;
   scope?: Record<string, unknown> | null;
@@ -31,10 +45,152 @@ type MemberArchiveInput = {
     assigneeAgentId?: string | null;
     assigneeUserId?: string | null;
   } | null;
+  routineResponsibleUserId?: string | null;
 };
+type SecuritySuspensionReason = SecuritySuspendCompanyMember["reasonCode"] | "enterprise_decommission";
 
 export function accessService(db: Db) {
   const authorization = authorizationService(db);
+
+  async function queueResponsibilityAfterOffboarding(companyIds: readonly string[]) {
+    for (const companyId of new Set(companyIds)) {
+      try { await enqueueResponsibilityScan(db, companyId); }
+      catch { /* access is already revoked; the fair scheduler will retry */ }
+    }
+  }
+
+  function workflowCoverageActor(userId: string): AuthorizationActor {
+    return { type: "board", source: "session", userId, ignoreInstanceAdmin: true };
+  }
+
+  async function humanCanRunWorkflow(tx: Parameters<Parameters<Db["transaction"]>[0]>[0], companyId: string, userId: string) {
+    const decision = await authorizationService(tx as unknown as Db).decide({
+      actor: workflowCoverageActor(userId),
+      action: "workflows:run",
+      resource: { type: "company", companyId },
+    });
+    return decision.allowed;
+  }
+
+  async function assertWorkflowCoverageHumanRights(input: {
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0];
+    companyId: string;
+    principalUserId: string;
+    delegateeUserId: string;
+    workflowId: string;
+    workflowRevisionId: string;
+    scopeType: "manual" | "task";
+    taskId: string | null;
+  }) {
+    if (input.principalUserId === input.delegateeUserId) {
+      throw unprocessable("Workflow coverage must route to a different Human.", { code: "workflow_coverage_self_route" });
+    }
+    const userIds = [input.principalUserId, input.delegateeUserId];
+    const currentUsers = await input.tx.select({ id: authUsers.id }).from(authUsers).where(and(
+      inArray(authUsers.id, userIds),
+      sql`not exists (select 1 from ${accountDeletionOperations} d where d.user_id = ${authUsers.id})`,
+    )).for("share");
+    if (currentUsers.length !== 2) {
+      throw forbidden("Both workflow coverage principals must be current Human accounts.", { code: "workflow_coverage_human_unavailable" });
+    }
+    const memberships = await input.tx.select({ principalId: companyMemberships.principalId }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, input.companyId),
+      eq(companyMemberships.principalType, "user"),
+      inArray(companyMemberships.principalId, userIds),
+      eq(companyMemberships.status, "active"),
+    )).for("share");
+    if (new Set(memberships.map((membership) => membership.principalId)).size !== 2) {
+      throw forbidden("Both workflow coverage principals need active company membership.", { code: "workflow_coverage_membership_unavailable" });
+    }
+
+    const [workflow] = await input.tx.select({ status: workflows.status, publishedRevisionId: workflows.publishedRevisionId })
+      .from(workflows).where(and(eq(workflows.companyId, input.companyId), eq(workflows.id, input.workflowId))).for("share");
+    const [revision] = await input.tx.select({ state: workflowRevisions.state }).from(workflowRevisions).where(and(
+      eq(workflowRevisions.companyId, input.companyId),
+      eq(workflowRevisions.workflowId, input.workflowId),
+      eq(workflowRevisions.id, input.workflowRevisionId),
+    )).for("share");
+    if (!workflow || workflow.status !== "active" || workflow.publishedRevisionId !== input.workflowRevisionId || revision?.state !== "published") {
+      throw conflict("Coverage must name the currently published active workflow revision.", { code: "workflow_coverage_revision_changed" });
+    }
+
+    const scopedAuthorization = authorizationService(input.tx as unknown as Db);
+    for (const userId of userIds) {
+      const decision = await scopedAuthorization.decide({
+        actor: workflowCoverageActor(userId),
+        action: "workflows:run",
+        resource: { type: "company", companyId: input.companyId },
+      });
+      if (!decision.allowed) {
+        throw forbidden("Both workflow coverage principals must currently be authorized to run this workflow.", {
+          code: "workflow_coverage_run_permission_unavailable", reason: decision.reason,
+        });
+      }
+    }
+
+    if (input.scopeType === "task" && input.taskId) {
+      const [task] = await input.tx.select({ id: issues.id, companyId: issues.companyId, projectId: issues.projectId,
+        parentId: issues.parentId, assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId,
+        originKind: issues.originKind, originId: issues.originId, status: issues.status,
+      }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.taskId))).for("share");
+      if (!task) throw notFound("Task not found");
+      if (task.status === "done" || task.status === "cancelled") {
+        throw conflict("Task is already terminal", { code: "workflow_task_not_active", issueId: task.id, status: task.status });
+      }
+      const taskResource: AuthorizationResource = {
+        type: "issue", companyId: input.companyId, issueId: task.id, projectId: task.projectId,
+        parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId,
+        originKind: task.originKind, originId: task.originId, status: task.status,
+      };
+      for (const userId of userIds) {
+        const decision = await scopedAuthorization.decide({ actor: workflowCoverageActor(userId), action: "issue:mutate", resource: taskResource });
+        if (!decision.allowed) {
+          throw forbidden("Both workflow coverage principals need current Task access and mutation authority.", {
+            code: "workflow_coverage_task_authority_unavailable", reason: decision.reason,
+          });
+        }
+      }
+    }
+  }
+
+  async function assertWorkflowCoverageCurrent(input: {
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0];
+    companyId: string;
+    coverageId: string;
+    delegateeUserId: string;
+    workflowId: string;
+    workflowRevisionId: string;
+    scopeType: "manual" | "task";
+    taskId: string | null;
+    now?: Date;
+  }) {
+    // Lock authorization owners before the coverage row. Member permission
+    // updates and offboarding lock membership first, then revoke matching
+    // coverage rows; matching that order prevents a claim/offboarding cycle.
+    const [candidate] = await input.tx.select().from(humanWorkflowCoverages).where(and(
+      eq(humanWorkflowCoverages.companyId, input.companyId), eq(humanWorkflowCoverages.id, input.coverageId),
+    ));
+    if (!candidate) {
+      throw forbidden("Current Human workflow coverage is unavailable for this exact action.", { code: "workflow_coverage_unavailable" });
+    }
+    await assertWorkflowCoverageHumanRights({ tx: input.tx, companyId: input.companyId,
+      principalUserId: candidate.principalUserId, delegateeUserId: candidate.delegateeUserId,
+      workflowId: input.workflowId, workflowRevisionId: input.workflowRevisionId,
+      scopeType: input.scopeType, taskId: input.taskId });
+
+    const [coverage] = await input.tx.select().from(humanWorkflowCoverages).where(and(
+      eq(humanWorkflowCoverages.companyId, input.companyId), eq(humanWorkflowCoverages.id, input.coverageId),
+    )).for("update");
+    const now = input.now ?? new Date();
+    if (!coverage || coverage.revokedAt || coverage.startsAt > now || coverage.expiresAt <= now ||
+      coverage.delegateeUserId !== input.delegateeUserId || coverage.workflowId !== input.workflowId ||
+      coverage.workflowRevisionId !== input.workflowRevisionId || coverage.scopeType !== input.scopeType ||
+      coverage.taskId !== input.taskId || coverage.principalUserId !== candidate.principalUserId ||
+      coverage.delegateeUserId !== candidate.delegateeUserId) {
+      throw forbidden("Current Human workflow coverage is unavailable for this exact action.", { code: "workflow_coverage_unavailable" });
+    }
+    return coverage;
+  }
 
   async function sweepMemberConnectionAccess(
     tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
@@ -42,6 +198,12 @@ export function accessService(db: Db) {
     userId: string,
     now: Date,
   ) {
+    // Agent credentials are company-scoped and bind a responsible Human. Once
+    // that membership is withdrawn they are irreversibly fenced in the same
+    // transaction; a later membership restoration cannot revive old tokens.
+    await tx.update(agentApiKeys).set({ revokedAt: now }).where(and(
+      eq(agentApiKeys.companyId, companyId), eq(agentApiKeys.responsibleUserId, userId), isNull(agentApiKeys.revokedAt),
+    ));
     const departingAudienceRows = await tx.select({
       grantId: connectionGrantMembers.grantId,
     }).from(connectionGrantMembers).where(and(
@@ -348,6 +510,191 @@ export function accessService(db: Db) {
     }
   }
 
+  async function pauseActiveOwnedRoutinesForWithdrawal(
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+    companyId: string,
+    userId: string,
+    actorUserId: string | null | undefined,
+  ) {
+    const owned = await tx
+      .select({ id: routines.id, originKind: routines.originKind })
+      .from(routines)
+      .where(and(
+        eq(routines.companyId, companyId),
+        eq(routines.responsibleUserId, userId),
+        eq(routines.status, "active"),
+      ))
+      .for("update");
+    if (owned.length === 0) return 0;
+
+    const service = routineService(db);
+    const actorId = actorUserId ?? "system";
+    for (const routine of owned) {
+      await service.pauseForResponsibleUserOffboardingInTransaction(
+        tx as unknown as Db,
+        companyId,
+        routine.id,
+        userId,
+        { userId: actorId },
+      );
+      await tx.insert(activityLog).values({
+        companyId,
+        actorType: "user",
+        actorId,
+        action: "routine.paused_for_responsible_user_offboarding",
+        entityType: "routine",
+        entityId: routine.id,
+        responsibleUserId: userId,
+        details: { privateSourcePreserved: routine.originKind === "conversation_draft" },
+      });
+    }
+    return owned.length;
+  }
+
+  async function clearCompanyResponsibleHuman(
+    tx: AccessTransaction,
+    companyId: string,
+    userId: string,
+    now: Date,
+  ) {
+    await tx.update(companies).set({
+      defaultResponsibleUserId: sql<string | null>`case when ${companies.defaultResponsibleUserId} = ${userId} then null else ${companies.defaultResponsibleUserId} end`,
+      securityContactUserId: sql<string | null>`case when ${companies.securityContactUserId} = ${userId} then null else ${companies.securityContactUserId} end`,
+      supportIncidentContactUserId: sql<string | null>`case when ${companies.supportIncidentContactUserId} = ${userId} then null else ${companies.supportIncidentContactUserId} end`,
+      updatedAt: now,
+    }).where(and(
+      eq(companies.id, companyId), or(eq(companies.defaultResponsibleUserId, userId),
+        eq(companies.securityContactUserId, userId), eq(companies.supportIncidentContactUserId, userId)),
+    ));
+  }
+
+  async function prepareMemberForOffboardingInTransaction(
+    tx: AccessTransaction,
+    userId: string,
+    actorUserId: string | null,
+    now = new Date(),
+  ) {
+    const memberships = await tx.select({ companyId: companyMemberships.companyId, status: companyMemberships.status })
+      .from(companyMemberships).where(and(eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)))
+      .orderBy(asc(companyMemberships.companyId)).for("update");
+    const affectedCompanyIds = memberships.map(row => row.companyId);
+    const staleDefaults = await tx.select({ companyId: companies.id }).from(companies)
+      .where(or(eq(companies.defaultResponsibleUserId, userId), eq(companies.securityContactUserId, userId),
+        eq(companies.supportIncidentContactUserId, userId)));
+    affectedCompanyIds.push(...staleDefaults.map(row => row.companyId));
+    for (const membership of memberships) {
+      await sweepMemberConnectionAccess(tx, membership.companyId, userId, now);
+      await pauseActiveOwnedRoutinesForWithdrawal(tx, membership.companyId, userId, actorUserId);
+      await revokeWorkflowCoveragesForMember(tx, membership.companyId, userId, actorUserId, now);
+      await clearCompanyResponsibleHuman(tx, membership.companyId, userId, now);
+    }
+    // Also clear stale defaults or contacts whose membership row was already
+    // removed by an earlier offboarding attempt.
+    await tx.update(companies).set({
+      defaultResponsibleUserId: sql<string | null>`case when ${companies.defaultResponsibleUserId} = ${userId} then null else ${companies.defaultResponsibleUserId} end`,
+      securityContactUserId: sql<string | null>`case when ${companies.securityContactUserId} = ${userId} then null else ${companies.securityContactUserId} end`,
+      supportIncidentContactUserId: sql<string | null>`case when ${companies.supportIncidentContactUserId} = ${userId} then null else ${companies.supportIncidentContactUserId} end`,
+      updatedAt: now,
+    })
+      .where(or(eq(companies.defaultResponsibleUserId, userId), eq(companies.securityContactUserId, userId),
+        eq(companies.supportIncidentContactUserId, userId)));
+    return [...new Set(affectedCompanyIds)];
+  }
+
+  async function suspendMemberForSecurityInTransaction(
+    tx: AccessTransaction,
+    companyId: string,
+    memberId: string,
+    actor: AuthorizationActor,
+    reason: SecuritySuspensionReason,
+  ) {
+    if (actor.type !== "board" || actor.source !== "session" || !actor.userId || !actor.sessionId) {
+      throw forbidden("A current Human session is required for security suspension.", { code: "security_suspension_session_required" });
+    }
+    const authentication = await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });
+    const [targetSnapshot] = await tx.select({ principalId: companyMemberships.principalId }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.id, memberId),
+      eq(companyMemberships.principalType, "user"),
+    ));
+    if (!targetSnapshot) return null;
+    const principals = [...new Set([actor.userId, targetSnapshot.principalId])];
+    await tx.select({ id: authUsers.id }).from(authUsers).where(and(
+      inArray(authUsers.id, principals),
+      sql`not exists (select 1 from ${accountDeletionOperations} d where d.user_id=${authUsers.id})`,
+    )).orderBy(asc(authUsers.id)).for("share");
+    await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.status, "active"), eq(companyMemberships.membershipRole, "owner"),
+    )).orderBy(asc(companyMemberships.principalId), asc(companyMemberships.id)).for("update");
+    const lockedPrincipals = await tx.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      inArray(companyMemberships.principalId, principals),
+    )).orderBy(asc(companyMemberships.principalId), asc(companyMemberships.id)).for("update");
+    const [targetMembership] = lockedPrincipals.filter(membership =>
+      membership.id === memberId && membership.principalId === targetSnapshot.principalId,
+    );
+    if (!targetMembership) return null;
+    if (targetMembership.status === "archived") return null;
+    // Revalidate the proof and company permission after locks. Request actor
+    // membership snapshots are hints only; authorizationService reads live rows.
+    await assertPinnedAuthenticationDeadline(tx, authentication);
+    const decision = await authorizationService(tx as unknown as Db).decide({
+      actor: { ...actor, ignoreInstanceAdmin: true }, action: "users:manage_permissions",
+      resource: { type: "company", companyId },
+    });
+    if (!decision.allowed) throw forbidden("Current company permission is required for security suspension.", {
+      code: "security_suspension_company_permission_required", reason: decision.reason,
+    });
+    const [company] = await tx.select({ status: companies.status }).from(companies).where(eq(companies.id, companyId)).for("share");
+    if (company?.status !== "active") throw forbidden("The current company is unavailable.", { code: "company_unavailable" });
+    const [targetUser] = await tx.select({ id: authUsers.id }).from(authUsers).where(and(
+      eq(authUsers.id, targetMembership.principalId),
+      sql`not exists (select 1 from ${accountDeletionOperations} d where d.user_id=${authUsers.id})`,
+    )).for("share");
+    if (!targetUser) throw conflict("The target Human account is already unavailable.", { code: "member_account_unavailable" });
+
+    const now = new Date();
+    if (targetMembership.status === "suspended") {
+      await clearCompanyResponsibleHuman(tx, companyId, targetMembership.principalId, now);
+      const remainingOwners = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.status, "active"), eq(companyMemberships.membershipRole, "owner"),
+      ));
+      return { member: targetMembership, ownerRecoveryRequired: remainingOwners.length === 0, changed: false };
+    }
+    if (targetMembership.status === "active") {
+      await sweepMemberConnectionAccess(tx, companyId, targetMembership.principalId, now);
+      await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, targetMembership.principalId, actor.userId);
+      await revokeWorkflowCoveragesForMember(tx, companyId, targetMembership.principalId, actor.userId, now);
+    }
+    await tx.delete(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, companyId),
+      eq(principalPermissionGrants.principalType, "user"),
+      eq(principalPermissionGrants.principalId, targetMembership.principalId),
+    ));
+    await clearCompanyResponsibleHuman(tx, companyId, targetMembership.principalId, now);
+    const [updated] = await tx.update(companyMemberships).set({ status: "suspended", updatedAt: now })
+      .where(eq(companyMemberships.id, targetMembership.id)).returning();
+    const remainingOwners = targetMembership.membershipRole === "owner"
+      ? await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.status, "active"), eq(companyMemberships.membershipRole, "owner"),
+      ))
+      : [true];
+    const ownerRecoveryRequired = remainingOwners.length === 0;
+    await tx.insert(activityLog).values({
+      companyId, actorType: "user", actorId: actor.userId, action: "company_member.security_suspended",
+      entityType: "company_membership", entityId: targetMembership.id,
+      details: { principalId: targetMembership.principalId, reason, ownerRecoveryRequired },
+    });
+    if (ownerRecoveryRequired) await tx.insert(activityLog).values({
+      companyId, actorType: "user", actorId: actor.userId, action: "company.owner_recovery_required",
+      entityType: "company", entityId: companyId,
+      details: { suspendedMembershipId: targetMembership.id, reasonCode: "last_owner_security_suspension" },
+    });
+    return { member: updated ?? targetMembership, ownerRecoveryRequired, changed: true };
+  }
+
   async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
     if (!userId) return false;
     const row = await db
@@ -421,6 +768,33 @@ export function accessService(db: Db) {
       .orderBy(sql`${companyMemberships.createdAt} desc`);
   }
 
+  async function searchMembers(companyId: string, actor: AuthorizationActor, query: string, limit = 20) {
+    const decision = await authorization.decide({
+      actor,
+      action: "users:manage_permissions",
+      resource: { type: "company", companyId },
+    });
+    if (!decision.allowed) throw forbidden("Company members are outside this actor's authorization boundary");
+    const escaped = query.replace(/[\\%_]/g, (value) => `\\${value}`);
+    const pattern = `%${escaped}%`;
+    const rows = await db.select({
+      id: authUsers.id,
+      name: authUsers.name,
+      email: authUsers.email,
+      updatedAt: companyMemberships.updatedAt,
+    }).from(companyMemberships)
+      .innerJoin(authUsers, eq(authUsers.id, companyMemberships.principalId))
+      .where(and(
+        eq(companyMemberships.companyId, companyId),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.status, "active"),
+        or(ilike(authUsers.name, pattern), ilike(authUsers.email, pattern)),
+      ))
+      .orderBy(desc(companyMemberships.updatedAt), asc(authUsers.name), asc(authUsers.id))
+      .limit(Math.min(100, Math.max(1, limit)) + 1);
+    return { items: rows.slice(0, limit), partial: rows.length > limit };
+  }
+
   async function getMemberById(companyId: string, memberId: string) {
     return db
       .select()
@@ -449,10 +823,14 @@ export function accessService(db: Db) {
     grants: GrantInput[],
     grantedByUserId: string | null,
   ) {
-    const member = await getMemberById(companyId, memberId);
-    if (!member) return null;
-
-    await db.transaction(async (tx) => {
+    return db.transaction(async (tx) => {
+      const [member] = await tx.select().from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.id, memberId),
+      )).for("update");
+      if (!member) return null;
+      const now = new Date();
+      const hadWorkflowRun = member.principalType === "user" && member.status === "active" &&
+        await humanCanRunWorkflow(tx, companyId, member.principalId);
       await tx
         .delete(principalPermissionGrants)
         .where(
@@ -476,9 +854,12 @@ export function accessService(db: Db) {
           })),
         );
       }
+      await tx.update(companyMemberships).set({ permissionsInitializedAt: now, updatedAt: now })
+        .where(eq(companyMemberships.id, member.id));
+      if (hadWorkflowRun && !(await humanCanRunWorkflow(tx, companyId, member.principalId)))
+        await revokeWorkflowCoveragesForMember(tx, companyId, member.principalId, grantedByUserId, now);
+      return member;
     });
-
-    return member;
   }
 
   async function updateMemberAndPermissions(
@@ -491,7 +872,7 @@ export function accessService(db: Db) {
     },
     grantedByUserId: string | null,
   ) {
-    return db.transaction(async (tx) => {
+    const updated = await db.transaction(async (tx) => {
       await tx.execute(sql`
         select ${companyMemberships.id}
         from ${companyMemberships}
@@ -513,6 +894,8 @@ export function accessService(db: Db) {
       const nextMembershipRole =
         data.membershipRole !== undefined ? data.membershipRole : existing.membershipRole;
       const nextStatus = data.status ?? existing.status;
+      const hadWorkflowRun = existing.principalType === "user" && existing.status === "active" &&
+        await humanCanRunWorkflow(tx, companyId, existing.principalId);
 
       if (
         existing.principalType === "user" &&
@@ -540,12 +923,16 @@ export function accessService(db: Db) {
       const now = new Date();
       if (existing.status === "active" && nextStatus !== "active" && existing.principalType === "user") {
         await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
+        await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, existing.principalId, grantedByUserId);
+        await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, grantedByUserId, now);
+        await clearCompanyResponsibleHuman(tx, companyId, existing.principalId, now);
       }
       const updated = await tx
         .update(companyMemberships)
         .set({
           membershipRole: nextMembershipRole,
           status: nextStatus,
+          permissionsInitializedAt: now,
           updatedAt: now,
         })
         .where(eq(companyMemberships.id, existing.id))
@@ -575,9 +962,14 @@ export function accessService(db: Db) {
           })),
         );
       }
+      if (hadWorkflowRun && nextStatus === "active" &&
+        !(await humanCanRunWorkflow(tx, companyId, existing.principalId)))
+        await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, grantedByUserId, now);
 
       return updated;
     });
+    if (updated?.status !== "active") await queueResponsibilityAfterOffboarding([companyId]);
+    return updated;
   }
 
   async function assertCanRemoveActiveOwner(
@@ -643,8 +1035,8 @@ export function accessService(db: Db) {
     await assertAssignableAgent(tx as Db, companyId, input.assigneeAgentId, { kind: "work" });
   }
 
-  async function archiveMember(companyId: string, memberId: string, input: MemberArchiveInput = {}) {
-    return db.transaction(async (tx) => {
+  async function archiveMember(companyId: string, memberId: string, input: MemberArchiveInput = {}, actorUserId = "system") {
+    const result = await db.transaction(async (tx) => {
       await tx.execute(sql`
         select ${companyMemberships.id}
         from ${companyMemberships}
@@ -666,7 +1058,13 @@ export function accessService(db: Db) {
         throw conflict("Only human company members can be archived");
       }
       if (existing.status === "archived") {
-        return { member: existing, reassignedIssueCount: 0 };
+        return {
+          member: existing,
+          reassignedIssueCount: 0,
+          reassignedRoutineCount: 0,
+          pausedRoutineCount: 0,
+          ownerActionRoutineCount: 0,
+        };
       }
       if (input.reassignment?.assigneeUserId === existing.principalId) {
         throw conflict("Replacement user cannot be the archived member");
@@ -681,8 +1079,36 @@ export function accessService(db: Db) {
       );
       await assertAssignableArchiveTarget(companyId, input.reassignment, tx);
 
+      const ownedRoutines = await tx
+        .select({ id: routines.id, originKind: routines.originKind, status: routines.status })
+        .from(routines)
+        .where(and(
+          eq(routines.companyId, companyId),
+          eq(routines.responsibleUserId, existing.principalId),
+          inArray(routines.status, ["active", "paused"]),
+        ))
+        .for("update");
+      let routineReplacementUserId: string | null = null;
+      if (input.routineResponsibleUserId && input.routineResponsibleUserId !== existing.principalId) {
+        const replacement = await tx
+          .select({ id: companyMemberships.id, userId: authUsers.id })
+          .from(companyMemberships)
+          .innerJoin(authUsers, eq(authUsers.id, companyMemberships.principalId))
+          .where(and(
+            eq(companyMemberships.companyId, companyId),
+            eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, input.routineResponsibleUserId),
+            eq(companyMemberships.status, "active"),
+          ))
+          .for("update")
+          .then((rows) => rows[0] ?? null);
+        if (replacement) routineReplacementUserId = replacement.userId;
+      }
+
       const now = new Date();
       await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
+      await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, actorUserId, now);
+      await clearCompanyResponsibleHuman(tx, companyId, existing.principalId, now);
       const assignmentPatch = {
         assigneeAgentId: input.reassignment?.assigneeAgentId ?? null,
         assigneeUserId: input.reassignment?.assigneeUserId ?? null,
@@ -711,6 +1137,73 @@ export function accessService(db: Db) {
         .where(and(assignedOpenIssueWhere, ne(issues.status, "in_progress")))
         .returning({ id: issues.id });
 
+      let reassignedRoutineCount = 0;
+      let pausedRoutineCount = 0;
+      let ownerActionRoutineCount = 0;
+      const routinesSvc = ownedRoutines.length > 0 ? routineService(db) : null;
+      for (const routine of ownedRoutines) {
+        const txDb = tx as unknown as Db;
+        if (routine.originKind === "conversation_draft") {
+          if (routine.status === "active") {
+            await routinesSvc!.pauseForResponsibleUserOffboardingInTransaction(
+              txDb, companyId, routine.id, existing.principalId, { userId: actorUserId },
+            );
+            pausedRoutineCount++;
+            await tx.insert(activityLog).values({
+              companyId,
+              actorType: "user",
+              actorId: actorUserId,
+              action: "routine.paused_for_responsible_user_offboarding",
+              entityType: "routine",
+              entityId: routine.id,
+              responsibleUserId: existing.principalId,
+              details: { privateSourcePreserved: true },
+            });
+          }
+          ownerActionRoutineCount++;
+          continue;
+        }
+        if (routineReplacementUserId) {
+          await routinesSvc!.transferResponsibilityInTransaction(
+            txDb,
+            companyId,
+            routine.id,
+            existing.principalId,
+            routineReplacementUserId,
+            { userId: actorUserId },
+          );
+          await tx.insert(activityLog).values({
+            companyId,
+            actorType: "user",
+            actorId: actorUserId,
+            action: "routine.responsibility_transferred",
+            entityType: "routine",
+            entityId: routine.id,
+            responsibleUserId: routineReplacementUserId,
+            details: { previousResponsibleUserId: existing.principalId },
+          });
+          reassignedRoutineCount++;
+          continue;
+        }
+        if (routine.status === "active") {
+          await routinesSvc!.pauseForResponsibleUserOffboardingInTransaction(
+            txDb, companyId, routine.id, existing.principalId, { userId: actorUserId },
+          );
+          pausedRoutineCount++;
+          await tx.insert(activityLog).values({
+            companyId,
+            actorType: "user",
+            actorId: actorUserId,
+            action: "routine.paused_for_responsible_user_offboarding",
+            entityType: "routine",
+            entityId: routine.id,
+            responsibleUserId: existing.principalId,
+            details: { privateSourcePreserved: false },
+          });
+        }
+        ownerActionRoutineCount++;
+      }
+
       await tx
         .delete(principalPermissionGrants)
         .where(
@@ -734,8 +1227,13 @@ export function accessService(db: Db) {
       return {
         member: archived,
         reassignedIssueCount: resetInProgress.length + reassigned.length,
+        reassignedRoutineCount,
+        pausedRoutineCount,
+        ownerActionRoutineCount,
       };
     });
+    if (result?.member.status === "archived") await queueResponsibilityAfterOffboarding([companyId]);
+    return result;
   }
 
   async function promoteInstanceAdmin(userId: string) {
@@ -777,6 +1275,7 @@ export function accessService(db: Db) {
     options: { actorUserId?: string | null } = {},
   ) {
     const target = new Set(companyIds);
+    const revokedCompanyIds: string[] = [];
 
     await db.transaction(async (tx) => {
       // Serialize every company-access removal/reactivation with personal OAuth
@@ -788,6 +1287,7 @@ export function accessService(db: Db) {
         .for("update");
       const existingByCompany = new Map(existing.map((row) => [row.companyId, row]));
       const toArchive = existing.filter((row) => !target.has(row.companyId) && row.status !== "archived");
+      revokedCompanyIds.push(...toArchive.map(row => row.companyId));
       if (toArchive.length > 0 && options.actorUserId && options.actorUserId === userId) {
         throw conflict("You cannot remove yourself");
       }
@@ -825,6 +1325,14 @@ export function accessService(db: Db) {
         const now = new Date();
         for (const membership of toArchive) {
           await sweepMemberConnectionAccess(tx, membership.companyId, membership.principalId, now);
+          await pauseActiveOwnedRoutinesForWithdrawal(
+            tx,
+            membership.companyId,
+            membership.principalId,
+            options.actorUserId,
+          );
+          await revokeWorkflowCoveragesForMember(tx, membership.companyId, membership.principalId, options.actorUserId ?? null, now);
+          await clearCompanyResponsibleHuman(tx, membership.companyId, membership.principalId, now);
         }
         await tx
           .update(companyMemberships)
@@ -865,6 +1373,8 @@ export function accessService(db: Db) {
         });
       }
     });
+
+    if (revokedCompanyIds.length > 0) await queueResponsibilityAfterOffboarding(revokedCompanyIds);
 
     return listUserCompanyAccess(userId);
   }
@@ -911,6 +1421,15 @@ export function accessService(db: Db) {
     grantedByUserId: string | null,
   ) {
     await db.transaction(async (tx) => {
+      const now = new Date();
+      if (principalType === "user") {
+        const [membership] = await tx.select({ id: companyMemberships.id })
+          .from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+            eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, principalId)))
+          .for("update");
+        if (membership) await tx.update(companyMemberships)
+          .set({ permissionsInitializedAt: now, updatedAt: now }).where(eq(companyMemberships.id, membership.id));
+      }
       await tx
         .delete(principalPermissionGrants)
         .where(
@@ -929,8 +1448,8 @@ export function accessService(db: Db) {
           permissionKey: grant.permissionKey,
           scope: grant.scope ?? null,
           grantedByUserId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: now,
+          updatedAt: now,
         })),
       );
     });
@@ -998,16 +1517,25 @@ export function accessService(db: Db) {
     scope: Record<string, unknown> | null = null,
   ) {
     if (!enabled) {
-      await db
-        .delete(principalPermissionGrants)
-        .where(
-          and(
-            eq(principalPermissionGrants.companyId, companyId),
-            eq(principalPermissionGrants.principalType, principalType),
-            eq(principalPermissionGrants.principalId, principalId),
-            eq(principalPermissionGrants.permissionKey, permissionKey),
-          ),
-        );
+      if (principalType === "user") {
+        const membership = await getMembership(companyId, "user", principalId);
+        if (membership) await ensureHumanRoleDefaultGrants(db, { companyId, principalId,
+          membershipRole: membership.membershipRole, grantedByUserId: null });
+      }
+      await db.transaction(async tx => {
+        const [membership] = principalType === "user" ? await tx.select({ id: companyMemberships.id })
+          .from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+            eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, principalId)))
+          .for("update") : [];
+        await tx.delete(principalPermissionGrants).where(and(
+          eq(principalPermissionGrants.companyId, companyId),
+          eq(principalPermissionGrants.principalType, principalType),
+          eq(principalPermissionGrants.principalId, principalId),
+          eq(principalPermissionGrants.permissionKey, permissionKey),
+        ));
+        if (membership) await tx.update(companyMemberships).set({ permissionsInitializedAt: new Date() })
+          .where(and(eq(companyMemberships.id, membership.id), isNull(companyMemberships.permissionsInitializedAt)));
+      });
       return;
     }
 
@@ -1017,6 +1545,12 @@ export function accessService(db: Db) {
       .onConflictDoUpdate({ target: [companyMemberships.companyId, companyMemberships.principalType, companyMemberships.principalId],
         set: { status: "active", membershipRole: "member", updatedAt: new Date() },
         setWhere: ne(companyMemberships.status, "active") });
+
+    if (principalType === "user") {
+      const membership = await getMembership(companyId, "user", principalId);
+      if (membership) await ensureHumanRoleDefaultGrants(db, { companyId, principalId,
+        membershipRole: membership.membershipRole, grantedByUserId });
+    }
 
     const existing = await db
       .select()
@@ -1055,6 +1589,115 @@ export function accessService(db: Db) {
     });
   }
 
+  async function createWorkflowCoverage(companyId: string, input: {
+    requestId: string;
+    delegateeUserId: string;
+    workflowId: string;
+    workflowRevisionId: string;
+    scopeType: "manual" | "task";
+    taskId: string | null;
+    startsAt: Date;
+    expiresAt: Date;
+    reason: string;
+  }, actor: AuthorizationActor) {
+    if (actor.type !== "board" || actor.source !== "session" || !actor.userId || actor.userId === input.delegateeUserId) {
+      throw forbidden("A current Human session must create coverage for a different Human.", { code: "workflow_coverage_session_required" });
+    }
+    const assertSameRequest = (existing: typeof humanWorkflowCoverages.$inferSelect) => {
+      if (existing.principalUserId !== actor.userId || existing.delegateeUserId !== input.delegateeUserId ||
+          existing.workflowId !== input.workflowId || existing.workflowRevisionId !== input.workflowRevisionId ||
+          existing.scopeType !== input.scopeType || existing.taskId !== input.taskId ||
+          existing.startsAt.getTime() !== input.startsAt.getTime() || existing.expiresAt.getTime() !== input.expiresAt.getTime() ||
+          existing.reason !== input.reason.trim()) {
+        throw conflict("Coverage request ID was already used for different terms.", { code: "workflow_coverage_request_reused" });
+      }
+      return { coverage: existing, created: false as const };
+    };
+    try {
+      return await db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(humanWorkflowCoverages).where(and(
+          eq(humanWorkflowCoverages.companyId, companyId), eq(humanWorkflowCoverages.requestId, input.requestId),
+        )).for("update");
+        if (existing) return assertSameRequest(existing);
+        await assertWorkflowCoverageHumanRights({ tx, companyId, principalUserId: actor.userId!,
+          delegateeUserId: input.delegateeUserId, workflowId: input.workflowId,
+          workflowRevisionId: input.workflowRevisionId, scopeType: input.scopeType, taskId: input.taskId });
+        const [coverage] = await tx.insert(humanWorkflowCoverages).values({
+          requestId: input.requestId, companyId, principalUserId: actor.userId!, delegateeUserId: input.delegateeUserId,
+          actionKey: "workflows:run", workflowId: input.workflowId, workflowRevisionId: input.workflowRevisionId,
+          scopeType: input.scopeType, taskId: input.taskId, startsAt: input.startsAt, expiresAt: input.expiresAt,
+          reason: input.reason.trim(), createdAt: new Date(),
+        }).returning();
+        if (!coverage) throw new Error("Workflow coverage insert returned no row");
+        return { coverage, created: true as const };
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error, "human_workflow_coverages_company_request_uq")) throw error;
+      const [existing] = await db.select().from(humanWorkflowCoverages).where(and(
+        eq(humanWorkflowCoverages.companyId, companyId), eq(humanWorkflowCoverages.requestId, input.requestId),
+      ));
+      if (!existing) throw error;
+      return assertSameRequest(existing);
+    }
+  }
+
+  async function listWorkflowCoverages(companyId: string, userId: string) {
+    return db.select().from(humanWorkflowCoverages).where(and(
+      eq(humanWorkflowCoverages.companyId, companyId),
+      or(eq(humanWorkflowCoverages.principalUserId, userId), eq(humanWorkflowCoverages.delegateeUserId, userId)),
+    )).orderBy(desc(humanWorkflowCoverages.createdAt)).limit(100);
+  }
+
+  async function revokeWorkflowCoverage(companyId: string, coverageId: string, actor: AuthorizationActor) {
+    if (actor.type !== "board" || actor.source !== "session" || !actor.userId) {
+      throw forbidden("A current Human session is required to revoke workflow coverage.", { code: "workflow_coverage_session_required" });
+    }
+    return db.transaction(async (tx) => {
+      const [coverage] = await tx.select().from(humanWorkflowCoverages).where(and(
+        eq(humanWorkflowCoverages.companyId, companyId), eq(humanWorkflowCoverages.id, coverageId),
+      )).for("update");
+      if (!coverage) return null;
+      if (actor.userId !== coverage.principalUserId && actor.userId !== coverage.delegateeUserId) {
+        throw forbidden("Only a Human named by this workflow coverage may revoke it.", { code: "workflow_coverage_revoke_denied" });
+      }
+      if (coverage.revokedAt) return coverage;
+      const [revoked] = await tx.update(humanWorkflowCoverages).set({ revokedAt: new Date(), revokedByUserId: actor.userId })
+        .where(and(eq(humanWorkflowCoverages.companyId, companyId), eq(humanWorkflowCoverages.id, coverageId), isNull(humanWorkflowCoverages.revokedAt)))
+        .returning();
+      return revoked ?? coverage;
+    });
+  }
+
+  async function revokeWorkflowCoveragesForMember(
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0], companyId: string, userId: string, revokedByUserId: string | null, now: Date,
+  ) {
+    await tx.update(humanWorkflowCoverages).set({ revokedAt: now, revokedByUserId })
+      .where(and(eq(humanWorkflowCoverages.companyId, companyId), isNull(humanWorkflowCoverages.revokedAt),
+        or(eq(humanWorkflowCoverages.principalUserId, userId), eq(humanWorkflowCoverages.delegateeUserId, userId))));
+  }
+
+  async function revokeAllWorkflowCoveragesForRestore(
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+    now = new Date(),
+  ) {
+    await tx.update(humanWorkflowCoverages).set({ revokedAt: now, revokedByUserId: null })
+      .where(isNull(humanWorkflowCoverages.revokedAt));
+  }
+
+  async function authorizeWorkflowCoverage(input: {
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0];
+    companyId: string;
+    coverageId: string;
+    delegateeUserId: string;
+    workflowId: string;
+    workflowRevisionId: string;
+    scopeType: "manual" | "task";
+    taskId: string | null;
+    now?: Date;
+  }) {
+    return assertWorkflowCoverageCurrent(input);
+  }
+
   async function updateMember(
     companyId: string,
     memberId: string,
@@ -1062,8 +1705,9 @@ export function accessService(db: Db) {
       membershipRole?: string | null;
       status?: "pending" | "active" | "suspended";
     },
+    actorUserId: string | null = null,
   ) {
-    return db.transaction(async (tx) => {
+    const updated = await db.transaction(async (tx) => {
       await tx.execute(sql`
         select ${companyMemberships.id}
         from ${companyMemberships}
@@ -1085,6 +1729,8 @@ export function accessService(db: Db) {
       const nextMembershipRole =
         data.membershipRole !== undefined ? data.membershipRole : existing.membershipRole;
       const nextStatus = data.status ?? existing.status;
+      const hadWorkflowRun = existing.principalType === "user" && existing.status === "active" &&
+        await humanCanRunWorkflow(tx, companyId, existing.principalId);
 
       if (
         existing.principalType === "user" &&
@@ -1112,13 +1758,15 @@ export function accessService(db: Db) {
       const now = new Date();
       if (
         existing.principalType === "user" &&
-        existing.status !== "suspended" &&
-        nextStatus === "suspended"
+        existing.status === "active" &&
+        nextStatus !== "active"
       ) {
         await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
+        await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, existing.principalId, actorUserId);
+        await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, actorUserId, now);
+        await clearCompanyResponsibleHuman(tx, companyId, existing.principalId, now);
       }
-
-      return tx
+      const updated = await tx
         .update(companyMemberships)
         .set({
           membershipRole: nextMembershipRole,
@@ -1128,7 +1776,13 @@ export function accessService(db: Db) {
         .where(eq(companyMemberships.id, existing.id))
         .returning()
         .then((rows) => rows[0] ?? existing);
+      if (hadWorkflowRun && nextStatus === "active" &&
+        !(await humanCanRunWorkflow(tx, companyId, existing.principalId)))
+        await revokeWorkflowCoveragesForMember(tx, companyId, existing.principalId, actorUserId, now);
+      return updated;
     });
+    if (updated && updated.status !== "active") await queueResponsibilityAfterOffboarding([companyId]);
+    return updated;
   }
 
   return {
@@ -1141,6 +1795,7 @@ export function accessService(db: Db) {
     getMemberById,
     ensureMembership,
     listMembers,
+    searchMembers,
     listActiveUserMemberships,
     copyActiveUserMemberships,
     ensureRoleDefaultGrants,
@@ -1155,5 +1810,17 @@ export function accessService(db: Db) {
     listPrincipalGrants,
     setPrincipalPermission,
     updateMember,
+    prepareMemberForOffboardingInTransaction,
+    suspendMemberForSecurityInTransaction,
+    suspendMemberForSecurity: async (companyId: string, memberId: string, actor: AuthorizationActor, reason: SecuritySuspensionReason) => {
+      const result = await db.transaction((tx) => suspendMemberForSecurityInTransaction(tx, companyId, memberId, actor, reason));
+      if (result?.changed) await queueResponsibilityAfterOffboarding([companyId]);
+      return result;
+    },
+    createWorkflowCoverage,
+    listWorkflowCoverages,
+    revokeWorkflowCoverage,
+    revokeAllWorkflowCoveragesForRestore,
+    authorizeWorkflowCoverage,
   };
 }

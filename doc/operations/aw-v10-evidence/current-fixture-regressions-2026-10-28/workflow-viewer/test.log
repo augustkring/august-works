@@ -1,0 +1,31 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > rejects a changed review account before reads or gateway decisions and keeps errors private
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > keeps Original unbound review callers compatible with the workflow rollout gate
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > fails closed while Workflows V1 is disabled
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > creates, reads, updates, publishes, and audits a valid manual workflow
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > uses effective permissions for normal session users
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > projects separate draft and active versions without configuration or mutation authority
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > requires a matching human account and rejects disabled, foreign and agent reads
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > uses current native read grants, suppresses edit controls and honors membership revocation
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > does not expose a workflow through another company route
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > does not advertise human-only Workflow mutations to agents
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > does not expose optimizer state for nonexistent or cross-company workflows
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > keeps optimizer suggestions read-only and feature-gated
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > exposes the typed Node Registry to authorized readers
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > searches deterministic Workflow capabilities for authorized readers
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > advertises run capability once the manual durable executor exists
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > builds a deterministic Data Selector model for the current unsaved graph
+ ✓ src/__tests__/workflow-routes.test.ts > Workflow routes > starts an idempotent manual Workflow run only from a published revision 1256ms
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > retries a failed Workflow run through HTTP with immutable lineage and request idempotency
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > invokes a published Workflow from an active task with authoritative task context and idempotency
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > does not invoke a Workflow through a task from another company
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > requires task mutation access before using a task to invoke a Workflow
+ ↓ src/__tests__/workflow-routes.test.ts > Workflow routes > refuses Task to Workflow invocation after the task is terminal
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 21 skipped (22)
+   Start at  12:10:14
+   Duration  25.17s (transform 13.01s, setup 76ms, import 18.60s, tests 6.36s, environment 0ms)
+

@@ -1,0 +1,52 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/agents-service-clear-error.test.ts > agent service clearError > pauses and resumes without manufacturing completion or mutating configuration and pending run history 189ms
+ ✓ src/__tests__/agents-service-clear-error.test.ts > agent service clearError > resets converted agent sessions while preserving identity, configuration and run history 192ms
+ ✓ src/__tests__/agents-service-clear-error.test.ts > agent service clearError > moves an error agent to idle without deleting run history or runtime diagnostics 80ms
+ ✓ src/__tests__/agents-service-clear-error.test.ts > agent service clearError > rejects non-error agents with a 409 conflict 39ms
+ × src/__tests__/agents-service-clear-error.test.ts > agent service clearError > keeps resume-style terminal and pending-approval protections 48ms
+   → expected 'Pending approval agents cannot be cle…' to be 'Pending approval agents cannot have e…' // Object.is equality
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > creates one canonical Task under concurrent idempotent starts and rejects key reuse 106ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > creates evidence-linked drafts with separate canonical approval and replay-safe publication 119ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > requires answers before draft publication and makes stale versions fail 87ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > rejects fabricated citations, changed evidence and cross-company access 85ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > fences agent candidate writes to the current live checked-out worker attempt 891ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > marks external assertions untrusted and cannot lower evidence sensitivity 6ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > attaches the original Error to res.err for 500s 7ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > ends aborted client requests without reporting a crash 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > exposes the trusted import response while sanitizing secret-sensitive crash metadata 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > attaches HttpError instances for 500 responses 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > sanitizes private owner errors before logs and crash reporting: /api/chat-endpoints/endpoint-1/setup 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > sanitizes private owner errors before logs and crash reporting: /api/companies/company-1/workflows/workflow-1/draft 0ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > sanitizes private owner errors before logs and crash reporting: /api/companies//workflows/workflow-1/unknown 0ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > sanitizes private owner errors before logs and crash reporting: /api/companies/company-1/workflow-runs/run-1 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > keeps actionable setup validation details while removing submitted credentials 2ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > returns 400 for Zod validation errors from another module instance 1ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > removes submitted credentials from setup Zod issue prose 0ms
+ ✓ src/__tests__/error-handler.test.ts > errorHandler > records responsible-user denial codes on the active agent run 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/agents-service-clear-error.test.ts > agent service clearError > keeps resume-style terminal and pending-approval protections
+AssertionError: expected 'Pending approval agents cannot be cle…' to be 'Pending approval agents cannot have e…' // Object.is equality
+
+Expected: "Pending approval agents cannot have errors cleared"
+Received: "Pending approval agents cannot be cleared"
+
+ ❯ src/__tests__/agents-service-clear-error.test.ts:278:45
+    276|     expect(pendingError).toBeInstanceOf(Error);
+    277|     expect(pendingError).toMatchObject({ status: 409 });
+    278|     expect((pendingError as Error).message).toBe("Pending approval age…
+       |                                             ^
+    279|   });
+    280|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 22 passed (23)
+   Start at  00:50:49
+   Duration  26.14s (transform 9.06s, setup 185ms, import 16.43s, tests 9.18s, environment 0ms)
+

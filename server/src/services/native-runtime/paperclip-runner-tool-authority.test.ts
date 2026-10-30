@@ -1,30 +1,63 @@
 import * as cloudIdentity from "../cloud-runtime-identity.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   activityLog,
+  authUsers,
+  companyMemberships,
   agents,
   approvals,
   companies,
+  completionContracts,
+  contextManifests,
+  contextManifestItems,
   createDb,
   documents,
+  documentRevisions,
   heartbeatRuns,
+  heartbeatRunEvents,
+  nativeRunFinalizations,
+  nativeRunResults,
   issueApprovals,
   issueComments,
+  issueDocuments,
   issueThreadInteractions,
   issues,
+  issuePrivacySources,
+  statusDecisions,
+  workAssessments,
 } from "@paperclipai/db";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
+import { seedCurrentHumanMembership } from "../../__tests__/helpers/current-human-membership-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../run-identity.js";
 import { documentService } from "../documents.js";
+import type { DocumentRevisionSourceCapture } from "../documents.js";
+import { assertNativeDocumentRevisionCurrentSourceAccess } from "../native-direct-input.js";
 import { issueService } from "../issues.js";
+import type { NativeTaskSourceCapture } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import type { NativeInputToolResultSource } from "./paperclip-runner-tool-authority.js";
+import { nativeSha256 } from "./canonical.js";
+import { assertNativeRunReadSourceHistoryQualified, recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
+  recordNativeDocumentToolResultIntent, recordNativeInputToolResultIntent } from "./native-session-executor.js";
+import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
+import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
+import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import type { ToolGatewayService } from "../tool-gateway.js";
 import { READ_CURRENT_WAKE_COMMENTS_TOOL_NAME } from "./current-wake-comments.js";
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, runnerCodexDynamicToolsFit } from "../../vendor/paperclip-runner/index.js";
+import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "./native-execution-input.js";
+import { buildNativeModelEnvelope } from "../../vendor/paperclip-runner/index.js";
+import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
+import { getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../heartbeat.js";
+import { ensureNativeCompletionContract } from "./completion-contracts.js";
+import { getNativeReviewAssignment } from "./native-review-participant.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 
 describe("PaperclipRunnerToolAuthority", () => {
   let temporary: Awaited<
@@ -35,6 +68,139 @@ describe("PaperclipRunnerToolAuthority", () => {
   const agentId = "00000000-0000-4000-8000-000000000102";
   const issueId = "00000000-0000-4000-8000-000000000103";
   const runId = "00000000-0000-4000-8000-000000000104";
+  const userId = randomUUID();
+
+  async function seedDocumentReader(payloadSourceProtocolVersion = 0) {
+    const companyId = randomUUID(), agentId = randomUUID(), runId = randomUUID();
+    let issueId: string = randomUUID();
+    const issuePrefix = `RDR${companyId.slice(0, 4).toUpperCase()}`;
+    await db.insert(companies).values({ id: companyId, name: "Document source reader", issuePrefix });
+    const currentHuman = await seedCurrentHumanSourceActor(db, [companyId], userId);
+    await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
+    const human = payloadSourceProtocolVersion === 1 ? currentHuman : null;
+    if (human) {
+      const task = await issueService(db).create(companyId, {
+        title: "Read document source", status: "todo", workMode: "standard",
+        assigneeAgentId: agentId, createdByUserId: userId, responsibleUserId: userId, visibility: "private",
+      }, db, undefined, { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+      expect(task.payloadSourceProtocolVersion).toBe(1);
+      expect(task.payloadSourceSnapshot).not.toBeNull();
+      expect(task.payloadSourceSnapshotInvalidated).toBe(false);
+      issueId = task.id;
+    } else {
+      await db.insert(issues).values({ id: issueId, companyId, issueNumber: 1, identifier: `${issuePrefix}-1`,
+        title: "Read document source", status: "in_progress", workMode: "standard", assigneeAgentId: agentId,
+        responsibleUserId: userId, visibility: "private", payloadSourceProtocolVersion,
+        payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false });
+    }
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", runtimeMode: "native",
+      nativeIssueId: issueId, responsibleUserId: userId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
+    await db.insert(contextManifests).values({ id: randomUUID(), companyId, runId, agentId, issueId,
+      projectId: null, queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64), createdAt: new Date() });
+    await db.update(issues).set({ status: "in_progress", executionRunId: runId }).where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId, responsibleUserId: userId,
+      requireExisting: false }, blenteraPlatformContractHashes());
+    return { companyId, agentId, issueId, runId, human,
+      authority: new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId }) };
+  }
+
+  async function seedDispatchBoundAuthority(payloadSourceProtocolVersion = 0) {
+    const fixture = await seedDocumentReader(payloadSourceProtocolVersion);
+    const controller = await currentNativeControllerIdentity();
+    const leaseOwner = `tool-receipt-owner-${randomUUID()}`;
+    const attempt = 3, eventSeq = 7;
+    await db.insert(nativeRunFinalizations).values({
+      runId: fixture.runId, companyId: fixture.companyId, issueId: fixture.issueId,
+      phase: "running", attempt, leaseOwner, leaseExpiresAt: new Date(Date.now() + 60_000),
+      controllerBootId: controller.bootId, controllerPid: controller.pid,
+      controllerProcessStartedAt: controller.processStartedAt,
+    });
+    await db.insert(heartbeatRunEvents).values({ companyId: fixture.companyId, runId: fixture.runId,
+      agentId: fixture.agentId, seq: eventSeq, eventType: PROCESS_START_REQUESTED,
+      payload: { fixture: "actual native launch event" } });
+    let qualifiedTurnInput: { message: { role: "user"; text: string }; requestedCollaborationMode: "default" | "plan" } | null = null;
+    let bootstrapSourceClosure: { sourceSet: NonNullable<ReturnType<typeof buildNativeBootstrapSourceSet>>;
+      taskEnvelopeDigest: string } | null = null;
+    const prepareQualifiedDispatch = async () => {
+      if (payloadSourceProtocolVersion !== 1 || qualifiedTurnInput) return;
+      // Exercise the same fail-closed prompt-closure path that a managed
+      // OpenCode run uses. This marker grants no prompt; recordNative... must
+      // bind every actual turn to the source set before it can persist one.
+      vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
+      if (!fixture.human) throw new Error("dispatch_fixture_current_human_unavailable");
+      const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
+      const task = await getIssueExecutionContext(db, fixture.companyId, fixture.issueId,
+        capture => { taskCaptureHolder.value = capture; });
+      const taskCapture = taskCaptureHolder.value;
+      if (!task || !taskCapture?.payloadSourceSnapshot)
+        throw new Error("dispatch_fixture_task_source_snapshot_unavailable");
+      const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+      const rendered = buildPaperclipTaskMarkdown({ issue: { id: fixture.issueId, identifier: task.identifier,
+        title: task.title, description: task.description, workMode: task.workMode } },
+      { onRenderedSource: source => references.push(source) });
+      if (!rendered) throw new Error("dispatch_fixture_task_prompt_unavailable");
+      const completion = await ensureNativeCompletionContract({ db, companyId: fixture.companyId,
+        issue: { id: fixture.issueId, title: task.title, description: task.description }, actorId: fixture.agentId });
+      await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
+        completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, fixture.runId));
+      await initializeRunIdentity(db, { companyId: fixture.companyId, runId: fixture.runId,
+        issueId: fixture.issueId, responsibleUserId: userId, cause: "dispatch" });
+      const workspace = { id: fixture.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null };
+      const execution = buildNativeExecutionInput({ companyId: fixture.companyId, runId: fixture.runId,
+        agentId: fixture.agentId, issue: { id: fixture.issueId, identifier: task.identifier, title: task.title,
+          description: task.description, workMode: task.workMode }, taskPrompt: rendered, workspace,
+        normalizedSessionId: null, provider: "opencode", model: "openrouter/deepseek/deepseek-v4-flash-0731",
+        completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
+          schemaVersion: completion.row.schemaVersion, contract: completion.contract },
+        runtimeContext: nativeRuntimeContextFixture() });
+      const sourceSet = buildNativeBootstrapSourceSet({ companyId: fixture.companyId, runId: fixture.runId,
+        agentId: fixture.agentId, issueId: fixture.issueId, renderedMarkdown: rendered,
+        renderedMarkdownDigest: createHash("sha256").update(rendered, "utf8").digest("hex"), references,
+        candidates: [{ kind: "task", id: fixture.issueId, input: taskCapture.input,
+          payloadSourceSnapshot: taskCapture.payloadSourceSnapshot }], runtimeInputs: [], contextManifestIds: [],
+        rolePackInputs: [], unsupportedInputPresent: false,
+        additionalInputs: [{ kind: "completion_contract", issueId: fixture.issueId, contractId: completion.row.id,
+          revision: String(completion.row.revision), contentHash: completion.row.canonicalSha256 },
+        { kind: "workspace_metadata", runId: fixture.runId, executionWorkspaceId: fixture.runId, origin: "task_session",
+          sourceVersion: `task-session:${fixture.runId}`, contentHash: createHash("sha256").update(JSON.stringify({
+            cwd: workspace.cwd, repoUrl: workspace.repoUrl, repoRef: workspace.repoRef, branchName: workspace.branchName,
+          }), "utf8").digest("hex") }] });
+      if (!sourceSet) throw new Error("dispatch_fixture_bootstrap_source_set_unavailable");
+      const [runBeforeSourceClosure] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+        .from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+      const existingProfile = runBeforeSourceClosure?.runnerProfileJson &&
+        typeof runBeforeSourceClosure.runnerProfileJson === "object" &&
+        !Array.isArray(runBeforeSourceClosure.runnerProfileJson)
+        ? runBeforeSourceClosure.runnerProfileJson as Record<string, unknown>
+        : {};
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { ...existingProfile, nativeExecutionInput: execution,
+        nativeOpenCodeSourceAuthority: { authorizedPromptHashes: [], promptSourceBindings: [] } } })
+        .where(eq(heartbeatRuns.id, fixture.runId));
+      qualifiedTurnInput = { message: { role: "user", text: JSON.stringify(buildNativeModelEnvelope(execution)) },
+        requestedCollaborationMode: "default" };
+      bootstrapSourceClosure = { sourceSet, taskEnvelopeDigest: nativeSha256(execution.task) };
+    };
+    const bindCall = async (tool: string, callId: string, turnId: string, expectAssociation = true,
+      argumentsHash?: string, requestedCollaborationMode?: "default" | "plan") => {
+      await prepareQualifiedDispatch();
+      const turnInput = qualifiedTurnInput
+        ? { ...qualifiedTurnInput, ...(requestedCollaborationMode ? { requestedCollaborationMode } : {}) }
+        : { message: { role: "user" as const, text: `actual native input ${turnId}` },
+            ...(requestedCollaborationMode ? { requestedCollaborationMode } : {}) };
+      const binding = { db, runId: fixture.runId, companyId: fixture.companyId, issueId: fixture.issueId,
+        agentId: fixture.agentId, leaseOwner, attempt, controller, eventSeq };
+      const dispatchId = await recordNativeModelInputDispatchIntent({ ...binding, turnInput,
+        ...(bootstrapSourceClosure ? { bootstrapSourceClosure } : {}) });
+      await recordNativeModelInputDispatchAcknowledgement({ ...binding, dispatchId, turnInput, turnId,
+        ...(bootstrapSourceClosure ? { sourceClosure: bootstrapSourceClosure } : {}) });
+      const associationRecorded = await recordNativeToolCallDispatchAssociation({ ...binding, turnId, callId, tool, argumentsHash });
+      if (expectAssociation) expect(associationRecorded).toBe(true);
+      return { tool, callId, turnId, dispatchId, eventSeq, attempt };
+    };
+    return { ...fixture, bindCall, prepareQualifiedDispatch, bootstrapSourceClosure: () => bootstrapSourceClosure,
+      documentCaptureBinding: { db, runId: fixture.runId, companyId: fixture.companyId,
+      issueId: fixture.issueId, agentId: fixture.agentId, leaseOwner, attempt, controller, eventSeq } };
+  }
 
   beforeEach(() => {
     vi.stubEnv("PAPERCLIP_RUNNER_API_TOOLS_ENABLED", undefined);
@@ -53,6 +219,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       issuePrefix: "RNT",
       issueCounter: 1,
     });
+    await seedCurrentHumanMembership(db, companyId, userId, "admin");
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -71,11 +238,13 @@ describe("PaperclipRunnerToolAuthority", () => {
       status: "in_progress",
       workMode: "standard",
       assigneeAgentId: agentId,
+      responsibleUserId: userId,
     });
     await db.insert(heartbeatRuns).values({
       id: runId,
       companyId,
       agentId,
+      responsibleUserId: userId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: issueId,
@@ -87,6 +256,8 @@ describe("PaperclipRunnerToolAuthority", () => {
       .update(issues)
       .set({ executionRunId: runId })
       .where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
   });
 
   afterAll(async () => {
@@ -97,10 +268,14 @@ describe("PaperclipRunnerToolAuthority", () => {
     const binding = { companyId: randomUUID(), agentId: randomUUID(), issueId: randomUUID(), runId: randomUUID() };
     await db.insert(companies).values({ id: binding.companyId, name: "Task proposal", issuePrefix: "TPR" });
     await db.insert(agents).values({ id: binding.agentId, companyId: binding.companyId, name: "Proposer", status: "active", adapterType: "paperclip_runner" });
-    await db.insert(issues).values({ id: binding.issueId, companyId: binding.companyId, title: "Original scope", status: "in_progress", assigneeAgentId: binding.agentId });
+    await seedCurrentHumanMembership(db, binding.companyId, userId, "operator");
+    await seedCurrentHumanMembership(db, binding.companyId, "local-board", "operator");
+    await db.insert(issues).values({ id: binding.issueId, companyId: binding.companyId, title: "Original scope", status: "in_progress", assigneeAgentId: binding.agentId, responsibleUserId: userId });
     await db.insert(heartbeatRuns).values({ id: binding.runId, companyId: binding.companyId, agentId: binding.agentId,
-      status: "running", runtimeMode: "native", nativeIssueId: binding.issueId, invocationSource: "assignment", triggerDetail: "system" });
+      status: "running", runtimeMode: "native", nativeIssueId: binding.issueId, responsibleUserId: userId, invocationSource: "assignment", triggerDetail: "system" });
     await db.update(issues).set({ executionRunId: binding.runId }).where(eq(issues.id, binding.issueId));
+    await preparePlatformSkillAdmission(db, { companyId: binding.companyId, agentId: binding.agentId,
+      runId: binding.runId, responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
     const authority = new PaperclipRunnerToolAuthority(db, binding);
     const definition = authority.definitions().find(tool => tool.name === "request_human_input")!;
     expect((definition.inputSchema as { properties: { resolverPolicy: unknown } }).properties.resolverPolicy)
@@ -133,7 +308,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       issueId,
       runId,
     });
-    expect(authority.definitions()).toHaveLength(30);
+    expect(authority.definitions()).toHaveLength(32);
     const questions = authority.definitions().find(tool => tool.name === "request_human_input")!;
     expect(questions.description).toContain("ask only the next unanswered question");
     expect(questions.description).toContain("Never infer answers");
@@ -150,6 +325,8 @@ describe("PaperclipRunnerToolAuthority", () => {
         "get_task_history",
         "search_tasks",
         "report_progress",
+        "update_task",
+        "propose_completion",
         "request_human_input",
         "create_task",
         "set_dependencies",
@@ -200,6 +377,405 @@ describe("PaperclipRunnerToolAuthority", () => {
         arguments: {},
       }),
     ).rejects.toThrow("paperclip_runner_tool_not_advertised");
+  });
+
+  it("captures the exact read_document revision and digest of the returned result", async () => {
+    const fixture = await seedDocumentReader();
+    const key = `source-${randomUUID()}`;
+    const body = "Exact document bytes delivered by read_document.";
+    const created = await documentService(db).upsertIssueDocument({
+      issueId: fixture.issueId, key, title: "Read source", format: "markdown", body,
+    });
+    const captures: Array<{
+      callId: string;
+      tool: "read_document";
+      resultDigest: string;
+      source: DocumentRevisionSourceCapture | null;
+    }> = [];
+    const result = await fixture.authority.execute({ tool: "read_document", callId: "read-exact-source", arguments: { key } }, {
+      onDocumentRead: async capture => { captures.push(capture); },
+    }) as { document: { id: string; latestRevisionId: string; body: string } };
+    expect(result.document).toMatchObject({ id: created.document.id, latestRevisionId: created.document.latestRevisionId, body });
+    expect(captures).toHaveLength(1);
+    expect(captures[0]).toMatchObject({ callId: "read-exact-source", tool: "read_document",
+      resultDigest: createHash("sha256").update(JSON.stringify(result)).digest("hex"),
+      source: { input: { kind: "document_revision", documentId: created.document.id,
+        revisionId: created.document.latestRevisionId, issueId: fixture.issueId,
+        contentHash: createHash("sha256").update(body, "utf8").digest("hex") }, payloadSourceSnapshot: null } });
+    await fixture.authority.execute({ tool: "get_task_context", callId: "non-document-read", arguments: {} }, {
+      onDocumentRead: async capture => { captures.push(capture); },
+    });
+    expect(captures).toHaveLength(1);
+  });
+
+  it("qualifies a pure task-context read from its exact retained Task owner", async () => {
+    const fixture = await seedDocumentReader(1);
+    const captures: NativeInputToolResultSource[] = [];
+    const result = await fixture.authority.execute({ tool: "get_task_context", callId: "task-context-pure",
+      arguments: {} }, { onNativeInputToolResult: async capture => { captures.push(capture); } });
+    expect(result).toMatchObject({ activeTask: { id: fixture.issueId } });
+    expect(captures).toHaveLength(1);
+    expect(captures[0]).toMatchObject({ sourceSet: { policy: { issueIds: [fixture.issueId] },
+      inputs: [expect.objectContaining({ kind: "task", issueId: fixture.issueId })] },
+      observedSourceInputs: [expect.objectContaining({ kind: "task", issueId: fixture.issueId })] });
+  });
+
+  it("binds an accepted-plan task-context result to its exact revision and accepted interaction", async () => {
+    const fixture = await seedDocumentReader(1);
+    const plan = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key: "plan",
+      title: "Owned source plan", format: "markdown", body: "This exact approved plan is part of task context.",
+      createdByUserId: userId, manualInputActor: fixture.human! });
+    const interactionId = randomUUID();
+    await db.insert(issueThreadInteractions).values({ id: interactionId, companyId: fixture.companyId,
+      issueId: fixture.issueId, kind: "request_confirmation", status: "accepted", resolvedByUserId: userId,
+      resolvedAt: new Date(), payload: { version: 1, prompt: "Approved exact plan",
+        target: { type: "issue_document", issueId: fixture.issueId, documentId: plan.document.id, key: "plan",
+          revisionId: plan.document.latestRevisionId, revisionNumber: plan.document.latestRevisionNumber } },
+      result: { version: 1, outcome: "accepted" } });
+    await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: fixture.issueId,
+      planReviewInteraction: { acceptedTargetRevision: { issueId: fixture.issueId,
+        documentId: plan.document.id, key: "plan", revisionId: plan.document.latestRevisionId,
+        revisionNumber: plan.document.latestRevisionNumber } } } }).where(eq(heartbeatRuns.id, fixture.runId));
+    const captures: NativeInputToolResultSource[] = [];
+    const result = await fixture.authority.execute({ tool: "get_task_context", callId: "task-context-plan",
+      arguments: {} }, { onNativeInputToolResult: async capture => { captures.push(capture); } });
+    expect(result).toMatchObject({ acceptedPlan: { revisionId: plan.document.latestRevisionId,
+      markdown: "This exact approved plan is part of task context." } });
+    expect(captures).toHaveLength(1);
+    expect(captures[0]!.sourceSet?.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "task", issueId: fixture.issueId }),
+      expect.objectContaining({ kind: "document_revision", revisionId: plan.document.latestRevisionId,
+        issueId: fixture.issueId }),
+      expect.objectContaining({ kind: "interaction", interactionId, issueId: fixture.issueId }),
+    ]));
+  });
+
+  it("captures actual get_task_history comments but leaves missing retained roots unknown", async () => {
+    const fixture = await seedDocumentReader();
+    const [comment] = await db.insert(issueComments).values({ companyId: fixture.companyId,
+      issueId: fixture.issueId, body: "A real retained history body", authorUserId: userId }).returning();
+    const captures: Array<{
+      turnId: string | null; callId: string; tool: string; resultDigest: string;
+      sourceSet: { policy: unknown; inputs: unknown[] } | null; observedSourceInputs: unknown[];
+    }> = [];
+    const result = await fixture.authority.execute({ tool: "get_task_history", callId: "history-read-real",
+      arguments: {} }, { nativeToolCallIdentity: { tool: "get_task_history", callId: "history-read-real", turnId: "history-turn" },
+      onNativeInputToolResult: async capture => { captures.push(capture); } }) as { comments: Array<{ id: string; body: string }> };
+    expect(result.comments).toEqual([expect.objectContaining({ id: comment!.id, body: "A real retained history body" })]);
+    expect(captures).toHaveLength(1);
+    expect(captures[0]).toMatchObject({ turnId: "history-turn", callId: "history-read-real", tool: "get_task_history",
+      resultDigest: nativeSha256(result), sourceSet: null,
+      observedSourceInputs: [expect.objectContaining({ kind: "comment", issueId: fixture.issueId,
+        commentId: comment!.id, contentHash: nativeSha256({ body: "A real retained history body", presentation: null, metadata: null }) })] });
+    await db.update(issueComments).set({ body: "Changed after capture", updatedAt: new Date(Date.now() + 1_000) })
+      .where(eq(issueComments.id, comment!.id));
+    const [changed] = await db.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` })
+      .from(issueComments).where(eq(issueComments.id, comment!.id));
+    expect(changed!.sourceVersion).not.toBe(captures[0]!.observedSourceInputs[0] &&
+      (captures[0]!.observedSourceInputs[0] as { sourceVersion?: string }).sourceVersion);
+  });
+
+  it("marks only an actually empty bounded task-history read as a complete source-free result", async () => {
+    const fixture = await seedDocumentReader();
+    const captures: Array<{ sourceSet: { policy: { issueIds: string[] }; inputs: unknown[] } | null;
+      resultDigest: string }> = [];
+    const result = await fixture.authority.execute({ tool: "get_task_history", callId: "empty-history-read", arguments: {} }, {
+      nativeToolCallIdentity: { tool: "get_task_history", callId: "empty-history-read", turnId: "empty-history-turn" },
+      onNativeInputToolResult: async capture => { captures.push(capture); },
+    });
+    expect(result).toEqual({ comments: [] });
+    expect(captures).toEqual([{ turnId: "empty-history-turn", callId: "empty-history-read",
+      tool: "get_task_history", argumentsHash: nativeSha256({}), result,
+      sourceSet: { policy: { issueIds: [fixture.issueId], projectIds: [], runIds: [],
+        memoryIds: [], foundationRevisionIds: [] }, inputs: [] },
+      observedSourceInputs: [], resultDigest: nativeSha256(result) }]);
+  });
+
+  it("persists a complete Native history read only against its acknowledged dispatch and exact result bytes", async () => {
+    const fixture = await seedDispatchBoundAuthority(1);
+    const args = {}, argumentsHash = nativeSha256(args);
+    const call = await fixture.bindCall("get_task_history", "native-empty-history", "native-empty-history-turn", true, argumentsHash);
+    const [runBefore] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    expect(runBefore?.nativeInputSourceProtocolVersion).toBe(1);
+    expect(runBefore?.runnerProfileJson).toHaveProperty("nativeInputSourceReceipt");
+    let captured: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"] | null = null;
+    const result = await fixture.authority.execute({ tool: call.tool, callId: call.callId, arguments: args }, {
+      nativeToolCallIdentity: call,
+      onNativeInputToolResult: async capture => {
+        captured = capture;
+        await recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture });
+      },
+    });
+    expect(result).toEqual({ comments: [] });
+    expect(captured).toMatchObject({ turnId: call.turnId, callId: call.callId, tool: call.tool,
+      argumentsHash, resultDigest: nativeSha256(result), sourceSet: { policy: {
+        issueIds: [fixture.issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [],
+      }, inputs: [] } });
+    const [stored] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const profile = stored!.runnerProfileJson!;
+    expect(profile.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({
+      callId: call.callId, turnId: call.turnId, tool: call.tool, argumentsHash,
+      resultDigest: nativeSha256(result), nativeReadResult: true,
+      source: { kind: "tool_result", runId: fixture.runId, callId: call.callId,
+        toolName: call.tool, invocationId: null, contentHash: nativeSha256(result) },
+    })]);
+    const updatedReceipt = nativeRunInputSourceReceiptSchema.parse(profile.nativeInputSourceReceipt);
+    expect(updatedReceipt.additionalInputs).toContainEqual({ responsibleUserId: runBefore!.responsibleUserId,
+      policy: captured!.sourceSet!.policy, inputs: [expect.objectContaining({ kind: "tool_result", callId: call.callId,
+        invocationId: null }),] });
+    const forged = { ...captured!, result: { comments: [{ id: "forged", body: "not returned" }] } };
+    await expect(recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture: forged }))
+      .rejects.toThrow("native_tool_result_capture_binding_invalid");
+  });
+
+  it("keeps assigned-review context unknown and prevents a later read from repairing its output history", async () => {
+    const fixture = await seedDispatchBoundAuthority(1);
+    const sourceAgentId = randomUUID(), sourceRunId = randomUUID(), contractId = randomUUID();
+    const resultId = randomUUID(), assessmentId = randomUUID(), decisionId = randomUUID(), interactionId = randomUUID();
+    await db.insert(agents).values({ id: sourceAgentId, companyId: fixture.companyId, name: "Assigned worker",
+      adapterType: "paperclip_runner", status: "active" });
+    await db.insert(completionContracts).values({ id: contractId, companyId: fixture.companyId, issueId: fixture.issueId,
+      revision: 1, schemaVersion: "paperclip.completion-contract.v1", policyVersion: "test-context-review",
+      risk: "standard", completionAuthority: "server_arbiter", incompleteCriteriaPolicy: "preserve_non_terminal",
+      contractJson: {}, canonicalSha256: randomUUID().replaceAll("-", "").padEnd(64, "a").slice(0, 64),
+      createdByActorType: "system", createdByActorId: "context-test" });
+    await db.insert(heartbeatRuns).values({ id: sourceRunId, companyId: fixture.companyId, agentId: sourceAgentId,
+      status: "succeeded", runtimeMode: "native", nativeIssueId: fixture.issueId,
+      completionContractId: contractId, completionContractSha256: "c".repeat(64) });
+    await db.insert(nativeRunResults).values({ id: resultId, companyId: fixture.companyId, issueId: fixture.issueId,
+      runId: sourceRunId, completionContractId: contractId, serverFingerprint: `context-review-${resultId}`,
+      schemaStatus: "accepted", resultJson: {}, canonicalSha256: "d".repeat(64) });
+    await db.insert(workAssessments).values({ id: assessmentId, companyId: fixture.companyId, issueId: fixture.issueId,
+      runId: sourceRunId, contractId, resultId, triggerKind: "turn_finished", triggerActorCompanyId: fixture.companyId,
+      priorIssueStatus: "in_progress", priorStatusVersion: 0, policyVersion: "test-context-review",
+      assessmentJson: {}, inputDigest: "e".repeat(64) });
+    await db.insert(statusDecisions).values({ id: decisionId, companyId: fixture.companyId, issueId: fixture.issueId,
+      runId: sourceRunId, assessmentId, decisionVersion: 1, policyVersion: "test-context-review",
+      fromStatus: "in_review", toStatus: "in_review", reasonCode: "review_required",
+      decisionJson: { projectedStatusVersion: 1 }, decisionDigest: "f".repeat(64), applicationState: "applied" });
+    await db.update(issues).set({ status: "in_review", statusVersion: 1, lastStatusDecisionId: decisionId,
+      assigneeAgentId: sourceAgentId }).where(eq(issues.id, fixture.issueId));
+    const [reviewTaskAfterTransition] = await db.select({ statusVersion: issues.statusVersion })
+      .from(issues).where(and(eq(issues.companyId, fixture.companyId), eq(issues.id, fixture.issueId)));
+    if (!reviewTaskAfterTransition) throw new Error("assigned_review_task_projection_missing");
+    await db.update(statusDecisions).set({ decisionJson: { projectedStatusVersion: reviewTaskAfterTransition.statusVersion } })
+      .where(and(eq(statusDecisions.companyId, fixture.companyId), eq(statusDecisions.id, decisionId)));
+    await db.insert(issueThreadInteractions).values({ id: interactionId, companyId: fixture.companyId,
+      issueId: fixture.issueId, kind: "request_confirmation", status: "pending", sourceRunId,
+      addresseeAgentId: fixture.agentId, payload: { version: 1, prompt: "Review the work",
+        target: { type: "custom", key: "native_completion_review", revisionId: decisionId } } });
+    await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: fixture.issueId,
+      nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId,
+      sourceRunId, revisionId: decisionId } }).where(eq(heartbeatRuns.id, fixture.runId));
+    await fixture.prepareQualifiedDispatch();
+    const preparedClosure = fixture.bootstrapSourceClosure();
+    expect(preparedClosure?.sourceSet.inputs.filter(value => value.kind === "workspace_metadata"))
+      .toEqual([expect.objectContaining({ runId: fixture.runId, origin: "task_session",
+        executionWorkspaceId: fixture.runId, sourceVersion: `task-session:${fixture.runId}` })]);
+    const [reviewTaskOwner] = await db.select({ assigneeAgentId: issues.assigneeAgentId,
+      executionRunId: issues.executionRunId, projectId: issues.projectId,
+      executionWorkspaceId: issues.executionWorkspaceId, status: issues.status,
+      statusVersion: issues.statusVersion, lastStatusDecisionId: issues.lastStatusDecisionId })
+      .from(issues).where(and(eq(issues.companyId, fixture.companyId), eq(issues.id, fixture.issueId)));
+    expect(reviewTaskOwner).toMatchObject({ assigneeAgentId: sourceAgentId, executionRunId: fixture.runId,
+      projectId: null, executionWorkspaceId: null, status: "in_review",
+      statusVersion: reviewTaskAfterTransition.statusVersion,
+      lastStatusDecisionId: decisionId });
+    await expect(getNativeReviewAssignment(db, { companyId: fixture.companyId, issueId: fixture.issueId,
+      agentId: fixture.agentId, contextSnapshot: { issueId: fixture.issueId,
+        nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId,
+        sourceRunId, revisionId: decisionId }, actingRunId: fixture.runId,
+      issueExecutionRunId: fixture.runId })).resolves.toMatchObject({ interaction: { id: interactionId },
+        sourceRun: { id: sourceRunId, agentId: sourceAgentId } });
+    const nativeReview = { nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId };
+    const authority = new PaperclipRunnerToolAuthority(db, { companyId: fixture.companyId, agentId: fixture.agentId,
+      issueId: fixture.issueId, runId: fixture.runId, nativeReview });
+    const contextArgs = {}, contextCallId = "assigned-review-context", contextTurnId = "assigned-review-turn";
+    const contextCall = await fixture.bindCall("get_task_context", contextCallId, contextTurnId, true, nativeSha256(contextArgs));
+    const historyArgs = {}, historyCallId = "later-empty-history", historyTurnId = "later-history-turn";
+    // A real second provider request may repeat the same source envelope while
+    // choosing a different supported collaboration mode. Keep its source bytes
+    // exact but give the acknowledged dispatch a distinct full-input digest.
+    const historyCall = await fixture.bindCall("get_task_history", historyCallId, historyTurnId, true,
+      nativeSha256(historyArgs), "plan");
+
+    const [runBefore] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    expect(runBefore?.nativeInputSourceProtocolVersion).toBe(1);
+    expect(runBefore?.runnerProfileJson).toHaveProperty("nativeInputSourceReceipt");
+    let contextCapture: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"] | null = null;
+    const contextResult = await authority.execute({ tool: "get_task_context", callId: contextCallId, arguments: contextArgs }, {
+      nativeToolCallIdentity: contextCall, onNativeInputToolResult: async capture => {
+        contextCapture = capture;
+        await recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture });
+      },
+    });
+    expect(contextResult).toMatchObject({ assignedReview: { id: interactionId, status: "pending" } });
+    expect(contextCapture).toMatchObject({ sourceSet: null, tool: "get_task_context",
+      observedSourceInputs: [expect.objectContaining({ kind: "task", issueId: fixture.issueId })] });
+
+    const historyResult = await authority.execute({ tool: "get_task_history", callId: historyCallId, arguments: historyArgs }, {
+      nativeToolCallIdentity: historyCall, onNativeInputToolResult: async capture => {
+        await recordNativeInputToolResultIntent({ ...fixture.documentCaptureBinding, capture });
+      },
+    });
+    expect(historyResult).toEqual({ comments: [] });
+    const [stored] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    expect(() => assertNativeRunReadSourceHistoryQualified(stored!.runnerProfileJson as Record<string, unknown>, {
+      runId: fixture.runId, responsibleUserId: userId,
+    })).toThrow("native_read_result_source_history_unavailable");
+  });
+
+  it("does not let a legacy document revision bypass its parent Task privacy check", async () => {
+    const fixture = await seedDocumentReader();
+    const created = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId,
+      key: `legacy-private-${randomUUID()}`, title: "Legacy private parent", format: "markdown", body: "Private body" });
+    await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: fixture.companyId, issueId: fixture.issueId, revisionId: created.document.latestRevisionId,
+      actor: { type: "none", source: "none" },
+    })).rejects.toThrow();
+  });
+
+  it("rechecks a protocol-v1 document parent reader after its revision row wait", async () => {
+    const fixture = await seedDocumentReader(1);
+    await db.update(companyMemberships).set({ membershipRole: "member" }).where(and(
+      eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalId, userId)));
+    const documentKey = `v1-parent-acl-${randomUUID()}`;
+    const created = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId,
+      key: documentKey, title: "Frozen document source", format: "markdown", body: "Exact body",
+      createdByUserId: userId, manualInputActor: fixture.human! });
+    const documentId = created.document.id, revisionId = created.document.latestRevisionId;
+    if (!revisionId) throw new Error("Canonical Human document revision is unavailable");
+    const actor = fixture.human!;
+    const read = () => assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: fixture.companyId,
+      issueId: fixture.issueId, revisionId, actor });
+    await expect(read()).resolves.toBeUndefined();
+
+    let releaseLock!: () => void;
+    let announceLock!: (pid: number) => void;
+    const release = new Promise<void>(resolve => { releaseLock = resolve; });
+    const locked = new Promise<number>(resolve => { announceLock = resolve; });
+    const lockHolder = db.transaction(async tx => {
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      await tx.execute(sql`select id from document_revisions where company_id=${fixture.companyId}::uuid
+        and id=${revisionId}::uuid for update`);
+      announceLock(backend!.pid);
+      await release;
+    });
+    const holderPid = await locked;
+    const pendingRead = read();
+    let observedWait = false;
+    for (let attempt = 0; attempt < 100 && !observedWait; attempt++) {
+      const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(
+        select 1 from pg_stat_activity a where ${holderPid}=any(pg_blocking_pids(a.pid))
+          and a.wait_event_type='Lock') as waiting`);
+      observedWait = row?.waiting === true;
+      if (!observedWait) await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    try {
+      expect(observedWait, "the exact document source reader must wait on the pinned revision row").toBe(true);
+      // Revoke actual current company access. Changing the responsible Human
+      // alone does not revoke this independent Human author's retained rights.
+      await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, fixture.companyId),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+    } finally {
+      releaseLock();
+      await lockHolder;
+    }
+    await expect(pendingRead).rejects.toThrow();
+  });
+
+  it("binds a returned document to its authenticated dispatch and never to model arguments", async () => {
+    const fixture = await seedDispatchBoundAuthority(), key = `dispatch-read-${randomUUID()}`;
+    const created = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key,
+      title: "Native dispatch document", format: "markdown", body: "Exact selected document" });
+    const nativeCall = await fixture.bindCall("read_document", "native-read-call", "native-read-turn");
+    const result = await fixture.authority.execute({ tool: "read_document", callId: nativeCall.callId,
+      arguments: { key, turnId: "model-supplied-turn", dispatchId: randomUUID() } }, {
+      nativeToolCallIdentity: nativeCall,
+      onDocumentRead: capture => recordNativeDocumentToolResultIntent({ ...fixture.documentCaptureBinding, capture }),
+    });
+    await fixture.authority.execute({ tool: "read_document", callId: "read-without-native-identity",
+      arguments: { key, turnId: nativeCall.turnId, dispatchId: nativeCall.dispatchId } }, {
+      onDocumentRead: capture => recordNativeDocumentToolResultIntent({ ...fixture.documentCaptureBinding, capture }),
+    });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    expect(run!.runnerProfileJson!.nativeToolResultSourceCaptures).toEqual([
+      expect.objectContaining({ callId: nativeCall.callId, turnId: nativeCall.turnId,
+        resultDigest: createHash("sha256").update(JSON.stringify(result)).digest("hex"),
+        nativeInputDispatch: { dispatchId: nativeCall.dispatchId, eventSeq: nativeCall.eventSeq,
+          attempt: nativeCall.attempt, turnId: nativeCall.turnId, callId: nativeCall.callId },
+        source: expect.objectContaining({ input: expect.objectContaining({ revisionId: created.document.latestRevisionId }) }) }),
+      expect.objectContaining({ callId: "read-without-native-identity", turnId: null, nativeInputDispatch: null }),
+    ]);
+    expect(run!.nativeInputSourceProtocolVersion).toBe(0);
+  });
+
+  it("keeps concurrent read_document source captures local to their calls", async () => {
+    const fixture = await seedDocumentReader();
+    const docs = await Promise.all(["first", "second"].map(async label => {
+      const key = `${label}-${randomUUID()}`;
+      const body = `Actual ${label} document body.`;
+      const created = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key, title: label, format: "markdown", body });
+      return { label, key, body, documentId: created.document.id, revisionId: created.document.latestRevisionId };
+    }));
+    const captures = new Map<string, DocumentRevisionSourceCapture | null>();
+    const results = await Promise.all(docs.map(({ label, key }) => fixture.authority.execute({
+      tool: "read_document", callId: `read-${label}`, arguments: { key },
+    }, { onDocumentRead: async capture => {
+      await new Promise(resolve => setTimeout(resolve, label === "first" ? 10 : 0));
+      captures.set(capture.callId, capture.source);
+    } }) as Promise<{ document: { body: string } }>));
+    for (let i = 0; i < docs.length; i += 1) {
+      const doc = docs[i]!;
+      expect(results[i]!.document.body).toBe(doc.body);
+      expect(captures.get(`read-${doc.label}`)).toMatchObject({ input: {
+        kind: "document_revision", documentId: doc.documentId, revisionId: doc.revisionId, issueId: fixture.issueId,
+        contentHash: createHash("sha256").update(doc.body, "utf8").digest("hex"),
+      }, payloadSourceSnapshot: null });
+    }
+  });
+
+  it("withholds the read_document result when its source capture callback fails", async () => {
+    const fixture = await seedDocumentReader();
+    const key = `callback-failure-${randomUUID()}`;
+    await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key, title: "Callback failure", format: "markdown", body: "Do not deliver." });
+    await expect(fixture.authority.execute({ tool: "read_document", callId: "read-callback-failure", arguments: { key } }, {
+      onDocumentRead: async () => { throw new Error("capture persistence rejected"); },
+    })).rejects.toThrow("capture persistence rejected");
+  });
+
+  it("rechecks the accountable reader after document capture and withholds on access revocation", async () => {
+    const fixture = await seedDocumentReader();
+    const [manifest] = await db.select().from(contextManifests).where(and(eq(contextManifests.companyId, fixture.companyId),
+      eq(contextManifests.issueId, fixture.issueId)));
+    if (!manifest) throw new Error("fixture_context_manifest_missing");
+    await db.insert(contextManifestItems).values({ companyId: fixture.companyId, manifestId: manifest.id,
+      sourceClass: "task", sourceProvider: "august_works_tasks", sourceRef: `issue://${fixture.issueId}`,
+      sourceVersion: new Date().toISOString(), contentHash: "c".repeat(64), trustLevel: "high", sensitivity: "internal",
+      rank: 0, selectionReason: "test" });
+    await db.insert(issuePrivacySources).values({ companyId: fixture.companyId, issueId: fixture.issueId,
+      sourceKind: "issue", sourceId: issueId, contextManifestId: manifest.id });
+    const key = `access-revoked-${randomUUID()}`;
+    await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key, title: "Revoked reader", format: "markdown", body: "Must not escape." });
+    await expect(fixture.authority.execute({ tool: "read_document", callId: "read-after-revocation", arguments: { key } }, {
+      onDocumentRead: async () => {
+        await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, fixture.companyId),
+          eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+      },
+    })).rejects.toThrow();
+  });
+
+  it("withholds a document result when its selected revision is replaced before delivery", async () => {
+    const fixture = await seedDocumentReader();
+    const key = `revision-replaced-${randomUUID()}`;
+    const original = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key,
+      title: "Original", format: "markdown", body: "Original source body." });
+    await expect(fixture.authority.execute({ tool: "read_document", callId: "read-replaced-revision", arguments: { key } }, {
+      onDocumentRead: async () => {
+        await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key, title: "Replacement", format: "markdown",
+          body: "Replacement source body.", baseRevisionId: original.document.latestRevisionId });
+      },
+    })).rejects.toThrow("The selected document revision changed or was erased before delivery");
   });
 
   it("returns public task URLs from the current claimed origin in context and search results", async () => {
@@ -477,6 +1053,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       adapterType: "paperclip_runner",
       status: "active",
     });
+    await seedCurrentHumanMembership(db, binding.companyId, userId, "operator");
     await db.insert(issues).values({
       id: binding.issueId,
       companyId: binding.companyId,
@@ -485,11 +1062,13 @@ describe("PaperclipRunnerToolAuthority", () => {
       workMode: "standard",
       reviewPolicy: "human_only",
       assigneeAgentId: binding.agentId,
+      responsibleUserId: userId,
     });
     await db.insert(heartbeatRuns).values({
       id: binding.runId,
       companyId: binding.companyId,
       agentId: binding.agentId,
+      responsibleUserId: userId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: binding.issueId,
@@ -501,6 +1080,9 @@ describe("PaperclipRunnerToolAuthority", () => {
       .update(issues)
       .set({ executionRunId: binding.runId })
       .where(eq(issues.id, binding.issueId));
+    await preparePlatformSkillAdmission(db, { companyId: binding.companyId,
+      agentId: binding.agentId, runId: binding.runId, responsibleUserId: userId,
+      requireExisting: false }, blenteraPlatformContractHashes());
     const authority = new PaperclipRunnerToolAuthority(db, binding);
     const advertised = authority
       .definitions()
@@ -1083,6 +1665,7 @@ describe("PaperclipRunnerToolAuthority", () => {
     await issueService(db).update(prerequisiteId, {
       status: "done",
       actorAgentId: agentId,
+      actorRunId: runId,
     });
     await expect(
       authority.execute({
@@ -1110,6 +1693,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       id: nextRunId,
       companyId,
       agentId,
+      responsibleUserId: userId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: issueId,
@@ -1117,6 +1701,8 @@ describe("PaperclipRunnerToolAuthority", () => {
       triggerDetail: "system",
       contextSnapshot: { issueId },
     });
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId: nextRunId,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
     await db
       .update(issues)
       .set({ executionRunId: nextRunId })
@@ -1217,6 +1803,155 @@ describe("PaperclipRunnerToolAuthority", () => {
     ).toHaveLength(3);
   });
 
+  it("binds a private Agent-created Task to the locked run Human and denies stale Human access", async () => {
+    const f = await seedDocumentReader();
+    const receipt = await f.authority.execute({ tool: "create_task", callId: "private-bound-task", arguments: {
+      idempotencyKey: "private-bound-task", title: "Private follow-up", status: "backlog",
+      responsibleUserId: "model-selected-human",
+    } }) as { task: { id: string } };
+    const [created] = await db.select().from(issues).where(eq(issues.id, receipt.task.id));
+    expect(created).toMatchObject({ visibility: "private", responsibleUserId: userId,
+      createdByAgentId: f.agentId, originRunId: f.runId });
+
+    const stale = await seedDocumentReader();
+    const wrongHumanId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: wrongHumanId, name: "Different active Human",
+      email: `${wrongHumanId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: stale.companyId, principalType: "user",
+      principalId: wrongHumanId, membershipRole: "admin", status: "active" });
+    await db.update(heartbeatRuns).set({ responsibleUserId: wrongHumanId }).where(eq(heartbeatRuns.id, stale.runId));
+    await expect(stale.authority.execute({ tool: "create_task", callId: "stale-human-task", arguments: {
+      idempotencyKey: "stale-human-task", title: "Stale Human follow-up", status: "backlog",
+    } })).rejects.toThrow();
+    expect(await db.select().from(issues).where(and(
+      eq(issues.companyId, stale.companyId), eq(issues.originRunId, stale.runId),
+    ))).toEqual([]);
+  });
+
+  it("commits exact acknowledged dispatch identity with the native Task mutation receipt", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const nativeCall = await fixture.bindCall("create_task", "receipt-call-exact", "provider-turn-receipt-exact");
+    const idempotencyKey = `receipt-${randomUUID()}`;
+    const result = await fixture.authority.execute({ tool: "create_task", callId: nativeCall.callId, arguments: {
+      idempotencyKey, title: "Receipt-bound child", description: "The actual Task mutation.",
+    } }, { nativeToolCallIdentity: { tool: nativeCall.tool, callId: nativeCall.callId, turnId: nativeCall.turnId } }) as { task: { id: string } };
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]).toMatchObject({ operationId: "create_task",
+      nativeInputDispatch: { dispatchId: nativeCall.dispatchId, eventSeq: nativeCall.eventSeq,
+        attempt: nativeCall.attempt, turnId: nativeCall.turnId, callId: nativeCall.callId } });
+    const [child] = await db.select().from(issues).where(eq(issues.id, result.task.id));
+    expect(child).toMatchObject({ parentId: fixture.issueId, originRunId: fixture.runId });
+  });
+
+  it("stores explicit unknown dispatch identity when no acknowledged association exists", async () => {
+    const fixture = await seedDocumentReader();
+    const idempotencyKey = `receipt-unknown-${randomUUID()}`;
+    await fixture.authority.execute({ tool: "create_task", callId: "unassociated-tool-call", arguments: {
+      idempotencyKey, title: "Unknown dispatch child",
+      nativeInputDispatch: { dispatchId: randomUUID(), turnId: "model-claim", callId: "unassociated-tool-call" },
+    } }, { nativeToolCallIdentity: { tool: "create_task", callId: "unassociated-tool-call", turnId: "unsupported-backend-turn" } });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]).toMatchObject({ operationId: "create_task", nativeInputDispatch: null });
+    const mismatchedKey = `receipt-mismatched-call-${randomUUID()}`;
+    await fixture.authority.execute({ tool: "create_task", callId: "actual-tool-call-id", arguments: {
+      idempotencyKey: mismatchedKey, title: "Mismatched server metadata stays unknown",
+    } }, { nativeToolCallIdentity: { tool: "create_task", callId: "different-server-call-id", turnId: "unsupported-backend-turn" } });
+    const [afterMismatch] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const afterReceipts = (afterMismatch!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(afterReceipts[mismatchedKey]!.nativeInputDispatch).toBeNull();
+  });
+
+  it("stores unknown when association history has a contradictory tool for the same call tuple", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const nativeCall = await fixture.bindCall("create_task", "contradictory-tool-call", "provider-turn-contradictory-tool");
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const profile = run!.runnerProfileJson as Record<string, unknown>;
+    const associations = profile.nativeToolCallDispatchAssociations as Array<Record<string, unknown>>;
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { ...profile,
+      nativeToolCallDispatchAssociations: [...associations, { ...associations[0], tool: "write_document" }],
+    } }).where(eq(heartbeatRuns.id, fixture.runId));
+    const idempotencyKey = `contradictory-tool-${randomUUID()}`;
+    await fixture.authority.execute({ tool: "create_task", callId: nativeCall.callId, arguments: {
+      idempotencyKey, title: "Ambiguous association stays unknown",
+    } }, { nativeToolCallIdentity: { tool: nativeCall.tool, callId: nativeCall.callId, turnId: nativeCall.turnId } });
+    const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (after!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]!.nativeInputDispatch).toBeNull();
+  });
+
+  it("stores unknown when a later acknowledged intent makes a previously associated turn ambiguous", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const turnId = "provider-turn-later-duplicate-ack";
+    const first = await fixture.bindCall("create_task", "earlier-turn-call", turnId);
+    const second = await fixture.bindCall("create_task", "later-turn-call", turnId, false);
+    expect(second.dispatchId).not.toBe(first.dispatchId);
+    const idempotencyKey = `ambiguous-turn-${randomUUID()}`;
+    await fixture.authority.execute({ tool: "create_task", callId: first.callId, arguments: {
+      idempotencyKey, title: "Ambiguous turn stays unknown",
+    } }, { nativeToolCallIdentity: { tool: first.tool, callId: first.callId, turnId } });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]!.nativeInputDispatch).toBeNull();
+  });
+
+  it("keeps concurrent mutation receipts bound to their own backend calls", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const first = await fixture.bindCall("create_task", "concurrent-receipt-first", "provider-turn-receipt-first");
+    const second = await fixture.bindCall("create_task", "concurrent-receipt-second", "provider-turn-receipt-second");
+    const firstKey = `concurrent-first-${randomUUID()}`;
+    const secondKey = `concurrent-second-${randomUUID()}`;
+    await Promise.all([
+      fixture.authority.execute({ tool: first.tool, callId: first.callId, arguments: { idempotencyKey: firstKey, title: "First concurrent Task" } },
+        { nativeToolCallIdentity: { tool: first.tool, callId: first.callId, turnId: first.turnId } }),
+      fixture.authority.execute({ tool: second.tool, callId: second.callId, arguments: { idempotencyKey: secondKey, title: "Second concurrent Task" } },
+        { nativeToolCallIdentity: { tool: second.tool, callId: second.callId, turnId: second.turnId } }),
+    ]);
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[firstKey]!.nativeInputDispatch).toEqual({ dispatchId: first.dispatchId, eventSeq: first.eventSeq,
+      attempt: first.attempt, turnId: first.turnId, callId: first.callId });
+    expect(receipts[secondKey]!.nativeInputDispatch).toEqual({ dispatchId: second.dispatchId, eventSeq: second.eventSeq,
+      attempt: second.attempt, turnId: second.turnId, callId: second.callId });
+  });
+
+  it("preserves original dispatch identity when a semantic mutation receipt is replayed", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const first = await fixture.bindCall("create_task", "receipt-replay-first", "provider-turn-replay-first");
+    const second = await fixture.bindCall("create_task", "receipt-replay-second", "provider-turn-replay-second");
+    const idempotencyKey = `receipt-replay-${randomUUID()}`;
+    const arguments_ = { idempotencyKey, title: "Replay retains original association" };
+    const initial = await fixture.authority.execute({ tool: "create_task", callId: first.callId, arguments: arguments_ },
+      { nativeToolCallIdentity: { tool: first.tool, callId: first.callId, turnId: first.turnId } });
+    await expect(fixture.authority.execute({ tool: "create_task", callId: second.callId, arguments: arguments_ },
+      { nativeToolCallIdentity: { tool: second.tool, callId: second.callId, turnId: second.turnId } })).resolves.toEqual(initial);
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+    const receipts = (run!.resultJson as Record<string, unknown>).semanticToolReceipts as Record<string, Record<string, unknown>>;
+    expect(receipts[idempotencyKey]!.nativeInputDispatch).toEqual({ dispatchId: first.dispatchId,
+      eventSeq: first.eventSeq, attempt: first.attempt, turnId: first.turnId, callId: first.callId });
+  });
+
+  it("rolls back Task effects when the atomic mutation receipt cannot commit", async () => {
+    const fixture = await seedDispatchBoundAuthority();
+    const nativeCall = await fixture.bindCall("create_task", "receipt-rollback-call", "provider-turn-receipt-rollback");
+    const idempotencyKey = `receipt-rollback-${randomUUID()}`;
+    const originId = `paperclip-runner:create-task:${fixture.issueId}:${idempotencyKey}`;
+    const constraintName = `reject_semantic_receipt_${fixture.runId.replaceAll("-", "")}`;
+    await db.execute(sql`alter table heartbeat_runs add constraint ${sql.identifier(constraintName)}
+      check (id <> ${sql.raw(`'${fixture.runId}'::uuid`)} or not coalesce(result_json ? 'semanticToolReceipts', false))`);
+    try {
+      await expect(fixture.authority.execute({ tool: "create_task", callId: nativeCall.callId, arguments: {
+        idempotencyKey, title: "Must roll back with receipt",
+      } }, { nativeToolCallIdentity: { tool: nativeCall.tool, callId: nativeCall.callId, turnId: nativeCall.turnId } })).rejects.toThrow();
+      expect(await db.select().from(issues).where(eq(issues.originId, originId))).toHaveLength(0);
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
+      expect(run!.resultJson ?? {}).not.toHaveProperty("semanticToolReceipts");
+    } finally {
+      await db.execute(sql`alter table heartbeat_runs drop constraint if exists ${sql.identifier(constraintName)}`);
+    }
+  });
+
   it("rejects mutations after reassignment, run replacement, or terminalization", async () => {
     const guardedIssueId = "00000000-0000-4000-8000-000000000107";
     const guardedRunId = "00000000-0000-4000-8000-000000000108";
@@ -1314,12 +2049,16 @@ describe("PaperclipRunnerToolAuthority", () => {
   it("captures delegation and approval origins before steering and preserves replay identity", async () => {
     const issueId = "00000000-0000-4000-8000-000000000120";
     const runId = "00000000-0000-4000-8000-000000000121";
+    await seedCurrentHumanMembership(db, companyId, "person-a", "operator");
+    await seedCurrentHumanMembership(db, companyId, "person-b", "operator");
     await db.insert(issues).values({ id: issueId, companyId, title: "Identity delegation",
-      status: "in_progress", assigneeAgentId: agentId });
+      status: "in_progress", assigneeAgentId: agentId, responsibleUserId: "person-a" });
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId,
-      status: "running", runtimeMode: "native", nativeIssueId: issueId,
+      status: "running", runtimeMode: "native", nativeIssueId: issueId, responsibleUserId: "person-a",
       invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+      responsibleUserId: "person-a", requireExisting: false }, blenteraPlatformContractHashes());
     const origin = await initializeRunIdentity(db, {
       companyId, runId, issueId, responsibleUserId: "person-a", cause: "instruction",
     });

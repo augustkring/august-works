@@ -1,0 +1,74 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/context/context-manifest.test.ts (6 tests | 1 failed | 4 skipped) 9334ms
+     × retains exact selected Task and Memory body snapshots without inventing unknown history (known=true) 415ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/context/context-manifest.test.ts > Context Manifest service > retains exact selected Task and Memory body snapshots without inventing unknown history (known=true)
+AssertionError: expected [ null, null ] to deeply equal [ { owner: { …(4) }, …(4) }, …(1) ]
+
+- Expected
++ Received
+
+  [
+-   {
+-     "digest": "31053a4fef54a63a9a8fa49c839922fff68147b7553f1911c10670ec168a887e",
+-     "inputs": [],
+-     "owner": {
+-       "companyId": "2f0cc361-3d96-4335-a46c-8c8568e43676",
+-       "contentHash": "aa725983f20a811bf284304e2789571e01e3aa8e5fd9f250131f9980d6f71420",
+-       "id": "cc4b28b3-77c5-4fbe-ba1d-23ee66c43a31",
+-       "kind": "issue",
+-     },
+-     "policy": {
+-       "foundationRevisionIds": [],
+-       "issueIds": [],
+-       "memoryIds": [],
+-       "projectIds": [],
+-       "runIds": [],
+-     },
+-     "version": 1,
+-   },
+-   {
+-     "digest": "0b3e3e1f25d612c4ef7fd2a7b20e1abe3c48e54a5ca84853894235d9a08b1270",
+-     "inputs": [],
+-     "owner": {
+-       "companyId": "2f0cc361-3d96-4335-a46c-8c8568e43676",
+-       "contentHash": "cd75197784c453d4accc584591f70039192f5b4cc6561ad9291dfa46a5fc27f5",
+-       "id": "733abd65-7fe7-43a9-ade0-9dcce6b504f2",
+-       "kind": "memory_record",
+-     },
+-     "policy": {
+-       "foundationRevisionIds": [],
+-       "issueIds": [],
+-       "memoryIds": [],
+-       "projectIds": [],
+-       "runIds": [],
+-     },
+-     "version": 1,
+-   },
++   null,
++   null,
+  ]
+
+ ❯ src/services/context/context-manifest.test.ts:191:66
+    189|       agentId: seeded.agent.id, query: "Actual selected native source …
+    190|       selected: [{ decision: decision(selectedTask) }, { decision: dec…
+    191|     expect(result.items.map(item => item.payloadSourceSnapshot)).toEqu…
+       |                                                                  ^
+    192|     await db.update(issues).set({ description: "Later Task body", payl…
+    193|     await db.update(memoryRecords).set({ content: "Later Memory body",…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 4 skipped (6)
+   Start at  07:13:53
+   Duration  54.62s (transform 29.81s, setup 218ms, import 44.75s, tests 9.33s, environment 0ms)
+

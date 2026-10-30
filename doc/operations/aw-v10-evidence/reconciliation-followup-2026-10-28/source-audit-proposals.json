@@ -1,0 +1,643 @@
+{
+  "kind": "aw-v10-reconciliation-proposals",
+  "reviewedAt": "2026-10-28",
+  "sourceRegistry": "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+  "scope": [
+    "V10-024",
+    "V10-027",
+    "V10-029",
+    "V10-034 through V10-059"
+  ],
+  "items": [
+    {
+      "id": "V10-024",
+      "work": "evaluate export/delete/restore/provisioning for envelope adoption.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "owner_adoption_decisions_recorded_source_only",
+      "proposedReconciliation": "owner_adoption_decisions_recorded_source_only",
+      "proposedImplementationStatus": "owner_adoption_decisions_recorded_source_only",
+      "sourcePaths": [
+        "packages/shared/src/customer-operations.ts",
+        "server/src/services/company-import-jobs.ts",
+        "server/src/routes/companies.ts",
+        "server/src/services/company-portability.ts",
+        "server/src/services/saas/account-deletion.ts",
+        "server/src/services/saas/support.ts",
+        "server/src/services/saas/quarantine.ts",
+        "server/src/services/saas/onboarding.ts",
+        "doc/plans/2026-10-28-v10-operation-envelope-adoption-decisions.md"
+      ],
+      "receiptsPresentAtReview": [],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Keep these decisions aligned when owners change execution mode. If export or company deletion becomes asynchronous, add a native durable receipt first and expose only a customer-safe projection; preserve restore quarantine and account privacy boundaries. Existing domain-specific restart/recovery qualification remains separate.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-027",
+      "work": "scoped time-bound coverage/delegation.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/tool-access.ts",
+        "server/src/routes/tool-access.ts",
+        "packages/db/src/schema/tool_access.ts",
+        "packages/shared/src/validators/tool-access.ts"
+      ],
+      "receiptsPresentAtReview": [],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Add bounded time windows and action/resource scope only through the correct owner after expiry/revocation semantics and authorization intersection are defined; do not broaden existing grant delegation.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-029",
+      "work": "critical contact / backup ownership readiness tests.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partially_implemented_workflow_coverage_only",
+      "proposedReconciliation": "partially_implemented_workflow_coverage_only",
+      "proposedImplementationStatus": "partially_implemented_workflow_coverage_only",
+      "sourcePaths": [
+        "server/src/services/readiness/readiness-policy.ts",
+        "server/src/routes/readiness.ts",
+        "server/src/services/access.ts",
+        "server/src/services/stewards/core-stewards.ts"
+      ],
+      "receiptsPresentAtReview": [],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Define required backup/contact policy from an accountable company/service policy, link material objects to named primary and backup owners through their existing domain owners, and add readiness/last-owner/offboarding tests that block only dependent actions and show clear recovery steps. Workflow coverage alone does not satisfy general responsibility continuity.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-034",
+      "work": "federated Universal Find contracts/adapters.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/company-search.ts",
+        "server/src/routes/companies.ts",
+        "ui/src/pages/Search.tsx",
+        "ui/src/api/search.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/universal-find-service-2026-10-28/README.md",
+        "doc/operations/aw-v10-evidence/universal-find-notices-2026-10-27/r1/README.md"
+      ],
+      "proposalBasis": "Universal Find service receipt reports 34/34 focused service tests passed on 2026-10-28, including federated owner-failure/count boundaries, Task/Project visibility before aggregation/paging, exact/fuzzy matching, current edits/deletion and bilingual checked Help. Separate 2026-10-27 notice projection receipt reports 76 focused tests passed; its TypeScript compile exited 137 with empty log (unknown/OOM). Neither establishes the complete browser journey or whole-workspace acceptance. The 2026-10-27 pinned server TypeScript attempt exited 137 with empty output, recorded as unknown/OOM rather than a pass.",
+      "remainingWork": "Map each domain adapter to its source owner, prove current authorization and partial-failure states end to end, and retain the Find journey as unqualified until current tests pass.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-035",
+      "work": "Workflows/Routines/Apps/Decisions/Insights search adapters.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/company-search.ts",
+        "server/src/__tests__/company-search-service.test.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/universal-find-service-2026-10-28/README.md"
+      ],
+      "proposalBasis": "Universal Find service receipt reports 34/34 focused service tests passed on 2026-10-28, including federated owner-failure/count boundaries, Task/Project visibility before aggregation/paging, exact/fuzzy matching, current edits/deletion and bilingual checked Help. Separate 2026-10-27 notice projection receipt reports 76 focused tests passed; its TypeScript compile exited 137 with empty log (unknown/OOM). Neither establishes the complete browser journey or whole-workspace acceptance. The 2026-10-27 pinned server TypeScript attempt exited 137 with empty output, recorded as unknown/OOM rather than a pass.",
+      "remainingWork": "Compare adapter inventory against \u00a710.2 and verify each adapter's owner query, visibility filtering, result URL and failure contract.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-036",
+      "work": "Settings/help/navigation search adapters.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/company-search.ts",
+        "ui/src/pages/Search.tsx",
+        "ui/src/lib/help-navigation.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/universal-find-notices-2026-10-27/r1/README.md"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Confirm each supported destination is indexed and permission-gated, then exercise keyboard, screen-reader and stale navigation states.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-037",
+      "work": "search partial-failure/security/accessibility tests.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/company-search.ts",
+        "server/src/__tests__/company-search-service.test.ts",
+        "ui/src/pages/Search.test.tsx"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/universal-find-service-2026-10-28/README.md",
+        "doc/operations/aw-v10-evidence/universal-find-notices-2026-10-27/r1/README.md"
+      ],
+      "proposalBasis": "Universal Find service receipt reports 34/34 focused service tests passed on 2026-10-28, including federated owner-failure/count boundaries, Task/Project visibility before aggregation/paging, exact/fuzzy matching, current edits/deletion and bilingual checked Help. Separate 2026-10-27 notice projection receipt reports 76 focused tests passed; its TypeScript compile exited 137 with empty log (unknown/OOM). Neither establishes the complete browser journey or whole-workspace acceptance. The 2026-10-27 pinned server TypeScript attempt exited 137 with empty output, recorded as unknown/OOM rather than a pass.",
+      "remainingWork": "Capture the current focused suite with real output and verify per-domain authorization leakage negatives, timeout/partial failure and accessibility.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-038",
+      "work": "Ask/Cmd+K deterministic Universal Find integration.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "ui/src/pages/Search.tsx",
+        "ui/src/pages/Search.test.tsx",
+        "ui/src/components/CommandPalette.tsx"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/universal-find-notices-2026-10-27/r1/README.md"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Prove that Find results are deterministic first and Ask entry does not silently change the query/result authority; capture keyboard and failure-path evidence.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-039",
+      "work": "support case schema/service/API.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "packages/db/src/schema/support_cases.ts",
+        "packages/shared/src/customer-support.ts",
+        "server/src/services/experience/support-cases.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-case-api-final.log",
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-case-api-reviewed.exit"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Qualify current migration/schema and the true customer-created/replied/closed history with deletion/retention behavior.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-040",
+      "work": "global Help / support intake UI.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/routes/customer-support.ts",
+        "ui/src/pages/CustomerHelpCenter.tsx",
+        "ui/src/pages/CustomerSupportCases.tsx"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-cases-ui-native-routing.log",
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/browser/support-browser-final.log",
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/browser/support-browser-final.exit"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Verify global Help entry, unavailable intake fallback and case creation in EN/DA with current user/account changes.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-041",
+      "work": "customer-safe case timeline/replies.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/experience/support-cases.ts",
+        "packages/shared/src/customer-support.ts",
+        "ui/src/pages/CustomerSupportCases.tsx"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-cases-close-final.log",
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-cases-close-final.exit"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Capture timeline ordering, reply authorization, stale account, redaction and duplicate-request behavior on the current source pins.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-042",
+      "work": "safe support diagnostics.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/experience/support-cases.ts",
+        "server/src/services/experience/support-case-configuration.ts",
+        "packages/shared/src/customer-support.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/policy/support-policy-native.exit",
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/export/support-rate-race-fixed-native.log"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Review every diagnostic field against the allowlist and configured retention/consent policy; capture redaction and retention results at current pins.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-043",
+      "work": "support case \u2192 V6 support-session request flow.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/experience/support-cases.ts",
+        "server/src/services/experience/customer-support.ts",
+        "server/src/routes/customer-support.ts",
+        "packages/shared/src/customer-support.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/request-recovery/support-request-recovery-final.exit"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Verify explicit support-session review/approval linking and no accidental authority transfer from a customer case; preserve independent consent and scope checks.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-044",
+      "work": "Support Agent Package + approved Help retrieval.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/experience/support-assistant-grounding.ts",
+        "server/src/services/experience/support-assistant-help.ts",
+        "server/src/routes/customer-support.ts",
+        "ui/src/components/CustomerSupportAssistant.tsx"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-case-api-final.log"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Complete package/tool admission, approved retrieval source pins, answer grounding, unavailable behavior and escalation to a human.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-045",
+      "work": "human escalation/no-dead-end tests.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/routes/customer-support.ts",
+        "ui/src/pages/CustomerHelpCenter.tsx",
+        "ui/src/pages/CustomerSupportCases.tsx",
+        "packages/shared/src/customer-support.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/browser/support-browser-final.log",
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/browser/support-browser-final.exit"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Exercise unavailable assistant/gateway, consent withdrawal and contact fallback through customer UI; keep a human route visible and usable.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-046",
+      "work": "support provider adapter seam.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/experience/support-case-delivery.ts",
+        "server/src/services/experience/support-case-http-gateway.ts",
+        "server/src/services/experience/support-case-configuration.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/support-outbound-gateway-2026-10-25/receipts.json",
+        "doc/operations/aw-v10-evidence/support-delivery-lease-2026-10-25/receipts.json"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Qualify configured provider identity, acknowledgement idempotency, unknown outcome recovery, data policy and real operator routing separately.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-047",
+      "work": "support privacy/retention/accessibility evidence.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "packages/shared/src/customer-support.ts",
+        "server/src/services/experience/support-cases.ts",
+        "server/src/__tests__/v9-customer-support.integration.test.ts",
+        "ui/src/pages/CustomerSupportCases.tsx"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/checkpoint.json",
+        "doc/operations/aw-v10-evidence/support-cases-2026-10-23/support-case-api-final.log"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Capture current audit output for retention expiry/erasure, redaction and accessible end-to-end support flow.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-048",
+      "work": "managed status provider decision/adapter.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "server/src/services/experience/service-health.ts",
+        "server/src/routes/service-health.ts",
+        "packages/shared/src/service-health.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/service-health/qualification-2026-10-28/README.md",
+        "doc/operations/service-health/qualification-2026-10-28/server-test.exit"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Record the managed-provider decision, independent availability/export history and live subscription operations; do not expand this into a general status platform.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-049",
+      "work": "customer service-component catalog.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "packages/shared/src/service-health.ts",
+        "server/src/services/experience/service-health.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/service-health/qualification-2026-10-28/README.md"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Align component identifiers and customer actions with the approved status provider model and prove the complete customer-visible catalog.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-050",
+      "work": "incident/maintenance publish path with role/audit.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "provider_owned_handoff_external_evidence_unqualified",
+      "proposedReconciliation": "provider_owned_handoff_external_evidence_unqualified",
+      "proposedImplementationStatus": "provider_owned_handoff_external_evidence_unqualified",
+      "sourcePaths": [
+        "server/src/services/experience/service-health.ts",
+        "server/src/routes/service-health.ts",
+        "ui/src/components/ServiceHealth.tsx",
+        "doc/operations/service-health/README.md"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/service-health/README.md"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "An operator must identify the managed provider account and named primary/backup publishers, capture role and audit evidence, and rehearse publish/update/resolve and manual failover. If the product needs local publishing, implement it through a reviewed provider adapter with authenticated role checks and auditable results; do not infer this from public read projection.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-051",
+      "work": "in-app affected-company incident projection.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "ui/src/components/ServiceHealth.tsx",
+        "server/src/services/experience/service-health.ts",
+        "packages/shared/src/service-health.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/service-health/qualification-2026-10-28/ui-test.exit"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Add a privacy-safe affected-company projection only if the authoritative provider/source supports it; prove the banner in a broken-app/no-session scenario.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-052",
+      "work": "subscriber/notification integration.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "provider_owned_handoff_external_evidence_unqualified",
+      "proposedReconciliation": "provider_owned_handoff_external_evidence_unqualified",
+      "proposedImplementationStatus": "provider_owned_handoff_external_evidence_unqualified",
+      "sourcePaths": [
+        "ui/src/components/ServiceHealth.tsx",
+        "server/src/services/experience/service-health.ts",
+        "server/src/routes/service-health.ts",
+        "doc/operations/service-health/README.md"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/service-health/README.md"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Provider owner must record the live account/domain, explicit consent and unsubscribe behavior, a redacted test-delivery reference, export/exit steps, and failover ownership before relying on notifications. Keep any future in-app integration opt-in with explicit purpose and canonical provider delivery evidence.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-053",
+      "work": "postmortem/customer-communication templates.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "operator_templates_present_external_use_unqualified",
+      "proposedReconciliation": "operator_templates_present_external_use_unqualified",
+      "proposedImplementationStatus": "operator_templates_present_external_use_unqualified",
+      "sourcePaths": [
+        "doc/operations/service-health/README.md",
+        "server/src/services/experience/service-health.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/service-health/README.md"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Use the templates with verified facts and accountable owners for each real incident; retain separately reviewed provider publication and delivery receipts. Do not treat template availability as proof of an incident response or published postmortem.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-054",
+      "work": "status-provider outage/failover/manual publication runbook.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "doc/operations/service-health/README.md",
+        "server/src/services/experience/service-health.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/service-health/README.md"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Exercise provider outage, stale content and manual status publishing with operator evidence; keep independent status route reachable without app auth.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-055",
+      "work": "rebrand announcements/product notices.",
+      "currentReconciliation": "partial_implementation_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "packages/shared/src/announcements.ts",
+        "server/src/services/announcement-feed.ts",
+        "server/src/services/experience/product-notices.ts",
+        "server/src/routes/announcements.ts",
+        "ui/src/components/MandatoryProductNotices.tsx",
+        "ui/src/components/AnnouncementWell.tsx",
+        "server/src/routes/v9-api-paths.ts",
+        "server/src/routes/openapi.ts",
+        "server/src/routes/trust-documents.ts",
+        "server/src/__tests__/openapi-routes.test.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-7/test.log",
+        "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-8/typecheck.log"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Add other supported canonical owner-domain projections only when their authoritative source and completion owner exist; keep the optional feed non-authoritative. Complete remaining action-required category coverage and accessibility/hosted rollout qualification.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-056",
+      "work": "notice class/targeting/action-required contract.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "packages/shared/src/announcements.ts",
+        "server/src/routes/announcements.ts",
+        "server/src/services/trust-documents.ts",
+        "server/src/services/experience/product-notices.ts",
+        "ui/src/api/product-notices.ts",
+        "server/src/routes/v9-api-paths.ts",
+        "server/src/routes/openapi.ts",
+        "server/src/__tests__/openapi-routes.test.ts",
+        "server/src/routes/trust-documents.ts",
+        "server/src/__tests__/trust-document-routes.integration.test.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-5/openapi-tests.log",
+        "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-5/openapi-tests.exit"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Add owner-backed projections for other action-required classes and publication governance where appropriate. Do not let arbitrary feed metadata set mandatory or completed state.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-057",
+      "work": "deprecation/sunset/migration notice.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "packages/shared/src/feature-catalog.ts",
+        "packages/shared/src/announcements.ts",
+        "server/src/services/experience/product-notices.ts",
+        "server/src/routes/announcements.ts",
+        "server/src/routes/v9-api-paths.ts",
+        "server/src/routes/openapi.ts",
+        "ui/src/api/product-notices.ts",
+        "ui/src/components/CapabilityLifecycleNotices.tsx",
+        "ui/src/components/AnnouncementWell.tsx"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/capability-lifecycle-notices-2026-10-28/r1/README.md",
+        "doc/operations/aw-v10-evidence/capability-lifecycle-notices-2026-10-28/r1/vitest.stdout.txt"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Final qualification remains pending: name an accountable lifecycle owner and populate current, reviewed deprecation/sunset (where applicable), replacement, supported support level, and safe migration-guide facts for each customer capability before any customer card can appear; then qualify the rendered EN/DA company journey on the final candidate. The current two deprecated compatibility flags are not customer lifecycle announcements.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-058",
+      "work": "notification preference/mandatory-notice semantics.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "partial_implementation",
+      "proposedReconciliation": "partial_implementation_open",
+      "proposedImplementationStatus": "partial_implementation",
+      "sourcePaths": [
+        "ui/src/components/AnnouncementWell.tsx",
+        "ui/src/components/MandatoryProductNotices.tsx",
+        "ui/src/api/product-notices.ts",
+        "server/src/routes/announcements.ts",
+        "server/src/services/trust-documents.ts",
+        "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-2/focused-tests.log",
+        "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-2/focused-tests.exit",
+        "server/src/routes/v9-api-paths.ts",
+        "server/src/routes/openapi.ts",
+        "server/src/__tests__/openapi-routes.test.ts",
+        "server/src/routes/trust-documents.ts",
+        "server/src/__tests__/trust-document-routes.integration.test.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-3/focused-tests.log",
+        "doc/operations/aw-v10-evidence/mandatory-notices-2026-10-28/attempt-3/focused-tests.exit"
+      ],
+      "proposalBasis": "Source and receipt review only. The cited artifact exists; it does not establish current-head, full-journey, hosted, external-provider, operator, Human, or release acceptance beyond its explicit scope.",
+      "remainingWork": "Add canonical owner-backed projections/shared completion behavior for other supported action-required domains and surfaces. Verify fail-closed behavior when current content/owner state cannot be read.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    },
+    {
+      "id": "V10-059",
+      "work": "customer changelog surface.",
+      "currentReconciliation": "no_scoped_evidence_located_open",
+      "currentImplementationStatus": "implemented_unqualified",
+      "proposedReconciliation": "implemented_unqualified_open",
+      "proposedImplementationStatus": "implemented_unqualified",
+      "sourcePaths": [
+        "packages/shared/src/announcements.ts",
+        "server/src/services/announcement-feed.ts",
+        "server/src/routes/announcements.ts"
+      ],
+      "receiptsPresentAtReview": [
+        "doc/operations/aw-v10-evidence/customer-changelog-2026-10-28/README.md"
+      ],
+      "proposalBasis": "Customer changelog README reports source-pinned feed 31/31, PostgreSQL route 1 selected/12 skipped, UI 12/12, and OpenAPI 1 selected/27 skipped; final unchanged-head full checks and release publication remain outstanding.",
+      "remainingWork": "Final unchanged-head workspace checks and release qualification; actual operator-owned release publication remains configuration/evidence, not synthesized software content.",
+      "claimBoundary": "Proposal only; no canonical item status is changed or marked done by this file.",
+      "receiptInterpretation": "These exact paths exist in the workspace. Older snapshots are historical and are not assumed to match current HEAD unless their receipt states and pins demonstrate that; a receipt\u2019s presence is not proof that every clause is complete."
+    }
+  ],
+  "statusMeaning": "These are proposed reconciliations only. Existing source/evidence receipts remain scoped to their own claims; do not upgrade an item to done without the missing journey, owner, provider, accessibility, hosted, or release evidence."
+}

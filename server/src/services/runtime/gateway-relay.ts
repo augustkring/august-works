@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createServer, type Server, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 import { WebSocket, WebSocketServer } from "ws";
-import { runtimeRelayMessageSchema } from "@paperclipai/shared";
+import { runtimeRelayMessageSchema, runtimeSandboxExecRelayRequestSchema, type RuntimeSandboxExecRelayRequest } from "@paperclipai/shared";
 import { forbidden } from "../../errors.js";
 
 type Host = { id: string; credentialVersion: number };
@@ -20,6 +20,7 @@ type Dependencies = {
   ): Promise<CellScope>;
   hostCurrent(host: Host): Promise<boolean>;
   cellCurrent(cellId: string, scope: CellScope): Promise<boolean>;
+  authorizeExec?(input: { cellId: string; generation: string; request: RuntimeSandboxExecRelayRequest; capabilityToken: string }): Promise<CellScope>;
 };
 type Channel = {
   ws: WebSocket;
@@ -29,6 +30,16 @@ type Channel = {
   cellId: string;
 };
 type Connection = { host: Host; ws: WebSocket; channels: Map<string, Channel> };
+type ExecChannel = {
+  cellId: string;
+  scope: CellScope;
+  timer: ReturnType<typeof setTimeout>;
+  onOutput(stream: "stdout" | "stderr", chunk: Buffer): void | Promise<void>;
+  resolve(value: { exitCode: number; timedOut: boolean }): void;
+  reject(error: Error): void;
+  signal?: AbortSignal;
+  abort?: () => void;
+};
 
 /** Outbound tunnels carry Gateway frames only for an authenticated host's current cells. */
 export function runtimeGatewayRelay(deps: Dependencies) {
@@ -47,13 +58,16 @@ export function runtimeGatewayRelay(deps: Dependencies) {
     res.end();
   });
   const hosts = new Map<string, Connection>();
+  const execChannels = new Map<string, ExecChannel>();
   let pending = 0,
     closed = false,
     checking = false;
   function send(ws: WebSocket, value: unknown) {
+    const encoded = JSON.stringify(value);
     if (
       ws.readyState !== WebSocket.OPEN ||
-      ws.bufferedAmount > 4 * 1024 * 1024
+      ws.bufferedAmount > 4 * 1024 * 1024 ||
+      Buffer.byteLength(encoded) > 1024 * 1024
     ) {
       ws.close(1013);
       return false;
@@ -80,6 +94,15 @@ export function runtimeGatewayRelay(deps: Dependencies) {
                   channel.ws.close(1008);
               } catch {
                 channel.ws.close(1008);
+              }
+            }
+            for (const [id, channel] of execChannels) {
+              if (channel.scope.runtimeHostId !== connection.host.id) continue;
+              try {
+                if (!(await deps.cellCurrent(channel.cellId, channel.scope)))
+                  connection.ws.send(JSON.stringify({ type: "close", channelId: id }));
+              } catch {
+                connection.ws.send(JSON.stringify({ type: "close", channelId: id }));
               }
             }
           } catch {
@@ -138,6 +161,25 @@ export function runtimeGatewayRelay(deps: Dependencies) {
             pending--;
             return;
           }
+          if (message.type === "exec_output" || message.type === "exec_exit" || message.type === "exec_error") {
+            const channel = execChannels.get(message.channelId);
+            if (!channel || channel.scope.runtimeHostId !== connection.host.id) return;
+            if (!(await deps.hostCurrent(connection.host)) || !(await deps.cellCurrent(channel.cellId, channel.scope))) {
+              finishExec(message.channelId, new Error("sandbox_scope_changed"));
+              return;
+            }
+            if (message.type === "exec_output") {
+              try {
+                await channel.onOutput(message.stream, Buffer.from(message.base64, "base64"));
+              } catch (error) {
+                send(connection.ws, { type: "close", channelId: message.channelId });
+                finishExec(message.channelId, error instanceof Error ? error : new Error("sandbox_output_rejected"));
+              }
+            } else if (message.type === "exec_exit") {
+              finishExec(message.channelId, undefined, { exitCode: message.exitCode, timedOut: message.timedOut });
+            } else finishExec(message.channelId, new Error(message.code));
+            return;
+          }
           if (
             message.type !== "data" &&
             message.type !== "opened" &&
@@ -175,9 +217,67 @@ export function runtimeGatewayRelay(deps: Dependencies) {
           clearTimeout(channel.timer);
           channel.ws.close(1011);
         }
+        for (const [id, channel] of execChannels) {
+          if (channel.scope.runtimeHostId === connection.host.id)
+            finishExec(id, new Error("runtime_unavailable"));
+        }
       }
     });
   });
+  function finishExec(id: string, error?: Error, result?: { exitCode: number; timedOut: boolean }) {
+    const channel = execChannels.get(id);
+    if (!channel) return;
+    clearTimeout(channel.timer);
+    if (channel.signal && channel.abort) channel.signal.removeEventListener("abort", channel.abort);
+    execChannels.delete(id);
+    if (error) channel.reject(error);
+    else if (result) channel.resolve(result);
+    else channel.reject(new Error("exec_unknown"));
+  }
+  async function executeOpenShell(input: {
+    cellId: string;
+    generation: string;
+    request: RuntimeSandboxExecRelayRequest;
+    capabilityToken: string;
+    signal?: AbortSignal;
+    onOutput(stream: "stdout" | "stderr", chunk: Buffer): void | Promise<void>;
+  }) {
+    if (!deps.authorizeExec) throw forbidden("Run-scoped sandbox execution is unavailable");
+    const request = runtimeSandboxExecRelayRequestSchema.parse(input.request);
+    const scope = await deps.authorizeExec({ cellId: input.cellId, generation: input.generation, request, capabilityToken: input.capabilityToken });
+    const connection = hosts.get(scope.runtimeHostId), deadlineAt = Date.parse(request.deadlineAt);
+    if (!connection || connection.host.credentialVersion !== request.hostEpoch || scope.generation !== input.generation ||
+      scope.companyId === "" || !(await deps.hostCurrent(connection.host)) || !(await deps.cellCurrent(input.cellId, scope)) ||
+      !Number.isFinite(deadlineAt) || deadlineAt <= Date.now()) throw forbidden("Sandbox execution scope is stale");
+    const channelId = randomUUID();
+    return await new Promise<{ exitCode: number; timedOut: boolean }>((resolve, reject) => {
+      const delay = Math.max(1, Math.min(60_000, deadlineAt - Date.now()));
+      const channel: ExecChannel = {
+        cellId: input.cellId,
+        scope,
+        timer: setTimeout(() => {
+          send(connection.ws, { type: "close", channelId });
+          finishExec(channelId, new Error("exec_timeout"));
+        }, delay),
+        onOutput: input.onOutput,
+        resolve,
+        reject,
+        signal: input.signal,
+      };
+      channel.timer.unref();
+      channel.abort = () => {
+        send(connection.ws, { type: "close", channelId });
+        finishExec(channelId, new Error("exec_unknown"));
+      };
+      execChannels.set(channelId, channel);
+      input.signal?.addEventListener("abort", channel.abort, { once: true });
+      const sent = send(connection.ws, {
+        type: "exec_open", channelId, cellId: input.cellId, companyId: scope.companyId,
+        generation: input.generation, capabilityToken: input.capabilityToken, request,
+      });
+      if (!sent) finishExec(channelId, new Error("runtime_unavailable"));
+    });
+  }
   privateHttp.on("upgrade", (req, socket, head) => {
     void (async () => {
       if (
@@ -289,9 +389,10 @@ export function runtimeGatewayRelay(deps: Dependencies) {
     clearInterval(verifyTimer);
     for (const client of publicWs.clients) client.terminate();
     for (const client of privateWs.clients) client.terminate();
+    for (const id of execChannels.keys()) finishExec(id, new Error("runtime_unavailable"));
     await new Promise<void>((resolve) => privateHttp.close(() => resolve()));
     publicWs.close();
     privateWs.close();
   }
-  return { attach, listen, stop };
+  return { attach, listen, stop, executeOpenShell };
 }

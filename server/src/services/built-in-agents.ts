@@ -1305,16 +1305,8 @@ export function builtInAgentService(db: Db) {
         concurrencyPolicy: routine.concurrencyPolicy,
         catchUpPolicy: routine.catchUpPolicy,
         variables: routine.variables,
-      }, actor);
+      }, actor, { builtInBundleOriginId: `${definition.key}:${routine.routineKey}` });
     if (!nextRoutine) throw notFound("Built-in routine not found");
-    await db
-      .update(routines)
-      .set({
-        originKind: "built_in_agent_bundle",
-        originId: `${definition.key}:${routine.routineKey}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(routines.id, nextRoutine.id));
 
     const currentTriggers = await db
       .select()

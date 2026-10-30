@@ -1,0 +1,205 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[07:02:56] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"b65d2c1a-6982-4ac6-9b67-f7bd95991070","agentId":"84cdaaeb-3d47-4f02-8029-7c628cac1b04","runId":"ca21d04d-607b-4244-b367-eb5fa2ae785e"}[39m
+[07:02:56] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"ca21d04d-607b-4244-b367-eb5fa2ae785e"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:02:58] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"b65d2c1a-6982-4ac6-9b67-f7bd95991070","agentId":"84cdaaeb-3d47-4f02-8029-7c628cac1b04","runId":"6ffb3c83-43e8-4eb6-bf3e-aa7c80e52053"}[39m
+[07:02:58] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"6ffb3c83-43e8-4eb6-bf3e-aa7c80e52053"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:02:58] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["290e2cd1-2852-4bb1-90cd-f4f514482d0e"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > runs exactly one bounded review-path recovery before surfacing a stalled decision 3903ms
+[07:03:00] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"8357bf1f-dc8b-4ed8-9196-537dca518530","agentId":"30dd85f2-0b12-403b-9cd6-2ed6ed49b279","runId":"6d05e8f5-4649-4e75-82f1-69387f1689e6"}[39m
+[07:03:00] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"6d05e8f5-4649-4e75-82f1-69387f1689e6"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:01] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"8357bf1f-dc8b-4ed8-9196-537dca518530","agentId":"30dd85f2-0b12-403b-9cd6-2ed6ed49b279","runId":"14584ba8-d84d-4673-bbc5-bd970dae613d"}[39m
+[07:03:01] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"14584ba8-d84d-4673-bbc5-bd970dae613d"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:01] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["6d9897cc-efe1-41b4-8963-b76f412e0742"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > keeps resolved dependency wake reconciliation active 3014ms
+[07:03:02] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"dc0e6da9-4ffe-415e-b846-617eab388518","agentId":"a1c1dcb0-6265-464b-bbf1-62dd4b42d72d","runId":"0eaa93dd-9a4c-48d4-9706-bf3641270927"}[39m
+[07:03:03] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"0eaa93dd-9a4c-48d4-9706-bf3641270927"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:04] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"dc0e6da9-4ffe-415e-b846-617eab388518","agentId":"a1c1dcb0-6265-464b-bbf1-62dd4b42d72d","runId":"6e8aa5dc-aef8-47f3-ab9d-9e8ab94a5c9c"}[39m
+[07:03:04] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"6e8aa5dc-aef8-47f3-ab9d-9e8ab94a5c9c"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > heals a blocked dependent whose done blocker has no workspace finalize obligation 2614ms
+[07:03:04] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["c37465db-8814-4860-96ba-9f1160d09dda"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+[07:03:05] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"f12624e9-46c1-4ac4-b9ae-857ea94c7607","agentId":"db057a19-e12c-470d-b148-ebaa1fcdf0ef","runId":"3fa1c595-dd44-43d0-a992-3e8a13ababda"}[39m
+[07:03:05] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"3fa1c595-dd44-43d0-a992-3e8a13ababda"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:06] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"f12624e9-46c1-4ac4-b9ae-857ea94c7607","agentId":"db057a19-e12c-470d-b148-ebaa1fcdf0ef","runId":"1588d130-beae-47d8-bfd5-93457ab4fbf2"}[39m
+[07:03:06] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"1588d130-beae-47d8-bfd5-93457ab4fbf2"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:07] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["ccfa4caa-2c91-4ca2-9189-64e4279a7240"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+[07:03:08] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"3cad2d58-013d-4061-ab24-8b9391c7bf4b","agentId":"f301bb1c-6f98-4119-a075-5e8993752ba5","runId":"feb129db-d0a8-4ab3-8b6d-9d9ba090f07c"}[39m
+[07:03:08] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"feb129db-d0a8-4ab3-8b6d-9d9ba090f07c"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > reconciles a resolved blocked dependency after the assignee-null window closes 2491ms
+[07:03:08] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["db0ad173-d802-449b-a4eb-7fe963d47346"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+[07:03:09] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"fd4c2cd0-856a-40c4-b099-41646ba77db5","agentId":"9b35c66a-ebd1-4f2a-b264-cf45b4ac7235","runId":"86cf157f-5943-480e-af56-cc5dc85fc3ef"}[39m
+[07:03:09] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"86cf157f-5943-480e-af56-cc5dc85fc3ef"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > keeps repeated wakes behind a active execution hold run-free, then resumes once 1425ms
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > keeps repeated wakes behind a resolved execution hold run-free, then resumes once 1298ms
+[07:03:09] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["16617747-9bd8-4d7b-a150-36cd571081cb"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+[07:03:10] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ec60fcd4-4f64-4983-b7ef-89877ebf4d31","agentId":"1e7d2ba7-35c8-41cb-861c-4175773312b4","runId":"4544c9ee-098e-43ef-9bd0-5e1ac0ab3a01"}[39m
+[07:03:10] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"4544c9ee-098e-43ef-9bd0-5e1ac0ab3a01"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:11] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"ec60fcd4-4f64-4983-b7ef-89877ebf4d31","agentId":"1e7d2ba7-35c8-41cb-861c-4175773312b4","runId":"427cdbca-bffe-40f0-80b1-f7f30cc657cb"}[39m
+[07:03:11] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"427cdbca-bffe-40f0-80b1-f7f30cc657cb"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > rechecks every gate after an execution hold clears 2392ms
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > preserves distinct comments through a hold and adopts them on the next eligible wake 196ms
+[07:03:12] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["a3ecb717-0f02-4735-bbfd-c4635471a4b6"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+[07:03:13] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"650cc4e5-bfcc-4eda-a845-f5074888e421","agentId":"a3ef88a1-8a2c-4f09-a34c-05c504808908","runId":"18a98f2d-4dc4-48fb-a048-bbde76a6a5b1"}[39m
+[07:03:13] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"18a98f2d-4dc4-48fb-a048-bbde76a6a5b1"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:14] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"650cc4e5-bfcc-4eda-a845-f5074888e421","agentId":"a3ef88a1-8a2c-4f09-a34c-05c504808908","runId":"cba7bf18-0ff6-4dc1-af99-d4c1b4900b5a"}[39m
+[07:03:14] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"cba7bf18-0ff6-4dc1-af99-d4c1b4900b5a"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:14] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["8046e59d-170a-4c24-91ff-6ca9d2bf3a70"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > retries a resolved dependency wake when the prior wake was skipped as stale 2052ms
+[07:03:15] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"ad6c9ca4-54a1-4bba-a95c-b238996b7304","failureCode":"setup_failed"}[39m
+[07:03:15] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"ad6c9ca4-54a1-4bba-a95c-b238996b7304"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:15] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["401c4ade-6872-491a-80a1-797d1ab1fc5e"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > waits for workspace finalize before healing a resolved blocked dependent 913ms
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > does not duplicate an existing dependency wake keyed to any resolved blocker 97ms
+[07:03:16] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"3525dc7f-c429-487f-b0e2-9407d47108f8","agentId":"a78a3715-118a-477a-8e79-e7b58a6fd2dd","runId":"2a1a78d2-acca-479d-bee7-6833cfd89c80"}[39m
+[07:03:16] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"2a1a78d2-acca-479d-bee7-6833cfd89c80"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:17] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"3525dc7f-c429-487f-b0e2-9407d47108f8","agentId":"a78a3715-118a-477a-8e79-e7b58a6fd2dd","runId":"ebf11f29-69b5-498e-a4bd-2fbddec54d4f"}[39m
+[07:03:17] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"ebf11f29-69b5-498e-a4bd-2fbddec54d4f"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:17] [33mWARN[39m: [36missue graph liveness backstop healed resolved blocked dependency wakes[39m [90m{"healed":1,"issueIds":["b82b6cf2-0631-4021-b168-0af0886dbfb0"],"source":"issue_graph_liveness.backstop","blockerIssueId":null}[39m
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > heals a multi-blocker dependent when only a completed wake for an earlier blocker exists 2161ms
+[07:03:18] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"004410aa-39b0-4f4a-959e-7a361ce0ccfc","agentId":"02d934a1-141c-403f-80d9-9d59339f1308","runId":"86273e01-8ff5-4468-ac2c-887bf4c1ab08"}[39m
+[07:03:18] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"86273e01-8ff5-4468-ac2c-887bf4c1ab08"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+[07:03:19] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"004410aa-39b0-4f4a-959e-7a361ce0ccfc","agentId":"02d934a1-141c-403f-80d9-9d59339f1308","runId":"49e47192-5803-4663-a78a-69f2995d91b5"}[39m
+[07:03:19] [33mWARN[39m: [36mfailed to emit agent.task_run telemetry[39m [90m{"runId":"49e47192-5803-4663-a78a-69f2995d91b5"}[39m
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 152,
+        "column": 41
+      }
+    }
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > heals a blocked dependent after a terminal reset when a previous-cycle old-key wake exists 2087ms
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > does not re-heal when a completed old-key wake is from the current blocked cycle 58ms
+ ✓ src/__tests__/heartbeat-issue-liveness-escalation.test.ts > heartbeat resolved dependency wake reconciliation > counts null dependency wake returns as deferred instead of enqueue failures 67ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  07:02:38
+   Duration  41.56s (transform 8.92s, setup 66ms, import 12.92s, tests 28.47s, environment 0ms)
+

@@ -53,6 +53,8 @@ export type { PluginLauncherRenderContextSnapshot } from "@paperclipai/shared";
 
 import type {
   PluginEvent,
+  ResourceLifecycleEvent,
+  ResourceLifecycleResult,
   PluginIssueCheckoutOwnership,
   PluginIssueOrchestrationSummary,
   PluginIssueRelationSummary,
@@ -74,6 +76,7 @@ import type {
   PluginAuthorizationDecisionResult,
   PluginAuthorizationPolicyRecord,
   PluginAuthorizationPolicySummary,
+  PluginAgentRuntimeState,
 } from "./types.js";
 import type {
   PluginHealthDiagnostics,
@@ -1337,6 +1340,7 @@ export interface HostToWorkerMethods {
   handleWebhook: [params: PluginWebhookInput, result: void];
   /** Scoped plugin API route dispatch. */
   handleApiRequest: [params: PluginApiRequestInput, result: PluginApiResponse];
+  resourceLifecycle: [params: ResourceLifecycleEvent, result: ResourceLifecycleResult];
   /** @see PLUGIN_SPEC.md §13.8 */
   getData: [params: GetDataParams, result: unknown];
   /** @see PLUGIN_SPEC.md §13.9 */
@@ -1467,6 +1471,7 @@ export const HOST_TO_WORKER_OPTIONAL_METHODS: readonly HostToWorkerMethodName[] 
   "runJob",
   "handleWebhook",
   "handleApiRequest",
+  "resourceLifecycle",
   "getData",
   "performAction",
   "executeTool",
@@ -2088,6 +2093,10 @@ export interface WorkerToHostMethods {
   "agents.get": [
     params: { agentId: string; companyId: string },
     result: Agent | null,
+  ];
+  "agents.getRuntime": [
+    params: { agentId: string; companyId: string },
+    result: PluginAgentRuntimeState | null,
   ];
 
   // Agents (write)

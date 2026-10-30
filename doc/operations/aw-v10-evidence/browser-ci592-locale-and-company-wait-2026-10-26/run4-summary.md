@@ -1,0 +1,8 @@
+Focused Playwright verification for the CI 592 conversation-authoring fix.
+
+- Command, under `/workspace/v10-preparation/v10-pg-tests.lock`: `python3 /workspace/v10-preparation/cleanup-stale-playwright-postgres-socket.py`; source snapshot to `source-pins4.json`; from `/workspace/v10-dep-qualification`, run `./node_modules/.bin/playwright test --config tests/e2e/playwright.config.ts tests/e2e/aw-v9-conversation-authoring.spec.ts --reporter=list` with `PATH=/workspace/v10-preparation/pinned-bin:$PATH` and `PAPERCLIP_PLAYWRIGHT_EXECUTABLE=/usr/bin/chromium`.
+- Result: exit 0, one test passed. The browser opened and read the real conversation using the existing current-Human owner Board-key fixture; the preview response remained a test-only explicit mock.
+- Raw output: `playwright4.log`; numeric exit: `playwright4.exit`; source pin manifest: `source-pins4.json`; per-run stale socket cleanup receipt: `stale-postgres-socket-cleanup-run4.json`.
+- The earlier `playwright2.log` still records the pre-fix failure: local-trusted synthetic identity received 404 when reading the private conversation. The owner-key fixture fixes the test identity without changing route policy.
+- `playwright2.log` is the separate three-spec run for onboarding consent, conversation authoring, and task draft (source pin `source-pins2.json`, exit 1): all four consent cases and task draft passed; only the then-unfixed private-conversation identity case failed. Do not summarize this as one combined all-pass run; run4 separately proves the corrected conversation test.
+- The rerun command queued as `playwright5` was cancelled before it acquired the host lock at root's direction; it ran no snapshot or tests. Its log records that fact, with no numeric test exit.

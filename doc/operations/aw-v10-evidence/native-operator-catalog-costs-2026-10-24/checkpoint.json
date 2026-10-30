@@ -1,0 +1,34 @@
+{
+  "parentCommit": "3a1d870cc2e7fe46a211bac3c5a61fca5755f3f4",
+  "requirements": [
+    "CE-03",
+    "CE-04",
+    "V10-166"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "nativeCatalogCostsOperatorSaasDomains": {
+      "exit": 0,
+      "suites": 4,
+      "passed": 30
+    },
+    "serverCompiler": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "Catalog candidate/requalification, capacity qualification, transition and cost-report publication retain actual AuthorizationActor instead of reducing it to a user ID. Original configured roles, qualification/resource contracts and other domain checks remain.",
+    "Actual recent native passkey proof is checked before preparation, within the original physical mutation transaction and before every successful return, including unchanged/idempotent receipts after lock waits. The native kernel uses actual database time independently of business fixture dates.",
+    "Native tests preserve canary/restore/backup/source qualification, immutable catalog contracts, cost coverage/rounding/idempotency, and original owner-approved support/request boundaries. Added missing-session, credential-backed password and stale cost-proof controls prevent publication and audit mutation.",
+    "Original automatic-host cost/inventory and explicit EUR/max-host/hour ceilings remain in the scheduler lane. The native test does not call the live provider.",
+    "Structural native proof rows qualify domain behavior only; real browser/cookie/WebAuthn qualification is separate."
+  ],
+  "compatibility": [
+    "No migration or dependency change. Internal catalog and cost publisher callers now pass native actors rather than user IDs. Estimate and invoice/source semantics are unchanged."
+  ],
+  "limits": [
+    "Fleet human request admission and explicit scheduler/operation provenance, asynchronous provider dispatch/receipt reconciliation and physical host qualification remain open.",
+    "Qualified URL/source/hash fixture checks are not independently verified live provider/host evidence or release admission.",
+    "Original Context/Memory, payload privacy, typed-origin and portability failures, complete V10 acceptance and latest full workspace checks remain open. No PR-ready or production qualification claim."
+  ]
+}

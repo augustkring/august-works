@@ -27,6 +27,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 import {
   registerServerAdapter,
   unregisterServerAdapter,
@@ -70,8 +71,10 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
     ReturnType<typeof startEmbeddedPostgresTestDatabase>
   > | null = null;
   const execute = vi.fn<ServerAdapterModule["execute"]>();
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase(
       "heartbeat-direct-adapter-isolation-",
     );
@@ -131,6 +134,7 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
       unregisterServerAdapter(adapterType);
     }
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   });
 
   it.each(DIRECT_ADAPTERS)(
@@ -157,6 +161,7 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
         requireBoardApprovalForNewAgents: false,
         defaultResponsibleUserId: "responsible-user",
       });
+      await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
       await db.insert(agents).values({
         id: agentId,
         companyId,

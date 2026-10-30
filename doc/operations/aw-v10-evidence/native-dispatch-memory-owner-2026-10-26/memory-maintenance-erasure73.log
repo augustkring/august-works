@@ -1,0 +1,39 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification
+
+--x-----------
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/memory/memory-maintenance.test.ts > Governed native Memory maintenance > honors original source erasure instead of re-emitting an old verified receipt
+AssertionError: expected undefined to match object { outcome: 'source_unavailable', …(2) }
+
+- Expected:
+{
+  "indexedRecordCount": null,
+  "outcome": "source_unavailable",
+  "receiptId": null,
+}
+
++ Received:
+undefined
+
+ ❯ src/services/memory/memory-maintenance.test.ts:106:8
+    104|     await memoryService(db).forget(seeded.companyId, seeded.records[0]…
+    105|     expect((await readMemoryMaintenanceHistory(db, historyActor(seeded…
+    106|       .toMatchObject({ outcome: "source_unavailable", receiptId: null,…
+       |        ^
+    107|   });
+    108|   it("repeats native company and Memory owner admission rather than tr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 13 skipped (14)
+   Start at  03:20:03
+   Duration  18.46s (transform 10.18s, setup 72ms, import 14.33s, tests 3.94s, environment 0ms)
+

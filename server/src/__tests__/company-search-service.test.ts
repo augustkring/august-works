@@ -4,7 +4,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
   companies,
+  companySkills,
   createDb,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   documents,
   issueComments,
   issueDocuments,
@@ -12,6 +14,7 @@ import {
   issues,
   labels,
   projects,
+  routines,
 } from "@paperclipai/db";
 import { companySearchQuerySchema, COMPANY_SEARCH_MAX_QUERY_LENGTH } from "@paperclipai/shared";
 import {
@@ -21,8 +24,11 @@ import {
 import {
   COMPANY_SEARCH_BRANCH_FETCH_LIMIT,
   companySearchBranchFetchLimit,
+  companySearchHelpHref,
   companySearchService,
 } from "../services/company-search.js";
+import { issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
+import { COMPANY_SEARCH_HELP_ARTICLES } from "../services/company-search-help.generated.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -34,6 +40,17 @@ if (!embeddedPostgresSupport.supported) {
 }
 
 describe("company search query validation", () => {
+  it("accepts Help as a first-class search scope", () => {
+    expect(companySearchQuerySchema.parse({ q: "imports", scope: "help" }).scope).toBe("help");
+    expect(companySearchHelpHref("guides/board-operator/importing-and-exporting")).toBe(
+      "https://docs.blentera.com/guides/board-operator/importing-and-exporting",
+    );
+    expect(companySearchHelpHref("help/index")).toBe("https://docs.blentera.com/help/index");
+    for (const unsafe of ["https://evil.example/page", "//evil.example/page", "../private", "guides/../private"]) {
+      expect(companySearchHelpHref(unsafe)).toBeNull();
+    }
+  });
+
   it("truncates long text queries but rejects invalid filters, sort, and pagination", () => {
     const parsed = companySearchQuerySchema.parse({
       q: "x".repeat(COMPANY_SEARCH_MAX_QUERY_LENGTH + 50),
@@ -80,7 +97,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     db = createDb(tempDb.connectionString);
     svc = companySearchService(db);
     await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
-  }, 20_000);
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
   afterEach(async () => {
     await db.delete(issueDocuments);
@@ -91,6 +108,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     await db.delete(labels);
     await db.delete(projects);
     await db.delete(agents);
+    await db.delete(companySkills);
     await db.delete(companies);
   });
 
@@ -146,10 +164,74 @@ describeEmbeddedPostgres("companySearchService", () => {
       companyId,
       name: values.name ?? "Search project",
       description: values.description ?? null,
+      sourceProvenanceQualified: true,
       ...values,
     });
     return id;
   }
+
+  it("reports bounded federated counts and an unavailable owner without implying complete coverage", async () => {
+    const companyId = await createCompany();
+    const actor = {
+      type: "board" as const,
+      source: "session" as const,
+      userId: randomUUID(),
+      sessionId: randomUUID(),
+      companyIds: [companyId],
+    };
+    await db.insert(routines).values(Array.from({ length: 9 }, (_, index) => ({
+      companyId,
+      title: `boundedfind routine ${index}`,
+      description: null,
+    })));
+
+    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "boundedfind" }), {
+      actor,
+      noticeProjection: { state: "unavailable", items: [] },
+    });
+
+    const federation = result.federation;
+    expect(federation?.countsByDomain.routines).toBe(8);
+    expect(federation?.results.filter((item) => item.domain === "routines")).toHaveLength(8);
+    expect(federation?.coverage.find((item) => item.domain === "routines")).toMatchObject({
+      status: "partial",
+      message: "Some routines results may be outside this bounded search page.",
+    });
+    expect(federation?.coverage.find((item) => item.domain === "notices")).toMatchObject({
+      status: "unavailable",
+      message: "notices search is temporarily unavailable.",
+    });
+    expect(federation?.complete).toBe(false);
+  });
+
+  it.each(["native", "filtered"] as const)("excludes private tasks and projects before counts, facets and pagination (%s)", async mode => {
+    const companyId = await createCompany();
+    const foreignCompany = await createCompany("Foreign");
+    const hidden = await createIssue(companyId, { title: "needle private task", visibility: "private", priority: "critical" });
+    const publicId = await createIssue(companyId, { title: "needle public task", priority: "low" });
+    await createIssue(foreignCompany, { title: "needle foreign task" });
+    await createProject(companyId, { name: "needle private project", visibility: "private" });
+    const publicProject = await createProject(companyId, { name: "needle public project" });
+    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "needle", limit: 1 }), mode === "filtered" ? {
+      issueReadCondition: await issueReadSqlCondition(db, { type: "none" }),
+      projectReadCondition: await projectReadSqlCondition(db, { type: "none" }),
+    } : undefined);
+    expect(result.countsByType).toMatchObject({ issue: 1, project: 1 });
+    expect(result.filterOptionCounts.priority).toEqual({ low: 1 });
+    expect(result.results.every(row => row.id === publicId || row.id === publicProject)).toBe(true);
+    expect(JSON.stringify(result)).not.toContain(hidden);
+  });
+
+  it.each(["native", "filtered"] as const)("does not let an unreadable literal task suppress a readable fuzzy task (%s)", async mode => {
+    const companyId = await createCompany();
+    await createIssue(companyId, { title: "orchard", visibility: "private" });
+    const visible = await createIssue(companyId, { title: "orchrad" });
+    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "orchard", scope: "issues" }), mode === "filtered" ? {
+      issueReadCondition: await issueReadSqlCondition(db, { type: "none" }),
+    } : undefined);
+    expect(result.results.map(row => row.id)).toEqual([visible]);
+    expect(result.countsByType.issue).toBe(1);
+  });
 
   async function createLabel(companyId: string, values: Partial<typeof labels.$inferInsert> = {}) {
     const id = values.id ?? randomUUID();
@@ -313,7 +395,7 @@ describeEmbeddedPostgres("companySearchService", () => {
       }),
     });
     expect(result.results[0]?.snippet).toMatch(/comet tail/i);
-    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0 });
+    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0, help: 0 });
   });
 
   it("does not pass high-offset search fetch windows through to artifact query validation", async () => {
@@ -548,7 +630,7 @@ describeEmbeddedPostgres("companySearchService", () => {
 
     for (const q of ["%", "_", "\\"]) {
       const result = await svc.search(companyId, companySearchQuerySchema.parse({ q }));
-      expect(result.results, `q=${q}`).toEqual([]);
+      expect(result.results.map((row) => row.id), `q=${q}`).toEqual(q === "\\" ? ["company-import-export"] : []);
     }
   });
 
@@ -673,7 +755,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "needle", limit: "2", offset: "2" }));
 
     expect(result.results.map((row) => row.id)).toEqual([agentIds[2], projectIds[0]]);
-    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 0, agent: 3, project: 3 });
+    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 0, agent: 3, project: 3, help: 0 });
     expect(result.hasMore).toBe(true);
   });
 
@@ -701,7 +783,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     const target = await createIssue(companyId, { title: "Improve mobile UI" });
     await createIssue(companyId, { title: "Build billing reports" });
     const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "UI" }));
-    expect(result.results.map((row) => row.id)).toEqual([target]);
+    expect(result.results.map((row) => row.id)).toEqual([target, "company-import-export"]);
   });
 
   it("keeps typo fallback inside the requested filters", async () => {
@@ -813,5 +895,74 @@ describeEmbeddedPostgres("companySearchService", () => {
       expect(ids, `query=${query}`).toContain(expectedId);
       expect(ids, `query=${query} should not match unrelated issue`).not.toContain(rejected);
     }
+  });
+
+  it("searches checked V10 Help articles with maturity labels, scope counts, pagination, and issue-filter isolation", async () => {
+    const companyId = await createCompany();
+    await createIssue(companyId, { title: "Company search control" });
+    const makeQuery = (scope: "help" | "all", offset = "0", extra: Record<string, string> = {}) =>
+      companySearchQuerySchema.parse({ q: "company", scope, limit: "1", offset, ...extra });
+    const expectedHelpCount = COMPANY_SEARCH_HELP_ARTICLES.filter((article) =>
+      article.locale === "en" && `${article.title} ${article.summary} ${article.body}`.toLowerCase().includes("company"),
+    ).length;
+    const first = await svc.search(companyId, makeQuery("help"));
+    const last = await svc.search(companyId, makeQuery("help", String(expectedHelpCount - 1)));
+
+    expect(first.countsByType.help).toBe(expectedHelpCount);
+    expect(first.results).toHaveLength(1);
+    expect(first.results[0]).toMatchObject({
+      type: "help",
+      href: expect.stringMatching(/^https:\/\/docs\.blentera\.com\//),
+      sourceLabel: "Help · Preview",
+      helpArticle: {
+        maturity: "preview",
+        applicableProductVersions: ["V10"],
+        source: "mintlify",
+      },
+    });
+    expect(first.hasMore).toBe(true);
+    expect(last.hasMore).toBe(false);
+    expect(last.results[0]?.id).not.toBe(first.results[0]?.id);
+
+    const all = await svc.search(companyId, makeQuery("all"));
+    expect(all.countsByType.help).toBe(first.countsByType.help);
+    expect(all.countsByType.help).toBeGreaterThan(0);
+    const allRows = await svc.search(companyId, companySearchQuerySchema.parse({ q: "company", scope: "all", limit: "10" }));
+    expect(allRows.countsByType.issue).toBe(1);
+    expect(allRows.results.map((row) => row.type)).toContain("issue");
+    expect(allRows.results.map((row) => row.type)).toContain("help");
+    const filtered = await svc.search(companyId, companySearchQuerySchema.parse({ q: "company", scope: "all", status: "blocked" }));
+    expect(filtered.results).toEqual([]);
+    expect(filtered.countsByType.help).toBe(0);
+    expect(filtered.countsByType.issue).toBe(0);
+
+    const prefix = await svc.search(companyId, companySearchQuerySchema.parse({ q: "impor", scope: "help" }));
+    expect(prefix.results.map((row) => row.id)).toEqual([
+      "company-import-export",
+      "help-and-human-support",
+      "export-and-delete",
+    ]);
+    for (const q of ["changed package", "outcome unknown"]) {
+      const recovery = await svc.search(companyId, companySearchQuerySchema.parse({ q, scope: "help" }));
+      expect(recovery.results.map((row) => row.id), `query=${q}`).toContain("company-import-export");
+    }
+  });
+
+  it("filters checked Help by the requested locale before counting and paging", async () => {
+    const companyId = await createCompany("Bilingual Help");
+    const svc = companySearchService(db);
+    const danish = await svc.search(companyId, companySearchQuerySchema.parse({ q: "hjælp", scope: "help", locale: "da", limit: "50" }));
+    expect(danish.results.map(row => row.id)).toContain("help-and-human-support-da");
+    expect(danish.results.every(row => row.helpArticle?.locale === "da")).toBe(true);
+    expect(danish.countsByType.help).toBe(danish.results.length);
+    const first = await svc.search(companyId, companySearchQuerySchema.parse({ q: "hjælp", scope: "help", locale: "da", limit: "1" }));
+    expect(first.countsByType.help).toBe(danish.countsByType.help);
+    expect(first.results).toHaveLength(1);
+    expect(first.hasMore).toBe(danish.results.length > 1);
+    const english = await svc.search(companyId, companySearchQuerySchema.parse({ q: "help", scope: "help" }));
+    expect(english.results.length).toBeGreaterThan(0);
+    expect(english.results.every(row => row.helpArticle?.locale === "en")).toBe(true);
+    expect(companySearchQuerySchema.safeParse({ q: "help", locale: "fr" }).success).toBe(false);
+    expect(companySearchQuerySchema.safeParse({ q: "help", locale: ["en", "da"] }).success).toBe(false);
   });
 });

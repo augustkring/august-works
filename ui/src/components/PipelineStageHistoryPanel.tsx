@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, History, RotateCcw } from "lucide-react";
 import { ApiError } from "../api/client";
@@ -64,7 +65,7 @@ export function PipelineStageHistoryPanel({
     onError: (error) => {
       pushToast({
         title: "Failed to restore revision",
-        body: error instanceof Error ? error.message : "Paperclip could not restore the revision.",
+        body: error instanceof Error ? error.message : `${PRODUCT_IDENTITY.productName} could not restore the revision.`,
         tone: "error",
       });
     },

@@ -14,8 +14,19 @@ import { readPackageMaintenanceAttention } from "../services/experience/maintena
 import { readCoreMaintenance } from "../services/experience/core-maintenance.js";
 import * as coreMaintenance from "../services/experience/core-maintenance.js";
 import { agentPackageRoutes } from "../routes/agent-packages.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { experienceService } from "../services/experience/service.js";
 import express from "express";
+import { existsSync } from "node:fs";
+import { createServer } from "node:http";
+import { chromium, expect as browserExpect, type Browser, type BrowserContext, type Response } from "@playwright/test";
+import { createApp } from "../app.js";
+import * as errorHandlerModule from "../middleware/error-handler.js";
+import { createLocalDiskStorageProvider } from "../storage/local-disk-provider.js";
+import { createStorageService } from "../storage/service.js";
+import { setupLiveEventsWebSocketServer } from "../realtime/live-events-ws.js";
+import { saasPlatform } from "../services/saas/platform.js";
+import type { SaasPlatformConfig } from "../saas-platform-config.js";
 import request from "supertest";
 import { maintenanceHistoryRoutes } from "../routes/maintenance-history.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -33,6 +44,8 @@ import {
 import { evaluateSpecialistPackage } from "../services/agent-packages/specialist-evaluation.js";
 import {
   authUsers,
+  authAccounts,
+  authSessions,
   readinessAssessments,
   knowledgeQualityFindings,
   companyMemberships,
@@ -50,21 +63,28 @@ import { approvalService } from "../services/approvals.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { verificationService } from "../services/supervision/verification-service.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { heartbeatService } from "../services/heartbeat.js";
+import { documentService } from "../services/documents.js";
 import { aiConnectionService } from "../services/ai-connections.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
-import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
+import { installedNativeDraftGateway, registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { initialActivationState, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
 import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook } from "./helpers/authoring-procedures.js";
 import { seedHireAutomationComponents } from "./helpers/hire-automations.js";
 import { agentSetupAuthoringToolsService } from "../services/agent-setup-authoring-tools.js";
+import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
+import { routineService } from "../services/routines.js";
+import { issueService } from "../services/issues.js";
+import { memoryService } from "../services/memory/memory-service.js";
 import { workflows, routines, workflowRuns, routineRuns } from "@paperclipai/db";
 import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
   documents, documentRevisions, issueDocuments } from "@paperclipai/db";
 import { readinessService } from "../services/readiness/readiness-service.js";
+import * as readinessOwnerBoundary from "../services/readiness/readiness-service.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { accessService } from "../services/access.js";
 import { foundationDocuments } from "@paperclipai/db";
@@ -80,20 +100,22 @@ import { learningChangeSchema } from "@paperclipai/shared";
 import {
   beforeAll,
   afterAll,
+  afterEach,
   beforeEach,
   describe,
   it,
   expect,
   vi,
 } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rolePacks } from "@paperclipai/db";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import {
   createDb,
+  completionContracts,
   principalPermissionGrants,
   orchestrationPlans,
   connectionGrants,
@@ -104,13 +126,25 @@ import {
   agentPackageComponents,
   companyAgentPackageInstallations,
   heartbeatRuns,
+  heartbeatRunEvents,
+  nativeRunFinalizations,
+  nativeRunResults,
+  orchestrationWorkerAttempts,
+  verificationRuns,
+  supportCases,
   agents,
   agentConfigurationDrafts,
   agentPackageStopActions,
   issues,
+  companySkills,
+  companySkillVersions,
 } from "@paperclipai/db";
 import {
   PROVIDER_CAPABILITY_FEATURES,
+  SPECIALIST_CANDIDATES,
+  specialistCompletionContract,
+  BLENTERA_MANAGED_STARTER_PROFILE,
+  managedCustomerStarterReleaseCandidate,
   type PackageRelease,
 } from "@paperclipai/shared";
 import {
@@ -122,6 +156,9 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { rolePackService } from "../services/role-packs.js";
 import { agentPackageService } from "../services/agent-packages/package-service.js";
+import { removeRuntimeStorageTree } from "../services/runtime-skill-cache.js";
+import { companyPortabilityService } from "../services/company-portability.js";
+import { customerSupportCaseService } from "../services/experience/support-cases.js";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import {
   assertPackageExecution,
@@ -137,6 +174,7 @@ import {
 } from "../services/agent-packages/package-policy.js";
 import { V9_FEATURE_KEYS } from "@paperclipai/shared";
 const support = await getEmbeddedPostgresTestSupport();
+const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
 (support.supported ? describe : describe.skip)(
   "V7 native internal package installation and activation",
   () => {
@@ -148,7 +186,49 @@ const support = await getEmbeddedPostgresTestSupport();
       versionId: string,
       roleId: string,
       roleVersionId: string,
+      installComponents: Array<{ key: string; resourceId: string; versionId: string }>,
       fixtureHome: string;
+    let starterModelProfile: WorkerModelProfile | null = null,
+      starterModelTransport: typeof guardedRemoteHttpFetch | null = null,
+      starterModelGateway: ReturnType<typeof workerModelGateway> | null = null,
+      starterModelOutput = "A concise follow-up draft grounded in the reviewed meeting notes.",
+      starterModelExpectedTaskNotes: string | null = null,
+      starterModelObservedRequest: { endpoint: boolean; credential: boolean; model: boolean; maxTokens: boolean; system: boolean; taskNotes: boolean | null } | null = null,
+      starterModelCalls = 0;
+    let managedStarterFixtureSequence = 0;
+    async function cancelCurrentFixtureRuns() {
+      if (!db || !f?.home || !f?.presence?.id) return;
+      const heartbeat = heartbeatService(db);
+      const active = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.agentId, f.presence.id),
+        sql`${heartbeatRuns.status} in ('queued','running','scheduled_retry')`,
+      ));
+      for (const run of active) {
+        await heartbeat.cancelRun(run.id, "Native package test fixture teardown", { suppressImmediateRecovery: true });
+      }
+      await heartbeat.drainActiveRunExecutions();
+    }
+    // Direct conversation-tool fixtures never start a Native runner. Assert
+    // that no Native owner/provider evidence exists before closing their row.
+    async function finishSyntheticConversationRun(runId: string) {
+      const [run] = await db.select({ companyId: heartbeatRuns.companyId, runtimeMode: heartbeatRuns.runtimeMode,
+        status: heartbeatRuns.status, startedAt: heartbeatRuns.startedAt, nativeSessionId: heartbeatRuns.nativeSessionId,
+        runtimeModeResolvedAt: heartbeatRuns.runtimeModeResolvedAt }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, f.home)));
+      expect(run).toMatchObject({ runtimeMode: "native", status: "running", startedAt: null,
+        nativeSessionId: null, runtimeModeResolvedAt: null });
+      expect(await db.select({ runId: nativeRunFinalizations.runId }).from(nativeRunFinalizations)
+        .where(eq(nativeRunFinalizations.runId, runId))).toEqual([]);
+      expect(await db.select({ id: nativeRunResults.id }).from(nativeRunResults)
+        .where(eq(nativeRunResults.runId, runId))).toEqual([]);
+      expect(await db.select({ id: heartbeatRunEvents.id }).from(heartbeatRunEvents)
+        .where(eq(heartbeatRunEvents.runId, runId)).limit(1)).toEqual([]);
+      await db.update(heartbeatRuns).set({ status: "cancelled", finishedAt: new Date(),
+        errorCode: "test_fixture_ended", error: "Synthetic conversation context ended by its fixture." })
+        .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.status, "running")));
+      expect((await db.select({ status: heartbeatRuns.status, finishedAt: heartbeatRuns.finishedAt }).from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, runId)))[0]).toMatchObject({ status: "cancelled" });
+    }
     beforeAll(async () => {
       fixtureHome = await mkdtemp(join(tmpdir(), "aw-v9-first-preparation-"));
       vi.stubEnv("PAPERCLIP_HOME", fixtureHome);
@@ -158,10 +238,14 @@ const support = await getEmbeddedPostgresTestSupport();
       await enableV5ForTest(db);
     }, 60000);
     afterAll(async () => {
+      await cancelCurrentFixtureRuns();
+      if (fixtureHome) await removeRuntimeStorageTree(fixtureHome);
       await database?.cleanup();
-      if (fixtureHome) await rm(fixtureHome, { recursive: true, force: true });
       vi.unstubAllEnvs();
     }, 30000);
+    afterEach(async () => {
+      await cancelCurrentFixtureRuns();
+    });
     beforeEach(async () => {
       await instanceSettingsService(db).updateExperimental({
         saas_deployment_profile_v6: true,
@@ -171,6 +255,16 @@ const support = await getEmbeddedPostgresTestSupport();
         maintenance_autopilot_v9: false,
       });
       f = await seedV5Presences(db);
+      starterModelProfile = null;
+      starterModelTransport = null;
+      starterModelGateway = null;
+      registerNativeDraftGateway(db, undefined);
+      starterModelExpectedTaskNotes = null;
+      starterModelObservedRequest = null;
+      starterModelCalls = 0;
+      // Structural passkey/session proof for the native package-domain suite;
+      // this is not a WebAuthn ceremony or a browser authentication claim.
+      f.actor.sessionId = await seedNativePasskeySession(db, f.userId);
       service = agentPackageService(db, {
         operatorUserIds: [f.userId],
         protectedEvidenceOrigin: "https://qualification.test.invalid",
@@ -199,6 +293,7 @@ const support = await getEmbeddedPostgresTestSupport();
       });
       roleVersionId = version.id;
       await rp.publish(f.actor, f.home, roleId, roleVersionId, null);
+      installComponents = [{ key: "internal-role", resourceId: roleId, versionId: roleVersionId }];
       const [digest] = await db.execute(
         sql`select aw_v7_package_component_hash(${f.home}::uuid,'role_pack',${roleId}::uuid,${roleVersionId}::uuid) as hash`,
       );
@@ -300,10 +395,53 @@ const support = await getEmbeddedPostgresTestSupport();
     const installInput = () => ({
       versionId,
       agentId: f.presence.id,
-      components: [
-        { key: "internal-role", resourceId: roleId, versionId: roleVersionId },
-      ],
+      components: installComponents,
       acceptInternalEvaluation: true,
+    });
+    it("refuses package activation under another installer's identity and preserves its actual owner session", async () => {
+      const installed = await service.install(f.actor, f.home, installInput());
+      const userId = `activator-${randomUUID()}`, now = new Date();
+      await db.insert(authUsers).values({ id: userId, name: "Current package reviewer", email: `${userId}@test.invalid`,
+        emailVerified: true, createdAt: now, updatedAt: now });
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: userId,
+        status: "active", membershipRole: "admin" });
+      await db.insert(principalPermissionGrants).values(grantsForHumanRole("admin").map(grant => ({
+        companyId: f.home, principalType: "user", principalId: userId, ...grant,
+      })));
+      const sessionId = await seedNativePasskeySession(db, userId);
+      const actor = { type: "board" as const, source: "session" as const, userId, sessionId, companyIds: [f.home] };
+      const boundaryStop = new Error("Stop before readiness admission; no assessment or activation is qualified");
+      let observedOwner: Parameters<ReturnType<typeof readinessService>["assess"]>[2] | undefined;
+      const nativeReadiness = readinessOwnerBoundary.readinessService;
+      // Inspect the actual package-to-readiness boundary, then abort. This does
+      // not fabricate a source decision, accountable run or successful review.
+      const spy = vi.spyOn(readinessOwnerBoundary, "readinessService").mockImplementation(tx => ({
+        ...nativeReadiness(tx),
+        assess: async (_companyId, _input, owner) => { observedOwner = owner; throw boundaryStop; },
+      }));
+      try {
+        await expect(service.decide(actor, f.home, installed.id, "activate", {
+          expectedVersion: installed.version, reason: "Current Human reviews an existing installation",
+        })).rejects.toMatchObject({ status: 403, details: { code: "package_accountable_human_required" } });
+        expect(observedOwner).toBeUndefined();
+        await expect(service.decide(f.actor, f.home, installed.id, "activate", {
+          expectedVersion: installed.version, reason: "Original accountable Human reviews the installation",
+        })).rejects.toBe(boundaryStop);
+        expect(observedOwner).toEqual({ actor: f.actor, principalId: f.userId, userId: f.userId });
+        const [unchanged] = await db.select().from(companyAgentPackageInstallations)
+          .where(eq(companyAgentPackageInstallations.id, installed.id));
+        expect(unchanged).toMatchObject({ status: "configuring", version: installed.version,
+          installedByUserId: f.userId, activationHash: null, readiness: null });
+        expect(await db.select().from(readinessAssessments).where(eq(readinessAssessments.companyId, f.home))).toHaveLength(0);
+        const suspended = await service.decide(actor, f.home, installed.id, "suspend", {
+          expectedVersion: installed.version, reason: "Current administrator can stop this installation",
+        });
+        expect(suspended.status).toBe("suspended");
+        const uninstalled = await service.decide(actor, f.home, installed.id, "uninstall", {
+          expectedVersion: suspended.version, reason: "Current administrator can retire this installation",
+        });
+        expect(uninstalled.status).toBe("uninstalled");
+      } finally { spy.mockRestore(); }
     });
     async function active() {
       const installed = await service.install(f.actor, f.home, installInput());
@@ -335,6 +473,7 @@ const support = await getEmbeddedPostgresTestSupport();
         conversationState: "active", status: "in_progress" }).returning();
       const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
         nativeIssueId: conversation!.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+      try {
       await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, conversation!.id));
       const author = agentSetupAuthoringToolsService(db), context = { companyId: f.home, agentId: f.presence.id, runId: run!.id };
       expect(await author.catalog(context, { query: release.packageKey })).toMatchObject({ coverage: "bounded", modelCalled: false,
@@ -353,6 +492,9 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(author.create(context, { ...command, packageVersionId: versionId })).rejects.toMatchObject({ status: 409 });
       await service.revoke(f.actor, published.id);
       await expect(author.create(context, { ...command, idempotencyKey: "later-package" })).rejects.toMatchObject({ status: 422 });
+      } finally {
+        await finishSyntheticConversationRun(run!.id);
+      }
     });
     it("saves a pinned unpublished Hire setup once without installing, granting or creating an agent", async () => {
       const {release, published, hire} = await hireFixture();
@@ -470,13 +612,25 @@ const support = await getEmbeddedPostgresTestSupport();
     });
     it("withholds another owner's conversation routine from package options and pin review", async () => {
       const automation = await seedHireAutomationComponents(db, f), { release } = await hireFixture();
-      const [conversation] = await db.insert(issues).values({ companyId: f.home, title: "PRIVATE routine source",
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, ambient_commands_v9: true });
+      await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
+        permissionKey: "tasks:assign" }).onConflictDoNothing();
+      const conversation = await issueService(db).create(f.home, { title: "PRIVATE routine source",
         assigneeAgentId: f.presence.id, conversationAgentId: f.presence.id, conversationUserId: f.userId,
-        conversationState: "active", status: "in_progress" }).returning();
+        conversationState: "active", status: "in_progress", createdByUserId: f.userId });
       const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
-        nativeIssueId: conversation!.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
-      await db.update(routines).set({ originKind: "conversation_draft", originId: run!.id,
-        responsibleUserId: f.userId, createdByAgentId: f.presence.id }).where(eq(routines.id, automation.routine.id));
+        nativeIssueId: conversation.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+      try {
+      await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, conversation.id));
+      const draft = await routineAuthoringToolsService(db).create({ companyId: f.home, agentId: f.presence.id, runId: run!.id }, {
+        idempotencyKey: `package-private-routine-${randomUUID()}`, title: "PRIVATE authored routine", description: "PRIVATE routine source body", priority: "medium",
+      });
+      const authoredRoutines = routineService(db, { sourceActor: f.actor });
+      await authoredRoutines.update(draft.routineId, { baseRevisionId: draft.currentRevisionId!, status: "active",
+        executionTarget: { kind: "workflow", workflowId: automation.workflow.id } }, { userId: f.userId });
+      const [authoredRoutine] = await db.select().from(routines).where(eq(routines.id, draft.routineId));
+      const [authoredRoutineHash] = await db.execute<{ hash: string }>(sql`select aw_v7_package_component_hash(${f.home}::uuid,
+        'routine_template',${authoredRoutine!.id}::uuid,${authoredRoutine!.latestRevisionId}::uuid) as hash`);
       const other = `package-other-owner-${randomUUID()}`, now = new Date();
       await db.insert(authUsers).values({ id: other, name: "Other owner", email: `${other}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
       await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: other, status: "active", membershipRole: "owner" });
@@ -484,18 +638,21 @@ const support = await getEmbeddedPostgresTestSupport();
         companyId: f.home, principalType: "user", principalId: other, ...grant })));
       const otherActor = { ...f.actor, userId: other, isInstanceAdmin: true };
       const ownOptions = await service.options(f.actor, f.home);
-      expect(ownOptions.components.some(component => component.resourceId === automation.routine.id)).toBe(true);
+      expect(ownOptions.components.some(component => component.resourceId === authoredRoutine!.id)).toBe(true);
       const hidden = await service.options(otherActor, f.home);
-      expect(hidden.components.some(component => component.resourceId === automation.routine.id)).toBe(false);
+      expect(hidden.components.some(component => component.resourceId === authoredRoutine!.id)).toBe(false);
       const published = await service.publish(f.actor, { ...release, packageKey: `private-routine-${randomUUID()}`,
         components: [...release.components, { key: "manual-routine", type: "routine_template", sourceVersion: "1",
-          contentHash: automation.routineHash, source: release.releaseEvidence.provenance, required: true }] });
+          contentHash: String(authoredRoutineHash!.hash), source: release.releaseEvidence.provenance, required: true }] });
       const beforeAssessments = await db.select().from(readinessAssessments), beforeInstalls = await db.select().from(companyAgentPackageInstallations);
       await expect(service.preview(otherActor, f.home, { ...installInput(), versionId: published.id,
-        components: [...installInput().components, { key: "manual-routine", resourceId: automation.routine.id, versionId: automation.routine.latestRevisionId }] }))
+        components: [...installInput().components, { key: "manual-routine", resourceId: authoredRoutine!.id, versionId: authoredRoutine!.latestRevisionId }] }))
         .rejects.toMatchObject({ status: 403 });
       expect(await db.select().from(readinessAssessments)).toEqual(beforeAssessments);
       expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
+      } finally {
+        await finishSyntheticConversationRun(run!.id);
+      }
     });
 
     it("bounds package option reads when the Original company privacy lock is busy", async () => {
@@ -1277,6 +1434,44 @@ const support = await getEmbeddedPostgresTestSupport();
         agentPackageService(db).publish(f.actor, input),
       ).rejects.toThrow(/publisher/);
     });
+    it("requires a current passkey proof for package publication and revocation", async () => {
+      const noSession = { ...f.actor, sessionId: undefined };
+      await expect(service.publish(noSession, {
+        ...input,
+        packageKey: `missing-session-${randomUUID()}`,
+      })).rejects.toMatchObject({ status: 403 });
+      await expect(service.revoke(noSession, versionId)).rejects.toMatchObject({ status: 403 });
+
+      const now = new Date();
+      await db.insert(authAccounts).values({
+        id: randomUUID(), issuer: "local:credential", accountId: f.userId,
+        providerId: "credential", userId: f.userId,
+        password: "structural-fixture-not-a-password-hash",
+        createdAt: now, updatedAt: now,
+      });
+      const [user] = await db.select({ version: authUsers.authenticatorVersion })
+        .from(authUsers).where(eq(authUsers.id, f.userId));
+      const passwordSessionId = randomUUID();
+      await db.insert(authSessions).values({
+        id: passwordSessionId, userId: f.userId, token: randomUUID(),
+        createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 3600000),
+        authenticationMethod: "password", authenticatedAt: now,
+        authenticatorVersion: user!.version,
+      });
+      await expect(service.revoke({ ...f.actor, sessionId: passwordSessionId }, versionId))
+        .rejects.toMatchObject({ status: 403 });
+      const [unchanged] = await db.select({ state: agentPackageVersions.state })
+        .from(agentPackageVersions).where(eq(agentPackageVersions.id, versionId));
+      expect(unchanged?.state).toBe("published");
+    });
+    it("revokes a published package with current native passkey proof and refuses a deleted session", async () => {
+      await service.revoke(f.actor, versionId);
+      const [version] = await db.select({ state: agentPackageVersions.state }).from(agentPackageVersions)
+        .where(eq(agentPackageVersions.id, versionId));
+      expect(version?.state).toBe("revoked");
+      await db.delete(authSessions).where(eq(authSessions.id, f.actor.sessionId!));
+      await expect(service.revoke(f.actor, versionId)).rejects.toMatchObject({ status: 403 });
+    });
     it("retains immutable release and component hashes after publication", async () => {
       await expect(
         db
@@ -1487,48 +1682,45 @@ const support = await getEmbeddedPostgresTestSupport();
           .returning();
         tasks.push(t!.id);
       }
-      const [binding] = await db
-        .insert(memoryBindings)
-        .values({
-          companyId: f.home,
-          key: "package-learning",
-          name: "Local outcome fixture",
-          providerKey: "local",
-        })
-        .returning();
+      const memory = memoryService(db), memoryActor = { principal: { type: "user" as const, userId: f.userId } };
+      const binding = await memory.createCompanyBinding(f.home, {
+        key: `package-learning-${randomUUID()}`,
+        name: "Local outcome fixture",
+        providerKey: "local",
+        config: {},
+        enabled: true,
+      }, memoryActor);
       const roots: string[] = [];
       for (let n = 0; n < 2; n++) {
-        const [root] = await db
-          .insert(memoryRecords)
-          .values({
-            companyId: f.home,
-            bindingId: binding!.id,
-            providerKey: "local",
-            memoryType: "outcome",
-            scopeType: "company",
-            content: `Local reviewed output fixture ${n}`,
-            reviewState: "accepted",
-            verificationState: "human_verified",
-            observedAt: new Date(),
-            createdByActorType: "user",
-            createdByActorId: f.userId,
-          })
-          .returning();
-        roots.push(root!.id);
-        await db.insert(memoryEvidence).values({
-          companyId: f.home,
-          memoryRecordId: root!.id,
-          sourceClass: "task",
-          sourceProvider: "august_works_tasks",
-          sourceType: "issue",
-          sourceRef: `issue://${tasks[n]}`,
-          sourceVersion: "1",
-          observedAt: new Date(),
-          excerptHash: String(n).repeat(64),
-          citationJson: { label: "Local paired fixture" },
-          trustLevel: "high",
-          supportsOrContradicts: "supports",
-        });
+        const [task] = await db.select().from(issues).where(eq(issues.id, tasks[n]!));
+        const observedAt = new Date().toISOString();
+        const candidate = await memory.createCandidate(f.home, {
+          bindingId: binding.id,
+          memoryType: "outcome",
+          scope: { type: "company", id: null },
+          subject: { type: "task", id: task!.id },
+          ownerAgentId: null,
+          title: `Local reviewed output fixture ${n}`,
+          content: `Local reviewed output fixture ${n}`,
+          summary: `Reviewed output fixture ${n}`,
+          sensitivity: "internal",
+          importance: 50,
+          confidenceScore: 0.8,
+          validFrom: null,
+          validUntil: null,
+          observedAt,
+          retentionPolicy: "standard",
+          expiresAt: null,
+          createdByOperationId: null,
+          metadata: {},
+          evidence: [{ sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue",
+            sourceRef: `issue://${task!.id}`, sourceVersion: task!.updatedAt.toISOString(),
+            sourceUpdatedAt: task!.updatedAt.toISOString(), observedAt,
+            excerptHash: createHash("sha256").update(task!.title).digest("hex"),
+            citation: { label: task!.title }, trustLevel: "high", relation: "supports" }],
+        }, memoryActor);
+        const accepted = await memory.reviewCandidate(f.home, candidate.record.id, { decision: "accept" }, memoryActor);
+        roots.push(accepted.record.id);
       }
       const learning = learningService(db),
         change = learningChangeSchema.parse({
@@ -1633,6 +1825,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(updated.status).toBe("configuring");
       expect(updated.installedVersionId).toBe(nextId);
       await instanceSettingsService(db).updateExperimental({
+        hire_agent_v9: false,
         learning_engine_v7: false,
         agent_packages_v7: false,
       });
@@ -1800,7 +1993,158 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(agentPackageStopActions.id, action!.id)),
       ).rejects.toMatchObject({ cause: { code: "23514" } });
     });
-    async function prepareFirstValueFixture(budgets: CreateOrchestrationPlanInput["budgets"] = {}, configurePresence?: () => Promise<void>) {
+    async function managedStarterFixture(): Promise<StarterFixture> {
+      // Disposable native service rows and explicit fixture evidence only.
+      // This exercises software wiring; none of these references qualify a
+      // production model, customer demand, provider or sandbox.
+      const fixtureEvidence = input.releaseEvidence.provenance!;
+      const sourceSha = input.manifest.sourceRevision;
+      const skillBody = "# Internal follow-up drafting\nKeep drafts factual, source-bound and ready for Human review.\n";
+      const [skill] = await db.insert(companySkills).values({
+        companyId: f.home,
+        key: `company/${f.home}/managed-customer-starter`,
+        slug: `managed-customer-starter-${randomUUID().slice(0, 8)}`,
+        name: "Managed customer starter procedure",
+        markdown: skillBody,
+        sourceType: "generated",
+        lifecycleState: "draft",
+        sharingScope: "company",
+        metadata: { sourceKind: "controlled_software_fixture" },
+      }).returning();
+      const [skillVersion] = await db.insert(companySkillVersions).values({
+        companyId: f.home,
+        companySkillId: skill!.id,
+        revisionNumber: 1,
+        state: "active",
+        visibility: "company",
+        fileInventory: [{ path: "SKILL.md", kind: "skill", content: skillBody }],
+        validationSummary: { sensitivity: "internal", sourceCompanyId: f.home, source: "controlled_software_fixture" },
+      }).returning();
+      await db.update(companySkills).set({ lifecycleState: "active", activeVersionId: skillVersion!.id,
+        currentVersionId: skillVersion!.id, headVersionId: skillVersion!.id }).where(eq(companySkills.id, skill!.id));
+      const playbook = await seedApprovedAuthoringPlaybook(db, f.actor, f.home);
+      async function componentHash(type: "role_pack" | "skill" | "playbook", resourceId: string, version: string) {
+        const [row] = await db.execute(sql`select aw_v7_package_component_hash(${f.home}::uuid, ${type}, ${resourceId}::uuid, ${version}::uuid) as hash`);
+        return String(row!.hash);
+      }
+      const cases = SPECIALIST_CANDIDATES[BLENTERA_MANAGED_STARTER_PROFILE.packageKey].cases;
+      const components: PackageRelease["components"] = [
+        { key: "starter-role", type: "role_pack", sourceVersion: "1", contentHash: await componentHash("role_pack", roleId, roleVersionId), source: fixtureEvidence, required: true },
+        { key: "starter-skill", type: "skill", sourceVersion: "1", contentHash: await componentHash("skill", skill!.id, skillVersion!.id), source: fixtureEvidence, required: true },
+        { key: "starter-playbook", type: "playbook", sourceVersion: "1", contentHash: await componentHash("playbook", playbook.playbookId, playbook.revisionId), source: fixtureEvidence, required: true },
+        { key: BLENTERA_MANAGED_STARTER_PROFILE.evaluation.suiteComponentKey, type: "eval_suite",
+          sourceVersion: BLENTERA_MANAGED_STARTER_PROFILE.evaluation.suiteVersion,
+          contentHash: nativeSha256(cases.map((scenario) => ({ caseKey: scenario.key,
+            contract: specialistCompletionContract(BLENTERA_MANAGED_STARTER_PROFILE.packageKey, scenario.key) }))), source: fixtureEvidence, required: true },
+      ];
+      const candidate = managedCustomerStarterReleaseCandidate({ sourceRevision: sourceSha, components,
+        releaseEvidence: { ...input.releaseEvidence, sbom: fixtureEvidence, provenance: fixtureEvidence,
+          signature: fixtureEvidence, scan: fixtureEvidence, evaluations: fixtureEvidence, protectedHoldout: fixtureEvidence,
+          sandboxQualification: fixtureEvidence, releaseAuthorization: fixtureEvidence, customerDemand: fixtureEvidence,
+          unresolvedCritical: [] } });
+      // Each invocation owns different company-bound component revisions. Keep
+      // each immutable release distinct when the full suite builds this fixture
+      // more than once for the same package key.
+      const release: PackageRelease = { ...candidate,
+        version: `1.0.${managedStarterFixtureSequence++}` };
+      return { release, intent: BLENTERA_MANAGED_STARTER_PROFILE.intent,
+        meetingNotes: "The team will collect launch feedback before next Tuesday's review. Confirm an owner before assigning follow-up work.",
+        installComponents: components.filter((component) => ["role_pack", "skill", "playbook"].includes(component.type))
+          .map((component) => component.type === "role_pack"
+            ? { key: component.key, resourceId: roleId, versionId: roleVersionId }
+            : component.type === "skill"
+              ? { key: component.key, resourceId: skill!.id, versionId: skillVersion!.id }
+              : { key: component.key, resourceId: playbook.playbookId, versionId: playbook.revisionId }) };
+    }
+    async function configureManagedStarterModel(): Promise<() => Promise<void>> {
+      vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `managed-starter-native-${randomUUID()}-${randomUUID()}`);
+      // The original managed-runner context includes Paperclip's MCP endpoint.
+      // This controlled, non-listening fixture address lets the scheduler
+      // assemble that server without claiming a hosted endpoint or making a
+      // network request (the deterministic model response is plain text).
+      vi.stubEnv("PAPERCLIP_API_URL", "http://127.0.0.1:3100/api");
+      const modelProfileId = randomUUID();
+      const sourceSha = input.manifest.sourceRevision;
+      const transport: typeof guardedRemoteHttpFetch = async (url, init) => {
+        starterModelCalls++;
+        let requestBody: { model?: string; max_tokens?: number; system?: string;
+          messages?: Array<{ content?: Array<{ text?: string }> }> };
+        try {
+          requestBody = JSON.parse(String(init.body)) as { model?: string; max_tokens?: number; system?: string;
+            messages?: Array<{ content?: Array<{ text?: string }> }> };
+        } catch {
+          requestBody = {};
+        }
+        let taskNotes: boolean | null = starterModelExpectedTaskNotes === null ? null : false;
+        if (starterModelExpectedTaskNotes !== null) {
+          try {
+            const dispatchedInput = JSON.parse(requestBody.messages?.[0]?.content?.[0]?.text ?? "null") as { task?: { description?: string | null } };
+            taskNotes = dispatchedInput.task?.description?.includes(starterModelExpectedTaskNotes) ?? false;
+          } catch { taskNotes = false; }
+        }
+        starterModelObservedRequest = {
+          endpoint: String(url) === "https://api.anthropic.com/v1/messages",
+          credential: Boolean(new Headers(init.headers).get("x-api-key")),
+          model: requestBody.model === "fixture-managed-starter-model-20261029",
+          maxTokens: requestBody.max_tokens === 256,
+          system: requestBody.system?.includes("internal draft") ?? false,
+          taskNotes,
+        };
+        return new Response(JSON.stringify({ type: "message", role: "assistant", model: requestBody.model ?? "fixture-managed-starter-model-20261029",
+          stop_reason: "end_turn", content: [{ type: "text", text: starterModelOutput }],
+          usage: { input_tokens: 28, output_tokens: 24 } }), { status: 200, headers: { "content-type": "application/json" } });
+      };
+      return async () => {
+        const connection = await aiConnectionService(db).save(f.home, f.userId, {
+          provider: "anthropic", method: "api_key", ownership: "shared", name: "Managed starter controlled model fixture",
+          apiKey: "fixture", allAgents: false, agentIds: [f.presence.id],
+        }, "fixture-managed-starter-provider-credential-20261029");
+        await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: {
+          provider: "aw_text_only", workerModelProfileId: modelProfileId, model: "fixture-managed-starter-model-20261029",
+          maxOutputTokens: 256, lifecycleMode: "per_turn",
+        }, runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true } } }).where(eq(agents.id, f.presence.id));
+        const [presence] = await db.select().from(agents).where(eq(agents.id, f.presence.id));
+        const providers = agentProviderBindingService(db);
+        const discovery = await discoverNativeCapabilities({ companyId: f.home, adapterType: "paperclip_runner", config: presence!.adapterConfig });
+        const recorded = await providers.recordDiscovery(f.home, f.presence.id, discovery, {
+          connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true,
+        });
+        await providers.revalidate(f.actor, f.home, f.presence.id, recorded.capabilitySnapshotHash!,
+          "Controlled test validation of this exact software configuration; no hosted provider delivery qualification");
+        const bound = await providers.assertRuntime(f.home, f.presence.id);
+        starterModelProfile = {
+          id: modelProfileId, companyId: f.home, workerAgentId: f.presence.id,
+          providerBindingId: bound.provider.id, providerSnapshotHash: bound.provider.capabilitySnapshotHash!,
+          providerProfileRef: bound.runtime.providerProfileRef, qualifiedConfigurationHash: bound.runtime.qualifiedConfigurationHash!,
+          binding: { provider: "anthropic", method: "api_key", mode: "shared", ...connection },
+          transport: "server-text-only-v1", contract: "anthropic-text-messages-2023-06-01",
+          maximumEnvelopeBytes: 64000, inputTokensUpperBound: 100000, maxOutputTokens: 256,
+          tariff: { provider: "anthropic", model: "fixture-managed-starter-model-20261029", currency: "USD",
+            inputMinorPerMillion: 0, outputMinorPerMillion: 0, fixedMinor: 0, qualificationHash: "b".repeat(64),
+            sourceSha, testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 120000).toISOString() },
+          qualificationEvidenceRef: "https://qualification.test.invalid/qualification/managed-starter-software-fixture.json",
+          qualificationArtifactSha256: "c".repeat(64),
+        };
+        starterModelGateway = workerModelGateway(db, { profiles: [starterModelProfile], sourceSha,
+          protectedEvidenceOrigin: "https://qualification.test.invalid", fetch: transport });
+        registerNativeDraftGateway(db, starterModelGateway);
+        // This transport is a controlled deterministic test provider, not a
+        // live API call and not evidence of a production tariff or model route.
+        starterModelTransport = transport;
+      };
+    }
+    type StarterFixture = {
+      release: PackageRelease;
+      installComponents: Array<{ key: string; resourceId: string; versionId: string }>;
+      intent: string;
+      meetingNotes: string;
+    };
+    async function prepareFirstValueFixture(
+      budgets: CreateOrchestrationPlanInput["budgets"] = {},
+      configurePresence?: () => Promise<void>,
+      starter?: StarterFixture,
+      deferFirstTaskStart = false,
+    ) {
       await instanceSettingsService(db).updateExperimental({
         activation_v9: true, experience_analytics_v9: true, free_core_commercial_v7: true, billing_entitlements_v6: true,
         billing_usage_v6: true, enableWorkflowsV1: true,
@@ -1808,26 +2152,34 @@ const support = await getEmbeddedPostgresTestSupport();
         readiness_engine_v7: true, orchestration_v7: true, supervision_v7: true, verifier_v7: true,
         ai_use_cases_v7: true,
       });
-      const { published } = await hireFixture();
+      const published = starter
+        ? await service.publish(f.actor, starter.release)
+        : (await hireFixture()).published;
       versionId = published.id;
+      if (starter) installComponents = starter.installComponents;
       // Seed the original onboarding owner at review, and a bounded native test
       // entitlement. All package activation, orchestration, admission and review
       // below use their original writers; this is not a live customer outcome.
       const [account] = await db.insert(billingAccounts).values({ displayName: "First value fixture", payerUserId: f.userId }).returning();
       await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
       await db.insert(billingSubscriptions).values({ billingAccountId: account!.id,
-        providerSubscriptionId: `native-test-fixture-${randomUUID()}`, status: "active", productKeys: ["agent_package_research"],
+        providerSubscriptionId: `native-test-fixture-${randomUUID()}`, status: "active",
+        productKeys: [published.release.manifest.commercialProductKey ?? "agent_package_research"],
         currentPeriodEnd: new Date(Date.now() + 3600000), providerUpdatedAt: new Date(), sourceHash: "native-test-fixture" });
-      const intent = "Prepare a source-bound customer research draft";
+      const intent = starter
+        ? `${starter.intent}\n\nMeeting notes:\n${starter.meetingNotes}`
+        : "Prepare a source-bound customer research draft";
       const [onboarding] = await db.insert(companyOnboardingRuns).values({ companyId: f.home, billingAccountId: account!.id,
         createdByUserId: f.userId, idempotencyKey: randomUUID(), requestHash: "a".repeat(64), currentStage: "v9_review",
         activationState: { ...initialActivationState(), step: "review", intent, packageVersionId: versionId } }).returning();
-      const foundation = foundationService(db), principal = { principal: { type: "user" as const, userId: f.userId } };
-      const companyProfile = await foundation.createDraft(f.home, { foundationKey: "company_profile", category: "company",
-        documentType: "profile", body: "Native test company prepares source-bound customer research drafts",
-        authorityLevel: "canonical", sensitivity: "internal" }, principal);
-      await foundation.submitForReview(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
-      await foundation.approve(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+      if (!starter) {
+        const foundation = foundationService(db), principal = { principal: { type: "user" as const, userId: f.userId } };
+        const companyProfile = await foundation.createDraft(f.home, { foundationKey: "company_profile", category: "company",
+          documentType: "profile", body: "Native test company prepares source-bound customer research drafts",
+          authorityLevel: "canonical", sensitivity: "internal" }, principal);
+        await foundation.submitForReview(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+        await foundation.approve(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+      }
       await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id, status: "active" }).onConflictDoNothing();
       await db.insert(principalPermissionGrants).values(["company_scope:read", "foundation:read"].map(permissionKey => ({
         companyId: f.home, principalType: "agent", principalId: f.presence.id, permissionKey,
@@ -1849,15 +2201,76 @@ const support = await getEmbeddedPostgresTestSupport();
         expectedVersion: installed.version, reason: "Explicit native fixture reviewed-purpose activation",
       });
       expect(installation.status, JSON.stringify(installation.readiness)).toBe("active");
-      const [task] = await db.insert(issues).values({ companyId: f.home, title: "Private first-result draft", status: "todo",
-        assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
+      let task: typeof issues.$inferSelect;
+      let created: typeof orchestrationPlans.$inferSelect;
+      let governanceDeployment: { id: string } | null = null;
+      let currentOnboarding = onboarding!;
+      if (starter) {
+        // This new company has not pre-seeded the required platform Skill.
+        // First-task preparation must establish the exact platform identity
+        // before binding the deployment that the first Run will consume.
+        expect(await db.select({ id: companySkills.id }).from(companySkills)
+          .where(and(eq(companySkills.companyId, f.home), eq(companySkills.key, "blentera-platform")))).toEqual([]);
+        const activation = activationService(db);
+        const review = await activation.get(f.actor, f.home);
+        const option = review.firstTask!.preparationOptions.find(item => item.installationId === installation.id);
+        if (!option) throw new Error("The original first-task owner did not expose the reviewed package and purpose");
+        const prepared = await activation.command(f.actor, f.home, {
+          operation: "prepare_first_task", requestId: randomUUID(), expectedVersion: review.version,
+          installationId: option.installationId, expectedInstallationVersion: option.installationVersion,
+          expectedInstallationHash: option.installationHash, expectedUseCaseVersion: option.useCaseVersion,
+          expectedPurposeVersion: option.purposeVersion, confirmCurrentPurpose: true,
+        });
+        const reference = prepared.state.preparedFirstTask;
+        if (!reference) throw new Error("The original activation owner did not retain its prepared Task and plan");
+        [task] = await db.select().from(issues).where(and(eq(issues.companyId, f.home), eq(issues.id, reference.issueId)));
+        if (!task) throw new Error("The original activation owner did not persist its Task");
+        [created] = await db.select().from(orchestrationPlans).where(and(
+          eq(orchestrationPlans.companyId, f.home), eq(orchestrationPlans.id, reference.planId)));
+        if (!created) throw new Error("The original activation owner did not persist its bounded plan");
+        const [deployment] = await db.execute(sql`select id::text as id from ai_use_case_deployments
+          where company_id=${f.home}::uuid and issue_id=${task.id}::uuid and agent_id=${f.presence.id}::uuid and use_case_id=${useCase.id}::uuid
+            and aw_v7_governance_deployment_current(ai_use_case_deployments)`);
+        if (typeof deployment?.id !== "string") throw new Error("The original activation owner did not bind a current intended purpose");
+        governanceDeployment = { id: deployment.id };
+        const platform = await db.select({ activeVersionId: companySkills.activeVersionId, lifecycleState: companySkills.lifecycleState })
+          .from(companySkills).where(and(eq(companySkills.companyId, f.home), eq(companySkills.key, "blentera-platform")));
+        expect(platform).toHaveLength(1);
+        expect(platform[0]).toMatchObject({ lifecycleState: "active" });
+        expect(process.env.PAPERCLIP_API_URL).toBe("http://127.0.0.1:3100/api");
+        starterModelExpectedTaskNotes = starter?.meetingNotes ?? null;
+        if (!deferFirstTaskStart) {
+          const started = await activation.command(f.actor, f.home, {
+            operation: "start_first_task", requestId: randomUUID(), expectedVersion: prepared.version,
+            installationId: installation.id, planId: created.id, expectedPlanVersion: created.version,
+            expectedInstallationHash: installation.activationHash!, expectedMaximumModelCostMinor: 0,
+          });
+          expect(started.state.firstTask).toMatchObject({ issueId: task.id, planId: created.id, installationId: installation.id });
+          [created] = await db.select().from(orchestrationPlans).where(and(
+            eq(orchestrationPlans.companyId, f.home), eq(orchestrationPlans.id, reference.planId)));
+          if (!created) throw new Error("The original activation owner did not persist the running plan version");
+          const [storedOnboarding] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, onboarding!.id));
+          if (!storedOnboarding) throw new Error("The original activation owner did not retain its first-task state");
+          currentOnboarding = storedOnboarding;
+        }
+      } else {
+        const [createdTask] = await db.insert(issues).values({ companyId: f.home, title: "Private first-result draft", status: "todo",
+          assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
+        task = createdTask!;
+        governanceDeployment = await governance.bind(f.actor, f.home, useCase.id, {
+          expectedVersion: useCase.version,
+          issueId: task.id,
+          agentId: f.presence.id,
+        });
+        const orchestration = orchestrationService(db);
+        created = await orchestration.create(f.actor, f.home, createOrchestrationPlanSchema.parse({
+          issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(), riskClass: "C1", workload: "semantic",
+          completionContract: { objective: intent, requiredOutputs: [{ key: "result" }],
+            businessInvariants: ["Every claim cites an authorized retained source"] }, budgets, workers: [{ key: "worker", issueId: task.id }],
+        }));
+      }
       const orchestration = orchestrationService(db);
-      const created = await orchestration.create(f.actor, f.home, createOrchestrationPlanSchema.parse({
-        issueId: task!.id, expectedIssueUpdatedAt: task!.updatedAt.toISOString(), riskClass: "C1", workload: "semantic",
-        completionContract: { objective: intent, requiredOutputs: [{ key: "result" }],
-          businessInvariants: ["Every claim cites an authorized retained source"] }, budgets, workers: [{ key: "worker", issueId: task!.id }],
-      }));
-      return { onboarding: onboarding!, installation, task: task!, created, intent, orchestration, useCase };
+      return { onboarding: currentOnboarding, installation, task, created, intent, orchestration, useCase, governanceDeployment };
     }
     async function noChargePreparationFixture() {
       const modelProfileId = randomUUID();
@@ -2785,30 +3198,575 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(retried.firstAgent?.status).toBe("pending_approval");
       expect(Number((await counts())!.agents)).toBe(Number(before!.agents) + 1);
     }, 60000);
-    async function firstValueFixture() {
-      const { onboarding, installation, task, created, intent, orchestration } = await prepareFirstValueFixture();
-      const plan = await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",
-        rationale: "Start the explicitly bounded native fixture draft" });
-      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
-        status: "running", contextSnapshot: { issueId: task!.id } }).returning();
-      await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: run!.id,
-        responsibleUserId: f.userId, issueId: task!.id, query: intent });
-      const [document] = await db.insert(documents).values({ companyId: f.home, title: "Research result",
-        latestBody: "Native fixture output for an independent human review", createdByAgentId: f.presence.id }).returning();
-      const [revision] = await db.insert(documentRevisions).values({ companyId: f.home, documentId: document!.id,
-        revisionNumber: 1, body: document!.latestBody }).returning();
-      await db.update(documents).set({ latestRevisionId: revision!.id }).where(eq(documents.id, document!.id));
-      await db.insert(issueDocuments).values({ companyId: f.home, issueId: task!.id, documentId: document!.id, key: "result" });
-      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run!.id));
+    async function firstValueFixture(starter?: StarterFixture, configurePresence?: () => Promise<void>) {
+      const sourceSha = input.manifest.sourceRevision;
+      const { onboarding, installation, task, created, intent, orchestration, useCase, governanceDeployment } = await prepareFirstValueFixture(
+        starter ? { maxModelCostMinor: BLENTERA_MANAGED_STARTER_PROFILE.execution.currentV9ActivationOwnerMaximumModelCostMinor } : {},
+        configurePresence,
+        starter,
+      );
+      const plan = starter
+        ? created
+        : await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",
+          rationale: "Start the explicitly bounded native fixture draft" });
+      let run: typeof heartbeatRuns.$inferSelect,
+        document: typeof documents.$inferSelect,
+        revision: typeof documentRevisions.$inferSelect;
+      if (starter && starterModelProfile && starterModelTransport) {
+        if (!governanceDeployment) throw new Error("The managed starter has no exact intended-purpose deployment");
+        const worker = (await orchestration.get(f.actor, f.home, plan.id)).workers[0]!;
+        // start_first_task dispatches the canonical plan through the normal
+        // heartbeat scheduler. Wait for that original run instead of creating
+        // a second run or opening a test-only backend session.
+        let scheduledRun: typeof heartbeatRuns.$inferSelect | undefined;
+        let attempt: typeof orchestrationWorkerAttempts.$inferSelect | undefined;
+        await vi.waitFor(async () => {
+          // A wakeup may register its run after activation dispatch returns;
+          // repeatedly drain then observe the original durable attempt until it
+          // reaches a terminal state. No run or attempt is written by this test.
+          await heartbeatService(db).drainActiveRunExecutions();
+          [attempt] = await db.select().from(orchestrationWorkerAttempts).where(and(
+            eq(orchestrationWorkerAttempts.companyId, f.home), eq(orchestrationWorkerAttempts.planId, plan.id),
+            eq(orchestrationWorkerAttempts.workerId, worker.id),
+          )).orderBy(sql`${orchestrationWorkerAttempts.attempt} desc`).limit(1);
+          if (!attempt?.runId) throw new Error("The original plan worker attempt has not yet bound its scheduler run");
+          [scheduledRun] = await db.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, attempt.runId),
+            eq(heartbeatRuns.nativeIssueId, task!.id), eq(heartbeatRuns.agentId, f.presence.id),
+          ));
+          if (scheduledRun && ["succeeded", "failed", "cancelled", "timed_out"].includes(scheduledRun.status) && attempt.status === "running") {
+            // The canonical verification packet owner reconciles a terminal
+            // Native run into its durable worker attempt before exposing the
+            // packet. Do not manufacture attempt or run terminal state here.
+            await verificationService(db).packet(f.actor, f.home, plan.id, worker.id);
+            [attempt] = await db.select().from(orchestrationWorkerAttempts).where(and(
+              eq(orchestrationWorkerAttempts.companyId, f.home), eq(orchestrationWorkerAttempts.planId, plan.id),
+              eq(orchestrationWorkerAttempts.workerId, worker.id),
+            )).orderBy(sql`${orchestrationWorkerAttempts.attempt} desc`).limit(1);
+          }
+          if (!scheduledRun || !["succeeded", "failed", "cancelled", "timed_out"].includes(scheduledRun.status) || attempt?.status === "running")
+            throw new Error(`The original scheduler run has not reached its terminal owner receipt (run=${scheduledRun?.status ?? "missing"}, runError=${scheduledRun?.errorCode ?? "none"}, attempt=${attempt?.status ?? "missing"}, calls=${starterModelCalls}, request=${JSON.stringify(starterModelObservedRequest)})`);
+        }, { timeout: 30000, interval: 50 });
+        if (!scheduledRun || !attempt || !attempt.executionManifestId || attempt.status !== "succeeded" || scheduledRun.status !== "succeeded")
+          throw new Error(`The original scheduler did not retain a successful native run as the plan worker attempt (run=${scheduledRun?.status ?? "missing"}, runError=${scheduledRun?.errorCode ?? "none"}, attempt=${attempt?.status ?? "missing"}, manifest=${Boolean(attempt?.executionManifestId)}, modelCalls=${starterModelCalls})`);
+        run = scheduledRun;
+        const [purposeBinding] = await db.execute(sql`
+          select d.id::text as "deploymentId", d.company_id::text as "deploymentCompanyId",
+            d.issue_id::text as "deploymentIssueId", d.agent_id::text as "deploymentAgentId", d.status as "deploymentStatus",
+            aw_v7_governance_deployment_current(d) as "deploymentCurrent",
+            i.ai_use_case_id::text as "installationUseCaseId",
+            r.native_issue_id::text as "runIssueId",
+            r.context_snapshot->>'governanceDeploymentId' as "runDeploymentId"
+          from heartbeat_runs r
+          join company_agent_package_installations i on i.id=${installation.id}::uuid and i.company_id=r.company_id
+          join ai_use_case_deployments d on d.id=${governanceDeployment.id}::uuid and d.company_id=r.company_id
+          where r.company_id=${f.home}::uuid and r.id=${run.id}::uuid`);
+        expect(purposeBinding).toMatchObject({ deploymentId: governanceDeployment.id, deploymentCompanyId: f.home,
+          deploymentIssueId: task!.id, deploymentAgentId: f.presence.id, deploymentStatus: "active", deploymentCurrent: true,
+          installationUseCaseId: useCase.id, runIssueId: task!.id, runDeploymentId: governanceDeployment.id });
+        expect(starterModelCalls).toBe(1);
+        expect(starterModelObservedRequest).toEqual({ endpoint: true, credential: true, model: true, maxTokens: true, system: true, taskNotes: true });
+        const saved = await documentService(db).getIssueDocumentByKey(task!.id, "result");
+        if (!saved) throw new Error("Controlled native model draft was not saved by its original document owner");
+        document = (await db.select().from(documents).where(eq(documents.id, saved.id)))[0]!;
+        revision = (await db.select().from(documentRevisions).where(eq(documentRevisions.id, saved.latestRevisionId)))[0]!;
+      } else {
+        const [createdRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+          status: "running", contextSnapshot: { issueId: task!.id } }).returning();
+        run = createdRun!;
+        await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: run.id,
+          responsibleUserId: f.userId, issueId: task!.id, query: intent });
+        const [createdDocument] = await db.insert(documents).values({ companyId: f.home, title: "Research result",
+          latestBody: "Native fixture output for an independent human review", createdByAgentId: f.presence.id }).returning();
+        const [createdRevision] = await db.insert(documentRevisions).values({ companyId: f.home, documentId: createdDocument!.id,
+          revisionNumber: 1, body: createdDocument!.latestBody }).returning();
+        await db.update(documents).set({ latestRevisionId: createdRevision!.id }).where(eq(documents.id, createdDocument!.id));
+        await db.insert(issueDocuments).values({ companyId: f.home, issueId: task!.id, documentId: createdDocument!.id, key: "result" });
+        await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
+        document = createdDocument!;
+        revision = createdRevision!;
+      }
       const worker = (await orchestration.get(f.actor, f.home, plan.id)).workers[0]!;
       const verifier = verificationService(db), packet = await verifier.packet(f.actor, f.home, plan.id, worker.id);
       const review = await verifier.review(f.actor, f.home, plan.id, { expectedPlanVersion: packet.planVersion, workerId: worker.id,
         expectedResultHash: packet.resultHash, result: "pass", objectiveSatisfied: true,
-        rationale: "Independently inspected the saved native draft against the declared invariant",
-        businessInvariants: [{ index: 0, satisfied: true, evidenceRefs: [packet.evidence[0]!.ref] }] });
+        rationale: starter
+          ? "Reviewed the meeting-note draft for source support, proposed versus agreed commitments, and missing owners or deadlines"
+          : "Independently inspected the saved native draft against the declared invariant",
+        businessInvariants: packet.contract.businessInvariants.map((_, index) => ({ index, satisfied: true,
+          evidenceRefs: [packet.evidence.find((evidence) => evidence.type === "task_document")!.ref] })),
+        evidenceRequirements: packet.contract.evidenceRequirements.map((_, index) => ({ index, satisfied: true,
+          evidenceRefs: [packet.evidence.find((evidence) => evidence.type === "task_document")!.ref] })),
+        prohibitedOutcomes: packet.contract.prohibitedOutcomes.map((_, index) => ({ index, satisfied: true,
+          evidenceRefs: [packet.evidence.find((evidence) => evidence.type === "task_document")!.ref] })),
+      });
+      if (starter) expect(packet.contract.businessInvariants).toEqual([...BLENTERA_MANAGED_STARTER_PROFILE.evaluation.judgments]);
       expect(review.result).toBe("pass");
       return { onboarding: onboarding!, installation, task: task!, run: run!, document: document!, revision: revision!, review: review! };
     }
+    it("joins the versioned managed starter through native draft execution, activation, Human review, support intake and opt-in export in a controlled software fixture", async () => {
+      const starter = await managedStarterFixture();
+      starterModelOutput = "Draft — proposed follow-up: collect launch feedback before next Tuesday's review. The notes do not record an owner or an agreed deadline; confirm both before assigning work.";
+      const configurePresence = await configureManagedStarterModel();
+      const fixture = await firstValueFixture(starter, configurePresence), activation = activationService(db);
+      const pending = await activation.get(f.actor, f.home);
+      expect(starter.release.packageKey).toBe(BLENTERA_MANAGED_STARTER_PROFILE.packageKey);
+      expect(fixture.installation.installedVersionId).toBe(fixture.onboarding.activationState!.packageVersionId);
+      const recorded = await activation.command(f.actor, f.home, {
+        operation: "record_verified_result", expectedVersion: fixture.onboarding.version, requestId: randomUUID(),
+        installationId: fixture.installation.id, verificationRunId: fixture.review.id,
+      });
+      expect(recorded.firstValue?.status).toBe("verified");
+      expect(recorded.firstValue?.result?.title).toContain(BLENTERA_MANAGED_STARTER_PROFILE.intent);
+      expect(pending.firstTask?.current).toMatchObject({ issueId: fixture.task.id, planId: fixture.review.planId,
+        installationId: fixture.installation.id, status: "completed", dispatched: true });
+      const completed = await activation.command(f.actor, f.home, {
+        operation: "complete_activation", expectedVersion: recorded.version, requestId: randomUUID(),
+      });
+      expect(completed.status).toBe("completed");
+
+      const supportPolicy = {
+        schemaVersion: 1, policyVersion: "starter-software-fixture", recipientName: "Configured test support operator",
+        privacyNoticeUrl: "https://support.example.test/privacy", processingRegion: "eu",
+        retentionTrigger: "after_last_customer_or_support_message" as const, retentionDays: 30,
+        backupMaxDays: 7, restoreLagDays: 1, deletionMarkerDays: 30, legalHoldPolicyId: "starter-software-fixture",
+      };
+      const support = customerSupportCaseService(db, { dataPolicy: supportPolicy });
+      const disclosure = await support.intakePolicy(f.actor, f.home, f.userId);
+      if (!disclosure.available) throw new Error("The controlled support fixture must have an explicit intake policy");
+      const supportCase = await support.create(f.actor, f.home, {
+        expectedUserId: f.userId, expectedPolicyRevision: disclosure.revision, idempotencyKey: randomUUID(),
+        category: "other", impact: null,
+        description: "The reviewed internal follow-up draft was useful; please retain the current authorization boundaries.",
+      });
+      const exported = await companyPortabilityService(db).exportBundle(f.home, {
+        expectedUserId: f.userId,
+        include: { company: true, agents: false, projects: false, issues: false, skills: false, supportCases: true },
+      }, { actor: f.actor });
+      const archive = JSON.parse(exported.files["blentera-support-cases-v1.json"]!) as {
+        schema: string; companyId: string; caseCount: number; cases: Array<{ id: string; description: string }>;
+      };
+      expect(archive).toMatchObject({ schema: "blentera.support-cases.v1", companyId: f.home, caseCount: 1,
+        cases: [{ id: supportCase.id, description: supportCase.description }] });
+      expect(exported.manifest.includes.supportCases).toBe(true);
+      // The deterministic test transport drives the original Worker Model
+      // Gateway and Native text-draft backend. Its fixture tariff and response
+      // are not live provider, hosted model, package release or customer
+      // acceptance qualification.
+      expect(fixture.document.latestBody).toContain("proposed follow-up");
+      expect(fixture.document.latestBody).toContain("The notes do not record an owner or an agreed deadline");
+      expect((await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.id, fixture.installation.id)))[0]!.status).toBe("active");
+    }, 60000);
+    it.skipIf(!browserExecutable || !existsSync(browserExecutable))(
+      "composes the real managed starter first-task and independent review through the authenticated browser and retains support intake",
+      async () => {
+        const priorApiUrl = process.env.PAPERCLIP_API_URL;
+        const priorInstanceId = process.env.PAPERCLIP_INSTANCE_ID;
+        const priorSecretsMasterKeyFile = process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+        const starter = await managedStarterFixture();
+        starterModelOutput = "Draft — proposed follow-up: collect launch feedback before next Tuesday's review. The notes do not record an owner or an agreed deadline; confirm both before assigning work.";
+        const configurePresence = await configureManagedStarterModel();
+        // Versioned package, purpose approval, installation, onboarding owner,
+        // current provider profile and prepared Task/plan are seeded through
+        // their original owners. The browser performs the first-task dispatch,
+        // independent review, first-value record, activation completion and
+        // support intake through the assembled application.
+        process.env.PAPERCLIP_INSTANCE_ID = `managed-first-value-browser-${randomUUID()}`;
+        process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = join(fixtureHome, "managed-browser-secrets", "master.key");
+        let fixture: Awaited<ReturnType<typeof prepareFirstValueFixture>>;
+        try {
+          fixture = await prepareFirstValueFixture(
+            { maxModelCostMinor: BLENTERA_MANAGED_STARTER_PROFILE.execution.currentV9ActivationOwnerMaximumModelCostMinor },
+            configurePresence,
+            starter,
+            true,
+          );
+        } catch (error) {
+          if (priorSecretsMasterKeyFile === undefined) delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+          else process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = priorSecretsMasterKeyFile;
+          if (priorInstanceId === undefined) delete process.env.PAPERCLIP_INSTANCE_ID;
+          else process.env.PAPERCLIP_INSTANCE_ID = priorInstanceId;
+          throw error;
+        }
+        if (!starterModelGateway || !fixture.task || !fixture.created) throw new Error("managed_browser_fixture_incomplete");
+        expect(fixture.created.status).toBe("draft");
+        expect((await activationService(db).get(f.actor, f.home)).firstTask?.candidates[0]?.planId).toBe(fixture.created.id);
+
+        const policy = {
+          schemaVersion: 1, policyVersion: "managed-first-value-browser-software", recipientName: "Configured test support operator",
+          privacyNoticeUrl: "https://support.example.test/privacy", processingRegion: "eu",
+          retentionTrigger: "after_last_customer_or_support_message", retentionDays: 30,
+          backupMaxDays: 7, restoreLagDays: 1, deletionMarkerDays: 30, legalHoldPolicyId: "managed-first-value-browser-software",
+        } as const;
+        const priorSupportPolicy = process.env.AW_SUPPORT_CASE_DATA_POLICY_JSON;
+        process.env.AW_SUPPORT_CASE_DATA_POLICY_JSON = JSON.stringify(policy);
+        let server: ReturnType<typeof createServer> | undefined;
+        let app: Awaited<ReturnType<typeof createApp>> | undefined;
+        let liveEvents: ReturnType<typeof setupLiveEventsWebSocketServer> | undefined;
+        let browser: Browser | undefined;
+        let browserContext: BrowserContext | undefined;
+        let foreignBrowserContext: BrowserContext | undefined;
+        let origin = "";
+        const foreignId = randomUUID();
+        let activationErrorContext = "journey";
+        const activationServerErrors: Array<{ name: string; status?: number; code?: string; retryable?: boolean; context: string; stack?: string[]; issues?: Array<{ code?: string; path: unknown[] }> }> = [];
+        const originalErrorHandler = errorHandlerModule.errorHandler;
+        const errorHandlerSpy = vi.spyOn(errorHandlerModule, "errorHandler").mockImplementation((error, req, res, next) => {
+          if (req.method === "GET" && req.path === `/api/companies/${f.home}/activation`) {
+            const chain: Array<{ name: string; status?: number; code?: string; retryable?: boolean; context: string; stack?: string[]; issues?: Array<{ code?: string; path: unknown[] }> }> = [];
+            let current: unknown = error;
+            for (let depth = 0; current && typeof current === "object" && depth < 3; depth++) {
+              const row = current as { name?: unknown; status?: unknown; code?: unknown; details?: unknown; stack?: unknown; cause?: unknown; issues?: unknown };
+              const details = row.details && typeof row.details === "object" ? row.details as { code?: unknown; retryable?: unknown } : {};
+              const issues = Array.isArray(row.issues) ? row.issues.slice(0, 8).map(item => {
+                const issue = item && typeof item === "object" ? item as { code?: unknown; path?: unknown } : {};
+                return { ...(typeof issue.code === "string" ? { code: issue.code } : {}),
+                  path: Array.isArray(issue.path) ? issue.path.slice(0, 8) : [] };
+              }) : undefined;
+              chain.push({ name: typeof row.name === "string" ? row.name : "Error",
+                ...(typeof row.status === "number" ? { status: row.status } : {}),
+                ...(typeof row.code === "string" ? { code: row.code } : {}),
+                ...(typeof details.code === "string" ? { code: details.code } : {}),
+                ...(typeof details.retryable === "boolean" ? { retryable: details.retryable } : {}),
+                context: activationErrorContext,
+                ...(typeof row.stack === "string" ? { stack: row.stack.split("\n").slice(1, 5) } : {}),
+                ...(issues ? { issues } : {}) });
+              current = row.cause;
+            }
+            activationServerErrors.push(...chain);
+          }
+          originalErrorHandler(error, req, res, next);
+        });
+        try {
+          const now = new Date();
+          await db.insert(authUsers).values({ id: foreignId, name: "Other company owner",
+            email: `${foreignId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+          const [foreignCompany] = await db.insert(companies).values({ name: "Managed first-value foreign tenant" }).returning();
+          await db.insert(companyMemberships).values({ companyId: foreignCompany!.id, principalType: "user",
+            principalId: foreignId, status: "active", membershipRole: "owner" });
+          const foreignSessionToken = randomUUID();
+          await db.insert(authSessions).values({ id: randomUUID(), userId: foreignId, token: foreignSessionToken,
+            createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+
+          const [humanSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+            token: authSessions.token, expiresAt: authSessions.expiresAt }).from(authSessions)
+            .where(and(eq(authSessions.id, f.actor.sessionId!), eq(authSessions.userId, f.userId))).limit(1);
+          if (!humanSession || humanSession.expiresAt.getTime() <= Date.now()) throw new Error("managed_browser_human_session_unavailable");
+          const resolveSessionFromHeaders = async (headers: Headers) => {
+            const entry = (headers.get("cookie") ?? "").split(";").map(value => value.trim())
+              .find(value => value.startsWith("session_token="));
+            const token = entry ? decodeURIComponent(entry.slice("session_token=".length)) : null;
+            if (!token) return null;
+            const [session] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+              expiresAt: authSessions.expiresAt }).from(authSessions)
+              .where(and(eq(authSessions.token, token), sql`${authSessions.expiresAt} > now()`)).limit(1);
+            if (!session) return null;
+            const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+              .from(authUsers).where(eq(authUsers.id, session.userId)).limit(1);
+            return user ? { session: { id: session.id, userId: session.userId, expiresAt: session.expiresAt }, user } : null;
+          };
+          const resolveSession = (req: import("express").Request) =>
+            resolveSessionFromHeaders(new Headers({ cookie: req.header("cookie") ?? "" }));
+          server = createServer();
+          await new Promise<void>((resolve, reject) => {
+            server!.once("error", reject);
+            server!.listen(0, "127.0.0.1", () => { server!.off("error", reject); resolve(); });
+          });
+          const address = server.address();
+          if (!address || typeof address === "string") throw new Error("managed_browser_listener_missing");
+          origin = `http://127.0.0.1:${address.port}`;
+          const fixtureKey = (byte: number) => Buffer.alloc(32, byte).toString("base64");
+          const fixturePlatform = saasPlatform(db, {
+            environment: "staging",
+            databaseUrl: database.connectionString,
+            outbox: { encryptionKey: fixtureKey(11), keyId: "managed-browser", previousKeys: {}, recipientHashKey: fixtureKey(12) },
+            mail: { apiKey: "controlled-software-fixture", signingKey: "controlled-software-fixture",
+              domain: "example.test", from: "support@example.test", stagingRecipients: [`${f.userId}@test.invalid`] },
+            billing: { environment: "sandbox", apiKey: "controlled-software-fixture", webhookSecret: "controlled-software-fixture",
+              payloadKey: fixtureKey(13), payloadKeyId: "managed-browser", previousKeys: {}, graceDays: 7 },
+            objects: { bucket: "managed-browser-fixture", endpoint: "https://objects.example.test", region: "eu-west-1" },
+            runtime: { region: "fixture", networkId: "fixture", hostPlan: "fixture", hostAgentImage: "fixture", osTemplate: "fixture",
+              maxHosts: 0, maxCreatesPerHour: 0, maxEstimatedMonthlyMinor: "0", heartbeatSeconds: 30,
+              suspectSeconds: 90, unreachableSeconds: 300, backupRetentionDays: 7 },
+            operatorUserIds: [f.userId],
+            deployment: { imageDigest: `sha256:${"0".repeat(64)}`, sourceSha: input.manifest.sourceRevision },
+          } as SaasPlatformConfig, { primaryAppOrigin: origin, allowedAppOrigins: [origin], legacyOrigins: [] });
+          app = await createApp(db, { heartbeat: heartbeatService(db), resolveSession, uiMode: "static",
+            serverPort: address.port, storageService: createStorageService(createLocalDiskStorageProvider(join(fixtureHome, "managed-browser-storage"))),
+            deploymentMode: "authenticated", deploymentExposure: "private", bindHost: "127.0.0.1",
+            allowedHostnames: ["127.0.0.1"], authReady: true, companyDeletionEnabled: false,
+            saasPlatform: fixturePlatform,
+            instanceId: process.env.PAPERCLIP_INSTANCE_ID, localPluginDir: join(fixtureHome, "plugins"),
+            managedPluginAutoInstall: [], decisionServiceOptions: { wakeOriginAgent: async () => undefined } });
+          server.on("request", app);
+          liveEvents = setupLiveEventsWebSocketServer(server, db, { deploymentMode: "authenticated", resolveSessionFromHeaders });
+          // The application installs its normal controller during boot. The
+          // test then registers the same controlled gateway already bound to
+          // this profile and asserts the original internal accessor is live.
+          registerNativeDraftGateway(db, starterModelGateway);
+          expect(installedNativeDraftGateway(db)).toBe(starterModelGateway);
+          process.env.PAPERCLIP_API_URL = `${origin}/api`;
+
+          browser = await chromium.launch({ executablePath: browserExecutable!, headless: true,
+            args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+          const context = await browser.newContext();
+          browserContext = context;
+          await context.addCookies([{ name: "session_token", value: humanSession.token, url: origin }]);
+          const page = await context.newPage();
+          let experienceStage = "bootstrap";
+          const pageErrors: string[] = [];
+          page.on("pageerror", error => pageErrors.push(error.message));
+          const privateExperienceResponses: Promise<string>[] = [];
+          const observePrivateExperienceResponse = (response: Response) => {
+            const url = new URL(response.url());
+            const operation = url.pathname === `/api/companies/${f.home}/activation` ? "activation"
+              : url.pathname === `/api/companies/${f.home}/onboarding` ? "onboarding" : null;
+            if (response.request().method() !== "GET" || !operation) return;
+            privateExperienceResponses.push(response.text().then(body => {
+              let parsed: Record<string, unknown> = {};
+              try { parsed = JSON.parse(body) as Record<string, unknown>; } catch { /* summarize only valid JSON fields */ }
+              const details = parsed.details && typeof parsed.details === "object" ? parsed.details as Record<string, unknown> : {};
+              const state = parsed.state && typeof parsed.state === "object" ? parsed.state as Record<string, unknown> : {};
+              const firstValue = parsed.firstValue && typeof parsed.firstValue === "object" ? parsed.firstValue as Record<string, unknown> : {};
+              const summary = { operation, stage: experienceStage, status: response.status(), code: parsed.code ?? details.code ?? null,
+                retryable: details.retryable ?? null, error: typeof parsed.error === "string" ? parsed.error : null,
+                activationStatus: typeof parsed.status === "string" ? parsed.status : null,
+                step: typeof state.step === "string" ? state.step : null,
+                firstValueStatus: typeof firstValue.status === "string" ? firstValue.status : null };
+              return JSON.stringify(summary);
+            }));
+            if (privateExperienceResponses.length > 16) privateExperienceResponses.shift();
+          };
+          page.on("response", observePrivateExperienceResponse);
+          try {
+          const [homeCompany] = await db.select({ issuePrefix: companies.issuePrefix }).from(companies).where(eq(companies.id, f.home));
+          if (!homeCompany?.issuePrefix) throw new Error("managed_browser_home_company_prefix_missing");
+          await page.goto(`${origin}/${homeCompany.issuePrefix}/dashboard`);
+          const claimBootstrap = page.getByRole("button", { name: "Claim this instance", exact: true });
+          await browserExpect(claimBootstrap).toBeVisible({ timeout: 30_000 });
+          const claimResponsePromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === "/api/bootstrap/claim");
+          await claimBootstrap.click();
+          const claimResponse = await claimResponsePromise;
+          expect(claimResponse.status()).toBe(200);
+          expect(await claimResponse.json()).toMatchObject({ claimed: true, userId: f.userId });
+          await page.reload();
+          await browserExpect(claimBootstrap).toHaveCount(0, { timeout: 30_000 });
+          await page.waitForFunction(
+            companyId => localStorage.getItem("paperclip.selectedCompanyId") === companyId,
+            f.home,
+            { timeout: 30_000 },
+          );
+
+          const deniedForeignTenant = await context.request.get(`${origin}/api/companies/${foreignCompany!.id}/activation`);
+          expect(deniedForeignTenant.status()).toBe(403);
+          foreignBrowserContext = await browser.newContext();
+          await foreignBrowserContext.addCookies([{ name: "session_token", value: foreignSessionToken, url: origin }]);
+          activationErrorContext = "foreign-user-negative-probe";
+          const deniedForeignUser = await foreignBrowserContext.request.get(`${origin}/api/companies/${f.home}/activation`);
+          expect(deniedForeignUser.status()).toBe(403);
+          activationErrorContext = "journey";
+
+          const activationPath = `${origin}/saas/activation/9`;
+          experienceStage = "activation-review-read";
+          const activationRead = await context.request.get(
+            `${origin}/api/companies/${f.home}/activation?expectedUserId=${encodeURIComponent(f.userId)}`,
+          );
+          const activationReadBody = await activationRead.text();
+          expect(activationRead.status(), activationReadBody).toBe(200);
+          await page.goto(activationPath);
+          const runFirstTask = page.getByRole("button", { name: "Run first task", exact: true });
+          await browserExpect(runFirstTask).toBeEnabled({ timeout: 30_000 });
+          const startResponsePromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation`);
+          experienceStage = "first-task-dispatch";
+          await runFirstTask.click();
+          const startResponse = await startResponsePromise;
+          expect(startResponse.status()).toBe(200);
+          const startedView = await startResponse.json() as { firstTask?: { current?: { issueId?: string; planId?: string; installationId?: string } } };
+          expect(startedView.firstTask?.current).toMatchObject({ issueId: fixture.task.id, planId: fixture.created.id,
+            installationId: fixture.installation.id });
+
+          let nativeRun: typeof heartbeatRuns.$inferSelect | undefined;
+          await vi.waitFor(async () => {
+            await heartbeatService(db).drainActiveRunExecutions();
+            [nativeRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),
+              eq(heartbeatRuns.agentId, f.presence.id), eq(heartbeatRuns.nativeIssueId, fixture.task!.id)))
+              .orderBy(sql`${heartbeatRuns.createdAt} desc`).limit(1);
+            if (!nativeRun || nativeRun.status !== "succeeded") {
+              const [completion] = nativeRun?.completionContractId ? await db.select({ contractJson: completionContracts.contractJson })
+                .from(completionContracts).where(and(eq(completionContracts.companyId, f.home),
+                  eq(completionContracts.id, nativeRun.completionContractId))).limit(1) : [];
+              const contract = completion?.contractJson as { v7?: { requiredOutputs?: unknown[] } } | undefined;
+              throw new Error(`managed_native_draft_not_terminal_${JSON.stringify({ status: nativeRun?.status ?? "missing",
+                errorCode: nativeRun?.errorCode, error: nativeRun?.error, completionContractId: nativeRun?.completionContractId,
+                requiredOutputs: contract?.v7?.requiredOutputs })}`);
+            }
+          }, { timeout: 90_000, interval: 100 });
+          expect(nativeRun).toMatchObject({ status: "succeeded", nativeIssueId: fixture.task.id, agentId: f.presence.id,
+            responsibleUserId: f.userId });
+          expect(starterModelCalls).toBe(1);
+          expect(starterModelObservedRequest).toMatchObject({ taskNotes: true, endpoint: true, credential: true, model: true });
+          const saved = await documentService(db).getIssueDocumentByKey(fixture.task.id, "result");
+          if (!saved) throw new Error("Managed starter did not save the original first-task result");
+          const [document] = await db.select().from(documents).where(eq(documents.id, saved.id));
+          const [revision] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, saved.latestRevisionId));
+          expect(revision?.body).toContain("proposed follow-up");
+          expect(revision?.body).toContain("The notes do not record an owner or an agreed deadline");
+          expect(revision?.body).not.toContain("Assign the follow-up to");
+
+          experienceStage = "human-worker-review";
+          await page.goto(`${origin}/orchestration`);
+          const reviewPlan = await orchestrationService(db).get(f.actor, f.home, fixture.created.id);
+          const reviewedWorker = reviewPlan.workers.find(worker => worker.issueId === fixture.task!.id);
+          if (!reviewedWorker) throw new Error("managed_browser_primary_worker_missing");
+          await page.getByRole("button", { name: `${reviewPlan.mode} · ${reviewPlan.riskClass} · ${reviewPlan.status}`, exact: true }).click();
+          const independentReview = page.getByRole("heading", { name: "Independent review", exact: true }).locator("xpath=..");
+          await browserExpect(independentReview).toBeVisible({ timeout: 30_000 });
+          await browserExpect(independentReview.getByRole("link", { name: "Open the Task outputs and sources" })).toBeVisible();
+          const reviewTarget = independentReview.getByRole("combobox").first();
+          const workerPacketResponsePromise = page.waitForResponse(response => {
+            const url = new URL(response.url());
+            return response.request().method() === "GET" &&
+              url.pathname.endsWith(`/companies/${f.home}/orchestration/plans/${reviewPlan.id}/verification-packet`) &&
+              url.searchParams.get("workerId") === reviewedWorker.id;
+          });
+          await reviewTarget.selectOption(reviewedWorker.id);
+          const workerPacketResponse = await workerPacketResponsePromise;
+          expect(workerPacketResponse.status()).toBe(200);
+          expect(await workerPacketResponse.json()).toMatchObject({ workerId: reviewedWorker.id, issueId: fixture.task.id, deterministicFailures: [] });
+          await browserExpect(independentReview.getByRole("checkbox").first()).toBeVisible({ timeout: 30_000 });
+          const checkboxes = await independentReview.getByRole("checkbox").all();
+          expect(checkboxes.length).toBeGreaterThan(0);
+          for (const checkbox of checkboxes) await checkbox.check();
+          const selects = await independentReview.getByRole("combobox").all();
+          expect(selects.length).toBeGreaterThan(1);
+          for (let index = 1; index < selects.length - 1; index++) await selects[index]!.selectOption({ index: 1 });
+          await independentReview.getByRole("textbox", { name: "Review rationale" }).fill(
+            "I reviewed the original meeting notes and the saved draft, including the missing owner and unagreed deadline.");
+          await selects.at(-1)!.selectOption("pass");
+          await independentReview.getByRole("button", { name: "Record independent review", exact: true }).click();
+          let review: typeof verificationRuns.$inferSelect | undefined;
+          await vi.waitFor(async () => {
+            [review] = await db.select().from(verificationRuns).where(and(eq(verificationRuns.companyId, f.home),
+              eq(verificationRuns.planId, fixture.created!.id), eq(verificationRuns.reviewerType, "human"),
+              eq(verificationRuns.reviewerId, f.userId), eq(verificationRuns.result, "pass")))
+              .orderBy(sql`${verificationRuns.createdAt} desc`).limit(1);
+            if (!review) throw new Error("managed_browser_independent_review_not_retained");
+          }, { timeout: 30_000, interval: 100 });
+          const [reviewedAttempt] = await db.select().from(orchestrationWorkerAttempts).where(and(
+            eq(orchestrationWorkerAttempts.companyId, f.home), eq(orchestrationWorkerAttempts.planId, reviewPlan.id),
+            eq(orchestrationWorkerAttempts.workerId, reviewedWorker.id)))
+            .orderBy(sql`${orchestrationWorkerAttempts.attempt} desc`).limit(1);
+          expect(reviewedAttempt).toMatchObject({ status: "succeeded", runId: nativeRun!.id });
+          expect(review).toMatchObject({ issueId: fixture.task.id, workerId: reviewedWorker.id,
+            workerAttemptId: reviewedAttempt!.id, reviewerType: "human", reviewerId: f.userId, result: "pass" });
+          expect(review!.resultHash).toMatch(/^[a-f0-9]{64}$/);
+
+          experienceStage = "record-first-result";
+          const activationPageReadPromise = page.waitForResponse(response => response.request().method() === "GET" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation` && response.status() === 200);
+          await page.goto(activationPath);
+          const activationPageRead = await activationPageReadPromise;
+          const activationPageReadBody = await activationPageRead.text();
+          expect(activationPageRead.status(), activationPageReadBody).toBe(200);
+          const useResult = page.getByRole("button", { name: "Use this as my first result", exact: true });
+          await browserExpect(useResult).toBeEnabled({ timeout: 30_000 });
+          const recordResponsePromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation`);
+          await useResult.click();
+          expect((await recordResponsePromise).status()).toBe(200);
+          await page.reload();
+          await browserExpect(page.getByRole("region", { name: "Your verified first result" })).toBeVisible({ timeout: 30_000 });
+          const finishSetup = page.getByRole("button", { name: "Use result", exact: true });
+          await browserExpect(finishSetup).toBeEnabled();
+          const finishResponsePromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation`);
+          experienceStage = "complete-activation";
+          await finishSetup.click();
+          expect((await finishResponsePromise).status()).toBe(200);
+          experienceStage = "completed-activation-reload";
+          await page.reload();
+          await browserExpect(page.getByRole("region", { name: "Your verified first result" })).toBeVisible({ timeout: 30_000 });
+          const activation = await activationService(db).get(f.actor, f.home);
+          expect(activation.status).toBe("completed");
+          expect(activation.firstValue?.result).toMatchObject({ issueId: fixture.task.id, runId: nativeRun!.id,
+            verificationRunId: review!.id, installationId: fixture.installation.id,
+            artifacts: [{ documentId: document!.id, revisionId: revision!.id, documentKey: "result" }] });
+
+          experienceStage = "support-intake";
+          await page.goto(`${origin}/${homeCompany.issuePrefix}/company/support`);
+          await browserExpect(page.getByRole("textbox", { name: "What do you need help with?", exact: true }))
+            .toBeVisible({ timeout: 30_000 });
+          const supportDescription = "The reviewed internal follow-up draft was useful; please retain the current authorization boundaries.";
+          await page.getByRole("textbox", { name: "What do you need help with?", exact: true }).fill(supportDescription);
+          const supportPostPromise = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/support/cases`);
+          await page.getByRole("button", { name: "Send to support", exact: true }).click();
+          const supportResponse = await supportPostPromise;
+          expect(supportResponse.status()).toBe(201);
+          const supportBody = await supportResponse.json() as { id: string; companyId: string; description: string };
+          expect(supportBody).toMatchObject({ companyId: f.home, description: supportDescription });
+          const [storedSupport] = await db.select().from(supportCases).where(and(eq(supportCases.companyId, f.home),
+            eq(supportCases.id, supportBody.id)));
+          expect(storedSupport).toMatchObject({ openedByUserId: f.userId, description: supportDescription });
+
+          experienceStage = "completed-activation-reload-after-support";
+          await page.goto(activationPath);
+          const completedActivationReadPromise = page.waitForResponse(response => response.request().method() === "GET" &&
+            new URL(response.url()).pathname === `/api/companies/${f.home}/activation` && response.status() === 200);
+          await page.reload();
+          const completedActivationRead = await completedActivationReadPromise;
+          const completedActivationReadBody = await completedActivationRead.text();
+          expect(completedActivationRead.status(), completedActivationReadBody).toBe(200);
+          expect(JSON.parse(completedActivationReadBody)).toMatchObject({
+            companyId: f.home, status: "completed", state: { step: "activated" },
+            firstValue: { status: "verified", result: { issueId: fixture.task.id, runId: nativeRun!.id,
+              verificationRunId: review!.id } },
+          });
+          await browserExpect(page.getByRole("region", { name: "Your verified first result" })).toBeVisible();
+          const currentView = await activationService(db).get(f.actor, f.home);
+          expect(currentView.firstValue?.result).toMatchObject({ issueId: fixture.task.id, runId: nativeRun!.id,
+            verificationRunId: review!.id, artifacts: [{ documentId: document!.id, revisionId: revision!.id }] });
+          expect(pageErrors).toEqual([]);
+          expect(activationServerErrors.filter(error => error.status === 403)).toEqual([
+            expect.objectContaining({ context: "foreign-user-negative-probe" }),
+          ]);
+          expect(activationServerErrors.filter(error => error.status === 409).length).toBeGreaterThan(0);
+          expect(activationServerErrors.filter(error => error.status === 409).every(error =>
+            error.context === "journey" && error.code === "activation_state_busy" && error.retryable === true)).toBe(true);
+          expect(activationServerErrors.filter(error => error.status !== 403 && error.status !== 409)).toEqual([]);
+          } catch (error) {
+            const responseFacts = await Promise.all(privateExperienceResponses);
+            throw new Error(`${String(error)}\nprivate experience stage: ${experienceStage}\nprivate experience responses: ${JSON.stringify(responseFacts)}\npage errors: ${JSON.stringify(pageErrors)}\nactivation server errors: ${JSON.stringify(activationServerErrors)}`);
+          } finally {
+            page.off("response", observePrivateExperienceResponse);
+          }
+        } finally {
+          errorHandlerSpy.mockRestore();
+          await browserContext?.close();
+          await foreignBrowserContext?.close();
+          await browser?.close();
+          for (const client of liveEvents?.clients ?? []) client.terminate();
+          if (liveEvents) await new Promise<void>(resolve => liveEvents!.close(() => resolve()));
+          try { await app?.locals.paperclipShutdown?.(); } catch { /* Preserve the primary test failure. */ }
+          if (server?.listening) {
+            server.closeAllConnections();
+            await new Promise<void>(resolve => server!.close(() => resolve()));
+          }
+          if (priorSupportPolicy === undefined) delete process.env.AW_SUPPORT_CASE_DATA_POLICY_JSON;
+          else process.env.AW_SUPPORT_CASE_DATA_POLICY_JSON = priorSupportPolicy;
+          if (priorApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
+          else process.env.PAPERCLIP_API_URL = priorApiUrl;
+          if (priorInstanceId === undefined) delete process.env.PAPERCLIP_INSTANCE_ID;
+          else process.env.PAPERCLIP_INSTANCE_ID = priorInstanceId;
+          if (priorSecretsMasterKeyFile === undefined) delete process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE;
+          else process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = priorSecretsMasterKeyFile;
+          registerNativeDraftGateway(db, undefined);
+        }
+      },
+      240_000,
+    );
     it("records only a current native first-result task/run/review and replays without executing or granting", async () => {
       const fixture = await firstValueFixture(), activation = activationService(db);
       const beforeRuns = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length;
@@ -2837,6 +3795,31 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(completionReplay.version).toBe(completed.version);
       expect(completionReplay.state.firstValueAt).toBe(first.state.firstValueAt);
     }, 60000);
+    it("classifies a busy company-row lock during the activation read as retryable", async () => {
+      const [account] = await db.insert(billingAccounts).values({ displayName: "Activation read-lock fixture", payerUserId: f.userId }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
+      await db.insert(companyOnboardingRuns).values({ companyId: f.home, billingAccountId: account!.id,
+        createdByUserId: f.userId, idempotencyKey: randomUUID(), requestHash: "a".repeat(64),
+        activationState: initialActivationState() });
+      let release!: () => void, acquired!: () => void;
+      const ready = new Promise<void>(resolve => { acquired = resolve; });
+      const done = new Promise<void>(resolve => { release = resolve; });
+      const owner = db.transaction(async tx => {
+        await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, f.home)).for("update");
+        acquired();
+        await done;
+      });
+      await ready;
+      try {
+        await expect(activationService(db).get(f.actor, f.home)).rejects.toMatchObject({
+          status: 409, details: { code: "activation_state_busy", retryable: true },
+        });
+      } finally {
+        release();
+        await owner;
+      }
+      expect((await activationService(db).get(f.actor, f.home)).companyId).toBe(f.home);
+    });
     it("measures original independently reviewed output without exporting content, inventing TTFO or writing analytics", async () => {
       const fixture = await firstValueFixture(), activation = activationService(db);
       await activation.command(f.actor, f.home, { operation: "record_verified_result", expectedVersion: fixture.onboarding.version,
@@ -2929,7 +3912,19 @@ const support = await getEmbeddedPostgresTestSupport();
         const beforeTasks = await db.select().from(issues).where(eq(issues.companyId, f.home));
         const beforePlans = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.companyId, f.home));
         const grants = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));
-        const [prepared, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, fixture.input), fixture.activation.command(f.actor, f.home, fixture.input)]);
+        const outcomes = await Promise.allSettled([
+          fixture.activation.command(f.actor, f.home, fixture.input),
+          fixture.activation.command(f.actor, f.home, fixture.input),
+        ]);
+        const completed = outcomes.filter((outcome) => outcome.status === "fulfilled").map((outcome) => outcome.value);
+        const contention = outcomes.filter((outcome) => outcome.status === "rejected");
+        expect(completed.length).toBeGreaterThanOrEqual(1);
+        expect(contention.length).toBeLessThanOrEqual(1);
+        if (contention.length) expect(contention[0]!.reason).toMatchObject({
+          status: 409, details: { code: "activation_state_busy", retryable: true },
+        });
+        const prepared = completed[0]!;
+        const replay = completed[1] ?? await fixture.activation.command(f.actor, f.home, fixture.input);
         expect(prepared.version).toBe(fixture.onboarding.version + 1);expect(replay.version).toBe(prepared.version);
         expect(prepared.state.step).toBe("review");expect(prepared.state.firstTask).toBeUndefined();expect(prepared.state.preparedFirstTask).toBeDefined();
         const reference = prepared.state.preparedFirstTask!;
@@ -2937,8 +3932,33 @@ const support = await getEmbeddedPostgresTestSupport();
         expect(prepared.firstTask!.candidates).toHaveLength(1);expect(prepared.firstTask!.candidates[0]!.planId).toBe(reference.planId);
         const task = (await db.select().from(issues).where(eq(issues.id, reference.issueId)))[0]!;
         expect(task).toMatchObject({ createdByUserId: f.userId, responsibleUserId: f.userId, assigneeAgentId: f.presence.id,
-          originKind: "v9_activation", originId: fixture.onboarding.id, status: "todo", executionRunId: null, checkoutRunId: null });
+          originKind: "manual", originId: null, status: "todo", executionRunId: null, checkoutRunId: null,
+          payloadSourceProtocolVersion: 1, payloadSourceSnapshotInvalidated: false });
         const plan = (await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, reference.planId)))[0]!;
+        const [captureProof] = await db.execute<{ bodyHash: string; digestValid: boolean }>(sql`
+          select public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "bodyHash",
+            (i.payload_source_snapshot->>'digest')=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex') as "digestValid"
+          from issues i where i.company_id=${f.home}::uuid and i.id=${task.id}::uuid
+        `);
+        expect(task.payloadSourceSnapshot).toMatchObject({ version: 1,
+          owner: { kind: "issue", companyId: f.home, id: task.id, contentHash: captureProof!.bodyHash },
+          policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] });
+        expect(captureProof?.digestValid).toBe(true);
+        const capturedInput = await db.select().from(activityLog).where(and(
+          eq(activityLog.companyId, f.home), eq(activityLog.entityId, task.id),
+          eq(activityLog.action, "issue.payload_source_captured"),
+        ));
+        expect(capturedInput).toHaveLength(1);
+        expect(capturedInput[0]).toMatchObject({ actorType: "user", actorId: f.userId });
+        expect(JSON.stringify(capturedInput[0]!.details)).not.toContain(fixture.intent);
+        const preparedAudit = await db.select().from(activityLog).where(and(
+          eq(activityLog.companyId, f.home), eq(activityLog.entityId, task.id),
+          eq(activityLog.action, "activation.first_task_prepared"),
+        ));
+        expect(preparedAudit).toHaveLength(1);
+        expect(preparedAudit[0]!.details).toMatchObject({ onboardingRunId: fixture.onboarding.id,
+          planId: plan.id, installationId: fixture.installation.id, runCreated: false, grantsCreated: 0 });
+        expect(JSON.stringify(preparedAudit[0]!.details)).not.toContain(fixture.intent);
         expect(plan).toMatchObject({ status: "draft", mode: "single_worker", riskClass: "C1", actionClass: "internal_draft", executionPrincipal: null, startedAt: null });
         expect(plan.budgets).toEqual({ maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 0, maxRetries: 0,
           maxWallClockSeconds: 300, maxModelCostMinor: 0, maxToolActions: 2 });
@@ -2955,6 +3975,36 @@ const support = await getEmbeddedPostgresTestSupport();
         expect(changed.state.step).toBe("intent");expect(changed.state.preparedFirstTask).toBeUndefined();
         expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]!.status).toBe("cancelled");
         expect(fixture.transport).not.toHaveBeenCalled();
+      } finally { registerNativeDraftGateway(db, undefined); }
+    });
+    it("does not capture activation intent for a different Human or an expired initiating session", async () => {
+      try {
+        const fixture = await noChargePreparationFixture();
+        const strangerId = `activation-stranger-${randomUUID()}`, now = new Date();
+        await db.insert(authUsers).values({ id: strangerId, name: "Different activation Human",
+          email: `${strangerId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+        await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: strangerId,
+          status: "active", membershipRole: "owner" });
+        await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+          companyId: f.home, principalType: "user", principalId: strangerId, ...grant,
+        })));
+        const strangerSessionId = await seedNativePasskeySession(db, strangerId);
+        const stranger: typeof f.actor = { type: "board", source: "session", userId: strangerId,
+          sessionId: strangerSessionId, companyIds: [f.home] };
+        const taskCount = async () => db.select({ id: issues.id }).from(issues).where(eq(issues.companyId, f.home));
+        const before = await taskCount();
+        await expect(fixture.activation.command(stranger, f.home, fixture.input)).rejects.toMatchObject({ status: 404 });
+        expect(await taskCount()).toEqual(before);
+        expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home),
+          eq(activityLog.action, "issue.payload_source_captured")))).toHaveLength(0);
+
+        await db.update(authSessions).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(authSessions.id, f.actor.sessionId!));
+        await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 403 });
+        expect(await taskCount()).toEqual(before);
+        expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home),
+          eq(activityLog.action, "issue.payload_source_captured")))).toHaveLength(0);
+        expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home),
+          eq(activityLog.action, "activation.first_task_prepared")))).toHaveLength(0);
       } finally { registerNativeDraftGateway(db, undefined); }
     });
     it("refuses a stale reviewed purpose before creating a first Task and preserves original authorities", async () => {

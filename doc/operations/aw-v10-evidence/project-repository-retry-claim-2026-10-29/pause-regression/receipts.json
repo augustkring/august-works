@@ -1,0 +1,24 @@
+{
+  "attempt": "retry-claim-pause-regression-r1-20261029",
+  "result": {
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "exit": 0
+  },
+  "sourceHead": "d53236bb50f800275794fb955683e6256b192a4b",
+  "sourceFiles": [
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "4090e803f45c12e5c036355db9fbce2a8342d6ec7a765386acbb281b5bccd799",
+      "proof": "exact copiedFiles pin"
+    },
+    {
+      "path": "server/src/__tests__/v9-agent-pause.integration.test.ts",
+      "sha256": "42bcc438c113574579a3eeb672b5c985894308018f9d3bedaa3d10c65220d0c3",
+      "proof": "unchanged identical bytes in sourceHead and qualificationBaseCommit; file not in copiedFiles delta"
+    }
+  ],
+  "archiveSha256": "c898313951854f6383d8653b78a4c8d51682b9b792b55c9eaab0ef6fc0c6c62e",
+  "scope": "Complete existing Agent pause integration suite after retry claim fix. No pause source changed; final unchanged-head gates pending."
+}

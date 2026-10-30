@@ -5,6 +5,9 @@ import {
   COMPANY_SEARCH_DEFAULT_LIMIT,
   COMPANY_SEARCH_SCOPES,
   type CompanySearchCountType,
+  type CompanySearchFederatedDomain,
+  type CompanySearchFederatedResult,
+  type CompanySearchFederatedDomainCoverage,
   type CompanySearchResponse,
   type CompanySearchResult,
   type CompanySearchScope,
@@ -20,6 +23,7 @@ import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useDialogActions } from "../context/DialogContext";
 import { searchApi } from "../api/search";
+import { useTranslation } from "../i18n";
 import { agentsApi } from "../api/agents";
 import { authApi } from "../api/auth";
 import { issuesApi } from "../api/issues";
@@ -38,7 +42,7 @@ import {
   type ParsedSearchQuery,
   type SearchQueryParserContext,
 } from "../lib/search-query-parser";
-import { SearchResultRow } from "../components/search/SearchResultRow";
+import { FederatedSearchResultRow, SearchResultRow } from "../components/search/SearchResultRow";
 import { SearchFilterBar, type SearchFilterDataProps } from "../components/search/SearchFilterBar";
 import { SearchFilterChips } from "../components/search/SearchFilterChips";
 import { SearchFilterSheet, SearchFilterSheetTrigger } from "../components/search/SearchFilterSheet";
@@ -65,6 +69,7 @@ const SCOPE_LABELS: Record<CompanySearchScope, string> = {
   artifacts: "Artifacts",
   agents: "Agents",
   projects: "Projects",
+  help: "Help",
 };
 
 function isCompanySearchScope(value: string | null): value is CompanySearchScope {
@@ -84,8 +89,23 @@ function totalMatchCount(counts: Partial<Record<CompanySearchCountType, number>>
     + (counts.artifact ?? 0)
     + (counts.agent ?? 0)
     + (counts.project ?? 0)
+    + (counts.help ?? 0)
   );
 }
+
+const FEDERATED_DOMAIN_LABELS: Record<CompanySearchFederatedDomain, string> = {
+  routines: "Routines",
+  workflows: "Workflows and pipelines",
+  skills: "Skills and playbooks",
+  packages: "Agent packages",
+  knowledge: "Company knowledge",
+  people: "People",
+  notices: "Release and deprecation notices",
+  insights: "Decisions and insights",
+  apps: "Apps and connections",
+  settings: "Settings",
+  navigation: "Navigation",
+};
 
 function mergeSearchFilters(
   base: ParsedSearchQuery["filters"],
@@ -131,6 +151,8 @@ function shapeError(error: unknown): { message: string; status?: number } {
 }
 
 export function Search() {
+  const { i18n } = useTranslation();
+  const locale = (i18n.resolvedLanguage ?? i18n.language).startsWith("da") ? "da" : "en";
   const { selectedCompanyId } = useCompany();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { openNewIssue } = useDialogActions();
@@ -315,17 +337,19 @@ export function Search() {
       ),
       activeFilters,
       sort,
+      locale,
     ] as const,
     queryFn: () =>
       searchApi.search(selectedCompanyId!, {
         q: trimmedQuery,
+        locale,
         scope,
         limit: COMPANY_SEARCH_DEFAULT_LIMIT,
         ...activeFilters,
         ...(sort !== "relevance" ? { sort } : {}),
       }),
     enabled: queryEnabled,
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData, previousQuery) => previousQuery?.queryKey.at(-1) === locale ? previousData : undefined,
   });
 
   const agentsById = useMemo<ReadonlyMap<string, Pick<Agent, "id" | "name" | "appearance">>>(() => {
@@ -376,17 +400,19 @@ export function Search() {
       "preview",
       draftSheetFilters,
       sort,
+      locale,
     ] as const,
     queryFn: () =>
       searchApi.search(selectedCompanyId!, {
         q: trimmedQuery,
+        locale,
         scope,
         limit: COMPANY_SEARCH_DEFAULT_LIMIT,
         ...draftSheetFilters,
         ...(sort !== "relevance" ? { sort } : {}),
       }),
     enabled: queryEnabled && sheetOpen,
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData, previousQuery) => previousQuery?.queryKey.at(-1) === locale ? previousData : undefined,
   });
 
   // Persist recent searches once we have a successful response with a non-empty query.
@@ -444,9 +470,11 @@ export function Search() {
     return () => window.removeEventListener("keydown", handler);
   }, [focusInput]);
 
-  const counts = data?.countsByType ?? { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 };
-  const totalResults = data?.results.length ?? 0;
-  const allMatchTotal = data ? totalMatchCount(counts) : 0;
+  const counts = data?.countsByType ?? { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 };
+  const universalResults = data?.federation?.results ?? [];
+  const federatedMatchCount = Object.values(data?.federation?.countsByDomain ?? {}).reduce((sum, count) => sum + (count ?? 0), 0);
+  const totalResults = (data?.results.length ?? 0) + universalResults.length;
+  const allMatchTotal = data ? totalMatchCount(counts) + federatedMatchCount : 0;
   const previewTotal = previewData ? totalMatchCount(previewData.countsByType) : null;
 
   const tabItems = useMemo<PageTabItem[]>(() => {
@@ -467,13 +495,16 @@ export function Search() {
           + (counts.document ?? 0)
           + (counts.artifact ?? 0)
           + (counts.agent ?? 0)
-          + (counts.project ?? 0);
+          + (counts.project ?? 0)
+          + (counts.help ?? 0)
+          + federatedMatchCount;
       } else if (value === "issues") count = issuesTotal;
       else if (value === "comments") count = counts.comment ?? 0;
       else if (value === "documents") count = counts.document ?? 0;
       else if (value === "artifacts") count = counts.artifact ?? 0;
       else if (value === "agents") count = counts.agent ?? 0;
       else if (value === "projects") count = counts.project ?? 0;
+      else if (value === "help") count = counts.help ?? 0;
       // Issue-only filters don't constrain agents/projects, so show a dash there
       // rather than an unfiltered count that would misrepresent the result set.
       const dashOut = filtersActive && (value === "agents" || value === "projects");
@@ -491,7 +522,7 @@ export function Search() {
         ),
       } satisfies PageTabItem;
     });
-  }, [counts, data, filtersActive]);
+  }, [counts, data, federatedMatchCount, filtersActive]);
 
   const operatorPills = useMemo(() => searchFilterPills(draftFilters, parserContext), [draftFilters, parserContext]);
   const operatorSuggestions = useMemo(
@@ -565,7 +596,7 @@ export function Search() {
                 }
               }
             }}
-            placeholder="Search tasks, comments, documents, artifacts, agents, projects…"
+            placeholder="Search tasks, routines, workflows, apps, knowledge, people, and Help…"
             aria-label="Search query"
             className="h-10 pl-9 pr-20 text-sm"
           />
@@ -680,6 +711,8 @@ export function Search() {
                 recentSearches={recentSearches}
                 onRecentClick={handleRecentClick}
                 results={data?.results ?? []}
+                federatedResults={universalResults}
+                federatedCoverage={data?.federation?.coverage ?? []}
                 totalResults={totalResults}
                 allMatchTotal={allMatchTotal}
                 activeFilterCount={activeFilterCount}
@@ -726,6 +759,8 @@ interface SearchTabContentProps {
   recentSearches: string[];
   onRecentClick: (query: string) => void;
   results: CompanySearchResult[];
+  federatedResults: CompanySearchFederatedResult[];
+  federatedCoverage: CompanySearchFederatedDomainCoverage[];
   totalResults: number;
   allMatchTotal: number;
   activeFilterCount: number;
@@ -751,6 +786,8 @@ function SearchTabContent({
   recentSearches,
   onRecentClick,
   results,
+  federatedResults,
+  federatedCoverage,
   totalResults,
   allMatchTotal,
   activeFilterCount,
@@ -759,13 +796,19 @@ function SearchTabContent({
   isFetching,
   agentsById,
 }: SearchTabContentProps) {
+  const federatedGroups = new Map<CompanySearchFederatedDomain, CompanySearchFederatedResult[]>();
+  for (const result of federatedResults) {
+    const group = federatedGroups.get(result.domain) ?? [];
+    group.push(result);
+    federatedGroups.set(result.domain, group);
+  }
   if (showInitialState) {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-10 sm:px-6">
         <div>
           <h2 className="text-lg font-semibold">Type to search organization memory.</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Tasks, comments, plan documents, artifacts, agents, projects — same surface, ranked by relevance.
+            Tasks, comments, documents, artifacts, agents, projects, and authorized company resources — same surface, grouped by domain.
           </p>
         </div>
         {recentSearches.length > 0 ? (
@@ -886,6 +929,13 @@ function SearchTabContent({
           </li>
           <li>Wrap multi-word phrases in quotes.</li>
         </ul>
+        {federatedCoverage.some((item) => item.status !== "complete") ? (
+          <div className="space-y-1 text-left text-sm text-muted-foreground" role="status" aria-live="polite" data-testid="search-coverage">
+            {federatedCoverage.filter((item) => item.status !== "complete").map((item) => (
+              <p key={item.domain}>{item.message ?? `${FEDERATED_DOMAIN_LABELS[item.domain]} results are incomplete.`}</p>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -916,7 +966,22 @@ function SearchTabContent({
             agentsById={agentsById}
           />
         ))}
+        {[...federatedGroups.entries()].map(([domain, items]) => (
+          <section key={domain} aria-label={FEDERATED_DOMAIN_LABELS[domain]} className="mt-3">
+            <h2 className="px-3 py-1 text-(length:--text-micro) font-semibold uppercase tracking-wide text-muted-foreground">
+              {FEDERATED_DOMAIN_LABELS[domain]}
+            </h2>
+            {items.map((result) => <FederatedSearchResultRow key={result.canonicalRef} result={result} />)}
+          </section>
+        ))}
       </div>
+      {federatedCoverage.some((item) => item.status !== "complete") ? (
+        <div className="mb-6 space-y-1 px-3 text-sm text-muted-foreground" role="status" aria-live="polite" data-testid="search-coverage">
+          {federatedCoverage.filter((item) => item.status !== "complete").map((item) => (
+            <p key={item.domain}>{item.message ?? `${FEDERATED_DOMAIN_LABELS[item.domain]} results are incomplete.`}</p>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

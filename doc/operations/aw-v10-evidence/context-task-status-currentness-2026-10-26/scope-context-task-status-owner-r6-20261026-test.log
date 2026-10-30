@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > executes Foundation and Memory query nodes with approved and accepted sources only
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > assembles authorized approved Foundation and task context into a durable manifest
+ × src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority 2595ms
+   → Context read did not retain the current Task body source
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > retrieves only issue-authorized synced GitHub evidence into the governed Context packet
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps Memory hydration disabled until Memory flags are enabled
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > hydrates only eligible relevant shared and owner-private Memory into Context
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps unsupported, expired, erased, and foreign Human Task evidence out of Memory payload snapshots
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > omits Foundation without foundation:read but still admits authorized task context
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > enforces the represented human's source permission for V5 even in shadow mode
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority
+Error: Context read did not retain the current Task body source
+ ❯ src/services/context/context-engine-integration.test.ts:705:32
+    703|     const taskOnlySource = taskOnlyContextRead.sourceSet.inputs.find((…
+    704|       value.kind === "task" && value.issueId === task.id);
+    705|     if (!taskOnlySource) throw new Error("Context read did not retain …
+       |                                ^
+    706|     const [capturedTask] = await db.select({ status: issues.status, ti…
+    707|       .where(and(eq(issues.companyId, seeded.companyId), eq(issues.id,…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 skipped (9)
+   Start at  10:12:06
+   Duration  20.76s (transform 10.06s, setup 92ms, import 14.16s, tests 6.36s, environment 0ms)
+

@@ -1,0 +1,345 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "5346ef627ba359b3fb3d7c8557381747c4517f76",
+  "meaning": "Logs include both failed/interrupted earlier runs and later scoped repairs. Workspace UI 8138/8139 and DB182/183 baseline runs failed; scoped repaired WorkflowReview15/15 and issuer2/2 are separate receipts, not a fresh full workspace pass. Native Help browser uses actual cookie authentication and disposable PostgreSQL, and proves original-view retention during search. No hosted documentation, provider execution, all-source privacy, release or complete V10 qualification is claimed.",
+  "logs": [
+    {
+      "name": "help-search-browser-integrated",
+      "rawSha256": "8c745c79e5ae19297f431452c9309715803bd60caf5b908abd18e1440951cc06",
+      "sanitizedSha256": "8c745c79e5ae19297f431452c9309715803bd60caf5b908abd18e1440951cc06",
+      "archiveSha256": "2f6e6c69bd60a039adfd64016d8c57c1e57283d7db7931905de25daf52bcfd90",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 0,
+      "summary": []
+    },
+    {
+      "name": "help-search-workflow-integrated",
+      "rawSha256": "cb817bbfec361bd2b26863afaa6d5a69d81484adbfd0eb441db1b4a08fbcccd0",
+      "sanitizedSha256": "cb817bbfec361bd2b26863afaa6d5a69d81484adbfd0eb441db1b4a08fbcccd0",
+      "archiveSha256": "569adb9e888abf6c122ec8501a4db8b7b0ac5bade062942fe0f01637bb606532",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 0,
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  45 passed (45)",
+        "Start at  22:44:14",
+        "Duration  11.41s (transform 1.92s, setup 29ms, import 5.27s, tests 4.12s, environment 1.64s)"
+      ]
+    },
+    {
+      "name": "help-search-integrated-unit",
+      "rawSha256": "3a22282fd2942b36d4c6a64b70abf6aff9c8d4e868ca44a519a50bad19a9797b",
+      "sanitizedSha256": "3a22282fd2942b36d4c6a64b70abf6aff9c8d4e868ca44a519a50bad19a9797b",
+      "archiveSha256": "dce26067d1ace31d25088f05eed0f2b6a1415c5660e3fa9f417f42daa5879006",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 0,
+      "summary": []
+    },
+    {
+      "name": "help-search-integrated-docs",
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 0,
+      "summary": []
+    },
+    {
+      "name": "help-search-integrated-review",
+      "rawSha256": "10d264c03ddfb5f7b394c71dd4c6b4d5cfe4cd969a8b9e5e7ebfc3e7476a8011",
+      "sanitizedSha256": "10d264c03ddfb5f7b394c71dd4c6b4d5cfe4cd969a8b9e5e7ebfc3e7476a8011",
+      "archiveSha256": "11df0a650a8828978f3c4a4fbf0b66b01f0862fb540d3446b400bc81d70ca2d2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 0,
+      "summary": []
+    },
+    {
+      "name": "help-search-integrated-review-invalid-ref",
+      "rawSha256": "6b5cbeb24d22d3bba130695d8307ccb90c305ecdd5cb7947c41d2f654f5b15c7",
+      "sanitizedSha256": "6b5cbeb24d22d3bba130695d8307ccb90c305ecdd5cb7947c41d2f654f5b15c7",
+      "archiveSha256": "a1590ae6b3a8ac18daaa50155cb903c5828859b4ced61253b4df5f83e07517bd",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 1,
+      "summary": []
+    },
+    {
+      "name": "repair-issue-recovery-red",
+      "rawSha256": "42c66c252132f09b43d46aaf22a9f6c0055b0ebb5036531122e56c8ed12a6a1a",
+      "sanitizedSha256": "35218c45a1c19321425dd47c2155d133ab6c4e1de7bce193338b9606d32fd0d2",
+      "archiveSha256": "b0e7e95bf2e47e79167398810ef88bdb72f59641b0f3c7ad8ec37751f595ce84",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 1,
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Tests  9 failed | 51 passed (60)",
+        "Start at  22:24:30",
+        "Duration  39.64s (transform 12.81s, setup 93ms, import 17.46s, tests 21.94s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "repair-issue-recovery-final",
+      "rawSha256": "526287243af6211769d33f31851a310f1eca8dbe1f7203e141d840cd5f16ef65",
+      "sanitizedSha256": "aaea75fd20793132e644dbba92be4f577e6a24b7a6d64c444d62372c82b612a9",
+      "archiveSha256": "f5426499bf4d6794add40f9538ee0f83870baa6008d776dfc777a25c7b942238",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  61 passed (61)",
+        "Start at  22:28:12",
+        "Duration  49.62s (transform 19.90s, setup 118ms, import 27.01s, tests 22.28s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "repair-thread-interactions-red",
+      "rawSha256": "e13b8db8afd0123e1564f42dcd5cbeefedaad4f13c25ea56313102b95ffb9718",
+      "sanitizedSha256": "e13b8db8afd0123e1564f42dcd5cbeefedaad4f13c25ea56313102b95ffb9718",
+      "archiveSha256": "1b85354e49e8344a6d0c5f377e2d8542af967c2a2bfbc671505717e19b86479e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 1,
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Tests  6 failed | 60 passed (66)",
+        "Start at  22:29:47",
+        "Duration  51.01s (transform 24.82s, setup 114ms, import 34.72s, tests 15.97s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "repair-thread-interactions-full-final",
+      "rawSha256": "7c9d0b993ada795ef042f332fbb1ee541f50932270616f304327008c8feb93b6",
+      "sanitizedSha256": "7c9d0b993ada795ef042f332fbb1ee541f50932270616f304327008c8feb93b6",
+      "archiveSha256": "8e6b7a1f91c3a5635b880d12030d71996bfd65ec33ecf82f1e6cbb5ad652da74",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  66 passed (66)",
+        "Start at  22:39:01",
+        "Duration  22.21s (transform 10.09s, setup 71ms, import 14.20s, tests 7.81s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "repair-comment-routes-full",
+      "rawSha256": "29c7bdba89af0324f207a0e4555ce96158712da3fa3ca18742d0bf99350021bd",
+      "sanitizedSha256": "29c7bdba89af0324f207a0e4555ce96158712da3fa3ca18742d0bf99350021bd",
+      "archiveSha256": "1a55c88f3caf772c5c289f3b806bf974f597db241b2fbb27958cf003f33977ee",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 1,
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Tests  98 failed | 2 passed (100)",
+        "Start at  22:38:05",
+        "Duration  11.69s (transform 9.52s, setup 68ms, import 10.96s, tests 542ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "repair-comment-routes-final",
+      "rawSha256": "39e98d9c42182e621b43893dc492e09132989d1e21158d5e5efa53360dec1a34",
+      "sanitizedSha256": "5ea6a0d85e27d53d3c6240111b1fdd3ac8195e468e75852c2bc1163f15fa2eb4",
+      "archiveSha256": "7cc2c2412672d8b9af12d4464dbf8fbca466a9efa928b63eccf09650bed36f72",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 1,
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Tests  6 failed | 94 passed (100)",
+        "Start at  22:39:29",
+        "Duration  12.86s (transform 9.48s, setup 76ms, import 10.98s, tests 1.69s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "repair-comment-routes-source-aware",
+      "rawSha256": "778775a04b4234f145b6dd24446084372bf33661720f8f36830e606f4da9d681",
+      "sanitizedSha256": "03e5c7f1b24ed9f036a21162c49bed3b22b46e45165c2bbadc260848ec65162d",
+      "archiveSha256": "c78ed32257e61b560e89dc401d4e08d040917f45e20055c6e2aa7285ba79d728",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  100 passed (100)",
+        "Start at  22:41:28",
+        "Duration  11.55s (transform 9.27s, setup 71ms, import 10.81s, tests 544ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "repair-account-issuer-red",
+      "rawSha256": "7663b10bd58273b55d9aa73eae6531b1418ad8c09f288b6cd09fe763a67cee6a",
+      "sanitizedSha256": "7663b10bd58273b55d9aa73eae6531b1418ad8c09f288b6cd09fe763a67cee6a",
+      "archiveSha256": "75af584163c2467d741e1d9512ceb3b705a04283f9b48bcddbb632228d9ae77b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 1,
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 1 passed (2)",
+        "Start at  22:34:45",
+        "Duration  16.91s (transform 6.27s, setup 0ms, import 10.83s, tests 5.76s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "repair-account-issuer-full",
+      "rawSha256": "019c46fabed04f7f5a32ce1e55d30ab8bb9d93499c85db891c68b12303defc6d",
+      "sanitizedSha256": "019c46fabed04f7f5a32ce1e55d30ab8bb9d93499c85db891c68b12303defc6d",
+      "archiveSha256": "8b208d4cc7f9f2811d74537809d3ef799e3b570bf70141bffe947d54236fdc3f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed (2)",
+        "Start at  22:35:25",
+        "Duration  17.69s (transform 5.73s, setup 0ms, import 9.50s, tests 7.98s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "workspace-a-tests-2026-10-24",
+      "rawSha256": "3e68fbf402d8ea020ae177b2c94cd48282c74fbb82776edde7ce4c1ef8d87a0d",
+      "sanitizedSha256": "3e68fbf402d8ea020ae177b2c94cd48282c74fbb82776edde7ce4c1ef8d87a0d",
+      "archiveSha256": "4ded230bace46397f43802d60959b0b9b21908fb27cad100197dce323b1569bd",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 1,
+      "summary": [
+        "Test Files  1 failed | 820 passed (821)",
+        "Tests  1 failed | 8138 passed (8139)",
+        "Start at  22:25:14",
+        "Duration  724.87s (transform 60.48s, setup 8.05s, import 1209.04s, tests 341.69s, environment 436.36s)"
+      ]
+    },
+    {
+      "name": "workspace-b-tests-2026-10-24",
+      "rawSha256": "c860a2f951d9a3bb782c66d15267dcda68b1f1ef42531206b9932f5e7dd88618",
+      "sanitizedSha256": "c860a2f951d9a3bb782c66d15267dcda68b1f1ef42531206b9932f5e7dd88618",
+      "archiveSha256": "2a99339c8b79f953b5d4ea7f035eecb030c9b8dc12239100cacaec5a54f04ca1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": 1,
+      "summary": [
+        "Test Files  136 passed (136)",
+        "Tests  1203 passed (1203)",
+        "Start at  22:29:54",
+        "Duration  29.35s (transform 8.24s, setup 0ms, import 36.19s, tests 12.58s, environment 36ms)",
+        "Test Files  5 passed (5)",
+        "Tests  20 passed (20)",
+        "Start at  22:30:24",
+        "Duration  6.35s (transform 6.21s, setup 0ms, import 10.91s, tests 3.62s, environment 0ms)",
+        "Test Files  1 failed | 48 passed (49)",
+        "Tests  1 failed | 182 passed (183)",
+        "Start at  22:30:32",
+        "Duration  255.53s (transform 16.48s, setup 0ms, import 165.91s, tests 576.83s, environment 4ms)"
+      ]
+    },
+    {
+      "name": "workspace-full-tests-2026-10-24",
+      "rawSha256": "bc5e635e841f69cdf6f371d79a4ae85cc62fc583f207fd7467845422bfc6b48f",
+      "sanitizedSha256": "0f422a21d63b4b48a0f35f65b9192697a94a6f0b35e81091a0b4e3164bf52a7c",
+      "archiveSha256": "1649ab5a383681a25b7110bd7d635e6f616438205ba080a2c160c7c2e4c38c1a",
+      "redactions": {
+        "ansi": 4136,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "exitCode": null,
+      "summary": []
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+Current-source route regression: 11/11 tests passed on 28 October 2026. The complete file executed, including readable workspace activity. Exact source pins and raw output are retained. This scoped result does not establish final-head or whole-brief acceptance.

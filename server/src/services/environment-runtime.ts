@@ -532,6 +532,7 @@ export interface EnvironmentDriverExecuteInput extends EnvironmentDriverLeaseInp
   env?: Record<string, string>;
   stdin?: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
   /**
    * Run this command outside the lease's persistent session. The run
    * orchestrator sets this on the workspace provision command, which runs before
@@ -541,6 +542,9 @@ export interface EnvironmentDriverExecuteInput extends EnvironmentDriverLeaseInp
    * span parents to the run trace. The default keeps the session path.
    */
   bypassSession?: boolean;
+  /** Private Native setup phase for pinned artifacts, exact run-owned harness
+   * state access, immutable runtime context staging, or the conversation Runnerd launch. Never user/model-supplied. */
+  nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
   /**
    * Force the command onto the lease's persistent session even when no run step
    * is active. The ACP process session bridge sets this so the long-lived agent
@@ -1283,6 +1287,20 @@ function createSandboxEnvironmentDriver(
   db: Db,
   options: {
     pluginWorkerManager?: PluginWorkerManager;
+    executeSandboxTask?: (input: {
+      companyId: string;
+      runId: string | null;
+      leaseId: string;
+      command: string;
+      args?: string[];
+      cwd?: string;
+      env?: Record<string, string>;
+      stdin?: string;
+      timeoutMs?: number;
+      signal?: AbortSignal;
+      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+      onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
+    }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;
     pluginWorkerReadyPollMs?: number;
     pendingCleanupWriteAttempts?: number;
@@ -2779,6 +2797,23 @@ function createSandboxEnvironmentDriver(
     },
 
     async execute(input) {
+      if (!input.lease.metadata?.sandboxProviderPlugin && options.executeSandboxTask) {
+        const nativeResult = await options.executeSandboxTask({
+          companyId: input.lease.companyId,
+          runId: input.lease.heartbeatRunId,
+          leaseId: input.lease.id,
+          command: input.command,
+          args: input.args,
+          cwd: input.cwd,
+          env: input.env,
+          stdin: input.stdin,
+          timeoutMs: input.timeoutMs,
+          signal: input.signal,
+          nativePreparationPurpose: input.nativePreparationPurpose,
+          onOutput: input.onLog,
+        });
+        if (nativeResult) return nativeResult;
+      }
       // Plugin-backed sandbox providers: delegate command execution.
       if (input.lease.metadata?.sandboxProviderPlugin && pluginWorkerManager) {
         // Read the active run-parent context once. The host mints the plugin
@@ -3527,7 +3562,7 @@ function createPluginEnvironmentDriver(
         providerLeaseId: input.lease.providerLeaseId,
         leaseMetadata: input.lease.metadata ?? undefined,
       });
-      return await environmentsSvc.releaseLease(input.lease.id, input.status);
+      return await environmentsSvc.releaseLease(input.lease.id, input.status, { cleanupStatus: "success" });
     },
 
     async resumeRunLease(input) {
@@ -3575,6 +3610,9 @@ function createPluginEnvironmentDriver(
       });
       return await environmentsSvc.releaseLease(input.lease.id, "failed", {
         failureReason: input.failureReason ?? "lease_destroyed",
+        cleanupStatus: "success",
+        ...(input.lease.status === "pending_cleanup" && typeof input.lease.metadata?.pendingCleanupAttemptId === "string"
+          ? { expectedPendingCleanupAttemptId: input.lease.metadata.pendingCleanupAttemptId } : {}),
       });
     },
 
@@ -3703,6 +3741,20 @@ export function environmentRuntimeService(
   options: {
     drivers?: EnvironmentRuntimeDriver[];
     pluginWorkerManager?: PluginWorkerManager;
+    executeSandboxTask?: (input: {
+      companyId: string;
+      runId: string | null;
+      leaseId: string;
+      command: string;
+      args?: string[];
+      cwd?: string;
+      env?: Record<string, string>;
+      stdin?: string;
+      timeoutMs?: number;
+      signal?: AbortSignal;
+      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+      onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
+    }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;
     pluginWorkerReadyPollMs?: number;
     pendingCleanupWriteAttempts?: number;
@@ -3720,6 +3772,7 @@ export function environmentRuntimeService(
     createSshEnvironmentDriver(db),
     createSandboxEnvironmentDriver(db, {
       pluginWorkerManager: options.pluginWorkerManager,
+      executeSandboxTask: options.executeSandboxTask,
       pluginWorkerReadyTimeoutMs: options.pluginWorkerReadyTimeoutMs,
       pluginWorkerReadyPollMs: options.pluginWorkerReadyPollMs,
       pendingCleanupWriteAttempts: options.pendingCleanupWriteAttempts,

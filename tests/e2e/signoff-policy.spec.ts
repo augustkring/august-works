@@ -11,10 +11,11 @@ import { test, expect, request as pwRequest, type APIRequestContext } from "@pla
  *   5. Approver approves → execution completes, issue marked done
  *   6. Verify "changes requested" flow returns to executor
  *
- * Requires local_trusted deployment mode (set in playwright.config.ts webServer env).
+ * Runs against the authenticated browser owner's real Human session. Agent
+ * actions still use their own issued API keys and heartbeat run IDs.
  *
  * Agent auth flow:
- *   - Board request (local_trusted auto-auth) handles setup/teardown.
+ *   - The bootstrap Human session handles Board setup/teardown.
  *   - Agent-specific actions use API keys + heartbeat run IDs.
  *   - Reviewers/approvers invoke heartbeat runs (gets run IDs) then PATCH
  *     directly without checkout (checkout would force in_progress, breaking
@@ -277,15 +278,20 @@ async function agentCheckoutAndPatch(
 }
 
 async function setupCompany(boardRequest: APIRequestContext): Promise<TestContext> {
-  // Verify server is in local_trusted mode
+  // This suite must use the authenticated browser profile, not implicit local
+  // Board authority; all company actions below are authorized as this Human.
+  const sessionRes = await boardRequest.get(`${BASE_URL}/api/auth/get-session`);
+  expect(sessionRes.ok()).toBe(true);
+  const session = await sessionRes.json();
+  expect(session.user.id).toEqual(expect.any(String));
+  expect(session.session.localImplicit).toBe(false);
   const healthRes = await boardRequest.get(`${BASE_URL}/api/health`);
   expect(healthRes.ok()).toBe(true);
   const health = await healthRes.json();
-  if (health.deploymentMode !== "local_trusted") {
+  if (health.deploymentMode !== "authenticated") {
     throw new Error(
-      `Signoff e2e tests require local_trusted deployment mode, ` +
-        `but server is in "${health.deploymentMode}" mode. ` +
-        `Set PAPERCLIP_DEPLOYMENT_MODE=local_trusted or use the webServer config.`,
+      `Signoff e2e tests require authenticated deployment mode, ` +
+        `but server is in "${health.deploymentMode}" mode.`,
     );
   }
 
@@ -377,7 +383,13 @@ test.describe("Signoff execution policy", () => {
   let ctx: TestContext;
 
   test.beforeAll(async () => {
-    const boardRequest = await pwRequest.newContext({ baseURL: BASE_URL });
+    const storageState = process.env.PAPERCLIP_E2E_AUTH_STORAGE_STATE;
+    if (!storageState) throw new Error("Authenticated browser owner storage state is required");
+    const boardRequest = await pwRequest.newContext({
+      baseURL: BASE_URL,
+      storageState,
+      extraHTTPHeaders: { Origin: BASE_URL },
+    });
     ctx = await setupCompany(boardRequest);
   });
 

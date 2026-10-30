@@ -5,12 +5,15 @@ import {
 import { saasSupportService } from "../services/saas/support.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import {
   agentIdentities,
   agentPresenceRuntimeBindings,
   agentProviderBindings,
   agents,
   authUsers,
+  authAccounts,
+  authSessions,
   billingSubscriptions,
   createDb,
   heartbeatRuns,
@@ -30,6 +33,8 @@ import { runtimeCommercialService } from "../services/runtime/commercial.js";
 import { runtimeControlService } from "../services/runtime/control.js";
 import { entitlementService } from "../services/billing/entitlements.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
+import type { AuthorizationActor } from "../services/authorization.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
@@ -39,6 +44,7 @@ const support = await getEmbeddedPostgresTestSupport();
     let db: ReturnType<typeof createDb>;
     const now = new Date();
     let companyId: string, accountId: string, firstId: string, secondId: string;
+    let operatorActor: AuthorizationActor, passwordSessionId: string;
     beforeAll(async () => {
       vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY", "a".repeat(64));
       database = await startEmbeddedPostgresTestDatabase("aw-v6-commercial-");
@@ -53,6 +59,22 @@ const support = await getEmbeddedPostgresTestSupport();
           createdAt: now,
           updatedAt: now,
         });
+      await db.insert(authUsers).values({
+        id: "operator", name: "Operator", email: "operator@example.test",
+        emailVerified: true, createdAt: now, updatedAt: now,
+      });
+      await db.insert(authAccounts).values({ id: randomUUID(), issuer: "local:credential", accountId: "operator",
+        providerId: "credential", userId: "operator", password: "structural-fixture-not-a-password-hash",
+        createdAt: now, updatedAt: now });
+      operatorActor = {
+        type: "board", source: "session", userId: "operator",
+        sessionId: await seedNativePasskeySession(db, "operator"),
+      };
+      const [operator] = await db.select({ version: authUsers.authenticatorVersion }).from(authUsers).where(eq(authUsers.id, "operator"));
+      passwordSessionId = randomUUID();
+      await db.insert(authSessions).values({ id: passwordSessionId, userId: "operator", token: randomUUID(), createdAt: now,
+        updatedAt: now, expiresAt: new Date(now.getTime() + 3600000), authenticationMethod: "password",
+        authenticatedAt: now, authenticatorVersion: operator!.version });
       const run = await saasOnboardingService(db).create("owner", {
         name: "Commercial fixture",
         idempotencyKey: "commercial-company-001",
@@ -205,7 +227,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(
         support.runtimeAction(
           session.id,
-          "owner",
+          { type: "board", source: "session", userId: "owner" },
           firstId,
           { action: "stop", idempotencyKey: "support-stop-fixture-001" },
           now,
@@ -213,7 +235,7 @@ const support = await getEmbeddedPostgresTestSupport();
       ).rejects.toMatchObject({ status: 403 });
       const operation = await support.runtimeAction(
         session.id,
-        "operator",
+        operatorActor,
         firstId,
         { action: "stop", idempotencyKey: "support-stop-fixture-001" },
         now,
@@ -222,7 +244,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(
         support.runtimeAction(
           session.id,
-          "operator",
+          operatorActor,
           firstId,
           {
             action: "restore",
@@ -236,7 +258,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(
         support.runtimeAction(
           session.id,
-          "operator",
+          operatorActor,
           firstId,
           { action: "stop", idempotencyKey: "support-stop-fixture-001" },
           now,
@@ -312,14 +334,22 @@ const support = await getEmbeddedPostgresTestSupport();
           },
         },
       };
+      const noSession = { ...operatorActor, sessionId: undefined };
+      const passwordOnly = { ...operatorActor, sessionId: passwordSessionId };
+      await expect(catalog.candidate(noSession, candidate, now)).rejects.toMatchObject({ status: 403 });
+      await expect(catalog.candidate(passwordOnly, candidate, now)).rejects.toMatchObject({ status: 403 });
+      const deniedTransition = { imageDigest: digest, expectedStatus: "candidate", status: "canary", reason: "Must remain unchanged" };
+      await expect(catalog.transition(noSession, deniedTransition, now)).rejects.toMatchObject({ status: 403 });
+      await expect(catalog.transition(passwordOnly, deniedTransition, now)).rejects.toMatchObject({ status: 403 });
+      expect(await db.select().from(runtimeVersionCatalog).where(eq(runtimeVersionCatalog.imageDigest, digest))).toEqual([]);
       await expect(
-        catalog.candidate("owner", candidate, now),
+        catalog.candidate({ type: "board", source: "session", userId: "owner" }, candidate, now),
       ).rejects.toMatchObject({ status: 403 });
-      await catalog.candidate("operator", candidate, now);
-      await catalog.candidate("operator", candidate, now);
+      await catalog.candidate(operatorActor, candidate, now);
+      await catalog.candidate(operatorActor, candidate, now);
       await expect(
         catalog.transition(
-          "operator",
+          operatorActor,
           {
             imageDigest: digest,
             expectedStatus: "candidate",
@@ -330,7 +360,7 @@ const support = await getEmbeddedPostgresTestSupport();
         ),
       ).rejects.toMatchObject({ status: 409 });
       await catalog.transition(
-        "operator",
+        operatorActor,
         {
           imageDigest: digest,
           expectedStatus: "candidate",
@@ -341,7 +371,7 @@ const support = await getEmbeddedPostgresTestSupport();
       );
       await expect(
         catalog.transition(
-          "operator",
+          operatorActor,
           {
             imageDigest: digest,
             expectedStatus: "candidate",
@@ -353,7 +383,7 @@ const support = await getEmbeddedPostgresTestSupport();
       ).rejects.toMatchObject({ status: 409 });
       await expect(
         catalog.transition(
-          "operator",
+          operatorActor,
           {
             imageDigest: digest,
             expectedStatus: "canary",
@@ -383,10 +413,10 @@ const support = await getEmbeddedPostgresTestSupport();
           diskStressPassed: true,
         },
       };
-      await catalog.qualifyCapacity("operator", profile, now);
+      await catalog.qualifyCapacity(operatorActor, profile, now);
       await expect(
         catalog.qualifyCapacity(
-          "operator",
+          operatorActor,
           { ...profile, cpuMillis: 2000 },
           now,
         ),
@@ -444,14 +474,14 @@ const support = await getEmbeddedPostgresTestSupport();
         );
       const created = await support.canaryRuntime(
         grant.id,
-        "operator",
+        operatorActor,
         input,
         now,
       );
       expect(created.operation.desiredState.canaryOperatorId).toBe("operator");
       await support.revoke(companyId, "owner", grant.id, now);
       await expect(
-        support.canaryRuntime(grant.id, "operator", input, now),
+        support.canaryRuntime(grant.id, operatorActor, input, now),
       ).rejects.toMatchObject({ status: 403 });
       // Persisted rows exercise the approval predicate; these remain fixture evidence, not a live provider rehearsal.
       const restoreTime = new Date(now.getTime() + 3000000),
@@ -559,7 +589,7 @@ const support = await getEmbeddedPostgresTestSupport();
           "Fixture tests persisted restore and current generation execution",
       };
       await expect(
-        catalog.transition("operator", approve, approvalTime),
+        catalog.transition(operatorActor, approve, approvalTime),
       ).rejects.toMatchObject({ status: 409 });
       await db
         .update(agentPresenceRuntimeBindings)
@@ -568,7 +598,7 @@ const support = await getEmbeddedPostgresTestSupport();
         })
         .where(eq(agentPresenceRuntimeBindings.id, binding!.id));
       await expect(
-        catalog.transition("operator", approve, approvalTime),
+        catalog.transition(operatorActor, approve, approvalTime),
       ).rejects.toMatchObject({ status: 409 });
       await db
         .update(heartbeatRuns)
@@ -578,10 +608,10 @@ const support = await getEmbeddedPostgresTestSupport();
         })
         .where(eq(heartbeatRuns.id, oldRun!.id));
       expect(
-        (await catalog.transition("operator", approve, approvalTime)).status,
+        (await catalog.transition(operatorActor, approve, approvalTime)).status,
       ).toBe("approved");
       await catalog.transition(
-        "operator",
+        operatorActor,
         {
           imageDigest: digest,
           expectedStatus: "approved",

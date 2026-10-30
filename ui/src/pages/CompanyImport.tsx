@@ -8,6 +8,7 @@ import type {
   CompanyPortabilitySource,
   CompanyPortabilityAdapterOverride,
 } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useToastActions } from "../context/ToastContext";
@@ -38,6 +39,7 @@ import { GithubIcon } from "../components/icons/github-icon";
 import { Field, adapterLabels } from "../components/agent-config-primitives";
 import { getAdapterLabel } from "../adapters/adapter-display-registry";
 import { defaultCreateValues } from "../components/agent-config-defaults";
+import { useTranslation } from "../i18n";
 import { getUIAdapter, listUIAdapters } from "../adapters";
 import type { CreateConfigValues } from "@paperclipai/adapter-utils";
 import {
@@ -748,12 +750,12 @@ function formatTransferProgress(progress: ImportTransferProgress): string {
 // the page polls the status route until the job settles. The connection is
 // no longer load-bearing — a proxy timeout, network blip, or page reload
 // cannot kill the import, and the stored job id lets the page resume
-// watching. Jobs are held in server memory only, so an id the server no
-// longer knows (restart, retention expiry) polls as 404.
+// watching. PostgreSQL owns job identity and status. Optional result detail
+// may leave the process cache; the durable compact receipt still survives.
 
 /** A 409 on submit means this user's previous import is still running; adopt it instead of importing twice. */
 function runningImportJobFromError(err: unknown): CompanyImportJobAccepted | null {
-  if (!(err instanceof ApiError) || err.status !== 409) return null;
+  if (!(err instanceof ApiError) || err.status !== 409 || importOutcomeIsUnknown(err)) return null;
   const body = err.body as { job?: { id?: unknown }; statusUrl?: unknown } | null;
   const jobId = body?.job?.id;
   if (typeof jobId !== "string" || jobId.length === 0) return null;
@@ -778,28 +780,31 @@ type CompanyImportWatchOutcome =
   | { status: "completed"; result: CompanyPortabilityImportResult }
   | { status: "completed-expired"; companyId: string | null };
 
+class ImportOutcomeUnknownError extends Error {}
+class ImportCancelledError extends Error {}
+
+function importOutcomeIsUnknown(error: unknown): boolean {
+  return error instanceof ImportOutcomeUnknownError || (error instanceof ApiError && error.status === 409
+    && (error.body as { code?: unknown } | null)?.code === "import_outcome_unknown");
+}
+
 /** Poll a job to a terminal state; resolves with the outcome or throws the job's error. */
 async function watchImportJob(
   jobId: string,
   storageKey: string,
+  onCancellationRequested?: () => void,
 ): Promise<CompanyImportWatchOutcome> {
   for (;;) {
     let job: Awaited<ReturnType<typeof companiesApi.getImportJob>>["job"] | null = null;
     try {
-      job = (await companiesApi.getImportJob(jobId)).job;
+      const status = await companiesApi.getImportJob(jobId);
+      job = status.job;
+      if (status.operation?.status === "cancel_requested") onCancellationRequested?.();
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        // The server has no record of this job. The retention sweep only drops
-        // jobs that have already *settled* (a running job is never removed), so
-        // a 404 while we are still watching means the in-memory record was lost
-        // to a restart mid-import — the import never reached a confirmed
-        // `succeeded` state and may not have finished. Report that honestly
-        // rather than masking a possibly-incomplete import as a success; the
-        // refreshed company list lets the user confirm what actually landed.
-        clearStoredImportJob(storageKey);
-        throw new Error(
-          "The server no longer reports this import job — it may have restarted while the import ran.",
-        );
+        // Missing or withdrawn status is no proof of non-application. Retain
+        // the original accepted ID for reconciliation; never resubmit it.
+        throw new ImportOutcomeUnknownError("The import status is no longer available. Its outcome is unconfirmed; reconcile the original import before trying again.");
       }
       if (
         err instanceof ApiError
@@ -834,6 +839,15 @@ async function watchImportJob(
       }
       return { status: "completed", result: job.importResult };
     }
+    if (job?.status === "needs_reconciliation") {
+      // Keep the original job identity for a later read. Uncertainty is never
+      // a reason to resubmit a non-idempotent import or activate its contents.
+      throw new ImportOutcomeUnknownError(job.error?.message ?? "The import outcome is unknown. Reconcile the existing import before trying again.");
+    }
+    if (job?.status === "cancelled") {
+      clearStoredImportJob(storageKey);
+      throw new ImportCancelledError();
+    }
     if (job?.status === "failed") {
       clearStoredImportJob(storageKey);
       throw new Error(job.error?.message ?? "Import failed on the server.");
@@ -845,6 +859,7 @@ async function watchImportJob(
 // ── Main page ─────────────────────────────────────────────────────────
 
 export function CompanyImport() {
+  const { t } = useTranslation("experience");
   const {
     selectedCompanyId,
     selectedCompany,
@@ -895,6 +910,8 @@ export function CompanyImport() {
 
   // Post-import success / activation state
   const [pauseAutomations, setPauseAutomations] = useState(true);
+  const [sourceReleaseConfirmed, setSourceReleaseConfirmed] = useState(false);
+  useEffect(() => setSourceReleaseConfirmed(false), [selectedCompanyId]);
   const [importOutcome, setImportOutcome] = useState<
     | {
         kind: "full";
@@ -918,6 +935,8 @@ export function CompanyImport() {
   // A still-running job from a previous page load being re-attached to. While
   // set, the page shows a "resume watching" panel instead of the stale form.
   const [resumedWatchJobId, setResumedWatchJobId] = useState<string | null>(null);
+  const [activeImportJobId, setActiveImportJobId] = useState<string | null>(null);
+  const [cancellationRequested, setCancellationRequested] = useState(false);
   const resumeAttemptedRef = useRef(false);
 
   // Chunked transfer state. The manifest cache is keyed by File identity so
@@ -1042,7 +1061,7 @@ export function CompanyImport() {
   );
 
   const localZipHelpText =
-    "Upload a .zip exported directly from Paperclip. Re-zipped archives created by Finder, Explorer, or other zip tools may not import correctly.";
+    `Upload a .zip exported directly from ${PRODUCT_IDENTITY.productName}. Re-zipped archives created by Finder, Explorer, or other zip tools may not import correctly.`;
 
   useEffect(() => {
     setBreadcrumbs([
@@ -1105,6 +1124,7 @@ export function CompanyImport() {
     onSuccess: (result, generation) => {
       if (generation !== previewGenerationRef.current) return;
       setImportPreview(result);
+      setSourceReleaseConfirmed(false);
 
       // Build conflicts and set default name overrides with prefix
       const conflicts = buildConflictList(result);
@@ -1210,14 +1230,19 @@ export function CompanyImport() {
     mutationFn: async (variables: {
       previewForImport: CompanyPortabilityPreviewResult | null;
       pauseAutomations: boolean;
+      sourceReleaseConfirmed: boolean;
       /** Re-attach to a job stored by a previous page load instead of submitting. */
       resume?: { jobId: string; storageKey: string };
     }) => {
       if (variables.resume) {
-        return watchImportJob(variables.resume.jobId, variables.resume.storageKey);
+        return watchImportJob(variables.resume.jobId, variables.resume.storageKey, () => setCancellationRequested(true));
       }
       const meta = {
         ...buildImportMetaCommon(),
+        expectedSourceFingerprint: variables.previewForImport?.sourceFingerprint,
+        ...(variables.sourceReleaseConfirmed && variables.previewForImport?.sourceFingerprint
+          ? { sourceReleaseReview: { confirmed: true as const, sourceFingerprint: variables.previewForImport.sourceFingerprint } }
+          : {}),
         nameOverrides: buildFinalNameOverrides(),
         selectedFiles: buildSelectedFiles(),
         adapterOverrides: buildFinalAdapterOverrides(),
@@ -1252,10 +1277,13 @@ export function CompanyImport() {
         jobId: accepted.job.id,
         pauseAutomations: variables.pauseAutomations,
       });
-      return watchImportJob(accepted.job.id, storageKey);
+      setActiveImportJobId(accepted.job.id);
+      return watchImportJob(accepted.job.id, storageKey, () => setCancellationRequested(true));
     },
     onSuccess: async (outcome, { previewForImport, pauseAutomations: submittedPauseAutomations }) => {
       setResumedWatchJobId(null);
+      setActiveImportJobId(null);
+      setCancellationRequested(false);
       // The company list powers the switcher; refresh it on every success path
       // so the imported company appears immediately without a manual reload.
       await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
@@ -1320,12 +1348,32 @@ export function CompanyImport() {
     },
     onError: (err) => {
       setResumedWatchJobId(null);
+      setActiveImportJobId(null);
+      setCancellationRequested(false);
       pushToast({
         tone: "error",
-        title: "Import failed",
-        body: err instanceof Error ? err.message : "Failed to apply import.",
+        title: err instanceof ImportCancelledError ? t("companyImport.cancelled")
+          : importOutcomeIsUnknown(err) ? "Import outcome unknown" : "Import failed",
+        body: err instanceof ImportCancelledError ? t("companyImport.cancelledBeforeEffects")
+          : err instanceof Error ? err.message : "Failed to apply import.",
       });
     },
+  });
+
+  const cancelImportMutation = useMutation({
+    mutationFn: (jobId: string) => companiesApi.cancelImportJob(jobId),
+    onSuccess: (response) => {
+      if (response.operation?.status === "cancelled") {
+        setCancellationRequested(true);
+        pushToast({ tone: "success", title: t("companyImport.cancelled"), body: t("companyImport.cancelledBeforeEffects") });
+      } else if (response.operation?.status === "cancel_requested") {
+        setCancellationRequested(true);
+        pushToast({ tone: "info", title: t("companyImport.cancelPendingTitle"), body: t("companyImport.cancelPendingBody") });
+      } else {
+        pushToast({ tone: "info", title: t("companyImport.cancelFinishedTitle"), body: t("companyImport.cancelFinishedBody") });
+      }
+    },
+    onError: (error) => pushToast({ tone: "error", title: t("companyImport.cancelFailed"), body: error instanceof Error ? error.message : t("companyImport.cancelErrorStatus") }),
   });
 
   // On mount, re-attach to a job stored by a previous page load. This is what
@@ -1338,9 +1386,11 @@ export function CompanyImport() {
     const stored = readStoredImportJob(selectedCompanyId);
     if (!stored) return;
     setResumedWatchJobId(stored.jobId);
+    setActiveImportJobId(stored.jobId);
     resumeImportWatch({
       previewForImport: null,
       pauseAutomations: stored.pauseAutomations,
+      sourceReleaseConfirmed: false,
       resume: { jobId: stored.jobId, storageKey: stored.storageKey },
     });
   }, [selectedCompanyId, resumeImportWatch]);
@@ -1363,6 +1413,7 @@ export function CompanyImport() {
   function resetImportFlowState() {
     previewGenerationRef.current += 1;
     setImportPreview(null);
+    setSourceReleaseConfirmed(false);
     resetMutationState();
   }
 
@@ -1419,6 +1470,17 @@ export function CompanyImport() {
 
   const totalFiles = useMemo(() => countFiles(tree), [tree]);
   const selectedCount = checkedFiles.size;
+  const selectedSourceProjectCount = importPreview
+    ? importPreview.manifest.projects.filter(project => checkedFiles.has(ensureMarkdownPath(project.path))).length : 0;
+  const selectedSourceTaskCount = importPreview
+    ? importPreview.manifest.issues.filter(task => checkedFiles.has(ensureMarkdownPath(task.path))).length : 0;
+  const selectedNativeSourceCompanyIds = importPreview ? new Set([
+    ...importPreview.manifest.issues.filter(task => checkedFiles.has(ensureMarkdownPath(task.path))).map(task => task.sourceCompanyId),
+    ...importPreview.manifest.projects.filter(project => checkedFiles.has(ensureMarkdownPath(project.path))).map(project => project.sourceCompanyId),
+  ].filter((companyId): companyId is string => typeof companyId === "string" && companyId.length > 0)) : new Set<string>();
+  const sourceReleaseReviewRequired = selectedSourceProjectCount + selectedSourceTaskCount > 0
+    && (targetMode === "new" || selectedNativeSourceCompanyIds.size !== 1
+      || !selectedNativeSourceCompanyIds.has(selectedCompanyId ?? ""));
 
   function handleToggleDir(path: string) {
     setExpandedDirs((prev) => {
@@ -1432,6 +1494,7 @@ export function CompanyImport() {
   function handleToggleCheck(path: string, kind: "file" | "dir") {
     if (!importPreview) return;
     resetMutationState();
+    setSourceReleaseConfirmed(false);
     setCheckedFiles((prev) => {
       const next = new Set(prev);
       if (kind === "file") {
@@ -1487,6 +1550,7 @@ export function CompanyImport() {
 
   function handleConflictToggleSkip(slug: string, filePath: string | null) {
     resetMutationState();
+    setSourceReleaseConfirmed(false);
     setSkippedSlugs((prev) => {
       const next = new Set(prev);
       const wasSkipped = next.has(slug);
@@ -1821,17 +1885,25 @@ export function CompanyImport() {
     return (
       <div className="max-w-6xl space-y-4 px-5 py-5">
         <div>
-          <h2 className="text-base font-semibold">Resume watching import</h2>
+          <h2 className="text-base font-semibold">{t("companyImport.resumeHeading")}</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            An import you started earlier is still running on the server.
+            {t("companyImport.resumeBody")}
           </p>
         </div>
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5">
           <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
-            Import running on the server — safe to keep waiting; reconnecting won&apos;t lose it.
+            {cancellationRequested
+              ? t("companyImport.cancelRequested")
+              : "Import running on the server — safe to keep waiting; reconnecting won&apos;t lose it."}
           </p>
         </div>
+        {activeImportJobId && !cancellationRequested && (
+          <Button size="sm" variant="outline" disabled={cancelImportMutation.isPending}
+            onClick={() => cancelImportMutation.mutate(activeImportJobId)}>
+            {cancelImportMutation.isPending ? t("companyImport.requestingCancel") : t("companyImport.cancelImport")}
+          </Button>
+        )}
       </div>
     );
   }
@@ -1847,7 +1919,7 @@ export function CompanyImport() {
         <div>
           <h2 className="text-base font-semibold">Import source</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Choose a GitHub repo or upload a local Paperclip zip package.
+            Choose a GitHub repo or upload a local {PRODUCT_IDENTITY.productName} zip package.
           </p>
         </div>
 
@@ -2087,6 +2159,17 @@ export function CompanyImport() {
 
           {/* Import button — below renames */}
           <div className="mx-5 mt-3 flex flex-wrap items-center justify-end gap-3">
+            {sourceReleaseReviewRequired && (
+              <div className="w-full rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                <p>{t("companyImport.sourceReleaseSummary", { fingerprint: importPreview.sourceFingerprint ?? "unavailable",
+                  projectCount: selectedSourceProjectCount, taskCount: selectedSourceTaskCount })}</p>
+                <label className="mt-2 flex items-start gap-2">
+                  <input type="checkbox" checked={sourceReleaseConfirmed}
+                    onChange={(e) => setSourceReleaseConfirmed(e.target.checked)} className="mt-0.5 accent-foreground" />
+                  <span>{t("companyImport.sourceReleaseReview")}</span>
+                </label>
+              </div>
+            )}
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input
                 type="checkbox"
@@ -2099,41 +2182,60 @@ export function CompanyImport() {
               />
               Start imported agents and routines paused
             </label>
-            <Button
-              size="sm"
-              onClick={() => importMutation.mutate({ previewForImport: importPreview, pauseAutomations })}
-              disabled={importMutation.isPending || hasErrors || selectedCount === 0}
-            >
-              <Download className="mr-1.5 h-3.5 w-3.5" />
-              {importMutation.isPending
-                ? "Importing..."
-                : `Import ${selectedCount} file${selectedCount === 1 ? "" : "s"}`}
-            </Button>
+            <div className="flex items-center gap-2">
+              {importMutation.isPending && activeImportJobId && !cancellationRequested && (
+                <Button size="sm" variant="outline" disabled={cancelImportMutation.isPending}
+                  onClick={() => cancelImportMutation.mutate(activeImportJobId)}>
+                  {cancelImportMutation.isPending ? t("companyImport.requestingCancel") : t("companyImport.cancelImport")}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => { setCancellationRequested(false); importMutation.mutate({ previewForImport: importPreview, pauseAutomations,
+                  sourceReleaseConfirmed }); }}
+                disabled={importMutation.isPending || importOutcomeIsUnknown(importMutation.error) || hasErrors || selectedCount === 0
+                  || (sourceReleaseReviewRequired && !sourceReleaseConfirmed)}
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                {importMutation.isPending
+                  ? "Importing..."
+                  : `Import ${selectedCount} file${selectedCount === 1 ? "" : "s"}`}
+              </Button>
+            </div>
           </div>
           {importMutation.isPending && (
             <div className="mx-5 mt-3 flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5">
               <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
               <p className="text-xs text-muted-foreground">
-                {transferProgress
+                {cancellationRequested
+                  ? t("companyImport.cancelRequestedProgress")
+                  : transferProgress
                   ? `${formatTransferProgress(transferProgress)} An interrupted upload resumes from the finished parts.`
                   : "Import running on the server — safe to keep waiting; reconnecting won't lose it. Large packages can take several minutes."}
               </p>
             </div>
           )}
           {importMutation.isError && !importMutation.isPending && (
-            <div className="mx-5 mt-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5">
-              <p className="text-xs text-destructive">
-                Import failed:{" "}
-                {importMutation.error instanceof Error
-                  ? importMutation.error.message
-                  : "the request did not complete."}{" "}
-                Nothing may have been created, or the import stopped partway — check the target company
-                before retrying.
+            <div className={cn("mx-5 mt-3 rounded-md border px-3 py-2.5", importMutation.error instanceof ImportCancelledError
+              ? "border-border bg-muted/30" : "border-destructive/40 bg-destructive/5")}>
+              <p className={cn("text-xs", importMutation.error instanceof ImportCancelledError ? "text-muted-foreground" : "text-destructive")}>
+                {importMutation.error instanceof ImportCancelledError ? t("companyImport.cancelled")
+                  : importOutcomeIsUnknown(importMutation.error) ? "Import outcome unknown:" : "Import failed:"}{" "}
+                {importMutation.error instanceof ImportCancelledError
+                  ? t("companyImport.cancelledBeforeEffects")
+                  : `${importMutation.error instanceof Error ? importMutation.error.message : "the request did not complete."} ${importOutcomeIsUnknown(importMutation.error)
+                    ? "Reconcile the existing import before trying again. Some changes may already exist."
+                    : "Nothing may have been created, or the import stopped partway — check the target company before retrying."}`}
               </p>
             </div>
           )}
 
           {/* Warnings */}
+          {importPreview.sourceRevision && (
+            <div className="mx-5 mt-3 text-xs text-muted-foreground">
+              {t("companyImport.sourceCommit", { sha: importPreview.sourceRevision })}
+            </div>
+          )}
           {importPreview.warnings.length > 0 && (
             <div className="mx-5 mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3">
               {importPreview.warnings.map((w) => (

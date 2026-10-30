@@ -10,18 +10,18 @@ export const runtimeSandboxBindings = pgTable("runtime_sandbox_bindings", {
   backend: text("backend").$type<SandboxCapabilitySnapshot["backend"]>().notNull(), profile: text("profile").$type<SandboxPolicy["profile"]>().notNull(), sandboxRef: text("sandbox_ref"),
   boundaryPolicy: jsonb("boundary_policy").$type<SandboxPolicy>().notNull(), boundaryPolicyHash: text("boundary_policy_hash").notNull(),
   capabilitySnapshot: jsonb("capability_snapshot").$type<SandboxCapabilitySnapshot | null>(), capabilitySnapshotHash: text("capability_snapshot_hash"), qualificationRunId: uuid("qualification_run_id"),
-  status: text("status").$type<"requested" | "ready" | "degraded" | "quarantined" | "stopping" | "stopped" | "failed" | "deleted">().notNull().default("requested"),
+  status: text("status").$type<"requested" | "ready" | "admitting" | "running" | "degraded" | "quarantined" | "stopping" | "stopped" | "failed" | "deleted">().notNull().default("requested"),
   version: integer("version").notNull().default(1), createdByUserId: text("created_by_user_id").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({ tenantUq: unique("sandbox_binding_tenant_uq").on(t.companyId, t.id), cellGenerationUq: unique("sandbox_binding_cell_generation_uq").on(t.companyId, t.runtimeCellId, t.cellGeneration),
   cellFk: foreignKey({ columns: [t.companyId, t.runtimeCellId], foreignColumns: [runtimeCells.companyId, runtimeCells.id] }),
-  statusCheck: check("sandbox_binding_status_check", sql`${t.status} in ('requested','ready','degraded','quarantined','stopping','stopped','failed','deleted')`),
+  statusCheck: check("sandbox_binding_status_check", sql`${t.status} in ('requested','ready','admitting','running','degraded','quarantined','stopping','stopped','failed','deleted')`),
   versionCheck: check("sandbox_binding_version_check", sql`${t.version}>0`), cellIdx: index("sandbox_binding_cell_idx").on(t.companyId, t.runtimeCellId),
 }));
 export const sandboxQualificationRuns = pgTable("sandbox_qualification_runs", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), bindingId: uuid("binding_id").notNull(),
   backend: text("backend").notNull(), backendVersion: text("backend_version").notNull(), hostOrImageRef: text("host_or_image_ref").notNull(), kernelVersion: text("kernel_version"), suiteVersion: text("suite_version").notNull(),
   evidenceKind: text("evidence_kind").$type<"local_fixture" | "protected_host_report">().notNull(), status: text("status").$type<"passed" | "failed" | "inconclusive">().notNull(),
-  results: jsonb("results").$type<Array<{ caseId: string; control: string; verdict: "pass" | "fail" | "unsupported"; observationHash: string | null }>>().notNull(), exceptions: jsonb("exceptions").$type<string[]>().notNull(), reportHash: text("report_hash").notNull(),
+  results: jsonb("results").$type<Array<{ caseId: string; control: string; verdict: "pass" | "fail" | "unsupported"; observationHash: string | null; contractHash: string }>>().notNull(), exceptions: jsonb("exceptions").$type<string[]>().notNull(), reportHash: text("report_hash").notNull(),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull(), completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
 }, t => ({ tenantUq: unique("sandbox_qualification_tenant_uq").on(t.companyId, t.id), bindingFk: foreignKey({ columns: [t.companyId, t.bindingId], foreignColumns: [runtimeSandboxBindings.companyId, runtimeSandboxBindings.id] }), bindingIdx: index("sandbox_qualification_binding_idx").on(t.companyId, t.bindingId) }));
 export const runtimePolicySnapshots = pgTable("runtime_policy_snapshots", {

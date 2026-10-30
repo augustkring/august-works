@@ -1,5 +1,9 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
+
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(
@@ -33,6 +37,8 @@ test("an explicit task draft reconciles a lost Native acknowledgement with reads
       data: { name: "Disposable Native task-draft qualification" },
     }),
   );
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedActorId = `user:${session.user.id}`;
   const base = `/api/companies/${company.id}`;
   const attempts: Array<Record<string, unknown>> = [];
   let savedId: string | undefined,
@@ -41,7 +47,7 @@ test("an explicit task draft reconciles a lost Native acknowledgement with reads
   await page.route(`**${base}/issues?**`, async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     const params = new URL(route.request().url()).searchParams;
-    expect(params.get("expectedActorId")).toBe("local-board");
+    expect(params.get("expectedActorId")).toBe(expectedActorId);
     expect(params.get("awExperienceDraft")).toBe("task");
     attempts.push(route.request().postDataJSON());
     expect(attempts).toHaveLength(1);
@@ -62,13 +68,19 @@ test("an explicit task draft reconciles a lost Native acknowledgement with reads
     expect(route.request().method()).toBe("GET");
     expect(
       new URL(route.request().url()).searchParams.get("expectedActorId"),
-    ).toBe("local-board");
+    ).toBe(expectedActorId);
     reads++;
     if (reads === 1) return route.abort("failed");
     await route.continue();
   });
   try {
     await page.goto(`/${company.issuePrefix}/dashboard`);
+    await expect(
+      page.getByRole("button", {
+        name: `Open ${company.name} organization switcher`,
+        exact: true,
+      }),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { level: 1, name: "Home", exact: true }),
     ).toBeVisible();

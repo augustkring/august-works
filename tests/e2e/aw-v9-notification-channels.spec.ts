@@ -51,6 +51,10 @@ test("linked notification settings retain the same uncertain command and work at
   await expect(settings.getByRole("status")).toContainText("Preference version 1 was saved");
   expect(requestIds).toHaveLength(2); expect(requestIds[1]).toBe(requestIds[0]); expect(commands[1]).toEqual(commands[0]);
   await page.addScriptTag({ path: axePath });
+  // Audit from the page's stable top position. The interaction above scrolls
+  // a prior preference row beneath the fixed app header, where it is outside
+  // the current viewport rather than a visible undersized target.
+  await page.evaluate(() => window.scrollTo(0, 0));
   for (const theme of ["light", "dark"]) {
     await page.evaluate(value => document.documentElement.classList.toggle("dark", value === "dark"), theme);
     // Wait for actual finite theme transitions before measuring their end-state contrast.

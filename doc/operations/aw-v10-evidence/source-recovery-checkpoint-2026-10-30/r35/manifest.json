@@ -1,0 +1,554 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T01:22:00.215688+00:00",
+  "baseCommit": "5eb1da4678af0cfdb6ec2343f10f2d61dacd8435",
+  "patchBytes": 2539407,
+  "patchSha256": "89b9a3c810349dfc2788dab258d573d4ef3e93aca052b86d782caee6166be305",
+  "archiveSha256": "41cca6809f97c38fe94bb1018a048e0fc697752ddfb7a436d021ae28e20cc558",
+  "untrackedSourceFiles": [
+    {
+      "path": "evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "path": "evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "path": "evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "path": "packages/db/src/migrations/0564_broken_guardian.sql",
+      "bytes": 22486,
+      "sha256": "f6a864d30917b526d97e4ad62bcca58b238dc88a41832a2e04e3bcfe966a7dab"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0564_snapshot.json",
+      "bytes": 2795166,
+      "sha256": "4fe9e81c7ad48a5b9ab4729b7327215774f42f2ffe27b0205427fe48eef02224"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "path": "scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "path": "scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "path": "scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15810,
+      "sha256": "4b1d17720e88948c60ed5d00c47998c412e55e4bb119c210607d1220ef2fc074"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    }
+  ],
+  "privateRecoveryFiles": [
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/0565_responsibility_scan.sql",
+      "bytes": 3132,
+      "sha256": "b21416d3d4e36d2ddfd64ec8b70416a03ae85f77fcca8eeb275fe66e22130f55"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/README.md",
+      "bytes": 15394,
+      "sha256": "f4bd600ee61a791037f2d61f39fb956911db6b62cf4b8416d2f158684e475463"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "bytes": 13870,
+      "sha256": "4427e093c427edf511395b7d930347a6696239bdb11e03d5f1cf8e7c20ab4a8b"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/README.md",
+      "bytes": 750,
+      "sha256": "6a6efc54d849f92261c4451fb0cd49df656affbd46289289b2fa2aa4f6b2aaad"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/authorized-subset-reader.ts",
+      "bytes": 5660,
+      "sha256": "c5eae865fbba8e16c1dda75dc0df30dcddd53f7eef0fce21eb9ae47418ad2185"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/maintenance-runner.ts",
+      "bytes": 1531,
+      "sha256": "37471163cfd763eae1ae1d22252c122c660f10c458fa3c308cc72ec3ac93f8ca"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-metadata-sources.ts",
+      "bytes": 8654,
+      "sha256": "5c99ee69a8f8eb1a772e0de85bc8253c9c3b2fa900ec885d54d228c62fcb956a"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-owner-coverage.ts",
+      "bytes": 1109,
+      "sha256": "e8472e5adaeb8283ce9d667a3dbd89e70c467e1b35ea275b43143215befd8517"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-reader-adapters.ts",
+      "bytes": 18651,
+      "sha256": "c7af7003fdde458b8387c3f231c162f86b38b5adb29e5305778cd6a212f16f1e"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-reader-ports.ts",
+      "bytes": 4862,
+      "sha256": "92038dd2f98589fc39f03e3206454b48fe72a9030e64a0f02373f6b14c95fe40"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-subject-policy.ts",
+      "bytes": 1985,
+      "sha256": "b1882db744915df33101a2182cec770b6cc89d77211dad2b5b33cf13e66282a5"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan-store.ts",
+      "bytes": 12144,
+      "sha256": "a14123e9e5fded5d2b3b945ca65f03322d32fcd7044299b86687bdebe156c316"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan.ts",
+      "bytes": 7317,
+      "sha256": "b0b733b76196442953828235ec19bf6b3ce9f65f9a90f9b45e172c6c2892e52f"
+    },
+    {
+      "path": "b-resource-0565-responsibility-scan-proposal-20261030/schema-responsibility-scan.ts",
+      "bytes": 3908,
+      "sha256": "2539c3405894ba81a943dafa7d18af77d8b1f4c8414a9242c70bb7a5de701ad0"
+    },
+    {
+      "path": "native-enclosing-consumer-cover-edit.py",
+      "bytes": 2243,
+      "sha256": "d99109d194586ad2cc80e04f0a28b097b5c346f5751658ecd01bb585a54c1765"
+    },
+    {
+      "path": "native-graph-ledger-handoff-20261030.md",
+      "bytes": 14330,
+      "sha256": "56e62d32b3300b52799f5c3de8b9adea84f816d4a2891f499d5664d13400317a"
+    },
+    {
+      "path": "publish-parsed-source.cjs",
+      "bytes": 1152,
+      "sha256": "08091f29cb7f4137077cc778b4a6cb9deaaea0c34e04fdac7e89f4af8bc48652"
+    },
+    {
+      "path": "record-static-ui-build-inputs.py",
+      "bytes": 1315,
+      "sha256": "6a15c4e06816af2c98a8e4208dd494d0f4476c2387a0acab0c7dcd5a7f5585f4"
+    },
+    {
+      "path": "resource-finish-handoff-20261030.md",
+      "bytes": 2854,
+      "sha256": "7223aef32fa43954c0e43b150b88ddf623febb56bf2652f9e6acc329c1cda8c8"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/assembled.sql",
+      "bytes": 22486,
+      "sha256": "f6a864d30917b526d97e4ad62bcca58b238dc88a41832a2e04e3bcfe966a7dab"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/companion.sha256",
+      "bytes": 157,
+      "sha256": "9abdd8180f5245f41fa201020af2ab4e0a9e37c82d32c8c3163efd66c5f53cb5"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/companion.sql",
+      "bytes": 18639,
+      "sha256": "06a09db9ee76d79f02d8c32a696ddda7a0da23bc49b5314b062b06e1ae2af9d7"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/db-build.log",
+      "bytes": 551,
+      "sha256": "9deb19621ad658ecd5071fb80672a359d016632581e955a7864d34975c21e95b"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/generate.log",
+      "bytes": 25047,
+      "sha256": "5a3241854f2ce810c24af8d3785ff6436efaa9324ba02458c05ff5fafb50df3d"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/generated.sql",
+      "bytes": 3393,
+      "sha256": "93266f853b9c417e714d6308d4f604a2b21857934dc4a28e55d6213de44e1276"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/manual-rebase-preconditions.json",
+      "bytes": 1822,
+      "sha256": "6d02948126155fc5c7e202e9d66b2ab2eb475a60728ad781c041901c05111224"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/migration-check.log",
+      "bytes": 274,
+      "sha256": "cbd194112cc77bd70d0e994ac6857781745a246f8c293cdfe85f76415f842aed"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/migration-tag",
+      "bytes": 21,
+      "sha256": "82172cb05ea530c644e62b1f04247f5e5e16ac4f0d538f1379950f2e2fbcffda"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/overlay-manifest.json",
+      "bytes": 1737,
+      "sha256": "ca82eb8e684c3b39dab9bdbe450b198e5838736c073b5e089a2a9b68f46c0652"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/preflight.mts",
+      "bytes": 955,
+      "sha256": "f056fc9ffeeadc943a04b807ce5f06c44b7d21cd40415c2ac5e3ddb7cfcf174d"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/packages/db/src/migrations/0564_broken_guardian.sql",
+      "bytes": 22486,
+      "sha256": "f6a864d30917b526d97e4ad62bcca58b238dc88a41832a2e04e3bcfe966a7dab"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/packages/db/src/migrations/meta/0564_snapshot.json",
+      "bytes": 2795166,
+      "sha256": "4fe9e81c7ad48a5b9ab4729b7327215774f42f2ffe27b0205427fe48eef02224"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/packages/db/src/migrations/meta/_journal.json",
+      "bytes": 85104,
+      "sha256": "b19f731e45e15348a93b63b1c1c0405918c5acb020a088edb39bc90e0e70513b"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/packages/db/src/schema/environment_leases.ts",
+      "bytes": 3901,
+      "sha256": "88222db0df8a135ccfca439ea8cbe624df8bd8df1209a8de48f775254a278b96"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/packages/db/src/schema/heartbeat_run_events.ts",
+      "bytes": 2059,
+      "sha256": "f887d01bfb4173faa88f62f9df680b7710b57336221af70fc988e35968998388"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/packages/db/src/schema/heartbeat_runs.ts",
+      "bytes": 10566,
+      "sha256": "98463a00ffaedd8da1bf9e35a944fd1411e338f76f01e9a49ee28a472ec1cac3"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/packages/db/src/schema/memory_jobs.ts",
+      "bytes": 5735,
+      "sha256": "d6767af727ccabb5109141fa9ff2ce0f03fd41c119232bdcd9a3b9467df3258b"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/packages/db/src/schema/native_run_finalizations.ts",
+      "bytes": 4394,
+      "sha256": "4dffb87a6701eba9882ca168b69530c9c37dbd8a20e762382c1784f4df1fb288"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/packages/db/src/schema/workflows.ts",
+      "bytes": 19713,
+      "sha256": "09affeab6594e5d161381ae2f5a44e861f55e2338aa3ff134d8256f5bd807db4"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/publish-staging/server/src/services/execution-blocker.ts",
+      "bytes": 4238,
+      "sha256": "4e93263aae7d464206ac401ba4bf3dc9f4d8a72fd90c40f3e042351b556b1777"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/published-files.json",
+      "bytes": 1691,
+      "sha256": "d72a72de446c2fa131dca369ee4b9dbec1540233125b36fe799286fee087ac6f"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/qualified-tree-source-pins.json",
+      "bytes": 185989,
+      "sha256": "6dd7d9eee49141c2692036e074da3fafbaadc316a80e4bb9cf77660c344ab9c7"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/resource-source-preconditions.json",
+      "bytes": 3464,
+      "sha256": "b2476ade9eb6fb13977defed681fc27b14d0f424e05fd2546316e37bb99a4302"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/resource-syntax-pins.json",
+      "bytes": 8538,
+      "sha256": "ef7bd77b4a5be835d12c79c36822daa9f43e785bd19163cff314de251c071a8b"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/responsibility-r2-cleanup-manifest.json",
+      "bytes": 5763,
+      "sha256": "9c5692c49c0933a91eec510af79a6ff92720ccfae6e6c31eb1e06c9cf6576abd"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/reused-r14-evidence.json",
+      "bytes": 552,
+      "sha256": "18d4225dbeb99ec7f9c97de5114c8f9672fbdccfcb28ab0d00dc523305560aa8"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/reused-r14-gateway-test.log",
+      "bytes": 12910,
+      "sha256": "a8845acfc73914291619f0911a0641d382db89a3bbdac2c2cbc1ce0643e4b6b9"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/reused-r14-resource-pg-test.log",
+      "bytes": 2550527,
+      "sha256": "2a7d0d7023634e9c060324e2f27aa1fc33ab443e8a89d3ab1900d4603cf61cbd"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/rust-target-bytes.txt",
+      "bytes": 54,
+      "sha256": "19bc5205125e85abe70137b50e147d0716b94869f361b0095f31114f8df2c652"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/server-typecheck.log",
+      "bytes": 7974,
+      "sha256": "3a49067d8433ce86eab936b7a5cfbb0c97ada9dfbb25f79cf5832f12819f1aaa"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/shared-test.log",
+      "bytes": 2130,
+      "sha256": "718a68fd2d6b14774fbf566e4dbd01fcae0872cda49c9ec9841ed8dbe791e642"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/shared-typecheck.log",
+      "bytes": 104,
+      "sha256": "2fec447f5757319106dbabdd4e12c28fffab38c3e1586414a7575a548034cb39"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/snapshot-0564.json",
+      "bytes": 2795166,
+      "sha256": "4fe9e81c7ad48a5b9ab4729b7327215774f42f2ffe27b0205427fe48eef02224"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/snapshot.log",
+      "bytes": 38,
+      "sha256": "bfd1235a03b8e08c824b78cc44bfa3283933a1bbed2f99926fa70256ff26633c"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-before-migrations.json",
+      "bytes": 74629,
+      "sha256": "9685e7c65807ed692927be0e720874ffbe594342ab9e6095e077a0350a79923c"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.json",
+      "bytes": 189896,
+      "sha256": "c8805e1ea26dea58dd0d31cf93a26920bf6c72f3da92f8b5a1b710b4a8d2a85f"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15810,
+      "sha256": "4b1d17720e88948c60ed5d00c47998c412e55e4bb119c210607d1220ef2fc074"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source-files/server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/source-pins.source.patch",
+      "bytes": 702356,
+      "sha256": "5631d37d1d737fabfbb7c1f5567af46c8034472ab79b1aa31527ca47a0468130"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/sql-preflight.log",
+      "bytes": 57,
+      "sha256": "f4db4116947fe5cd8d68abfc4d91dbd95bff8d1a717ce699c7a93da9e99fa52f"
+    },
+    {
+      "path": "resource-governance-current-typecheck-r6-20261030/syntax.log",
+      "bytes": 60,
+      "sha256": "90b1466c061f96b707944318551c892c1ef30d32da1642e49d24720ea86d68f5"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/heartbeat.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/heartbeat.log",
+      "bytes": 855,
+      "sha256": "b51eeb09d5045f425711ec0f44b6583619c65e135597568a03ee14c8b8481039"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/snapshot.log",
+      "bytes": 38,
+      "sha256": "2c4c0c193bc892f395916ab8a5419b1b057b1b6500fc198901c35c0b71de559a"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.json",
+      "bytes": 187183,
+      "sha256": "0d0a13922108d3e93c6c9bde3d6f79e746b54e89af22b664c390c8ec226bca6a"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/evals/platform-skill/cases.json",
+      "bytes": 2949,
+      "sha256": "1d9ceb97491828790e1296e41dd062aec42c3a08c17f8ccaaa476710f9a570e8"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "bytes": 3972,
+      "sha256": "a1e44973d3d64480378e7d461dbe2c6c513ff21c7acf63d4240f3256053f00a4"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/customer-problem-evidence.ts",
+      "bytes": 851,
+      "sha256": "6361a2a79c07e2c2040972b89f2774b8297d8032137a310eafcc7a403a5262e9"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/customer-success-quality.test.ts",
+      "bytes": 2110,
+      "sha256": "ed45cb6fecfab6483c52e9e87982fe05214a6376a91dd34b112640f9883ecc57"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/customer-success-quality.ts",
+      "bytes": 8587,
+      "sha256": "21139743ecf50b437289bb6e3215611546b28d608e552022a742399810a7a6b1"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 14784,
+      "sha256": "887473a4fccd044bc5b9ccee08955f8a35f6e2c2e7a8a5901dc190c9061d3702"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15486,
+      "sha256": "bb2a05a67019fcb3ab810b33ee9cb9102bad36126b0cf74b298a3ccd579ce48a"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source.patch",
+      "bytes": 699089,
+      "sha256": "fac41ddeabb1f90cc717b0e51868cb531643e0a3d349e8107b70e9cc685dd405"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/syntax.log",
+      "bytes": 61,
+      "sha256": "07692700cca347278e88985c432acb80a2fab2b96eb641be15ffada7eb56867b"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/ui.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/ui.log",
+      "bytes": 11126,
+      "sha256": "14b9a12e087e923111cc6ab3213fda6929c4a053fb883de43c4f5ef710f3e1fa"
+    }
+  ],
+  "privateArchiveSha256": "59d1d66e0b9bd3dac27db98f85f776d065a7f938dc83b20264146f0186aaae94",
+  "note": "Resource0564 published files and current Native enclosing-consumer-cover WIP preserved; runtime9 and full \u00a717 completion still pending. Prior full119 qualification remains in r34."
+}

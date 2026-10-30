@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[23:38:22] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"1bd83d27-87e3-4f35-b4af-dd21b9bfbd6e","actorAgentId":"533055ef-59ac-4cf9-9caa-f27a6166fb99","responsibleUserId":"6a9977ff-14aa-42e0-bb90-47fdd3312cbb"}[39m
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 6 skipped (9)
+   Start at  23:38:04
+   Duration  18.37s (transform 8.55s, setup 82ms, import 12.31s, tests 5.85s, environment 0ms)
+

@@ -1,0 +1,19 @@
+{
+  "cwd": "/workspace/v10-dep-qualification/server",
+  "timeoutSeconds": 360,
+  "timeoutCommand": "timeout --signal=TERM --kill-after=10s 360s python3 /workspace/v10-preparation/run-with-owned-child-cleanup.py ../node_modules/.bin/vitest run",
+  "testFiles": [
+    "src/__tests__/issue-attachment-routes.test.ts",
+    "src/__tests__/workspace-runtime-routes-authz.test.ts",
+    "src/__tests__/agent-runtime-fabric-v5.test.ts",
+    "src/__tests__/support-case-storage.integration.test.ts"
+  ],
+  "testNameRegex": "issue attachment routes|workspace runtime service route authorization|allows explicitly authorized guest act forecasts|applies the coverage migration before quarantine",
+  "vitestArgs": [
+    "--maxWorkers=1",
+    "--no-file-parallelism",
+    "--reporter=verbose"
+  ],
+  "lock": "flock -x /workspace/v10-preparation/v10-pg-tests.lock",
+  "exitCode": 0
+}

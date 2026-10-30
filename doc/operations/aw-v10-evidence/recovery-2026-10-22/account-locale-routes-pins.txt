@@ -1,0 +1,4 @@
+bdd81375075bbac207cbae77661f9d49c26a28a7f2e57a67c9cbc40ddbd9edad  packages/shared/src/validators/access.ts
+f835c00946931c638fb51d25ee28011a26c05a611abc55af1d57000a3894378f  server/src/routes/auth.ts
+cbe7f7e1795428c5264b0acecc7b8d69b7ad2c0b57e608783b50ff7676ef80d0  server/src/__tests__/auth-routes.test.ts
+6f6a68fb62ef5f15ba22919dd1bbd158b8af625d75ab3cfc16759c4278157ce5  server/src/__tests__/user-preferences-routes.test.ts

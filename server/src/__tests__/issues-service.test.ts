@@ -1,13 +1,21 @@
+import { projectService } from "../services/projects.js";
 import { randomUUID } from "node:crypto";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
+import express from "express";
+import request from "supertest";
+import { actorMiddleware } from "../middleware/auth.js";
+import { errorHandler } from "../middleware/error-handler.js";
+import { projectRoutes } from "../routes/projects.js";
 import {
   activityLog,
   agents,
+  authUsers,
   companies,
   companyMemberships,
   createDb,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   documentRevisions,
   documents,
   environments,
@@ -16,6 +24,8 @@ import {
   heartbeatRuns,
   instanceSettings,
   issueComments,
+  issueAccessGrants,
+  issuePrivacySources,
   issueInboxArchives,
   issueDocuments,
   issuePlanDecompositions,
@@ -41,6 +51,7 @@ import {
   deriveIssueCommentRunLogAttribution,
   ISSUE_LIST_MAX_LIMIT,
   issueService,
+  type NativeTaskSourceCapture,
 } from "../services/issues.ts";
 import {
   WORKSPACE_WORKTREE_REQUIRES_PROJECT_CODE,
@@ -48,6 +59,8 @@ import {
   WORKSPACE_WORKTREE_REQUIRES_PROJECT_REMEDIATION,
 } from "../services/execution-workspace-policy.ts";
 import { buildAgentMentionHref, buildProjectMentionHref, MAX_ISSUE_REQUEST_DEPTH, type IssueWorkMode } from "@paperclipai/shared";
+import { canActorReadIssuePrivacy } from "../services/authorization.js";
+import { getIssueExecutionContext } from "../services/heartbeat.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -62,11 +75,128 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+async function createCanonicalProject(
+  db: ReturnType<typeof createDb>,
+  companyId: string,
+  project: Record<string, unknown>,
+) {
+  const app = express();
+  app.use(express.json());
+  app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+  app.use("/api", projectRoutes(db));
+  app.use(errorHandler);
+  const response = await request(app).post(`/api/companies/${companyId}/projects`).send(project).expect(201);
+  return response.body.id as string;
+}
+
 describe("issue list limit helpers", () => {
   it("clamps untrusted issue-list limits to the server maximum", () => {
     expect(clampIssueListLimit(0)).toBe(1);
     expect(clampIssueListLimit(25.9)).toBe(25);
     expect(clampIssueListLimit(ISSUE_LIST_MAX_LIMIT + 10)).toBe(ISSUE_LIST_MAX_LIMIT);
+  });
+});
+
+describeEmbeddedPostgres("issueService native ancestor source capture",()=>{
+  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>;
+  beforeAll(async()=>{database=await startEmbeddedPostgresTestDatabase("native-ancestor-source-capture-");db=createDb(database.connectionString);},EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  afterAll(async()=>{await database?.cleanup();},30000);
+  async function chain(){
+    const companyId=randomUUID();
+    await db.insert(companies).values({id:companyId,name:"Native ancestor fixture",issuePrefix:randomUUID()});
+    const rows:Array<typeof issues.$inferSelect>=[];
+    for(let i=0;i<9;i++){
+      const [row]=await db.insert(issues).values({companyId,title:`Ancestor source ${i}`,identifier:`ANC-${companyId}-${i}`,
+        description:`Unused ancestor description ${i}`,parentId:rows.at(-1)?.id??null,
+        status:"todo",priority:"medium",payloadSourceProtocolVersion:i===7?1:0}).returning();
+      rows.push(row!);
+    }
+    // Canonical source-free structural envelope, not producer qualification.
+    const id=rows[7]!.id;
+    const [sealed]=await db.execute<{snapshot:Record<string,unknown>}>(sql`with content as (select jsonb_build_object('version',1,
+      'owner',jsonb_build_object('kind','issue','companyId',company_id::text,'id',id::text,
+        'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(i))),
+      'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,'memoryIds','[]'::jsonb,
+        'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as value from issues i where id=${id}::uuid)
+      update issues set payload_source_snapshot=value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')),
+        updated_at='2026-10-23T01:02:03.123456Z'::timestamptz from content where id=${id}::uuid
+      returning payload_source_snapshot as snapshot`);
+    return {rows,selected:rows[7]!,target:rows[8]!,snapshot:sealed!.snapshot};
+  }
+  it("captures only the six rendered ancestors with selected snapshots and exact microsecond versions without public metadata",async()=>{
+    const seeded=await chain(),svc=issueService(db),captures:NativeTaskSourceCapture[]=[];
+    const original=await svc.getAncestors(seeded.target.id);
+    const result=await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>captures.push(capture)});
+    expect(result).toEqual(original);
+    expect(result).toHaveLength(8);
+    const versions=await db.execute<{id:string;version:string;ownerHash:string}>(sql`select id,
+      extract(epoch from i.updated_at)::text as version,
+      public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "ownerHash"
+      from issues i where i.company_id=${seeded.target.companyId}::uuid`);
+    const versionMap=new Map(versions.map(row=>[row.id,row.version]));
+    const hashMap=new Map(versions.map(row=>[row.id,row.ownerHash]));
+    expect(captures).toEqual(result.slice(0,6).map((row,index)=>({input:{kind:"task",issueId:row.id,
+      sourceVersion:versionMap.get(row.id),contentHash:hashMap.get(row.id)},payloadSourceSnapshot:index===0?seeded.snapshot:null})));
+    expect(captures[0]!.input.sourceVersion).toMatch(/123456$/);
+    expect(captures.map(capture=>capture.input.issueId)).toEqual(seeded.rows.slice(2,8).reverse().map(row=>row.id));
+    for(const row of result){
+      expect(row).not.toHaveProperty("payloadSourceSnapshot");
+      expect(row).not.toHaveProperty("sourceVersion");
+      expect(row).not.toHaveProperty("sourceCapture");
+    }
+  });
+  it("retains the captured row across status changes and rejects a body edit under its sealed source",async()=>{
+    const seeded=await chain(),svc=issueService(db),captured:NativeTaskSourceCapture[]=[];
+    await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>captured.push(capture)});
+    expect(captured[0]?.payloadSourceSnapshot).toEqual(seeded.snapshot);
+    await db.update(issues).set({status:"in_progress",updatedAt:new Date()})
+      .where(eq(issues.id,seeded.selected.id));
+    const later:NativeTaskSourceCapture[]=[];
+    await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>later.push(capture)});
+    expect(later[0]!.input.contentHash).toBe(captured[0]!.input.contentHash);
+    expect(later[0]!.input.sourceVersion).not.toBe(captured[0]!.input.sourceVersion);
+    expect(later[0]!.payloadSourceSnapshot).toEqual(seeded.snapshot);
+    expect(captured[0]!.payloadSourceSnapshot).toEqual(seeded.snapshot);
+    const [currentHash]=await db.execute<{hash:string}>(sql`select public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash
+      from issues i where i.id=${seeded.selected.id}::uuid`);
+    expect(captured[0]!.input.contentHash).toBe(currentHash!.hash);
+    await expect(db.update(issues).set({title:"Changed Task payload"}).where(eq(issues.id,seeded.selected.id)))
+      .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+    const [unchanged]=await db.select({title:issues.title,payloadSourceSnapshot:issues.payloadSourceSnapshot,
+      payloadSourceSnapshotInvalidated:issues.payloadSourceSnapshotInvalidated}).from(issues)
+      .where(eq(issues.id,seeded.selected.id));
+    expect(unchanged!.title).toBe(seeded.selected.title);
+    expect(unchanged!.payloadSourceSnapshot).toEqual(seeded.snapshot);
+    expect(unchanged!.payloadSourceSnapshotInvalidated).toBe(false);
+    const empty:NativeTaskSourceCapture[]=[];
+    expect(await svc.getAncestors(seeded.rows[0]!.id,{onSourceCapture:capture=>empty.push(capture)})).toEqual([]);
+    expect(empty).toEqual([]);
+  });
+  it("captures the original selected Task context without adding source metadata to its DTO",async()=>{
+    const seeded=await chain(),captures:Array<NativeTaskSourceCapture|null>=[];
+    const context=await getIssueExecutionContext(db,seeded.target.companyId,seeded.selected.id,capture=>captures.push(capture));
+    expect(context!.id).toBe(seeded.selected.id);
+    const [version]=await db.execute<{version:string;ownerHash:string}>(sql`select
+      extract(epoch from i.updated_at)::text as version,
+      public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "ownerHash"
+      from issues i where i.id=${seeded.selected.id}::uuid`);
+    expect(version!.version).toMatch(/123456$/);
+    expect(captures[0]).toEqual({input:{kind:"task",issueId:context!.id,sourceVersion:version!.version,
+      contentHash:version!.ownerHash},payloadSourceSnapshot:seeded.snapshot});
+    expect(context).not.toHaveProperty("sourceVersion");
+    expect(context).not.toHaveProperty("payloadSourceSnapshot");
+    const unknown:Array<NativeTaskSourceCapture|null>=[];
+    await getIssueExecutionContext(db,seeded.target.companyId,seeded.target.id,capture=>unknown.push(capture));
+    expect(unknown[0]?.payloadSourceSnapshot).toBeNull();
+    for(const [company,id] of [[randomUUID(),seeded.selected.id],[seeded.target.companyId,randomUUID()]]){
+      const absent:Array<NativeTaskSourceCapture|null>=[];
+      expect(await getIssueExecutionContext(db,company!,id!,capture=>absent.push(capture))).toBeNull();
+      expect(absent).toEqual([null]);
+    }
+    await db.update(issues).set({description:"Later Task body",payloadSourceSnapshot:null,updatedAt:new Date()})
+      .where(eq(issues.id,seeded.selected.id));
+    expect(context!.description).toBe(seeded.selected.description);
+    expect(captures[0]!.payloadSourceSnapshot).toEqual(seeded.snapshot);
   });
 });
 
@@ -423,6 +553,26 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
     return companyId;
   }
 
+  async function addVerifiedMember(companyId: string, userId = randomUUID()) {
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Issue service Human",
+      email: `${userId}@example.test`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "member",
+    });
+    return userId;
+  }
+
   it("does not treat passive issue activity as touching it, but includes real user mutations", async () => {
     const companyId = await seedAssignableAgentCompany();
     const issueId = randomUUID();
@@ -619,10 +769,10 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
     const companyId = await seedAssignableAgentCompany();
     const agentId = randomUUID();
     const userId = randomUUID();
+    const actorUserId = randomUUID();
     await db.insert(agents).values(agentRow(companyId, { id: agentId, name: "ConnectionRequester" }));
-    await db.insert(companyMemberships).values({
-      companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "member",
-    });
+    await addVerifiedMember(companyId, userId);
+    await addVerifiedMember(companyId, actorUserId);
     const issue = await svc.create(companyId, {
       title: "Waiting for a connection", status: "in_review", priority: "medium", assigneeAgentId: agentId,
     });
@@ -635,7 +785,7 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
     }).returning();
     const [interaction] = await db.insert(issueThreadInteractions).values({
       companyId, issueId: issue.id, kind: "connection_intent", status: "pending",
-      createdByAgentId: agentId, addresseeUserId: "local-board",
+      createdByAgentId: agentId, addresseeUserId: actorUserId,
       payload: {
         version: 1, serviceSlug: "notion", serviceName: "Notion",
         requestingAgentId: agentId, requestingAgentName: "ConnectionRequester", phase: "authorizing",
@@ -645,12 +795,12 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
     await db.insert(toolOauthStates).values({
       state: oauthState, companyId, connectionId: connection!.id, issueId: issue.id,
       interactionId: interaction!.id, codeVerifier: "test-verifier",
-      createdByActorType: "user", createdByActorId: "local-board",
+      createdByActorType: "user", createdByActorId: actorUserId,
       expiresAt: new Date(Date.now() + 60_000),
     });
 
     const updated = await svc.update(issue.id, {
-      assigneeAgentId: null, assigneeUserId: userId, actorUserId: "local-board",
+      assigneeAgentId: null, assigneeUserId: userId, actorUserId,
     });
     expect(updated).toMatchObject({ status: "in_review", assigneeAgentId: null, assigneeUserId: userId });
     await expect(db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interaction!.id)))
@@ -664,6 +814,7 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
 
   it("expires pending thread interactions on any service-level terminal transition", async () => {
     const companyId = await seedAssignableAgentCompany();
+    const actorUserId = await addVerifiedMember(companyId);
     const issue = await svc.create(companyId, {
       title: "Close me with a pending card",
       description: null,
@@ -691,7 +842,7 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
 
     // Direct service callers (tree control, recovery, pipelines, status cards)
     // never pass through the HTTP routes, so the expiry must fire here.
-    const updated = await svc.update(issue.id, { status: "cancelled", actorUserId: "local-board" });
+    const updated = await svc.update(issue.id, { status: "cancelled", actorUserId });
     expect(updated?.status).toBe("cancelled");
 
     const interaction = await db
@@ -701,7 +852,7 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
       .then((rows) => rows[0] ?? null);
     expect(interaction).toMatchObject({
       status: "expired",
-      resolvedByUserId: "local-board",
+      resolvedByUserId: actorUserId,
     });
     expect(interaction?.result).toMatchObject({ version: 1, outcome: "issue_closed" });
     expect(interaction?.resolvedAt).not.toBeNull();
@@ -3004,7 +3155,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("inherits the parent issue workspace linkage when child workspace fields are omitted", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -3017,9 +3168,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -3178,7 +3327,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("does not stamp the assignee default environment onto new issues", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const assigneeEnvironmentId = randomUUID();
     const assigneeAgentId = randomUUID();
@@ -3215,9 +3364,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       permissions: {},
     });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
       executionWorkspacePolicy: {
@@ -3251,7 +3398,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("ignores legacy project environment selection when creating new issues", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const projectEnvironmentId = randomUUID();
     const assigneeEnvironmentId = randomUUID();
@@ -3297,9 +3444,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       permissions: {},
     });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
       executionWorkspacePolicy: {
@@ -3332,7 +3477,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("does not rewrite execution workspace settings on reassignment", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const firstEnvironmentId = randomUUID();
     const secondEnvironmentId = randomUUID();
@@ -3393,9 +3538,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       },
     ]);
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
       executionWorkspacePolicy: {
@@ -3438,7 +3581,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("strips legacy environmentId values from execution workspace settings updates", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const firstEnvironmentId = randomUUID();
     const secondEnvironmentId = randomUUID();
@@ -3473,8 +3616,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       },
     ]);
 
-    await db.insert(projects).values({
-      id: projectId, companyId, name: "Workspace project", status: "in_progress",
+    projectId = await createCanonicalProject(db, companyId, {
+      name: "Workspace project", status: "in_progress",
       executionWorkspacePolicy: {
         enabled: true,
         defaultMode: "shared_workspace",
@@ -3515,7 +3658,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("keeps explicit workspace fields instead of inheriting the parent linkage", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const parentProjectWorkspaceId = randomUUID();
     const parentExecutionWorkspaceId = randomUUID();
@@ -3530,9 +3673,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -3614,7 +3755,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("inherits workspace linkage from an explicit source issue without creating a parent-child relationship", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const sourceIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -3627,9 +3768,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -3685,7 +3824,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("createChild applies parent defaults, acceptance criteria, workspace inheritance, and optional parent blocker chaining", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const goalId = randomUUID();
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
@@ -3707,9 +3846,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       status: "active",
     });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       goalId,
       name: "Workspace project",
       status: "in_progress",
@@ -3783,7 +3920,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("createChild preserves strategy-only workspace intent without realizing the parent workspace", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const environmentId = randomUUID();
@@ -3796,9 +3933,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -3855,8 +3990,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("createChild targeting another project does not forward the parent project workspace", async () => {
     const companyId = randomUUID();
-    const parentProjectId = randomUUID();
-    const targetProjectId = randomUUID();
+    let parentProjectId: string;
+    let targetProjectId: string;
     const parentIssueId = randomUUID();
     const parentProjectWorkspaceId = randomUUID();
     const targetProjectWorkspaceId = randomUUID();
@@ -3869,10 +4004,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values([
-      { id: parentProjectId, companyId, name: "Paperclip App", status: "in_progress" },
-      { id: targetProjectId, companyId, name: "Paperclip ID", status: "in_progress" },
-    ]);
+    parentProjectId = await createCanonicalProject(db, companyId, { name: "Paperclip App", status: "in_progress" });
+    targetProjectId = await createCanonicalProject(db, companyId, { name: "Paperclip ID", status: "in_progress" });
 
     await db.insert(projectWorkspaces).values([
       {
@@ -3920,7 +4053,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("clamps helper-created child requestDepth to the safe maximum", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const goalId = randomUUID();
     const parentIssueId = randomUUID();
 
@@ -3940,9 +4073,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       status: "active",
     });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       goalId,
       name: "Workspace project",
       status: "in_progress",
@@ -4003,7 +4134,7 @@ describeEmbeddedPostgres("issueService blockers and dependency wake readiness", 
   async function seedSharedWorkspaceDependency() {
     const companyId = randomUUID();
     const assigneeAgentId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const blockerId = randomUUID();
@@ -4027,9 +4158,7 @@ describeEmbeddedPostgres("issueService blockers and dependency wake readiness", 
       runtimeConfig: {},
       permissions: {},
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Shared workspace project",
       status: "in_progress",
     });
@@ -4893,7 +5022,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("inherits the parent issue workspace linkage when child workspace fields are omitted", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -4906,9 +5035,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -4969,7 +5096,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("preserves the parent project when a generic child create inherits workspace linkage", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -4982,9 +5109,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -5037,8 +5162,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("uses the target project's own workspaces for a cross-project child instead of inheriting the parent's", async () => {
     const companyId = randomUUID();
-    const parentProjectId = randomUUID();
-    const targetProjectId = randomUUID();
+    let parentProjectId: string;
+    let targetProjectId: string;
     const parentIssueId = randomUUID();
     const parentProjectWorkspaceId = randomUUID();
     const targetProjectWorkspaceId = randomUUID();
@@ -5052,10 +5177,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values([
-      { id: parentProjectId, companyId, name: "Paperclip App", status: "in_progress" },
-      { id: targetProjectId, companyId, name: "Paperclip ID", status: "in_progress" },
-    ]);
+    parentProjectId = await createCanonicalProject(db, companyId, { name: "Paperclip App", status: "in_progress" });
+    targetProjectId = await createCanonicalProject(db, companyId, { name: "Paperclip ID", status: "in_progress" });
 
     await db.insert(projectWorkspaces).values([
       {
@@ -5169,7 +5292,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("keeps explicit workspace fields instead of inheriting the parent linkage", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const parentProjectWorkspaceId = randomUUID();
     const parentExecutionWorkspaceId = randomUUID();
@@ -5184,9 +5307,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -5268,7 +5389,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("inherits workspace linkage from an explicit source issue without creating a parent-child relationship", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const sourceIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -5281,9 +5402,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -5339,7 +5458,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("derives project identity when an update adds workspace linkage to a projectless issue", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const issueId = randomUUID();
 
@@ -5351,9 +5470,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -5429,7 +5546,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("syncs reused execution workspace config when issue workspace settings are updated", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const issueId = randomUUID();
@@ -5442,9 +5559,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -7221,5 +7336,189 @@ describeEmbeddedPostgres("issueService.addComment createdByRunId", () => {
       .from(issueComments)
       .where(eq(issueComments.createdByRunId, runId));
     expect(duplicates).toHaveLength(1);
+  });
+});
+
+describeEmbeddedPostgres("issueService retained private source authority", () => {
+  let fixture: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
+  let db: ReturnType<typeof createDb>;
+  beforeAll(async () => {
+    fixture = await startEmbeddedPostgresTestDatabase("paperclip-private-task-domain-");
+    db = createDb(fixture.connectionString);
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  afterAll(async () => { await fixture?.cleanup(); });
+
+  async function privateFixture() {
+    const companyId = randomUUID(), owner = randomUUID(), assignee = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Private domain", issuePrefix: `PR${companyId.slice(0, 6)}` });
+    await db.insert(authUsers).values([
+      { id: owner, name: "Private owner", email: `${owner}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: assignee, name: "Private assignee", email: `${assignee}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+    ]);
+    await db.insert(companyMemberships).values([owner, assignee].map(principalId => ({ companyId, principalType: "user", principalId,
+      membershipRole: "owner", status: "active" })));
+    const svc = issueService(db);
+    const parent = await svc.create(companyId, { title: "Protected source", visibility: "private", createdByUserId: owner,
+      responsibleUserId: owner, trustExplicitResponsibleUserId: true });
+    return { companyId, owner, assignee, parent, svc };
+  }
+
+  it("retains the old private parent after detach and does not replace source access with assignment", async () => {
+    const f = await privateFixture();
+    const child = await f.svc.create(f.companyId, { title: "Derived task", parentId: f.parent.id,
+      createdByUserId: f.owner, assigneeUserId: f.assignee });
+    expect(child).toMatchObject({ visibility: "private", privacyParentIssueId: f.parent.id });
+    const detached = await f.svc.update(child.id, { parentId: null, actorUserId: f.owner,
+      privacyActor: { type: "board", userId: f.owner, source: "session" } });
+    expect(detached).toMatchObject({ parentId: null, visibility: "private", privacyParentIssueId: f.parent.id });
+    expect(await db.select().from(issuePrivacySources).where(eq(issuePrivacySources.issueId, child.id)))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ sourceKind: "issue", sourceId: f.parent.id })]));
+    const actor = { type: "board" as const, userId: f.assignee, source: "session" as const };
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(false);
+    const [grant] = await db.insert(issueAccessGrants).values({ companyId: f.companyId, issueId: f.parent.id,
+      subjectType: "user", subjectId: f.assignee, source: "explicit", grantedByUserId: f.owner }).returning();
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(true);
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, grant.id));
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(false);
+    const assignment = await db.select().from(issueAccessGrants).where(eq(issueAccessGrants.issueId, child.id));
+    expect(assignment).toEqual(expect.arrayContaining([expect.objectContaining({ source: "assignment", subjectId: f.assignee, revokedAt: null })]));
+  });
+
+  it("does not replay a private idempotency receipt to a creator who lacks current source access", async () => {
+    const f = await privateFixture();
+    const idempotencyKey = randomUUID();
+    const first = await f.svc.create(f.companyId, { title: "Owned idempotency", visibility: "private", createdByUserId: f.owner,
+      idempotencyKey });
+    await expect(f.svc.create(f.companyId, { title: "Forged receipt", createdByUserId: f.assignee, idempotencyKey }))
+      .rejects.toThrow("Task not found");
+    expect((await db.select().from(issues).where(eq(issues.id, first.id)))[0]?.title).toBe("Owned idempotency");
+  });
+
+  it("denies a private update when membership is withdrawn during the actual issue-row wait", async () => {
+    const f = await privateFixture();
+    const held = deferred<number>(), release = deferred<void>();
+    const blocker = db.transaction(async tx => {
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, f.parent.id)).for("update");
+      const [backend] = await tx.execute(sql`select pg_backend_pid() as pid`);
+      held.resolve(Number(backend.pid));
+      await release.promise;
+    });
+    const holderPid = await held.promise;
+    const update = f.svc.update(f.parent.id, { title: "Late write must not land", actorUserId: f.owner,
+      privacyActor: { type: "board", userId: f.owner, source: "session" } });
+    const outcome = update.then(value => ({ value, error: null }), (error: unknown) => ({ value: null, error }));
+    // Observe the real database wait; a timer alone cannot prove the ordering.
+    let blocked = false;
+    try {
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const rows = await db.execute(sql`select 1 from pg_stat_activity where ${holderPid}::integer = any(pg_blocking_pids(pid))`);
+        if (rows.length) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(blocked).toBe(true);
+      await db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.principalId, f.owner));
+    } finally {
+      release.resolve();
+      await blocker;
+    }
+    expect((await outcome).error).toMatchObject({ status: 403 });
+    expect((await db.select().from(issues).where(eq(issues.id, f.parent.id)))[0]?.title).toBe("Protected source");
+  });
+
+  it("rolls back a task move that creates a retained task-project source cycle", async () => {
+    const f = await privateFixture();
+    const actor = { type: "board" as const, userId: f.owner, source: "session" as const };
+    const project = await projectService(db).create(f.companyId, { name: "Task-derived project", visibility: "private",
+      privacyOwnerUserId: f.owner, sourceIssueIds: [f.parent.id], sourceProjectIds: [], sourceProvenanceQualified: true }, undefined, actor);
+    await expect(f.svc.update(f.parent.id, { projectId: project.id, actorUserId: f.owner, privacyActor: actor }))
+      .rejects.toMatchObject({ status: 422 });
+    expect((await db.select().from(issues).where(eq(issues.id, f.parent.id)))[0]?.projectId).toBeNull();
+    expect(await db.select().from(issuePrivacySources).where(and(eq(issuePrivacySources.issueId, f.parent.id),
+      eq(issuePrivacySources.sourceKind, "project"), eq(issuePrivacySources.sourceId, project.id)))).toEqual([]);
+  });
+
+  it("rolls back a project update that creates a retained project-task source cycle", async () => {
+    const f = await privateFixture();
+    const actor = { type: "board" as const, userId: f.owner, source: "session" as const };
+    const projectsSvc = projectService(db);
+    const project = await projectsSvc.create(f.companyId, { name: "Source-free private project", visibility: "private",
+      privacyOwnerUserId: f.owner, sourceIssueIds: [], sourceProjectIds: [], sourceProvenanceQualified: true }, undefined, actor);
+    const child = await f.svc.create(f.companyId, { title: "Project-derived task", projectId: project.id, createdByUserId: f.owner });
+    await expect(projectsSvc.update(project.id, { sourceIssueIds: [child.id] }, actor)).rejects.toMatchObject({ status: 422 });
+    expect((await db.select().from(projects).where(eq(projects.id, project.id)))[0]?.sourceIssueIds).toEqual([]);
+  });
+
+  it("retains an independent assignment grant after a private assignment handoff until explicitly revoked", async () => {
+    const f = await privateFixture();
+    const child = await f.svc.create(f.companyId, { title: "Private handoff", visibility: "private",
+      createdByUserId: f.owner, assigneeUserId: f.assignee });
+    const actor = { type: "board" as const, userId: f.assignee, source: "session" as const };
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(true);
+    await f.svc.update(child.id, { assigneeUserId: f.owner, actorUserId: f.assignee, privacyActor: actor });
+    const [current] = await db.select().from(issues).where(eq(issues.id, child.id));
+    expect(current.assigneeUserId).toBe(f.owner);
+    expect(current.responsibleUserId).toBe(f.owner);
+    expect(await canActorReadIssuePrivacy(db, actor, current)).toBe(true);
+    const [retainedGrant] = await db.select().from(issueAccessGrants).where(and(
+      eq(issueAccessGrants.issueId, child.id), eq(issueAccessGrants.subjectId, f.assignee),
+      eq(issueAccessGrants.source, "assignment"),
+    ));
+    expect(retainedGrant).toMatchObject({ revokedAt: null });
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, retainedGrant.id));
+    expect(await canActorReadIssuePrivacy(db, actor, current)).toBe(false);
+  });
+
+  it("commits an authorized private handoff when a previously revoked assignment grant leaves only current-assignee access", async () => {
+    const f = await privateFixture();
+    const child = await f.svc.create(f.companyId, { title: "Current assignee handoff", visibility: "private",
+      createdByUserId: f.owner, assigneeUserId: f.assignee });
+    const actor = { type: "board" as const, userId: f.assignee, source: "session" as const };
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(and(
+      eq(issueAccessGrants.issueId, child.id), eq(issueAccessGrants.subjectId, f.assignee),
+      eq(issueAccessGrants.source, "assignment"),
+    ));
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(true);
+    await f.svc.update(child.id, { assigneeUserId: f.owner, actorUserId: f.assignee, privacyActor: actor });
+    const [current] = await db.select().from(issues).where(eq(issues.id, child.id));
+    expect(current).toMatchObject({ assigneeUserId: f.owner, responsibleUserId: f.owner, createdByUserId: f.owner });
+    expect(await canActorReadIssuePrivacy(db, actor, current)).toBe(false);
+    const formerAssigneeGrants = await db.select().from(issueAccessGrants).where(and(
+      eq(issueAccessGrants.issueId, child.id), eq(issueAccessGrants.subjectId, f.assignee),
+    ));
+    expect(formerAssigneeGrants).toHaveLength(1);
+    expect(formerAssigneeGrants[0].revokedAt).toBeInstanceOf(Date);
+    // This is an internal mutation result. External committed-but-unreadable
+    // response qualification remains closed with private HTTP admission.
+  });
+
+  it("rechecks the canonical mutation role after a public task row wait", async () => {
+    const f = await privateFixture();
+    const issue = await f.svc.create(f.companyId, { title: "Public original", createdByUserId: f.owner });
+    const held = deferred<number>(), release = deferred<void>();
+    const blocker = db.transaction(async tx => {
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, issue.id)).for("update");
+      const [backend] = await tx.execute(sql`select pg_backend_pid() as pid`);
+      held.resolve(Number(backend.pid));
+      await release.promise;
+    });
+    const holderPid = await held.promise;
+    const outcome = f.svc.update(issue.id, { title: "Stale owner write", actorUserId: f.owner,
+      privacyActor: { type: "board", userId: f.owner, source: "session" } })
+      .then(value => ({ value, error: null }), (error: unknown) => ({ value: null, error }));
+    try {
+      let blocked = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const rows = await db.execute(sql`select 1 from pg_stat_activity where ${holderPid}::integer = any(pg_blocking_pids(pid))`);
+        if (rows.length) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(blocked).toBe(true);
+      await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(eq(companyMemberships.principalId, f.owner));
+    } finally {
+      release.resolve();
+      await blocker;
+    }
+    expect((await outcome).error).toMatchObject({ status: 403 });
+    expect((await db.select().from(issues).where(eq(issues.id, issue.id)))[0]?.title).toBe("Public original");
   });
 });

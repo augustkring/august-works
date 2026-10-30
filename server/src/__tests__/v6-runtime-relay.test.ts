@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { once } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
+import { runtimeSandboxExecRelayRequestSchema } from "@paperclipai/shared";
 import { runtimeGatewayRelay } from "../services/runtime/gateway-relay.js";
 const hostId = "11111111-1111-4111-8111-111111111111",
   cellId = "22222222-2222-4222-8222-222222222222",
@@ -14,6 +15,68 @@ const proof = {
   nonce: "a".repeat(43),
   signature: "a".repeat(512),
 };
+const execRequest = () => ({
+  requestId: "44444444-4444-4444-8444-444444444444",
+  bindingId: "55555555-5555-4555-8555-555555555555",
+  hostEpoch: 1,
+  runId: "66666666-6666-4666-8666-666666666666",
+  attemptId: null,
+  attempt: 1,
+  manifestId: "77777777-7777-4777-8777-777777777777",
+  manifestHash: "a".repeat(64),
+  policySnapshotId: "88888888-8888-4888-8888-888888888888",
+  policyHash: "b".repeat(64),
+  commandDigest: "c".repeat(64),
+  deadlineAt: new Date(Date.now() + 10_000).toISOString(),
+  sandboxRef: "aw-v7-55555555-5555-4555-8555-555555555555",
+  imageDigest: "example.invalid/sandbox@sha256:" + "d".repeat(64),
+  argv: ["node", "-e", "process.stdout.write('x')"],
+  cwd: "/workspace",
+  env: {},
+  stdinBase64: "",
+});
+
+it("accepts only the exact nonsecret managed-model bounds tied to the typed broker credential", () => {
+  const request = execRequest();
+  const modelBrokerCredential = {
+    capabilityToken: "typed-capability-token",
+    profileId: "managed-model",
+    profileHash: "e".repeat(64),
+    expiresAt: new Date(Date.now() + 30_000).toISOString(),
+    inputTokensUpperBound: 100_000,
+    maxOutputTokens: 1024,
+  };
+  const valid = { ...request, env: {
+    PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+    PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+    PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+  }, modelBrokerCredential };
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse(valid).success).toBe(true);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...valid,
+    env: { ...valid.env, PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100001" },
+  }).success).toBe(false);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...valid,
+    env: { ...valid.env, PAPERCLIP_PROVIDER_API_KEY: "must-stay-rejected" },
+  }).success).toBe(false);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...request,
+    env: { PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000" },
+  }).success).toBe(false);
+});
+
+it("rejects oversized relay stdin before running the base64 validator", () => {
+  expect(() => runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...execRequest(),
+    stdinBase64: "A".repeat(5 * 1024 * 1024),
+  })).not.toThrow();
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...execRequest(),
+    stdinBase64: "A".repeat(5 * 1024 * 1024),
+  }).success).toBe(false);
+});
+
 const resources: {
   relay: ReturnType<typeof runtimeGatewayRelay>;
   server: Server;
@@ -87,6 +150,102 @@ async function setup() {
   };
 }
 describe("V6 private Gateway relay", () => {
+  it("streams only one authorized run-scoped OpenShell command and rejects replay", async () => {
+    let consumed = false;
+    const request = execRequest();
+    const relay = runtimeGatewayRelay({
+      authenticateHost: async () => ({ id: hostId, credentialVersion: 1 }),
+      authorizeCell: async () => ({ runtimeHostId: hostId, companyId, generation: "1" }),
+      async authorizeExec(input) {
+        expect(input.capabilityToken).toBe("signed-run-capability");
+        expect(input.request).toEqual(request);
+        if (consumed) throw new Error("already_consumed");
+        consumed = true;
+        return { runtimeHostId: hostId, companyId, generation: "1" };
+      },
+      hostCurrent: async () => true,
+      cellCurrent: async () => true,
+    });
+    const server = createServer();
+    relay.attach(server);
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const privatePort = await relay.listen(0);
+    const port = (server.address() as AddressInfo).port;
+    const host = new WebSocket(`ws://127.0.0.1:${port}/api/internal/runtime/relay`);
+    const sockets = [host];
+    const waitForMessage = (predicate: (message: Record<string, any>) => boolean) => new Promise<Record<string, any>>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("relay_message_timeout")), 2000);
+      const onMessage = (raw: Buffer) => {
+        const message = JSON.parse(raw.toString());
+        if (predicate(message)) { clearTimeout(timer); host.off("message", onMessage); resolve(message); }
+      };
+      host.on("message", onMessage);
+    });
+    await once(host, "open");
+    host.send(JSON.stringify({ type: "hello", proof }));
+    const privateClient = new WebSocket(`ws://127.0.0.1:${privatePort}/cells/${cellId}/1`, { headers: { "x-aw-relay-token": "private-token" } });
+    await once(privateClient, "open");
+    privateClient.close();
+    await once(privateClient, "close");
+    const outputs: string[] = [];
+    const execution = relay.executeOpenShell({
+      cellId, generation: "1", request, capabilityToken: "signed-run-capability",
+      onOutput: (_stream, chunk) => outputs.push(chunk.toString()),
+    });
+    const command = await waitForMessage(message => message.type === "exec_open");
+    expect(command).toMatchObject({
+      type: "exec_open", cellId, companyId, generation: "1",
+      request, capabilityToken: "signed-run-capability",
+    });
+    host.send(JSON.stringify({ type: "exec_output", channelId: command.channelId, stream: "stdout", base64: Buffer.from("result").toString("base64") }));
+    host.send(JSON.stringify({ type: "exec_exit", channelId: command.channelId, exitCode: 0, timedOut: false }));
+    await expect(execution).resolves.toEqual({ exitCode: 0, timedOut: false });
+    expect(outputs).toEqual(["result"]);
+    await expect(relay.executeOpenShell({
+      cellId, generation: "1", request, capabilityToken: "signed-run-capability", onOutput: () => {},
+    })).rejects.toThrow("already_consumed");
+    for (const ws of sockets) ws.terminate();
+    await relay.stop();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  });
+  it("treats host disconnect after exec dispatch as unknown and never reports success", async () => {
+    const request = { ...execRequest(), requestId: "99999999-9999-4999-8999-999999999999" };
+    const relay = runtimeGatewayRelay({
+      authenticateHost: async () => ({ id: hostId, credentialVersion: 1 }),
+      authorizeCell: async () => ({ runtimeHostId: hostId, companyId, generation: "1" }),
+      authorizeExec: async () => ({ runtimeHostId: hostId, companyId, generation: "1" }),
+      hostCurrent: async () => true,
+      cellCurrent: async () => true,
+    });
+    // Use an independent host connection because the shared fixture's relay does
+    // not install the exec authorizer.
+    const server = createServer();
+    relay.attach(server);
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const privatePort = await relay.listen(0);
+    const port = (server.address() as AddressInfo).port;
+    const host = new WebSocket(`ws://127.0.0.1:${port}/api/internal/runtime/relay`);
+    await once(host, "open");
+    host.send(JSON.stringify({ type: "hello", proof }));
+    const privateClient = new WebSocket(`ws://127.0.0.1:${privatePort}/cells/${cellId}/1`, { headers: { "x-aw-relay-token": "private-token" } });
+    await once(privateClient, "open");
+    privateClient.close();
+    await once(privateClient, "close");
+    const command = new Promise<Record<string, any>>(resolve => host.on("message", raw => {
+      const message = JSON.parse(raw.toString());
+      if (message.type === "exec_open") resolve(message);
+    }));
+    const execution = relay.executeOpenShell({ cellId, generation: "1", request, capabilityToken: "signed-run-capability", onOutput: () => {} });
+    await command;
+    const hostClosed = once(host, "close");
+    host.terminate();
+    await hostClosed;
+    await expect(execution).rejects.toThrow("runtime_unavailable");
+    await relay.stop();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  });
   it("does not allocate a verification timer for transaction-scoped control services", async () => {
     const intervals = vi.spyOn(globalThis, "setInterval");
     const cleared = vi.spyOn(globalThis, "clearInterval");

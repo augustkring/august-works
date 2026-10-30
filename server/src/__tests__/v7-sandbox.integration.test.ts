@@ -1,11 +1,22 @@
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import express from "express";
+import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { and, eq, ne } from "drizzle-orm";
-import { createDb, activityLog, companyMemberships, billingAccounts, billingAccountCompanies, runtimeCells, runtimeHosts, runtimeCapacityProfiles, runtimeVersionCatalog, runtimeSandboxBindings, sandboxQualificationRuns, runtimeOperations } from "@paperclipai/db";
+import { and, eq, ne, sql } from "drizzle-orm";
+import { createDb, authSessions, activityLog, companyMemberships, billingAccounts, billingAccountCompanies, runtimeCells, runtimeHosts, runtimeCapacityProfiles, runtimeVersionCatalog, runtimeSandboxBindings, sandboxQualificationRuns, runtimeOperations, issues, heartbeatRuns } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
-import { seedV5Companies } from "./helpers/v5-fixtures.js";
+import { enableV5ForTest, seedV5Companies } from "./helpers/v5-fixtures.js";
 import { policyFixture } from "./helpers/sandbox-fixture.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { executionSandboxService } from "../services/execution-sandbox/sandbox-service.js";
+import { executionSandboxRoutes } from "../routes/execution-sandbox.js";
+import { errorHandler } from "../middleware/index.js";
+import { agentIdentityService } from "../services/agent-identities.js";
+import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
+import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
+import type { ExecutionSandboxBackend } from "../services/execution-sandbox/backend.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { reconcileSandboxSafety } from "../services/execution-sandbox/sandbox-guardian.js";
 import { runtimeControlService } from "../services/runtime/control.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
@@ -14,15 +25,98 @@ const support = await getEmbeddedPostgresTestSupport(), image = "fixture.invalid
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, f: Awaited<ReturnType<typeof seedV5Companies>>, cell: typeof runtimeCells.$inferSelect;
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v7-sandbox-"); db = createDb(database.connectionString); await instanceSettingsService(db).getExperimental(); await db.insert(runtimeVersionCatalog).values({ imageDigest: image, providerVersion: "fixture", stateFormat: "v1", hostAgentMinimumVersion: "6.0.0", conformance: { fixtureOnly: true }, status: "approved" }); await db.insert(runtimeCapacityProfiles).values({ key: "sandbox-fixture", cpuMillis: 1000, memoryBytes: 1073741824n, diskBytes: 10737418240n, pidsLimit: 128, qualified: false }); }, 60000);
   afterAll(async () => { await database?.cleanup(); }, 30000);
-  beforeEach(async () => { await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: true, openshell_v7: false }); f = await seedV5Companies(db); const [account] = await db.insert(billingAccounts).values({ displayName: "Fixture", payerUserId: f.userId }).returning(); await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id }); [cell] = await db.insert(runtimeCells).values({ companyId: f.home, billingAccountId: account!.id, capacityProfile: "sandbox-fixture", desiredImageDigest: image, status: "STOPPED", isolationMode: "company_cell" }).returning() as [typeof runtimeCells.$inferSelect]; });
-  const create = () => executionSandboxService(db).create(f.actor, f.home, { runtimeCellId: cell.id, expectedCellGeneration: cell.generation.toString(), backend: "existing_cell_container", profile: "development", boundaryPolicy: policyFixture() });
-  it("creates only current stopped company-owned bindings and exposes honest posture", async () => { const row = await create(); expect(row.status).toBe("requested"); expect(await executionSandboxService(db).posture(f.actor, f.home, cell.id)).toMatchObject({ state: "awaiting_qualification", executionEnforced: false }); await expect(create()).rejects.toThrow(); await expect(executionSandboxService(db).get(f.actor, f.guest, row.id)).rejects.toMatchObject({ status: 404 }); });
-  it("does not earn readiness from the existing container lifecycle", async () => { const row = await create(); const qualified = await executionSandboxService(db).qualify(f.actor, f.home, row.id, 1); expect(qualified.status).toBe("requested"); expect(qualified.capabilitySnapshot).toBeNull(); const [report] = await db.select().from(sandboxQualificationRuns).where(eq(sandboxQualificationRuns.bindingId, row.id)); expect(report?.status).toBe("inconclusive"); expect(report?.results).toHaveLength(18); expect(report?.results.every(test => test.verdict === "unsupported")).toBe(true); await expect(db.update(sandboxQualificationRuns).set({ status: "passed" }).where(eq(sandboxQualificationRuns.id, report!.id))).rejects.toThrow(); await expect(db.update(runtimeSandboxBindings).set({ status: "ready" }).where(eq(runtimeSandboxBindings.id, row.id))).rejects.toThrow(); });
-  it("rejects agent-controlled bindings and disabled OpenShell", async () => { await expect(executionSandboxService(db).create({ type: "agent", companyId: f.home, agentId: "11111111-1111-4111-8111-111111111111" }, f.home, { runtimeCellId: cell.id, expectedCellGeneration: "1", backend: "existing_cell_container", profile: "development", boundaryPolicy: policyFixture() })).rejects.toMatchObject({ status: 403 }); await expect(executionSandboxService(db).create(f.actor, f.home, { runtimeCellId: cell.id, expectedCellGeneration: "1", backend: "openshell", profile: "development", boundaryPolicy: policyFixture() })).rejects.toMatchObject({ status: 404 }); });
-  it("invalidates a changed generation even after feature rollback and keeps the original boundary immutable", async () => { const row = await create(); await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: false }); await db.update(runtimeCells).set({ generation: cell.generation + 1n }).where(eq(runtimeCells.id, cell.id)); const [fenced] = await db.select().from(runtimeSandboxBindings).where(eq(runtimeSandboxBindings.id, row.id)); expect(fenced?.status).toBe("quarantined"); await expect(db.update(runtimeSandboxBindings).set({ cellGeneration: "2" }).where(eq(runtimeSandboxBindings.id, row.id))).rejects.toThrow(); expect((await executionSandboxService(db).posture(f.actor, f.home, cell.id)).state).toBe("quarantined"); await expect(create()).rejects.toMatchObject({ status: 404 }); });
+  beforeEach(async () => { await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: true, openshell_v7: false }); f = await seedV5Companies(db); f.actor.sessionId = await seedNativePasskeySession(db, f.userId); const [account] = await db.insert(billingAccounts).values({ displayName: "Fixture", payerUserId: f.userId }).returning(); await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id }); [cell] = await db.insert(runtimeCells).values({ companyId: f.home, billingAccountId: account!.id, capacityProfile: "sandbox-fixture", desiredImageDigest: image, status: "STOPPED", isolationMode: "company_cell" }).returning() as [typeof runtimeCells.$inferSelect]; });
+  const create = () => executionSandboxService(db, { operatorUserIds: [f.userId] }).create(f.actor, f.home, { runtimeCellId: cell.id, expectedCellGeneration: cell.generation.toString(), backend: "existing_cell_container", profile: "development", boundaryPolicy: policyFixture() });
+  it("refuses configured operator writes with only a session label", async () => {
+    const service = executionSandboxService(db, { operatorUserIds: [f.userId] });
+    await expect(service.create({ ...f.actor, sessionId: undefined }, f.home, { runtimeCellId: cell.id,
+      expectedCellGeneration: cell.generation.toString(), backend: "existing_cell_container",
+      profile: "development", boundaryPolicy: policyFixture() })).rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(runtimeSandboxBindings).where(eq(runtimeSandboxBindings.runtimeCellId, cell.id))).toEqual([]);
+  });
+  it("requires configured live passkey proof for private sandbox reads", async () => {
+    const row = await create();
+    const service = executionSandboxService(db, { operatorUserIds: [f.userId] });
+    const bare = { ...f.actor, sessionId: undefined };
+    await expect(service.list(bare, f.home)).rejects.toMatchObject({ status: 403 });
+    await expect(service.get(bare, f.home, row.id)).rejects.toMatchObject({ status: 403 });
+    await expect(executionSandboxService(db).list(f.actor, f.home)).rejects.toMatchObject({ status: 403 });
+    await expect(service.list(f.actor, f.home)).resolves.toHaveLength(1);
+    await db.delete(authSessions).where(eq(authSessions.id, f.actor.sessionId!));
+    await expect(service.get(f.actor, f.home, row.id)).rejects.toMatchObject({ status: 403 });
+    // The ordinary tenant posture projection remains separate from operator configuration.
+    const tenant = { ...f.actor, sessionId: undefined };
+    await expect(service.posture(tenant, f.home, cell.id)).resolves.toMatchObject({ state: "awaiting_qualification" });
+  });
+  it("rechecks native operator proof after a real transaction wait before binding writes", async () => {
+    let pending!: Promise<{ value?: unknown; error?: unknown }>;
+    await db.transaction(async holder => {
+      const [owner] = await holder.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      await holder.execute(sql`select id from runtime_cells where id=${cell.id}::uuid for update`);
+      pending = create().then(value => ({ value }), error => ({ error }));
+      const deadline = performance.now() + 5000;
+      let waiting = false;
+      while (performance.now() < deadline) {
+        const [state] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity
+          where ${owner!.pid}=any(pg_blocking_pids(pid)) and wait_event_type='Lock') as waiting`);
+        if (state?.waiting) { waiting = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(waiting).toBe(true);
+      await db.delete(authSessions).where(eq(authSessions.id, f.actor.sessionId!));
+    });
+    await expect(pending).resolves.toMatchObject({ error: { status: 403 } });
+    expect(await db.select().from(runtimeSandboxBindings).where(eq(runtimeSandboxBindings.runtimeCellId, cell.id))).toEqual([]);
+  });
+  it("creates only current stopped company-owned bindings and exposes honest posture", async () => { const row = await create(); expect(row.status).toBe("requested"); expect(await executionSandboxService(db, { operatorUserIds: [f.userId] }).posture(f.actor, f.home, cell.id)).toMatchObject({ state: "awaiting_qualification", executionEnforced: false }); await expect(create()).rejects.toThrow(); await expect(executionSandboxService(db, { operatorUserIds: [f.userId] }).get(f.actor, f.guest, row.id)).rejects.toMatchObject({ status: 404 }); });
+  it("does not earn readiness from the existing container lifecycle", async () => { const row = await create(); const qualified = await executionSandboxService(db, { operatorUserIds: [f.userId] }).qualify(f.actor, f.home, row.id, 1); expect(qualified.status).toBe("requested"); expect(qualified.capabilitySnapshot).toBeNull(); const [report] = await db.select().from(sandboxQualificationRuns).where(eq(sandboxQualificationRuns.bindingId, row.id)); expect(report?.status).toBe("inconclusive"); expect(report?.results).toHaveLength(18); expect(report?.results.every(test => test.verdict === "unsupported")).toBe(true); await expect(db.update(sandboxQualificationRuns).set({ status: "passed" }).where(eq(sandboxQualificationRuns.id, report!.id))).rejects.toThrow(); await expect(db.update(runtimeSandboxBindings).set({ status: "ready" }).where(eq(runtimeSandboxBindings.id, row.id))).rejects.toThrow(); });
+  it("rejects agent-controlled bindings and disabled OpenShell", async () => { await expect(executionSandboxService(db, { operatorUserIds: [f.userId] }).create({ type: "agent", companyId: f.home, agentId: "11111111-1111-4111-8111-111111111111" }, f.home, { runtimeCellId: cell.id, expectedCellGeneration: "1", backend: "existing_cell_container", profile: "development", boundaryPolicy: policyFixture() })).rejects.toMatchObject({ status: 403 }); await expect(executionSandboxService(db, { operatorUserIds: [f.userId] }).create(f.actor, f.home, { runtimeCellId: cell.id, expectedCellGeneration: "1", backend: "openshell", profile: "development", boundaryPolicy: policyFixture() })).rejects.toMatchObject({ status: 404 }); });
+  it("invalidates a changed generation even after feature rollback and keeps the original boundary immutable", async () => { const row = await create(); await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: false }); await db.update(runtimeCells).set({ generation: cell.generation + 1n }).where(eq(runtimeCells.id, cell.id)); const [fenced] = await db.select().from(runtimeSandboxBindings).where(eq(runtimeSandboxBindings.id, row.id)); expect(fenced?.status).toBe("quarantined"); await expect(db.update(runtimeSandboxBindings).set({ cellGeneration: "2" }).where(eq(runtimeSandboxBindings.id, row.id))).rejects.toThrow(); expect((await executionSandboxService(db, { operatorUserIds: [f.userId] }).posture(f.actor, f.home, cell.id)).state).toBe("quarantined"); await expect(create()).rejects.toMatchObject({ status: 404 }); });
   it("blocks native start bypasses on bound cells after feature rollback, and preserves Stop", async () => { await create(); await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: false }); const operation = { companyId: f.home, runtimeCellId: cell.id, requestedByType: "user", requestedById: f.userId, operationType: "start", idempotencyKey: "fixture-start", requestHash: "fixture", status: "REQUESTED", deadlineAt: new Date(Date.now() + 60000) }; await expect(db.insert(runtimeOperations).values(operation)).rejects.toThrow(); await db.insert(runtimeOperations).values({ ...operation, operationType: "stop", idempotencyKey: "fixture-stop" }); });
-  it("reconciles missing enforcement into quarantine independently of flag rollback", async () => { const row = await create(); await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: false }); expect(await executionSandboxService(db).reconcile(f.actor, f.home, row.id, 1)).toMatchObject({ status: "quarantined", version: 2 }); });
-  it("requires an actual owned manifest instead of caller policy pins", async () => { const row = await create(); await expect(executionSandboxService(db).compile(f.actor, f.home, row.id, { expectedVersion: 1, executionManifestId: "11111111-1111-4111-8111-111111111111", candidatePolicy: policyFixture() })).rejects.toMatchObject({ status: 404 }); await expect(executionSandboxService(db).qualify(f.actor, f.home, row.id, 2)).rejects.toMatchObject({ status: 409 }); });
+  it("fences backup, delete and direct cell cleanup while an admission claim is active", async () => {
+    const binding = await create();
+    await db.update(runtimeSandboxBindings).set({ status: "admitting" }).where(eq(runtimeSandboxBindings.id, binding.id));
+    const operation = { companyId: f.home, runtimeCellId: cell.id, requestedByType: "user", requestedById: f.userId, requestHash: "fixture-active-sandbox", status: "REQUESTED", deadlineAt: new Date(Date.now() + 60000) };
+    await expect(db.insert(runtimeOperations).values({ ...operation, operationType: "backup", idempotencyKey: "fixture-active-backup" })).rejects.toThrow();
+    await expect(db.insert(runtimeOperations).values({ ...operation, operationType: "delete", idempotencyKey: "fixture-active-delete" })).rejects.toThrow();
+    await expect(db.update(runtimeCells).set({ status: "DELETED", deletedAt: new Date() }).where(eq(runtimeCells.id, cell.id))).rejects.toThrow();
+  });
+  it("reconciles missing enforcement into quarantine independently of flag rollback", async () => { const row = await create(); await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: false }); expect(await executionSandboxService(db, { operatorUserIds: [f.userId] }).reconcile(f.actor, f.home, row.id, 1)).toMatchObject({ status: "quarantined", version: 2 }); });
+  it("requires an actual owned manifest instead of caller policy pins", async () => { const row = await create(); await expect(executionSandboxService(db, { operatorUserIds: [f.userId] }).compile(f.actor, f.home, row.id, { expectedVersion: 1, executionManifestId: "11111111-1111-4111-8111-111111111111", candidatePolicy: policyFixture() })).rejects.toMatchObject({ status: 404 }); await expect(executionSandboxService(db, { operatorUserIds: [f.userId] }).qualify(f.actor, f.home, row.id, 2)).rejects.toMatchObject({ status: 409 }); });
+  it("refuses workload admission before protected physical qualification and a current compiled manifest policy", async () => {
+    await instanceSettingsService(db).updateExperimental({
+      openshell_v7: true,
+      sandbox_abstraction_v7: true,
+      hosted_openclaw_v6: true,
+      runtime_host_agent_v6: true,
+      saas_deployment_profile_v6: true,
+      billing_v6: true,
+      billing_entitlements_v6: true,
+      billing_usage_v6: true,
+    });
+    const service = executionSandboxService(db, { operatorUserIds: [f.userId] });
+    const binding = await service.create(f.actor, f.home, {
+      runtimeCellId: cell.id,
+      expectedCellGeneration: cell.generation.toString(),
+      backend: "openshell",
+      profile: "development",
+      boundaryPolicy: policyFixture(),
+    });
+    await expect(
+      service.admit({ ...f.actor, sessionId: undefined }, f.home, binding.id, {
+        expectedVersion: binding.version,
+        policySnapshotId: "11111111-1111-4111-8111-111111111111",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.admit(f.actor, f.home, binding.id, {
+        expectedVersion: binding.version,
+        policySnapshotId: "11111111-1111-4111-8111-111111111111",
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    const [unchanged] = await db.select().from(runtimeSandboxBindings).where(eq(runtimeSandboxBindings.id, binding.id));
+    expect(unchanged).toMatchObject({ status: "requested", version: binding.version });
+  });
   it("automatically quarantines a lifecycle bypass after rollout rollback and owner revocation, with a durable native system Stop", async () => {
     const binding = await create();
     await db.update(runtimeCells).set({ status: "HEALTHY" }).where(eq(runtimeCells.id, cell.id));

@@ -1,0 +1,364 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not reap active adapter executions started by another heartbeat service instance
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > persists the normalized failure without permanently blocking the conversation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > cancels obsolete continuation setup: continuation_task_ownership_changed
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains untyped continuation setup failures: continuation_source_context_missing
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains untyped continuation setup failures: continuation_user_authorization_missing
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains untyped continuation setup failures: continuation_task_ownership_changed
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not immediately continue a low-trust preflight setup failure
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not queue immediate recovery when the failed run's issue is hidden
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not relabel a lost process run when its agent changes to a conversation adapter
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > waits for a live terminal predecessor before a new turn (historical hold: false)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > waits for a live terminal predecessor before a new turn (historical hold: true)
+ ✓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > waits for a terminal predecessor's environment lease to be released 555ms
+ ✓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps an unsafe Stop blocked when recovery sees a deferred human comment 498ms
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > leaves hidden issues out of stranded-issue reconciliation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > joins startup and reap retained cleanup, keeps recovery live, and drains its settled operation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > joins startup and reap retained cleanup, keeps recovery live, and drains its rejected operation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > joins startup and reap retained cleanup, keeps recovery live, and drains its late_callback operation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps a local run active when the recorded pid is still alive
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps a native run active without granting legacy retry or signal authority
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains authentication-blocked ownership after restart with coordinator phase terminal_failure
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains authentication-blocked ownership after restart with coordinator phase retryable_failure
+ ✓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps a live native run owned by the current controller out of ambiguous recovery 673ms
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not reap a retryable native run while its same-run recovery path owns it
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not grant a dead native run legacy retry authority after adapter reassignment
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > skips generic timer wakes without invoking an adapter when no assigned work is actionable
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > recovers legacy startup before adapter.invoke using the claimed adapter identity
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > schedules one conversation continuation after losing the provider
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > requires reconciliation for a lost monitor whose provider outcomes are unknown
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not retry a lost monitor dispatch while another monitor wake remains scheduled
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > fences native selection when cancellation wins during preparation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > locks the issue before the run during native runtime selection
+ ✓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not dispatch when cancellation wins after native selection 2213ms
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > persists the selected Task, plan and inline comment sources with the first native bootstrap before dispatch (redact=false)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > persists the selected Task, plan and inline comment sources with the first native bootstrap before dispatch (redact=true)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > dispatches local native external chat inside the server-selected task root
+ ✓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps an accepted Native result open while workspace copy-back is pending 3253ms
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > holds admitted native chat with a legacy shared cwd without replacing input or releasing ownership
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > checkpoints idle warm sessions even when no hot restart was requested
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > captures a hot-restart shutdown snapshot without interrupting running runs
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > snapshots and drains a server-stdio ACP run before embedded database shutdown
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > reports a selectively drained ACP run as lost when terminal persistence fails
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > drains only server-stdio runs and preserves detached CLI adoption in a mixed restart
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > adopts an old-server legacy snapshot written for a new instance-scoped marker
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > reports preflight live runs as lost when the shutdown snapshot is missing
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > reports a preflight run that finished before snapshot capture as finalized
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > persists codex_local spawn identity before hot restart and never loses the live run for missing metadata
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > reports adopted hot-restart runs before startup reap can mark them process_lost
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps process-group-only hot-restart adoptions out of process_lost reaping
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > terminalizes an unsupported legacy session on shutdown without speculative replay
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > suspends native Paperclip Runner ownership on graceful restart without cancelling or creating a retry run
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not overwrite a run that is no longer running during graceful shutdown drain
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not duplicate a legacy reconciliation action across repeated shutdowns
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not reset an exhausted incident budget on server restart
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > releases active environment leases when an orphaned run is reaped
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not signal an unowned persisted process group after the tracked parent exits
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not bypass unknown process outcomes through immediate continuation recovery
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks failed recovery work in place during immediate terminal-run cleanup
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not block paused-tree work when immediate continuation recovery is suppressed by the hold
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > allows conversation continuation after a transient remote-compaction failure
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > schedules bounded retries for failed accepted interaction continuation wakes
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > schedules an infra retry for a setup failure caused by a transient sandbox provider worker restart
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > classifies only the installed-but-not-ready sandbox provider plugin message as a configuration gap
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks the issue instead of re-dispatching when the sandbox provider plugin is stuck in error
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates (does not retry) an accepted-interaction-continuation setup failure whose message matches neither retryable pattern
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates exhausted plan approval resume failures with a system comment and recovery action
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retries a plan-approval continuation lost as process_lost before agent start as an infrastructure failure
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks a git-sensitive local adapter before launch when a project-workspace-linked issue is missing its project id
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks before dispatch when a declared secret ref has no binding instead of emitting an opaque setup failure
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > queues one finish-handoff wake when a successful run leaves in-progress work without a next action
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > requeues a missing-disposition handoff when the previous corrective wake was cancelled
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > queues one missing-disposition handoff for artifact-producing successful runs left in progress
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > redacts secret-bearing successful-run detected progress before handoff disclosure
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates an exhausted failed successful-run handoff without using generic continuation recovery first
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retries an interrupted corrective successful-run handoff instead of escalating it
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates an interrupted corrective successful-run handoff once its transient retry budget is spent
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates an in_progress issue whose interrupted run has spent its transient retry budget
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps retrying an interrupted run while its transient retry budget remains
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates an assigned todo issue whose lost dispatch has spent its transient retry budget
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates an exhausted successful handoff run that still leaves no disposition
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > converts a continuation parked for review into a dependency wait on its open sub-tasks
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > converts a continuation parked for review into a dependency wait on its existing blockers
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > repairs the PAP-16986 deliberate wait through the original owner when no target exists
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > folds a persisted disposition-repair action when a current typed wait appears
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > reschedules an expired persisted disposition repair without duplicating the retry
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > atomically deduplicates concurrent disposition-repair reconciliation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not reset disposition repair for prose but does reset for durable source state
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates exhausted source-owner repair to the board without a substitute wake
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > routes a non-invokable source owner to recovery without reassigning the source
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps a legacy agent-owned recovery action readable without scheduling another takeover wake
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not consume a disposition-repair attempt when on-demand wakes are disabled
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > stops controller renewal and releases execution controls when teardown deadline cleanup throws
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > dispatches interrupted CLI input after the executor releases its lease
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retries durable queue interruption after a promotion failure on a fresh service
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > resumes only the authorized pending queue after an acknowledged legacy interrupt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > resumes only the authorized discarded queue after an acknowledged legacy interrupt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > resumes only the authorized wrong queue queue after an acknowledged legacy interrupt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves deferred input on a clean Stop and adopts it once on the next explicit comment
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not adopt unrelated queued comments for a dedicated deferred donor after Stop
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not adopt unrelated queued comments for a non-coalescing recipient after Stop
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not adopt unrelated queued comments for a persistent agent conversation after Stop
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > fences adapter registration while an earlier no-owner single Stop waits to commit
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > fences adapter registration while an earlier no-owner agent pause waits to commit
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > signals an embedded adapter and waits for its cleanup before returning Stop
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > clears the detached warning when the run reports activity again
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > tracks the first heartbeat with the agent role instead of adapter type
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves first-heartbeat telemetry after a timer interval claim
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'process' Stop before classifying its 'signal'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'codex_local' Stop before classifying its 'signal'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'process' Stop before classifying its 'graceful exit'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'codex_local' Stop before classifying its 'graceful exit'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'process' Stop before classifying its 'adapter exception'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'codex_local' Stop before classifying its 'adapter exception'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'process' Stop before classifying its 'termination error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'codex_local' Stop before classifying its 'termination error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'process' Stop before classifying its 'cancellation write error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'codex_local' Stop before classifying its 'cancellation write error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'process' Stop before classifying its 'graceful termination error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'codex_local' Stop before classifying its 'graceful termination error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'process' Stop before classifying its 'graceful cancellation write error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'codex_local' Stop before classifying its 'graceful cancellation write error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'process' Stop before classifying its 'late graceful cancellation write error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > settles an owned 'codex_local' Stop before classifying its 'late graceful cancellation write error'
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps an independent process 'clean exit' distinct from Stop
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps an independent process 'unrequested signal' distinct from Stop
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retries a settled failed Stop while its exact active process remains alive
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains the exact owned child when process Stop cannot verify termination
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > terminates the in-memory process before persisting cancellation status
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > uses a bounded per-cancel process grace for an external-chat successor
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not overwrite a run that finishes while cancellation is stopping its process
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not signal an unowned persisted process during manual cancellation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not signal an unowned persisted process during graceful shutdown
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not signal an unowned persisted process during agent-wide cancellation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > signals and clears an owned process during graceful shutdown
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > signals and clears an owned process during agent-wide cancellation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > records manual cancellation stop metadata
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > records operator interrupt cancellation metadata without changing terminal status
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > dispatches assigned todo work with no prior run as a normal assignment wake
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > leaves the onboarding first task idle until the user comments
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps the onboarding first task idle while the seeded opening card is unanswered
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > dispatches the onboarding first task once the user answered the opening card
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > dispatches the onboarding first task once a user comment exists
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not duplicate initial assigned todo dispatch when a queued wake already exists
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not bypass a preparing durable inbound-chat wake intent with generic assignment recovery
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not bypass a issued durable inbound-chat wake intent with generic assignment recovery
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not bypass a processing durable inbound-chat wake intent with generic assignment recovery
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not bypass a failed durable inbound-chat wake intent with generic assignment recovery
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > creates a board recovery action for budget-blocked assigned work and continues the sweep
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > routes paused assigned work to the board without waking available executives
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > re-enqueues assigned todo work when the last issue run died and no wake remains
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > re-enqueues handed-back todo work when its resolving run succeeded but the wake was lost
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not let an active chat conversation suppress stranded execution-review participant recovery
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates an execution-review participant whose interrupted run has spent its transient retry budget
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not block an issue whose review participant spent its retry budget while another agent is still working it
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > re-enqueues a stranded execution-review participant when another agent has the latest issue run
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > re-enqueues a stranded execution-review participant when another agent has a queued issue wake
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retries a pending execution-review participant when another agent has an active issue run
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not immediately recover a generic on-demand run used for an in-review agent API update
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retries a pending execution-review participant once before blocking with a recovery action
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks failed execution-review recovery under the reviewer when the source assignee differs
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > re-enqueues stranded in-progress work after a failed/adapter_failed run before escalating
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > re-enqueues stranded in-progress work after a failed/process_lost run before escalating
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > re-enqueues stranded in-progress work after a timed_out/adapter_timed_out run before escalating
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > skips stranded recovery when a pending wake_assignee interaction exists
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > skips stranded recovery when a pending wake_assignee_on_accept interaction exists
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > requeues accepted interaction continuations stranded in_review without execution state
+[00:25:03] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"33f24f3e-4a2b-4445-974c-32b6ac762d88","agentId":"27669686-428b-4372-9228-13cfd15d9332","runId":"c993ddab-c58c-44fd-a444-f9083512f5b6"}[39m
+ ✓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains an accepted recipient message while paused and delivers one successor after resume 17507ms
+ ✓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > lets a Task Stop win while an accepted interaction continuation is recovering 1785ms
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > recovers an answered question with its interaction-specific continuation context
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not requeue an answered interaction after native recovery is board-owned
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > counts five historical review-park cancellations against the upgraded disposition-repair ceiling
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > skips accepted interaction recovery after its continuation succeeds
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > requeues accepted interaction continuations even when a later successful run is unrelated
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > recovers a plan approval whose accept-time continuation wake enqueue was silently dropped
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > promotes a scheduled plan-approval continuation retry after a simulated server restart
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > still re-enqueues stranded assigned todo recovery when an old queued wake exists
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks assigned todo work after the one automatic dispatch recovery was already used
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks an already stranded recovery issue without creating a recovery child
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > assigns open unassigned blockers back to their creator agent
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > re-enqueues continuation for stranded in-progress work with no active run
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not run generic continuation recovery for a paused unfinished session goal
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not continue seeded in-progress work that has no run linkage
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > enqueues one bounded plan-only continuation with legacy productivity review present: false
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > enqueues one bounded plan-only continuation with legacy productivity review present: true
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > treats a plan document update as progress and does not enqueue liveness continuation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks stranded in-progress work after the continuation retry was already used
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > redacts error-code-only stranded recovery failures in issue copy
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps retrying transient adapter_failed continuation runs before the cap
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates after repeated adapter_failed continuation retries with the cause in the comment
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > counts different failure causes against the same incident budget
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates non-retryable continuation failures immediately without enqueuing another retry
+ ✓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not recover a finished native chat while its response publication is pending 385ms
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not turn a pre-adapter setup failure into a duplicate continuation run
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > leaves a successful external-chat turn idle while its conversation is active
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > leaves a successful external-chat turn idle while its conversation is waiting
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not automatically resume a source after its committed authorized /close receipt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not automatically resume a source after its committed authorized /new receipt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > recognizes the real generic control delivery event kind message
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > recognizes the real generic control delivery event kind direct_message
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > recognizes the real generic control delivery event kind mention
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not infer chat close authority from a mismatched authorization receipt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not infer chat close authority from a mismatched outbound receipt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not infer chat close authority from a mismatched principal receipt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not infer chat close authority from a mismatched command receipt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not infer chat close authority from a mismatched generation receipt
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > orders chat close against original admitted sources, not a later failed retry action
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves a genuinely later coalesced inbound source instead of selecting only the old canonical message
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > follows exact automatic ancestry despite rewritten context and stops only that unused child
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > honors close committed at the claim boundary without a provider call
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > honors close committed at the dispatch boundary without a provider call
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > honors close committed at the queued_comments boundary without a provider call
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks admission after transient database contention: issue
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks admission after transient database contention: wake
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks admission after transient database contention: run
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks admission after transient database contention: native
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks admission after transient database contention: close
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks admission after transient database contention: cancel
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > defers unresolved automatic ancestry at claim and records a distinct nonretrying failure after claim
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not confuse inherited warm-runner metadata with dispatch of the new child
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps the claimed admission marker through legacy preparation: intact
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps the claimed admission marker through legacy preparation: lost
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps the claimed admission marker through legacy preparation: copied
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks only unadmitted native bootstrap recovery after a committed close: required
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks only unadmitted native bootstrap recovery after a committed close: admitted
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks only unadmitted native bootstrap recovery after a committed close: historical
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not acquire a new chat gate lock for protected native recovery: admitted
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not acquire a new chat gate lock for protected native recovery: historical
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > native preparation preserves only the current run's reserved admission evidence: required
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > native preparation preserves only the current run's reserved admission evidence: historical
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > native preparation preserves only the current run's reserved admission evidence: invalid
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains closed chat ancestry and current retry authority: native
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains closed chat ancestry and current retry authority: legacy_pre_provider
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains closed chat ancestry and current retry authority: legacy_unknown
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > defers exhausted automatic ancestry without claiming a close or launching work
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > binds a native status continuation to its applied decision and exact delivered effect (mismatch=false)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > binds a native status continuation to its applied decision and exact delivered effect (mismatch=true)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > allows fresh Board work and coalesced user causes after a committed chat close
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > defers a contended chat close proof without starving another queued Board task
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > requires the exact native close target generation (mismatch=false)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > requires the exact native close target generation (mismatch=true)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not let an old agent's closed-chat stop suppress reassigned ordinary work
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > recovers productive chat work after its conversation is completed
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > recovers a non-chat productive run even when its issue has an active chat conversation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > lets a child waiting for the shared workspace run before recovering its lead
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > resumes a shared-workspace lead when its child needs review
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > repairs missing disposition independently of the productive diagnostic label
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > reuses the raced stranded recovery issue when duplicate active recovery creation conflicts
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks stranded recovery issues in place instead of creating nested recovery issues
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > keeps repeated recovery failures on the same canonical recovery issue
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not escalate paused-tree recovery when the automatic continuation retry was cancelled by the hold
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > re-enqueues recovery when the latest in-progress continuation made progress but left no live path
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not accept unmanaged local-background wait evidence as a live continuation path
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > escalates repeated unmanaged local-background waits instead of retrying forever
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves a persisted issue monitor as the durable external-wait path
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves a delegated blocker edge as the durable external-wait path
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > blocks stranded in-progress work after a productive continuation retry was already used
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > commits a native passive Board response without manufacturing immediate work (issue_commented)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > commits a native passive Board response without manufacturing immediate work (issue_reopened_via_comment)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > preserves the exact board passive receipt across repeated paused restart sweeps
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > preserves the exact chat passive receipt across repeated paused restart sweeps
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (uncommitted)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (superseded_decision)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (newer_request)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (edited_source)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (failed_run)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (terminated_agent)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (reassigned)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (revoked_destination)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (malformed_source)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (pending_interaction)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > keeps ordinary escalation when a paused chat wait is not current (pending_approval)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > preserves existing error-agent passive wait behavior without treating it as paused
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > does not use an obsolete Board wait to suppress paused recovery (edited_source)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > paused maintenance over committed native passive waits > does not use an obsolete Board wait to suppress paused recovery (newer_request)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > materializes the accepted native passive Board answer privately in the decision commit
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rolls the native passive Board answer back with its rejected decision, then recovers once
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after source_edit
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after source_delete
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after different_user
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after wake_actor
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after wake_reason
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after wake_run
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after native_issue
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after new_comment
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after reassignment
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not use stale native passive Board authority after pending_question
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves productive native Board same_agent continuations
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves productive native Board retry continuations
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rechecks native passive Board source inside the status transaction
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not let a native passive Board wait suppress a fresh request or reassignment
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves the native passive Board origin after edited without presenting a stale answer
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves the native passive Board origin after deleted without presenting a stale answer
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves the native passive Board origin after newer_comment without presenting a stale answer
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > admits a genuine new Board wake for same_agent after a native passive Board wait
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > admits a genuine new Board wake for reassigned_agent after a native passive Board wait
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > defers a native passive Board decision under a held source lock without partial presentation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > recovers the native passive Board wait from its receipt, not mutable result or wake presentation
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves a native blocked Board request instead of recovering the old task title
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not clobber a newer status while native blocker repair waits on the issue lock
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not clobber a newer assignee while native blocker repair waits on the issue lock
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not clobber a newer comment while native blocker repair waits on the issue lock
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not clobber a newer wake while native blocker repair waits on the issue lock
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not clobber a newer run while native blocker repair waits on the issue lock
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not clobber a newer attention while native blocker repair waits on the issue lock
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > preserves a later routed native attention decision after its wake was coalesced
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not grant a legacy summary authority to bind a native blocked wait
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > rolls back the native blocked wait when its durable notice cannot be persisted
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > allows one productive-terminal recovery after regular continuation recovery made progress
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not treat a productive terminal run as healthy when in-progress work has no live path
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not replenish exhausted legacy repair from a recent comment
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > still escalates stranded-recovery work when the recent comment is older than the exemption window (GGU-809)
+ ↓ src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > does not reconcile user-assigned work through the agent stranded-work recovery path
+ ↓ src/services/execution-control-reconciliation.test.ts > reconcileAbandonedExecutionControl reports a genuine failed transition > reports exactly one Sentry event for a genuine finalization-deadline failure
+ ✓ src/services/execution-control-reconciliation.test.ts > reconcileAbandonedExecutionControl reports a genuine failed transition > leaves a run owned by a live legacy controller to that controller 207ms
+ ↓ src/services/execution-control-reconciliation.test.ts > reconcileAbandonedExecutionControl reports a genuine failed transition > reports zero events for a repeated sweep over the same already-failed run
+ ↓ src/services/execution-control-reconciliation.test.ts > native review execution reconciliation admission > only releases the exact admitted review (admitted=true)
+ ↓ src/services/execution-control-reconciliation.test.ts > native review execution reconciliation admission > only releases the exact admitted review (admitted=false)
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > settles the cleanup claim before a later cooldown write fails
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_sweep_retries_and_destroys_lease
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_sweep_respects_backoff_and_page_size
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_sweep_continues_after_escalation_with_durable_backoff
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > does not let malformed provider metadata defer cleanup forever
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > uses the ownership deadline while cleanup is in flight (expired: false)
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > uses the ownership deadline while cleanup is in flight (expired: true)
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > starts escalation and the long cooldown on the fifth failed attempt
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > retries after a restart and cooldown when the provider recovers
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > does not start another cleanup while a previous attempt remains in flight
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > explicit Retry bypasses cooldown but preserves in-flight ownership (false)
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > explicit Retry bypasses cooldown but preserves in-flight ownership (true)
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > renews cleanup ownership while the provider remains blocked
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > preserves progress and cooldown with hung renewal (fails: false, retry first: false)
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > preserves progress and cooldown with hung renewal (fails: true, retry first: false)
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > preserves progress and cooldown with hung renewal (fails: false, retry first: true)
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > preserves progress and cooldown with hung renewal (fails: true, retry first: true)
+ ✓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > ignores a superseded cleanup completion (throws: false) 157ms
+ ✓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > ignores a superseded cleanup completion (throws: true) 30ms
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_overlapping_sweeps_destroy_lease_once
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_concurrent_unified_sweeps_tear_an_orphan_down_once
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_sweep_tears_down_reusable_lease_after_environment_delete
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_sweep_keeps_reusable_lease_when_recorded_teardown_fails
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_sweep_skips_lease_while_plugin_worker_down_then_retries
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_sweep_never_caps_while_provider_unavailable_then_cleans_up
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_sweep_does_not_let_unavailable_leases_starve_ready_leases
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_concurrent_sweeps_destroy_a_lease_at_most_once
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_concurrent_sweeps_never_exceed_attempt_cap
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_retry_log_omits_sentinel_in_error_name_and_code
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_sweep_failure_log_omits_sentinel_in_error_name_and_code
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_claim_preserves_unrelated_concurrent_metadata_key
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_malformed_retry_metadata_does_not_abort_sweep
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_cap_warning_requires_pending_cleanup_status_and_cap
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_negative_attempts_metadata_normalizes_and_lease_still_destroys
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_out_of_range_attempts_metadata_does_not_abort_sweep
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_scalar_metadata_root_does_not_abort_sweep
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > test_pending_cleanup_array_metadata_root_does_not_abort_sweep
+ ↓ src/__tests__/heartbeat-pending-cleanup-sweep.test.ts > heartbeat sweepPendingCleanupLeases > flushes the in-process orphan buffer before the read, so a freshly landed row is swept the same tick
+
+ Test Files  3 passed (3)
+      Tests  11 passed | 343 skipped (354)
+   Start at  00:24:19
+   Duration  59.29s (transform 9.97s, setup 206ms, import 19.28s, tests 39.42s, environment 0ms)
+

@@ -99,6 +99,7 @@ const mockAgentsApi = vi.hoisted(() => ({
 const mockAccessApi = vi.hoisted(() => ({
   getCurrentBoardAccess: vi.fn(),
   listUserDirectory: vi.fn(),
+  listWorkflowCoverages: vi.fn(),
 }));
 
 const mockAuthApi = vi.hoisted(() => ({
@@ -1372,6 +1373,7 @@ describe("IssueDetail", () => {
       userId: null,
     });
     mockAccessApi.listUserDirectory.mockResolvedValue({ users: [] });
+    mockAccessApi.listWorkflowCoverages.mockResolvedValue({ coverages: [] });
     mockAuthApi.getSession.mockResolvedValue({ session: null, user: null });
     mockAuthApi.getPreferences.mockResolvedValue({ keyboardShortcuts: false });
     mockProjectsApi.list.mockResolvedValue([]);
@@ -4643,9 +4645,7 @@ describe("IssueDetail", () => {
     expect(moreButton).toBeTruthy();
 
     await act(async () => {
-      moreButton!.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-      );
+      moreButton!.click();
     });
     await flushReact();
 

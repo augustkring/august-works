@@ -1,0 +1,337 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/CompanyAccess.test.tsx (29 tests | 13 failed) 20419ms
+     × suppresses a late removal success before refresh begins 6538ms
+     × suppresses Approve human acknowledgement after a held refresh and session renewal 45ms
+     × suppresses Reject human acknowledgement after a held refresh and session renewal 33ms
+     × shows protected member removal reasons from the API 44ms
+     × redirects legacy access deep links to the permissions extension route when installed 34ms
+     × shows a read-only unavailable fallback for legacy access deep links 29ms
+     × shows Members and Invites tabs with Members active by default 49ms
+     × opens the Invites tab from a ?tab=invites deep link 19ms
+     × hides the Invites tab when the operator hides company.invites 21ms
+     × offers Cloud invitations to the current stack's owner even with local invites hidden 40ms
+     × offers Cloud invitations to the current stack's admin even with local invites hidden 20ms
+     × waits for the Cloud role before showing the invitation action 17ms
+     × hides a cached invitation action when the Cloud role refresh fails 23ms
+stderr | src/components/SidebarAccountMenu.test.tsx > SidebarAccountMenu > opens the mounted first-party feedback composer from the standard account menu
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/SidebarAccountMenu.test.tsx > SidebarAccountMenu > opens the mounted first-party feedback composer from the standard account menu
+An update to Popper inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CustomerFeedbackDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/SidebarAccountMenu.test.tsx > SidebarAccountMenu > opens the mounted first-party feedback composer from the standard account menu
+An update to CustomerFeedbackDialog inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/SidebarAccountMenu.test.tsx > SidebarAccountMenu > opens the mounted first-party feedback composer from the standard account menu
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to FeedbackForm inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/components/SidebarAccountMenu.test.tsx > SidebarAccountMenu > opens the mounted first-party feedback composer from the standard account menu
+An update to SidebarAccountMenu inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ❯ |@paperclipai/ui| src/components/SidebarAccountMenu.test.tsx (8 tests | 1 failed) 5094ms
+     × opens the mounted first-party feedback composer from the standard account menu 131ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal success before refresh begins
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/pages/CompanyAccess.test.tsx:469:32
+    467|   });
+    468|
+    469|   it.each(["success", "error"])("suppresses a late removal %s before r…
+       |                                ^
+    470|     const root = createRoot(container);
+    471|     const client = new QueryClient({ defaultOptions: { queries: { retr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Approve human acknowledgement after a held refresh and session renewal
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Reject human acknowledgement after a held refresh and session renewal
+TypeError: Cannot read properties of undefined (reading 'click')
+ ❯ src/pages/CompanyAccess.test.tsx:508:37
+    506|     vi.spyOn(client, "invalidateQueries").mockImplementationOnce(() =>…
+    507|     const action = [...container.querySelectorAll("button")].find(butt…
+    508|     await act(async () => { action!.click(); });
+       |                                     ^
+    509|     await flushReact();
+    510|     expect(label === "Approve human" ? approveJoinRequestMock : reject…
+ ❯ Proxy.process.env.NODE_ENV.exports.act ../node_modules/.pnpm/react@19.2.8/node_modules/react/cjs/react.development.js:814:22
+ ❯ src/pages/CompanyAccess.test.tsx:508:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > shows protected member removal reasons from the API
+AssertionError: expected undefined to be truthy
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ src/pages/CompanyAccess.test.tsx:572:26
+    570|       (button) => button.textContent?.includes("Remove"),
+    571|     );
+    572|     expect(removeButton).toBeTruthy();
+       |                          ^
+    573|     expect(removeButton).toHaveProperty("disabled", true);
+    574|     expect(removeButton?.getAttribute("title")).toBe("Company admins c…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > redirects legacy access deep links to the permissions extension route when installed
+AssertionError: expected "vi.fn()" to be called with arguments: [ …(2) ]
+
+Number of calls: 0
+
+ ❯ src/pages/CompanyAccess.test.tsx:609:26
+    607|     await flushReact();
+    608|
+    609|     expect(mockNavigate).toHaveBeenCalledWith("/company/settings/permi…
+       |                          ^
+    610|     expect(container.textContent).toContain("/company/settings/permiss…
+    611|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess > shows a read-only unavailable fallback for legacy access deep links
+AssertionError: expected '' to contain 'Advanced Permissions'
+
+- Expected
++ Received
+
+- Advanced Permissions
+
+ ❯ src/pages/CompanyAccess.test.tsx:632:35
+    630|     await flushReact();
+    631|
+    632|     expect(container.textContent).toContain("Advanced Permissions");
+       |                                   ^
+    633|     expect(container.textContent).toContain("Advanced permissions unav…
+    634|     expect(container.textContent).toContain("Open Members");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > shows Members and Invites tabs with Members active by default
+AssertionError: expected [] to deeply equal [ 'Members', 'Invites' ]
+
+- Expected
++ Received
+
+- [
+-   "Members",
+-   "Invites",
+- ]
++ []
+
+ ❯ src/pages/CompanyAccess.test.tsx:687:23
+    685|
+    686|     const tabLabels = [...container.querySelectorAll('[role="tab"]')].…
+    687|     expect(tabLabels).toEqual(["Members", "Invites"]);
+       |                       ^
+    688|     expect(container.textContent).toContain("Organization Members");
+    689|     expect(container.textContent).not.toContain("Invite a person");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > opens the Invites tab from a ?tab=invites deep link
+AssertionError: expected '' to contain 'Invite a person'
+
+- Expected
++ Received
+
+- Invite a person
+
+ ❯ src/pages/CompanyAccess.test.tsx:702:35
+    700|     const root = await renderPage();
+    701|
+    702|     expect(container.textContent).toContain("Invite a person");
+       |                                   ^
+    703|     expect(container.textContent).toContain("Invite history");
+    704|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > hides the Invites tab when the operator hides company.invites
+AssertionError: expected '' to contain 'Organization Members'
+
+- Expected
++ Received
+
+- Organization Members
+
+ ❯ src/pages/CompanyAccess.test.tsx:718:35
+    716|     expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
+    717|     expect(container.textContent).not.toContain("Invite a person");
+    718|     expect(container.textContent).toContain("Organization Members");
+       |                                   ^
+    719|     expect(listInvitesMock).not.toHaveBeenCalled();
+    720|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > offers Cloud invitations to the current stack's owner even with local invites hidden
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > offers Cloud invitations to the current stack's admin even with local invites hidden
+AssertionError: expected undefined to be 'https://cloud.example.test/workspaces…' // Object.is equality
+
+- Expected:
+"https://cloud.example.test/workspaces/current-team/settings?section=people"
+
++ Received:
+undefined
+
+ ❯ src/pages/CompanyAccess.test.tsx:745:42
+    743|
+    744|     const invite = [...container.querySelectorAll("a")].find((link) =>…
+    745|     expect(invite?.getAttribute("href")).toBe("https://cloud.example.t…
+       |                                          ^
+    746|     expect(invite?.getAttribute("target")).toBeNull();
+    747|     expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > waits for the Cloud role before showing the invitation action
+AssertionError: expected '' to contain 'Invite people'
+
+- Expected
++ Received
+
+- Invite people
+
+ ❯ src/pages/CompanyAccess.test.tsx:767:35
+    765|     await act(async () => resolveStacks({ stacks: [cloudStack("admin")…
+    766|     await flushReact();
+    767|     expect(container.textContent).toContain("Invite people");
+       |                                   ^
+    768|     await act(async () => root.unmount());
+    769|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/14]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > hides a cached invitation action when the Cloud role refresh fails
+AssertionError: expected '' to contain 'Invite people'
+
+- Expected
++ Received
+
+- Invite people
+
+ ❯ src/pages/CompanyAccess.test.tsx:775:35
+    773|     client.setQueryData(["cloud", "stacks"], { stacks: [cloudStack("ow…
+    774|     const root = await renderPage(client);
+    775|     expect(container.textContent).toContain("Invite people");
+       |                                   ^
+    776|     listCloudStacksMock.mockRejectedValue(new Error("Portfolio unavail…
+    777|     await act(async () => { await client.invalidateQueries({ queryKey:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/14]⎯
+
+ FAIL  |@paperclipai/ui| src/components/SidebarAccountMenu.test.tsx > SidebarAccountMenu > opens the mounted first-party feedback composer from the standard account menu
+AssertionError: expected null not to be null
+ ❯ src/components/SidebarAccountMenu.test.tsx:225:32
+    223|       'button[aria-label="Share feedback"]',
+    224|     );
+    225|     expect(feedbackButton).not.toBeNull();
+       |                                ^
+    226|     expect(container.querySelector('a[href="https://paperclip.ing/feed…
+    227|     await act(async () => feedbackButton?.click());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/14]⎯
+
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  14 failed | 47 passed (61)
+   Start at  13:12:02
+   Duration  144.61s (transform 35.58s, setup 379ms, import 91.84s, tests 34.17s, environment 14.55s)
+

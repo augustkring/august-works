@@ -1,0 +1,4 @@
+2a319b496fb2bed9b59cce2a4b25dfdae04150cc964c87166af77330baff0fb6  doc/operations/agent-native-ui-operation-coverage.json
+3e4ee0fffeaedc1fffb3e1c15b6470a2bc7d98ae1f8410ae8060122cc1f05177  scripts/check-aw-v10-operation-coverage.mjs
+f0c777e631f78d967b41efd09b63ba6021ee638aeea33f4216c6d5f1299b2a17  scripts/refresh-aw-v10-operation-coverage.mjs
+b51b3fbf81b60db692589a051950f323c0689b5a6247d88d1d5f8f06cbfa4cd8  scripts/refresh-aw-v10-operation-coverage.test.mjs

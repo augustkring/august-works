@@ -1,0 +1,37 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/CustomerSupportCases.test.tsx (9 tests | 3 failed) 1313ms
+   × rejects an unsafe or foreign return route: /OTHER/issues/OTHER-1 39ms
+   × rejects an unsafe or foreign return route: //example.test/BLT/work 33ms
+   × rejects an unsafe or foreign return route: /BLT/../OTHER/work 28ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/CustomerSupportCases.test.tsx > rejects an unsafe or foreign return route: /OTHER/issues/OTHER-1
+ FAIL  |@paperclipai/ui| src/pages/CustomerSupportCases.test.tsx > rejects an unsafe or foreign return route: //example.test/BLT/work
+ FAIL  |@paperclipai/ui| src/pages/CustomerSupportCases.test.tsx > rejects an unsafe or foreign return route: /BLT/../OTHER/work
+AssertionError: expected '/BLT/work' to be '/work' // Object.is equality
+
+Expected: "/work"
+Received: "/BLT/work"
+
+ ❯ src/pages/CustomerSupportCases.test.tsx:292:120
+    290|   await mount({ pathname: "/BLT/company/support", state: { companyId: …
+    291|   await vi.waitFor(() => expect(container.querySelector("form")).toBeT…
+    292|   expect([...container.querySelectorAll("a")].find(link => link.textCo…
+       |                                                                                                                        ^
+    293| });
+    294|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  3 failed | 47 passed (50)
+   Start at  18:03:59
+   Duration  47.36s (transform 11.55s, setup 102ms, import 30.18s, tests 4.35s, environment 10.09s)
+

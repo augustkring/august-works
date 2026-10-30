@@ -1,0 +1,5 @@
+f515533b29d90e3a37c544dea3309a41bbd0496f4df5034c2e279b6504f98e83  server/src/realtime/live-events-ws.ts
+fa717cf679bdb9c7eec653622cd3066d85b9561592d0199e24a5013504460f64  server/src/services/authorization.ts
+fc2b6cb54b1d7251e5a142956bcb18f5b902e37c71c542d0c04b2af8973392d9  server/src/services/analytical-live-events.ts
+2a87b79bd1ee5d520921563e33beb3c31e1929d9e6d9384cea52951b1356a985  packages/shared/src/validators/agent.ts
+5e02a5f83c91a6f2e48be4428bca70c3f4149d00549298f0c50e66e95db159a9  server/src/__tests__/live-events-agent-key-authority.integration.test.ts

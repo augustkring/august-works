@@ -1,5 +1,5 @@
 import { agentPackageService } from "../agent-packages/package-service.js";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { companyAgentPackageInstallations, agentPackageUpdateProposals, learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, workflowOptimizerEvaluations, rolePacks, rolePackItems, workflows, policyChangeProposals, memoryEvidence, issues, projects, companySkills, foundationDocuments, documents, playbookDocuments, readinessRequirements, type Db } from "@paperclipai/db";
 import { finishLearningCycleSchema, learningCycleSchema, learningHypothesisSchema, learningEvaluationSchema, proposeLearningChangeSchema, reviewLearningPolicySchema, EVIDENCE_SENSITIVITIES, roadmapPolicySchema, type MemoryScope, type LearningPolicyPayload, type ReadinessAction } from "@paperclipai/shared";
 import type { z } from "zod";
@@ -32,7 +32,8 @@ async function learningMaterial(db:Db,actor:AuthorizationActor,cycle:Cycle) {
   const analyticalSensitivity=await assertLearningAnalyticalSources(db,actor,cycle);
   const edges = await db.select().from(learningEvidence).where(and(eq(learningEvidence.companyId, cycle.companyId), eq(learningEvidence.cycleId, cycle.id)));
   const roots = await derivedRoots(db, actor, cycle.companyId, scope(cycle), cycle.purpose, edges.map((edge) => edge.memoryRecordId), new Map(edges.map((edge) => [edge.memoryRecordId, edge.sourceVersion])));
-  await outcomes(db, actor, cycle, Object.keys(cycle.outcomeVersions), cycle.outcomeVersions); return {roots,analyticalSensitivity};
+  await outcomes(db, actor, cycle, Object.keys(cycle.outcomeVersions), cycle.outcomeVersions);
+  return {roots,analyticalSensitivity,memoryRecordIds:edges.map(edge=>edge.memoryRecordId).sort()};
 }
 export async function learningRoots(db:Db,actor:AuthorizationActor,cycle:Cycle){return (await learningMaterial(db,actor,cycle)).roots;}
 async function outcomes(db: Db, actor: AuthorizationActor, cycle: Cycle, ids: string[], expected?: Record<string, string>) {
@@ -104,7 +105,7 @@ export function learningService(db: Db) {
   }
   const audit = (tx: Db, actor: AuthorizationActor, companyId: string, id: string, action: string, publications: Parameters<typeof logActivity>[2], details?: Record<string, unknown>) => logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.type === "agent" ? actor.agentId! : v7HumanActorId(actor), action, entityType: "learning_cycle", entityId: id, details }, publications);
   /** Existing owner, with publications retained by the outer native transaction. */
-  async function createInTransaction(actor:AuthorizationActor,companyId:string,raw:z.input<typeof learningCycleSchema>,publications:Parameters<typeof logActivity>[2]) {
+  async function createInTransaction(actor:AuthorizationActor,companyId:string,raw:z.input<typeof learningCycleSchema>,publications:Parameters<typeof logActivity>[2],outcomeReviewScope?:{cycleId:string|null;purpose:string}) {
     const input=learningCycleSchema.parse(raw),tx=db;
     await admit(actor,companyId,tx,"propose");await assertSaasDomainAdmission(tx,companyId,"memory.use");
     await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, "propose");
@@ -115,7 +116,7 @@ export function learningService(db: Db) {
       .flatMap((item) => { const match = /^issue:\/\/([a-f0-9-]{36})$/i.exec(item.sourceRef); return match ? [match[1]!] : []; }))];
     if (!taskIds.length || roots.some((root) => !["human_verified", "system_verified", "corroborated"].includes(root.verificationState) || !sources.some((item) => item.memoryRecordId === root.id && item.sourceClass === "task" && item.trustLevel === "high" && item.supportsOrContradicts === "supports" && ["august_works_tasks", "august_works_issue"].includes(item.sourceProvider) && taskIds.some((taskId) => item.sourceRef === `issue://${taskId}`)))) throw conflict("Learning roots require verified canonical outcome evidence");
     const tasks = await outcomes(tx, actor, { scopeType: input.scope.type, scopeId: input.scope.id, companyId } as Cycle, taskIds);
-    const analytical = input.analyticalSources?.length ? await inspectAnalyticalContextPins(tx,companyId,actor,input.analyticalSources) : null;
+    const analytical = input.analyticalSources?.length ? await inspectAnalyticalContextPins(tx,companyId,actor,input.analyticalSources,performance.now()+30_000,true,outcomeReviewScope) : null;
     const [row] = await tx.insert(learningCycles).values({ analyticalSourcePins: analytical?.pins ?? [], analyticalSourceCount: analytical?.manifestIds.length ?? 0, analyticalSourceExpiresAt: analytical?.expiresAt ?? null, companyId, scopeType: input.scope.type, scopeId: input.scope.id, purpose: input.purpose, trigger: input.trigger, maxHypotheses: input.maxHypotheses, maxEvaluations: input.maxEvaluations, outcomeVersions: Object.fromEntries(tasks.map((task) => [task.id, task.updatedAt.toISOString()])), createdBy: actor.type === "agent" ? `agent:${actor.agentId}` : v7HumanActorId(actor) }).returning();
     if(analytical) for(let start=0;start<analytical.manifestIds.length;start+=500) await tx.insert(learningAnalyticalDependencies).values(analytical.manifestIds.slice(start,start+500).map(sourceManifestId=>({companyId,cycleId:row!.id,sourceManifestId})));
     await tx.insert(learningEvidence).values(roots.map((root) => ({ companyId, cycleId: row!.id, memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString() })));
@@ -174,6 +175,15 @@ export function learningService(db: Db) {
       const evaluations = hypotheses.length ? await db.select().from(learningEvaluations).where(and(eq(learningEvaluations.companyId, companyId), inArray(learningEvaluations.hypothesisId, hypotheses.map((item) => item.id)), isNull(learningEvaluations.erasedAt))).limit(40) : [];
       const candidates = hypotheses.length ? await db.select().from(learningDomainCandidates).where(and(eq(learningDomainCandidates.companyId, companyId), inArray(learningDomainCandidates.hypothesisId, hypotheses.map((item) => item.id)))).limit(20) : [];
       return { ...row, hypotheses, evaluations, candidates: await Promise.all(candidates.map(async candidate => ({ ...candidate, promotionReceipt: await learningPromotionReceipt(db, candidate) }))) };
+    },
+    /** Narrow replay read for the decision-outcome owner. It preserves the
+     * same cycle admission and complete current-root checks as get(), while
+     * avoiding hydration of hypothesis/evaluation/candidate DTOs that this
+     * idempotent caller does not consume. */
+    getOutcomeReviewReplay: async (actor: AuthorizationActor, companyId: string, id: string) => {
+      const row = await cycle(actor, companyId, id);
+      const material=await learningMaterial(db,actor,row);
+      return {...row,memoryRecordIds:material.memoryRecordIds};
     },
     createInTransaction,
     create: async (actor: AuthorizationActor, companyId: string, raw: z.input<typeof learningCycleSchema>) => {
@@ -306,7 +316,10 @@ export function learningService(db: Db) {
             await assertV7Authorization(tx, actor, companyId, "tasks:assign", { type: "project", companyId, projectId: row.targetId });
             const [project] = await tx.select().from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, row.targetId))).for("update");
             if (!project || project.updatedAt.toISOString() !== row.proposal.expectedProjectUpdatedAt) throw conflict("Project policy baseline changed");
-            await tx.update(projects).set({ roadmapPolicy: roadmapPolicySchema.parse(row.proposal.policy), updatedAt: new Date() }).where(eq(projects.id, project.id));
+            const policy = roadmapPolicySchema.parse(row.proposal.policy);
+            await tx.update(projects).set({ roadmapPolicy: policy,
+              payloadSourceSnapshot: sql`case when ${projects.roadmapPolicy} is distinct from ${JSON.stringify(policy)}::jsonb then null else ${projects.payloadSourceSnapshot} end`,
+              updatedAt: new Date() }).where(and(eq(projects.companyId, companyId), eq(projects.id, project.id)));
           } else {
             if (row.targetId !== companyId || parent.scopeType !== "company") throw forbidden("Readiness policy requires a company evidence scope");
             await assertV7Enabled(tx, "readiness_engine_v7"); await assertV7Authorization(tx, actor, companyId, "foundation:approve");

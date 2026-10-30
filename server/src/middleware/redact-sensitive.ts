@@ -11,7 +11,10 @@
 // objects/arrays. Caps depth so a hostile or accidental cycle can't pin
 // the logger.
 
+import { HTTP_LOG_SENSITIVE_HEADERS } from "./http-log-redaction.js";
+
 const SENSITIVE_KEYS = new Set<string>([
+  ...HTTP_LOG_SENSITIVE_HEADERS,
   // Provider setup payloads deliberately group all durable authentication
   // material under `credentials`. Redact the whole subtree instead of trying
   // to keep an ever-changing allowlist of provider-specific field names in
@@ -91,6 +94,7 @@ const SENSITIVE_KEYS = new Set<string>([
 
 const MAX_DEPTH = 6;
 const REDACTED = "[REDACTED]";
+const INVITE_BEARER_PATHS = /^(\/(?:api\/invites|invites|invite)\/)[^/]+/i;
 const URLISH_KEYS = new Set<string>([
   "href",
   "locator",
@@ -120,17 +124,18 @@ export function stripSecretBearingUrlParts(value: string): string {
   const suffixStart = value.search(/[?#]/);
   const withoutQueryOrFragment =
     suffixStart === -1 ? value : value.slice(0, suffixStart);
-
   try {
     const url = new URL(withoutQueryOrFragment);
-    if (!url.username && !url.password && suffixStart === -1) return value;
+    const pathname = url.pathname.replace(INVITE_BEARER_PATHS, "$1:token");
+    if (!url.username && !url.password && suffixStart === -1 && pathname === url.pathname) return value;
+    url.pathname = pathname;
     url.username = "";
     url.password = "";
     return url.toString();
   } catch {
     // Request URLs are normally origin-form paths rather than absolute URLs.
     // They still need the same query/fragment policy as URL-valued payloads.
-    return withoutQueryOrFragment;
+    return withoutQueryOrFragment.replace(INVITE_BEARER_PATHS, "$1:token");
   }
 }
 

@@ -1,9 +1,11 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Request, RequestHandler } from "express";
-import { and, eq, isNull } from "drizzle-orm";
+import { isDeepStrictEqual } from "node:util";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   activityLog,
+  accountDeletionOperations,
   agentApiKeys,
   agents,
   authUsers,
@@ -11,6 +13,7 @@ import {
   companyMemberships,
   heartbeatRuns,
   instanceUserRoles,
+  nativeRunFinalizations,
 } from "@paperclipai/db";
 import {
   MAX_ISSUE_PREFIX_ATTEMPTS,
@@ -20,11 +23,12 @@ import {
   pickAvailableIssuePrefix,
   rekeyCompanyIssueIdentifiers,
 } from "../services/issue-prefix.js";
-import { verifyLocalAgentJwt } from "../agent-auth-jwt.js";
+import { verifyLocalAgentJwt, type NativeToolEffectClaim } from "../agent-auth-jwt.js";
 import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
 import { isUuidLike, normalizeAgentApiKeyScope, type DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "./logger.js";
+import { stripSecretBearingUrlParts } from "./redact-sensitive.js";
 import { captureRunIdentity } from "../services/run-identity.js";
 import { boardAuthService } from "../services/board-auth.js";
 
@@ -63,6 +67,68 @@ import { cloudTenantPrimaryCompanyId } from "../services/cloud-instance.js";
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+/** Consume the one server-signed native call carrier before reaching a route.
+ * It is bound to the current acknowledged dispatch, lease and exact HTTP
+ * request. Legacy local JWTs have no such claim and remain ordinary requests. */
+async function consumeNativeToolEffectClaim(db: Db, claim: NativeToolEffectClaim, input: {
+  companyId: string; agentId: string; runId: string; responsibleUserId: string | null;
+  method: string; originalUrl: string; body: unknown; bodyPresent: boolean;
+}): Promise<boolean> {
+  if (claim.method !== input.method.toUpperCase() || claim.pathAndQuery !== input.originalUrl ||
+    claim.bodyPresent !== input.bodyPresent ||
+    createHash("sha256").update(input.bodyPresent ? canonicalJson(input.body) : "null").digest("hex") !== claim.bodyHash) return false;
+  return db.transaction(async tx => {
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.runtimeMode, "native"),
+      eq(heartbeatRuns.status, "running"),
+    )).for("update");
+    if (!run || !input.responsibleUserId || run.responsibleUserId !== input.responsibleUserId) return false;
+    const profile = objectRecord(run.runnerProfileJson);
+    const associations = profile.nativeToolCallDispatchAssociations;
+    const intents = profile.nativeModelInputDispatchIntents;
+    if (!Array.isArray(associations) || !Array.isArray(intents)) return false;
+    const matchingAssociations = associations.map(objectRecord).filter(row => row.callId === claim.callId && row.turnId === claim.turnId &&
+      row.tool === claim.tool && row.dispatchId === claim.dispatchId && row.eventSeq === claim.eventSeq && row.attempt === claim.attempt);
+    const matchingIntents = intents.map(objectRecord).filter(row => row.dispatchId === claim.dispatchId && row.turnId === claim.turnId &&
+      row.eventSeq === claim.eventSeq && row.attempt === claim.attempt && row.responsibleUserId === input.responsibleUserId);
+    if (matchingAssociations.length !== 1 || matchingIntents.length !== 1 || !run.nativeIssueId) return false;
+    const [lease] = await tx.select().from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.runId, input.runId), eq(nativeRunFinalizations.companyId, input.companyId),
+      eq(nativeRunFinalizations.issueId, run.nativeIssueId),
+      eq(nativeRunFinalizations.attempt, claim.attempt),
+      eq(nativeRunFinalizations.leaseOwner, claim.leaseOwner),
+      eq(nativeRunFinalizations.controllerBootId, claim.controllerBootId),
+      eq(nativeRunFinalizations.controllerPid, claim.controllerPid),
+      eq(nativeRunFinalizations.controllerProcessStartedAt, new Date(claim.controllerProcessStartedAt)),
+      gte(nativeRunFinalizations.leaseExpiresAt, new Date(claim.leaseExpiresAt)),
+      sql`${nativeRunFinalizations.leaseExpiresAt} > clock_timestamp()`,
+    )).for("update");
+    if (!lease) return false;
+    const resultJson = objectRecord(run.resultJson), apiReceipts = objectRecord(resultJson.apiToolReceipts);
+    const receiptKey = createHash("sha256").update(claim.callId).digest("hex");
+    const apiReceipt = objectRecord(apiReceipts[receiptKey]);
+    if (apiReceipt.digest !== claim.apiReceiptDigest || apiReceipt.operationId !== claim.operationId ||
+      apiReceipt.state !== "pending" || apiReceipt.nativeEffectClaimConsumed === true) return false;
+    apiReceipts[receiptKey] = { ...apiReceipt, nativeEffectClaimConsumed: true };
+    await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, apiToolReceipts: apiReceipts } }).where(eq(heartbeatRuns.id, run.id));
+    return true;
+  });
 }
 
 function normalizeOptionalString(value: string | null | undefined) {
@@ -158,26 +224,40 @@ async function auditAgentJwtRunHeaderMismatch(
   db: Db,
   input: { companyId: string; agentId: string; claimRunId: string; headerRunId: string; method: string; url: string },
 ) {
+  // Retain opaque identifiers, never arbitrary header/claim prose or URL secrets.
+  const claimRunId = isUuidLike(input.claimRunId) ? input.claimRunId.trim() : null;
+  const headerRunId = isUuidLike(input.headerRunId) ? input.headerRunId.trim() : null;
   try {
-    await db.insert(activityLog).values({
-      companyId: input.companyId,
-      actorType: "agent",
-      actorId: input.agentId,
-      action: "auth.agent_jwt_run_header_mismatch",
-      entityType: "heartbeat_run",
-      entityId: input.claimRunId,
-      ...(isUuidLike(input.agentId) ? { agentId: input.agentId } : {}),
-      ...(isUuidLike(input.claimRunId) ? { runId: input.claimRunId } : {}),
-      details: {
-        claimRunId: input.claimRunId,
-        headerRunId: input.headerRunId,
-        method: input.method,
-        url: input.url,
-      },
+    await db.transaction(async (tx) => {
+      // Lock the scoped run through the insert: a prior deletion omits the FK,
+      // while a concurrent deletion cannot invalidate an already selected run.
+      const [claimedRun] = claimRunId
+        ? await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.id, claimRunId),
+            eq(heartbeatRuns.companyId, input.companyId),
+            eq(heartbeatRuns.agentId, input.agentId),
+          )).for("key share")
+        : [];
+      await tx.insert(activityLog).values({
+        companyId: input.companyId,
+        actorType: "agent",
+        actorId: input.agentId,
+        action: "auth.agent_jwt_run_header_mismatch",
+        entityType: "heartbeat_run",
+        entityId: claimRunId ?? "invalid-run-id",
+        ...(isUuidLike(input.agentId) ? { agentId: input.agentId } : {}),
+        ...(claimedRun ? { runId: claimedRun.id } : {}),
+        details: {
+          claimRunId,
+          headerRunId,
+          method: input.method.slice(0, 16),
+          url: stripSecretBearingUrlParts(input.url).slice(0, 2048),
+        },
+      });
     });
   } catch (err) {
     logger.warn(
-      { err, companyId: input.companyId, agentId: input.agentId, claimRunId: input.claimRunId },
+      { err, companyId: input.companyId, agentId: input.agentId, claimRunId },
       "Failed to audit rejected agent JWT run header mismatch",
     );
   }
@@ -220,7 +300,7 @@ const publicMcpGatewayProtocolPath = /^\/mcp\/gateways\/gw_[a-f0-9]{32}\/?$/i;
 
 export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHandler {
   const boardAuth = boardAuthService(db);
-  return async (req, _res, next) => {
+  return async (req, res, next) => {
     req.actor =
       opts.deploymentMode === "local_trusted"
         ? {
@@ -273,11 +353,13 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         let session: BetterAuthSessionResult | null = null;
         try {
           session = await opts.resolveSession(req);
-        } catch (err) {
+        } catch {
           logger.warn(
-            { err, method: req.method, url: req.originalUrl },
+            { method: req.method, url: stripSecretBearingUrlParts(req.originalUrl) },
             "Failed to resolve auth session from request headers",
           );
+          res.status(503).json({ error: "Authentication is temporarily unavailable", code: "AUTHENTICATION_UNAVAILABLE" });
+          return;
         }
         if (session?.user?.id && session.session?.id) {
           const userId = session.user.id;
@@ -293,6 +375,9 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
             type: "board",
             userId,
             sessionId: session.session.id,
+            // Retain the verifier's original deadline. A later session renewal
+            // cannot extend this already-authenticated request while it waits.
+            ...(session.session.expiresAt ? { authenticatedCredentialExpiresAt: session.session.expiresAt.getTime() } : {}),
             userName: session.user.name ?? null,
             userEmail: session.user.email ?? null,
             companyIds: memberships.map((row) => row.companyId),
@@ -330,6 +415,8 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
           memberships: access.memberships,
           isInstanceAdmin: access.isInstanceAdmin,
           keyId: boardKey.id,
+          authenticatedKeyHash: boardKey.keyHash,
+          ...(boardKey.expiresAt ? { authenticatedCredentialExpiresAt: boardKey.expiresAt.getTime() } : {}),
           runId: runIdHeader || undefined,
           source: "board_key",
         };
@@ -339,7 +426,7 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
     }
 
     const tokenHash = hashToken(token);
-    const key = await db
+    let key = await db
       .select()
       .from(agentApiKeys)
       .where(and(eq(agentApiKeys.keyHash, tokenHash), isNull(agentApiKeys.revokedAt)))
@@ -400,7 +487,7 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
       if (agentRunWritesRevoked(identityRun)
         && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
         const conversation = identityRun?.contextSnapshot?.conversationMode === true;
-        _res.status(403).json({ error: conversation ? "This conversation turn was cancelled" : "This run was cancelled",
+        res.status(403).json({ error: conversation ? "This conversation turn was cancelled" : "This run was cancelled",
           code: conversation ? "conversation_turn_cancelled" : "agent_run_cancelled" });
         return;
       }
@@ -423,26 +510,58 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         userId: onBehalfOfUserId,
       });
 
+      const keyScope = normalizeAgentApiKeyScope(claims.key_scope);
+      if (!keyScope) {
+        next(unauthorized("Agent credential scope is unavailable; obtain fresh credentials and retry"));
+        return;
+      }
+      if (claims.native_tool_effect) {
+        if (keyScope.kind !== "standard" || !await consumeNativeToolEffectClaim(db, claims.native_tool_effect, {
+          companyId: claims.company_id, agentId: claims.sub, runId: claims.run_id,
+          responsibleUserId: onBehalfOfUserId, method: req.method, originalUrl: req.originalUrl,
+          body: req.body, bodyPresent: req.body !== undefined,
+        })) {
+          next(forbidden("Native tool effect binding is stale or does not match this request", { code: "native_tool_effect_binding_invalid" }));
+          return;
+        }
+      }
       req.actor = {
         type: "agent",
         agentId: claims.sub,
         companyId: claims.company_id,
         keyId: undefined,
-        keyScope: normalizeAgentApiKeyScope(claims.key_scope),
+        authenticatedCredentialExpiresAt: claims.exp * 1000,
+        keyScope,
         runId: claims.run_id,
         onBehalfOfUserId,
         identityContextId: identityRun?.activeIdentityContextId ?? null,
         onBehalfOfMemberships,
         source: "agent_jwt",
+        ...(claims.native_tool_effect ? { nativeToolEffect: claims.native_tool_effect } : {}),
       };
       next();
       return;
     }
 
-    await db
+    const originalScope = normalizeAgentApiKeyScope(key.scopeConfig);
+    if (!originalScope) {
+      next(unauthorized("Agent credential scope is unavailable; obtain fresh credentials and retry"));
+      return;
+    }
+    const [currentKey] = await db
       .update(agentApiKeys)
       .set({ lastUsedAt: new Date() })
-      .where(eq(agentApiKeys.id, key.id));
+      .where(and(eq(agentApiKeys.id, key.id), eq(agentApiKeys.companyId, key.companyId),
+        eq(agentApiKeys.keyHash, tokenHash), isNull(agentApiKeys.revokedAt)))
+      .returning();
+    const keyScope = currentKey ? normalizeAgentApiKeyScope(currentKey.scopeConfig) : null;
+    if (!currentKey || !keyScope || !isDeepStrictEqual(originalScope, keyScope)) {
+      next(unauthorized("Agent credential changed; obtain fresh credentials and retry"));
+      return;
+    }
+    // The last-used write can wait behind revocation or identity changes.
+    // All subsequent identity fields belong to the actual returned row.
+    key = currentKey;
 
     const agentRecord = await db
       .select()
@@ -483,7 +602,8 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
       agentId: key.agentId,
       companyId: key.companyId,
       keyId: key.id,
-      keyScope: normalizeAgentApiKeyScope(key.scopeConfig),
+      authenticatedKeyHash: key.keyHash,
+      keyScope,
       onBehalfOfUserId: responsibleUserId,
       onBehalfOfMemberships: await loadResponsibleUserMemberships(db, {
         companyId: key.companyId,
@@ -641,27 +761,6 @@ async function resolveCloudTenantActorOnce(
     status: "active",
   };
 
-  if (shouldSync) await db
-    .insert(authUsers)
-    .values({
-      id: userId,
-      name: userName,
-      email: userEmail,
-      emailVerified: true,
-      image: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: authUsers.id,
-      set: {
-        name: userName,
-        email: userEmail,
-        emailVerified: true,
-        updatedAt: now,
-      },
-    });
-
   // Earlier cloud_tenant builds granted every tenant user `instance_admin`.
   // Stale rows from those deployments would still elevate this user through
   // the BetterAuth session path, board API keys, and the authorization
@@ -689,44 +788,81 @@ async function resolveCloudTenantActorOnce(
     await repairCloudTenantCompanyProvisionDefaults(db, { companyId, stackId, now });
   }
 
-  effectiveMembership = shouldSync ? await db
-    .insert(companyMemberships)
-    .values({
-      companyId,
-      principalType: "user",
-      principalId: userId,
-      status: "active",
-      membershipRole,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [
-        companyMemberships.companyId,
-        companyMemberships.principalType,
-        companyMemberships.principalId,
-      ],
-      set: {
+  // The debounce only suppresses profile/role writes. Membership state is
+  // always read from the database, and an attempted Cloud refresh can create
+  // an initial membership but can never reactivate a locally suspended or
+  // archived row. Serialize with account deletion by locking the user row
+  // before checking its durable tombstone and making any identity writes.
+  const identityState = await db.transaction(async tx => {
+    await tx.select({ id: authUsers.id }).from(authUsers)
+      .where(eq(authUsers.id, userId)).for("update");
+    const [deletion] = await tx.select({ userId: accountDeletionOperations.userId })
+      .from(accountDeletionOperations)
+      .where(eq(accountDeletionOperations.userId, userId)).limit(1);
+    if (deletion) return { deleted: true as const, membership: null };
+
+    if (shouldSync) {
+      await tx.insert(authUsers).values({
+        id: userId,
+        name: userName,
+        email: userEmail,
+        emailVerified: true,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoUpdate({
+        target: authUsers.id,
+        set: { name: userName, email: userEmail, emailVerified: true, updatedAt: now },
+      });
+
+      const [claimed] = await tx.insert(companyMemberships).values({
+        companyId,
+        principalType: "user",
+        principalId: userId,
         status: "active",
         membershipRole,
         updatedAt: now,
-      },
-    })
-    .returning()
-    .then((rows) => rows[0] ?? {
-      companyId,
-      membershipRole,
-      status: "active",
-    }) : { companyId, membershipRole, status: "active" as const };
+      }).onConflictDoUpdate({
+        target: [companyMemberships.companyId, companyMemberships.principalType, companyMemberships.principalId],
+        set: { membershipRole, updatedAt: now },
+        // A pre-existing non-active row is an authoritative local denial.
+        // PostgreSQL rechecks this predicate after waiting on a concurrent
+        // revocation, so a stale Cloud header cannot win that race.
+        setWhere: eq(companyMemberships.status, "active"),
+      }).returning({ id: companyMemberships.id });
 
-  // Without instance-admin elevation, cloud tenant users are authorized purely
-  // through company-scoped permission grants — seed the same role defaults the
-  // regular membership flows create.
-  if (shouldSync) await ensureHumanRoleDefaultGrants(db, {
-    companyId,
-    principalId: userId,
-    membershipRole: effectiveMembership.membershipRole ?? membershipRole,
-    grantedByUserId: null,
+      if (claimed) {
+        // This helper locks the same membership row and only initializes
+        // missing defaults. It stays inside this transaction so revocation
+        // cannot interleave between the active check and grant initialization.
+        await ensureHumanRoleDefaultGrants(tx, {
+          companyId,
+          principalId: userId,
+          membershipRole,
+          grantedByUserId: null,
+        });
+      }
+    }
+
+    const [membership] = await tx.select({
+      companyId: companyMemberships.companyId,
+      membershipRole: companyMemberships.membershipRole,
+      status: companyMemberships.status,
+    }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId),
+      eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    )).for("update");
+
+    return { deleted: false as const, membership: membership ?? null };
   });
+
+  if (identityState.deleted) {
+    cloudTenantWriteDebounce.delete(userId);
+    return null;
+  }
+  const currentMembership = identityState.membership;
+  effectiveMembership = currentMembership ?? { companyId, membershipRole: null, status: "missing" };
   if (shouldSync) {
     cloudTenantWriteDebounce.delete(userId);
     cloudTenantWriteDebounce.set(userId, { fingerprint: syncFingerprint, syncedAt: Date.now() });
@@ -760,13 +896,12 @@ async function resolveCloudTenantActorOnce(
     userId,
     userName,
     userEmail,
-    companyIds: [companyId, ...additionalMemberships.map((row) => row.companyId)],
+    companyIds: [
+      ...(effectiveMembership.status === "active" ? [companyId] : []),
+      ...additionalMemberships.map((row) => row.companyId),
+    ],
     memberships: [
-      {
-        companyId,
-        membershipRole: effectiveMembership.membershipRole ?? membershipRole,
-        status: effectiveMembership.status,
-      },
+      ...(effectiveMembership.status === "active" ? [effectiveMembership] : []),
       ...additionalMemberships,
     ],
     // Computed per request, never persisted: the stack owner is elevated to
@@ -774,7 +909,9 @@ async function resolveCloudTenantActorOnce(
     // `enableOwnerInstanceAdmin` flag is on. Non-owner stack roles stay
     // company-scoped. Turning the flag off de-elevates on the next request —
     // there is no role row to clean up.
-    isInstanceAdmin: await resolveOwnerInstanceAdmin(db, stackRole),
+    isInstanceAdmin: effectiveMembership.status === "active"
+      ? await resolveOwnerInstanceAdmin(db, stackRole)
+      : false,
     source: "cloud_tenant",
   };
 }

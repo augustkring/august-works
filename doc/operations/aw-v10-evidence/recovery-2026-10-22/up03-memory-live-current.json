@@ -1,0 +1,56 @@
+{
+  "status": "scoped_current_native_live_green; complete graph and V10 remain open",
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=2GiB GOMAXPROCS=2 node node_modules/vitest/vitest.mjs run server/src/__tests__/memory-private-live-events.integration.test.ts server/src/__tests__/memory-derived-live-events.integration.test.ts --maxWorkers=1",
+  "sessionId": 93321,
+  "actual": {
+    "filesPassed": 2,
+    "testsPassed": 2,
+    "durationSeconds": 89.84,
+    "exitCode": 0,
+    "all12PinsUnchanged": true,
+    "cleanup": "PostgreSQL fixtures and actual WebSocket/server cleanup completed"
+  },
+  "covered": [
+    "Actual private Memory creation publication: Bob nativeget403/current sourceACLfalse, canonical owning Agent positive, helperdrop and real Bob socket omission followed by authorized barrier.",
+    "Actual Agent-produced/reviewed shared Memory retaining a private Task/run; original observation/model/Learning creation publications check full original lineage with Alice positive/Bob negative.",
+    "Original leased reflection job completed over those actual sources; persisted receipt and proposed child qualified, actual memory_job publication Alice positive/Bob negative.",
+    "Actual cognitive private agent-scope and private project binding creation; original status/project-create sibling guards.",
+    "Actual shared cognitive reconciliation retains exact operation Memory IDs/versions; Alice eligible2/Bob eligible0 before actual event checks.",
+    "Original company retention-policy publication remains available to current administrators although its entity UUID is the company UUID.",
+    "Observed physical PostgreSQL Memory-lock wait then committed original administrator demotion; reconcile403, unchanged operation and activity populations."
+  ],
+  "limitations": [
+    "Two tests contain the listed assertions; this is not an assertion count or all-event-action coverage claim.",
+    "heartbeat_run entity-only binding is implemented; these2cases exercise explicit runId gates on real Memory publication, not a separate original extraction-event fixture.",
+    "Original regression had3Bob privacy assertions failing before fix; canonical owningAgent fixture was corrected after exact RED snapshot archival.",
+    "The first --project server invocation failed at startup; exact raw log remains in earlier RED receipt.",
+    "Session50950 deliberately stopped with143 during startup for slot handoff; no behavioral result.",
+    "Later session40164 disappeared with environment transition; startup-only log and no terminal verdict retained; no pass inferred.",
+    "Current normal server typecheck and parent credential-after-source-wait changes are separate qualifications.",
+    "Local elapsed deadlines do not strictly cancel delegated source-owner calls.",
+    "Task/Project captured-payload graph, historical provenance and private HTTP/UI admission/full V10 remain open."
+  ],
+  "pins": {
+    "server/src/services/analytical-live-events.ts": "fc2b6cb54b1d7251e5a142956bcb18f5b902e37c71c542d0c04b2af8973392d9",
+    "server/src/services/memory/cognitive-memory.ts": "30ad908a601f62c69c801f12ed76fcd1fccb008c49da86e40b183273e2b83c3e",
+    "server/src/services/memory/memory-service.ts": "94c0a50d3068747641d18fd2a561ef5c9fe59a3f26930dfa03df9df1a0a75938",
+    "server/src/services/memory/memory-privacy.ts": "3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470",
+    "server/src/services/memory/derived-memory.ts": "fba3b81f80d0917c3989e1ed32ee17dd7b2b14772bec5ad143b8b1287bcdd2f7",
+    "server/src/services/memory/memory-jobs.ts": "5289bb0614c8346660575d2ae7d40f0c2a2e4c0f7b257ad22f6893fe04abd22e",
+    "server/src/services/learning/learning-service.ts": "dcac19938d6e743ecb685b913472e432c0d453df85d0215bc3b7fa76c12ea1d1",
+    "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+    "server/src/realtime/live-events-ws.ts": "38e30f5a72ddcbf2622affac4fef3a3d96daaae92aab94743f0cdae5e7cd01e9",
+    "packages/db/src/migrations/0508_deep_black_cat.sql": "9687be3d6e5624d267740293992965cc8ef5dea08b052b4319fefe67d66bcd70",
+    "server/src/__tests__/memory-private-live-events.integration.test.ts": "32d9b5002430cf7853cd30429ee5b572562afdd8ea84018604cc7f9629603aa3",
+    "server/src/__tests__/memory-derived-live-events.integration.test.ts": "1a13fb62015a1c80615528f7ac1f3b2914514185f8263cc43e05d1a1fcf0e700"
+  },
+  "artifacts": {
+    "up03-memory-live-current.log.txt": "8fe564e97c469bb2ee4e0b416cda6a3d9045a19235357130841e6807cce255fc",
+    "up03-memory-live-stopped-for-slot.log.txt": "9b8ce6d841d1a3b09334629a1bf8391ed4c2db84b8a56c496cc39bf8f1f83d8a",
+    "up03-memory-live-environment-interrupted.log.txt": "9b8ce6d841d1a3b09334629a1bf8391ed4c2db84b8a56c496cc39bf8f1f83d8a",
+    "up03-memory-live-current-derived.test-source.txt": "1a13fb62015a1c80615528f7ac1f3b2914514185f8263cc43e05d1a1fcf0e700",
+    "up03-memory-live-current-private.test-source.txt": "32d9b5002430cf7853cd30429ee5b572562afdd8ea84018604cc7f9629603aa3",
+    "up03-memory-live-stopped-for-slot.pins.txt": "b15afe224f39f553cfa520167d440cbdf2d95bad9e2bc210d56c8a942e2a2002",
+    "up03-memory-live-environment-interrupted.pins.txt": "9d8a0cdb5d90b5a6aa98e0e991506e12cb6d6e3ddf6bd60d898741a0fa24dcdd"
+  }
+}

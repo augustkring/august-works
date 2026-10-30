@@ -1,0 +1,44 @@
+{
+  "scope": "Original ancestor source collector plus Root exported Task selected-source regression; not source completeness/permission/native dispatch admission",
+  "sources": {
+    "ancestor": "Optional onSourceCapture, first6 selectedsameSQL epochmicrosecond version+nullable snapshot; exactJSON scalar hash{id,identifier,title,status,priority}; publicdefault neither selects nor returns capturemetadata",
+    "task": "Root existing original helper exposedmoduleexport, actualbodyprojectionhash/rootSnapshot/microsecond version. Fullnativebootstrapwiring notexecuted by these3cases"
+  },
+  "red": {
+    "actualExit": 1,
+    "failed": 3,
+    "deselected": 135,
+    "durationSeconds": 65.08,
+    "log": "/workspace/v10-preparation/up03-task-ancestor-source-red.log",
+    "durableExit": "/workspace/v10-preparation/up03-task-ancestor-source-red.exit",
+    "before": "/workspace/v10-preparation/up03-task-ancestor-source-red-before.sha256",
+    "exactTest": "/workspace/v10-preparation/up03-task-ancestor-source-red-test.ts",
+    "originalIssues": "/workspace/v10-preparation/up03-task-ancestor-source-red-issues.ts",
+    "heartbeatExactUpfrontCopy": "/workspace/v10-preparation/up03-task-bootstrap-red-heartbeat.txt",
+    "heartbeatUpfrontCopySha256": "47229847ea194f0884918f857259c8b7f1fa4c52765345a2d00e11fad65ce6e2",
+    "verification": "issues/test/0509 remainedexactafterexit; Root observed durable exit then restored heartbeat before A postexitcheck. Saved Rootoldcopy matches upfront47229847...; no unobserved oldheartbeat postexit hash verification claim"
+  },
+  "green": {
+    "actualExit": 0,
+    "passed": 3,
+    "deselected": 135,
+    "durationSeconds": 83.45,
+    "log": "/workspace/v10-preparation/up03-task-ancestor-source-green.log",
+    "durableExit": "/workspace/v10-preparation/up03-task-ancestor-source-green.exit",
+    "before": "/workspace/v10-preparation/up03-task-ancestor-source-green-before.sha256",
+    "after": "/workspace/v10-preparation/up03-task-ancestor-source-green-after.sha256",
+    "all4PinsUnchanged": true,
+    "actualEmbeddedPostgresCleanupClosed": true
+  },
+  "ownedSources": {
+    "server/src/services/issues.ts": "d433686366127dff776b3f38bc8e5f61c890aa40528b5df8b4ff495b7882e1aa",
+    "server/src/__tests__/issues-service.test.ts": "334b1e29211c0d859873d8b8909493838ef80e0f089b6cc2ead5fd11c2629314"
+  },
+  "limits": [
+    "Known snapshots are source-free structural DB fixtures, not native producer qualification",
+    "No all138cases suite claim; selected3 only",
+    "No allbody/provenance/permission/Ready bit; original temporalgraph failures remainopen",
+    "No heartbeat/shared/schema edits by A",
+    "No Git commit"
+  ]
+}

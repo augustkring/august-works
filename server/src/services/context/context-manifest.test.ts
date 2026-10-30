@@ -1,14 +1,18 @@
 import { randomUUID } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   contextManifestItems,
   contextManifests,
   createDb,
   heartbeatRuns,
+  issues, memoryBindings, memoryRecords, contextManifestMemoryRoots,
 } from "@paperclipai/db";
-import type { ContextAuthorityDecision, EvidenceItem } from "@paperclipai/shared";
+import type { ContextAuthorityDecision, EvidenceItem, NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -35,8 +39,13 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     await db.delete(contextManifestItems);
     await db.delete(contextManifests);
     await db.delete(heartbeatRuns);
+    await db.delete(memoryRecords);
+    await db.delete(memoryBindings);
+    await db.delete(issues);
     await db.delete(agents);
+    await db.delete(companyMemberships);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -45,12 +54,15 @@ describeEmbeddedPostgres("Context Manifest service", () => {
 
   async function seedCompanyAndAgent(name: string) {
     const companyId = randomUUID();
+    const userId = randomUUID();
+    await db.insert(authUsers).values({id:userId,name:"Current Context owner",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
     await db.insert(companies).values({
       id: companyId,
       name,
       issuePrefix: `C${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"owner"});
     const [agent] = await db.insert(agents).values({
       companyId,
       name: `${name} Agent`,
@@ -60,7 +72,7 @@ describeEmbeddedPostgres("Context Manifest service", () => {
       runtimeConfig: {},
       permissions: {},
     }).returning();
-    return { companyId, agent: agent! };
+    return { companyId, userId, agent: agent! };
   }
 
   function evidence(companyId: string, excerpt: string): EvidenceItem {
@@ -100,6 +112,7 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     const [run] = await db.insert(heartbeatRuns).values({
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
+      responsibleUserId:seeded.userId,
     }).returning();
     const rawQuery = "secret customer question that must not be stored";
     const rawExcerpt = "sensitive selected evidence that must not be stored in the manifest";
@@ -135,6 +148,181 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     expect(persisted).not.toContain(rawQuery);
     expect(persisted).not.toContain(rawExcerpt);
     expect(persisted).not.toContain("raw-metadata");
+  });
+
+  it.each([false, true])("retains exact selected Task and Memory body snapshots without inventing unknown history (known=%s)", async known => {
+    const seeded = await seedCompanyAndAgent("Captured sources");
+    const [task] = await db.insert(issues).values({ companyId: seeded.companyId, title: "Selected Task body",
+      description: "Original selected Task rendition", payloadSourceProtocolVersion: known ? 1 : 0 }).returning();
+    const [binding] = await db.insert(memoryBindings).values({ companyId: seeded.companyId, key: randomUUID(),
+      name: "Selected native Memory", providerKey: "local" }).returning();
+    const [memory] = await db.insert(memoryRecords).values({ companyId: seeded.companyId, bindingId: binding!.id,
+      providerKey: "local", memoryType: "lesson", scopeType: "company", content: "Original selected Memory rendition",
+      observedAt: new Date(), createdByActorType: "user", createdByActorId: seeded.userId,
+      sourceProvenanceQualified: true, payloadSourceProtocolVersion: known ? 1 : 0 }).returning();
+    // Canonically bound structural fixtures, never complete producer history or
+    // provider dispatch qualification. Unknown originals deliberately stay NULL.
+    async function seal(kind: "issue" | "memory_record", table: "issues" | "memory_records", id: string) {
+      const [hash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash(${kind},to_jsonb(r)) as hash
+        from ${sql.identifier(table)} r where r.company_id=${seeded.companyId}::uuid and r.id=${id}::uuid`);
+      const content = { version: 1, owner: { kind, companyId: seeded.companyId, id, contentHash: hash!.hash },
+        policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] };
+      const [sealed] = await db.execute<{ snapshot: NativePayloadSourceSnapshot }>(sql`select ${JSON.stringify(content)}::jsonb ||
+        jsonb_build_object('digest',encode(sha256(convert_to((${JSON.stringify(content)}::jsonb)::text,'UTF8')),'hex')) as snapshot`);
+      return sealed!.snapshot;
+    }
+    const taskSnapshot = known ? await seal("issue", "issues", task!.id) : null;
+    const memorySnapshot = known ? await seal("memory_record", "memory_records", memory!.id) : null;
+    if (known) {
+      await db.update(issues).set({ payloadSourceSnapshot: taskSnapshot }).where(eq(issues.id, task!.id));
+      await db.update(memoryRecords).set({ payloadSourceSnapshot: memorySnapshot }).where(eq(memoryRecords.id, memory!.id));
+    }
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, status: "running" }).returning();
+    const selectedTask: EvidenceItem = { ...evidence(seeded.companyId, task!.description!), id: `task:${task!.id}`,
+      sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${task!.id}`,
+      title: task!.title, sourceVersion: task!.updatedAt.toISOString() };
+    const selectedMemory: EvidenceItem = { ...evidence(seeded.companyId, memory!.content), id: `memory:${memory!.id}`,
+      sourceClass: "accepted_memory", sourceProvider: "august_works_memory", sourceType: "memory_record", sourceRef: `memory://record/${memory!.id}`,
+      sourceVersion: memory!.updatedAt.toISOString() };
+    const result = await contextManifestService(db).create({ companyId: seeded.companyId, runId: run!.id,
+      agentId: seeded.agent.id, query: "Actual selected native source bodies", policySnapshot: {},
+      selected: [{ decision: decision(selectedTask) }, { decision: decision(selectedMemory) }] });
+    expect(result.items.map(item => item.payloadSourceSnapshot)).toEqual([taskSnapshot, memorySnapshot]);
+    const [root] = await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,result.manifest.id));
+    expect(root!.payloadSourceSnapshot).toEqual(memorySnapshot);
+    await db.update(issues).set({ description: "Later Task body", payloadSourceSnapshot: null }).where(eq(issues.id, task!.id));
+    await db.update(memoryRecords).set({ content: "Later Memory body", payloadSourceSnapshot: null }).where(eq(memoryRecords.id, memory!.id));
+    const items = await db.select().from(contextManifestItems).where(eq(contextManifestItems.manifestId, result.manifest.id));
+    items.sort((a, b) => a.rank - b.rank);
+    expect(items.map(item => item.payloadSourceSnapshot)).toEqual([taskSnapshot, memorySnapshot]);
+    const [retained] = await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,result.manifest.id));
+    expect(retained!.payloadSourceSnapshot).toEqual(memorySnapshot);
+    expect(items.map(item => item.sourceVersion)).toEqual([selectedTask.sourceVersion, selectedMemory.sourceVersion]);
+    expect(items.map(item => item.contentHash)).toEqual([hashEvidenceContent(selectedTask), hashEvidenceContent(selectedMemory)]);
+  });
+
+  it("cancels a deadline-bound manifest transaction and releases acquired privacy locks", async () => {
+    const seeded = await seedCompanyAndAgent("Bounded manifest transaction");
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, status: "running" }).returning();
+    let markTreeLockHeld!: () => void;
+    const treeLockHeld = new Promise<void>(resolve => { markTreeLockHeld = resolve; });
+    let releaseTreeLock!: () => void;
+    const treeLockRelease = new Promise<void>(resolve => { releaseTreeLock = resolve; });
+    const blocker = db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`issue-privacy-tree:${seeded.companyId}`}, 0))`);
+      markTreeLockHeld();
+      await treeLockRelease;
+    });
+    await treeLockHeld;
+
+    const deadlineAt = Date.now() + 1_500;
+    const controller = new AbortController();
+    try {
+      const creation = contextManifestService(db).create({
+        companyId: seeded.companyId,
+        runId: run!.id,
+        agentId: seeded.agent.id,
+        query: "Bounded manifest transaction",
+        policySnapshot: {},
+        selected: [],
+      }, undefined, { signal: controller.signal, deadlineAt });
+      const outcome = creation.then(
+        () => ({ succeeded: true as const }),
+        error => ({ succeeded: false as const, error }),
+      );
+      let acquiredPrivacyLocks = false;
+      while (Date.now() < deadlineAt - 40 && !acquiredPrivacyLocks) {
+        const [locks] = await db.execute<{ businessEvents: boolean; memoryPrivacy: boolean }>(sql`
+          select pg_try_advisory_xact_lock(hashtextextended(${`business-events:${seeded.companyId}`}, 0)) as "businessEvents",
+            pg_try_advisory_xact_lock(hashtextextended(${`memory:privacy:${seeded.companyId}`}, 0)) as "memoryPrivacy"
+        `);
+        acquiredPrivacyLocks = locks?.businessEvents === false && locks.memoryPrivacy === false;
+        if (!acquiredPrivacyLocks) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(acquiredPrivacyLocks).toBe(true);
+      const settled = await outcome;
+      expect(settled.succeeded).toBe(false);
+      if (settled.succeeded) throw new Error("Deadline-bound manifest unexpectedly committed");
+      expect(settled.error).toMatchObject({ status: 503, details: {
+        code: "source_unavailable", reason: "context_deadline", stage: "context_manifest",
+      } });
+      expect(controller.signal.aborted).toBe(false);
+    } finally {
+      releaseTreeLock();
+      await blocker;
+    }
+
+    const [locks] = await db.execute<{ businessEvents: boolean; memoryPrivacy: boolean }>(sql`
+      select pg_try_advisory_xact_lock(hashtextextended(${`business-events:${seeded.companyId}`}, 0)) as "businessEvents",
+        pg_try_advisory_xact_lock(hashtextextended(${`memory:privacy:${seeded.companyId}`}, 0)) as "memoryPrivacy"
+    `);
+    expect(locks).toEqual({ businessEvents: true, memoryPrivacy: true });
+    expect(await db.select().from(contextManifests)).toHaveLength(0);
+  });
+
+  it.each([false, true])("rechecks same-company admission after a privacy-lock wait (revoked=%s)", async revoked => {
+    const seeded = await seedCompanyAndAgent("Current manifest admission");
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, status: "running" }).returning();
+    let markTreeLockHeld!: () => void;
+    const treeLockHeld = new Promise<void>(resolve => { markTreeLockHeld = resolve; });
+    let releaseTreeLock!: () => void;
+    const treeLockRelease = new Promise<void>(resolve => { releaseTreeLock = resolve; });
+    const blocker = db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`issue-privacy-tree:${seeded.companyId}`}, 0))`);
+      markTreeLockHeld();
+      await treeLockRelease;
+    });
+    await treeLockHeld;
+
+    let acquiredPrivacyLocks = false;
+    const creation = contextManifestService(db).create({
+      companyId: seeded.companyId,
+      runId: run!.id,
+      agentId: seeded.agent.id,
+      query: "Current membership at manifest commit",
+      policySnapshot: {},
+      selected: [],
+    });
+    const outcome = creation.then(
+      value => ({ succeeded: true as const, value }),
+      error => ({ succeeded: false as const, error }),
+    );
+    try {
+      const waitUntil = Date.now() + 1_000;
+      while (Date.now() < waitUntil && !acquiredPrivacyLocks) {
+        const [locks] = await db.execute<{ businessEvents: boolean; memoryPrivacy: boolean }>(sql`
+          select pg_try_advisory_xact_lock(hashtextextended(${`business-events:${seeded.companyId}`}, 0)) as "businessEvents",
+            pg_try_advisory_xact_lock(hashtextextended(${`memory:privacy:${seeded.companyId}`}, 0)) as "memoryPrivacy"
+        `);
+        acquiredPrivacyLocks = locks?.businessEvents === false && locks.memoryPrivacy === false;
+        if (!acquiredPrivacyLocks) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(acquiredPrivacyLocks).toBe(true);
+      if (revoked) {
+        await db.update(companyMemberships).set({ status: "inactive", updatedAt: new Date() }).where(and(
+          eq(companyMemberships.companyId, seeded.companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, seeded.userId)));
+      }
+    } finally {
+      releaseTreeLock();
+      await blocker;
+    }
+
+    const settled = await outcome;
+    if (revoked) {
+      expect(settled.succeeded).toBe(false);
+      if (settled.succeeded) throw new Error("Manifest committed after responsible-user membership was revoked");
+      expect(settled.error).toMatchObject({ status: 403 });
+      expect(await db.select().from(contextManifests)).toHaveLength(0);
+    } else {
+      expect(settled.succeeded).toBe(true);
+      if (!settled.succeeded) throw settled.error;
+      expect(settled.value.manifest.id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(await db.select().from(contextManifests)).toHaveLength(1);
+    }
   });
 
   it("hashes policy snapshots deterministically across object-key order", () => {

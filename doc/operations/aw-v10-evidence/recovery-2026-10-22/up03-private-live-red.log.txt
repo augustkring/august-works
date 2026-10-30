@@ -1,0 +1,184 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts (6 tests | 6 failed) 14007ms
+     × withholds an inaccessible task event including its identity and loss placeholder 299ms
+     × checks both explicit task and persisted run sources instead of replacing one with the other 159ms
+     × checks the actual private project named by projectId 30ms
+     × checks the actual private project named by entityId 25ms
+     × does not turn a malformed explicit source into an unscoped public event 23ms
+     × drops private messages on the actual socket while delivering the next authorized event 147ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > withholds an inaccessible task event including its identity and loss placeholder
+AssertionError: expected { id: 1, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "companyId": "92776467-8621-4278-9fb2-78dbde2ba720",
+  "createdAt": "2026-10-22T21:58:46.707Z",
+  "id": 1,
+  "payload": {
+    "code": "analytical_source_access_lost",
+    "issueId": "a09928a3-4087-4de9-9be1-bea1ced49c2e",
+    "runId": null,
+  },
+  "type": "analytical.context.access_lost",
+}
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:43:74
+     41|     const value=event({issueId:privateIssueId,body:"PRIVATE original b…
+     42|     expect(await analyticalLiveEventForReader(db,value,actor(ownerId))…
+     43|     expect(await analyticalLiveEventForReader(db,value,actor(readerId)…
+       |                                                                          ^
+     44|   });
+     45|   it("checks both explicit task and persisted run sources instead of r…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > checks both explicit task and persisted run sources instead of replacing one with the other
+AssertionError: expected { id: 1, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "companyId": "47263953-50b8-4bdd-8ded-ad9c1fe396e7",
+  "createdAt": "2026-10-22T21:58:46.891Z",
+  "id": 1,
+  "payload": {
+    "chunk": "PRIVATE borrowed bytes",
+    "issueId": "220fa946-2a30-4157-9952-58403df6a5cc",
+    "runId": "cb46d747-6ed4-4e84-824d-8d9e6d538e33",
+  },
+  "type": "heartbeat.run.log",
+}
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:46:157
+     44|   });
+     45|   it("checks both explicit task and persisted run sources instead of r…
+     46|     expect(await analyticalLiveEventForReader(db,event({runId,issueId:…
+       |                                                                                                                                                             ^
+     47|   });
+     48|   it.each(["projectId","entityId"])("checks the actual private project…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > checks the actual private project named by projectId
+AssertionError: expected { id: 1, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "companyId": "5d7022a9-8218-457e-8bcf-8b6724341650",
+  "createdAt": "2026-10-22T21:58:47.022Z",
+  "id": 1,
+  "payload": {
+    "name": "PRIVATE project bytes",
+    "projectId": "e34befcd-87c9-4cf2-8f0b-a5dcd32c1e62",
+  },
+  "type": "activity.logged",
+}
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:51:74
+     49|     const value=event({[key]:projectId,...(key==="entityId"?{entityTyp…
+     50|     expect(await analyticalLiveEventForReader(db,value,actor(ownerId))…
+     51|     expect(await analyticalLiveEventForReader(db,value,actor(readerId)…
+       |                                                                          ^
+     52|   });
+     53|   it("does not turn a malformed explicit source into an unscoped publi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > checks the actual private project named by entityId
+AssertionError: expected { id: 1, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "companyId": "549aee5d-a49f-473d-ba87-6c4e6cee4566",
+  "createdAt": "2026-10-22T21:58:47.055Z",
+  "id": 1,
+  "payload": {
+    "entityId": "5902dcda-000d-412b-8e09-6bb82563d41a",
+    "entityType": "project",
+    "name": "PRIVATE project bytes",
+  },
+  "type": "activity.logged",
+}
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:51:74
+     49|     const value=event({[key]:projectId,...(key==="entityId"?{entityTyp…
+     50|     expect(await analyticalLiveEventForReader(db,value,actor(ownerId))…
+     51|     expect(await analyticalLiveEventForReader(db,value,actor(readerId)…
+       |                                                                          ^
+     52|   });
+     53|   it("does not turn a malformed explicit source into an unscoped publi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > does not turn a malformed explicit source into an unscoped public event
+AssertionError: expected { id: 1, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "companyId": "ab5ef59b-8d83-46ba-b8d6-0b315edede0d",
+  "createdAt": "2026-10-22T21:58:47.083Z",
+  "id": 1,
+  "payload": {
+    "body": "Unqualified source bytes",
+    "issueId": "invalid",
+  },
+  "type": "activity.logged",
+}
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:54:127
+     52|   });
+     53|   it("does not turn a malformed explicit source into an unscoped publi…
+     54|     expect(await analyticalLiveEventForReader(db,event({issueId:"inval…
+       |                                                                                                                               ^
+     55|   });
+     56|   it("drops private messages on the actual socket while delivering the…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > drops private messages on the actual socket while delivering the next authorized event
+AssertionError: expected undefined to be 'authorized barrier' // Object.is equality
+
+- Expected:
+"authorized barrier"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:71:43
+     69|       await next;
+     70|       expect(received).toHaveLength(1);
+     71|       expect(received[0]!.payload.marker).toBe("authorized barrier");
+       |                                           ^
+     72|       expect(JSON.stringify(received)).not.toContain(privateIssueId);
+     73|       expect(JSON.stringify(received)).not.toContain("PRIVATE");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  21:58:13
+   Duration  34.19s (transform 9.95s, setup 261ms, import 17.71s, tests 14.01s, environment 0ms)
+

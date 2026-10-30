@@ -1,0 +1,16 @@
+9d4704e90d01fda8cb2ea5db0218feefcc2bbc97a69be37d81987c6f0d8e4da0  ./README.md
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./agent-chat-witness-134-20261027T0322-db-prune.exit
+f979fa59bf2a9f3662afd841e510dff04b8c8fae70651d4c0cb2005f8d1f124d  ./agent-chat-witness-134-20261027T0322-db-prune.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./agent-chat-witness-134-20261027T0322-list-count.exit
+89a39ed715de124667420ea8643b8fe356f85f318d007ba47e901d1877f0c159  ./agent-chat-witness-134-20261027T0322-list-count.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./agent-chat-witness-134-20261027T0322-list.exit
+95537b8e96f0374a34e70964bfb03a8977637bd2f683319cc7477f8bf6d6ff0f  ./agent-chat-witness-134-20261027T0322-list.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./agent-chat-witness-134-20261027T0322-snapshot.exit
+15b573982c8b5c0c07eb47c02a32aae672af77dea946c509d2fa90279bc34974  ./agent-chat-witness-134-20261027T0322-snapshot.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./agent-chat-witness-134-20261027T0322-socket.exit
+6ab7189f059c45be14bef23eedcc7a466ed30241e6922f63a383c06e4ed56ec3  ./agent-chat-witness-134-20261027T0322-socket.log
+19e4077cc6f59a5efc2fbec081c570bcf021322cadd3ed7e4d9fa73ae17e0638  ./agent-chat-witness-134-20261027T0322-source-pins.json
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./agent-chat-witness-134-20261027T0322-syntax.exit
+e05aefa6ac06b2e241cbc5e7b448c269f170d83f3c11c78dffb1db0f494c028e  ./agent-chat-witness-134-20261027T0322-syntax.log
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  ./agent-chat-witness-134-20261027T0322-test.exit
+1bf8368eca2d329c13b14dbd98ccec9f81fa5da7fa527b18c3f3a3ae82cfeea6  ./agent-chat-witness-134-20261027T0322-test.log

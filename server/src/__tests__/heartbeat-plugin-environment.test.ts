@@ -3,16 +3,20 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   createDb,
   environments,
   executionWorkspaces,
   issues,
   plugins,
-  projects,
+  principalPermissionGrants,
   projectWorkspaces,
 } from "@paperclipai/db";
 import {
@@ -22,6 +26,11 @@ import {
 import { heartbeatService } from "../services/heartbeat.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
 import type { PluginWorkerManager } from "../services/plugin-worker-manager.ts";
+import { projectRoutes } from "../routes/projects.js";
+import { errorHandler } from "../middleware/index.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const adapterExecute = vi.hoisted(() => vi.fn(async () => ({
   exitCode: 0,
@@ -60,8 +69,10 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
   let stopDb: (() => Promise<void>) | null = null;
   let db!: ReturnType<typeof createDb>;
   const tempRoots: string[] = [];
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     const started = await startEmbeddedPostgresTestDatabase("heartbeat-plugin-environment");
     stopDb = started.stop;
     db = createDb(started.connectionString);
@@ -78,16 +89,41 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
   afterAll(async () => {
     await db.$client.end();
     await stopDb?.();
+    restoreApiUrl?.();
   });
+
+  async function seedNativeHuman(companyId: string, userId: string) {
+    await db.insert(authUsers).values({ id: userId, name: "Plugin environment owner",
+      email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      status: "active", membershipRole: "owner" });
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+      companyId, principalType: "user" as const, principalId: userId, ...grant,
+    })));
+    return seedNativePasskeySession(db, userId);
+  }
+
+  async function createNativeProject(companyId: string, userId: string, sessionId: string, name: string) {
+    const app = express();
+    app.use(express.json());
+    app.use(((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] }; next(); }) as RequestHandler);
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const response = await request(app).post(`/api/companies/${companyId}/projects`).send({ name });
+    if (response.status !== 201) throw new Error(`Canonical Human Project creation failed: ${response.status}`);
+    return response.body.id as string;
+  }
 
   it("acquires plugin environment leases through the heartbeat execution path", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const workspaceId = randomUUID();
     const environmentId = randomUUID();
     const pluginId = randomUUID();
     const pluginKey = `acme.environments.${pluginId}`;
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "paperclip-plugin-env-heartbeat-"));
     tempRoots.push(workspaceRoot);
     const workerManager = {
@@ -113,18 +149,12 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Plugin Environment Heartbeat",
-      status: "active",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const humanSessionId = await seedNativeHuman(companyId, responsibleUserId);
+    projectId = await createNativeProject(companyId, responsibleUserId, humanSessionId, "Plugin Environment Heartbeat");
     await db.insert(projectWorkspaces).values({
       id: workspaceId,
       companyId,
@@ -251,8 +281,10 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
     const pluginKey = `acme.environments.${pluginId}`;
     const companyAId = randomUUID();
     const companyBId = randomUUID();
-    const projectAId = randomUUID();
-    const projectBId = randomUUID();
+    let projectAId: string;
+    let projectBId: string;
+    const responsibleUserAId = randomUUID();
+    const responsibleUserBId = randomUUID();
     const workspaceAId = randomUUID();
     const workspaceBId = randomUUID();
     const agentAId = randomUUID();
@@ -347,7 +379,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
         name: "Acme A",
         issuePrefix: `T${companyAId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
         status: "active",
-        defaultResponsibleUserId: "responsible-user-a",
+        defaultResponsibleUserId: responsibleUserAId,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -356,29 +388,16 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
         name: "Acme B",
         issuePrefix: `T${companyBId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
         status: "active",
-        defaultResponsibleUserId: "responsible-user-b",
+        defaultResponsibleUserId: responsibleUserBId,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
     ]);
-    await db.insert(projects).values([
-      {
-        id: projectAId,
-        companyId: companyAId,
-        name: "Company A Project",
-        status: "active",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      {
-        id: projectBId,
-        companyId: companyBId,
-        name: "Company B Project",
-        status: "active",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
+    const [humanSessionAId, humanSessionBId] = await Promise.all([
+      seedNativeHuman(companyAId, responsibleUserAId), seedNativeHuman(companyBId, responsibleUserBId),
     ]);
+    projectAId = await createNativeProject(companyAId, responsibleUserAId, humanSessionAId, "Company A Project");
+    projectBId = await createNativeProject(companyBId, responsibleUserBId, humanSessionBId, "Company B Project");
     await db.insert(projectWorkspaces).values([
       {
         id: workspaceAId,
@@ -482,7 +501,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
 
   it("ignores stale non-reused workspace environment config in favor of the assignee selection", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const workspaceId = randomUUID();
     const oldEnvironmentId = randomUUID();
     const newEnvironmentId = randomUUID();
@@ -490,6 +509,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
     const pluginKey = `acme.environments.${pluginId}`;
     const agentId = randomUUID();
     const issueId = randomUUID();
+    const responsibleUserId = randomUUID();
     const staleExecutionWorkspaceId = randomUUID();
     const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "paperclip-plugin-env-issue-"));
     tempRoots.push(workspaceRoot);
@@ -520,18 +540,12 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Plugin Environment Issue",
-      status: "active",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const humanSessionId = await seedNativeHuman(companyId, responsibleUserId);
+    projectId = await createNativeProject(companyId, responsibleUserId, humanSessionId, "Plugin Environment Issue");
     await db.insert(projectWorkspaces).values({
       id: workspaceId,
       companyId,
@@ -647,7 +661,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
       title: "Environment matrix: e2b / codex_local",
       status: "in_progress",
       priority: "medium",
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       assigneeAgentId: agentId,
       executionWorkspaceId: staleExecutionWorkspaceId,
       executionWorkspaceSettings: {

@@ -1,13 +1,15 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(
     true,
   );
   return response.json();
 }
-// Real built UI/native local-board integration. The native published wait graph
+// Real built UI/authenticated-human integration. The native published wait graph
 // is an explicit software prerequisite, not customer publication qualification.
 test("customer stop recovers a lost native admission after reload without repeating effects", async ({
   page,
@@ -17,6 +19,8 @@ test("customer stop recovers a lost native admission after reload without repeat
   const original = await json(
     await request.get("/api/instance/settings/experimental"),
   );
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedUserId = encodeURIComponent(session.user.id);
   const enabled = {
     enableWorkflowsV1: true,
     enableWorkflowBuilderV1: true,
@@ -89,7 +93,7 @@ test("customer stop recovers a lost native admission after reload without repeat
     );
     runId = waiting.run.id;
     expect(waiting.run.status).toBe("waiting");
-    const endpoint = `${base}/workflow-runs/${runId}/experience/stop?expectedUserId=local-board`;
+    const endpoint = `${base}/workflow-runs/${runId}/experience/stop?expectedUserId=${expectedUserId}`;
     const commands: Record<string, unknown>[] = [];
     let accepted: Record<string, unknown> | undefined;
     await page.route(`**${endpoint}`, async (route) => {
@@ -146,7 +150,7 @@ test("customer stop recovers a lost native admission after reload without repeat
     expect(commands).toHaveLength(1);
     const recovered = await json(
       await request.get(
-        `${base}/workflow-runs/${runId}/experience?expectedUserId=local-board`,
+        `${base}/workflow-runs/${runId}/experience?expectedUserId=${expectedUserId}`,
       ),
     );
     expect(recovered.stopReceipt).toEqual(accepted);

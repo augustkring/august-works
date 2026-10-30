@@ -1,7 +1,7 @@
 import {assertLearningCandidateAnalyticalSources} from "./learning/learning-analytical-sources.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "./analytical-privacy.js";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { agents, approvals, companyMemberships, goals, issues, issueApprovals, issueRelations, projects, projectMilestones, projectRoadmapProposals, projectScheduleBaselines, type Db } from "@paperclipai/db";
 import { updateMilestoneSchema, createMilestoneSchema, roadmapPolicySchema, roadmapProposalSchema, taskForecastPatchSchema, type ProjectRoadmap, type RoadmapTask } from "@paperclipai/shared";
 import type { z } from "zod";
@@ -78,7 +78,10 @@ export function projectControlService(db: Db) {
     get: (actor: AuthorizationActor, companyId: string, projectId: string) => read(db, actor, companyId, projectId),
     policy: async (actor: AuthorizationActor, companyId: string, projectId: string, raw: z.infer<typeof roadmapPolicySchema>) => {
       v5HumanActorId(actor); await assertV5Authorization(db, actor, companyId, "users:manage_permissions"); const policy = roadmapPolicySchema.parse(raw);
-      return withV5ActivityTransaction(db, async (tx, publications) => { await project(tx, actor, companyId, projectId, true); await tx.update(projects).set({ roadmapPolicy: policy, updatedAt: new Date() }).where(eq(projects.id, projectId)); await logActivity(tx, { companyId, actorType: "user", actorId: v5HumanActorId(actor), action: "project.roadmap_policy_updated", entityType: "project", entityId: projectId }, publications); return policy; });
+      return withV5ActivityTransaction(db, async (tx, publications) => { await project(tx, actor, companyId, projectId, true); await tx.update(projects).set({ roadmapPolicy: policy,
+        payloadSourceSnapshot: sql`case when ${projects.roadmapPolicy} is distinct from ${JSON.stringify(policy)}::jsonb
+          then null else ${projects.payloadSourceSnapshot} end`, updatedAt: new Date(),
+      }).where(and(eq(projects.companyId, companyId), eq(projects.id, projectId))); await logActivity(tx, { companyId, actorType: "user", actorId: v5HumanActorId(actor), action: "project.roadmap_policy_updated", entityType: "project", entityId: projectId }, publications); return policy; });
     },
     createMilestone: async (actor: AuthorizationActor, companyId: string, projectId: string, raw: z.infer<typeof createMilestoneSchema>) => {
       const userId = v5HumanActorId(actor), input = createMilestoneSchema.parse(raw);
@@ -170,7 +173,12 @@ export function projectControlService(db: Db) {
         if (policy.fieldOwnership.forecast !== "internal" || actor.type === "agent" && !policy.allowAgentForecast) throw forbidden("Forecast updates are disabled by the project ownership policy");
         await task(tx, actor, companyId, projectId, issueId, input.expectedUpdatedAt);
         const { expectedUpdatedAt: _expected, ...forecast } = input;
-        const [updated] = await tx.update(issues).set({ ...forecast, forecastStartAt: input.forecastStartAt ? new Date(input.forecastStartAt) : null, forecastEndAt: input.forecastEndAt ? new Date(input.forecastEndAt) : null, updatedAt: new Date() }).where(eq(issues.id, issueId)).returning();
+        const [updated] = await tx.update(issues).set({ ...forecast,
+          payloadSourceSnapshot: sql`case when ${issues.forecastReason} is distinct from ${input.forecastReason}
+            then null else ${issues.payloadSourceSnapshot} end`,
+          forecastStartAt: input.forecastStartAt ? new Date(input.forecastStartAt) : null,
+          forecastEndAt: input.forecastEndAt ? new Date(input.forecastEndAt) : null, updatedAt: new Date(),
+        }).where(and(eq(issues.companyId, companyId), eq(issues.projectId, projectId), eq(issues.id, issueId))).returning();
         await logActivity(tx, { companyId, actorType: actor.type === "agent" ? "agent" : "user", actorId: actor.agentId ?? v5HumanActorId(actor), action: "project.forecast_updated", entityType: "issue", entityId: issueId, details: { projectId, confidence: input.forecastConfidence } }, publications); return updated!;
       });
     },

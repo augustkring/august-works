@@ -305,10 +305,48 @@ describe("HTTP logger redaction", () => {
       token: "[REDACTED]",
     });
     expect(log.reqParams).toEqual({ id: "issue-1" });
-    expect(log.errorContext).toEqual({
-      name: "Error",
-      message: "ordinary diagnostic",
+    expect(log.errorContext).toEqual({ type: "Error" });
+  });
+
+  it("keeps background-style Drizzle errors content-free on ordinary HTTP routes", async () => {
+    const canaries = [
+      "db-message-private-profile-marker",
+      "sql-query-private-marker",
+      "drizzle-parameter-private-marker",
+      "stack-private-path-marker",
+    ];
+    const chunks: string[] = [];
+    const stream = new Writable({
+      write(chunk, _encoding, callback) { chunks.push(chunk.toString()); callback(); },
     });
+    const app = express();
+    app.use(createHttpLogger(pino({ redact: [...HTTP_LOG_REDACT_PATHS] }, stream)));
+    app.get("/api/diagnostics", (_req, res) => {
+      const databaseError = Object.assign(new Error(canaries[0]!), {
+        code: "23505",
+        query: `insert ${canaries[1]}`,
+        params: [canaries[2]],
+        stack: `Error: ${canaries[0]}\n    at query (/private/${canaries[3]}:51:9)`,
+      });
+      const drizzleError = Object.assign(new Error(canaries[0]!), {
+        name: "DrizzleQueryError",
+        cause: databaseError,
+      });
+      (res as any).err = drizzleError;
+      res.status(500).end();
+    });
+    await request(app).get("/api/diagnostics");
+    const output = chunks.join("");
+    for (const canary of canaries) expect(output).not.toContain(canary);
+    const log = JSON.parse(output.trim());
+    expect(log.msg).toMatch(/500 — request failed \(Error\)$/);
+    expect(log.err).toMatchObject({
+      type: "Error",
+      cause: { type: "DatabaseError", sqlState: "23505", location: { line: 51, column: 9 } },
+    });
+    expect(log.err).not.toHaveProperty("query");
+    expect(log.err).not.toHaveProperty("params");
+    expect(log.err).not.toHaveProperty("stack");
   });
 
   it("defines the HTTP auth and cookie header paths that must be redacted", () => {

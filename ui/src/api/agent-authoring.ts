@@ -18,10 +18,14 @@ import {
   agentDraftTestPacketSchema,
   agentDraftPublicationReviewSchema,
   agentDraftPublicationReceiptSchema,
+  agentModelMigrationMonitorReviewSchema,
+  agentModelMigrationMonitorReceiptSchema,
+  agentModelMigrationMonitorCommandSchema,
   agentPackageSetupReviewSchema,
   agentPackageSetupReceiptSchema,
   type AgentPackageSetupCommand,
   type AgentDraftPublicationCommand,
+  type AgentModelMigrationMonitorCommand,
   type AgentDraftTestCommand,
   type VerificationReviewInput,
   type AgentDraftPrepare,
@@ -94,6 +98,23 @@ export const agentAuthoringApi = {
   },
   publish: async (company: string, principal: string, id: string, command: AgentDraftPublicationCommand) =>
     agentDraftPublicationReceiptSchema.parse(await api.post(scope(`${root(company)}/${id}/publish`, principal), command)),
+  modelMigrationMonitorReview: async (company: string, principal: string, id: string, revisionId: string, signal?: AbortSignal) =>
+    agentModelMigrationMonitorReviewSchema.parse(await api.get(scope(`${root(company)}/${id}/model-migrations/${revisionId}/monitor-review`, principal),
+      { signal, cache: "no-store" })),
+  currentModelMigrationMonitorReview: async (company: string, principal: string, id: string, signal?: AbortSignal) => {
+    const value = await api.get(scope(`${root(company)}/${id}/model-migrations/current/monitor-review`, principal), { signal, cache: "no-store" });
+    return value === null ? null : agentModelMigrationMonitorReviewSchema.parse(value);
+  },
+  modelMigrationMonitorReceipt: async (company: string, principal: string, id: string, revisionId: string, signal?: AbortSignal) => {
+    const value = await api.get(scope(`${root(company)}/${id}/model-migrations/${revisionId}/monitor-receipt`, principal), { signal, cache: "no-store" });
+    return value === null ? null : agentModelMigrationMonitorReceiptSchema.parse(value);
+  },
+  recordModelMigrationMonitor: async (company: string, principal: string, id: string, revisionId: string, raw: AgentModelMigrationMonitorCommand) => {
+    const command = agentModelMigrationMonitorCommandSchema.parse(raw);
+    const value = agentModelMigrationMonitorReceiptSchema.parse(await api.post(scope(`${root(company)}/${id}/model-migrations/${revisionId}/monitor`, principal), command));
+    if (value.requestId !== command.requestId || value.migrationRevisionId !== revisionId) throw new Error("Model monitoring receipt changed");
+    return value;
+  },
   testVerificationPacket: async (company: string, principal: string, id: string, requestId: string, signal?: AbortSignal) =>
     agentDraftTestPacketSchema.parse(await api.get(scope(`${root(company)}/${id}/tests/${requestId}/verification-packet`, principal), { signal, cache: "no-store" })),
   verifyTest: async (company: string, principal: string, id: string, requestId: string, input: VerificationReviewInput) =>

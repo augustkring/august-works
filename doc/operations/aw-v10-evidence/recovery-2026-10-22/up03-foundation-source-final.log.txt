@@ -1,0 +1,17 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[00:58:15] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"f5f0dece-05ec-4a2d-a87c-93def7fe5f66","actorAgentId":"39d83ff2-ef99-4783-ade8-06163650feca","responsibleUserId":"e7efa208-65e7-4192-a1ce-1a3a854712fa"}[39m
+[00:58:15] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"foundation:read","resourceType":"company","companyId":"f5f0dece-05ec-4a2d-a87c-93def7fe5f66","actorAgentId":"39d83ff2-ef99-4783-ade8-06163650feca","responsibleUserId":"e7efa208-65e7-4192-a1ce-1a3a854712fa"}[39m
+[00:58:15] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"d765c63f-21ce-4147-ae01-ae673d6ef43f","actorAgentId":"de4a7487-f38e-4d62-bf81-80790f81e2bb","responsibleUserId":"54d9dbd8-5a43-4b27-9b28-b8f4b69ce094"}[39m
+[00:58:45] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:read","resourceType":"issue","companyId":"09581fc1-ff12-4139-9180-97d115a964f6","actorAgentId":"7857e94f-d625-4b5a-9c89-b954d060390d","responsibleUserId":"user-6fb25d2c-9330-42b8-b45d-20a043546654"}[39m
+[00:58:45] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:read","resourceType":"issue","companyId":"09581fc1-ff12-4139-9180-97d115a964f6","actorAgentId":"7857e94f-d625-4b5a-9c89-b954d060390d","responsibleUserId":"user-6fb25d2c-9330-42b8-b45d-20a043546654"}[39m
+
+ Test Files  2 passed (2)
+      Tests  16 passed | 82 skipped (98)
+   Start at  00:57:49
+   Duration  57.64s (transform 9.55s, setup 294ms, import 19.74s, tests 36.82s, environment 0ms)
+

@@ -1,0 +1,57 @@
+{
+  "scope": "Selected Task/Memory Context snapshot producer and original retained Memory root integrity only",
+  "sources": {
+    "server/src/services/context/context-manifest.ts": "652b971adfb417c02d1e2172da961e499bae7d3b518a576bdc08c7f14b232a67",
+    "server/src/services/context/context-manifest.test.ts": "1490e7a9897c1150925be267c3bf2e572e3165a21cf23eb2f2e799f5467c48e1"
+  },
+  "fixtureFailure": {
+    "actualExit": 1,
+    "failed": 2,
+    "durationSeconds": 45.92,
+    "reason": "Memory fixture used non-native sourceClass memory; corrected to accepted_memory, no production guard change",
+    "log": "up03-context-selected-snapshots-red.log",
+    "test": "up03-context-selected-snapshots-fixture-test.txt"
+  },
+  "genuineBaseline": {
+    "actualExit": 1,
+    "failed": 1,
+    "passed": 1,
+    "filtered": 4,
+    "durationSeconds": 54.62,
+    "reason": "Known selected Task/Memory snapshots silently stored NULL; unknown history case remains positive",
+    "log": "up03-context-selected-snapshots-native-red.log",
+    "exactTest": "up03-context-selected-snapshots-native-red-test.txt"
+  },
+  "currentProducer": {
+    "actualExit": 0,
+    "passed": 6,
+    "durationSeconds": 64.21,
+    "sourcePinsUnchanged": true,
+    "log": "up03-context-selected-snapshots-green.log",
+    "pins": "up03-context-selected-snapshots-green-pins.txt"
+  },
+  "currentDatabase": {
+    "actualExit": 0,
+    "passed": 13,
+    "checkpoint": "up03-context-memory-root-receipt.json"
+  },
+  "currentServerCompiler": {
+    "actualExit": 0,
+    "log": "up03-context-selected-snapshots-server-types.log"
+  },
+  "broaderEngineAttempt": {
+    "actualExit": 1,
+    "failed": 7,
+    "durationSeconds": 73.66,
+    "log": "up03-context-selected-snapshots-engine.log",
+    "reason": "Six original engine fixtures omit actual accountable run; workflow case failed status needs diagnosis. Separate fixture repair is ongoing; no green engine claim."
+  },
+  "limits": [
+    "Structural snapshot fixtures, not complete native producers, current source permissions or transport.",
+    "Task snapshots enter immutable selected items under existing source row/version pins; all expected direct/derived/learned Memory roots retain then-selected snapshot, with direct Memory items carrying the same snapshot.",
+    "Existing analytical retention may append separate NULL/hash-version roots; other root producers remain unknown until explicitly instrumented.",
+    "Foundation, annotations, workflow inputs, reviews, dynamic tools, retained sessions and final dispatch still need original source capture and qualification.",
+    "Current intrinsic policy/erasure remains independently revocable; graph still follows dynamic later Contexts and original copy/temporal regressions remain open.",
+    "No constructor stamps protocol1 or complete receipt; no private HTTP/UI admission release."
+  ]
+}

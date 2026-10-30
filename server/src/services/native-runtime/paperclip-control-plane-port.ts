@@ -76,14 +76,22 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
   readonly #db: Db;
   readonly #binding: PaperclipControlPlaneBinding;
   #sessionId: string | null = null;
-  readonly #onCommittedEvent?: (event: PrpEvent) => Promise<void>;
+  readonly #onCommittedEvent?: (
+    event: PrpEvent,
+    markDiagnosticStage?: (stage: string) => void,
+  ) => Promise<void>;
   readonly #onDuplicateEvent?: (event: PrpEvent) => Promise<void>;
+  readonly #serializeTransaction: <T>(operation: () => Promise<T>) => Promise<T>;
 
   constructor(
     db: Db,
     binding: PaperclipControlPlaneBinding,
     options: {
-      onCommittedEvent?: (event: PrpEvent) => Promise<void>;
+      serializeTransaction?: <T>(operation: () => Promise<T>) => Promise<T>;
+      onCommittedEvent?: (
+        event: PrpEvent,
+        markDiagnosticStage?: (stage: string) => void,
+      ) => Promise<void>;
       onDuplicateEvent?: (event: PrpEvent) => Promise<void>;
     } = {},
   ) {
@@ -91,6 +99,7 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
     this.#binding = structuredClone(binding);
     this.#onCommittedEvent = options.onCommittedEvent;
     this.#onDuplicateEvent = options.onDuplicateEvent;
+    this.#serializeTransaction = options.serializeTransaction ?? (operation => operation());
   }
 
   #matchesPersistedBinding(run: typeof heartbeatRuns.$inferSelect): boolean {
@@ -183,10 +192,30 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
   }
 
   async appendEvent(value: NativeRunEvent | PrpEvent) {
+    const concurrentChatDiagnostics =
+      process.env.PAPERCLIP_NATIVE_CONCURRENT_CHAT_DIAGNOSTICS === "1";
+    const appendInvocationStartedAt = Date.now();
+    if (concurrentChatDiagnostics) {
+      process.stderr.write(`${JSON.stringify({
+        diagnostic: "native_concurrent_chat_append_event_entry",
+        runId: this.#binding.runId,
+        stage: "port_entry",
+      })}\n`);
+    }
     if (!isPrpEvent(value)) throw new Error("native_legacy_event_not_supported");
     const validated = validatePrpEvent(value);
     if (!validated.ok) throw new Error(`native_event_schema_invalid:${validated.issues[0]?.message ?? "unknown"}`);
     const event = validated.event;
+    if (concurrentChatDiagnostics) {
+      process.stderr.write(`${JSON.stringify({
+        diagnostic: "native_concurrent_chat_append_event_entry",
+        runId: this.#binding.runId,
+        eventType: event.eventType,
+        sourceSeq: event.sourceSeq,
+        stage: "event_schema_validated",
+        validationElapsedMs: Date.now() - appendInvocationStartedAt,
+      })}\n`);
+    }
     if (event.runId !== this.#binding.runId || (this.#sessionId && event.normalizedSessionId !== this.#sessionId)) {
       throw new Error("native_event_binding_mismatch");
     }
@@ -198,47 +227,122 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
           event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId)) {
       throw new Error("native_event_source_binding_mismatch");
     }
-    if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId) {
-      await assertNativeAnalyticalRunPayloadAccess(this.#db, this.#binding.companyId, this.#binding.runId);
-    }
-    const persisted = await appendHeartbeatRunEvent(this.#db, {
-      companyId: this.#binding.companyId,
-      runId: this.#binding.runId,
-      agentId: this.#binding.agentId,
-      eventType: event.eventType,
-      stream: "system",
-      level: event.eventType.includes("failed") ? "error" : "info",
-      payload: { prpEvent: event as unknown as Record<string, unknown> },
-      nativeSource: {
-        sourceInstanceId: event.sourceInstanceId,
-        sourceEventId: event.sourceEventId,
-        sourceSeq: event.sourceSeq,
-        protocolSchemaVersion: event.schemaVersion,
-        canonicalPayload: event as unknown as Record<string, unknown>,
-      },
-    });
-    if (persisted.disposition === "committed") {
-      publishChatPublicationCommitSignal({
-        companyId: this.#binding.companyId,
-        issueId: this.#binding.issueId,
-        runId: this.#binding.runId,
-        agentId: this.#binding.agentId,
-        seq: persisted.row.seq,
-        eventType: event.eventType,
-      });
-      await this.#onCommittedEvent?.(event);
-    } else {
-      // A recovered runner may replay the event whose durable side effects
-      // parked the prior attempt. Do not repeat those effects, but let the
-      // embedding runtime refresh observational state before appendEvent
-      // returns to its synchronous governed-wait boundary.
-      await this.#onDuplicateEvent?.(event);
-    }
-    return {
-      cursor: persisted.row.seq,
-      highestContiguousSourceSeq: persisted.highestContiguousSourceSeq,
-      disposition: persisted.disposition,
+    const diagnosticsEnabled =
+      process.env.PAPERCLIP_NATIVE_CONCURRENT_CHAT_DIAGNOSTICS === "1";
+    const diagnosticStartedAt = Date.now();
+    let diagnosticStage = "before_db_transaction";
+    let diagnosticStageStartedAt = Date.now();
+    let diagnosticReportCount = 0;
+    let sourceAccessElapsedMs = 0;
+    let eventWriteElapsedMs = 0;
+    let transactionElapsedMs = 0;
+    let callbackElapsedMs = 0;
+    let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
+    const markDiagnosticStage = (stage: string) => {
+      diagnosticStage = stage;
+      diagnosticStageStartedAt = Date.now();
     };
+    if (diagnosticsEnabled) {
+      diagnosticTimer = setInterval(() => {
+        diagnosticReportCount += 1;
+        if (diagnosticReportCount > 12) {
+          if (diagnosticTimer !== undefined) clearInterval(diagnosticTimer);
+          diagnosticTimer = undefined;
+          return;
+        }
+        process.stderr.write(`${JSON.stringify({
+          diagnostic: "native_concurrent_chat_append_event_progress",
+          runId: this.#binding.runId,
+          eventType: event.eventType,
+          sourceSeq: event.sourceSeq,
+          sourceKind: event.sourceKind,
+          stage: diagnosticStage,
+          stageElapsedMs: Date.now() - diagnosticStageStartedAt,
+          elapsedMs: Date.now() - diagnosticStartedAt,
+        })}\n`);
+      }, 5_000);
+      diagnosticTimer.unref?.();
+    }
+    try {
+      const transactionStartedAt = Date.now();
+      const persisted = await this.#serializeTransaction(() => this.#db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db;
+        markDiagnosticStage("transaction_source_access_check");
+        if (event.sourceKind !== "control_plane" || event.sourceInstanceId === this.#binding.internalDraftSourceInstanceId) {
+          const sourceAccessStartedAt = Date.now();
+          // This performs a fresh mixed run+native-Task source review for every
+          // provider event; the exact current owner proof stays in this append
+          // transaction before any event can become durable.
+          await assertNativeAnalyticalRunPayloadAccess(tx, this.#binding.companyId, this.#binding.runId);
+          sourceAccessElapsedMs = Date.now() - sourceAccessStartedAt;
+        }
+        markDiagnosticStage("transaction_append_run_event");
+        const eventWriteStartedAt = Date.now();
+        const result = await appendHeartbeatRunEvent(tx, {
+          companyId: this.#binding.companyId,
+          runId: this.#binding.runId,
+          agentId: this.#binding.agentId,
+          eventType: event.eventType,
+          stream: "system",
+          level: event.eventType.includes("failed") ? "error" : "info",
+          payload: { prpEvent: event as unknown as Record<string, unknown> },
+          nativeSource: {
+            sourceInstanceId: event.sourceInstanceId,
+            sourceEventId: event.sourceEventId,
+            sourceSeq: event.sourceSeq,
+            protocolSchemaVersion: event.schemaVersion,
+            canonicalPayload: event as unknown as Record<string, unknown>,
+          },
+        });
+        eventWriteElapsedMs = Date.now() - eventWriteStartedAt;
+        markDiagnosticStage("transaction_callback_return");
+        return result;
+      }));
+      transactionElapsedMs = Date.now() - transactionStartedAt;
+      markDiagnosticStage("after_db_commit");
+      const callbackStartedAt = Date.now();
+      if (persisted.disposition === "committed") {
+        publishChatPublicationCommitSignal({
+          companyId: this.#binding.companyId,
+          issueId: this.#binding.issueId,
+          runId: this.#binding.runId,
+          agentId: this.#binding.agentId,
+          seq: persisted.row.seq,
+          eventType: event.eventType,
+        });
+        markDiagnosticStage("on_committed_event");
+        await this.#onCommittedEvent?.(event, markDiagnosticStage);
+      } else {
+        // A recovered runner may replay the event whose durable side effects
+        // parked the prior attempt. Do not repeat those effects, but let the
+        // embedding runtime refresh observational state before appendEvent
+        // returns to its synchronous governed-wait boundary.
+        markDiagnosticStage("on_duplicate_event");
+        await this.#onDuplicateEvent?.(event);
+      }
+      callbackElapsedMs = Date.now() - callbackStartedAt;
+      markDiagnosticStage("append_event_complete");
+      if (diagnosticsEnabled) {
+        process.stderr.write(`${JSON.stringify({
+          diagnostic: "native_concurrent_chat_append_event_timing",
+          runId: this.#binding.runId,
+          eventType: event.eventType,
+          sourceSeq: event.sourceSeq,
+          sourceAccessElapsedMs,
+          eventWriteElapsedMs,
+          transactionElapsedMs,
+          callbackElapsedMs,
+          totalElapsedMs: Date.now() - diagnosticStartedAt,
+        })}\n`);
+      }
+      return {
+        cursor: persisted.row.seq,
+        highestContiguousSourceSeq: persisted.highestContiguousSourceSeq,
+        disposition: persisted.disposition,
+      };
+    } finally {
+      if (diagnosticTimer !== undefined) clearInterval(diagnosticTimer);
+    }
   }
 
   async replayEvents(input: ReplayControlPlaneEventsInput) {

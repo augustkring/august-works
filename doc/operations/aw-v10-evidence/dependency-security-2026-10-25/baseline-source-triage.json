@@ -1,0 +1,269 @@
+{
+  "schema": "bounded-production-dependency-triage.v1",
+  "date": "2026-10-25",
+  "scope": "Read-only triage of /workspace/v10-preparation/v10-production-dependency-audit.json; no dependency or source changes, network/provider calls, or tests.",
+  "audit": {
+    "commandEvidence": "Caller reports pnpm 9 production audit exited 1.",
+    "file": "/workspace/v10-preparation/v10-production-dependency-audit.json",
+    "summary": {
+      "dependencies": 1355,
+      "low": 6,
+      "moderate": 16,
+      "high": 14,
+      "critical": 1,
+      "advisoryRecords": 35,
+      "findings": 37
+    },
+    "note": "The audit labels all dependencies production. Static source-path review classifies development/tooling and unused transport findings separately; package flags alone are not treated as reachability proof."
+  },
+  "baseline": {
+    "commit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "commitDate": "2026-10-16",
+    "result": "All reviewed vulnerable package versions below were already in the baseline lockfile, except the current branch adds an explicit @modelcontextprotocol/sdk 1.31.0 dependency declaration to paperclip-runner. The SDK version was already present transitively through claude-agent-acp. The branch changes MCP server packages to @modelcontextprotocol/server 2.4.0, which is beyond the listed 2.x affected range."
+  },
+  "findings": [
+    {
+      "package": "body-parser",
+      "current": "2.3.0",
+      "baseline": "2.3.0",
+      "advisories": [
+        "1243074"
+      ],
+      "classification": "Relevant, remotely reachable process-crash condition.",
+      "evidence": [
+        "server/src/app.ts:607-623 installs express.json globally before route/auth middleware; default inflate remains enabled; ordinary JSON limit is 10mb.",
+        "server/src/routes/projects.ts:263 validates repositoryIds before handler assertBoard; repositoryIds is an unbounded Zod array.",
+        "server/package.json uses Express 5.1; body-parser is the Express JSON parser transitive dependency."
+      ],
+      "advisory_condition": "Compressed request with valid frame followed by trailing bytes can emit an unhandled decoder error after parsing; auth is not needed when parser is global and runs before routing.",
+      "minimal_candidate": "Resolve body-parser to >=2.4.0 (prefer the smallest compatible pnpm override/lock update). This keeps compressed-body behavior and is a patch-compatible Express 5 body-parser update. Alternative inflate:false is more behavior-changing and may break clients sending compressed JSON.",
+      "priority": "P1"
+    },
+    {
+      "package": "zod",
+      "current": [
+        "4.4.3",
+        "4.1.11",
+        "3.25.76"
+      ],
+      "baseline": [
+        "4.4.3",
+        "4.1.11",
+        "3.25.76"
+      ],
+      "advisories": [
+        "1243066"
+      ],
+      "classification": "Relevant to untrusted request validation; multiple unbounded collection schemas are reachable. High priority, but preserve major-version peer compatibility.",
+      "evidence": [
+        "server/src/routes/projects.ts:263 parses an unbounded array of regex-constrained repository IDs before handler authorization.",
+        "server/src/middleware/validate.ts:5-9 synchronously parses request bodies and lets Zod construct all errors.",
+        "server/src/app.ts:607-623 allows up to 10mb JSON globally; company import has a separate 64mb JSON limit.",
+        "server/src/routes/cases-schemas.ts and server/src/routes/pipelines-schemas.ts contain records/arrays; several shared company-portability arrays have no .max() (the import path is bounded by body size, not collection count)."
+      ],
+      "advisory_condition": "Large invalid arrays against an unconstrained array schema can accumulate validation issue objects and exhaust memory. Current branch has Zod 4.4.3 widely; audit also finds 4.1.11 and 3.25.76 under dependencies.",
+      "minimal_candidate": "Advance Zod 4 consumers to >=4.6.6 via compatible minor version/lock resolution; do not force Zod 4 onto the Cursor SDK's Zod 3 peer. The audit metadata reports all versions below 4.6.6 vulnerable and provides no separate patched Zod 3 range, so the Zod 3.25.76 Cursor SDK edge remains unresolved until its vendor range/backport is established. Independently add bounds to the concrete unbounded public request collections (at minimum repositoryIds) as defense in depth; a body-byte cap alone does not cap array issue count.",
+      "priority": "P1"
+    },
+    {
+      "package": "dompurify",
+      "current": "3.4.16",
+      "baseline": "3.4.16",
+      "advisories": [
+        "1242880",
+        "1242881",
+        "1242882"
+      ],
+      "classification": "Critical audit finding but listed exploit preconditions are absent in current consumers; still recommend the one-patch update because it is a security sanitizer on untrusted input.",
+      "evidence": [
+        "server/src/routes/assets.ts: sanitizeSvgBuffer sanitizes uploaded company-logo SVG with USE_PROFILES, then reparses as image/svg+xml; it does not set SAFE_FOR_TEMPLATES, RETURN_DOM, RETURN_DOM_FRAGMENT, IN_PLACE, or PARSER_MEDIA_TYPE application/xhtml+xml.",
+        "server/src/services/announcement-animation.ts sanitizes a bounded untrusted HTML/CSS/SVG string to a string result; it does not enable those modes or install hooks."
+      ],
+      "advisory_condition": "Critical advisory requires SAFE_FOR_TEMPLATES together with a DOM-returning mode and attacker DOM/shadow-root input; current calls use string output and no SAFE_FOR_TEMPLATES. Other listed issues require IN_PLACE hooks or XHTML parser mode/allowlist, neither used here.",
+      "minimal_candidate": "Update dompurify to 3.4.17, the patched minor release, and rerun focused SVG asset/announcement sanitization tests. This is narrowly scoped and preserves current call options.",
+      "priority": "P2 hardening; no present critical exploit path found"
+    },
+    {
+      "package": "multer",
+      "current": "2.4.0",
+      "baseline": "2.4.0",
+      "advisories": [
+        "1243083"
+      ],
+      "classification": "Current application configuration does not meet the vulnerable condition.",
+      "evidence": [
+        "Multer call sites in server/src/routes/assets.ts, companies.ts, issues.ts, customer-feedback.ts, and cases.ts use memoryStorage and limits; source search found no fileFilter callback."
+      ],
+      "advisory_condition": "Crash requires an asynchronous fileFilter still pending while request parsing is torn down. No Multer instance in the application defines fileFilter.",
+      "minimal_candidate": "No emergency source workaround required. Updating to >=2.5.0 is a small compatible hardening option, but lower priority than body-parser/Zod; retain the no-async-fileFilter invariant if staying on 2.4.0.",
+      "priority": "P3 / condition absent"
+    },
+    {
+      "package": "follow-redirects",
+      "current": "1.16.0",
+      "baseline": "1.16.0",
+      "advisories": [
+        "1242604",
+        "1242605"
+      ],
+      "classification": "Credential-bearing Slack/Teams client dependency; reported array/custom-header vectors were not found in this repository's configuration.",
+      "evidence": [
+        "server/src/services/chat-sdk-runtime.ts:1361-1375 builds Slack webClientOptions from retry/timeout only and passes credential config to the adapter; no header array or sensitiveHeaders option is configured.",
+        "The source tree has no direct follow-redirects or axios imports. Outbound SDK targets can be configured, but Axios supplies its normalized object-like headers; the advisories' array-form-header condition is not evidenced in the app path.",
+        "The second advisory concerns caller-declared sensitiveHeaders with regex metacharacters; no such option is supplied. Built-in Authorization/Cookie names are unaffected by that regex issue."
+      ],
+      "advisory_condition": "Cross-origin redirect must be followed with array-form headers for 1242604; 1242605 requires custom sensitiveHeaders with metacharacters. Neither condition is present in the Paperclip caller configuration found.",
+      "minimal_candidate": "Update the lock resolution to >=1.16.1 as a low-risk patch because Slack/Teams calls carry credentials and the library is on that egress path. Keep redirect/endpoint policy unchanged; do not change SDK versions.",
+      "priority": "P2 prudent patch, not demonstrated exploitable"
+    },
+    {
+      "package": "@modelcontextprotocol/sdk",
+      "current": "1.31.0",
+      "baseline": "1.31.0 transitively via Claude ACP",
+      "advisories": [
+        "1242628",
+        "1242630",
+        "1242649",
+        "1242667"
+      ],
+      "classification": "Affected SDK code exists in dependency graph, but affected HTTP transports/server features are not used by current source paths reviewed.",
+      "evidence": [
+        "rg source audit found no StreamableHTTPClientTransport, SSEClientTransport, taskStore, requireBearerAuth, verifyBearerToken, or direct @modelcontextprotocol/sdk import in packages/adapters/claude-local or paperclip-runner source.",
+        "packages/mcp-server/src/index.ts creates @modelcontextprotocol/server McpServer and packages/mcp-server/src/stdio.ts serves it over stdio only; package version is ^2.4.0, beyond the listed server affected range (<=2.2.0 for memory exhaustion/auth, <=2.3.0 for task issue).",
+        "packages/adapters/claude-local declares SDK 1.31.0; its runtime transport is Claude Agent ACP, with no application-owned MCP HTTP server/client path found."
+      ],
+      "advisory_condition": "Advisories require experimental taskStore on an HTTP server, MCP HTTP/SSE client transports/OAuth, unauthenticated HTTP server validation, or bearer auth without audience validation. These surfaces were not found. stdio-only use is explicitly excluded for the HTTP client/server advisories.",
+      "minimal_candidate": "Do not blindly upgrade ACP/Claude SDK peer stack. Retain current SDK only while the above HTTP features remain absent; add an inventory gate if an HTTP MCP transport/taskStore is introduced. The explicit direct SDK manifest addition is new relative to base but adds no found import/transport behavior.",
+      "priority": "P3 / affected feature surfaces absent"
+    },
+    {
+      "package": "undici",
+      "current": [
+        "6.28.1",
+        "8.10.2"
+      ],
+      "baseline": [
+        "6.28.1",
+        "8.10.2"
+      ],
+      "advisories": [
+        "1243077",
+        "1243079",
+        "1243080",
+        "1243112",
+        "1243114"
+      ],
+      "classification": "No application-owned call to the affected EventSource, SRI fetch, or untrusted raw undici fetch API found.",
+      "evidence": [
+        "Undici is transitive under jsdom and Discord.js/@discordjs/rest/@discordjs/ws. Source search found no direct undici import.",
+        "Current JSDOM use parses/sanitizes content and does not enable resource loading or EventSource.",
+        "Discord transport uses WebSocket/gateway and REST APIs; EventSource is not used by the application. Existing application-owned fetch calls use global fetch and several explicitly reject redirects; no direct undici override exists."
+      ],
+      "advisory_condition": "EventSource parser DoS requires an EventSource connection; SRI issue requires a consumer accepting mixed-case integrity tokens; excessive-content-encoding issue is on undici fetch response parsing. No direct matching caller was identified, though bundled SDK internals were not exhaustively audited.",
+      "minimal_candidate": "Do not force one undici version across 6.x/8.x peers based on this source-only review. If future call-site tracing shows a direct fetch/EventSource, update its compatible branch to the patched range (6.x >=6.29.1; 8.x >=8.12.2) and test that specific transport.",
+      "priority": "P3 / not demonstrated reachable"
+    },
+    {
+      "package": "@azure/msal-node",
+      "current": "5.6.0",
+      "baseline": "5.6.0",
+      "advisories": [
+        "1243111"
+      ],
+      "classification": "Condition absent in the current Teams adapter path inspected.",
+      "evidence": [
+        "node_modules/.pnpm/@microsoft+teams.apps@2.0.16/.../dist/token-manager.js calls acquireTokenByClientCredential; no acquireTokenByCode use was found in Teams app code."
+      ],
+      "advisory_condition": "Advisory is specifically the authorization-code flow parameter disclosure. The inspected Teams app token manager uses client-credentials flow.",
+      "minimal_candidate": "No targeted app fix indicated by the current call path. Reassess if Teams OAuth authorization-code acquisition is added.",
+      "priority": "P3 / condition absent"
+    }
+  ],
+  "other_advisory_buckets": [
+    {
+      "packages": [
+        "esbuild",
+        "vite",
+        "@vitest/mocker"
+      ],
+      "classification": "Tooling/dev-server/mocking features, not shipped app request handling. Audit has production path artifacts through dependency trees; verify deploy package contents before treating them as runtime exposure."
+    },
+    {
+      "packages": [
+        "katex",
+        "postcss-selector-parser"
+      ],
+      "classification": "UI/build-time paths; advisories require prototype-polluted renderer options or pathological selector parse input. No production server call path found."
+    },
+    {
+      "packages": [
+        "fast-uri",
+        "ip-address"
+      ],
+      "classification": "Transitive validators/network middleware. Fast-uri versions arrive through MCP/JSON-schema dependency trees; no direct import found. ip-address is used transitively for rate-limit IP parsing; Node header bounds constrain attacker-controlled text, but exact input route deserves separate validation if proxy trust configuration permits arbitrary forwarded IP strings."
+    }
+  ],
+  "minimal_patch_order_for_owner_decision": [
+    "body-parser 2.3.0 -> >=2.4.0",
+    "Zod 4 workspace resolution 4.4.3/4.1.11 -> >=4.6.6, with separate decision for Cursor SDK's Zod 3.25.76 compatibility edge",
+    "DOMPurify 3.4.16 -> >=3.4.17",
+    "follow-redirects 1.16.0 -> >=1.16.1 (compatible minor patch; credential-bearing egress dependency)",
+    "Optionally Multer 2.4.0 -> >=2.5.0; current app has no async fileFilter"
+  ],
+  "limitations": [
+    "Static call-path triage only; did not inspect every generated/bundled third-party source file.",
+    "No exploit reproduction, package installation, audit rerun, tests, or compatibility build was performed.",
+    "No claim that the complete dependency tree is safe or that advisories absent from the focus list are closed."
+  ],
+  "follow_up_changes": {
+    "source_files": [
+      "/workspace/blentera-v10/pnpm-workspace.yaml",
+      "/workspace/blentera-v10/package.json",
+      "/workspace/blentera-v10/pnpm-lock.yaml"
+    ],
+    "overrides": {
+      "body-parser": "2.4.0",
+      "dompurify": "3.4.17",
+      "follow-redirects": "1.16.1",
+      "zod_v4": "4.6.6"
+    },
+    "preserved": "Zod 3.25.76 remains for the Cursor SDK peer; no Zod 3-to-4 override, MCP SDK/ACP upgrade, MSAL/undici upgrade, or toolchain change.",
+    "installed_versions": {
+      "body-parser": "2.4.0",
+      "dompurify": "3.4.17",
+      "follow-redirects": "1.16.1",
+      "zod_v4": "4.6.6",
+      "zod_v3": "3.25.76"
+    },
+    "toolchain": {
+      "pnpm": "9.15.4",
+      "storeDir": "/workspace/.cloud-setup/pnpm-store/v3",
+      "lockfileVersion": "9.0"
+    },
+    "verification": [
+      {
+        "command": "pnpm install --no-frozen-lockfile --store-dir /workspace/.cloud-setup/pnpm-store/v3",
+        "exit_code": 0
+      },
+      {
+        "command": "pnpm install --frozen-lockfile --store-dir /workspace/.cloud-setup/pnpm-store/v3",
+        "exit_code": 0,
+        "result": "Lockfile up to date; resolution skipped."
+      },
+      {
+        "check": "git diff --check",
+        "result": "pass"
+      }
+    ],
+    "body_parser_control": {
+      "vulnerable_version": "2.3.0",
+      "payload": "valid gzip JSON frame and trailing bytes, delivered as chunked request with a delay between the compressed frame and trailing chunk",
+      "observed": {
+        "request_status": 400,
+        "subsequent_health_status": 200,
+        "process_exit_code": 0
+      },
+      "interpretation": "The isolated control did not reproduce process termination. A temporary test that also passed on the vulnerable version was removed; no regression proof is claimed. Control script and output are preserved under /workspace/v10-preparation/body-parser-2.3-control.*."
+    }
+  }
+}

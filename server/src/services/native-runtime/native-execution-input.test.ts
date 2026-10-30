@@ -1,11 +1,230 @@
+import { createHash, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { ExecutionContinuationEnvelope, AskUserQuestionsInteraction } from "@paperclipai/shared";
 
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { buildNativeExecutionInput } from "./native-execution-input.js";
+import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource } from "./native-execution-input.js";
+import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
+import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
+import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
+import type { NativePayloadSourceInput } from "@paperclipai/shared";
+
+describe("native bootstrap rendered-source closure", () => {
+  const companyId = randomUUID(), issueId = randomUUID(), runId = randomUUID(), agentId = randomUUID(), renderedMarkdown = "Task body rendered by the native task renderer.";
+  const hash = "a".repeat(64);
+  const policy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+  const snapshot = (ownerCompanyId = companyId, ownerIssueId = issueId) => ({ version: 1 as const,
+    owner: { kind: "issue" as const, companyId: ownerCompanyId, id: ownerIssueId, contentHash: hash }, policy, inputs: [], digest: hash });
+  const input = (overrides: Partial<Parameters<typeof buildNativeBootstrapSourceSet>[0]> = {}) => {
+    const taskInput = { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash };
+    const references = [{ kind: "task" as const, id: issueId }];
+    return buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"), references,
+      candidates: [{ kind: "task", id: issueId, input: taskInput, payloadSourceSnapshot: snapshot() }],
+      runtimeInputs: [], contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false, ...overrides });
+  };
+
+  it("requires a nonempty Task root and exact company, renderer identity and candidate input binding", () => {
+    expect(input()?.inputs).toEqual([{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }]);
+    expect(input({ references: [] })).toBeNull();
+    expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot(randomUUID()) }] })).toBeNull();
+    expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "project", projectId: issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
+    expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId: randomUUID(), sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
+  });
+
+  it("retains only exact Role Pack version inputs and fails closed on missing or foreign-family role inputs", () => {
+    const rolePack = { kind: "role_pack_version" as const, rolePackId: randomUUID(), versionId: randomUUID(), contentHash: hash };
+    expect(input({ rolePackInputs: [rolePack] })?.inputs).toContainEqual(rolePack);
+    expect(input({ rolePackInputs: null })).toBeNull();
+    expect(input({ rolePackInputs: [{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }] })).toBeNull();
+    expect(input({ rolePackInputs: [{ kind: "unknown" } as unknown as NativePayloadSourceInput] })).toBeNull();
+  });
+
+  it("admits only the exact rendered attachment owner after byte verification", () => {
+    const attachmentId = randomUUID(), commentId = randomUUID(), assetId = randomUUID();
+    const taskInput = { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash };
+    const attachmentInput = { kind: "attachment" as const, issueId, attachmentId, commentId, assetId,
+      sha256: hash, byteSize: 42, disposition: "delivered" as const };
+    const attachmentSnapshot = { version: 1 as const,
+      owner: { kind: "attachment" as const, companyId, id: attachmentId, contentHash: hash },
+      policy, inputs: [], digest: hash };
+    const base = { companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task" as const, id: issueId }, { kind: "attachment" as const, id: attachmentId,
+        commentId, filename: "brief.pdf", contentType: "application/pdf", byteSize: 42 }],
+      candidates: [{ kind: "task" as const, id: issueId, input: taskInput, payloadSourceSnapshot: snapshot() },
+        { kind: "attachment" as const, id: attachmentId, input: attachmentInput, payloadSourceSnapshot: attachmentSnapshot }],
+      runtimeInputs: [], contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false };
+    expect(buildNativeBootstrapSourceSet(base)?.inputs).toContainEqual(attachmentInput);
+    expect(buildNativeBootstrapSourceSet({ ...base, candidates: [...base.candidates.slice(0, 1), {
+      kind: "attachment" as const, id: attachmentId,
+      input: { ...attachmentInput, disposition: "attachment_staging_failed" as const }, payloadSourceSnapshot: attachmentSnapshot,
+    }] })).toBeNull();
+    expect(buildNativeBootstrapSourceSet({ ...base, references: [...base.references.slice(0, 1), {
+      ...base.references[1]!, commentId: randomUUID(),
+    }] })).toBeNull();
+  });
+
+  it("includes only interaction envelopes matched to unique exact current captures", () => {
+    const interactionId = randomUUID();
+    const response = { interactionId, kind: "ask_user_questions", response: { status: "pending", result: null } } satisfies NativeInteractionResponseEnvelope;
+    const source = { kind: "interaction" as const, issueId, interactionId, sourceVersion: "1",
+      contentHash: nativeSha256(response) };
+    expect(input({ interactionResponses: [response], interactionSources: [source] })?.inputs).toContainEqual(source);
+    expect(input({ interactionResponses: [response], interactionSources: [] })).toBeNull();
+    expect(input({ interactionResponses: [], interactionSources: [source] })).toBeNull();
+    expect(input({ interactionResponses: [response], interactionSources: [{ ...source, contentHash: hash }] })).toBeNull();
+    expect(input({ interactionResponses: [response, response], interactionSources: [source] })).toBeNull();
+  });
+
+  it("closes a Task-only wake or comments whose exact rendered bodies have owner captures", () => {
+    const task = { id: issueId, identifier: "NATIVE-1", title: "Draft", description: "Internal draft",
+      status: "todo", priority: "medium", workMode: "standard" };
+    const payload = {
+      reason: "on_demand", executionContinuation: null, attachmentOmissions: [], externalChatProvider: null,
+      recovery: null, issue: { id: task.id, identifier: task.identifier, title: task.title, description: task.description,
+        descriptionTruncated: false, status: task.status, priority: task.priority, workMode: task.workMode },
+      agentMessage: null, childIssueSummaries: [], childIssueSummaryTruncated: false, dispositionRepair: null,
+      livenessContinuation: null, interactionKind: null, interactionStatus: null, interactionId: null, sourceRunId: null,
+      externalChatQuestionResponse: null, externalInteractionContinuation: false, checkboxSelection: null,
+      checkedOutByHarness: false, externalChatExecutionBound: false, simplifiedEnglishInteractions: false,
+      dependencyBlockedInteraction: false, treeHoldInteraction: false, activeTreeHold: {}, unresolvedBlockerIssueIds: [],
+      unresolvedBlockerSummaries: [], executionStage: null, taskWatchdog: null, skillTest: null, continuationSummary: null,
+      commentIds: [], latestCommentId: null, comments: [], annotationDeltas: [], planReviewContext: null,
+      documentReviewContext: null, commentWindow: { requestedCount: 0, includedCount: 0, missingCount: 0 },
+      truncated: false, fallbackFetchNeeded: false,
+    };
+    const emptyContinuation = { version: 1, companyId, issueId, trigger: { reason: "on_demand", interactionId: null, sourceRunId: null },
+      originCommentIds: [], objective: task.description, messages: [], humanResponses: [], interactionOutcomes: [],
+      completedWork: null, recoveryOutcomes: [], unresolvedInteractionIds: [],
+      coverage: { kind: "full_task_history", throughCommentId: null, summaryThroughCommentId: null } };
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
+      payload: { ...payload, connectorSkillInstructions: "" } })).toMatchObject({
+      kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+    const wake = captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload });
+    expect(wake).toMatchObject({ kind: "native_task_wake" });
+    const reorderedPayload = Object.fromEntries(Object.entries(payload).reverse());
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: reorderedPayload })?.contentHash).toBe(wake?.contentHash);
+    const commentId = randomUUID();
+    const commentSource = { kind: "comment" as const, issueId, commentId, sourceVersion: "2",
+      contentHash: nativeCommentProjectionHash({ body: "Please finish this task.", presentation: null, metadata: null }) };
+    const comment = { id: commentId, issueId, authorType: "user", body: "Please finish this task.", bodyTruncated: false,
+      presentation: null, metadata: null, deletedAt: null };
+    const commentWake = { ...payload, commentIds: [commentId], latestCommentId: commentId, comments: [comment],
+      commentWindow: { requestedCount: 1, includedCount: 1, missingCount: 0 } };
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: commentWake, commentSources: [commentSource] })).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const unrelatedRendition = { ...commentSource,
+      contentHash: nativeCommentProjectionHash({ body: "redacted alternate rendition", presentation: null, metadata: null }) };
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: commentWake, commentSources: [unrelatedRendition, commentSource] })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: commentWake, commentSources: [commentSource, { ...commentSource, sourceVersion: "3" }] })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: commentWake })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: { ...commentWake, comments: [{ ...comment, body: "changed" }] }, commentSources: [commentSource] })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      checkoutRunId: runId, task, payload: { ...payload, checkedOutByHarness: true } })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      checkoutRunId: randomUUID(), task, payload: { ...payload, checkedOutByHarness: true } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
+      payload: { ...payload, executionContinuation: emptyContinuation } })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: null, task,
+      payload: { ...payload, reason: null, executionContinuation: { ...emptyContinuation,
+        trigger: { reason: "task_execution", interactionId: null, sourceRunId: null } } } })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload: {
+      ...payload, connectorSkillInstructions: "untracked connector instructions",
+    } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload: {
+      ...payload, comments: [{ id: randomUUID(), body: "unaccounted" }],
+    } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task, payload: {
+      ...payload, futureField: "unknown input",
+    } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
+      payload: { ...payload, executionContinuation: { ...emptyContinuation, completedActions: [{ runId, receiptId: "x" }] } } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "different_reason", task,
+      payload: { ...payload, executionContinuation: emptyContinuation } })).toBeNull();
+  });
+
+  it("adds only an exact server-minted approved Context closure bound to the native run and rendered markdown", () => {
+    const foundationDocumentId = randomUUID(), foundationRevisionId = randomUUID();
+    const contextMarkdown = "## August Works governed context\n### Approved Foundation\nStable guidance.";
+    const taskInput = { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash };
+    const sourceActor = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId, runId, onBehalfOfUserId: "user-1" };
+    const witness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId, actor: sourceActor, renderedMarkdown: contextMarkdown,
+      manifest: { id: randomUUID(), companyId, runId, agentId, issueId, projectId: null, queryHash: hash,
+        policySnapshotHash: "b".repeat(64), createdAt: new Date() },
+      items: [
+        { id: randomUUID(), manifestId: randomUUID(), companyId, rank: 0, sourceProvider: "august_works_tasks",
+          sourceRef: `issue://${issueId}`, sourceVersion: new Date().toISOString(), contentHash: hash, payloadSourceSnapshot: snapshot() },
+        { id: randomUUID(), manifestId: "manifest-placeholder", companyId, rank: 1, sourceProvider: "august_works_foundation",
+          sourceRef: `foundation://${foundationDocumentId}/${foundationRevisionId}/1`, sourceVersion: foundationRevisionId,
+          contentHash: "c".repeat(64), payloadSourceSnapshot: null },
+      ], roots: [] });
+    // The helper above rejects mismatched item/manifest IDs. Build the same
+    // source from exact IDs to prove both the positive and substitution gates.
+    const manifestId = randomUUID();
+    const manifest = { id: manifestId, companyId, runId, agentId, issueId, projectId: null, queryHash: hash,
+      policySnapshotHash: "b".repeat(64), createdAt: new Date() };
+    const contextItems = [
+      { id: randomUUID(), manifestId, companyId, rank: 0, sourceProvider: "august_works_tasks", sourceRef: `issue://${issueId}`,
+        sourceVersion: new Date().toISOString(), contentHash: hash, payloadSourceSnapshot: snapshot() },
+      { id: randomUUID(), manifestId, companyId, rank: 1, sourceProvider: "august_works_foundation",
+        sourceRef: `foundation://${foundationDocumentId}/${foundationRevisionId}/1`, sourceVersion: foundationRevisionId,
+        contentHash: "c".repeat(64), payloadSourceSnapshot: null },
+    ];
+    const exactWitness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId, actor: sourceActor, renderedMarkdown: contextMarkdown,
+      manifest, items: contextItems, roots: [] });
+    expect(witness).toBeNull();
+    const sourceSet = buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task", id: issueId }],
+      candidates: [{ kind: "task", id: issueId, input: taskInput, payloadSourceSnapshot: snapshot() }], runtimeInputs: [],
+      contextManifestIds: [{ companyId, contextManifestId: manifestId }], governedContextMarkdown: contextMarkdown,
+      contextWitness: exactWitness, rolePackInputs: [], unsupportedInputPresent: false });
+    expect(sourceSet?.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "context", manifestId }),
+      expect.objectContaining({ kind: "task", issueId }),
+    ]));
+    const contextOwnerFingerprint = createHash("sha256").update(JSON.stringify({
+      manifest: { id: manifest.id, companyId: manifest.companyId, runId: manifest.runId, agentId: manifest.agentId,
+        issueId: manifest.issueId, projectId: manifest.projectId, queryHash: manifest.queryHash,
+        policySnapshotHash: manifest.policySnapshotHash, createdAt: manifest.createdAt.toISOString() },
+      items: contextItems.map(item => ({ id: item.id, provider: item.sourceProvider, ref: item.sourceRef,
+        version: item.sourceVersion, contentHash: item.contentHash, snapshot: item.payloadSourceSnapshot })), roots: [],
+    }), "utf8").digest("hex");
+    const contextSource = sourceSet?.inputs.find(value => value.kind === "context" && value.manifestId === manifestId);
+    if (!contextSource || contextSource.kind !== "context") throw new Error("expected exact context source");
+    expect(contextSource.contentHash).toBe(contextOwnerFingerprint);
+    expect(sourceSet?.policy.foundationRevisionIds).toEqual([foundationRevisionId]);
+    const combinedFabricContext = `## Pinned execution inventory\nPolicies: budget_hard_stop\n\n${contextMarkdown}`;
+    const combinedContextSourceSet = buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task", id: issueId }],
+      candidates: [{ kind: "task", id: issueId, input: taskInput, payloadSourceSnapshot: snapshot() }], runtimeInputs: [],
+      contextManifestIds: [{ companyId, contextManifestId: manifestId }], governedContextMarkdown: combinedFabricContext,
+      contextWitnessMarkdown: contextMarkdown, contextWitness: exactWitness, rolePackInputs: [], unsupportedInputPresent: false });
+    expect(combinedContextSourceSet?.inputs).toContainEqual(expect.objectContaining({ kind: "context", manifestId }));
+    expect(buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task", id: issueId }], candidates: [{ kind: "task", id: issueId, input: taskInput,
+        payloadSourceSnapshot: snapshot() }], runtimeInputs: [], contextManifestIds: [{ companyId, contextManifestId: manifestId }],
+      governedContextMarkdown: combinedFabricContext, contextWitnessMarkdown: `${contextMarkdown} changed`,
+      contextWitness: exactWitness, rolePackInputs: [], unsupportedInputPresent: false })).toBeNull();
+    expect(buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task", id: issueId }], candidates: [{ kind: "task", id: issueId, input: taskInput,
+        payloadSourceSnapshot: snapshot() }], runtimeInputs: [], contextManifestIds: [{ companyId, contextManifestId: manifestId }],
+      governedContextMarkdown: `${contextMarkdown} changed`, contextWitness: exactWitness, rolePackInputs: [], unsupportedInputPresent: false })).toBeNull();
+  });
+});
 
 describe("LCA-05 explicit native work mode", () => {
   it.each(["standard", "planning", "ask"])("title and description cannot override %s mode", (workMode) => {

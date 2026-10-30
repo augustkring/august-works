@@ -1,0 +1,46 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/api/auth.test.ts (6 tests | 2 failed) 208ms
+     × keeps network diagnostics without logging invitation paths or arbitrary error content 4ms
+     × retains the native auth error contract without logging response bodies or status text 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/api/auth.test.ts > authentication diagnostics > keeps network diagnostics without logging invitation paths or arbitrary error content
+ReferenceError: window is not defined
+ ❯ src/api/auth.test.ts:98:30
+     96|   it("keeps network diagnostics without logging invitation paths or ar…
+     97|     const diagnostic = vi.spyOn(console, "error").mockImplementation((…
+     98|     const originalLocation = window.location.href;
+       |                              ^
+     99|     const failure = Object.assign(new TypeError("network-error-secret-…
+    100|     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(failure));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/ui| src/api/auth.test.ts > authentication diagnostics > retains the native auth error contract without logging response bodies or status text
+AssertionError: expected '[["[auth] request returned an error s…' not to contain 'response-message-secret-canary'
+
+Expected: "response-message-secret-canary"
+Received: "[["[auth] request returned an error status",{"method":"POST","requestUrl":"/api/auth/sign-in/email","status":401,"statusText":"status-text-secret-canary","body":{"code":"INVALID_EMAIL_OR_PASSWORD","message":"response-message-secret-canary","token":"response-token-secret-canary","otp":"response-otp-secret-canary"}}]]"
+
+ ❯ src/api/auth.test.ts:127:26
+    125|     const logged = JSON.stringify(diagnostic.mock.calls);
+    126|     for (const secret of ["response-message-secret-canary", "response-…
+    127|       expect(logged).not.toContain(secret);
+       |                          ^
+    128|   });
+    129| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed (6)
+   Start at  23:13:47
+   Duration  27.05s (transform 13.31s, setup 111ms, import 25.74s, tests 208ms, environment 1ms)
+

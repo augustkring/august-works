@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
+import { is } from "drizzle-orm";
+import { drizzle as drizzlePg, PostgresJsSession } from "drizzle-orm/postgres-js";
 import { migrate as migratePg } from "drizzle-orm/postgres-js/migrator";
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import * as schema from "./schema/index.js";
-import { withTransientWriteRetry } from "./transient-write-retry.js";
+import { installDatabaseWorkSignals } from "./work-signals.js";
 
 const MIGRATIONS_FOLDER = fileURLToPath(new URL("./migrations", import.meta.url));
 const DRIZZLE_MIGRATIONS_TABLE = "__drizzle_migrations";
@@ -260,10 +261,24 @@ export function createDb(url: string, options?: DatabaseClientOptions) {
   const sql = postgres(url, postgresJsOptions(resolved));
   const key = hostPortKeyOrNull(url);
   if (key) registerClient(key, sql);
-  // The registry keeps the real client (teardown must end the actual pool);
-  // drizzle gets the retrying face so a pooler-recycled socket replays the
-  // query instead of failing the request that happened to draw it.
-  return drizzlePg(withTransientWriteRetry(sql), { schema });
+  // A disconnect can hide a committed write. Let the driver reconnect, but
+  // leave retries and uncertain-outcome reconciliation to the domain owner.
+  return installDatabaseWorkSignals(drizzlePg(sql, { schema }));
+}
+
+/** Reuse only the server plan for privacy readers' id projections. The existing
+ * session keeps its connection/transaction; postgres-js's pool-level prepare
+ * opt-out still wins over this per-statement request. No read result is cached. */
+export async function executePrivacyIdSelect(db: Pick<Db, "_">,
+  query: PromiseLike<{ id: string }[]> & { toSQL(): { sql: string; params: unknown[] } },
+): Promise<{ id: string }[]> {
+  const session = db._?.session;
+  if (!is(session, PostgresJsSession)) return query;
+  const compiled = query.toSQL();
+  session.logger.logQuery(compiled.sql, compiled.params);
+  return session.client.unsafe<{ id: string }[]>(compiled.sql,
+    compiled.params as Parameters<typeof session.client.unsafe>[1], { prepare: true });
+
 }
 
 export async function getPostgresDataDirectory(url: string): Promise<string | null> {
@@ -342,9 +357,70 @@ async function orderMigrationsByJournal(migrationFiles: string[]): Promise<strin
 
 type SqlExecutor = Pick<ReturnType<typeof postgres>, "unsafe">;
 
-async function runInTransaction(sql: SqlExecutor, action: () => Promise<void>): Promise<void> {
+export const MIGRATION_EXECUTION_BUDGETS = {
+  "0554_company_import_fenced_effects.sql": {
+    lockTimeoutMs: 5_000,
+    preflightStatementTimeoutMs: 5_000,
+    statementTimeoutMs: 120_000,
+    maximumOneShotRows: 10_000,
+    rationale: "Bound the CompanyImport whole-population lease initialization and DDL lock wait without imposing a timeout on unrelated historical migrations.",
+  },
+} as const;
+
+function postgresErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  const { code } = error;
+  return typeof code === "string" ? code : undefined;
+}
+
+function migrationBudgetFailure(
+  migrationFile: string,
+  budget: (typeof MIGRATION_EXECUTION_BUDGETS)[keyof typeof MIGRATION_EXECUTION_BUDGETS],
+  error: unknown,
+  population: string | null,
+): Error {
+  const causeCode = postgresErrorCode(error);
+  const reason = causeCode === "55P03" ? "lock wait exceeded" : "statement execution exceeded";
+  return new Error(
+    `Migration ${migrationFile} stopped because its ${reason} budget was exceeded ` +
+    `(lock ${budget.lockTimeoutMs} ms; preflight statement ${budget.preflightStatementTimeoutMs} ms; migration statement ${budget.statementTimeoutMs} ms). ` +
+    `The migration transaction was rolled back and its journal entry was not written. Running CompanyImport rows at preflight: ${population ?? "unknown (preflight did not complete)"}. Keep application traffic drained, run ` +
+    "SELECT count(*) AS affected_rows FROM public.customer_operations WHERE operation_type = 'company_import' AND status = 'running'; " +
+    "Inspect blockers with SELECT pid, pg_blocking_pids(pid), state, wait_event_type, wait_event FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0; " +
+    "After the active blocker is resolved, retry the same migration. Do not edit historical SQL or manually change operation status. If the measured population cannot fit this budget, stop and prepare a reviewed bounded migration procedure before retrying.",
+    { cause: error },
+  );
+}
+
+export async function runMigrationTransaction(
+  sql: SqlExecutor,
+  migrationFile: string,
+  action: () => Promise<void>,
+): Promise<void> {
+  const budget = MIGRATION_EXECUTION_BUDGETS[migrationFile as keyof typeof MIGRATION_EXECUTION_BUDGETS];
+  let population: string | null = null;
   await sql.unsafe("BEGIN");
   try {
+    if (budget) {
+      await sql.unsafe(`SET LOCAL lock_timeout = '${budget.lockTimeoutMs}ms'`);
+      await sql.unsafe(`SET LOCAL statement_timeout = '${budget.preflightStatementTimeoutMs}ms'`);
+      // The migration's first ALTER TABLE needs this same lock. Acquiring it
+      // before counting freezes the selected population across preflight and
+      // the existing whole-file transaction.
+      await sql.unsafe('LOCK TABLE "customer_operations" IN ACCESS EXCLUSIVE MODE');
+      const [count] = await sql.unsafe<{ affected_rows: string }[]>(`SELECT count(*)::text AS affected_rows
+        FROM public.customer_operations WHERE operation_type = 'company_import' AND status = 'running'`);
+      population = count?.affected_rows ?? "0";
+      if (BigInt(population) > BigInt(budget.maximumOneShotRows)) {
+        throw new Error(
+          `Migration ${migrationFile} preflight found ${population} running CompanyImport rows; ` +
+          `the one-shot limit is ${budget.maximumOneShotRows}. No migration statements or journal entry were written. ` +
+          "Keep CompanyImport writers drained; capture this count and inspect active PostgreSQL blockers. Leave operation rows unchanged; no pre-0554 runtime recovery path owns their effect state. " +
+          "Prepare a separately reviewed batched forward migration that preserves the expired-lease initialization, then let the current bounded reconciler retain unknown outcomes as needs_reconciliation. Do not edit historical SQL, manually change status, or replay effects.",
+        );
+      }
+      await sql.unsafe(`SET LOCAL statement_timeout = '${budget.statementTimeoutMs}ms'`);
+    }
     await action();
     await sql.unsafe("COMMIT");
   } catch (error) {
@@ -352,6 +428,9 @@ async function runInTransaction(sql: SqlExecutor, action: () => Promise<void>): 
       await sql.unsafe("ROLLBACK");
     } catch {
       // Ignore rollback failures and surface the original error.
+    }
+    if (budget && ["55P03", "57014"].includes(postgresErrorCode(error) ?? "")) {
+      throw migrationBudgetFailure(migrationFile, budget, error, population);
     }
     throw error;
   }
@@ -475,7 +554,7 @@ async function applyPendingMigrationsManually(
       );
       if (existingEntry) continue;
 
-      await runInTransaction(sql, async () => {
+      await runMigrationTransaction(sql, migrationFile, async () => {
         for (const statement of splitMigrationStatements(migrationContent)) {
           // PostgreSQL checks pending deferred trigger events before treating
           // CREATE INDEX IF NOT EXISTS as a no-op. During journal repair, a
@@ -1158,4 +1237,6 @@ export async function resetPostgresDatabase(
   }
 }
 
-export type Db = ReturnType<typeof createDb>;
+// Services use the native query/transaction surface. Pool ownership belongs to
+// createDb's result; native transactions intentionally do not own a $client.
+export type Db = Omit<ReturnType<typeof createDb>, "$client">;

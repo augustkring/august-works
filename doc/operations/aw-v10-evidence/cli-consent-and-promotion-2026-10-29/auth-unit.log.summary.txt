@@ -1,0 +1,36 @@
+ ✓ src/pages/Auth.test.tsx > AuthPage > exposes password-manager metadata and a11y attributes on the sign-in form 86ms
+ ✓ src/pages/Auth.test.tsx > AuthPage > uses new-password autocomplete in sign-up mode 27ms
+ ✓ src/pages/Auth.test.tsx > AuthPage > renders auth errors in an assertive alert region referenced by the inputs 25ms
+ ✓ src/pages/Auth.test.tsx > AuthPage > invalidates anonymous health metadata after sign-in 23ms
+ ✓ src/pages/Auth.test.tsx > AuthPage > keeps a native two-factor challenge pending until the server confirms a session 50ms
+ ✓ src/pages/Auth.test.tsx > AuthPage > hydrates only the native challenge view from router state and can return to sign-in 17ms
+ ✓ src/pages/Auth.test.tsx > AuthPage > validates new passwords by Unicode code points while keeping the exact submitted value 34ms
+ ✓ src/pages/Auth.test.tsx > AuthPage > changes authentication language without submitting credentials and translates a refused request while preserving email 34ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > waits for the real API retry hint and recovers approval without a reload or automatic mutation 23ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP400 7ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP401 5ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP403 5ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP404 5ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP410 5ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not retry an ordinary approval GET failure with HTTP500 5ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > uses a nonzero fallback and stops after three retries when the actual challenge expiry is unknown 9ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not schedule a hinted retry beyond the actual expiry from an earlier successful read 7ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not shorten a hint that falls outside the finite page retry window 4ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > retries only the rate-limited read after one operator approval, without resubmitting it 11ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > waits for an authoritative session before reading viewer-specific challenge details 16ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > recovers a failed session read without submitting consent 13ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > denies consent dispatch after a same-Human session renewal in the click boundary 11ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > keeps recent-auth guidance when a same-session refresh overlaps the rejected approval 28ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > suppresses late consent success after the current Human changes 14ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > suppresses late consent failure after the current Human changes 13ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > does not reuse a prior Human's cached organization name for the same challenge capability 9ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > detaches an unresolved challenge GET when the Human changes on the same capability 7ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > explains full cross-organization developer authority, expiry and Co-worker exclusion in Danish 6ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > shows an explicitly non-expiring credential before consent without the default lifetime claim 6ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > confirms fresh identity, reviews the challenge again, and requires a separate explicit approval 24ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > retains confirmation when a same-account session refresh overlaps native confirmation 26ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > refuses a late confirmation after the account changes 21ms
+ ✓ src/pages/Auth.test.tsx > CliAuthPage rate-limit recovery > refuses a late confirmation after the challenge changes 20ms
+ Test Files  1 passed (1)
+      Tests  33 passed (33)
+   Duration  4.21s (transform 1.82s, setup 26ms, import 2.90s, tests 599ms, environment 557ms)

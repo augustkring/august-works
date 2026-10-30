@@ -7,12 +7,16 @@ import {
   activityLog,
   agentWakeupRequests,
   agents,
+  authSessions,
+  authUsers,
+  companyMemberships,
   companies,
   createDb,
   heartbeatRuns,
   issueRelations,
   issues,
   projects,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import { LOW_TRUST_REVIEW_PRESET } from "@paperclipai/shared";
 import {
@@ -21,6 +25,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -38,6 +43,8 @@ type CompanyRow = typeof companies.$inferSelect;
 type AgentRow = typeof agents.$inferSelect;
 type ProjectRow = typeof projects.$inferSelect;
 type IssueRow = typeof issues.$inferSelect;
+const humanActors = new Map<string, Express.Request["actor"]>();
+const humanOwnerIds = new Map<string, string>();
 
 function createApp(db: Db, actor: Express.Request["actor"]) {
   const app = express();
@@ -52,13 +59,13 @@ function createApp(db: Db, actor: Express.Request["actor"]) {
 }
 
 function boardActor(company: CompanyRow): Express.Request["actor"] {
+  const actor = humanActors.get(company.id);
+  if (!actor) throw new Error("Wake diagnostics fixture has no persisted current Human actor");
   return {
-    type: "board",
-    userId: "board-user",
+    ...actor,
     companyIds: [company.id],
-    memberships: [{ companyId: company.id, membershipRole: "operator", status: "active" }],
-    isInstanceAdmin: true,
-    source: "local_implicit",
+    memberships: [{ companyId: company.id, membershipRole: "owner", status: "active" }],
+    isInstanceAdmin: false,
   };
 }
 
@@ -69,16 +76,20 @@ function agentActor(company: CompanyRow, agent: AgentRow, runId: string): Expres
     companyId: company.id,
     runId,
     source: "agent_jwt",
+    onBehalfOfUserId: humanOwnerIds.get(company.id) ?? "board-user",
+    onBehalfOfMemberships: [{ companyId: company.id, membershipRole: "owner", status: "active" }],
   };
 }
 
-async function seedCompany(db: Db, label = "Wake Diagnostics") {
+async function seedCompany(db: Db, label = "Wake Diagnostics", ownerUserId = "board-user") {
   const nonce = randomUUID().slice(0, 8);
   const [company] = await db.insert(companies).values({
     name: `${label} ${nonce}`,
     issuePrefix: `WD${nonce.slice(0, 4).toUpperCase()}`,
-    defaultResponsibleUserId: "board-user",
+    defaultResponsibleUserId: ownerUserId,
   }).returning();
+  humanOwnerIds.set(company!.id, ownerUserId);
+  humanActors.set(company!.id, await seedCurrentHumanSourceActor(db, [company!.id], ownerUserId) as Express.Request["actor"]);
   return company!;
 }
 
@@ -96,12 +107,9 @@ async function seedAgent(db: Db, companyId: string, permissions: Record<string, 
 }
 
 async function seedProject(db: Db, companyId: string, name: string) {
-  const [project] = await db.insert(projects).values({
-    companyId,
-    name,
-    status: "in_progress",
-  }).returning();
-  return project!;
+  const actor = humanActors.get(companyId);
+  if (!actor) throw new Error("Wake diagnostics fixture has no persisted current Human actor");
+  return createCanonicalHumanProject(db, companyId, actor, name, { status: "in_progress" });
 }
 
 async function seedIssue(
@@ -123,7 +131,7 @@ async function seedIssue(
     status: input.status ?? "todo",
     priority: "medium",
     assigneeAgentId: input.assigneeAgentId ?? null,
-    responsibleUserId: "board-user",
+    responsibleUserId: humanOwnerIds.get(input.companyId) ?? "board-user",
   }).returning();
   return issue!;
 }
@@ -170,6 +178,7 @@ async function attachLowTrustRun(db: Db, fixture: {
   const [run] = await db.insert(heartbeatRuns).values({
     companyId: fixture.company.id,
     agentId: fixture.agent.id,
+    responsibleUserId: humanOwnerIds.get(fixture.company.id) ?? "board-user",
     status: "running",
     contextSnapshot: {
       issueId: fixture.root.id,
@@ -195,6 +204,8 @@ describeEmbeddedPostgres("issue wake diagnostics route", () => {
   }, 20_000);
 
   afterEach(async () => {
+    humanActors.clear();
+    humanOwnerIds.clear();
     await db.delete(activityLog);
     await db.delete(agentWakeupRequests);
     await db.delete(issueRelations);
@@ -202,7 +213,11 @@ describeEmbeddedPostgres("issue wake diagnostics route", () => {
     await db.delete(issues);
     await db.delete(agents);
     await db.delete(projects);
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
+    await db.delete(authSessions);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -426,8 +441,6 @@ describeEmbeddedPostgres("issue wake diagnostics route", () => {
 
   it("denies cross-company issue reads", async () => {
     const companyA = await seedCompany(db, "Company A");
-    const companyB = await seedCompany(db, "Company B");
-    const agentB = await seedAgent(db, companyB.id);
     const projectA = await seedProject(db, companyA.id, "A");
     const issueA = await seedIssue(db, {
       companyId: companyA.id,
@@ -435,10 +448,17 @@ describeEmbeddedPostgres("issue wake diagnostics route", () => {
       title: "Company A issue",
       status: "blocked",
     });
+    const sameCompanyRead = await request(createApp(db, boardActor(companyA)))
+      .get(`/api/issues/${issueA.id}/diagnostics/wakes`);
+    expect(sameCompanyRead.status, JSON.stringify(sameCompanyRead.body)).toBe(200);
+
+    const companyB = await seedCompany(db, "Company B", "board-user-b");
+    const agentB = await seedAgent(db, companyB.id);
     const [runB] = await db.insert(heartbeatRuns).values({
       companyId: companyB.id,
       agentId: agentB.id,
       status: "running",
+      responsibleUserId: "board-user-b",
       contextSnapshot: { issueId: issueA.id },
     }).returning();
 
@@ -448,6 +468,29 @@ describeEmbeddedPostgres("issue wake diagnostics route", () => {
     // Uniform 404 so cross-tenant ids are indistinguishable from missing ones.
     expect(res.status, JSON.stringify(res.body)).toBe(404);
     expect(res.body.error).toBe("Issue not found");
+  });
+
+  it("withholds wake diagnostics after the current Human loses company membership", async () => {
+    const company = await seedCompany(db);
+    const project = await seedProject(db, company.id, "Core");
+    const issue = await seedIssue(db, { companyId: company.id, projectId: project.id, title: "Withdrawn reader" });
+    await db.insert(agentWakeupRequests).values({
+      companyId: company.id,
+      agentId: (await seedAgent(db, company.id)).id,
+      source: "automation",
+      reason: "issue_commented",
+      status: "completed",
+      payload: { issueId: issue.id },
+      requestedAt: new Date(),
+    });
+    await db.update(companyMemberships).set({ status: "inactive" }).where(eq(companyMemberships.companyId, company.id));
+
+    const res = await request(createApp(db, boardActor(company)))
+      .get(`/api/issues/${issue.id}/diagnostics/wakes`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("Issue not found");
+    expect(res.body).not.toHaveProperty("events");
   });
 
   it("projects activity records and wake failures without raw blobs", async () => {

@@ -9,12 +9,13 @@ import { instanceSettingsService } from "./instance-settings.js";
 import { v5FeatureEnabled } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "./authorization.js";
 import { logger } from "../middleware/logger.js";
+import { logActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 import { prepareRuntimeSkillVersionDirectory, removeRuntimeSkillCache, resolveRuntimeSkillCache, runtimeSkillCacheSpec } from "./runtime-skill-cache.js";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents as agentsTable,
@@ -30,6 +31,8 @@ import {
   companySkillEvalCases,
   companySkillVersions,
   companySkills,
+  agentExecutionManifests,
+  heartbeatRuns,
   costEvents,
   documents,
   issueAttachments,
@@ -39,6 +42,8 @@ import {
   issueWorkProducts,
 } from "@paperclipai/db";
 import { readPaperclipSkillSyncPreference, writePaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
+import { agentExecutionManifestSchema } from "@paperclipai/shared";
+import { hashContextPolicySnapshot } from "./context/context-manifest.js";
 import type { PaperclipDesiredSkillEntry, PaperclipSkillEntry } from "@paperclipai/adapter-utils/server-utils";
 import type {
   AgentDesiredSkillEntry,
@@ -315,7 +320,42 @@ function assertImportedSkillSourceAllowed(skill: ImportedSkill) {
   }
 }
 
+export const BLENTERA_PLATFORM_SKILL_KEY = "blentera-platform";
+
+function hasPlatformSkillIdentity(skill: { key?: string | null; slug?: string | null; name?: string | null }) {
+  return skill.key === BLENTERA_PLATFORM_SKILL_KEY || [skill.slug, skill.name].some(
+    value => typeof value === "string" && normalizeSkillSlug(value) === BLENTERA_PLATFORM_SKILL_KEY,
+  );
+}
+
+export function assertPlatformSkillCustomerMutable(skill: { key?: string | null; slug?: string | null; name?: string | null }) {
+  if (hasPlatformSkillIdentity(skill)) throw forbidden("The required Blentera platform Skill is platform-owned and cannot be changed by a company", { code: "platform_skill_reserved" });
+}
+
+function assertSkillMarkdownIdentityCustomerMutable(
+  skill: Pick<CompanySkill, "key" | "slug" | "name">,
+  markdown: string,
+) {
+  const parsed = parseFrontmatterMarkdown(markdown);
+  const frontmatterMetadata = isPlainRecord(parsed.frontmatter.metadata) ? parsed.frontmatter.metadata : null;
+  const contentIdentity = {
+    key: readCanonicalSkillKey(parsed.frontmatter, frontmatterMetadata),
+    slug: deriveImportedSkillSlug(parsed.frontmatter, skill.slug),
+    name: asString(parsed.frontmatter.name) ?? skill.name,
+  };
+  // Check the persisted identity and every identity the submitted document
+  // declares. A document cannot claim the reserved key while retaining a
+  // customer key in its import envelope (or vice versa).
+  assertPlatformSkillCustomerMutable(skill);
+  assertPlatformSkillCustomerMutable(contentIdentity);
+  return parsed;
+}
+
 function assertImportedSkillKeyAllowed(skill: ImportedSkill) {
+  if (hasPlatformSkillIdentity(skill)) {
+    if (skill.key === BLENTERA_PLATFORM_SKILL_KEY && asString(skill.metadata?.sourceKind) === "paperclip_bundled") return;
+    throw unprocessable("The blentera-platform Skill name is reserved for the managed platform release", { code: "platform_skill_reserved" });
+  }
   if (!skill.key.startsWith("paperclipai/paperclip/")) return;
   const metadata = isPlainRecord(skill.metadata) ? skill.metadata : null;
   const sourceKind = asString(metadata?.sourceKind);
@@ -401,6 +441,7 @@ type BundledSkillReleaseManifestEntry = {
   releasedAt: string;
   notes: string;
   dir: string;
+  platformRelease?: { sourceSha: string; contentDigest: string; operationManifestHash: string; toolCatalogContractHash: string };
 };
 
 type CreateVersionOptions = {
@@ -609,6 +650,7 @@ function uniqueImportedSkillKey(companyId: string, baseSlug: string, usedKeys: S
 }
 
 function buildSkillRuntimeName(key: string, slug: string) {
+  if (key === BLENTERA_PLATFORM_SKILL_KEY) return BLENTERA_PLATFORM_SKILL_KEY;
   if (key.startsWith("paperclipai/paperclip/")) return slug;
   return `${slug}--${hashSkillValue(key)}`;
 }
@@ -659,6 +701,7 @@ function readCanonicalSkillKey(frontmatter: Record<string, unknown>, metadata: R
  * `ensureSkillInventoryCurrent` imports into every company library.
  */
 export const PAPERCLIP_CORE_SKILL_KEYS = [
+  BLENTERA_PLATFORM_SKILL_KEY,
   "paperclipai/paperclip/paperclip",
   "paperclipai/paperclip/paperclip-board",
   "paperclipai/paperclip/paperclip-converting-plans-to-tasks",
@@ -983,12 +1026,12 @@ function resolveBundledSkillsRoot() {
   ];
 }
 
-function resolveBundledSkillReleasesRoot() {
+function resolveBundledSkillReleasesRoot(skillKey: "paperclip" | "blentera-platform" = "paperclip") {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   return [
-    path.resolve(moduleDir, "../../skills-releases/paperclip"),
-    path.resolve(process.cwd(), "skills-releases/paperclip"),
-    path.resolve(moduleDir, "../../../skills-releases/paperclip"),
+    path.resolve(moduleDir, "../../skills-releases", skillKey),
+    path.resolve(process.cwd(), "skills-releases", skillKey),
+    path.resolve(moduleDir, "../../../skills-releases", skillKey),
   ];
 }
 
@@ -1331,7 +1374,7 @@ function stableJsonEqual(left: unknown, right: unknown) {
 }
 
 function isPaperclipBundledSkillKey(key: string) {
-  return key.startsWith("paperclipai/paperclip/");
+  return key === BLENTERA_PLATFORM_SKILL_KEY || key.startsWith("paperclipai/paperclip/");
 }
 
 function paperclipBundledFolderCategory(key: string, metadata?: unknown) {
@@ -3009,8 +3052,8 @@ export function companySkillService(db: Db) {
     return upsertImportedSkills(companyId, [firstTaskSkill]);
   }
 
-  async function readBundledSkillReleaseRegistry() {
-    for (const registryRoot of resolveBundledSkillReleasesRoot()) {
+  async function readBundledSkillReleaseRegistry(skillKey: "paperclip" | "blentera-platform" = "paperclip") {
+    for (const registryRoot of resolveBundledSkillReleasesRoot(skillKey)) {
       const manifestPath = path.join(registryRoot, "releases.json");
       const manifestText = await fs.readFile(manifestPath, "utf8").catch(() => null);
       if (!manifestText) continue;
@@ -3031,6 +3074,14 @@ export function companySkillService(db: Db) {
         if (relativeReleaseDir.startsWith("..") || path.isAbsolute(relativeReleaseDir)) {
           throw new Error(`Bundled skill release directory escapes registry root: ${dir}`);
         }
+        if (skillKey === "blentera-platform") {
+          const sourceSha = asString(entry.sourceSha), contentDigest = asString(entry.contentDigest);
+          const operationManifestHash = asString(entry.operationManifestHash), toolCatalogContractHash = asString(entry.toolCatalogContractHash);
+          if (entry.skillKey !== BLENTERA_PLATFORM_SKILL_KEY || entry.mutableByCustomer !== false || !sourceSha || !/^[a-f0-9]{40}$/.test(sourceSha) || !contentDigest || !/^sha256:[a-f0-9]{64}$/.test(contentDigest)) throw new Error("Invalid immutable platform Skill release identity");
+          // A staged release can be imported for evaluation. Missing live
+          // contract pins never make it eligible for a material run.
+          return { id, releaseName, releasedAt, notes, dir, releaseDir, platformRelease: { sourceSha, contentDigest, operationManifestHash: operationManifestHash ?? "", toolCatalogContractHash: toolCatalogContractHash ?? "" } };
+        }
         return { id, releaseName, releasedAt, notes, dir, releaseDir };
       });
     }
@@ -3048,12 +3099,24 @@ export function companySkillService(db: Db) {
   }
 
   async function ensureBundledSkillReleases(companyId: string, bundledSkills: CompanySkill[]) {
-    const paperclipSkill = bundledSkills.find((skill) => skill.key === "paperclipai/paperclip/paperclip");
-    if (!paperclipSkill) return;
-    for (const release of await readBundledSkillReleaseRegistry()) {
+    async function publishInitialPlatformRelease(skill: CompanySkill, versionId: string) {
+      await db.transaction(async tx => {
+        const [current] = await tx.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skill.id))).limit(1).for("update");
+        // Repair an interrupted initial publication, but never clear a later
+        // degraded/revalidation/retirement state during an inventory read.
+        if (!current || current.activeVersionId || current.lifecycleState !== "draft") return;
+        await tx.update(companySkillVersions).set({ state: "active", visibility: "company" }).where(and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, skill.id), eq(companySkillVersions.id, versionId)));
+        await tx.update(companySkills).set({ currentVersionId: versionId, activeVersionId: versionId, lifecycleState: "active", sharingScope: "company" }).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skill.id)));
+      });
+    }
+    for (const registryKey of ["paperclip", "blentera-platform"] as const) {
+    const paperclipSkill = bundledSkills.find((skill) => skill.key === (registryKey === "paperclip" ? "paperclipai/paperclip/paperclip" : BLENTERA_PLATFORM_SKILL_KEY));
+    if (!paperclipSkill) continue;
+    for (const release of await readBundledSkillReleaseRegistry(registryKey)) {
       const fileInventory = serializeVersionFileInventory(
         await collectVersionFileInventoryFromDirectory(release.releaseDir),
       );
+      if (release.platformRelease && buildInventoryContentHash(fileInventory.map(entry => ({ path: entry.path, sha256: sha256Buffer(entry.content) }))) !== release.platformRelease.contentDigest) throw new Error("The platform Skill artifact does not match its release digest");
       const existing = await db
         .select()
         .from(companySkillVersions)
@@ -3076,19 +3139,26 @@ export function companySkillService(db: Db) {
         if (existingHash !== registryHash) {
           throw new Error(`Bundled skill release ${release.id} does not match its seeded snapshot.`);
         }
+        if (registryKey === "blentera-platform") await publishInitialPlatformRelease(paperclipSkill, existing.id);
         continue;
       }
       const releasedAt = new Date(release.releasedAt);
       if (Number.isNaN(releasedAt.getTime())) {
         throw new Error(`Invalid bundled skill release date: ${release.releasedAt}`);
       }
-      await createVersion(companyId, paperclipSkill.id, { label: release.releaseName }, null, {
+      const version = await createVersion(companyId, paperclipSkill.id, { label: release.releaseName }, null, {
         fileInventory,
         release: { id: release.id, name: release.releaseName, releasedAt },
         updateCurrentVersion: false,
         skipInventoryRefresh: true,
         skill: paperclipSkill,
       });
+      if (registryKey === "blentera-platform") {
+        // This is the shipped immutable platform release, never a tenant
+        // candidate promotion. Admission still checks current runtime integrity.
+        await publishInitialPlatformRelease(paperclipSkill, version.id);
+      }
+    }
     }
   }
 
@@ -3361,6 +3431,47 @@ export function companySkillService(db: Db) {
       }));
     }
     return items;
+  }
+
+  async function search(companyId: string, actor: AuthorizationActor, query: string, limit = 20) {
+    await ensureSkillInventoryCurrent(companyId);
+    const privateCondition = await privateSkillCondition(companyId, actor);
+    const tokens = query.trim().toLocaleLowerCase("en").split(/\s+/).filter(Boolean).slice(0, 8);
+    if (!tokens.length) return { items: [], partial: false };
+    const tokenConditions = tokens.map((token) => {
+      const pattern = `%${token.replace(/[\\%_]/g, (value) => `\\${value}`)}%`;
+      return or(
+        ilike(companySkills.name, pattern),
+        ilike(companySkills.slug, pattern),
+        ilike(companySkills.key, pattern),
+        ilike(companySkills.description, pattern),
+        ilike(companySkills.tagline, pattern),
+        ilike(companySkills.authorName, pattern),
+        sql<boolean>`${companySkills.categories}::text ILIKE ${pattern}`,
+      )!;
+    });
+    const boundedLimit = Math.min(100, Math.max(1, Math.trunc(limit)));
+    // Source checks can reject stale/private candidates. Scan a bounded superset
+    // so one denied row does not hide all later current matches.
+    const scanLimit = Math.min(201, Math.max(boundedLimit * 8, 40));
+    const candidates = await db.select({
+      id: companySkills.id,
+      name: companySkills.name,
+      slug: companySkills.slug,
+      description: companySkills.description,
+      tagline: companySkills.tagline,
+      updatedAt: companySkills.updatedAt,
+    }).from(companySkills)
+      .where(and(eq(companySkills.companyId, companyId), privateCondition, ...tokenConditions))
+      .orderBy(desc(companySkills.updatedAt), asc(companySkills.name), asc(companySkills.id))
+      .limit(scanLimit + 1);
+    const items: typeof candidates = [];
+    for (const item of candidates.slice(0, scanLimit)) {
+      if (await canReadSkill(companyId, item.id, actor)) items.push(item);
+      if (items.length > boundedLimit) break;
+    }
+    const partial = candidates.length > scanLimit || items.length > boundedLimit || tokens.length < query.trim().split(/\s+/).filter(Boolean).length;
+    return { items: items.slice(0, boundedLimit), partial };
   }
 
   async function listFull(companyId: string): Promise<CompanySkill[]> {
@@ -3658,9 +3769,14 @@ export function companySkillService(db: Db) {
     if (!options.skipInventoryRefresh) await ensureSkillInventoryCurrent(companyId);
     const skill = options.skill ?? await getById(companyId, skillId, options.database);
     if (!skill) throw notFound("Skill not found");
-    const fileInventory = serializeVersionFileInventory(
-      options.fileInventory ?? await collectVersionFileInventory(companyId, skill),
-    );
+    const platformRelease = Boolean(options.release && options.skipInventoryRefresh && asString(skill.metadata?.sourceKind) === "paperclip_bundled");
+    if (!platformRelease) assertPlatformSkillCustomerMutable(skill);
+    const sourceInventory = options.fileInventory ?? await collectVersionFileInventory(companyId, skill);
+    if (!platformRelease) {
+      const skillMarkdown = sourceInventory.find(entry => normalizePortablePath(entry.path) === "SKILL.md")?.content;
+      if (typeof skillMarkdown === "string") assertSkillMarkdownIdentityCustomerMutable(skill, skillMarkdown);
+    }
+    const fileInventory = serializeVersionFileInventory(sourceInventory);
     const persist = async (tx: DbOrTransaction) => {
       await tx.execute(sql`
         select ${companySkills.id}
@@ -4014,9 +4130,14 @@ export function companySkillService(db: Db) {
     if (!source) throw notFound("Skill not found");
     const existing = await listFull(companyId);
     const usedSlugs = new Set(existing.map((skill) => normalizeSkillSlug(skill.slug) ?? skill.slug));
+    assertPlatformSkillCustomerMutable({ slug: input.slug, name: input.name });
     const forkSlug = uniqueSkillSlug(normalizeSkillSlug(input.slug ?? `${source.slug}-fork`) ?? `${source.slug}-fork`, usedSlugs);
     const forkName = input.name?.trim() || `${source.name} Fork`;
     const forkKey = `company/${companyId}/${forkSlug}`;
+    const markdown = await readFile(companyId, source.id, "SKILL.md").then(file => file?.content ?? source.markdown);
+    const parsed = assertSkillMarkdownIdentityCustomerMutable({ key: forkKey, slug: forkSlug, name: forkName }, markdown);
+    const effectiveForkName = asString(parsed.frontmatter.name) ?? forkName;
+    assertPlatformSkillCustomerMutable({ key: forkKey, slug: forkSlug, name: effectiveForkName });
     const plannedReassignments = await planSkillReassignments(companyId, source, forkKey, input.reassignAgentIds);
     const managedRoot = resolveManagedSkillsRoot(companyId);
     const forkDir = path.resolve(managedRoot, forkSlug);
@@ -4027,15 +4148,14 @@ export function companySkillService(db: Db) {
       if (!detail) continue;
       const targetPath = path.resolve(forkDir, detail.path);
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.writeFile(targetPath, detail.content, "utf8");
+      await fs.writeFile(targetPath, detail.path === "SKILL.md" ? markdown : detail.content, "utf8");
     }
     const skillFilePath = path.join(forkDir, "SKILL.md");
-    const markdown = await fs.readFile(skillFilePath, "utf8").catch(() => source.markdown);
+    const persistedMarkdown = await fs.readFile(skillFilePath, "utf8").catch(() => markdown);
     if (!(await statPath(skillFilePath))?.isFile()) {
       await fs.writeFile(skillFilePath, markdown, "utf8");
     }
     const inventory = await collectLocalSkillInventory(forkDir);
-    const parsed = parseFrontmatterMarkdown(markdown);
     const metadata = {
       sourceKind: "managed_local",
       forkedFromSkillId: source.id,
@@ -4048,7 +4168,7 @@ export function companySkillService(db: Db) {
       slug: forkSlug,
       name: asString(parsed.frontmatter.name) ?? forkName,
       description: asString(parsed.frontmatter.description) ?? source.description,
-      markdown,
+      markdown: persistedMarkdown,
       sourceType: "local_path",
       sourceLocator: forkDir,
       sourceRef: null,
@@ -4124,6 +4244,7 @@ export function companySkillService(db: Db) {
           const newName = input.name.trim();
           if (!newName) throw unprocessable("Skill name is required.");
           const newSlug = normalizeSkillSlug(input.slug ?? null) ?? normalizeSkillSlug(newName);
+          assertPlatformSkillCustomerMutable({ slug: newSlug ?? undefined, name: newName });
           if (!newSlug) {
             throw unprocessable("Skill name must contain at least one letter or number to derive a slug.");
           }
@@ -4450,6 +4571,7 @@ export function companySkillService(db: Db) {
     await ensureSkillInventoryCurrent(companyId);
     const skill = await getById(companyId, skillId);
     if (!skill) throw notFound("Skill not found");
+    assertPlatformSkillCustomerMutable(skill);
 
     const sharingScope = Object.prototype.hasOwnProperty.call(input, "sharingScope")
       ? normalizeMutableSharingScope(input.sharingScope)
@@ -4502,6 +4624,7 @@ export function companySkillService(db: Db) {
     if (actor?.type === "agent" && v5FeatureEnabled(await instanceSettingsService(db).getExperimental(), "skill_lifecycle_v5")) throw conflict("Use a governed private/proposed Skill candidate under the company proposal policy");
     if (input.folderId) await folderSvc.validateSkillFolder(companyId, input.folderId);
     const slug = normalizeSkillSlug(input.slug ?? input.name) ?? "skill";
+    assertPlatformSkillCustomerMutable({ slug, name: input.name });
     const key = `company/${companyId}/${slug}`;
 
     const forkSource = input.forkedFromSkillId
@@ -4528,6 +4651,7 @@ export function companySkillService(db: Db) {
     const markdown = input.markdown?.trim().length
       ? input.markdown
       : forkSource?.markdown ?? fallbackMarkdown;
+    assertSkillMarkdownIdentityCustomerMutable({ key, slug, name: input.name }, markdown);
 
     return db.transaction(async (tx) => {
       await tx.execute(sql`
@@ -4664,6 +4788,7 @@ export function companySkillService(db: Db) {
     await ensureSkillInventoryCurrent(companyId);
     const initial = await getById(companyId, skillId);
     if (!initial) throw notFound("Skill not found");
+    assertPlatformSkillCustomerMutable(initial);
     return db.transaction(async (tx) => {
       // Share the creation/deletion name lock. The identity must be checked
       // again after waiting: a new skill can now own the same source folder.
@@ -4672,6 +4797,7 @@ export function companySkillService(db: Db) {
       }
       const skill = await getById(companyId, skillId, tx);
       if (!skill) throw notFound("Skill not found");
+      assertPlatformSkillCustomerMutable(skill);
       if (skill.slug !== initial.slug) throw conflict("Skill was renamed. Retry the operation.");
       if (v5FeatureEnabled(await instanceSettingsService(db).getExperimental(), "skill_lifecycle_v5")) {
         const [state] = await tx.select({ activeVersionId: companySkills.activeVersionId }).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId))).limit(1).for("update");
@@ -4713,12 +4839,16 @@ export function companySkillService(db: Db) {
       const absolutePath = resolveLocalSkillFilePath(skill, normalizedPath);
       if (!absolutePath) throw notFound("Skill file not found");
 
+      const parsedSkillMarkdown = normalizedPath === "SKILL.md"
+        ? assertSkillMarkdownIdentityCustomerMutable(skill, content)
+        : null;
+
       const previousContent = await fs.readFile(absolutePath, "utf8").catch(() => null);
       await fs.mkdir(path.dirname(absolutePath), { recursive: true });
       await fs.writeFile(absolutePath, content, "utf8");
 
       if (normalizedPath === "SKILL.md") {
-        const parsed = parseFrontmatterMarkdown(content);
+        const parsed = parsedSkillMarkdown!;
         await tx
           .update(companySkills)
           .set({
@@ -6075,9 +6205,10 @@ export function companySkillService(db: Db) {
     }
   }
 
-  async function listRuntimeSkillEntries(
+  async function listRuntimeSkillEntriesInternal(
     companyId: string,
     options: RuntimeSkillEntryOptions = {},
+    immutableManifestPinVersionIds: ReadonlySet<string> = new Set(),
   ): Promise<PaperclipSkillEntry[]> {
     if(options.selectedSkillKeys?.size===0)return [];
     const skills = await listFull(companyId);
@@ -6091,7 +6222,11 @@ export function companySkillService(db: Db) {
         if (!selectedVersionId) continue;
         const selected = await getVersion(companyId, skill.id, selectedVersionId,options.actor,options.readScope);
         if (!selected || selected.visibility === "private") continue;
-        if (!options.allowCandidateVersionsForTest && (skill.lifecycleState !== "active" || selected.state !== "active" || selectedVersionId !== skill.activeVersionId)) continue;
+        const pinnedByCurrentManifest = immutableManifestPinVersionIds.has(selectedVersionId);
+        if (pinnedByCurrentManifest) {
+          if (!(["active", "needs_revalidation", "degraded"] as const).includes(skill.lifecycleState as "active" | "needs_revalidation" | "degraded") || !(["active", "superseded"] as const).includes(selected.state as "active" | "superseded")) continue;
+        } else if (!options.allowCandidateVersionsForTest &&
+          (skill.lifecycleState !== "active" || selected.state !== "active" || selectedVersionId !== skill.activeVersionId)) continue;
       }
       const pinnedOptions = selectedVersionId ? { ...options, versionSelections: new Map([[skill.key, selectedVersionId]]) } : options;
       const sourceResolution = await resolveRuntimeSkillSource(companyId, skill, pinnedOptions);
@@ -6110,6 +6245,107 @@ export function companySkillService(db: Db) {
 
     out.sort((left, right) => left.key.localeCompare(right.key));
     return out;
+  }
+
+  async function requiredPlatformSkill(companyId: string, actor: AuthorizationActor, contracts: { operationManifestHash: string; toolCatalogContractHash: string }, options: { ensureInventory?: boolean; admitContractRefresh?: boolean } = {}) {
+    // Material operations validate the admitted release; they must never
+    // install, repair or promote a procedure while committing a business effect.
+    if (options.ensureInventory !== false) await ensureSkillInventoryCurrent(companyId);
+    const releases = await readBundledSkillReleaseRegistry("blentera-platform");
+    const release = releases.at(-1), identity = release?.platformRelease;
+    if (!release || !identity || identity.operationManifestHash !== contracts.operationManifestHash || identity.toolCatalogContractHash !== contracts.toolCatalogContractHash) throw conflict("The required platform Skill needs validation against the current operation and tool contracts", { code: "platform_skill_contract_drift" });
+    // A fresh admission may adopt a reviewed contract binding for identical
+    // procedure bytes. Ordinary reads, resumed Runs and material effects cannot
+    // promote a version or clear a degraded/revalidation lifecycle state.
+    if (options.admitContractRefresh && options.ensureInventory !== false) {
+      const publications: ActivityPublication[] = [];
+      await db.transaction(async raw => {
+        const tx = raw as unknown as Db;
+        const [current] = await tx.select().from(companySkills).where(and(eq(companySkills.companyId, companyId),
+          eq(companySkills.key, BLENTERA_PLATFORM_SKILL_KEY))).for("update");
+        if (!current?.activeVersionId || current.lifecycleState !== "active" ||
+          asString(current.metadata?.sourceKind) !== "paperclip_bundled") return;
+        const versions = await tx.select().from(companySkillVersions).where(and(
+          eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, current.id),
+          or(eq(companySkillVersions.id, current.activeVersionId), eq(companySkillVersions.releaseId, release.id)),
+        )).for("update");
+        const prior = versions.find(version => version.id === current.activeVersionId);
+        const next = versions.find(version => version.releaseId === release.id);
+        if (!prior || !next || prior.id === next.id || prior.state !== "active" || next.state !== "candidate") return;
+        const priorRelease = releases.find(candidate => candidate.id === prior.releaseId)?.platformRelease;
+        const inventoryDigest = (version: (typeof versions)[number]) => buildInventoryContentHash(toCompanySkillVersion(version).fileInventory
+          .map(entry => ({ path: entry.path, sha256: sha256Buffer(entry.content) })));
+        if (!priorRelease || priorRelease.sourceSha !== identity.sourceSha || priorRelease.contentDigest !== identity.contentDigest ||
+          inventoryDigest(prior) !== identity.contentDigest || inventoryDigest(next) !== identity.contentDigest) return;
+        await tx.update(companySkillVersions).set({ state: "superseded" }).where(eq(companySkillVersions.id, prior.id));
+        await tx.update(companySkillVersions).set({ state: "active", visibility: "company" }).where(eq(companySkillVersions.id, next.id));
+        await tx.update(companySkills).set({ activeVersionId: next.id, currentVersionId: next.id, updatedAt: new Date() })
+          .where(eq(companySkills.id, current.id));
+        await logActivity(tx, { companyId, actorType: "system", actorId: "platform-release",
+          action: "skill.platform_contract_refreshed", entityType: "company_skill", entityId: current.id,
+          details: { fromVersionId: prior.id, toVersionId: next.id, releaseId: release.id,
+            contentDigest: identity.contentDigest, ...contracts } }, publications);
+      });
+      for (const publication of publications) publishActivity(publication);
+    }
+    const [skill] = await db.select().from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.key, BLENTERA_PLATFORM_SKILL_KEY))).limit(1);
+    if (!skill || asString(skill.metadata?.sourceKind) !== "paperclip_bundled" || skill.lifecycleState !== "active" || !skill.activeVersionId) throw conflict("The required platform Skill is unavailable", { code: "platform_skill_unavailable" });
+    const version = await getVersion(companyId, skill.id, skill.activeVersionId, actor, "task");
+    if (!version || version.releaseId !== release.id || version.state !== "active" || version.visibility !== "company" || buildInventoryContentHash(version.fileInventory.map(entry => ({ path: entry.path, sha256: sha256Buffer(entry.content) }))) !== identity.contentDigest) throw conflict("The required platform Skill snapshot failed integrity validation", { code: "platform_skill_integrity_failed" });
+    return {
+      pin: { skillId: skill.id, versionId: version.id, key: BLENTERA_PLATFORM_SKILL_KEY, name: skill.name, selection: "required" as const, loadPoint: "task_relevant" as const, estimatedDescriptorTokens: Math.ceil(Buffer.byteLength(skill.name + (skill.description ?? "")) / 4) },
+      identity: { key: BLENTERA_PLATFORM_SKILL_KEY as "blentera-platform", version: release.id, digest: identity.contentDigest, sourceSha: identity.sourceSha },
+    };
+  }
+
+  async function listRuntimeSkillEntries(companyId: string, options: RuntimeSkillEntryOptions = {}) {
+    return listRuntimeSkillEntriesInternal(companyId, options);
+  }
+
+  /** Resolve only exact Skill versions retained by the current immutable native run manifest. */
+  async function listRuntimeSkillEntriesForCurrentExecution(
+    companyId: string,
+    actor: AuthorizationActor,
+    runId: string,
+  ): Promise<PaperclipSkillEntry[]> {
+    if (actor.type !== "agent" || actor.companyId !== companyId || actor.runId !== runId || !actor.agentId || !actor.onBehalfOfUserId) {
+      throw forbidden("Runtime Skill pins require the current persisted native execution");
+    }
+    const [run] = await db.select({
+      companyId: heartbeatRuns.companyId,
+      agentId: heartbeatRuns.agentId,
+      responsibleUserId: heartbeatRuns.responsibleUserId,
+      status: heartbeatRuns.status,
+      runtimeMode: heartbeatRuns.runtimeMode,
+    }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId))).limit(1);
+    if (!run || run.agentId !== actor.agentId || run.responsibleUserId !== actor.onBehalfOfUserId ||
+        run.status !== "running" || run.runtimeMode !== "native") {
+      throw forbidden("Runtime Skill pins require the current responsible Human and running native attempt");
+    }
+    const [stored] = await db.select({ agentId: agentExecutionManifests.agentId, manifest: agentExecutionManifests.manifest, hash: agentExecutionManifests.hash })
+      .from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.runId, runId))).limit(1);
+    const parsed = agentExecutionManifestSchema.safeParse(stored?.manifest);
+    if (!stored || stored.agentId !== actor.agentId || !parsed.success || parsed.data.companyId !== companyId ||
+        parsed.data.agentId !== actor.agentId || parsed.data.runId !== runId || hashContextPolicySnapshot(parsed.data) !== stored.hash) {
+      throw forbidden("Runtime Skill pins do not match the current immutable execution manifest");
+    }
+    const pins = parsed.data.skills;
+    if (new Set(pins.map(pin => pin.key)).size !== pins.length || new Set(pins.map(pin => pin.versionId)).size !== pins.length) {
+      throw forbidden("Runtime execution manifest contains duplicate Skill pins");
+    }
+    for (const pin of pins) {
+      if (!(await canReadSkill(companyId, pin.skillId, actor, "task", pin.versionId))) {
+        throw forbidden("A pinned Skill is no longer authorized for the current execution");
+      }
+      await assertRuntimeSkillSourceRetained(db, companyId, actor, pin.skillId, pin.versionId);
+    }
+    const selectedSkillKeys = new Set(pins.map(pin => pin.key));
+    return listRuntimeSkillEntriesInternal(companyId, {
+      actor,
+      readScope: "task",
+      selectedSkillKeys,
+      versionSelections: new Map<string, string | null>(pins.map(pin => [pin.key, pin.versionId])),
+    }, new Set(pins.map(pin => pin.versionId)));
   }
 
   async function importPackageFiles(
@@ -6259,6 +6495,11 @@ export function companySkillService(db: Db) {
     const out: CompanySkill[] = [];
     for (const skill of imported) {
       assertImportedSkillKeyAllowed(skill);
+      const bundledPlatformRelease = skill.key === BLENTERA_PLATFORM_SKILL_KEY
+        && asString(skill.metadata?.sourceKind) === "paperclip_bundled";
+      if (!bundledPlatformRelease) {
+        assertSkillMarkdownIdentityCustomerMutable(skill, skill.markdown);
+      }
       assertImportedSkillSourceAllowed(skill);
       const existing = await getByKey(companyId, skill.key, database);
       const existingMeta = existing ? getSkillMeta(existing) : {};
@@ -7195,6 +7436,7 @@ export function companySkillService(db: Db) {
   async function deleteSkill(companyId: string, skillId: string): Promise<CompanySkill | null> {
     const initial = await getById(companyId, skillId);
     if (!initial) return null;
+    assertPlatformSkillCustomerMutable(initial);
     async function assertUnused(skill: CompanySkill) {
       const usedByAgents = await usage(companyId, skill.key);
       if (usedByAgents.length === 0) return;
@@ -7278,6 +7520,7 @@ export function companySkillService(db: Db) {
 
   return {
     list,
+    search,
     listFull,
     getById,
     getByKey,
@@ -7342,5 +7585,7 @@ export function companySkillService(db: Db) {
     resetSkill,
     canReadSkill,
     listRuntimeSkillEntries,
+    requiredPlatformSkill,
+    listRuntimeSkillEntriesForCurrentExecution,
   };
 }

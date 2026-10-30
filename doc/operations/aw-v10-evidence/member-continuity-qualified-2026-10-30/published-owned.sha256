@@ -1,0 +1,7 @@
+6bf4ffe5a4699d6b2343345466671373fb58f29adf94d79c8567a52035c69d29  server/src/routes/access.ts
+8b717130bdc9a6e17473ef01c2124f15ec01e2ad4a65233ad283d838bff4902f  server/src/services/access.ts
+04ee7a7064f8759327c9b1a04ed7e7d9b9bea2d4d1f6ab67d1df8015db74efbe  server/src/__tests__/private-0565-responsibility-scan.integration.test.ts
+792f451a52cffd83550105c371e281c999c699ffaf792076d6756f13a3bc0daf  server/src/services/experience/private-0565/member-continuity-preflight.ts
+6cea9972f066238f6a660e0a053c76be5f0c154b109001426944160672a8195b  ui/src/api/access.ts
+ef2e4a643a9e16b79de7228d038e8bfbda72fd70bd7b18c8a13c45117ba912d7  ui/src/pages/CompanyAccess.tsx
+195f2051584a15ca763cbea3260c6aff0e2a896fb1ef86614e7e88820a5a96dc  ui/src/pages/CompanyAccess.test.tsx

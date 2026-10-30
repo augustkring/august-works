@@ -1,0 +1,13 @@
+{
+  "generator": "drizzle-kit 0.31.10 generate --custom",
+  "entry": {
+    "idx": 548,
+    "version": "7",
+    "when": 1793009891277,
+    "tag": "0548_native_conversation_dispatch_sources",
+    "breakpoints": true
+  },
+  "schemaUnchangedFrom547": true,
+  "sqlSha256": "a0689cdbccfc98db2079578fb2d2d4519cea5afea4f2c95f583a2e35bb6b4c1f",
+  "scope": "Metadata publication only; application and acceptance need tests"
+}

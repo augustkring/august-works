@@ -3,8 +3,9 @@ import { assertExecutionGovernance } from "./services/ai-governance/execution-ga
 import { assertManagedRuntimeCommercialAuthority } from "./services/billing/managed-runtime-admission.js";
 import { v7FeatureEnabled } from "@paperclipai/shared";
 import { and, eq } from "drizzle-orm";
-import { heartbeatRuns, instanceSettings, orchestrationPlans, orchestrationWorkerAttempts, type Db } from "@paperclipai/db";
+import { heartbeatRuns, orchestrationPlans, orchestrationWorkerAttempts, type Db } from "@paperclipai/db";
 import { forbidden } from "./errors.js";
+import { instanceSettingsService } from "./services/instance-settings.js";
 
 /** Stop revokes write authority before waiting for the executor to settle. */
 export function agentRunWritesRevoked(run: {
@@ -23,21 +24,44 @@ export async function assertAgentRunWriteAllowed(tx: Db, companyId: string, acto
   stopId?: string | null;
 }) {
   if (!actor.agentId) return;
-  if (!actor.runId) { await assertManagedRuntimeCommercialAuthority(tx, companyId, actor.agentId); await assertPackageExecution(tx, companyId, actor.agentId); return; }
+  if (!actor.runId) await assertManagedRuntimeCommercialAuthority(tx, companyId, actor.agentId);
+  else {
+    const [run] = await tx.select({ status: heartbeatRuns.status, resultJson: heartbeatRuns.resultJson })
+      .from(heartbeatRuns).where(and(eq(heartbeatRuns.id, actor.runId),
+        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, actor.agentId)))
+      .for("share");
+    const stoppedForThisMutation = run?.status === "cancelled" && actor.stopId &&
+      run.resultJson?.issueMutationStopId === actor.stopId;
+    if (!stoppedForThisMutation) await assertManagedRuntimeCommercialAuthority(tx, companyId, actor.agentId);
+  }
+  await assertAgentRunPolicyAllowed(tx, companyId, actor);
+}
+
+/** Validate the native run's package, governance and cancellation authority
+ * without asserting that its managed runtime is already healthy. Runtime start
+ * consumers pair this with RuntimeControl's current STOPPED-cell commercial
+ * admission before any start effect. Ordinary writes keep using the stricter
+ * assertAgentRunWriteAllowed gate above. */
+export async function assertAgentRunPolicyAllowed(tx: Db, companyId: string, actor: {
+  agentId?: string | null;
+  runId?: string | null;
+  stopId?: string | null;
+}) {
+  if (!actor.agentId) return;
+  if (!actor.runId) { await assertPackageExecution(tx, companyId, actor.agentId); return; }
   const [run] = await tx.select({ status: heartbeatRuns.status, resultJson: heartbeatRuns.resultJson })
     .from(heartbeatRuns).where(and(eq(heartbeatRuns.id, actor.runId),
       eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, actor.agentId)))
     .for("share");
   const stoppedForThisMutation = run?.status === "cancelled" && actor.stopId &&
     run.resultJson?.issueMutationStopId === actor.stopId;
-  if (!stoppedForThisMutation) await assertManagedRuntimeCommercialAuthority(tx, companyId, actor.agentId);
   if (!stoppedForThisMutation) await assertPackageExecution(tx, companyId, actor.agentId, actor.runId);
   if (!stoppedForThisMutation) await assertExecutionGovernance(tx, companyId, actor.agentId, actor.runId);
   const [orchestration] = await tx.select({ status: orchestrationPlans.status, startedAt: orchestrationPlans.startedAt, budgets: orchestrationPlans.budgets }).from(orchestrationWorkerAttempts)
     .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId), eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId)))
     .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, actor.runId))).for("share", { of: orchestrationPlans });
-  const [settings] = orchestration ? await tx.select({ flags: instanceSettings.experimental }).from(instanceSettings).where(eq(instanceSettings.singletonKey, "default")) : [];
-  if (orchestration && (!v7FeatureEnabled(settings?.flags ?? {}, "orchestration_v7") || orchestration.status !== "running" || !orchestration.startedAt || Date.now() >= orchestration.startedAt.getTime() + orchestration.budgets.maxWallClockSeconds * 1000) && !stoppedForThisMutation) {
+  const flags = orchestration ? await instanceSettingsService(tx).getExperimental({ db: tx }) : {};
+  if (orchestration && (!v7FeatureEnabled(flags, "orchestration_v7") || orchestration.status !== "running" || !orchestration.startedAt || Date.now() >= orchestration.startedAt.getTime() + orchestration.budgets.maxWallClockSeconds * 1000) && !stoppedForThisMutation) {
     throw forbidden("This orchestration attempt no longer has write authority", { code: "orchestration_attempt_stopped" });
   }
   if (agentRunWritesRevoked(run) && !stoppedForThisMutation) {

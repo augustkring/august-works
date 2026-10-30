@@ -1,0 +1,253 @@
+{
+  "runs": [
+    {
+      "prefix": "root-ui-heartbeat-fixtures-r2-20261030",
+      "passed": 14,
+      "currentOwnedSourcesMatch": true,
+      "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "sourceHead": "605f2096f7976d53eaa7a6804e26509772ad6223",
+      "sourceFiles": [
+        "server/src/__tests__/heartbeat-lock-release-on-reassignment.test.ts",
+        "ui/src/pages/CustomerHelpCenter.test.tsx"
+      ]
+    },
+    {
+      "prefix": "native-project-unknown-dispatch-root-r1-20261030",
+      "passed": 1,
+      "currentOwnedSourcesMatch": true,
+      "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "sourceHead": "c080bfffb84350db24cd8a354fa5f5c58b4be11d",
+      "sourceFiles": [
+        "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-binary.path",
+      "sha256": "f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99",
+      "bytes": 124
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-binary.sha256",
+      "sha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62",
+      "bytes": 65
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-runner.txt",
+      "sha256": "6b7b2a12ef9ea8ab86890d1d7642e165bed43195b5119a86be459e54206f18fb",
+      "bytes": 174
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-snapshot.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-snapshot.log",
+      "sha256": "c65fc297e10580b4883ee0a31d442b8498d60ac73a268ba14a57dc934bd589a5",
+      "bytes": 38
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.json",
+      "sha256": "3f2a266f6bfb6bba68290c2a420c4f6a0134b64835185dee1cf5cdbcf085de9b",
+      "bytes": 188222
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/evals/platform-skill/README.md",
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59",
+      "bytes": 2751
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/evals/platform-skill/cases.json",
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b",
+      "bytes": 3541
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4",
+      "bytes": 4458
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8",
+      "bytes": 2495
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6",
+      "bytes": 2483
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227",
+      "bytes": 677
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf",
+      "bytes": 20828
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce",
+      "bytes": 3871
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/scripts/run-platform-skill-evals.mjs",
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3",
+      "bytes": 4384
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd",
+      "bytes": 5637
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9",
+      "bytes": 39931
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "sha256": "cec8ea59bdf966cb42ebe5afe77abbd6f80a6d655c8b79c1e233ee2ab8256890",
+      "bytes": 15809
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source-files/server/src/services/resource-governance.ts",
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6",
+      "bytes": 4436
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-source-pins.source.patch",
+      "sha256": "27af518f47457fea7fe4577caaecff4a39ca8b3af205b737f7c6ed3a4a32cada",
+      "bytes": 686464
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-syntax.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-syntax.log",
+      "sha256": "6031b29d068210e22d39d5816508d5e8366772621bb39c63bfa7fc2d1d1cae3a",
+      "bytes": 61
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-test.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030-test.log",
+      "sha256": "ffd0c09fd9f9db4ffa3593108330a80cf64821c0a96f1dee1836d311d3ce130f",
+      "bytes": 9302
+    },
+    {
+      "path": "native-project-unknown-dispatch-root-r1-20261030.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/heartbeat.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/heartbeat.log",
+      "sha256": "b51eeb09d5045f425711ec0f44b6583619c65e135597568a03ee14c8b8481039",
+      "bytes": 855
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/snapshot.log",
+      "sha256": "2c4c0c193bc892f395916ab8a5419b1b057b1b6500fc198901c35c0b71de559a",
+      "bytes": 38
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.json",
+      "sha256": "0d0a13922108d3e93c6c9bde3d6f79e746b54e89af22b664c390c8ec226bca6a",
+      "bytes": 187183
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/evals/platform-skill/cases.json",
+      "sha256": "1d9ceb97491828790e1296e41dd062aec42c3a08c17f8ccaaa476710f9a570e8",
+      "bytes": 2949
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/evals/platform-skill/operating-knowledge.json",
+      "sha256": "a1e44973d3d64480378e7d461dbe2c6c513ff21c7acf63d4240f3256053f00a4",
+      "bytes": 3972
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/customer-problem-evidence.ts",
+      "sha256": "6361a2a79c07e2c2040972b89f2774b8297d8032137a310eafcc7a403a5262e9",
+      "bytes": 851
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/customer-success-quality.test.ts",
+      "sha256": "ed45cb6fecfab6483c52e9e87982fe05214a6376a91dd34b112640f9883ecc57",
+      "bytes": 2110
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/customer-success-quality.ts",
+      "sha256": "21139743ecf50b437289bb6e3215611546b28d608e552022a742399810a7a6b1",
+      "bytes": 8587
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/resource-governance.test.ts",
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8",
+      "bytes": 2495
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/packages/shared/src/resource-governance.ts",
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6",
+      "bytes": 2483
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "sha256": "887473a4fccd044bc5b9ccee08955f8a35f6e2c2e7a8a5901dc190c9061d3702",
+      "bytes": 14784
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd",
+      "bytes": 5637
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9",
+      "bytes": 39931
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "sha256": "bb2a05a67019fcb3ab810b33ee9cb9102bad36126b0cf74b298a3ccd579ce48a",
+      "bytes": 15486
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source-files/server/src/services/resource-governance.ts",
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6",
+      "bytes": 4436
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/source-pins.source.patch",
+      "sha256": "fac41ddeabb1f90cc717b0e51868cb531643e0a3d349e8107b70e9cc685dd405",
+      "bytes": 699089
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/syntax.log",
+      "sha256": "07692700cca347278e88985c432acb80a2fab2b96eb641be15ffada7eb56867b",
+      "bytes": 61
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/ui.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "root-ui-heartbeat-fixtures-r2-20261030/ui.log",
+      "sha256": "14b9a12e087e923111cc6ab3213fda6929c4a053fb883de43c4f5ef710f3e1fa",
+      "bytes": 11126
+    }
+  ],
+  "archiveSha256": "642f9428899cee36e7f2115984f01ac5766e1bf4e6d717ef7bc74ba8e2909e39"
+}

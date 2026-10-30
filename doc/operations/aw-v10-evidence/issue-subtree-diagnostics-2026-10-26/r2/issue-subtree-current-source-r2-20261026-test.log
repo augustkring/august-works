@@ -1,0 +1,15 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[17:58:43] [32mINFO[39m: [36missue subtree diagnostics read[39m [90m{"companyId":"ff896727-bd77-455f-a19c-6714089fe0e6","issueId":"eb4f6807-2187-4738-b091-cc44c5f15309","actorType":"board","nodeCount":2,"omittedUnauthorizedNodeCount":0,"edgeCount":3,"internalIdsIncluded":true,"truncated":false}[39m
+[17:58:44] [32mINFO[39m: [36missue subtree diagnostics read[39m [90m{"companyId":"99e3407f-e944-4235-8270-ee292ee7af4b","issueId":"17f73708-811e-4648-a338-382e8b349aa2","actorType":"board","nodeCount":1,"omittedUnauthorizedNodeCount":0,"edgeCount":0,"internalIdsIncluded":true,"truncated":false}[39m
+[17:58:50] [32mINFO[39m: [36missue subtree diagnostics read[39m [90m{"companyId":"86c216f0-5591-47cd-853d-5a85fd860109","issueId":"36d3898f-e31d-4db3-953b-3b432513c987","actorType":"board","nodeCount":100,"omittedUnauthorizedNodeCount":null,"edgeCount":99,"internalIdsIncluded":true,"truncated":true}[39m
+[17:58:51] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"5705b75a-69d4-4a6f-ad10-ffc101cb1501","issueId":"1556fdc5-5028-4e0e-a476-bdbd2a8a1b77","companyId":"81137f8f-cd12-46a1-8344-82bc3df78b2d","commentId":"8bff385c-fc57-418f-ab69-f0addb9d16c5","grantedAction":"issue:read","grant":"issue_mention_comment"}[39m
+[17:58:51] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"5705b75a-69d4-4a6f-ad10-ffc101cb1501","issueId":"1556fdc5-5028-4e0e-a476-bdbd2a8a1b77","companyId":"81137f8f-cd12-46a1-8344-82bc3df78b2d","commentId":"8bff385c-fc57-418f-ab69-f0addb9d16c5","grantedAction":"issue:read","grant":"issue_mention_comment"}[39m
+[17:58:51] [32mINFO[39m: [36missue subtree diagnostics read[39m [90m{"companyId":"81137f8f-cd12-46a1-8344-82bc3df78b2d","issueId":"1556fdc5-5028-4e0e-a476-bdbd2a8a1b77","actorType":"agent","nodeCount":1,"omittedUnauthorizedNodeCount":1,"edgeCount":0,"internalIdsIncluded":false,"truncated":false}[39m
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  17:58:20
+   Duration  31.51s (transform 12.33s, setup 89ms, import 17.25s, tests 14.01s, environment 0ms)
+

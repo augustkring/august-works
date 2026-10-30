@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 import { settleTheme } from "./theme.shared";
 import { expect, test } from "@playwright/test";
 import { createRequire } from "node:module";
@@ -11,6 +13,8 @@ test.setTimeout(120000);
 // This records a provider-pinned proposal; no qualified causal trial is claimed.
 test("a native operator pins DoWhy to a human model without reviewing or running it", async ({ page, request }, info) => {
   const original = await json(await request.get("/api/instance/settings/experimental"));
+ const session = await json(await request.get("/api/auth/get-session"));
+ const currentUserId = session.user.id as string;
   try {
     await json(await request.patch("/api/instance/settings/experimental", { data: { analytical_lineage_v8: true, business_metrics_v8: true, business_experiments_v8: true, causal_claims_v8: true, causal_provider_dowhy_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true } }));
     const company = await json(await request.post("/api/companies", { data: { name: "Native DoWhy proposal software fixture" } }));
@@ -19,11 +23,12 @@ test("a native operator pins DoWhy to a human model without reviewing or running
     const policy = await json(await request.post(`/api/companies/${company.id}/governance-obligations`, { data: purpose }));
     const metrics = [];
     for (const status of ["done", "cancelled", "in_progress"]) {
-      const definition = { ...metricDefinition(policy.id), calculation: { kind: "native_ratio", numerator: { entity: "issue", statuses: [status], projectId: null }, denominator: { entity: "issue", statuses: [...ISSUE_STATUSES], projectId: null } } };
+      const definition = { ...metricDefinition(policy.id), ownerUserId: currentUserId, calculation: { kind: "native_ratio", numerator: { entity: "issue", statuses: [status], projectId: null }, denominator: { entity: "issue", statuses: [...ISSUE_STATUSES], projectId: null } } };
       const metric = await json(await request.post(`/api/companies/${company.id}/business-metrics`, { data: { key: `native_${status}`, definition } }));
       await json(await request.post(`/api/companies/${company.id}/business-metrics/${metric.metric.id}/publish`, { data: { expectedRevision: 1, versionId: metric.version.id } })); metrics.push({ id: metric.metric.id, versionId: metric.version.id });
     }
     const definition = experimentDefinition(policy.id, metrics);
+    definition.ownerUserId = currentUserId;
     definition.sampleOrDurationPlan.from = new Date(Date.now() + 2000).toISOString(); definition.sampleOrDurationPlan.until = new Date(Date.parse(definition.sampleOrDurationPlan.from) + 12000).toISOString(); definition.sampleOrDurationPlan.minimumAssignedUnits = 4;
     const experiment = await json(await request.post(`/api/companies/${company.id}/experiments`, { data: { key: "native_proposal_source", definition } })), base = `/api/companies/${company.id}/experiments/${experiment.experiment.id}`;
     for (const [revision, state] of [[1, "in_review"], [2, "ready"]] as const) await json(await request.post(`${base}/transition`, { data: { expectedRevision: revision, versionId: experiment.version.id, state, rationale: "Explicit synthetic native Source fixture, not a collected business trial" } }));

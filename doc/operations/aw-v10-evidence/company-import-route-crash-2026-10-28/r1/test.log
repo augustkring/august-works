@@ -1,0 +1,41 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ × |@paperclipai/server| src/__tests__/company-import-process-recovery.integration.test.ts > company import process recovery > preserves one real imported Agent and the original unknown job after child death before receipt 57426ms
+   → Failed query: update "customer_operations" set "lease_expires_at" = $1 where "customer_operations"."id" = $2
+params: 2026-10-28T10:48:01.929Z,import-c9f99724-7334-430b-bb36-35002f0d104d
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-process-recovery.integration.test.ts > company import process recovery > preserves one real imported Agent and the original unknown job after child death before receipt
+Error: Failed query: update "customer_operations" set "lease_expires_at" = $1 where "customer_operations"."id" = $2
+params: 2026-10-28T10:48:01.929Z,import-c9f99724-7334-430b-bb36-35002f0d104d
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/company-import-process-recovery.integration.test.ts:208:7
+    206|       // Shorten the crashed worker's lease into the future, then let …
+    207|       // expiry condition pass before the original scheduler owner rec…
+    208|       await db.update(customerOperations).set({ leaseExpiresAt: new Da…
+       |       ^
+    209|         .where(eq(customerOperations.id, originalId));
+    210|       await new Promise(resolve => setTimeout(resolve, 200));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { query: 'update "customer_operations" set "lease_expires_at" = $1 where "customer_operations"."id" = $2', params: [ '2026-10-28T10:48:01.929Z', 'import-c9f99724-7334-430b-bb36-35002f0d104d' ] }
+Caused by: PostgresError: new row for relation "customer_operations" violates check constraint "customer_operations_lease_check"
+ ❯ ErrorResponse ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', detail: 'Failing row contains (import-c9f99724-7334-430b-bb36-35002f0d104d, f3032ce4-1c99-441c-84b0-317fd0cfabcd, company_import, company_portability, null, 323f60ca62ed4826f48efa0f4d71c81393b111acab3cfd395a2b390cc2aa80cc, user-94454c9b-8a6c-4dfd-9b9d-1b3754810e20, f3032ce4-1c99-441c-84b0-317fd0cfabcd, 7a83c0ab57218ab343281145e682ed9779bedfcde282919d92e7215fff7ec185, 21029ffa5a37d03a160264b4718d59790c0ce2bd22bf8cd591f8a2b0c7ad77f6, succeeded, settled, 1, 82cddf37-92e1-465e-a194-c19b88b28c92, {"companyId": "f3032ce4-1c99-441c-84b0-317fd0cfabcd", "agentCoun..., null, null, 2026-10-28 10:48:01.093661+00, 2026-10-28 10:48:01.7056+00, 2026-10-28 10:48:01.7056+00, 2026-10-28 11:48:01.7056+00, 2026-10-28 10:48:01.055263+00, 2026-10-28 10:48:01.7056+00, null, null, 2026-10-28 10:48:01.929+00, {"version": 1, "selected": [{"kind": "agent", "slug": "worker", ..., {"idMap": [{"key": "skills:bundle", "kind": "skill", "sourceId":...).', schema_name: 'public', table_name: 'customer_operations', constraint_name: 'customer_operations_lease_check', file: 'execMain.c', routine: 'ExecConstraints', query: 'update "customer_operations" set "lease_expires_at" = $1 where "customer_operations"."id" = $2', parameters: [ '2026-10-28T10:48:01.929Z', 'import-c9f99724-7334-430b-bb36-35002f0d104d' ], args: [ '2026-10-28T10:48:01.929Z', 'import-c9f99724-7334-430b-bb36-35002f0d104d' ], types: [ 1184, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  10:47:30
+   Duration  76.69s (transform 10.22s, setup 75ms, import 14.98s, tests 61.51s, environment 0ms)
+

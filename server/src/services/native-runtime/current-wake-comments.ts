@@ -403,6 +403,7 @@ function parseReceipt(value: unknown): CurrentWakeCommentsReceipt | null {
 async function currentWakeCommentsSnapshot(
   db: Db,
   binding: CurrentWakeCommentsBinding,
+  lockMode: "share" | "update" = "update",
 ): Promise<CurrentWakeCommentsSnapshot> {
   const rows = await db
     .select({
@@ -424,7 +425,7 @@ async function currentWakeCommentsSnapshot(
       ),
     )
     .orderBy(asc(issueComments.id))
-    .for("update");
+    .for(lockMode);
   const attachments = await db
     .select({
       id: issueAttachments.id,
@@ -537,6 +538,47 @@ async function currentWakeCommentsSnapshot(
   };
 }
 
+async function lockCurrentWakeCommentsOwner(
+  db: Db,
+  input: {
+    companyId: string;
+    issueId: string;
+    runId: string;
+    agentId: string;
+  },
+  lockMode: "share" | "update",
+) {
+  // Source readers pin Task before Run. Keep the receipt writer and terminal
+  // fence in that same order to avoid a Task↔Run row-lock cycle.
+  const issue = await db
+    .select({
+      assigneeAgentId: issues.assigneeAgentId,
+      executionRunId: issues.executionRunId,
+    })
+    .from(issues)
+    .where(and(eq(issues.id, input.issueId), eq(issues.companyId, input.companyId)))
+    .for(lockMode)
+    .then((rows) => rows[0] ?? null);
+  if (!issue) return null;
+
+  const run = await db
+    .select({
+      row: heartbeatRuns,
+    })
+    .from(heartbeatRuns)
+    .where(
+      and(
+        eq(heartbeatRuns.id, input.runId),
+        eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId),
+        eq(heartbeatRuns.nativeIssueId, input.issueId),
+      ),
+    )
+    .for(lockMode)
+    .then((rows) => rows[0]?.row ?? null);
+  return run ? { run, issue } : null;
+}
+
 function buildPage(
   binding: CurrentWakeCommentsBinding,
   snapshot: CurrentWakeCommentsSnapshot,
@@ -622,37 +664,17 @@ export async function readCurrentWakeComments(
   const inputCursor = request.cursor ?? null;
 
   return db.transaction(async (tx) => {
-    const locked = await tx
-      .select({
-        run: heartbeatRuns,
-        issueAssigneeAgentId: issues.assigneeAgentId,
-        issueExecutionRunId: issues.executionRunId,
-      })
-      .from(heartbeatRuns)
-      .innerJoin(
-        issues,
-        and(
-          eq(issues.id, binding.issueId),
-          eq(issues.companyId, binding.companyId),
-        ),
-      )
-      .where(
-        and(
-          eq(heartbeatRuns.id, binding.runId),
-          eq(heartbeatRuns.companyId, binding.companyId),
-          eq(heartbeatRuns.agentId, binding.agentId),
-          eq(heartbeatRuns.nativeIssueId, binding.issueId),
-        ),
-      )
-      .for("update")
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
+    const locked = await lockCurrentWakeCommentsOwner(
+      tx as unknown as Db,
+      binding,
+      "update",
+    );
     if (
       !locked ||
       locked.run.runtimeMode !== "native" ||
       locked.run.status !== "running" ||
-      locked.issueAssigneeAgentId !== binding.agentId ||
-      locked.issueExecutionRunId !== binding.runId
+      locked.issue.assigneeAgentId !== binding.agentId ||
+      locked.issue.executionRunId !== binding.runId
     ) {
       throw new Error("paperclip_current_wake_comments_binding_not_authorized");
     }
@@ -751,44 +773,24 @@ export async function assertCurrentWakeCommentsRead(
   expectedBinding?: CurrentWakeCommentsBinding | null,
 ): Promise<void> {
   await db.transaction(async (tx) => {
-    const locked = await tx
-      .select({
-        resultJson: heartbeatRuns.resultJson,
-        contextSnapshot: heartbeatRuns.contextSnapshot,
-        issueAssigneeAgentId: issues.assigneeAgentId,
-        issueExecutionRunId: issues.executionRunId,
-      })
-      .from(heartbeatRuns)
-      .innerJoin(
-        issues,
-        and(
-          eq(issues.id, input.issueId),
-          eq(issues.companyId, input.companyId),
-        ),
-      )
-      .where(
-        and(
-          eq(heartbeatRuns.id, input.runId),
-          eq(heartbeatRuns.companyId, input.companyId),
-          eq(heartbeatRuns.agentId, input.agentId),
-          eq(heartbeatRuns.nativeIssueId, input.issueId),
-          eq(heartbeatRuns.status, "running"),
-        ),
-      )
-      .for("update")
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    if (!locked) throw new Error("native_current_wake_comments_binding_changed");
-    if (readNativeReviewAssignmentContext(locked.contextSnapshot)) {
+    const locked = await lockCurrentWakeCommentsOwner(
+      tx as unknown as Db,
+      input,
+      "share",
+    );
+    if (!locked || locked.run.status !== "running") {
+      throw new Error("native_current_wake_comments_binding_changed");
+    }
+    if (readNativeReviewAssignmentContext(locked.run.contextSnapshot)) {
       // Accepting a review can release the child's execution lock. The exact
       // resolving run may still finish; it does not regain task write access.
       const review = await getNativeReviewAssignment(tx as unknown as Db, {
-        ...input, contextSnapshot: locked.contextSnapshot, allowResolvedByRunId: input.runId,
+        ...input, contextSnapshot: locked.run.contextSnapshot, allowResolvedByRunId: input.runId,
       });
-      if (!review || (review.interaction.status === "pending" && locked.issueExecutionRunId !== input.runId)) {
+      if (!review || (review.interaction.status === "pending" && locked.issue.executionRunId !== input.runId)) {
         throw new Error("native_current_wake_comments_binding_changed");
       }
-    } else if (locked.issueAssigneeAgentId !== input.agentId || locked.issueExecutionRunId !== input.runId) {
+    } else if (locked.issue.assigneeAgentId !== input.agentId || locked.issue.executionRunId !== input.runId) {
       throw new Error("native_current_wake_comments_binding_changed");
     }
     const currentBinding = await resolveCurrentWakeCommentsBinding(
@@ -812,7 +814,7 @@ export async function assertCurrentWakeCommentsRead(
     const binding = currentBinding;
     if (!binding) return;
     const receipt = parseReceipt(
-      record(locked.resultJson)[CURRENT_WAKE_COMMENTS_RECEIPT_KEY],
+      record(locked.run.resultJson)[CURRENT_WAKE_COMMENTS_RECEIPT_KEY],
     );
     if (!receipt || receipt.complete !== true || receipt.nextCursor !== null) {
       throw new Error("native_current_wake_comments_unread");
@@ -823,6 +825,7 @@ export async function assertCurrentWakeCommentsRead(
     const snapshot = await currentWakeCommentsSnapshot(
       tx as unknown as Db,
       binding,
+      "share",
     );
     if (receipt.snapshotDigest !== snapshot.snapshotDigest) {
       throw new Error("native_current_wake_comments_changed_after_read");

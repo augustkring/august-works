@@ -1,0 +1,2 @@
+a818a320251dbb8c7d16898889cb3b6c03487239fc2e38941e9191224952cf12  ui/src/components/SidebarAccountMenu.production.tsx
+9ad2d6bcc46442c3d19c37ad4eef34d44cc7bb3d9b9146d6c8c533d3189e2c39  ui/src/components/SidebarAccountMenu.test.tsx

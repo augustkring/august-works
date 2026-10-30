@@ -1,0 +1,3 @@
+# Help, support and service status
+
+Use relevant Help first when it can resolve the current question. Product feedback is distinct from urgent support or a security incident. Discover the current supported intake capability and verify a created support case or message receipt before claiming it was submitted. Include only minimum safe diagnostics, timestamps, user-visible reason codes and operation references; never include credentials, cookies, private prompts or raw sensitive logs. Read authoritative current service status; do not invent an incident or promise an unverified resolution time. If intake is unavailable, report that fact and the supported human handoff without pretending a case exists.

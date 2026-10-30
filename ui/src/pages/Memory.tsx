@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useV9CurrentAccount } from "@/hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "@/hooks/useV9PrivateReadAuthority";
 import { MemoryPrivacyControls } from "@/components/MemoryPrivacyControls";
 import { MemoryMaintenanceControls } from "@/components/MemoryMaintenanceControls";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -77,12 +80,20 @@ function statusTone(record: MemoryRecord) {
 }
 
 export function Memory() {
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, selectedCompany } = useCompany();
+  const { t } = useTranslation("experience");
+  const identity = useV9CurrentAccount();
+  const principal = identity.localImplicit ? "local-board" : identity.userId ?? "";
+  const authority = useV9PrivateReadAuthority(principal, true);
   const { recordId } = useParams();
   const navigate = useNavigate();
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToastActions();
   const queryClient = useQueryClient();
+  const scope = JSON.stringify([selectedCompanyId, recordId, principal, identity.sessionId, identity.authorityEpoch, authority.epoch]);
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const readScope = [principal, identity.sessionId, identity.authorityEpoch, authority.epoch];
 
   const [reviewState, setReviewState] = useState<MemoryReviewState>("pending");
   const [memoryType, setMemoryType] = useState<MemoryType | "all">("all");
@@ -109,26 +120,26 @@ export function Memory() {
     memoryType === "all" ? null : memoryType,
   );
   const listQuery = useQuery({
-    queryKey: listKey,
+    queryKey: [...listKey, ...readScope],
     queryFn: () =>
-      memoryApi.listRecords(selectedCompanyId!, {
+      authority.read(() => memoryApi.listRecords(selectedCompanyId!, {
         reviewState,
         ...(memoryType === "all" ? {} : { memoryType }),
         limit: 100,
-      }),
-    enabled: !!selectedCompanyId && !recordId,
+      })),
+    enabled: !!selectedCompanyId && !recordId && authority.readReady,
   });
 
   const detailQuery = useQuery({
-    queryKey: queryKeys.memory.detail(selectedCompanyId!, recordId ?? ""),
-    queryFn: () => memoryApi.getRecord(selectedCompanyId!, recordId!),
-    enabled: !!selectedCompanyId && !!recordId,
+    queryKey: [...queryKeys.memory.detail(selectedCompanyId!, recordId ?? ""), ...readScope],
+    queryFn: () => authority.read(() => memoryApi.getRecord(selectedCompanyId!, recordId!)),
+    enabled: !!selectedCompanyId && !!recordId && authority.readReady,
   });
 
   const bindingsQuery = useQuery({
-    queryKey: queryKeys.memory.bindings(selectedCompanyId!),
-    queryFn: () => memoryApi.listBindings(selectedCompanyId!),
-    enabled: !!selectedCompanyId,
+    queryKey: [...queryKeys.memory.bindings(selectedCompanyId!), ...readScope],
+    queryFn: () => authority.read(() => memoryApi.listBindings(selectedCompanyId!)),
+    enabled: !!selectedCompanyId && authority.readReady,
   });
 
   const invalidateMemory = async () => {
@@ -137,19 +148,26 @@ export function Memory() {
   };
 
   const acceptMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedCompanyId || !recordId) throw new Error("Memory record is unavailable.");
-      return memoryApi.accept(selectedCompanyId, recordId);
+    mutationFn: async (intent: { companyId: string; recordId: string; scope: string; publishPrivateShare?: true }) => {
+      if (scopeRef.current !== intent.scope || !authority.canRead()) throw new Error(t("memorySharing.accessChanged"));
+      const result = await authority.write(() => intent.publishPrivateShare
+        ? memoryApi.accept(intent.companyId, intent.recordId, undefined, true)
+        : memoryApi.accept(intent.companyId, intent.recordId));
+      if (scopeRef.current !== intent.scope) throw new Error(t("memorySharing.accessChanged"));
+      return result;
     },
-    onSuccess: async () => {
-      await invalidateMemory();
-      pushToast({ title: "Memory accepted", tone: "success" });
+    onSuccess: async (result, intent) => {
+      await queryClient.invalidateQueries({ queryKey: ["memory", intent.companyId] });
+      if (scopeRef.current === intent.scope && authority.confirmed(result))
+        pushToast({ title: result.privateShareReview?.state === "published" ? t("memorySharing.shared") : "Memory accepted", tone: "success" });
     },
-    onError: (error) => pushToast({
-      title: "Could not accept memory",
-      body: error instanceof Error ? error.message : "Unknown error",
-      tone: "error",
-    }),
+    onError: (error, intent) => {
+      if (scopeRef.current === intent.scope && authority.canRead()) pushToast({
+        title: t("memorySharing.failed"),
+        body: error instanceof Error ? error.message : t("memorySharing.unconfirmed"),
+        tone: "error",
+      });
+    },
   });
 
   const decisionMutation = useMutation({
@@ -277,6 +295,8 @@ export function Memory() {
     return <EmptyState icon={Brain} message="Select a company to open Memory." />;
   }
 
+  if (!authority.readReady) return <PageSkeleton />;
+
   if (recordId) {
     if (detailQuery.isLoading) return <PageSkeleton />;
     if (detailQuery.error || !detailQuery.data) {
@@ -302,6 +322,8 @@ export function Memory() {
 
     const { record, evidence } = detailQuery.data;
     const canDecide = record.reviewState === "pending";
+    const privateShare = detailQuery.data.privateShareReview?.state === "pending"
+      ? detailQuery.data.privateShareReview : null;
     const canRevoke =
       record.reviewState === "accepted" && !record.revokedAt && !record.supersededByRecordId;
     const canCorrect = canRevoke;
@@ -361,16 +383,30 @@ export function Memory() {
                     </Button>
                     <Button
                       disabled={pendingMutation}
-                      onClick={() => acceptMutation.mutate()}
+                      aria-describedby={privateShare ? "memory-sharing-heading memory-sharing-destination" : undefined}
+                      onClick={() => acceptMutation.mutate({ companyId: selectedCompanyId, recordId, scope,
+                        ...(privateShare ? { publishPrivateShare: true as const } : {}) })}
                     >
                       <Check className="mr-1.5 h-4 w-4" />
-                      {acceptMutation.isPending ? "Accepting…" : "Accept"}
+                      {acceptMutation.isPending ? t("memorySharing.saving") : privateShare ? t("memorySharing.approveAndShare") : "Accept"}
                     </Button>
                   </>
                 ) : null}
               </div>
             </div>
           </header>
+
+          {privateShare ? <section aria-labelledby="memory-sharing-heading" className="rounded-lg border border-border bg-card p-4 text-sm">
+            <h2 id="memory-sharing-heading" className="font-semibold">{t("memorySharing.reviewTitle")}</h2>
+            <p className="mt-2">{t("memorySharing.reviewDescription")}</p>
+            <p id="memory-sharing-destination" className="mt-2 font-medium">{t("memorySharing.destination", {
+              company: selectedCompany?.name ?? selectedCompanyId,
+              scope: privateShare.targetScopeType === "company" ? t("memorySharing.companyScope")
+                : privateShare.targetScopeType === "project" ? t("memorySharing.projectScope") : t("memorySharing.subjectScope"),
+              reference: privateShare.targetScopeId ? ` · ${privateShare.targetScopeId}` : "",
+            })}</p>
+            <p className="mt-2 text-muted-foreground">{t("memorySharing.retainedSources")}</p>
+          </section> : null}
 
           <section aria-labelledby="memory-content-heading">
             <h2 id="memory-content-heading" className="text-sm font-semibold">

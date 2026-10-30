@@ -1,5 +1,8 @@
 import type {
   Company,
+  CompanyResponsibilityContacts,
+  UpdateCompanyResponsibilityContacts,
+  CustomerOperationReceipt,
   CompanyPortabilityExportRequest,
   CompanyPortabilityExportPreviewResult,
   CompanyPortabilityExportResult,
@@ -45,7 +48,8 @@ function importPackageForm(file: File, meta: CompanyPortabilityPreviewMeta | Com
   return form;
 }
 
-export type CompanyImportJobState = "running" | "succeeded" | "failed";
+export type { CompanyImportJobState } from "@paperclipai/shared/customer-operations";
+import type { CompanyImportJobState } from "@paperclipai/shared/customer-operations";
 
 /** 202 body from the async opt-in on POST /companies/import (and the 409 body when a job is already running). */
 export interface CompanyImportJobAccepted {
@@ -58,6 +62,8 @@ export interface CompanyImportJobStatus {
   job: {
     id: string;
     status: CompanyImportJobState;
+    /** An unbound new-company receipt is not evidence that a company was created. */
+    target?: { mode: "new_company"; result: "not_confirmed" };
     createdAt?: string;
     updatedAt?: string;
     completedAt?: string;
@@ -76,10 +82,21 @@ export interface CompanyImportJobStatus {
     /** Board-created jobs carry the full result for parity with the sync response. */
     importResult?: CompanyPortabilityImportResult;
   };
+  operation?: CustomerOperationReceipt;
   retryAfterMs?: number;
 }
 
+export interface CompanyImportJobHistory {
+  jobs: Array<CompanyImportJobStatus & { operation: CustomerOperationReceipt }>;
+  nextCursor: string | null;
+}
+
 export const companiesApi = {
+  importHistory: (companyId: string, expectedUserId: string, cursor?: string, signal?: AbortSignal) => {
+    const query = new URLSearchParams({ expectedUserId });
+    if (cursor) query.set("cursor", cursor);
+    return api.get<CompanyImportJobHistory>(`/companies/${encodeURIComponent(companyId)}/import/jobs?${query}`, { signal });
+  },
   list: () => api.get<Company[]>(COMPANIES_LIST_PATH),
   directory: () => api.get<Company[]>(COMPANIES_DIRECTORY_PATH),
   detachInflightDirectory: () => detachInflightGet(COMPANIES_DIRECTORY_PATH),
@@ -104,6 +121,8 @@ export const companiesApi = {
         Company,
         | "name"
         | "description"
+        | "locale"
+        | "timezone"
         | "status"
         | "budgetMonthlyCents"
         | "requireBoardApprovalForNewAgents"
@@ -113,6 +132,30 @@ export const companiesApi = {
       >
     >,
   ) => api.patch<Company>(`/companies/${companyId}`, data),
+  responsibilityContacts: (companyId: string, expectedUserId: string, expectedSessionId: string | null,
+    options?: RequestOptions) => {
+    const path = `/companies/${companyId}/responsibility-contacts`;
+    detachInflightGet(path);
+    return api.get<CompanyResponsibilityContacts>(path, {
+      ...options,
+      cache: "no-store",
+      headers: {
+        ...(options?.headers ?? {}),
+        "X-Blentera-Expected-User": expectedUserId,
+        ...(expectedSessionId ? { "X-Blentera-Expected-Session": expectedSessionId } : {}),
+      },
+    });
+  },
+  updateResponsibilityContacts: (companyId: string, data: UpdateCompanyResponsibilityContacts,
+    expectedUserId: string, expectedSessionId: string | null, options?: RequestOptions) =>
+    api.patch<{ ok: true }>(`/companies/${companyId}/responsibility-contacts`, data, {
+      ...options,
+      headers: {
+        ...(options?.headers ?? {}),
+        "X-Blentera-Expected-User": expectedUserId,
+        ...(expectedSessionId ? { "X-Blentera-Expected-Session": expectedSessionId } : {}),
+      },
+    }),
   updateBranding: (companyId: string, data: UpdateCompanyBranding) =>
     api.patch<Company>(`/companies/${companyId}/branding`, data),
   archive: (companyId: string) => api.post<Company>(`/companies/${companyId}/archive`, {}),
@@ -149,6 +192,8 @@ export const companiesApi = {
     api.postForm<CompanyImportJobAccepted>("/companies/import?async=1", importPackageForm(file, meta)),
   getImportJob: (jobId: string) =>
     api.get<CompanyImportJobStatus>(`/companies/import/jobs/${encodeURIComponent(jobId)}`),
+  cancelImportJob: (jobId: string) =>
+    api.post<CompanyImportJobStatus>(`/companies/import/jobs/${encodeURIComponent(jobId)}/cancel`, {}),
   // Chunked resumable transfer for large local .zip packages: declare the
   // sliced zip (content-addressed, so re-declaring the same file resumes the
   // prior transfer with its uploaded parts intact), upload the missing parts,

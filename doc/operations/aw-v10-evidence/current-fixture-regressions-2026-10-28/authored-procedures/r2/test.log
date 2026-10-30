@@ -1,0 +1,47 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses missing required procedures without installing a catalog or disabling the Role Pack 131ms
+ × src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > uses all default required procedures in a pinned Task-only runtime without executable capabilities 2045ms
+   → The required operating procedure changed or is unavailable. Validate it and start a new run.
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a resumed run after an approved procedure is revoked 1362ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a missing or superseded worker definition pin even when required procedures stay identical 1399ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > rejects a cached definition before writing retained runtime copies and accepts the actual current version 1118ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > does not load unrelated optional catalog procedures 320ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > pins procedure bodies and refuses an actual active version replacement 620ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > consumes the exact approved Playbook even when its ordinary trigger does not match 1833ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting 1355ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > captures exact authored sources and retained Memory roots for the combined runtime input 2399ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > keeps draft Playbook edits outside the pin and refuses replacement of the approved revision 1026ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > erases only actual consuming Playbook runtime copies and refuses restoration of the erased identity 2866ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > retains exact approved preference roots before copying their body and physically erases only their consumer 2803ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > loads only pinned approved knowledge into the actual read-only runtime envelope 1094ms
+ ✓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > closes and deletes actual knowledge runtime copies while preserving an unrelated consumer 1574ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > uses all default required procedures in a pinned Task-only runtime without executable capabilities
+Error: The required operating procedure changed or is unavailable. Validate it and start a new run.
+ ❯ conflict src/errors.ts:29:10
+     27|
+     28| export function conflict(message: string, details?: unknown) {
+     29|   return new HttpError(409, message, details);
+       |          ^
+     30| }
+     31|
+ ❯ changed src/services/platform-skill-admission.ts:34:9
+ ❯ assertPlatformSkillAdmission src/services/platform-skill-admission.ts:95:7
+ ❯ assertRuntimeSkillSourceRetained src/services/learning/learning-assets.ts:64:3
+ ❯ Object.listRuntimeSkillEntriesForCurrentExecution src/services/company-skills.ts:6305:7
+ ❯ src/__tests__/v9-agent-procedure-pins.integration.test.ts:114:33
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 409, details: { code: 'platform_skill_readmission_required' } }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+   Start at  12:59:16
+   Duration  43.19s (transform 11.54s, setup 84ms, import 16.89s, tests 26.10s, environment 0ms)
+

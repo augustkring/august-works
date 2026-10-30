@@ -52,12 +52,39 @@ export async function retainLearnedAssetsInContext(db:Db,companyId:string,actor:
  * Task reader and complete retained signal graph, not caller-supplied metadata. */
 export async function assertRuntimeSkillSourceRetained(db:Db,companyId:string,actor:AuthorizationActor,skillId:string,versionId:string){
  if(actor.type!=="agent"||!actor.runId||actor.companyId!==companyId)throw forbidden("Skill copies require the current native execution");
- const [pin]=await db.execute<{context_id:string;test_current:boolean}>(sql`select e.context_manifest_id as context_id,exists(select 1 from company_skill_test_runs t where t.company_id=e.company_id and t.agent_id=e.agent_id and t.issue_id=coalesce(r.native_issue_id,(select c.issue_id from context_manifests c where c.company_id=e.company_id and c.id=e.context_manifest_id)) and t.skill_id=${skillId}::uuid and t.skill_version_id=${versionId}::uuid and t.deleted_at is null and t.superseded_at is null and t.status in ('queued','running') and (t.evaluation_context is null or exists(select 1 from company_skill_eval_runs v where v.company_id=t.company_id and v.id=(t.evaluation_context->>'evaluationRunId')::uuid and v.status='running' and v.created_by_user_id=r.responsible_user_id))) as test_current from agent_execution_manifests e join heartbeat_runs r on r.company_id=e.company_id and r.id=e.run_id join agent_execution_manifest_items i on i.company_id=e.company_id and i.manifest_id=e.id where e.company_id=${companyId}::uuid and e.run_id=${actor.runId}::uuid and e.agent_id=${actor.agentId}::uuid and r.agent_id=e.agent_id and r.responsible_user_id is not distinct from ${actor.onBehalfOfUserId??null} and r.status='running' and i.type='skill' and i.ref=${skillId} and i.version_ref=${versionId} limit 1`);
+ // The platform substrate has its own server-owned immutable Run admission,
+ // including Fabric-off profiles. Customer/learned Skills retain the complete
+ // original manifest/context requirement below; none can use this branch.
+ const {companySkills}=await import("@paperclipai/db");
+ const [platform]=await db.select({key:companySkills.key}).from(companySkills).where(and(
+  eq(companySkills.companyId,companyId),eq(companySkills.id,skillId),eq(companySkills.key,"blentera-platform"))).limit(1);
+ if(platform){
+  const {assertPlatformSkillAdmission}=await import("../platform-skill-admission.js");
+  const {blenteraPlatformContractHashes}=await import("../tool-gateway.js");
+  await assertPlatformSkillAdmission(db,actor,blenteraPlatformContractHashes());
+  const {skillResolverService}=await import("../skill-resolver.js");
+  const selected=await skillResolverService(db).authorizedVersion(actor,companyId,skillId,versionId,false,"task");
+  const source=await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",versionId,actor,"task");
+  if(source.cycles.length || (await learningAssetRoots(db,companyId,"skill_version",versionId,undefined,actor,"task")).length)
+   throw forbidden("The required platform procedure cannot contain customer-derived source dependencies");
+  return selected;
+ }
+ const [pin]=await db.execute<{context_id:string;test_current:boolean;runtime_mode:string|null;runtime_mode_resolved_at:Date|null;adapter_type:string|null}>(sql`select e.context_manifest_id as context_id,r.runtime_mode,r.runtime_mode_resolved_at,a.adapter_type,exists(select 1 from company_skill_test_runs t where t.company_id=e.company_id and t.agent_id=e.agent_id and t.issue_id=coalesce(r.native_issue_id,(select c.issue_id from context_manifests c where c.company_id=e.company_id and c.id=e.context_manifest_id)) and t.skill_id=${skillId}::uuid and t.skill_version_id=${versionId}::uuid and t.deleted_at is null and t.superseded_at is null and t.status in ('queued','running') and (t.evaluation_context is null or exists(select 1 from company_skill_eval_runs v where v.company_id=t.company_id and v.id=(t.evaluation_context->>'evaluationRunId')::uuid and v.status='running' and v.created_by_user_id=r.responsible_user_id))) as test_current from agent_execution_manifests e join heartbeat_runs r on r.company_id=e.company_id and r.id=e.run_id join agents a on a.company_id=e.company_id and a.id=e.agent_id join agent_execution_manifest_items i on i.company_id=e.company_id and i.manifest_id=e.id where e.company_id=${companyId}::uuid and e.run_id=${actor.runId}::uuid and e.agent_id=${actor.agentId}::uuid and r.agent_id=e.agent_id and r.responsible_user_id is not distinct from ${actor.onBehalfOfUserId??null} and r.status='running' and i.type='skill' and i.ref=${skillId} and i.version_ref=${versionId} limit 1`);
  if(!pin)throw forbidden("Skill is outside the current native execution inventory");
  const {assertAnalyticalContextPayloadAccess}=await import("../analytical-context-authority.js");
  await assertAnalyticalContextPayloadAccess(db,companyId,actor,{runId:actor.runId},"task");
  const {skillResolverService}=await import("../skill-resolver.js");
- const selected=await skillResolverService(db).authorizedVersion(actor,companyId,skillId,versionId,pin.test_current,"task");
+ const resolver=skillResolverService(db);
+ // V5 creates the immutable manifest before Native mode is claimed. During
+ // that bounded preparation window, only an exact manifest pin that is also
+ // the currently active, company-visible version may be materialized. A
+ // superseded retained pin still requires the persisted Native execution
+ // proof checked by authorizedCurrentManifestVersion below.
+ const unresolvedNativePreparation=(pin.runtime_mode===null||pin.runtime_mode==="legacy")&&
+  pin.runtime_mode_resolved_at===null&&pin.adapter_type==="paperclip_runner";
+ const selected=pin.test_current || unresolvedNativePreparation
+  ? await resolver.authorizedVersion(actor,companyId,skillId,versionId,pin.test_current,"task")
+  : await resolver.authorizedCurrentManifestVersion(actor,companyId,skillId,versionId,"task");
  const source=await assertLearnedAssetAnalyticalSources(db,companyId,"skill_version",versionId,actor,"task");
  for(const cycle of source.cycles){
   const [coverage]=await db.execute<{covered:number}>(sql`select count(distinct d.source_manifest_id)::int as covered from learning_analytical_dependencies d where d.company_id=${companyId}::uuid and d.cycle_id=${cycle.id}::uuid and exists(select 1 from analytical_context_dependencies a join context_manifest_memory_roots r on r.company_id=a.company_id and r.memory_record_id=a.memory_record_id where a.company_id=d.company_id and a.source_manifest_id=d.source_manifest_id and r.manifest_id=${pin.context_id}::uuid)`);

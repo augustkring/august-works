@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { afterAll, afterEach, beforeEach, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   activityLog,
+  accountDeletionOperations,
   authUsers,
   cases,
   companies,
@@ -29,13 +30,13 @@ if (!embeddedPostgresSupport.supported) {
 
 const SERVER_TOKEN = "test-server-token";
 
-function tenantHeaders(input: { stackId: string; userId: string; companyName?: string }) {
+function tenantHeaders(input: { stackId: string; userId: string; companyName?: string; role?: "owner" | "admin" | "member" | "support" }) {
   const headers: Record<string, string> = {
     "x-paperclip-cloud-tenant-token": SERVER_TOKEN,
     "x-paperclip-cloud-user-id": input.userId,
     "x-paperclip-cloud-user-email": `${input.userId}@example.com`,
     "x-paperclip-cloud-stack-id": input.stackId,
-    "x-paperclip-cloud-stack-role": "owner",
+    "x-paperclip-cloud-stack-role": input.role ?? "owner",
   };
   if (input.companyName) headers["x-paperclip-cloud-paperclip-company-name"] = input.companyName;
   return cloudActorHeaderSourceFromHeaders(headers);
@@ -72,6 +73,7 @@ describeEmbeddedPostgres("cloud tenant company provisioning", () => {
     await db.delete(activityLog);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(accountDeletionOperations);
     await db.delete(cases);
     await db.delete(issues);
     await db.delete(companies);
@@ -152,6 +154,162 @@ describeEmbeddedPostgres("cloud tenant company provisioning", () => {
         name: "Acme Robotics",
         issuePrefix: "ACMA",
       });
+    });
+  });
+
+  describe("authoritative local membership state", () => {
+    it.each(["suspended", "archived"] as const)(
+      "does not revive a %s membership in the debounce window or on a later sync",
+      async status => {
+        const stackId = `stack-${status}-auth`;
+        const userId = `user-${status}-auth`;
+        const headers = tenantHeaders({ stackId, userId });
+        const provisioned = await resolveCloudTenantActor(db, headers);
+        const companyId = provisioned!.companyIds![0]!;
+
+        await db.delete(principalPermissionGrants).where(and(
+          eq(principalPermissionGrants.companyId, companyId),
+          eq(principalPermissionGrants.principalId, userId),
+        ));
+        await db.update(companyMemberships).set({ status, permissionsInitializedAt: null })
+          .where(and(
+            eq(companyMemberships.companyId, companyId),
+            eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, userId),
+          ));
+
+        const debounced = await resolveCloudTenantActor(db, headers);
+        expect(debounced?.companyIds).not.toContain(companyId);
+        expect(debounced?.memberships).not.toContainEqual(expect.objectContaining({ companyId, status: "active" }));
+        expect(await db.select({ status: companyMemberships.status }).from(companyMemberships)
+          .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId))))
+          .toMatchObject([{ status }]);
+        expect(await db.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants)
+          .where(and(eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalId, userId))))
+          .toEqual([]);
+
+        // A changed header role bypasses the write debounce. The conditional
+        // conflict update still refuses to activate the locally denied row.
+        const resynced = await resolveCloudTenantActor(db, tenantHeaders({ stackId, userId, role: "member" }));
+        expect(resynced?.companyIds).not.toContain(companyId);
+        expect(await db.select({ status: companyMemberships.status, membershipRole: companyMemberships.membershipRole })
+          .from(companyMemberships).where(and(
+            eq(companyMemberships.companyId, companyId),
+            eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, userId),
+          ))).toMatchObject([{ status, membershipRole: "owner" }]);
+        expect(await db.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants)
+          .where(and(eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalId, userId))))
+          .toEqual([]);
+      },
+    );
+
+    it("refreshes an active membership without resetting initialized grants", async () => {
+      const stackId = "stack-active-refresh";
+      const userId = "user-active-refresh";
+      const first = await resolveCloudTenantActor(db, tenantHeaders({ stackId, userId }));
+      const companyId = first!.companyIds![0]!;
+      const markerBefore = await db.select({ value: companyMemberships.permissionsInitializedAt })
+        .from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, userId),
+        ));
+      await db.insert(principalPermissionGrants).values({
+        companyId,
+        principalType: "user",
+        principalId: userId,
+        permissionKey: "tasks:assign_scope",
+        grantedByUserId: null,
+      }).onConflictDoNothing();
+
+      const refreshed = await resolveCloudTenantActor(db, tenantHeaders({ stackId, userId, role: "member" }));
+      expect(refreshed?.companyIds).toContain(companyId);
+      const [membership] = await db.select({ status: companyMemberships.status, membershipRole: companyMemberships.membershipRole,
+        permissionsInitializedAt: companyMemberships.permissionsInitializedAt })
+        .from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, userId),
+        ));
+      expect(membership).toMatchObject({ status: "active", membershipRole: "member" });
+      expect(membership.permissionsInitializedAt?.getTime()).toBe(markerBefore[0]!.value?.getTime());
+      expect(await db.select({ permissionKey: principalPermissionGrants.permissionKey }).from(principalPermissionGrants)
+        .where(and(eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalId, userId))))
+        .toContainEqual({ permissionKey: "tasks:assign_scope" });
+    });
+
+    it("does not recreate a user or membership after account deletion is recorded", async () => {
+      const stackId = "stack-deleted-account";
+      const userId = "user-deleted-account";
+      const first = await resolveCloudTenantActor(db, tenantHeaders({ stackId, userId }));
+      const companyId = first!.companyIds![0]!;
+      await db.delete(authUsers).where(eq(authUsers.id, userId));
+      await db.delete(principalPermissionGrants).where(and(
+        eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalId, userId),
+      ));
+      await db.delete(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId),
+      ));
+      await db.insert(accountDeletionOperations).values({ userId, idempotencyKey: "deleted-account-test" });
+
+      expect(await resolveCloudTenantActor(db, tenantHeaders({ stackId, userId }))).toBeNull();
+      expect(await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId))).toEqual([]);
+      expect(await db.select({ id: companyMemberships.id }).from(companyMemberships)
+        .where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId)))).toEqual([]);
+    });
+
+    it("keeps a concurrent local revocation authoritative over a Cloud refresh", async () => {
+      const stackId = "stack-revocation-race";
+      const userId = "user-revocation-race";
+      const first = await resolveCloudTenantActor(db, tenantHeaders({ stackId, userId }));
+      const companyId = first!.companyIds![0]!;
+      let startRefresh!: () => void;
+      let finishRevocation!: () => void;
+      const refreshStarted = new Promise<void>(resolve => { startRefresh = resolve; });
+      const revocationLocked = new Promise<void>(resolve => { finishRevocation = resolve; });
+      let refresh!: ReturnType<typeof resolveCloudTenantActor>;
+      const revocation = db.transaction(async tx => {
+        await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, userId),
+        )).for("update");
+        finishRevocation();
+        await refreshStarted;
+        // Wait until the Cloud writer is blocked on this membership row so
+        // the test proves PostgreSQL rechecks its status predicate at commit.
+        await expect.poll(async () => {
+          const [row] = await db.execute<{ waiting: boolean }>(sql`select exists(
+            select 1 from pg_stat_activity where datname = current_database()
+              and pid <> pg_backend_pid() and wait_event_type = 'Lock'
+              and query ilike '%company_memberships%'
+          ) as waiting`);
+          return row?.waiting;
+        }, { timeout: 5_000 }).toBe(true);
+        await tx.update(companyMemberships).set({ status: "suspended" }).where(and(
+          eq(companyMemberships.companyId, companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, userId),
+        ));
+        await tx.delete(principalPermissionGrants).where(and(
+          eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalId, userId),
+        ));
+      });
+      await revocationLocked;
+      refresh = resolveCloudTenantActor(db, tenantHeaders({ stackId, userId, role: "member" }));
+      startRefresh();
+      await revocation;
+      const refreshed = await refresh;
+      expect(refreshed?.companyIds).not.toContain(companyId);
+      expect(await db.select({ status: companyMemberships.status }).from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, userId),
+      ))).toMatchObject([{ status: "suspended" }]);
+      expect(await db.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants)
+        .where(and(eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalId, userId))))
+        .toEqual([]);
     });
   });
 

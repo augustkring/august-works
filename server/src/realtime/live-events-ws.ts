@@ -1,16 +1,17 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage, Server as HttpServer } from "node:http";
 import { createRequire } from "node:module";
+import { isDeepStrictEqual } from "node:util";
 import type { Duplex } from "node:stream";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agentApiKeys, companyMemberships, instanceUserRoles } from "@paperclipai/db";
-import type { AwDeploymentProfile, DeploymentMode } from "@paperclipai/shared";
+import { agentApiKeys, agents, authSessions, authUsers, companyMemberships, instanceUserRoles } from "@paperclipai/db";
+import { normalizeAgentApiKeyScope, type AwDeploymentProfile, type DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "../middleware/logger.js";
 import { subscribeCompanyLiveEvents } from "../services/live-events.js";
 import { analyticalLiveEventForReader } from "../services/analytical-live-events.js";
-import type { AuthorizationActor } from "../services/authorization.js";
+import { authorizationService, type AuthorizationActor } from "../services/authorization.js";
 
 interface WsSocket {
   readyState: number;
@@ -167,7 +168,7 @@ async function authorizeUpgrade(
           companyId,
           actorType: "board",
           actorId: cloudActor.userId,
-          actor: { type: "board", userId: cloudActor.userId, source: "cloud_tenant", companyIds: cloudActor.companyIds },
+          actor: { type: "board", userId: cloudActor.userId, source: "cloud_tenant", companyIds: [...new Set(cloudActor.companyIds)].sort() },
         };
       }
     }
@@ -178,34 +179,26 @@ async function authorizeUpgrade(
 
     const session = await opts.resolveSessionFromHeaders(headersFromIncomingMessage(req));
     const userId = session?.user?.id;
-    if (!userId) return null;
+    if (!userId || !session.session?.id || session.session.userId !== userId) return null;
 
-    const [roleRow, memberships] = await Promise.all([
-      opts.deploymentProfile === "saas" ? Promise.resolve(null) : db
-        .select({ id: instanceUserRoles.id })
-        .from(instanceUserRoles)
-        .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
-        .then((rows) => rows[0] ?? null),
-      db
-        .select({ companyId: companyMemberships.companyId })
-        .from(companyMemberships)
-        .where(
-          and(
-            eq(companyMemberships.principalType, "user"),
-            eq(companyMemberships.principalId, userId),
-            eq(companyMemberships.status, "active"),
-          ),
-        ),
-    ]);
-
-    const hasCompanyMembership = memberships.some((row) => row.companyId === companyId);
-    if (!roleRow && !hasCompanyMembership) return null;
+    // A cached session resolver cannot keep a deleted/expired login alive.
+    // Read the actual account, session and current company authority together.
+    const [access] = await db.select({
+      sessionId: authSessions.id,
+      companyIds: sql<string[]>`array(select m.company_id::text from ${companyMemberships} m
+        where m.principal_type='user' and m.principal_id=${userId} and m.status='active' order by m.company_id)`,
+      isInstanceAdmin: opts.deploymentProfile === "saas" ? sql<boolean>`false`
+        : sql<boolean>`exists(select 1 from ${instanceUserRoles} r where r.user_id=${userId} and r.role='instance_admin')`,
+    }).from(authSessions).innerJoin(authUsers,eq(authUsers.id,authSessions.userId)).where(and(
+      eq(authSessions.id,session.session.id),eq(authSessions.userId,userId),sql`${authSessions.expiresAt}>clock_timestamp()`,
+    )).limit(1);
+    if (!access || (!access.isInstanceAdmin && !access.companyIds.includes(companyId))) return null;
 
     return {
       companyId,
       actorType: "board",
       actorId: userId,
-      actor: { type: "board", userId, source: "session", companyIds: memberships.map(row => row.companyId), isInstanceAdmin: !!roleRow, ignoreInstanceAdmin: opts.deploymentProfile === "saas" },
+      actor: { type: "board", userId, sessionId: access.sessionId, source: "session", companyIds: access.companyIds, isInstanceAdmin: access.isInstanceAdmin, ignoreInstanceAdmin: opts.deploymentProfile === "saas" },
     };
   }
 
@@ -219,18 +212,35 @@ async function authorizeUpgrade(
   if (!key || key.companyId !== companyId) {
     return null;
   }
+  const originalScope = normalizeAgentApiKeyScope(key.scopeConfig);
+  if (!originalScope) return null;
 
-  await db
+  const [currentKey] = await db
     .update(agentApiKeys)
     .set({ lastUsedAt: new Date() })
-    .where(eq(agentApiKeys.id, key.id));
+    .where(and(eq(agentApiKeys.id, key.id), eq(agentApiKeys.companyId, companyId),
+      eq(agentApiKeys.keyHash, tokenHash), isNull(agentApiKeys.revokedAt)))
+    .returning();
+  if (!currentKey) return null;
 
-  return {
-    companyId,
-    actorType: "agent",
-    actorId: key.agentId,
-    actor: { type: "agent", source: "agent_key", agentId: key.agentId, companyId: key.companyId, keyId: key.id, keyScope: key.scopeConfig, onBehalfOfUserId: key.responsibleUserId },
-  };
+  // Match the original HTTP key-auth identity contract. Paused Agents retain
+  // read access; terminated or unapproved presences cannot authenticate.
+  const [agent] = await db.select({ id: agents.id, status: agents.status }).from(agents).where(and(
+    eq(agents.id, currentKey.agentId), eq(agents.companyId, companyId),
+  ));
+  const responsibleUserId = currentKey.responsibleUserId?.trim();
+  if (!agent || ["terminated", "pending_approval"].includes(agent.status) || !responsibleUserId) return null;
+  const keyScope = normalizeAgentApiKeyScope(currentKey.scopeConfig);
+  if (!keyScope || !isDeepStrictEqual(originalScope, keyScope)) return null;
+  const actor: AuthorizationActor = { type: "agent", source: "agent_key", agentId: agent.id,
+    companyId: currentKey.companyId, keyId: currentKey.id,
+    keyScope, onBehalfOfUserId: responsibleUserId };
+  // Company-stream admission uses the same key/trust policy and current Human
+  // intersection as native HTTP actions, including after source-lock waits.
+  const decision = await authorizationService(db).decide({ actor, action: "company_scope:read",
+    resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+  if (!decision.allowed) return null;
+  return { companyId, actorType: "agent", actorId: agent.id, actor };
 }
 
 export function setupLiveEventsWebSocketServer(
@@ -283,11 +293,22 @@ export function setupLiveEventsWebSocketServer(
       delivery = delivery.then(async () => {
         if (socket.readyState !== WebSocket.OPEN) return;
         const current = await authorizeUpgrade(db, req, context.companyId, new URL(req.url!, "http://localhost"), opts);
-        if (!current || current.actorType !== context.actorType || current.actorId !== context.actorId) {
+        if (!current || current.actorType !== context.actorType || current.actorId !== context.actorId
+          || current.actor.source !== context.actor.source
+          || (current.actor.type === "board" && context.actor.type === "board" && current.actor.sessionId !== context.actor.sessionId)
+          || (current.actor.type === "agent" && context.actor.type === "agent" && current.actor.keyId !== context.actor.keyId)) {
           socket.close(1008, "live access changed");
           return;
         }
         const admitted = await analyticalLiveEventForReader(db, event, current.actor);
+        if (!admitted || socket.readyState !== WebSocket.OPEN) return;
+        // Source review may wait on native locks. The credential and effective
+        // actor used by that review must still be current before bytes leave.
+        const final = await authorizeUpgrade(db, req, context.companyId, new URL(req.url!, "http://localhost"), opts);
+        if (!final || !isDeepStrictEqual(final.actor, current.actor)) {
+          socket.close(1008, "live access changed");
+          return;
+        }
         if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(admitted));
       }).catch((err) => {
         logger.warn({ err, companyId: context.companyId }, "live event admission failed");

@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-created-from-routes.test.ts (7 tests | 1 failed | 6 skipped) 9127ms
+     × denies an ambiguous native run binding at both the Run and Task readers 29ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-created-from-routes.test.ts > tasks created from an issue > denies an ambiguous native run binding at both the Run and Task readers
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/issue-created-from-routes.test.ts:173:94
+    171|   it("denies an ambiguous native run binding at both the Run and Task …
+    172|     const actor = { type: "board" as const, source: "session" as const…
+    173|     expect(await canActorReadHeartbeatRunPrivacy(db, actor, { id: nati…
+       |                                                                                              ^
+    174|     const [ambiguousTask] = await db.select().from(issues).where(eq(is…
+    175|     expect(ambiguousTask).toBeDefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  08:22:23
+   Duration  42.02s (transform 21.14s, setup 190ms, import 32.24s, tests 9.13s, environment 0ms)
+

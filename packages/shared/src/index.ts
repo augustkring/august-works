@@ -1,4 +1,6 @@
+export type { CustomerOperationStatus, CustomerOperationReceipt, CompanyImportJobState } from "./customer-operations.js";
 export * from "./customer-support.js";
+export * from "./types/jev-decisions.js";
 export * from "./maintenance-history.js";
 export * from "./memory-maintenance-history.js";
 export * from "./agent-runtime-candidates.js";
@@ -8,7 +10,8 @@ export * from "./support-diagnostics.js";
 export { agentAdapterTypeSchema, optionalAgentAdapterTypeSchema } from "./adapter-type.js";
 export * from "./v9-feature-flags.js";
 export * from "./experience.js";
-export { workerModelBindingSchema, workerModelCallSchema, workerModelResultSchema, type WorkerModelBinding, type WorkerModelCall, type WorkerModelResult } from "./worker-model-gateway.js";
+export { workerModelBindingSchema, conversationModelBindingSchema, workerModelCallSchema, workerModelResultSchema,
+  type WorkerModelBinding, type ConversationModelBinding, type WorkerModelCall, type WorkerModelResult } from "./worker-model-gateway.js";
 export {
   RUNNER_GOAL_MAX_OBJECTIVE_CHARS,
   runnerGoalAvailabilitySchema,
@@ -29,6 +32,7 @@ export {
   type RunnerGoalActionAccepted,
 } from "./runner-goal.js";
 export { ADAPTER_AUTH_MISSING_CHECK_CODE } from "./adapter-auth-check-code.js";
+export * from "./trust-documents.js";
 export {
   CONNECTION_INTENT_AGENT_GUIDANCE,
   CONNECTION_REQUEST_TOOL_DESCRIPTION,
@@ -506,6 +510,7 @@ export {
   SECRET_SCOPES,
   STORAGE_PROVIDERS,
   BILLING_TYPES,
+  NATIVE_CONVERSATION_MODEL_BILLING_PREFIX,
   FINANCE_EVENT_KINDS,
   FINANCE_DIRECTIONS,
   FINANCE_UNITS,
@@ -780,6 +785,7 @@ export {
 
 export type {
   Company,
+  CompanyResponsibilityContacts,
   InteractionResolverGovernance,
   InteractionResolverKindGovernance,
   GenerateSummarySlotRequest,
@@ -969,6 +975,9 @@ export type {
   SetupTokenTransportAdvisoryCode,
   AssetImage,
   Project,
+  ProjectVisibility,
+  ProjectAccessMember,
+  ProjectAccessSubjectType,
   ProjectBudgetSummary,
   ProjectRepository,
   ProjectRepositoryOptions,
@@ -978,6 +987,10 @@ export type {
   ProjectManagedByPlugin,
   ProjectWorkspace,
   CompanySearchCountType,
+  CompanySearchFederatedDomain,
+  CompanySearchFederatedDomainCoverage,
+  CompanySearchFederatedResult,
+  CompanySearchFederation,
   CompanySearchExtractIssueResult,
   CompanySearchExtractKind,
   CompanySearchExtractMatch,
@@ -1104,6 +1117,13 @@ export type {
   ExternalObjectSummaryItem,
   CompactIssue,
   Issue,
+  IssueVisibility,
+  IssuePrivacyConstraints,
+  IssueAccessGrant,
+  IssueAccessGrantAgentVisibility,
+  IssueAccessGrantSubjectType,
+  IssueAccessGrantSource,
+  IssueLockedStub,
   IssueChangeReceiptEntry,
   IssueChanges,
   IssueAssigneeAdapterOverrides,
@@ -1316,11 +1336,15 @@ export type {
   UserProfileWindowStats,
   SidebarBadges,
   SidebarOrderPreference,
+  PreferredCoworkerPreference,
   InboxDismissal,
   InboxDismissalKind,
   AccessUserProfile,
   CompanyMemberRecord,
   CompanyMembersResponse,
+  HumanWorkflowCoverage,
+  ArchiveCompanyMemberResponse,
+  SecuritySuspendCompanyMemberResponse,
   CompanyMembership,
   CompanyInviteListResponse,
   CompanyInviteRecord,
@@ -1490,6 +1514,7 @@ export type {
   ToolConnectionTestCallStatusPhase,
   ToolConnectionLifecycleEvent,
   ToolConnectionLifecycleEventType,
+  ToolConnectionLifecycle,
   ToolConnectionInstall,
   ToolConnectionInstallSnapshot,
   ToolConnectionInstallTargetType,
@@ -1726,7 +1751,10 @@ export {
 export {
   sidebarOrderPreferenceSchema,
   upsertSidebarOrderPreferenceSchema,
+  preferredCoworkerPreferenceSchema,
+  setPreferredCoworkerPreferenceSchema,
   type UpsertSidebarOrderPreference,
+  type SetPreferredCoworkerPreference,
 } from "./validators/sidebar-preferences.js";
 export {
   resourceMembershipStateSchema,
@@ -1820,6 +1848,7 @@ export {
   patchInstanceExperimentalSettingsSchema,
   patchInstanceSettingsSchema,
   createSmokeRunSchema,
+  createHumanWorkflowCoverageSchema,
   updateSmokeRunSchema,
   recordSmokeRunStepSchema,
   smokeRunStatusSchema,
@@ -1835,6 +1864,7 @@ export {
   type PatchInstanceExperimentalSettings,
   type PatchInstanceSettings,
   type CreateSmokeRun,
+  type CreateHumanWorkflowCoverage,
   type UpdateSmokeRun,
   type RecordSmokeRunStep,
   type TrustPresetInput,
@@ -1844,9 +1874,12 @@ export {
 
 export {
   createCompanySchema,
+  companyLocaleSchema,
+  companyTimeZoneSchema,
   interactionResolverGovernanceSchema,
   updateCompanySchema,
   updateCompanyBrandingSchema,
+  updateCompanyResponsibilityContactsSchema,
   feedbackTargetTypeSchema,
   feedbackTraceStatusSchema,
   feedbackVoteValueSchema,
@@ -1863,6 +1896,7 @@ export {
   type CreateCompany,
   type UpdateCompany,
   type UpdateCompanyBranding,
+  type UpdateCompanyResponsibilityContacts,
   type UpsertIssueFeedbackVote,
   type ExternalObjectCanonicalIdentityInput,
   type ExternalObjectMentionSourceInput,
@@ -1931,10 +1965,12 @@ export {
   type UpdateAgentPermissions,
   createProjectSchema,
   updateProjectSchema,
+  addProjectAccessMemberSchema,
   createProjectWorkspaceSchema,
   updateProjectWorkspaceSchema,
   type CreateProject,
   type UpdateProject,
+  type AddProjectAccessMember,
   type CreateProjectWorkspace,
   type UpdateProjectWorkspace,
   projectExecutionWorkspacePolicySchema,
@@ -2359,9 +2395,21 @@ export {
   type CurrentUserPreferences,
   type UpdateCurrentUserPreferences,
   authSessionSchema,
+  nativeAuthenticationSecuritySchema,
+  nativeAuthenticationMethodsSchema,
+  nativePasskeySchema,
+  nativePasskeyListSchema,
+  nativePasskeyRegistrationSchema,
+  nativePasskeyAuthenticationSchema,
+  type NativePasskey,
+  nativeAuthenticationConfirmationSchema,
+  type NativeAuthenticationSecurity,
+  nativeRecoveryCodesSchema,
+  nativeTotpEnrollmentSchema,
   updateCurrentUserProfileSchema,
   updateCompanyMemberSchema,
   updateCompanyMemberWithPermissionsSchema,
+  securitySuspendCompanyMemberSchema,
   archiveCompanyMemberSchema,
   updateMemberPermissionsSchema,
   searchAdminUsersQuerySchema,
@@ -2385,6 +2433,7 @@ export {
   type UpdateCurrentUserProfile,
   type UpdateCompanyMember,
   type UpdateCompanyMemberWithPermissions,
+  type SecuritySuspendCompanyMember,
   type ArchiveCompanyMember,
   type UpdateMemberPermissions,
   type SearchAdminUsersQuery,
@@ -2472,6 +2521,8 @@ export {
   portabilityCompanyManifestEntrySchema,
   portabilitySidebarOrderSchema,
   portabilityAgentManifestEntrySchema,
+  portabilityProjectManifestEntrySchema,
+  portabilityIssueManifestEntrySchema,
   portabilityManifestSchema,
   portabilitySourceSchema,
   portabilityTargetSchema,
@@ -2693,13 +2744,25 @@ export * from "./validators/skill-policy.js";
 export * from "./validators/provider-trace.js";
 export {
   FEATURE_TIERS,
+  CAPABILITY_MATURITIES,
   INSTANCE_FEATURE_CATALOG,
   INSTANCE_FEATURE_KEYS,
+  applyCapabilityLifecycleAvailability,
   buildFeatureCatalogArtifact,
+  buildFeatureCatalogArtifactV2,
+  capabilityEnablementIssues,
+  capabilityGaAdmissionIssues,
+  capabilityLifecyclePolicyIssues,
   featureCatalogArtifactSchema,
+  isCapabilityAdvertisedForNewUse,
+  isCapabilityMaturityAdvertisedForNewUse,
   renderFeatureCatalogArtifact,
   type FeatureCatalogArtifact,
+  type FeatureCatalogArtifactV2,
+  type FeatureCatalogArtifactInput,
   type FeatureCatalogEntry,
+  type CapabilityLifecycle,
+  type CapabilityMaturity,
   type FeatureTier,
   type InstanceFeatureKey,
 } from "./feature-catalog.js";
@@ -3289,8 +3352,8 @@ export * from "./saas-types.js";
 export * from "./runtime-host-contracts.js";
 export * from "./runtime-relay-contracts.js";
 
-export type { SaasOperationsSnapshot, SaasSupportStatus, SaasProviderInventory } from "./saas-operations.js";
-export { saasCostReportSchema } from "./saas-costs.js";
+export type { SaasOperationsSnapshot, SaasSupportStatus, SaasProviderInventory, SaasModelDependencyInventory } from "./saas-operations.js";
+export { saasCostReportSchema, saasCostSnapshotSchema } from "./saas-costs.js";
 export type { SaasCostSnapshot } from "./saas-costs.js";
 export * from "./learning.js";
 
@@ -3335,6 +3398,8 @@ export * from "./analytical-context.js";
 export * from "./management-chat-tools.js";
 
 export * from "./customer-feedback.js";
+export * from "./customer-success-quality.js";
+export * from "./product-identity.js";
 export * from "./feedback-data-processing.js";
 export * from "./feedback-retention.js";
 export * from "./feedback-retention-controls.js";
@@ -3374,6 +3439,8 @@ export * from "./feedback-retention-erasure.js";
 export { agentDraftTestReviewSchema, agentDraftTestCommandSchema, agentDraftTestViewSchema, agentDraftTestPacketSchema, type AgentDraftTestReview, type AgentDraftTestCommand, type AgentDraftTestView } from "./agent-authoring-tests.js";
 export { agentDraftPublicationCommandSchema, agentDraftPublicationReviewSchema, agentDraftPublicationReceiptSchema,
   type AgentDraftPublicationCommand, type AgentDraftPublicationReview, type AgentDraftPublicationReceipt } from "./agent-authoring-publication.js";
+export { agentModelMigrationMonitorReviewSchema, agentModelMigrationMonitorCommandSchema, agentModelMigrationMonitorReceiptSchema,
+  type AgentModelMigrationMonitorReview, type AgentModelMigrationMonitorCommand, type AgentModelMigrationMonitorReceipt } from "./agent-model-migration-monitoring.js";
 export * from "./agent-authoring-package-setup.js";
 
 export * from "./agent-pause.js";
@@ -3400,3 +3467,9 @@ export * from "./experience-forecast-results.js";
 export * from "./experience-management-review-summaries.js";
 
 export * from "./notification-channel-policy.js";
+export * from "./auth-mail-copy.js";
+
+export * from "./validators/native-payload-source-snapshot.js";
+export * from "./service-health.js";
+
+export * from "./resource-governance.js";

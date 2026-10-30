@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/v7-agent-packages.integration.test.ts
+test_pattern=joins the versioned managed starter|atomically prepares one original canonical Task|does not capture activation intent

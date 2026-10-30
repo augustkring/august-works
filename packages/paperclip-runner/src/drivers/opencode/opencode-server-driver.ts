@@ -69,7 +69,7 @@ import {
   startOpenCodeMcpBridge,
   type OpenCodeMcpBridge,
 } from "./mcp-bridge.js";
-import { nativeMcpLaunchBinding } from "../native-mcp.js";
+import { nativeMcpLaunchBinding, validateNativeMcpLaunchBinding } from "../native-mcp.js";
 import { materializeNativeRuntimeSkills } from "../runtime-context-materializer.js";
 
 export const OPENCODE_SERVER_DRIVER_KIND = "opencode_server" as const;
@@ -102,6 +102,8 @@ export interface OpenCodeServerDriverOptions {
   systemInstructions?: string;
   runtimeContext?: NativeRuntimeContextSnapshot | null;
   environment?: NodeJS.ProcessEnv;
+  /** Server-owned MCP launch credentials; kept out of the child environment. */
+  assignedMcp?: import("../native-mcp.js").NativeMcpLaunchBinding | null;
   dynamicTools?: readonly Readonly<Record<string, unknown>>[];
   dynamicToolHandler?: DynamicToolHandler;
   onSpawn?: (meta: {
@@ -125,6 +127,7 @@ interface OpenCodeRuntime {
   bridge: OpenCodeMcpBridge;
   trace: ProviderTraceFileSink | null;
   sensitiveValues: readonly string[];
+  managedModel: boolean;
   close(input?: {
     finalizeTrace?: boolean;
     reason?: string | null;
@@ -155,6 +158,113 @@ const CAPABILITIES: NativeSessionCapabilities = {
   threadLineage: false,
   unsupported: ["steering", "goals", "threadLineage"],
 };
+
+// Hook names and mutable output shapes are qualified against OpenCode 1.18.32.
+// The gateway treats these as observations and independently validates the
+// final Messages body against current server-owned sources and tool results.
+function managedSourceWitnessPlugin(systemInstructions: string, bridgeUrl: string, bridgeSecret: string): string {
+return `
+import { createHash } from "node:crypto";
+const PAPERCLIP_SYSTEM_PROMPT = ${JSON.stringify(systemInstructions)};
+const PAPERCLIP_TOOL_OBSERVATION_URL = ${JSON.stringify(`${bridgeUrl.replace(/\/mcp$/, "")}/paperclip-native-tool-call`)};
+const PAPERCLIP_TOOL_OBSERVATION_COMPLETE_URL = ${JSON.stringify(`${bridgeUrl.replace(/\/mcp$/, "")}/paperclip-native-tool-call-complete`)};
+const PAPERCLIP_TOOL_OBSERVATION_SECRET = ${JSON.stringify(bridgeSecret)};
+const stable = (value) => {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
+  return value;
+};
+const hash = (value) => {
+  const encoded = JSON.stringify(stable(value));
+  if (encoded === undefined || encoded.length > 4_000_000) throw new Error("source witness limit");
+  return createHash("sha256").update(encoded).digest("hex");
+};
+export const PaperclipSourceWitness = async () => {
+  let system = null;
+  let messages = null;
+  const tools = new Map();
+  const pending = new Map();
+  const activeToolCalls = new Map();
+  const calls = [];
+  let invalid = false;
+  let ordinal = 0;
+  return {
+    "experimental.chat.messages.transform": async (_input, output) => { try { messages = output.messages; hash(messages); } catch { invalid = true; } },
+    "experimental.chat.system.transform": async (_input, output) => { try { output.system.splice(0, output.system.length, PAPERCLIP_SYSTEM_PROMPT); system = [...output.system]; hash(system); } catch { invalid = true; } },
+    "tool.definition": async (input, output) => { try { tools.set(input.toolID, hash({ description: output.description, parameters: output.parameters })); } catch { invalid = true; } },
+    "tool.execute.before": async (input, output) => {
+      if (typeof input.callID !== "string" || !/^[\\x21-\\x7e]{1,240}$/.test(input.callID) ||
+        typeof input.tool !== "string" || activeToolCalls.has(input.callID)) { invalid = true; throw new Error("managed OpenCode tool call is ambiguous"); }
+      try {
+        const argsHash = hash(output.args);
+        if ([...activeToolCalls.values()].some(active => active.tool === input.tool && active.argsHash === argsHash)) {
+          invalid = true;
+          throw new Error("managed OpenCode identical parallel tool calls are ambiguous");
+        }
+        activeToolCalls.set(input.callID, { tool: input.tool, argsHash });
+        const response = await fetch(PAPERCLIP_TOOL_OBSERVATION_URL, { method: "POST",
+          headers: { authorization: "Bearer " + PAPERCLIP_TOOL_OBSERVATION_SECRET, "content-type": "application/json" },
+          body: JSON.stringify({ callId: input.callID, tool: input.tool, argsHash }), signal: AbortSignal.timeout(5000) });
+        if (!response.ok) throw new Error("managed OpenCode tool observation was rejected");
+        pending.set(input.callID, { tool: input.tool, argsHash });
+      } catch {
+        invalid = true;
+        activeToolCalls.delete(input.callID);
+        throw new Error("managed OpenCode tool observation failed");
+      }
+    },
+    "tool.execute.after": async (input, output) => {
+      const before = pending.get(input.callID);
+      pending.delete(input.callID);
+      const active = activeToolCalls.get(input.callID);
+      if (active) {
+        try {
+          const response = await fetch(PAPERCLIP_TOOL_OBSERVATION_COMPLETE_URL, { method: "POST",
+            headers: { authorization: "Bearer " + PAPERCLIP_TOOL_OBSERVATION_SECRET, "content-type": "application/json" },
+            body: JSON.stringify({ callId: input.callID }), signal: AbortSignal.timeout(5000) });
+          if (!response.ok) invalid = true;
+        } catch { invalid = true; }
+      }
+      activeToolCalls.delete(input.callID);
+      if (!before || calls.length >= 128) { invalid = true; return; }
+      try { calls.push({ callID: input.callID, tool: input.tool, argsHash: before.argsHash, resultHash: hash(output) }); }
+      catch { invalid = true; }
+    },
+    "chat.headers": async (input, output) => {
+      ordinal += 1;
+      const witness = {
+        version: 1,
+        driver: "opencode_server",
+        driverVersion: "1.18.32",
+        ordinal,
+        pluginRevision: "paperclip-opencode-source-witness-v1",
+        sessionID: input.sessionID,
+        messageID: input.message.id,
+        model: { providerID: input.model.providerID, modelID: input.model.modelID },
+        systemHash: system === null ? null : hash(system),
+        messageHistoryHash: messages === null ? null : hash(messages),
+        messageCount: Array.isArray(messages) ? messages.length : null,
+        toolDefinitionCount: tools.size,
+        toolDefinitionsHash: hash([...tools].sort(([a], [b]) => a.localeCompare(b))),
+        toolCallCount: calls.length,
+        toolCallChainHash: hash(calls),
+        pendingToolCallCount: pending.size,
+        // Hook-visible hashes are observations, not current-owner source refs.
+        // The broker must keep OpenCode source closure absent until it can
+        // structurally bind the final body to canonical task/history/tool
+        // receipts and revalidate those owners.
+        sourceClosure: "unsupported",
+        sourceRefs: [],
+        missingSourceFamilies: ["task", "history", "tool_result", "tool_schema"],
+        unsupported: invalid,
+      };
+      const encoded = JSON.stringify(witness);
+      output.headers["x-paperclip-opencode-source-witness"] = encoded.length <= 6_000 ? encoded : "unsupported:limit";
+    },
+  };
+};
+`;
+}
 
 export class OpenCodeServerDriver implements HarnessDriver {
   readonly #options: OpenCodeServerDriverOptions;
@@ -559,7 +669,12 @@ class OpenCodeHarnessSession implements HarnessSession {
     // OpenCode then completes with `finish: unknown` and zero tokens. The
     // native model envelope still carries the authoritative wake delta,
     // interaction responses, completion contract, and current issue context.
-    const prompt = this.#sendFullContext
+    const prompt = this.#runtime.managedModel
+      // Managed Native input is already the complete server-owned envelope.
+      // The generic task wrapper below is a legacy prompt convenience; adding
+      // it here changes the provider bytes after their source receipt is bound.
+      ? input.message.text
+      : this.#sendFullContext
       ? JSON.stringify({
           task: this.#taskEnvelope,
           message: input.message.text,
@@ -583,7 +698,7 @@ class OpenCodeHarnessSession implements HarnessSession {
           // This exact OpenCode version passed the native-question conformance
           // suite. question.asked is adapted into PRP v2 and its reply/reject API
           // remains private to this driver.
-          tools: { question: true },
+          ...(this.#runtime.managedModel ? {} : { tools: { question: true } }),
           ...(this.#sendFullContext
             ? { system: this.#systemInstructions }
             : {}),
@@ -941,6 +1056,11 @@ class OpenCodeHarnessSession implements HarnessSession {
           },
           { turnId, itemId: call.callId },
         );
+        // Managed messages are source-bound per provider request. Once the
+        // server accepts the semantic result, stop this turn instead of asking
+        // the model for another answer whose transcript would contain a local
+        // terminal tool result without a provider call receipt.
+        if (this.#runtime.managedModel) await this.interrupt({ turnId });
         return { accepted: true };
       } catch (error) {
         // A rejected semantic call still completes its tool activity item.
@@ -1490,6 +1610,26 @@ class OpenCodeHarnessSession implements HarnessSession {
         text(providerErrorData.message, text(providerError.message)) ===
           "Aborted"
       ) {
+        if (this.#runtime.managedModel && this.#resultTurnId === turnId &&
+          this.#resultFingerprint !== null) {
+          const fingerprint = canonicalJson({
+            status: "completed",
+            semanticResult: this.#resultFingerprint,
+          });
+          this.#terminalTurns.set(turnId, fingerprint);
+          this.#emitSettledFinalAgentMessage(turnId);
+          const workspace = this.#workspaceChangesByTurn.get(turnId);
+          if (workspace !== undefined)
+            this.#emit(
+              "workspace.diff.recorded",
+              { ...workspace, complete: true },
+              { turnId, itemId: `${turnId}:workspace` },
+            );
+          this.#activeTurnId = null;
+          this.#emit("turn.completed", { status: "completed" }, { turnId });
+          this.#events.close();
+          return;
+        }
         // OpenCode reports its normal /abort control path as session.error. That
         // endpoint is also how Paperclip parks a provider turn after a durable
         // governed interaction is created, so presenting it as a provider
@@ -1840,13 +1980,25 @@ async function startRuntime(input: {
   const username = "paperclip";
   const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
   const configHome = join(input.root, "config");
+  const configDirectory = join(configHome, "opencode");
+  const configPath = join(configDirectory, "opencode.json");
+  const sourcePluginPath = join(configDirectory, "plugins", "paperclip-source-witness.js");
   const dataHome = join(input.root, "data");
   const cacheHome = join(input.root, "cache");
   await Promise.all([
-    mkdir(join(configHome, "opencode"), { recursive: true, mode: 0o700 }),
+    mkdir(configDirectory, { recursive: true, mode: 0o700 }),
     mkdir(dataHome, { recursive: true, mode: 0o700 }),
     mkdir(cacheHome, { recursive: true, mode: 0o700 }),
   ]);
+  // OpenCode 1.18.32 checks this directory's write bit before it starts a
+  // background `npm install @opencode-ai/plugin`. Pre-create its ignore file,
+  // write the server-owned config/plugin, then make the managed XDG directory
+  // read-only before spawn so cold starts never fetch npm dependencies.
+  await chmod(configDirectory, 0o700);
+  await mkdir(join(configDirectory, "plugins"), { recursive: true, mode: 0o700 });
+  await makePrivateFileWritable(join(configDirectory, ".gitignore"));
+  await writeFile(join(configDirectory, ".gitignore"), "node_modules\npackage.json\npackage-lock.json\nbun.lock\n.gitignore", { mode: 0o600 });
+  await chmod(join(configDirectory, ".gitignore"), 0o400);
   // HOME contains a read-only skill snapshot, whose destination must be fresh.
   // Keep OpenCode's XDG data stable for provider-session recovery while giving
   // every launch (including retries and recovery) a new isolated HOME.
@@ -1863,8 +2015,10 @@ async function startRuntime(input: {
     );
     throw error;
   }
+  const managedModel = Boolean((input.options.environment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim());
   const bridge = await startOpenCodeMcpBridge({
     tools: input.options.dynamicTools,
+    requireNativeToolCallObservation: managedModel,
     handler: input.dispatch,
   }).catch(async (error) => {
     await rm(isolatedHome, { recursive: true, force: true }).catch(
@@ -1872,9 +2026,11 @@ async function startRuntime(input: {
     );
     throw error;
   });
-  const assignedMcp = nativeMcpLaunchBinding(
-    input.options.environment ?? process.env,
-  );
+  const assignedMcp = input.options.assignedMcp
+    ? validateNativeMcpLaunchBinding(input.options.assignedMcp)
+    : input.options.assignedMcp === null
+      ? null
+      : nativeMcpLaunchBinding(input.options.environment ?? process.env);
   input.trace?.addSensitiveValues([
     password,
     authHeader,
@@ -1884,13 +2040,24 @@ async function startRuntime(input: {
   ]);
   const instructionRoot =
     input.options.runtimeContext?.instructions.bundle.rootPath;
-  const [modelProvider, ...modelIdParts] = input.options.model.split("/");
-  const providerModelId = modelIdParts.join("/");
+  const providerConfiguration = resolveManagedModelProviderConfiguration(
+    input.options.model,
+    input.options.environment ?? process.env,
+  );
+  if (managedModel) {
+    await makePrivateFileWritable(sourcePluginPath);
+    await writeFile(sourcePluginPath, managedSourceWitnessPlugin(input.options.systemInstructions ?? CODEX_SKILLLESS_BASE_INSTRUCTIONS,
+      bridge.url, bridge.secret), { mode: 0o400 });
+    await chmod(sourcePluginPath, 0o400);
+  }
   const config = {
     $schema: "https://opencode.ai/config.json",
     model: input.options.model,
     small_model: input.options.model,
     share: "disabled",
+    // Cold starts must not contact the public update service or mutate the
+    // pinned runtime outside the qualified provider/tool routes.
+    autoupdate: false,
     // The configured entry is already composed exactly once into the session
     // system prompt; siblings remain available through the read-only root.
     instructions: [],
@@ -1898,17 +2065,17 @@ async function startRuntime(input: {
     // OpenCode's bundled models.dev snapshot can lag behind OpenRouter's live
     // catalog. Bind the already-qualified exact model slug into the built-in
     // provider instead of silently falling back or rejecting a newer model.
-    provider: {
-      [modelProvider!]: {
-        models: {
-          [providerModelId]: { name: providerModelId },
-        },
-      },
-    },
-    tools: {
-      question: true,
-    },
-    permission: {
+    provider: providerConfiguration,
+    // Managed OpenCode exposes only its assigned Paperclip MCP tools. Built-in
+    // filesystem, shell, web and question tools have no qualified provenance
+    // producer and stay absent from every model request in this profile.
+    tools: managedModel ? { "*": false, "paperclip_*": true } : { question: true },
+    permission: managedModel ? {
+      "*": "deny",
+      "paperclip_*": "allow",
+      "mcp__paperclip__*": "allow",
+      external_directory: "deny",
+    } : {
       "*": input.options.permissionMode ?? "allow",
       question: "allow",
       "paperclip_*": "allow",
@@ -1940,11 +2107,10 @@ async function startRuntime(input: {
         : {}),
     },
   };
-  await writeFile(
-    join(configHome, "opencode", "opencode.json"),
-    `${JSON.stringify(config, null, 2)}\n`,
-    { mode: 0o600 },
-  );
+  await makePrivateFileWritable(configPath);
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  await chmod(configPath, 0o400);
+  if (managedModel) await chmod(configDirectory, 0o500);
   const environment = sanitizedEnvironment(
     input.options.environment ?? process.env,
     {
@@ -1953,6 +2119,14 @@ async function startRuntime(input: {
       XDG_DATA_HOME: dataHome,
       XDG_CACHE_HOME: cacheHome,
       OPENCODE_DISABLE_PROJECT_CONFIG: "true",
+      // These pinned 1.18.32 controls keep a cold isolated runtime from
+      // reaching the public updater, plugin registry, or model catalog. They are
+      // hard-coded for the managed child and are included in the diagnostic
+      // environment allowlist below; callers cannot use them to re-enable IO.
+      OPENCODE_DISABLE_AUTOUPDATE: "true",
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
+      OPENCODE_DISABLE_MODELS_FETCH: "true",
+      ...(managedModel ? { ANTHROPIC_API_KEY: "paperclip-managed-model-broker" } : {}),
       OPENCODE_SERVER_USERNAME: username,
       OPENCODE_SERVER_PASSWORD: password,
     },
@@ -2051,6 +2225,7 @@ async function startRuntime(input: {
       process: child,
       bridge,
       trace: input.trace,
+      managedModel,
       sensitiveValues: [
         password,
         input.options.environment?.OPENROUTER_API_KEY,
@@ -2076,9 +2251,7 @@ async function startRuntime(input: {
             child.kill("SIGKILL");
           }
         }
-        await rm(join(configHome, "opencode", "opencode.json"), {
-          force: true,
-        }).catch(() => undefined);
+        await cleanupManagedOpenCodeConfig(configDirectory, configPath, sourcePluginPath);
         await rm(isolatedHome, { recursive: true, force: true }).catch(
           () => undefined,
         );
@@ -2090,14 +2263,47 @@ async function startRuntime(input: {
   } catch (error) {
     await bridge.close().catch(() => {});
     child.kill("SIGKILL");
-    await rm(join(configHome, "opencode", "opencode.json"), {
-      force: true,
-    }).catch(() => undefined);
+    await cleanupManagedOpenCodeConfig(configDirectory, configPath, sourcePluginPath);
     await rm(isolatedHome, { recursive: true, force: true }).catch(
       () => undefined,
     );
     throw error;
   }
+}
+
+function resolveManagedModelProviderConfiguration(
+  model: string,
+  environment: NodeJS.ProcessEnv,
+): Record<string, unknown> {
+  const [provider, ...parts] = model.split("/");
+  const modelId = parts.join("/");
+  if (!provider || !modelId) throw new Error("opencode_model_provider_invalid");
+  const managedOrigin = environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim();
+  const base = { models: { [modelId]: { name: modelId } } };
+  if (!managedOrigin) return { [provider]: base };
+  if (provider !== "anthropic") throw new Error("managed_model_broker_requires_anthropic");
+  const inputTokensUpperBound = Number(environment.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND);
+  const maxOutputTokens = Number(environment.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS);
+  if (!Number.isSafeInteger(inputTokensUpperBound) || inputTokensUpperBound < 1 || inputTokensUpperBound > 2_000_000 ||
+    !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 256 || maxOutputTokens > 8192)
+    throw new Error("managed_model_profile_limits_invalid");
+  let origin: URL;
+  try { origin = new URL(managedOrigin); }
+  catch { throw new Error("managed_model_broker_origin_invalid"); }
+  if (origin.protocol !== "https:" || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash)
+    throw new Error("managed_model_broker_origin_invalid");
+  return {
+    anthropic: {
+      options: {
+        baseURL: `${origin.origin}/runtime-tools/model/v1`,
+        // The OpenShell host injects the scoped Authorization capability
+        // only for the exact endpoint. This placeholder is not a credential.
+        apiKey: "paperclip-managed-model-broker",
+      },
+      models: { [modelId]: { name: modelId, tool_call: true,
+        limit: { context: inputTokensUpperBound + maxOutputTokens, output: maxOutputTokens } } },
+    },
+  };
 }
 
 export function normalizeOpenCodeQuestionSet(
@@ -2466,11 +2672,38 @@ function sanitizedEnvironment(
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "OPENROUTER_API_KEY",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+    "OPENCODE_DISABLE_AUTOUPDATE",
+    "OPENCODE_DISABLE_DEFAULT_PLUGINS",
+    "OPENCODE_DISABLE_MODELS_FETCH",
   ];
   const result: NodeJS.ProcessEnv = {};
   for (const key of allowed)
     if (source[key] !== undefined) result[key] = source[key];
   return { ...result, ...overrides };
+}
+
+async function makePrivateFileWritable(path: string): Promise<void> {
+  try {
+    await chmod(path, 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+async function cleanupManagedOpenCodeConfig(
+  configDirectory: string,
+  configPath: string,
+  sourcePluginPath: string,
+): Promise<void> {
+  // The managed XDG config directory is read-only for the child. Restore its
+  // owner write bit before removing server-owned files on every exit path.
+  await chmod(configDirectory, 0o700).catch(() => undefined);
+  await Promise.all([
+    rm(configPath, { force: true }).catch(() => undefined),
+    rm(sourcePluginPath, { force: true }).catch(() => undefined),
+  ]);
 }
 
 function sanitizedEnvironmentKeys(): string[] {
@@ -2487,6 +2720,12 @@ function sanitizedEnvironmentKeys(): string[] {
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "OPENROUTER_API_KEY",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+    "OPENCODE_DISABLE_AUTOUPDATE",
+    "OPENCODE_DISABLE_DEFAULT_PLUGINS",
+    "OPENCODE_DISABLE_MODELS_FETCH",
+    "ANTHROPIC_API_KEY",
   ];
 }
 
@@ -2594,7 +2833,10 @@ async function waitForExit(
   });
 }
 
-export const openCodeServerDriverInternals = { parseSse };
+export const openCodeServerDriverInternals = {
+  parseSse,
+  resolveManagedModelProviderConfiguration,
+};
 
 class AsyncQueue<T> implements AsyncIterable<T> {
   #items: T[] = [];

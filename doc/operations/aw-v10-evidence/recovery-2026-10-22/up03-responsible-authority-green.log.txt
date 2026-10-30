@@ -1,0 +1,54 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:56:55] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_no_grant","action":"skill_config:update","resourceType":"company","companyId":"109be69e-7157-4fe6-9b91-7f7e30eb5c5b","actorAgentId":"3d0b70cc-bade-4c19-a476-2dee39430cd8","responsibleUserId":"user-75f2e5ac-1b6b-4035-9b31-4b4c0e55b05d"}[39m
+[20:56:56] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:comment","resourceType":"issue","companyId":"027e82cc-2426-4ad5-a866-e355c779d689","actorAgentId":"a4eec88e-c29c-4ad5-b916-28d1b5c2d83e","responsibleUserId":"user-ec540f39-056d-4a2e-8de7-56d56c7e2d7b"}[39m
+[20:56:56] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:mutate","resourceType":"issue","companyId":"027e82cc-2426-4ad5-a866-e355c779d689","actorAgentId":"a4eec88e-c29c-4ad5-b916-28d1b5c2d83e","responsibleUserId":"user-ec540f39-056d-4a2e-8de7-56d56c7e2d7b"}[39m
+[20:56:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_policy_restricted","action":"tasks:assign","resourceType":"issue","companyId":"6e28d3f9-1682-45c3-a9ce-817795f93d62","actorAgentId":"cbd926b0-9fbb-4c11-bc98-c804b71b8fa5","responsibleUserId":"user-9a0f93e1-0bb7-481e-b6be-ed6f3e5db425"}[39m
+[20:56:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"skill_config:update","resourceType":"company","companyId":"4181f354-e2c9-4c16-b021-00e959669475","actorAgentId":"a1d5dfaf-8902-483b-b63c-49e4802fa869","responsibleUserId":"user-f5e91c5d-0d11-4231-841c-1d97357843ef"}[39m
+[20:56:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"skill_config:update","resourceType":"company","companyId":"450fda2c-3953-4f86-84e0-faac5371aecf","actorAgentId":"76454137-8149-4139-bd1a-46c4c0fc4f83","responsibleUserId":"missing-fa302f38-f365-478d-9de7-588862d5ce92"}[39m
+[20:56:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"9e234602-bb0d-499d-9d12-1d2cc55b0a72","actorAgentId":"7797faf7-19e1-4444-bcde-90c7ba7a24d4","responsibleUserId":"user-84a7796e-775d-46c3-99a7-df287cfc3034"}[39m
+[20:56:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:mutate","resourceType":"issue","companyId":"21d2d5e3-3d8f-4a8a-b901-f8ceec411150","actorAgentId":"e3362499-38a1-4b29-8ce9-815b7abcd24d","responsibleUserId":"user-6da64e6d-afb0-499b-a7d0-02c303c3daa0"}[39m
+[20:56:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_unsupported_action","action":"issue:mutate","resourceType":"issue","companyId":"b977a723-7f10-4497-a089-cafd44b411bb","actorAgentId":"cb1db049-f28e-4f78-a038-eed693746d55","responsibleUserId":"user-326087eb-a4ad-4c69-b698-05dedee0eea1"}[39m
+[20:56:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"tasks:assign","resourceType":"issue","companyId":"40cb4f59-540f-480b-8100-a731ca747ed8","actorAgentId":"e3e27c65-ba7f-4265-be44-46b833299f65","responsibleUserId":"missing-4b8f8fe5-0071-4ca1-ac97-77a441b45c2b"}[39m
+[20:56:58] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"2427e612-bcde-4be3-8217-bbe4b756cb11","issueId":"e8e82c98-ef9d-49c7-8b3b-c470a8674047","companyId":"fe576063-f25f-45e8-9d3b-a33a6dac6212","commentId":"f36b76b1-6cf2-48b1-a62a-941599d45b32","grantedAction":"issue:read","grant":"issue_mention_comment"}[39m
+[20:56:58] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"2427e612-bcde-4be3-8217-bbe4b756cb11","issueId":"e8e82c98-ef9d-49c7-8b3b-c470a8674047","companyId":"fe576063-f25f-45e8-9d3b-a33a6dac6212","commentId":"f36b76b1-6cf2-48b1-a62a-941599d45b32","grantedAction":"issue:comment","grant":"issue_mention_comment"}[39m
+[20:56:58] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"bf257291-a7cb-43e8-87a4-508ee7d49068","issueId":"1ffa11fa-0fd3-4d45-b479-7349eda6161a","companyId":"f63a4295-72d0-4da6-9cf3-c5084d2fb348","commentId":"5717452f-32be-4778-82a2-bfe141afe47a","grantedAction":"issue:comment","grant":"issue_mention_comment"}[39m
+[20:56:58] [32mINFO[39m: [36mauthorized issue mention-scoped comment grant[39m [90m{"actorAgentId":"0b388e94-fd0d-46ff-90e6-41d191936da5","issueId":"23fb0730-922f-41ae-9187-665e99b4e3e8","companyId":"4beeb5d8-a4e7-4ad9-b2d2-047e38de99f8","commentId":"8f044010-3f6f-46b8-9de1-2e3386dbeff8","grantedAction":"issue:comment","grant":"issue_mention_comment"}[39m
+[20:57:02] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:read","resourceType":"issue","companyId":"5e517b08-de8a-48dd-872e-ea9fa76293e0","actorAgentId":"d85dd210-7192-44d3-8343-919a035bd5d2","responsibleUserId":"user-226a7a16-7bb7-497e-98a2-fae45eee2cd8"}[39m
+ ❯ |@paperclipai/server| src/__tests__/authorization-service.test.ts (83 tests | 1 failed) 20023ms
+     × rechecks current responsible-human membership for each Source with compiled SQL 109ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > rechecks current responsible-human membership for each Source with compiled SQL
+AssertionError: expected { action: 'issue:read', …(5) } to match object { allowed: false, …(1) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "allowed": false,
+-   "code": "RESPONSIBLE_USER_UNAUTHORIZED",
++   "code": "RESPONSIBLE_USER_UNAVAILABLE",
+  }
+
+ ❯ src/__tests__/authorization-service.test.ts:2865:24
+
+ ❯ Object.withReadSources src/services/authorization.ts:758:18
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/authorization-service.test.ts:2861:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 82 passed (83)
+   Start at  20:56:26
+   Duration  39.77s (transform 11.21s, setup 183ms, import 19.23s, tests 20.02s, environment 0ms)
+

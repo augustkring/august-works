@@ -1,27 +1,33 @@
 import express from "express";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { activityLog, announcementDismissals, announcementPublications, companies, createDb, startEmbeddedPostgresTestDatabase, type EmbeddedPostgresTestDatabase } from "@paperclipai/db";
+import { activityLog, agents, announcementDismissals, announcementPublications, authSessions, authUsers, companies, companyMemberships, createDb, startEmbeddedPostgresTestDatabase, type EmbeddedPostgresTestDatabase } from "@paperclipai/db";
 import { announcementRoutes } from "../routes/announcements.js";
 import { announcementService } from "../services/announcements.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import type { ReadOnlyModelProfile } from "../services/orchestration/read-only-model-profiles.js";
 
 const companyId = "11111111-1111-4111-8111-111111111111";
 const otherCompanyId = "22222222-2222-4222-8222-222222222222";
+const reviewerAgentId = "33333333-3333-4333-8333-333333333333";
+const sessionId = "44444444-4444-4444-8444-444444444444";
+const sourceSha = "a".repeat(40);
+const protectedEvidenceOrigin = "https://qualification.example.test";
 const item = { id: "new-projects", eyebrow: "New", title: "Projects", description: "Organize your work.", primaryAction: { kind: "route", label: "Open", path: "/projects" } };
 describe("announcement routes and durable dismissals", () => {
   let database: EmbeddedPostgresTestDatabase;
   let db: ReturnType<typeof createDb>;
-  function app(userId = "alice", actorOverride?: Record<string, unknown>, announcement: unknown = item, feedStatus = 200, animationHtml?: string) {
+  function app(userId = "alice", actorOverride?: Record<string, unknown>, announcement: unknown = item, feedStatus = 200,
+    animationHtml?: string, dependencyProfiles?: { readOnly: readonly ReadOnlyModelProfile[]; support: []; jev: []; sourceSha: string; protectedEvidenceOrigin: string }) {
     const server = express();
     server.use(express.json());
     server.use((req, _res, next) => {
       req.actor = (actorOverride ?? { type: "board", userId, source: "session", companyIds: [companyId, otherCompanyId], memberships: [{ companyId, membershipRole: "viewer", status: "active" }] }) as never;
       next();
     });
-    server.use("/api", announcementRoutes(db, { version: "2026.913.0", fetch: async (url) => animationHtml && url.pathname.endsWith(".html") ? new Response(animationHtml, { headers: { "Content-Type": "text/html" } }) : new Response(JSON.stringify({ schemaVersion: 1, announcement }), { status: feedStatus, headers: { "Content-Type": "application/json" } }) }));
+    server.use("/api", announcementRoutes(db, { enabled: true, feedUrl: "https://notices.example.test/current.json", version: "2026.913.0", fetch: async (url) => animationHtml && url.pathname.endsWith(".html") ? new Response(animationHtml, { headers: { "Content-Type": "text/html" } }) : new Response(JSON.stringify({ schemaVersion: 1, announcement }), { status: feedStatus, headers: { "Content-Type": "application/json" } }) }, undefined, [], dependencyProfiles));
     server.use(errorHandler);
     return server;
   }
@@ -29,6 +35,12 @@ describe("announcement routes and durable dismissals", () => {
     database = await startEmbeddedPostgresTestDatabase("paperclip-announcements-");
     db = createDb(database.connectionString);
     await db.insert(companies).values([{ id: companyId, name: "Test", issuePrefix: "ANN" }, { id: otherCompanyId, name: "Other", issuePrefix: "ANB" }]);
+    const now = new Date();
+    await db.insert(authUsers).values({ id: "alice", name: "Current Human", email: "alice@example.test", emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(authSessions).values({ id: sessionId, userId: "alice", token: "notice-session-token", createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "alice", status: "active", membershipRole: "owner" });
+    await db.insert(agents).values({ id: reviewerAgentId, companyId, name: "Model reviewer", role: "reviewer", status: "idle", adapterType: "claude_local" });
   }, 90_000);
   beforeEach(async () => { await db.delete(announcementDismissals); await db.delete(announcementPublications); await db.delete(activityLog); });
   afterAll(async () => { await database?.cleanup(); }, 30_000);
@@ -37,6 +49,60 @@ describe("announcement routes and durable dismissals", () => {
     expect(response.status).toBe(200);
     expect(response.body).toBeNull();
     expect(response.headers["cache-control"]).toBe("private, no-store");
+  });
+  it("keeps customer release history available after optional news dismissal and requires board access", async () => {
+    const release = { ...item, kind: "release", publishedAt: "2026-01-01T00:00:00Z", releaseNote: {
+      releaseId: "v10-test", locale: "en", changes: ["Customer change"], affectedAudience: "Members",
+      actionRequired: false, requiredAction: null, documentation: [{ label: "Help", url: "https://docs.example.test/help" }], rollback: null, knownLimitations: [],
+    } };
+    const server = app("alice", undefined, release);
+    await request(server).get("/api/announcements/current");
+    expect((await request(server).post(`/api/announcements/${item.id}/dismiss`).send({ companyId })).status).toBe(204);
+    expect((await request(server).get("/api/announcements/current")).body).toBeNull();
+    const response = await request(server).get("/api/announcements/releases?locale=da");
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.body.entries[0].releaseNote.locale).toBe("en");
+    expect((await request(server).get("/api/announcements/releases?locale=fr")).status).toBe(400);
+    expect((await request(app("", { type: "none" })).get("/api/announcements/releases")).status).toBe(401);
+  });
+  it("fails closed on required-notice projection without a current Human session", async () => {
+    const response = await request(app()).get(`/api/companies/${companyId}/notices/action-required`).query({ expectedUserId: "alice" });
+    expect(response.status).toBe(403);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+  });
+  it.each([false, true])("returns one stable earliest-deadline notice for duplicate read-only profiles (reverse order: %s)", async reverse => {
+    const now = Date.now();
+    const profile = (retirementAt: string): ReadOnlyModelProfile => ({
+      id: randomUUID(), companyId, reviewerAgentId,
+      binding: { provider: "anthropic", method: "api_key", mode: "shared", connectionId: randomUUID(), grantId: randomUUID() },
+      contract: "anthropic-text-messages-2023-06-01",
+      tariff: { provider: "anthropic", model: "fixture-model", currency: "USD", inputMinorPerMillion: 1, outputMinorPerMillion: 1,
+        fixedMinor: 0, qualificationHash: "b".repeat(64), sourceSha, testedAt: new Date(now - 60_000).toISOString(),
+        expiresAt: new Date(now + 60 * 60_000).toISOString() },
+      maximumEnvelopeBytes: 64000, inputTokensUpperBound: 300000, maxOutputTokens: 1024,
+      qualificationEvidenceRef: `${protectedEvidenceOrigin}/qualification/read-only.json`, qualificationArtifactSha256: "c".repeat(64),
+      calibrationHash: "d".repeat(64), lifecycle: { status: "deprecated", owner: "model owner", retirementAt,
+        replacementProfileId: null, regionOrRoutingProfile: "operator-declared-region", dataUseProfile: "operator-declared-use",
+        supportedInputOutput: ["text"], toolUseCapability: false, rateLimits: { requestsPerMinute: 10, tokensPerMinute: 1000 } },
+    });
+    const early = profile("2026-11-01T00:00:00.000Z");
+    const late = profile("2026-11-15T00:00:00.000Z");
+    const profiles = reverse ? [late, early] : [early, late];
+    const actor = { type: "board", userId: "alice", source: "session", sessionId, companyIds: [companyId],
+      memberships: [{ companyId, membershipRole: "owner", status: "active" }] };
+    const response = await request(app("alice", actor, item, 200, undefined,
+      { readOnly: profiles, support: [], jev: [], sourceSha, protectedEvidenceOrigin }))
+      .get(`/api/companies/${companyId}/notices/action-required`).query({ expectedUserId: "alice" });
+    expect(response.status).toBe(200);
+    const notices = response.body.modelNotices.filter((notice: { dependency?: string }) => notice.dependency === "read_only_verifier");
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ dependency: "read_only_verifier", effectiveAt: "2026-11-01T00:00:00.000Z" });
+    const reversedResponse = await request(app("alice", actor, item, 200, undefined,
+      { readOnly: [...profiles].reverse(), support: [], jev: [], sourceSha, protectedEvidenceOrigin }))
+      .get(`/api/companies/${companyId}/notices/action-required`).query({ expectedUserId: "alice" });
+    expect(reversedResponse.body.modelNotices).toHaveLength(1);
+    expect(reversedResponse.body.modelNotices[0]).toMatchObject({ id: notices[0].id, effectiveAt: notices[0].effectiveAt });
   });
   it("serves animation documents with a sandbox and network-denying CSP", async () => {
     const html = "<div>Team</div>";

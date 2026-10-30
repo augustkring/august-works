@@ -5,7 +5,7 @@ import {
   createDb,
   memoryBindings,
   memoryRecords,
-  memoryEvidence,
+  memoryBindingTargets,
   companyMemberships,
   type Db,
 } from "@paperclipai/db";
@@ -15,11 +15,13 @@ import { cognitiveMemoryActor } from "../services/memory/cognitive-memory.js";
 import { derivedMemoryService } from "../services/memory/derived-memory.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { issueService } from "../services/issues.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
   "native owner V7 portability",
@@ -28,13 +30,16 @@ const support = await getEmbeddedPostgresTestSupport();
       db: Db,
       f: Awaited<ReturnType<typeof seedV5Presences>>,
       first: string,
-      second: string;
+      second: string,
+      firstMemoryRecordId: string,
+      secondMemoryRecordId: string;
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v7-portability-");
       db = createDb(database.connectionString);
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
       f = await seedV5Presences(db);
+      const sourceActor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
       await instanceSettingsService(db).updateExperimental({
         enableCollectiveMemoryV1: true,
         enableContextEngineV1: true,
@@ -44,6 +49,17 @@ const support = await getEmbeddedPostgresTestSupport();
       });
       first = randomUUID();
       second = randomUUID();
+      const taskSources = new Map<string, Date>();
+      for (const [index, id] of [first, second].entries()) {
+        const task = await issueService(db).create(f.home, {
+          id,
+          title: `Human-reviewed portable source ${index + 1}`,
+          description: `Original Human task evidence ${index + 1}`,
+          createdByUserId: f.userId,
+          responsibleUserId: f.userId,
+        }, db, undefined, { manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor });
+        taskSources.set(id, task.updatedAt);
+      }
       const [binding] = await db
         .insert(memoryBindings)
         .values({
@@ -53,41 +69,52 @@ const support = await getEmbeddedPostgresTestSupport();
           providerKey: "local",
         })
         .returning();
-      const roots = [first, second];
-      for (const id of roots) {
-        await db
-          .insert(memoryRecords)
-          .values({
-            id,
-            companyId: f.home,
-            bindingId: binding!.id,
-            providerKey: "local",
-            memoryType: "outcome",
-            scopeType: "company",
-            content: "Portable shared reviewed outcome",
-            reviewState: "accepted",
-            verificationState: "human_verified",
-            observedAt: new Date(),
-            createdByActorType: "user",
-            createdByActorId: f.userId,
-          });
-        await db
-          .insert(memoryEvidence)
-          .values({
-            companyId: f.home,
-            memoryRecordId: id,
+      const roots: string[] = [];
+      await db.insert(memoryBindingTargets).values({ companyId: f.home, bindingId: binding!.id,
+        targetType: "company", targetId: f.home });
+      const memoryActor = { principal: { type: "user" as const, userId: f.userId }, authorizationActor: sourceActor };
+      for (const [index, id] of [first, second].entries()) {
+        const observedAt = new Date();
+        const sourceVersion = taskSources.get(id)!.toISOString();
+        const candidate = await memoryService(db).createCandidate(f.home, {
+          bindingId: binding!.id,
+          memoryType: "outcome",
+          scope: { type: "company", id: null },
+          subject: null,
+          ownerAgentId: null,
+          title: `Portable shared reviewed outcome ${index + 1}`,
+          content: `Portable shared reviewed outcome ${index + 1}`,
+          summary: "A current Human reviewed portable Task outcome",
+          sensitivity: "internal",
+          importance: 50,
+          confidenceScore: 0.8,
+          validFrom: null,
+          validUntil: null,
+          expiresAt: null,
+          observedAt: observedAt.toISOString(),
+          retentionPolicy: "standard",
+          createdByOperationId: randomUUID(),
+          metadata: index === 1 ? { fixtureLabel: "retain-independent-human-record-metadata" } : {},
+          evidence: [{
             sourceClass: "task",
             sourceProvider: "august_works_tasks",
             sourceType: "issue",
             sourceRef: `issue://${id}`,
-            sourceVersion: "1",
-            observedAt: new Date(),
-            excerptHash: id === first ? "a".repeat(64) : "b".repeat(64),
-            citationJson: { label: "Reviewed outcome" },
+            sourceVersion,
+            sourceUpdatedAt: sourceVersion,
+            observedAt: observedAt.toISOString(),
+            excerptHash: nativeSha256({ taskId: id, updatedAt: sourceVersion, index }),
+            citation: { label: "Reviewed outcome" },
             trustLevel: "high",
-            supportsOrContradicts: "supports",
-          });
+            relation: "supports",
+          }],
+        }, memoryActor);
+        roots.push(candidate.record.id);
+        await memoryService(db).reviewCandidate(f.home, candidate.record.id,
+          { decision: "accept", reason: "The current Human reviewed this portable Task outcome" }, memoryActor);
       }
+      firstMemoryRecordId = roots[0]!;
+      secondMemoryRecordId = roots[1]!;
       await db
         .insert(memoryRecords)
         .values({
@@ -115,7 +142,10 @@ const support = await getEmbeddedPostgresTestSupport();
             relation: "supports" as const,
           })),
         });
-    }, 30000);
+    // This setup deliberately builds 101 independently observed lifecycle
+    // rows through the original service path; keep its fixture budget separate
+    // from the normal per-hook default.
+    }, 120000);
     afterAll(async () => {
       await db?.$client.end();
       await database?.cleanup();
@@ -136,7 +166,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(state.files["role-packs/roles.json"]).toBeDefined();
       expect(state.files["workflows/definitions.json"]).toBeDefined();
       expect(state.files["governance/use-cases.json"]).toBeDefined();
-    });
+    }, 120000);
     it("retains portability with rollout off and excludes source-erased payloads", async () => {
       await instanceSettingsService(db).updateExperimental({
         memory_observations_v7: false,
@@ -152,15 +182,28 @@ const support = await getEmbeddedPostgresTestSupport();
       ).toHaveLength(101);
       await memoryService(db).forget(
         f.home,
-        first,
+        firstMemoryRecordId,
         cognitiveMemoryActor(f.actor),
       );
       const state = await exportCompanyStateV7(db, f.actor, f.home);
-      expect(state.files["memory/records.json"]).not.toContain(first);
+      const exportedRecords = JSON.parse(state.files["memory/records.json"]!).records as Array<{ id: string }>;
+      expect(exportedRecords.some(record => record.id === firstMemoryRecordId)).toBe(false);
+      expect(JSON.stringify(state)).not.toContain(firstMemoryRecordId);
+      const independentRecord = exportedRecords.find((record) => record.id === secondMemoryRecordId) as
+        | { id: string; content: string; metadata: Record<string, unknown> }
+        | undefined;
+      expect(independentRecord).toBeDefined();
+      expect(independentRecord?.content).toBe("Portable shared reviewed outcome 2");
+      expect(independentRecord?.metadata.fixtureLabel).toBe("retain-independent-human-record-metadata");
+      const memoryResolution = independentRecord?.metadata.memoryResolution as
+        | { relatedRecordIds?: string[]; targetRecordId?: string | null }
+        | undefined;
+      expect(memoryResolution?.relatedRecordIds ?? []).not.toContain(firstMemoryRecordId);
+      expect(memoryResolution?.targetRecordId).not.toBe(firstMemoryRecordId);
       expect(state.files["memory/observations.json"]).not.toContain(
         "Portable observation",
       );
-    });
+    }, 120000);
     it("requires fresh actual company owner membership even with a previously authorized actor", async () => {
       await db
         .update(companyMemberships)

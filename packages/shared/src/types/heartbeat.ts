@@ -158,6 +158,8 @@ export interface HeartbeatRun {
   id: string;
   companyId: string;
   agentId: string;
+  scopeKind: "company" | "issue";
+  issueId: string | null;
   invocationSource: HeartbeatInvocationSource;
   triggerDetail: WakeupTriggerDetail | null;
   status: HeartbeatRunStatus;
@@ -222,6 +224,9 @@ export interface HeartbeatRun {
   contextSnapshot: Record<string, unknown> | null;
   createdAt: Date;
   updatedAt: Date;
+  redacted?: boolean;
+  durationMs?: number | null;
+  costUsd?: number | null;
   outputSilence?: HeartbeatRunOutputSilence;
   /**
    * Ephemeral, process-local current status message for an active run. Resolved

@@ -1,0 +1,3 @@
+timeout_seconds=600
+test_file=src/__tests__/business-experiment-analysis.integration.test.ts
+test_pattern=.

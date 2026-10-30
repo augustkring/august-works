@@ -1,14 +1,16 @@
 import { performance } from "node:perf_hooks";
 import { isDeepStrictEqual } from "node:util";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { activityLog, memoryJobs, type Db } from "@paperclipai/db";
+import { activityLog, type Db } from "@paperclipai/db";
 import { executionPrincipalSchema, memoryMaintenanceHistorySchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { listReadableMemoryJobs } from "../memory/memory-jobs.js";
 import { memoryService, type MemoryMutationActor } from "../memory/memory-service.js";
 import { memoryMaintenanceInputSchema } from "../memory/memory-maintenance.js";
 
@@ -38,7 +40,7 @@ export async function readMemoryMaintenanceHistory(db: Db, actor: AuthorizationA
   return db.transaction(async (rawTx) => {
     const tx = rawTx as unknown as Db;
     await tx.execute(sql`set local statement_timeout='5s'`);
-    await lockMemoryPrivacy(tx, companyId);
+    await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
     async function access() {
       budget();
       const flags = await instanceSettingsService(tx).getExperimental();
@@ -50,11 +52,7 @@ export async function readMemoryMaintenanceHistory(db: Db, actor: AuthorizationA
       budget();
     }
     await access();
-    const jobs = await tx.select().from(memoryJobs).where(and(
-      eq(memoryJobs.companyId, companyId), eq(memoryJobs.operationType, "index_refresh"),
-      sql`${memoryJobs.jobKey} like 'maintenance:v1:%'`,
-      ...(jobId ? [eq(memoryJobs.id, jobId)] : []),
-    )).orderBy(desc(memoryJobs.submittedAt), desc(memoryJobs.id)).limit(11).for("share");
+    const jobs = await listReadableMemoryJobs(tx, companyId, actor, { indexHistory: true, jobId, limit: 11 });
     const ids = jobs.slice(0, 10).map((job) => job.id);
     // Eleven jobs and at most two receipts per job; duplicate bindings fail closed.
     const receipts = ids.length ? await tx.select().from(activityLog).where(and(

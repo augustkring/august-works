@@ -1,3 +1,5 @@
+import { createDeliveryWorkCoordinator } from "./services/delivery-work-coordinator.js";
+import { registerScheduledWork } from "./services/scheduled-work.js";
 import { eraseExpiredExperienceObservations } from "./services/experience/observations.js";
 import { securityEventExportService } from "./services/enterprise/security-events.js";
 import { reconcileSandboxSafety } from "./services/execution-sandbox/sandbox-guardian.js";
@@ -19,7 +21,7 @@ import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network
 import { instrumentationReady, shutdownInstrumentation } from "./instrumentation.js";
 import { assertSaasRolloutReady, activePublicAppOrigins } from "./aw-deployment.js";
 import { assertDatabaseRestoreAdmission } from "./services/saas/database-admission.js";
-import { saasAuthDelivery } from "./services/saas/auth-delivery.js";
+import { pruneExpiredAuthSecurityEvents, saasAuthDelivery } from "./services/saas/auth-delivery.js";
 import { setupPublicOriginUpgradeGuard } from "./middleware/public-origin-guard.js";
 import { sentryReady, shutdownSentry, captureException } from "./sentry.js";
 import { waitForPendingRunFailureReports } from "./services/run-failure-report.js";
@@ -121,6 +123,9 @@ import {
   reconcileAdapterAvailability,
 } from "./services/adapter-registry-bootstrap.js";
 import { createFeedbackTraceShareClientFromConfig } from "./services/feedback-share-client.js";
+import { eraseExpiredSupportCases } from "./services/experience/support-cases.js";
+import { configuredSupportCaseGateway } from "./services/experience/support-case-http-gateway.js";
+import { supportCaseDeliveryService } from "./services/experience/support-case-delivery.js";
 import { buildRuntimeApiCandidateUrls, choosePrimaryRuntimeApiUrl } from "./runtime-api.js";
 import { isLoopbackHost, rewriteLoopbackUrlPort } from "./url-utils.js";
 import { createPluginWorkerManager } from "./services/plugin-worker-manager.js";
@@ -918,7 +923,7 @@ async function startServerWithDatabaseTeardown(
   };
   const pluginWorkerManager = createPluginWorkerManager();
   const heartbeat = config.heartbeatSchedulerEnabled
-    ? heartbeatService(db as any, { pluginWorkerManager })
+    ? heartbeatService(db as any, { pluginWorkerManager, sandboxExec: platform?.runtime.executeSandboxTask })
     : null;
   const decisionServiceOptions = {
     wakeOriginAgent: createDecisionWakeOriginAgent(heartbeat?.wakeup ?? null),
@@ -927,6 +932,9 @@ async function startServerWithDatabaseTeardown(
   // document parsed fail-closed above (`plugins.autoInstall`). Absent env means
   // self-hosted: createApp falls back to its built-in kubernetes-only default.
   const managedPluginAutoInstall = config.deploymentProfile === "saas" ? [] : managedConfig?.plugins.autoInstall ?? null;
+  const supportCaseGateway = configuredSupportCaseGateway(process.env);
+  const jevProfiles = platform?.config.jevSkillSuggestionProfiles ?? [];
+  const supportCaseDelivery = supportCaseGateway ? supportCaseDeliveryService(db as any, supportCaseGateway) : null;
   const app = await createApp(db as any, {
     uiMode,
     serverPort: listenPort,
@@ -952,6 +960,7 @@ async function startServerWithDatabaseTeardown(
       : undefined,
     deploymentMode: config.deploymentMode,
     deploymentProfile: config.deploymentProfile,
+    ...(platform && jevProfiles.length ? { decisionShadow: { sourceSha: platform.config.deployment.sourceSha, profiles: jevProfiles } } : {}),
     saasPlatform: platform,
     deploymentExposure: config.deploymentExposure,
     allowedHostnames: config.allowedHostnames,
@@ -1196,6 +1205,7 @@ async function startServerWithDatabaseTeardown(
     drainRunIds?: string[];
   }>) | null = null;
   let heartbeatSchedulerStopped = false;
+  let scheduledWorkCoordinator: ReturnType<typeof createDeliveryWorkCoordinator> | null = null;
   let heartbeatSchedulerInterval: ReturnType<typeof setInterval> | null = null;
   const heartbeatSchedulerInFlight = new Set<Promise<void>>();
   const trackHeartbeatSchedulerWork = (work: Promise<unknown>) => {
@@ -1214,7 +1224,11 @@ async function startServerWithDatabaseTeardown(
   };
   const executionControlSweepsInFlight = new Set<string>();
   const workflowRecoveryExecutor = workflowExecutorService(db);
-  const memoryJobs = memoryJobService(db);
+  const memoryJobs = memoryJobService(db, {
+    eraseRemoteNativeRuntimeAsset: platform
+      ? (locator, input) => platform.runtime.eraseRemoteNativeRuntimeAsset(locator, input)
+      : undefined,
+  });
   const semanticVerifier = platform?.config.readOnlyModelProfiles?.length
     ? (await import("./services/supervision/read-only-model-verifier.js")).readOnlyModelVerifier(db, {
       profiles: platform.config.readOnlyModelProfiles, sourceSha: platform.config.deployment.sourceSha,
@@ -1251,6 +1265,9 @@ async function startServerWithDatabaseTeardown(
       const result = await processAnalysisService(db).sweepExpired();
       if (result.erasedDefinitions > 0) logger.info(result, "Process retention sweep removed expired definitions and runs");
     }],
+    ["auth_event_retention", () => pruneExpiredAuthSecurityEvents(db)],
+    ["support_case_retention", () => eraseExpiredSupportCases(db)],
+    ["support_case_delivery", () => supportCaseDelivery?.deliverNext()],
     ["analytical_retention", async () => {
       const result = await eraseExpiredAnalyticalLineage(db);
       if (result.erasedManifests > 0) logger.info(result, "Analytical retention sweep removed expired manifests and dependent payloads");
@@ -1369,7 +1386,7 @@ async function startServerWithDatabaseTeardown(
   // sweep passes zero, so a restart retries a stranded orphan at once.
   const ENVIRONMENT_LEASE_CLEANUP_SWEEP_BACKOFF_MS = 5 * 60 * 1000;
   const environmentLeaseCleanupHeartbeat =
-    heartbeat ?? heartbeatService(db as any, { pluginWorkerManager });
+    heartbeat ?? heartbeatService(db as any, { pluginWorkerManager, sandboxExec: platform?.runtime.executeSandboxTask });
   const connectionDeliveries = connectionIntentDeliveryService(db as any, environmentLeaseCleanupHeartbeat);
   const questionResponseDeliveries = questionResponseDeliveryService(db as any, {
     heartbeat: environmentLeaseCleanupHeartbeat,
@@ -1451,7 +1468,7 @@ async function startServerWithDatabaseTeardown(
       heartbeat.drainActiveRunExecutions();
     prepareHotRestartShutdown = heartbeat.prepareHotRestartShutdown;
     const environmentCustomImages = environmentCustomImageService(db as any, { pluginWorkerManager });
-    const routines = routineService(db as any, { pluginWorkerManager });
+    const routines = routineService(db as any, { pluginWorkerManager, deploymentMode: config.deploymentMode });
     const statusCards = statusCardService(db as any);
     const issues = issueService(db as any);
     const mergedPullRequestConfirmations = issueThreadInteractionService(db as any, {
@@ -1751,6 +1768,23 @@ async function startServerWithDatabaseTeardown(
     // restart, so a leaked sandbox does not stay allocated across the restart.
     await runEnvironmentLeaseCleanupSweep(0);
 
+    // Housekeeping has completed. Restore each durable owner independently;
+    // periodic wakes below remain recovery for other-process/direct DB writes.
+    await heartbeat.resolveSchedulingSuppression();
+    scheduledWorkCoordinator = createDeliveryWorkCoordinator({
+      owner: db,
+      canRun: () => !heartbeatSchedulerStopped && !heartbeat.schedulingSuppressionSnapshot().suppressed,
+      canReconcile: () => !heartbeatSchedulerStopped &&
+        [null, "task_drain"].includes(heartbeat.schedulingSuppressionSnapshot().reason),
+      onError: (err, queue) => logger.error({ err, queue }, "scheduled work recovery failed"),
+    });
+    const scheduledWorkers = registerScheduledWork(scheduledWorkCoordinator, db, {
+      retryMs: config.heartbeatSchedulerIntervalMs,
+      tickTimers: signal => heartbeat.tickIssueMonitors(new Date(), signal),
+      tickRoutines: signal => routines.tickScheduledTriggers(new Date(), signal),
+    });
+    trackHeartbeatSchedulerWork(Promise.all([scheduledWorkers.routines.ready, scheduledWorkers.timers.ready]));
+
     const runRetentionSweep = async () => {
       const activeCompanies = await db.select({ id: companies.id }).from(companies).where(eq(companies.status, "active"));
       let archived = 0;
@@ -1792,7 +1826,7 @@ async function startServerWithDatabaseTeardown(
 
         if (!(await heartbeat.resolveSchedulingSuppression()).suppressed) {
           trackHeartbeatSchedulerWork(heartbeat
-            .tickTimers(new Date())
+            .tickTimers(new Date(), { includeIssueMonitors: false })
             .then((result) => {
               if (result.enqueued > 0) {
                 logger.info({ ...result }, "heartbeat timer tick enqueued runs");
@@ -1816,16 +1850,10 @@ async function startServerWithDatabaseTeardown(
         scheduleEnvironmentLeaseCleanupSweep();
 
         if (heartbeatSchedulerStopped) return;
-        trackHeartbeatSchedulerWork(routines
-          .tickScheduledTriggers(new Date())
-          .then((result) => {
-            if (result.triggered > 0) {
-              logger.info({ ...result }, "routine scheduler tick enqueued runs");
-            }
-          })
-          .catch((err) => {
-            logger.error({ err }, "routine scheduler tick failed");
-          }));
+        if (!heartbeat.schedulingSuppressionSnapshot().suppressed) {
+          scheduledWorkers.routines.wake();
+          scheduledWorkers.timers.wake();
+        }
 
         if (heartbeatSchedulerStopped) return;
         trackHeartbeatSchedulerWork((async () => {
@@ -2010,6 +2038,14 @@ async function startServerWithDatabaseTeardown(
 
   platform?.start();
   setStartupRecoveryPhase("ready");
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" ||
+    process.env.PAPERCLIP_NATIVE_FINALIZATION_DIAGNOSTICS === "1" ||
+    process.env.PAPERCLIP_NATIVE_CONCURRENT_CHAT_DIAGNOSTICS === "1") {
+    logger.info({ nativeSourceClosureDiagnostics: process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1",
+      nativeFinalizationDiagnostics: process.env.PAPERCLIP_NATIVE_FINALIZATION_DIAGNOSTICS === "1",
+      nativeConcurrentChatDiagnostics: process.env.PAPERCLIP_NATIVE_CONCURRENT_CHAT_DIAGNOSTICS === "1" },
+    "Native diagnostics enabled");
+  }
   logger.info(`Server startup recovery complete on ${config.host}:${listenPort}`);
   void systemdNotify(["--ready", `--status=Listening on ${config.host}:${listenPort}`]).then((notified) => {
     if (notified) logger.info("Notified systemd that Paperclip is ready");
@@ -2071,6 +2107,8 @@ async function startServerWithDatabaseTeardown(
       clearInterval(heartbeatSchedulerInterval);
       heartbeatSchedulerInterval = null;
     }
+
+    await scheduledWorkCoordinator?.stop();
 
     const heartbeatShutdown = await coordinateHeartbeatSchedulerShutdown({
       signal,

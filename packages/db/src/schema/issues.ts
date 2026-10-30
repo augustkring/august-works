@@ -1,3 +1,4 @@
+import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -6,6 +7,7 @@ import {
   text,
   timestamp,
   integer,
+  boolean,
   doublePrecision,
   jsonb,
   index,
@@ -29,6 +31,11 @@ export const issues = pgTable(
   "issues",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Insert-only writer protocol. Historical payloads remain unknown; a hash
+    // or an empty source set cannot reconstruct their lost input history.
+    payloadSourceProtocolVersion: integer("payload_source_protocol_version").notNull().default(0),
+    payloadSourceSnapshot: jsonb("payload_source_snapshot").$type<NativePayloadSourceSnapshot | null>(),
+    payloadSourceSnapshotInvalidated: boolean("payload_source_snapshot_invalidated").notNull().default(false),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     // Conversation identity and session boundaries are owned by the server.
     conversationAgentId: uuid("conversation_agent_id").references(() => agents.id),
@@ -41,6 +48,10 @@ export const issues = pgTable(
     projectWorkspaceId: uuid("project_workspace_id").references(() => projectWorkspaces.id, { onDelete: "set null" }),
     goalId: uuid("goal_id").references(() => goals.id),
     parentId: uuid("parent_id").references((): AnyPgColumn => issues.id),
+    visibility: text("visibility").notNull().default("open"),
+    // Immutable source identities outlive source erasure; missing sources deny reads.
+    privacyRootIssueId: uuid("privacy_root_issue_id"),
+    privacyParentIssueId: uuid("privacy_parent_issue_id"),
     title: text("title").notNull(),
     description: text("description"),
     status: text("status").notNull().default("backlog"),
@@ -102,6 +113,9 @@ export const issues = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    visibilityCheck: check("issues_visibility_check", sql`${table.visibility} in ('open', 'private')`),
+    privacyParentIdx: index("issues_company_privacy_parent_idx").on(table.companyId, table.privacyParentIssueId),
+    privacyRootIdx: index("issues_company_privacy_root_idx").on(table.companyId, table.privacyRootIssueId),
     conversationIdentityIdx: uniqueIndex("issues_conversation_identity_idx").on(table.companyId, table.conversationAgentId, table.conversationUserId),
     conversationRetirementCheck: check("issues_conversation_retirement_check", sql`${table.conversationRetiredAt} is null or (
       ${table.conversationAgentId} is null and ${table.conversationUserId} is null and ${table.conversationState} is null

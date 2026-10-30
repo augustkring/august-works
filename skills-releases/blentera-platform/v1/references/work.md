@@ -1,0 +1,3 @@
+# Tasks and Projects
+
+Read the current Task and its Project, owner, blockers, version and current execution before changing it. Use canonical claim or checkout when the operation requires it. Preserve assignment and work identity when handing off; a comment is not an assignment or completed outcome. Draft backlog work through the allowed draft capability. Creating a child cannot bypass its parent plan, limits or approval. Verify the persisted result and required work product before completing a Task. Stop, pause and cancelled states fence new effects. Reconcile an unknown operation outcome before retrying its idempotency key; never create a second Task merely because a response was lost. Discover current tool schemas for status transitions and preconditions.

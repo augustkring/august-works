@@ -1,0 +1,210 @@
+{
+  "schema_version": "aw-v10-scoped-ci-review.v1",
+  "created_at": "2026-10-29",
+  "scope": "Interaction wake idempotency and chat retry ownership focused cases only",
+  "passes": [
+    {
+      "name": "interaction-wake-idempotency-r2-20261029",
+      "status": "passed",
+      "test_file": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "selected": [
+        "retains an accepted recipient message while paused and delivers one successor after resume",
+        "retries accepted interaction recovery after an earlier failed receipt",
+        "retries accepted interaction recovery after an earlier cancelled receipt",
+        "does not adopt an interaction wake idempotency receipt from another issue",
+        "lets a Task Stop win while an accepted interaction continuation is recovering"
+      ],
+      "result": "5 passed, 310 skipped",
+      "runner_path": "/workspace/v10-preparation/interaction-wake-idempotency-r2-20261029-runner.txt",
+      "test_log_path": "/workspace/v10-preparation/interaction-wake-idempotency-r2-20261029-test.log",
+      "source_pins_path": "/workspace/v10-preparation/interaction-wake-idempotency-r2-20261029-source-pins.json",
+      "source_reconstruction_patch_path": "/workspace/v10-preparation/interaction-wake-idempotency-r2-20261029-source-pins.source.patch",
+      "snapshot_head": "02c7998619beddbbaf0bb4c1f4d779aebaa34c44",
+      "qualification_base": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "selected_source_hashes": {
+        "server/src/services/heartbeat.ts": "561bf1188074e9fc70b1e2a5de7326fd60e3a08318c59e2e6227ba97c954c952",
+        "server/src/services/recovery/service.ts": "0a5eab4eb22bae1e7bf2c1e50fff68da8b7ef1466ab4c9e991db452e003cc4ec",
+        "server/src/__tests__/heartbeat-process-recovery.test.ts": "5b40665ab6be83d17d9d34995d0d99825e9c4fae5831bfcb2140b52315fac7c8"
+      },
+      "test_log_sha256": "ea0b092838eafcce356a39c70ef06cb8ed49180df63d9c7621d6d4d28a6ce2ac",
+      "source_pins_sha256": "addb5351be395eec407c0c16ee1a0e057d675a74207ee68647409eefdac98b63",
+      "reconstruction_patch_sha256": "4f3f9bface2a5b415dab7a5c726b5868c3683a0c0806a571699acb6ee1bccbc3",
+      "exit_code": 0
+    },
+    {
+      "name": "chat-retry-contention-r3-20261029",
+      "status": "passed",
+      "test_file": "server/src/__tests__/chat-channels.integration.test.ts",
+      "selected": [
+        "keeps one exact chat delivery owner through concurrent reconciliation",
+        "keeps one exact chat delivery owner through lost_scheduler_receipt reconciliation"
+      ],
+      "result": "2 passed, 1049 skipped",
+      "post_receipt_note": "After this snapshot, only the explanatory comment was clarified; fixture behavior and assertions did not change.",
+      "runner_path": "/workspace/v10-preparation/chat-retry-contention-r3-20261029-runner.txt",
+      "test_log_path": "/workspace/v10-preparation/chat-retry-contention-r3-20261029-test.log",
+      "source_pins_path": "/workspace/v10-preparation/chat-retry-contention-r3-20261029-source-pins.json",
+      "source_reconstruction_patch_path": "/workspace/v10-preparation/chat-retry-contention-r3-20261029-source-pins.source.patch",
+      "snapshot_head": "1ca369cc2f981a1b1df259db4e31dd41c074289a",
+      "qualification_base": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "selected_source_hashes": {
+        "server/src/services/heartbeat.ts": "561bf1188074e9fc70b1e2a5de7326fd60e3a08318c59e2e6227ba97c954c952",
+        "server/src/services/recovery/service.ts": "0a5eab4eb22bae1e7bf2c1e50fff68da8b7ef1466ab4c9e991db452e003cc4ec",
+        "server/src/__tests__/chat-channels.integration.test.ts": "85a31fe8fe5725e583244538bd7b874b1f13243db89cb9c39bcba61d85d987b0"
+      },
+      "test_log_sha256": "33e2472065a58bf9b5029db17700535dd7312eed5efd47a154ff062fb039f192",
+      "source_pins_sha256": "c1596affccc502a9bcc9ccad26a6ae92d1413ace0113e06586a3434ad42ff927",
+      "reconstruction_patch_sha256": "67d06ec80a9d51b3e6eaf1ca21f4afa46c14fde14d124052b205e55943325786",
+      "exit_code": 0
+    },
+    {
+      "name": "interaction-wake-idempotency-r5-20261029",
+      "status": "passed",
+      "test_file": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "selected": [
+        "does not adopt an interaction wake idempotency receipt from another issue"
+      ],
+      "result": "1 passed, 313 skipped",
+      "note": "The selected case covers both a cross-issue scope collision and a completed same-scope receipt/run for a fabricated interaction ID. The latter is refused before deferred wake persistence.",
+      "runner_path": "/workspace/v10-preparation/interaction-wake-idempotency-r5-20261029-runner.txt",
+      "test_log_path": "/workspace/v10-preparation/interaction-wake-idempotency-r5-20261029-test.log",
+      "source_pins_path": "/workspace/v10-preparation/interaction-wake-idempotency-r5-20261029-source-pins.json",
+      "source_reconstruction_patch_path": "/workspace/v10-preparation/interaction-wake-idempotency-r5-20261029-source-pins.source.patch",
+      "snapshot_head": "dd496d2e6f567fcec08159e661a0d6dd28ba44a9",
+      "qualification_base": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "selected_source_hashes": {
+        "server/src/services/heartbeat.ts": "9ebee792c5aeb79e1e30e3097f5f45b504a600e60a5fd15439c5e0e550db8dba",
+        "server/src/services/recovery/service.ts": "0a5eab4eb22bae1e7bf2c1e50fff68da8b7ef1466ab4c9e991db452e003cc4ec",
+        "server/src/__tests__/heartbeat-process-recovery.test.ts": "898e14aab56d81f831f61b161c053aa35b5ec5bdbe4841e1a572eaad809e5149"
+      },
+      "test_log_sha256": "4945ba0c9f109dda1c2eff2c82bc1ab9431d62c5b51bbd7a0f536e6967db985d",
+      "source_pins_sha256": "dd1a41a213391b9f9f8f8bde7d5fca230fd6b4d8938853a090e53767ae29f434",
+      "reconstruction_patch_sha256": "3bd22f60ee2917a3b4959346295d307b15a56da2cac6c6a1d232fd797f2e7a46",
+      "exit_code": 0
+    },
+    {
+      "name": "interaction-wake-idempotency-r6-20261029",
+      "status": "passed",
+      "test_file": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "selected": [
+        "retains an accepted recipient message while paused and delivers one successor after resume",
+        "retries accepted interaction recovery after an earlier failed receipt",
+        "retries accepted interaction recovery after an earlier cancelled receipt",
+        "does not adopt an interaction wake idempotency receipt from another issue",
+        "does not replay a run for an interaction id absent from the source issue",
+        "lets a Task Stop win while an accepted interaction continuation is recovering"
+      ],
+      "result": "6 passed, 309 skipped",
+      "runner_path": "/workspace/v10-preparation/interaction-wake-idempotency-r6-20261029-runner.txt",
+      "test_log_path": "/workspace/v10-preparation/interaction-wake-idempotency-r6-20261029-test.log",
+      "source_pins_path": "/workspace/v10-preparation/interaction-wake-idempotency-r6-20261029-source-pins.json",
+      "source_reconstruction_patch_path": "/workspace/v10-preparation/interaction-wake-idempotency-r6-20261029-source-pins.source.patch",
+      "snapshot_head": "7ed2e34d6cdd297266b0f5720ccb36aec996b198",
+      "qualification_base": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "selected_source_hashes": {
+        "docs/help/change-review.json": "a884bfb0547c4b6f685a5195cb25911b1a6fd9278f43bf4f0a44f6a09bc77be3",
+        "server/src/__tests__/chat-channels.integration.test.ts": "f8d4fd98b4d304af8861149520814d152d8bf27295ba59a4f5300567eda04da8",
+        "server/src/__tests__/heartbeat-process-recovery.test.ts": "6b2874b3c0b0ce3a89d97965c659b7eb2b84715d865b8f4c73106af9e50bfc85",
+        "server/src/services/heartbeat.ts": "9ebee792c5aeb79e1e30e3097f5f45b504a600e60a5fd15439c5e0e550db8dba",
+        "server/src/services/recovery/service.ts": "0a5eab4eb22bae1e7bf2c1e50fff68da8b7ef1466ab4c9e991db452e003cc4ec"
+      },
+      "test_log_sha256": "dec871a190067db2f72e8cb39c58e22b237a8d737a82bbbac47c99109dca7535",
+      "source_pins_sha256": "49f84f8ce7820e6ff0bcd0a92c8c14fc24dbb9af2cae28c9dd4fb549b6d7aee4",
+      "reconstruction_patch_sha256": "ef9a2689389c42a1a68ee02a9af37a58047ff3c1e84ababda41c7386f3e697ff",
+      "exit_code": 0,
+      "source_pin_note": "Final six-case receipt on the material preflight source; earlier R2 five-case pass is superseded for qualification."
+    },
+    {
+      "name": "rejected-interaction-idempotency-r2-20261029",
+      "status": "passed",
+      "test_file": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "selected": [
+        "replays a rejected wake_assignee interaction receipt and refuses accept-only rejection"
+      ],
+      "result": "1 passed, 315 skipped",
+      "runner_path": "/workspace/v10-preparation/rejected-interaction-idempotency-r2-20261029-runner.txt",
+      "test_log_path": "/workspace/v10-preparation/rejected-interaction-idempotency-r2-20261029-test.log",
+      "source_pins_path": "/workspace/v10-preparation/rejected-interaction-idempotency-r2-20261029-source-pins.json",
+      "source_reconstruction_patch_path": "/workspace/v10-preparation/rejected-interaction-idempotency-r2-20261029-source-pins.source.patch",
+      "snapshot_head": "c014f3bb74cf1896bf03401b1c785e966c3a41cc",
+      "qualification_base": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "selected_source_hashes": {
+        "server/src/services/heartbeat.ts": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
+        "server/src/services/recovery/service.ts": "0a5eab4eb22bae1e7bf2c1e50fff68da8b7ef1466ab4c9e991db452e003cc4ec",
+        "server/src/__tests__/heartbeat-process-recovery.test.ts": "292d22a7f0774167a945b724e2b027f6b7ea60004dd21fbea64b48dc66639310"
+      },
+      "test_log_sha256": "ac84cc240486d7033fb06ef59b04e0859db3d2726a25f1be4257274ddf7a8658",
+      "source_pins_sha256": "aaab05f31d63945c297e68e74d8b0321b0f2e2ef7875cf9223ee857bd68d4786",
+      "reconstruction_patch_sha256": "bf5880d7f4fa6e9e5456eb0b1d079023fb560d7cc1c0b89f224b3a52fcab06b1",
+      "exit_code": 0
+    },
+    {
+      "name": "interaction-wake-idempotency-r7-20261029",
+      "status": "passed",
+      "test_file": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "selected": [
+        "retains an accepted recipient message while paused and delivers one successor after resume",
+        "retries accepted interaction recovery after an earlier failed receipt",
+        "retries accepted interaction recovery after an earlier cancelled receipt",
+        "does not adopt an interaction wake idempotency receipt from another issue",
+        "does not replay a run for an interaction id absent from the source issue",
+        "replays a rejected wake_assignee interaction receipt and refuses accept-only rejection",
+        "lets a Task Stop win while an accepted interaction continuation is recovering"
+      ],
+      "result": "7 passed, 309 skipped",
+      "runner_path": "/workspace/v10-preparation/interaction-wake-idempotency-r7-20261029-runner.txt",
+      "test_log_path": "/workspace/v10-preparation/interaction-wake-idempotency-r7-20261029-test.log",
+      "source_pins_path": "/workspace/v10-preparation/interaction-wake-idempotency-r7-20261029-source-pins.json",
+      "source_reconstruction_patch_path": "/workspace/v10-preparation/interaction-wake-idempotency-r7-20261029-source-pins.source.patch",
+      "snapshot_head": "e1e7d04d8c0f96c4ae8782905719fb8cd8035b5d",
+      "qualification_base": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+      "selected_source_hashes": {
+        "server/src/services/heartbeat.ts": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
+        "server/src/services/recovery/service.ts": "0a5eab4eb22bae1e7bf2c1e50fff68da8b7ef1466ab4c9e991db452e003cc4ec",
+        "server/src/__tests__/heartbeat-process-recovery.test.ts": "292d22a7f0774167a945b724e2b027f6b7ea60004dd21fbea64b48dc66639310",
+        "docs/help/change-review.json": "4896e2b9f66636d6138b703649b138b559b38544ffe3b352564d45c136c7d042"
+      },
+      "test_log_sha256": "9a9c97877aab6cb874361e11a133bd805d5c6ee56ade136647d9115122a4c37c",
+      "source_pins_sha256": "6ba25740ff92d97d83cf4a8aed4e366b49f481722d7b925bbb1a79af41bf32c8",
+      "reconstruction_patch_sha256": "2743d49821320c1a81cddc2e692abd3515c2301d21bf24d7b889347e974a0b7a",
+      "exit_code": 0
+    }
+  ],
+  "diagnostics_not_counted_as_passes": [
+    {
+      "name": "interaction-wake-idempotency-r3-20261029",
+      "status": "failed diagnostic",
+      "cause": "A fabricated interaction key reached the issue-execution deferral branch before the locked idempotency guard, which attempted to persist a deferred receipt.",
+      "resolution": "Validate the canonical interaction source before admission/deferral writes, while retaining the locked recheck before replay.",
+      "test_log_path": "/workspace/v10-preparation/interaction-wake-idempotency-r3-20261029-test.log",
+      "source_pins_path": "/workspace/v10-preparation/interaction-wake-idempotency-r3-20261029-source-pins.json"
+    },
+    {
+      "name": "interaction-wake-idempotency-r4-20261029",
+      "status": "failed diagnostic",
+      "cause": "The test payload omitted mutation=interaction, so normalizeInteractionContinuationWakeContext correctly cleared its untrusted interaction fields; the malformed generic wake took the deferral path.",
+      "resolution": "The final test now carries the canonical interaction mutation marker and verifies the fabricated ID is refused by source validation.",
+      "test_log_path": "/workspace/v10-preparation/interaction-wake-idempotency-r4-20261029-test.log",
+      "source_pins_path": "/workspace/v10-preparation/interaction-wake-idempotency-r4-20261029-source-pins.json"
+    },
+    {
+      "name": "rejected-interaction-idempotency-r1-20261029",
+      "status": "failed diagnostic",
+      "cause": "A rejected wake_assignee continuation with an existing active receipt bypassed both interaction idempotency guards and attempted a second queue insert. PostgreSQL raised 23505 on agent_wakeup_requests_question_response_delivery_idempotency_uq for interaction:<id>:rejected.",
+      "resolution": "Include rejected in preflight and locked canonical wake receipt handling. Admit rejected wake_assignee continuations and actual rejected plan confirmations; keep ordinary wake_assignee_on_accept rejection denied.",
+      "test_file": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "test_log_path": "/workspace/v10-preparation/rejected-interaction-idempotency-r1-20261029-test.log",
+      "test_log_sha256": "21fcf2602d19acdd2f14b6fdbd032f099d64e8dcdf1d7b173ca4e6d8d5af2bae",
+      "source_pins_path": "/workspace/v10-preparation/rejected-interaction-idempotency-r1-20261029-source-pins.json"
+    }
+  ],
+  "current_source_sha256": {
+    "server/src/services/heartbeat.ts": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
+    "server/src/services/recovery/service.ts": "0a5eab4eb22bae1e7bf2c1e50fff68da8b7ef1466ab4c9e991db452e003cc4ec",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "292d22a7f0774167a945b724e2b027f6b7ea60004dd21fbea64b48dc66639310",
+    "docs/help/change-review.json": "4896e2b9f66636d6138b703649b138b559b38544ffe3b352564d45c136c7d042"
+  },
+  "chat_retry_root_cause": "Both immediate postcommit dispatch attempts correctly observed row-lock contention and persisted a future retryAt; the test then invoked the processor before that retry was due. Deferring scheduling in this ownership test isolates the concurrent route commits and paired background processors without changing service behavior or weakening the one-receipt assertion.",
+  "final_heartbeat_case_receipt": "interaction-wake-idempotency-r7-20261029",
+  "rejected_wake_root_cause": "The database partial unique index covers active interaction:<id>:<status> receipts for rejected responses too; omitting rejected from heartbeat guards turned intended replay into a 23505 insert error."
+}

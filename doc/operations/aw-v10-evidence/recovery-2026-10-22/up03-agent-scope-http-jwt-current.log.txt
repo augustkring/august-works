@@ -1,0 +1,16 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[00:58:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"73b43b10-c4c5-43b1-9bd3-345d047bb165","actorAgentId":"2fde3278-d1e7-4226-ace1-621fbf1408f9","responsibleUserId":"696fc6b6-631a-4626-82cc-ff805d23494f"}[39m
+[00:58:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"73b43b10-c4c5-43b1-9bd3-345d047bb165","actorAgentId":"2fde3278-d1e7-4226-ace1-621fbf1408f9","responsibleUserId":"696fc6b6-631a-4626-82cc-ff805d23494f"}[39m
+[00:58:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"2dc9a5b6-8fa7-4225-9d13-a900cdf95026","actorAgentId":"2165f101-82a0-4a2c-bb38-99c743ffd2bc","responsibleUserId":"2b7afd15-2fed-48ce-9ad4-afcdfc2fbe4c"}[39m
+[00:58:57] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"2dc9a5b6-8fa7-4225-9d13-a900cdf95026","actorAgentId":"2165f101-82a0-4a2c-bb38-99c743ffd2bc","responsibleUserId":"2b7afd15-2fed-48ce-9ad4-afcdfc2fbe4c"}[39m
+
+ Test Files  3 passed (3)
+      Tests  61 passed (61)
+   Start at  00:57:49
+   Duration  88.35s (transform 34.07s, setup 1.03s, import 62.64s, tests 23.36s, environment 1ms)
+

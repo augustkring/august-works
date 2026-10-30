@@ -1,7 +1,10 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
 import { V5_FEATURE_KEYS } from "../../packages/shared/src/index.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { setup as setupAgentChat } from "./agent-chat.shared";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
@@ -9,22 +12,24 @@ async function json(response: APIResponse) { expect(response.ok(), `${response.s
 // authoring metadata. Actual Original tool/revision provenance is exercised in
 // the PostgreSQL suites, not asserted from these synthetic browser responses.
 test("conversation previews a saved workflow version without publishing or calling its agent", async ({ page, request }) => {
-  const company = await json(await request.post("/api/companies", { data: { name: "Disposable saved proposal browser fixture" } }));
+  const instanceControlRequest = request;
   const original = await json(await request.get("/api/instance/settings/experimental"));
+  const fixture = await setupAgentChat(request, page);
+  request = fixture.request;
+  const { company, agent } = fixture;
   try {
-    await json(await request.patch("/api/instance/settings/experimental", { data: { enableAgentChat: true, enableClassicTaskInterface: false } }));
-    const agent = await json(await request.post(`/api/companies/${company.id}/agents`, { data: { name: "Proposal author", adapterType: "process",
-      adapterConfig: {}, runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: false } } } }));
-    const conversation = await json(await request.post(`/api/companies/${company.id}/chats/${agent.id}`, { data: {} }));
-    const session = await json(await request.get("/api/auth/get-session"));
+    const conversation = await json(await request.post(fixture.chatPath, { data: {} }));
+    expect(await json(await request.get(fixture.chatPath))).toMatchObject({
+      id: conversation.id,
+      conversationAgentId: agent.id,
+    });
     const flags = { ...original, ...Object.fromEntries(V5_FEATURE_KEYS.map(key => [key, true])), enableAgentChat: true, enableClassicTaskInterface: false,
       enableFoundationV1: true, enableContextEngineV1: true, saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true,
       experience_projection_v9: true, progressive_shell_v9: true, ambient_commands_v9: true,notification_policy_v9:true };
     let reads = 0, writes = 0;
-    await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, session: { ...session.session, localImplicit: false } } }));
     await page.route("**/api/instance/settings/experimental", route => route.fulfill({ json: flags }));
     await page.route(`**/api/companies/${company.id}/conversations/${conversation.id}/authoring**`, route => {
-      const url = new URL(route.request().url()); expect(url.searchParams.get("expectedUserId")).toBe(session.user.id);
+      const url = new URL(route.request().url()); expect(url.searchParams.get("expectedUserId")).toBe(conversation.conversationUserId);
       expect(route.request().method()).toBe("GET"); reads++;
       return route.fulfill({ json: { companyId: company.id, conversationId: conversation.id, agentId: agent.id, generation: 0,
         observedAt: "2026-10-13T00:00:00Z", hasMore: false, modelCalled: false, proposals: [{ kind: "workflow", id: id(1), name: "Saved weekly review proposal",
@@ -55,6 +60,10 @@ test("conversation previews a saved workflow version without publishing or calli
       if (route.request().method() !== "GET") writes++;
       return route.fulfill({ status: 409, json: { error: "This preview does not authorize workflow writes" } });
     });
+    await page.goto(`/${company.issuePrefix}/dashboard`);
+    await expect(page.getByRole("button", {
+      name: `Open ${company.name} organization switcher`, exact: true,
+    })).toBeVisible();
     await page.goto(`/${company.issuePrefix}/chats/${agent.id}`);
     const preview = page.getByRole("region", { name: "Saved conversation proposals", exact: true });
     await expect(preview).toContainText("Saved weekly review proposal");
@@ -99,7 +108,7 @@ test("conversation previews a saved workflow version without publishing or calli
     expect(await json(await request.get(`/api/companies/${company.id}/issues`))).toEqual([]);
     expect(await json(await request.get(`/api/issues/${conversation.id}`))).toMatchObject({ id: conversation.id, conversationAgentId: agent.id });
   } finally {
-    await json(await request.patch("/api/instance/settings/experimental", { data: original }));
-    await json(await request.delete(`/api/companies/${company.id}`));
+    await fixture.restore({ collectState: false });
+    await json(await instanceControlRequest.delete(`/api/companies/${company.id}`));
   }
 });

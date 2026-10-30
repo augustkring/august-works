@@ -1,6 +1,6 @@
 import * as nativeExecutor from "./native-runtime/native-session-executor.js";
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
-import { recordNativeLocalProcessStop, hasNativeLocalProcessStop, PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
+import { recordNativeLocalProcessStop, recordNativeLocalProcessStopAfterExit, hasNativeLocalProcessStop, PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
 import { remoteTerminationReceipt } from "./remote-execution-termination.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
@@ -14,9 +14,13 @@ import {
   issues, nativeRunFinalizations, nativeRunResults, completionContracts, environmentLeases, environments, issueRelations, issueTreeHolds, issueTreeHoldMembers,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "../__tests__/helpers/embedded-postgres.js";
+import { issueService } from "./issues.js";
+import { seedCurrentHumanSourceActor } from "../__tests__/helpers/current-human-source-fixture.js";
 import { admitExplicitNativeContinuation } from "./explicit-native-continuation.js";
 import { buildExecutionContinuation } from "./execution-continuation.js";
 import { heartbeatService, persistHeartbeatRunProcessMetadata, type HeartbeatEnvironmentRuntime } from "./heartbeat.js";
+import { createRemoteRuntimeAssetLocator } from "./native-runtime/runtime-asset-retention.js";
+import { readProcessStartedAt } from "./hot-restart.js";
 import { getExecutionBlocker } from "./execution-blocker.js";
 import { createDurableChatWakeupRequest } from "./durable-chat-wakeup.js";
 const support = await getEmbeddedPostgresTestSupport();
@@ -25,13 +29,21 @@ const support = await getEmbeddedPostgresTestSupport();
   let db: ReturnType<typeof createDb>;
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("explicit-native-message-"); db = createDb(database.connectionString); }, 30000);
   afterAll(async () => { await database?.cleanup(); });
-  async function seed() {
+  async function seed(canonicalHumanTask = false) {
     const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID();
     const sourceRunId = randomUUID(), successorRunId = randomUUID();
     const commentId: string = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Explicit turn", defaultResponsibleUserId: "board", issuePrefix: `E${companyId.slice(0, 6)}` });
     await db.insert(agents).values({ id: agentId, companyId, name: "Native", role: "engineer", adapterType: "paperclip_runner", status: "idle", runtimeConfig: { heartbeat: { maxConcurrentRuns: 1 } } });
-    await db.insert(issues).values({ id: issueId, companyId, title: "Deploy", status: "blocked", assigneeAgentId: agentId });
+    if (canonicalHumanTask) {
+      const human = await seedCurrentHumanSourceActor(db, [companyId], "board");
+      await issueService(db).create(companyId, { id: issueId, title: "Deploy", status: "todo", priority: "medium",
+        assigneeAgentId: agentId, responsibleUserId: "board", createdByUserId: "board" }, db, undefined,
+      { manualInputActor: human });
+      await db.update(issues).set({ status: "blocked" }).where(eq(issues.id, issueId));
+    } else {
+      await db.insert(issues).values({ id: issueId, companyId, title: "Deploy", status: "blocked", assigneeAgentId: agentId });
+    }
     await db.insert(heartbeatRuns).values({ id: sourceRunId, companyId, agentId,
       nativeIssueId: issueId, runtimeMode: "native", status: "failed", processPid: 999999999,
       contextSnapshot: { issueId }, finishedAt: new Date("2026-09-11T10:00:00Z") });
@@ -48,7 +60,7 @@ const support = await getEmbeddedPostgresTestSupport();
   }
   type Fixture = Awaited<ReturnType<typeof seed>>;
   it.each(["handoff", "foreign_task", "running_source", "different_owner", "mention", "interaction", "chat"])("adopts former-owner comments only during an authorized handoff (%s)", async kind => {
-    const f = await seed(), nextAgentId = randomUUID(), queueId = randomUUID();
+    const f = await seed(true), nextAgentId = randomUUID(), queueId = randomUUID();
     await db.delete(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, f.issueId));
     await db.delete(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, f.sourceRunId));
     await db.insert(agents).values({ id: nextAgentId, companyId: f.companyId, name: "Replacement", role: "engineer", adapterType: "paperclip_runner", runtimeConfig: { heartbeat: { maxConcurrentRuns: 1 } } });
@@ -563,6 +575,82 @@ const support = await getEmbeddedPostgresTestSupport();
       eventType: PROCESS_START_REQUESTED });
     // No PID was stored for the new launch, as when the server dies after spawn.
     expect(await admit(f, true)).toBeNull();
+  });
+
+  it("records the ordinary local Native child exit with an exact PID clear", async () => {
+    const f = await seed();
+    const child = (await import("node:child_process")).spawn(process.execPath,
+      ["-e", "setTimeout(() => {}, 50)"], { detached: true, stdio: "ignore" });
+    if (!child.pid) throw new Error("Test child did not expose a PID");
+    const childClosed = new Promise<void>(resolve => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, f.sourceRunId, {
+      pid: child.pid, processGroupId: child.pid, startedAt: new Date().toISOString(),
+    });
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, f.sourceRunId));
+    await db.insert(environmentLeases).values({ companyId: f.companyId, heartbeatRunId: f.sourceRunId,
+      provider: "local", status: "released", releasedAt: new Date(), cleanupStatus: "succeeded", leasePolicy: "ephemeral" });
+    await childClosed;
+
+    expect(await recordNativeLocalProcessStopAfterExit(db, f.companyId, f.sourceRunId)).toBe(true);
+    const [stopped] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.sourceRunId));
+    expect(stopped).toMatchObject({ processPid: null, processGroupId: null, processStartedAt: null });
+    expect(await hasNativeLocalProcessStop(db, f.companyId, f.sourceRunId)).toBe(true);
+  });
+
+  it("persists the validated remote process marker when its PID collides with a local process", async () => {
+    const f = await seed();
+    const environmentId = randomUUID(), environmentLeaseId = randomUUID(), runnerInstanceId = randomUUID();
+    const nativeSessionId = randomUUID(), remoteCwd = "/workspace/remote-runner";
+    const remoteMarkerStartedAt = "2001-02-03T04:05:06.007Z";
+    const localObservedStartedAt = await readProcessStartedAt(process.pid);
+    expect(localObservedStartedAt).toBeTruthy();
+    expect(localObservedStartedAt).not.toBe(remoteMarkerStartedAt);
+    await expect(persistHeartbeatRunProcessMetadata(db, f.sourceRunId, { pid: process.pid, processGroupId: null,
+      startedAt: remoteMarkerStartedAt, identitySource: "remote_marker", remoteRunnerInstanceId: randomUUID() })).rejects.toThrow();
+    await db.insert(environments).values({ id: environmentId, name: `Remote identity ${environmentId}`, driver: "sandbox" });
+    await db.insert(environmentLeases).values({ id: environmentLeaseId, companyId: f.companyId,
+      environmentId, heartbeatRunId: f.sourceRunId, provider: "sandbox-fixture", providerLeaseId: "provider-lease-1",
+      status: "active", leasePolicy: "ephemeral", expiresAt: new Date(Date.now() + 60_000), metadata: { remoteCwd } });
+    const locator = createRemoteRuntimeAssetLocator({ companyId: f.companyId, runId: f.sourceRunId, environmentId,
+      environmentLeaseId, provider: "sandbox-fixture", providerLeaseId: "provider-lease-1", runnerInstanceId,
+      normalizedSessionId: nativeSessionId, remoteCwd });
+    await db.update(heartbeatRuns).set({ status: "running", driverKind: "opencode_server", nativeSessionId,
+      runnerInstanceId, runnerProfileJson: { nativeRemoteRuntimeAssetLocator: locator } })
+      .where(eq(heartbeatRuns.id, f.sourceRunId));
+
+    await persistHeartbeatRunProcessMetadata(db, f.sourceRunId, { pid: process.pid, processGroupId: null,
+      startedAt: remoteMarkerStartedAt, identitySource: "remote_marker", remoteRunnerInstanceId: runnerInstanceId });
+
+    const [stored] = await db.select({ processStartedAt: heartbeatRuns.processStartedAt,
+      processPid: heartbeatRuns.processPid }).from(heartbeatRuns).where(eq(heartbeatRuns.id, f.sourceRunId));
+    expect(stored).toMatchObject({ processPid: process.pid, processStartedAt: new Date(remoteMarkerStartedAt) });
+  });
+
+  it("does not infer an ordinary Native Stop from an unknown or still-live process", async () => {
+    const unknown = await seed();
+    await db.insert(environmentLeases).values({ companyId: unknown.companyId, heartbeatRunId: unknown.sourceRunId,
+      provider: "local", status: "released", releasedAt: new Date(), cleanupStatus: "succeeded", leasePolicy: "ephemeral" });
+    expect(await recordNativeLocalProcessStopAfterExit(db, unknown.companyId, unknown.sourceRunId)).toBe(false);
+    expect(await hasNativeLocalProcessStop(db, unknown.companyId, unknown.sourceRunId)).toBe(false);
+
+    const active = await seed();
+    const child = (await import("node:child_process")).spawn(process.execPath,
+      ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
+    if (!child.pid) throw new Error("Test child did not expose a PID");
+    const childClosed = new Promise<void>(resolve => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, active.sourceRunId, {
+      pid: child.pid, processGroupId: child.pid, startedAt: new Date().toISOString(),
+    });
+    await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, active.sourceRunId));
+    await db.insert(environmentLeases).values({ companyId: active.companyId, heartbeatRunId: active.sourceRunId,
+      provider: "local", status: "released", releasedAt: new Date(), cleanupStatus: "succeeded", leasePolicy: "ephemeral" });
+    try {
+      expect(await recordNativeLocalProcessStopAfterExit(db, active.companyId, active.sourceRunId)).toBe(false);
+      expect(await hasNativeLocalProcessStop(db, active.companyId, active.sourceRunId)).toBe(false);
+    } finally {
+      child.kill("SIGTERM");
+      await childClosed;
+    }
   });
 
   it.each(["live", "remote", "provider_event"])("does not accept invalid local stop proof: %s", async kind => {

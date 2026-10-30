@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { authApi } from "@/api/auth";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { saasApi } from "@/api/saas";
-import { queryKeys } from "@/lib/queryKeys";
+import { useV9CurrentAccount, hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
+import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import {
   runtimeCapacityQualificationSchema,
@@ -12,14 +12,10 @@ import {
 } from "@paperclipai/shared";
 
 export function SaasOperationsPage() {
-  const identity = useQuery({
-    queryKey: queryKeys.auth.session,
-    queryFn: authApi.getSession,
-    retry: false,
-  });
-  const userId = identity.data?.user.id;
-  const scope = useRef(userId);
-  scope.current = userId;
+  const identity = useV9CurrentAccount(), client = useQueryClient();
+  const userId = identity.userId, authSessionId = identity.sessionId;
+  const scope = useRef({ userId, authSessionId, epoch: identity.authorityEpoch });
+  scope.current = { userId, authSessionId, epoch: identity.authorityEpoch };
   const [sessionId, setSessionId] = useState(""),
     [hostId, setHostId] = useState(""),
     [confirmation, setConfirmation] = useState("");
@@ -37,27 +33,63 @@ export function SaasOperationsPage() {
     [canaryImage, setCanaryImage] = useState(""),
     [canaryKey, setCanaryKey] = useState(() => crypto.randomUUID());
   const operations = useQuery({
-    queryKey: ["saas-operations", userId],
-    queryFn: () => saasApi.operations(userId!),
-    enabled: Boolean(userId),
+    queryKey: ["saas-operations", userId, authSessionId, identity.authorityEpoch],
+    queryFn: async ({ signal }) => {
+      if (!identity.settled || !userId || !authSessionId || identity.localImplicit ||
+        !hasCurrentV9Session(client, userId, authSessionId))
+        throw new Error("Current operator session is unavailable");
+      const result = await saasApi.operations(userId, signal);
+      signal.throwIfAborted();
+      if (!hasCurrentV9Session(client, userId, authSessionId))
+        throw new Error("Current operator session changed");
+      return result;
+    },
+    enabled: Boolean(identity.settled && userId && authSessionId && !identity.localImplicit),
     retry: false,
+    staleTime: 0,
+    gcTime: 0,
     refetchInterval: 15000,
   });
+  const operationsKey = ["saas-operations", userId, authSessionId, identity.authorityEpoch] as const;
+  const canReadOperations = () => {
+    const state = client.getQueryState(operationsKey);
+    return Boolean(identity.settled && userId && authSessionId && !identity.localImplicit &&
+      hasCurrentV9Session(client, userId, authSessionId) && state?.status === "success" &&
+      state.fetchStatus === "idle" && !state.isInvalidated);
+  };
   const grant = operations.data?.support.find(
     (value) => value.id === sessionId,
   );
   const inventory = useQuery({
-    queryKey: ["saas-provider-inventory", userId],
-    queryFn: () => saasApi.providerInventory(userId!),
-    enabled: Boolean(userId && operations.data),
+    queryKey: ["saas-provider-inventory", userId, authSessionId, identity.authorityEpoch],
+    queryFn: async ({ signal }) => {
+      if (!identity.settled || !userId || !authSessionId || identity.localImplicit || !hasCurrentV9Session(client, userId, authSessionId))
+        throw new Error("Current operator session is unavailable");
+      const result = await saasApi.providerInventory(userId, signal);
+      signal.throwIfAborted();
+      if (!hasCurrentV9Session(client, userId, authSessionId)) throw new Error("Current operator session changed");
+      return result;
+    },
+    enabled: Boolean(canReadOperations() && operations.data),
     retry: false,
+    staleTime: 0,
+    gcTime: 0,
     refetchInterval: 60000,
   });
   const costs = useQuery({
-    queryKey: ["saas-costs", userId],
-    queryFn: () => saasApi.costs(userId!),
-    enabled: Boolean(userId && operations.data),
+    queryKey: ["saas-costs", userId, authSessionId, identity.authorityEpoch],
+    queryFn: async ({ signal }) => {
+      if (!identity.settled || !userId || !authSessionId || identity.localImplicit || !hasCurrentV9Session(client, userId, authSessionId))
+        throw new Error("Current operator session is unavailable");
+      const result = await saasApi.costs(userId, signal);
+      signal.throwIfAborted();
+      if (!hasCurrentV9Session(client, userId, authSessionId)) throw new Error("Current operator session changed");
+      return result;
+    },
+    enabled: Boolean(canReadOperations() && operations.data),
     retry: false,
+    staleTime: 0,
+    gcTime: 0,
     refetchInterval: 60000,
   });
   const euros = (value: string) => {
@@ -82,10 +114,11 @@ export function SaasOperationsPage() {
     mutationFn: async () => {
       const actor = userId!;
       await saasApi.fleetAction(actor, hostId, hostAction);
-      return actor;
+      return { actor, authSessionId, epoch: identity.authorityEpoch };
     },
-    onSuccess: (actor) => {
-      if (scope.current === actor) {
+    onSuccess: ({ actor, authSessionId: mutationSession, epoch }) => {
+      if (scope.current.userId === actor && scope.current.authSessionId === mutationSession &&
+        scope.current.epoch === epoch && hasCurrentV9Session(client, actor, mutationSession)) {
         setConfirmation("");
         void operations.refetch();
       }
@@ -98,10 +131,11 @@ export function SaasOperationsPage() {
         action: "stop",
         idempotencyKey: crypto.randomUUID(),
       });
-      return actor;
+      return { actor, authSessionId, epoch: identity.authorityEpoch };
     },
-    onSuccess: (actor) => {
-      if (scope.current === actor) void status.refetch();
+    onSuccess: ({ actor, authSessionId: mutationSession, epoch }) => {
+      if (scope.current.userId === actor && scope.current.authSessionId === mutationSession &&
+        scope.current.epoch === epoch && hasCurrentV9Session(client, actor, mutationSession)) void status.refetch();
     },
   });
   const qualification = useMutation({
@@ -120,10 +154,11 @@ export function SaasOperationsPage() {
           actor,
           runtimeCapacityQualificationSchema.parse(value),
         );
-      return actor;
+      return { actor, authSessionId, epoch: identity.authorityEpoch };
     },
-    onSuccess: (actor) => {
-      if (scope.current === actor) {
+    onSuccess: ({ actor, authSessionId: mutationSession, epoch }) => {
+      if (scope.current.userId === actor && scope.current.authSessionId === mutationSession &&
+        scope.current.epoch === epoch && hasCurrentV9Session(client, actor, mutationSession)) {
         void operations.refetch();
         void costs.refetch();
       }
@@ -145,10 +180,11 @@ export function SaasOperationsPage() {
           reason: versionReason,
         }),
       );
-      return actor;
+      return { actor, authSessionId, epoch: identity.authorityEpoch };
     },
-    onSuccess: (actor) => {
-      if (scope.current === actor) void operations.refetch();
+    onSuccess: ({ actor, authSessionId: mutationSession, epoch }) => {
+      if (scope.current.userId === actor && scope.current.authSessionId === mutationSession &&
+        scope.current.epoch === epoch && hasCurrentV9Session(client, actor, mutationSession)) void operations.refetch();
     },
   });
   const canary = useMutation({
@@ -156,6 +192,8 @@ export function SaasOperationsPage() {
       const actor = userId!;
       return {
         actor,
+        authSessionId,
+        epoch: identity.authorityEpoch,
         result: await saasApi.canaryRuntime(sessionId, actor, {
           capacityProfile: canaryProfile,
           imageDigest: canaryImage,
@@ -164,8 +202,9 @@ export function SaasOperationsPage() {
         }),
       };
     },
-    onSuccess: ({ actor }) => {
-      if (scope.current === actor) {
+    onSuccess: ({ actor, authSessionId: mutationSession, epoch }) => {
+      if (scope.current.userId === actor && scope.current.authSessionId === mutationSession &&
+        scope.current.epoch === epoch && hasCurrentV9Session(client, actor, mutationSession)) {
         setCanaryKey(crypto.randomUUID());
         void operations.refetch();
         void status.refetch();
@@ -187,7 +226,7 @@ export function SaasOperationsPage() {
     qualification.reset();
     transition.reset();
     canary.reset();
-  }, [userId]);
+  }, [userId, authSessionId, identity.authorityEpoch]);
   function changeApproval(value: string) {
     setSessionId(value);
     setCanaryProfile("");
@@ -210,7 +249,10 @@ export function SaasOperationsPage() {
     qualification.error ??
     transition.error ??
     canary.error;
-  if (identity.isPending) return <p role="status">Loading account…</p>;
+  if (!identity.settled) return <div role={identity.failed ? "alert" : "status"}>
+    <p>{identity.failed ? "Account session could not be verified." : "Loading account…"}</p>
+    {identity.failed && <Button variant="outline" onClick={() => void client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true })}>Retry</Button>}
+  </div>;
   if (!userId)
     return (
       <main className="saas-page">
@@ -231,9 +273,55 @@ export function SaasOperationsPage() {
         </p>
       )}
       {operations.isPending && <p role="status">Loading operator status…</p>}
-      {operations.data && (
+      {canReadOperations() && operations.data && (
         <>
           <p>Environment: {operations.data.environment}</p>
+          <section className="saas-section" aria-label="AI model lifecycle inventory">
+            <h2 className="saas-subtitle">AI model lifecycle inventory</h2>
+            <p className="saas-muted">
+              This view combines current Agent adapter settings with the pinned worker, verifier, and first-party Support profiles.
+              Unknown lifecycle facts stay untracked. This inventory does not select a replacement model.
+            </p>
+            {operations.data.modelDependencies.truncated && (
+              <p role="alert" className="saas-error">The model inventory is truncated; review the bounded source before relying on totals.</p>
+            )}
+            {operations.data.modelDependencies.coverage.map((item) => (
+              <p key={item.dependency}>
+                {item.dependency.replaceAll("_", " ")} · {item.configuration} · {item.entries} entries ·
+                {" "}{item.untracked} untracked · {item.unresolved} unresolved
+              </p>
+            ))}
+            {operations.data.modelDependencies.entries.map((item, index) => (
+              <div className="saas-row" key={item.dependency + ":" + item.companyId + ":" + (item.agentId ?? "service") + ":" + index}>
+                <span>
+                  {item.dependency.replaceAll("_", " ")}{item.runtimeAdapter ? " · " + item.runtimeAdapter : ""} · {item.companyId}
+                  {item.agentId ? " · " + item.agentId : ""}
+                </span>
+                <span>
+                  {item.provider ?? "provider unknown"}{item.model ? " / " + item.model : ""}
+                  {" · "}{item.lifecycleStatus}{item.lifecycleOwner ? " · owner: " + item.lifecycleOwner : ""}
+                  {item.qualificationHash ? " · qualification " + item.qualificationHash : ""}
+                  {item.retirementAt ? " · retires " + new Date(item.retirementAt).toLocaleString() : ""}
+                  {" · "}{item.bindingState.replaceAll("_", " ")} · availability not assessed
+                </span>
+                {(item.regionOrRoutingProfile || item.dataUseProfile || item.supportedInputOutput || item.toolUseCapability !== null ||
+                  item.contextLimits || item.costProfile || item.rateLimits) && (
+                  <span className="saas-muted">
+                    {item.regionOrRoutingProfile ? "Route: " + item.regionOrRoutingProfile + " · " : ""}
+                    {item.dataUseProfile ? "Data use: " + item.dataUseProfile + " · " : ""}
+                    {item.supportedInputOutput ? "I/O: " + item.supportedInputOutput.join(", ") + " · " : ""}
+                    {item.toolUseCapability !== null ? "Tools: " + (item.toolUseCapability ? "yes" : "no") + " · " : ""}
+                    {item.contextLimits ? "Context: " + item.contextLimits.inputTokensUpperBound + " input tokens / " + item.contextLimits.maxOutputTokens + " output tokens · " : ""}
+                    {item.costProfile ? "Tariff: " + item.costProfile.currency + " " + item.costProfile.inputMinorPerMillion + "/" + item.costProfile.outputMinorPerMillion + " minor units per million · fixed " + item.costProfile.fixedMinor + " · expires " + new Date(item.costProfile.expiresAt).toLocaleDateString() + " · " : ""}
+                    {item.rateLimits ? "Rate: " + (item.rateLimits.requestsPerMinute ?? "unknown") + " requests/min, " + (item.rateLimits.tokensPerMinute ?? "unknown") + " tokens/min" : ""}
+                  </span>
+                )}
+              </div>
+            ))}
+            {operations.data.modelDependencies.entries.length === 0 && (
+              <p className="saas-muted">No configured model profiles or current Agent bindings were found.</p>
+            )}
+          </section>
           <section
             className="saas-section"
             aria-label="Operational cost estimate"
@@ -261,7 +349,7 @@ export function SaasOperationsPage() {
                   reservations; this estimate supports operations.
                 </p>
                 <p>
-                  Estimated monthly COGS:{" "}
+                  Partial monthly platform + host cost estimate:{" "}
                   {euros(costs.data.estimatedMonthlyCogsMinor)}
                 </p>
                 <p>
@@ -269,7 +357,7 @@ export function SaasOperationsPage() {
                   {euros(costs.data.reportedArrMinor)}
                 </p>
                 <p>
-                  Estimated monthly gross margin:{" "}
+                  Partial gross margin estimate (reported MRR less platform + host costs):{" "}
                   {euros(costs.data.estimatedGrossMarginMinor)}
                 </p>
                 <p>
@@ -291,6 +379,21 @@ export function SaasOperationsPage() {
                     {euros(account.reportedMrrMinor)}
                   </p>
                 ))}
+                {costs.data.unitEconomics && (
+                  <div className="saas-subsection" aria-label="Partial tenant cost coverage">
+                    <h3>Tenant cost coverage · {costs.data.unitEconomics.windowStart.slice(0, 10)} to {costs.data.unitEconomics.windowEnd.slice(0, 10)}</h3>
+                    <p className="saas-muted">Partial observed sources only. Provider event cents have no verified currency here; usage has no configured cost rate. Total cost per tenant and cost per accepted outcome are unavailable.</p>
+                    <p>Platform cost: {euros(costs.data.unitEconomics.platformCost.amountMinor)} EUR ({costs.data.basis === "provider_invoice" ? "invoice" : "price estimate"}), unallocated to tenants · Host cost: {euros(costs.data.unitEconomics.managedRuntimeHostCost.amountMinor)} EUR by CPU reservation ({costs.data.basis === "provider_invoice" ? "invoice" : "price estimate"}), including {euros(costs.data.unitEconomics.managedRuntimeHostCost.unallocatedMultiCompanyMinor)} held unallocated for shared billing accounts and {euros(costs.data.unitEconomics.managedRuntimeHostCost.unallocatedNoActiveCompanyMinor)} for accounts with no active company.</p>
+                    <p>Provider/model events: {costs.data.unitEconomics.providerModelCost.reportedCents ?? "no recorded priced amount"} reported cents ({costs.data.unitEconomics.providerModelCost.reportedEventCount} events) · {costs.data.unitEconomics.providerModelCost.estimatedCents ?? "no recorded estimate"} estimated cents ({costs.data.unitEconomics.providerModelCost.estimatedEventCount} events) · {costs.data.unitEconomics.providerModelCost.unpricedEventCount} unpriced · {costs.data.unitEconomics.providerModelCost.unrecognizedEventCount} unrecognized status. Currency unspecified; event capture completeness not established.</p>
+                    <p>Runtime and storage meters: {costs.data.unitEconomics.runtimeAndStorageUsage.status}; {costs.data.unitEconomics.runtimeAndStorageUsage.bucketCount} aggregate buckets through {costs.data.unitEconomics.runtimeAndStorageUsage.latestSourceWatermark ?? "no source watermark"}. No runtime or storage price rate is configured.</p>
+                    {costs.data.unitEconomics.tenants.map((tenant) => (
+                      <p key={tenant.companyId}>
+                        Company <span className="saas-machine">{tenant.companyId}</span> · provider {tenant.providerReportedCents ?? "no recorded priced amount"} reported / {tenant.providerEstimatedCents ?? "no estimate"} cents, {tenant.providerUnpricedEventCount} unpriced, {tenant.providerUnrecognizedEventCount} unrecognized events · host {tenant.estimatedHostRuntimeMinor === null ? tenant.hostAllocation : `${euros(tenant.estimatedHostRuntimeMinor)} EUR, ${tenant.hostAllocation}`} · usage {tenant.usage.length ? tenant.usage.map((usage) => `${usage.meterKey}: ${usage.quantity} ${usage.unit}`).join(", ") : "no aggregate rows"} · total unavailable
+                      </p>
+                    ))}
+                    <p className="saas-muted">Not recorded: support, analytics, network and tool costs. Agent-run classes are not currently classified. No canonical cost attribution to accepted outcomes exists.</p>
+                  </div>
+                )}
               </>
             )}
           </section>

@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (11 tests | 1 failed | 10 skipped) 10591ms
+     × validates Memory captures after its retained source arrays have been restored 108ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > validates Memory captures after its retained source arrays have been restored
+AssertionError: promise resolved "[]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[]
+
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:181:48
+    179|         from memory_records m where m.company_id=${companyId}::uuid an…
+    180|     await expect(db.update(memoryRecords).set({ sourceIssueIds: [], pa…
+    181|       .where(eq(memoryRecords.id, memory!.id))).rejects.toMatchObject(…
+       |                                                ^
+    182|     const [retained] = await db.select().from(memoryRecords).where(eq(…
+    183|     expect(retained!.sourceIssueIds).toEqual([source.id]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 skipped (11)
+   Start at  21:07:26
+   Duration  43.87s (transform 22.83s, setup 162ms, import 32.80s, tests 10.59s, environment 0ms)
+

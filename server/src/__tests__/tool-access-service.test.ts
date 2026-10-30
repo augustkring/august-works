@@ -69,10 +69,12 @@ import {
   projectedConnectionHeaders,
   projectConnectionMethodToolInputSchema,
   projectConnectionMethodToolArguments,
+  loadGitHubGrantMetadata,
   toolAccessService,
 } from "../services/tool-access.js";
 import { accessService } from "../services/access.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { projectToolConnectionLifecycle } from "../services/tool-connection-lifecycle.js";
 import { toolAccessPolicyService } from "../services/tool-access-policy.js";
 import { secretService } from "../services/secrets.js";
 import {
@@ -801,6 +803,31 @@ async function createRemoteToolFixture(
 }
 
 describeEmbeddedPostgres("tool access service", () => {
+  it("bounds full GitHub repository access pagination before returning a partial snapshot", async () => {
+    let calls = 0;
+    const request = vi.fn(async (input: string | URL | Request) => {
+      calls += 1;
+      const url = new URL(String(input));
+      if (url.pathname === "/user") return new Response(JSON.stringify({ id: 42, login: "octocat" }), { status: 200 });
+      if (url.pathname === "/user/installations") {
+        return new Response(JSON.stringify({ installations: Array.from({ length: 100 }, (_, index) => ({
+          id: index + 1, repository_selection: "selected", html_url: `https://github.com/settings/installations/${index + 1}`,
+        })) }), { status: 200 });
+      }
+      if (/^\/user\/installations\/\d+\/repositories$/.test(url.pathname)) {
+        const page = Number(url.searchParams.get("page"));
+        return new Response(JSON.stringify({ repositories: [{ id: 900 + page, full_name: `octocat/repo-${page}` }] }), {
+          status: 200,
+          headers: page === 1 ? { link: `<${url.origin}${url.pathname}?per_page=100&page=2>; rel="next"` } : {},
+        });
+      }
+      throw new Error(`unexpected request ${url}`);
+    }) as typeof fetch;
+    await expect(loadGitHubGrantMetadata("opaque-test-token", request, "paperclip"))
+      .rejects.toMatchObject({ details: { code: "github_access_refresh_incomplete" } });
+    expect(calls).toBe(200);
+  });
+
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<
     ReturnType<typeof startEmbeddedPostgresTestDatabase>
@@ -4812,6 +4839,52 @@ describeEmbeddedPostgres("tool access service", () => {
     });
   });
 
+  it("projects current OAuth and GitHub lifecycle from the grant endpoint", async () => {
+    const company = await createCompany(db);
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+    const userId = `lifecycle-owner-${randomUUID()}`;
+    await grantBoardUser(db, company.id, userId, [], "owner");
+    const service = createTestToolAccessService(db);
+    const connection = await service.createConnection(company.id, {
+      name: "GitHub lifecycle",
+      transport: "rest_api",
+      authKind: "oauth",
+      status: "active",
+      enabled: true,
+      config: { sourceTemplateKey: "github" },
+    }, { actorType: "user", actorId: userId });
+    const [grant] = await db.select().from(connectionGrants).where(and(
+      eq(connectionGrants.companyId, company.id), eq(connectionGrants.connectionId, connection.id),
+    ));
+    await db.update(connectionGrants).set({
+      providerTenant: {
+        oauth: { scopes: ["repo", "read:user"], accessTokenExpiresAt: expiresAt },
+        github: {
+          userId: "123", login: "octocat", installationCount: 1, repositoryCount: 2,
+          repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+          repositories: [{ id: "789", fullName: "octo/project", installationId: "456" }],
+          accessRevision: "access-version-1", lastAccessRefreshAt: "2026-10-28T00:00:00.000Z",
+          lastWebhookAt: "2026-10-27T23:00:00.000Z", webhookHealth: "healthy",
+        },
+      },
+    }).where(eq(connectionGrants.id, grant!.id));
+    const response = await request(createRouteApp(db, boardSessionActor(company.id, "owner", userId)))
+      .get(`/api/tool-connections/${connection.id}/grants`);
+    expect(response.status).toBe(200);
+    expect(response.body.grants[0].lifecycle).toMatchObject({
+      grantStatus: "active", scopeNames: ["read:user", "repo"], state: "DEGRADED",
+      credentialExpiresAt: expiresAt, accessVersion: "access-version-1",
+      webhook: { health: "healthy", lastDeliveryAt: "2026-10-27T23:00:00.000Z", expiry: "not_applicable" },
+      providerLifecycle: "not_reported", syncReconciliation: {
+        state: "required", mode: "github_repository_full_snapshot", accessRevision: "access-version-1",
+        accessRevisionKind: "local_access_revision", lastSuccessAt: null, lastFullReconciledAt: null,
+        gapDetection: "not_reported",
+      },
+    });
+    expect(response.body.grants[0].lifecycle).not.toHaveProperty("accessToken");
+    expect(response.body.grants[0].lifecycle).not.toHaveProperty("refreshToken");
+  });
+
   it("installs the safe example fixture idempotently and smokes allow, deny, and audit paths", async () => {
     const company = await createCompany(db);
     const service = createTestToolAccessService(db);
@@ -7243,7 +7316,7 @@ describeEmbeddedPostgres("tool access service", () => {
     ).toBe(false);
   });
 
-  it.each(["none", "event", "same-time-refresh", "one-conflict"])(
+  it.each(["none", "event", "identity", "same-time-refresh", "one-conflict", "incomplete", "missed-webhook", "rate-limit", "bounded-fair", "leased-backoff"])(
     "binds a managed GitHub identity and protects refresh from concurrent access changes (%s)",
     async (concurrentChange) => {
       const company = await createCompany(db);
@@ -7251,8 +7324,10 @@ describeEmbeddedPostgres("tool access service", () => {
       await grantBoardUser(db, company.id, userId, [], "owner");
       const agent = await createAgent(db, company.id);
       const connector = fakeGitHubConnector(company.id, `agent:${agent.id}`);
+      let sweepNow = new Date();
       const service = createTestToolAccessService(db, {
         paperclipCloudConnector: connector,
+        now: () => sweepNow,
       });
       const actor = { actorType: "user" as const, actorId: userId };
       const githubDefinition = getConnectableAppDefinition("github")!;
@@ -7263,6 +7338,9 @@ describeEmbeddedPostgres("tool access service", () => {
         platform_shared: true,
       };
       let beforeRepositoryResponse = async () => {};
+      let forcePaginationCycle = false;
+      let forceRateLimit = false;
+      let repositoryIds = [1, 2, 3];
       vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
         const href = String(url);
         if (href === "https://api.github.com/user") {
@@ -7290,9 +7368,22 @@ describeEmbeddedPostgres("tool access service", () => {
           )
         ) {
           await beforeRepositoryResponse();
+          if (forceRateLimit) {
+            return new Response("rate limited", { status: 429, headers: {
+              "retry-after": "x".repeat(129),
+              "x-ratelimit-remaining": "0",
+              "x-ratelimit-reset": String(Math.floor(Date.now() / 1_000) + 7_200),
+            } });
+          }
+          if (forcePaginationCycle) {
+            return new Response(JSON.stringify({ total_count: 1, repositories: [{ id: 1, full_name: "paperclipai/repo-1" }] }), {
+              status: 200,
+              headers: { link: "<https://api.github.com/user/installations/101/repositories?per_page=100&page=2>; rel=\"next\"" },
+            });
+          }
           return mcpHttpResponse({
             total_count: 3,
-            repositories: [1, 2, 3].map((id) => ({
+            repositories: repositoryIds.map((id) => ({
               id,
               full_name: `paperclipai/repo-${id}`,
               description: "do-not-store",
@@ -7416,6 +7507,11 @@ describeEmbeddedPostgres("tool access service", () => {
         expect(
           grant!.credentialSecretRefs.map((ref) => ref.configPath),
         ).toEqual(["oauth.access_token"]);
+        expect(grant!.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+          state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+        });
+        expect(grant!.providerTenant?.github?.repositoryAccessReconciliation?.scopeHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(grant!.providerTenant?.github?.repositoryAccessReconciliation?.sourceIdentityHash).toMatch(/^[a-f0-9]{64}$/);
         expect(JSON.stringify(grant)).not.toContain("do-not-store");
         expect(connector.setWebhookBinding).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -7440,6 +7536,138 @@ describeEmbeddedPostgres("tool access service", () => {
             ),
         ).resolves.toHaveLength(1);
         vi.mocked(connector.setWebhookBinding).mockClear();
+        if (concurrentChange === "incomplete") {
+          forcePaginationCycle = true;
+          await expect(service.checkHealth(connected.connectionId, actor)).rejects.toMatchObject({ status: 502 });
+          let [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          const priorFullAt = latest?.providerTenant?.github?.repositoryAccessReconciliation?.lastFullReconciledAt;
+          expect(latest?.providerTenant?.github?.repositories).toHaveLength(3);
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "required", mode: "full", requiredReason: "provider_failure",
+            lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
+          forcePaginationCycle = false;
+          sweepNow = new Date(Date.parse(latest!.providerTenant!.github!.repositoryAccessReconciliation!.nextAttemptAt!) + 1);
+          await expect(service.sweepGitHubConnectionContinuity({ force: true })).resolves.toMatchObject({ refreshed: 1, failed: 0 });
+          [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
+          expect(Date.parse(latest!.providerTenant!.github!.repositoryAccessReconciliation!.lastFullReconciledAt!))
+            .toBeGreaterThan(Date.parse(priorFullAt!));
+          const [currentConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connected.connectionId));
+          expect(projectToolConnectionLifecycle(currentConnection!, latest!, sweepNow).syncReconciliation)
+            .toMatchObject({ state: "reconciled", cursor: "not_reported", watermark: "not_reported", gapDetection: "not_reported" });
+          return;
+        }
+        if (concurrentChange === "missed-webhook") {
+          const oldFullAt = grant!.providerTenant?.github?.repositoryAccessReconciliation?.lastFullReconciledAt;
+          repositoryIds = [4, 5];
+          sweepNow = new Date(Date.parse(grant!.providerTenant!.github!.repositoryAccessReconciliation!.nextAttemptAt!) + 1);
+          await expect(service.sweepGitHubConnectionContinuity({ force: true })).resolves.toMatchObject({ refreshed: 1, failed: 0 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositories?.map((repository) => repository.id)).toEqual(["4", "5"]);
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
+          expect(Date.parse(latest!.providerTenant!.github!.repositoryAccessReconciliation!.lastFullReconciledAt!))
+            .toBeGreaterThan(Date.parse(oldFullAt!));
+          expect(latest?.providerTenant?.github?.lastWebhookAt).toBe(grant!.providerTenant?.github?.lastWebhookAt);
+          return;
+        }
+        if (concurrentChange === "bounded-fair") {
+          const [baseConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connected.connectionId));
+          const priorTenant = grant!.providerTenant!;
+          const dueTenant = { ...priorTenant, github: { ...priorTenant.github!, repositoryAccessReconciliation: {
+            ...priorTenant.github!.repositoryAccessReconciliation!, state: "required" as const,
+            requiredReason: "source_event_invalidated" as const, nextAttemptAt: sweepNow.toISOString(),
+            lastAttemptAt: new Date(sweepNow.getTime() - 1_000).toISOString(),
+          } } };
+          await db.update(connectionGrants).set({ providerTenant: dueTenant, updatedAt: new Date(sweepNow.getTime() - 1_000) })
+            .where(eq(connectionGrants.id, grant!.id));
+          for (let index = 0; index < 5; index += 1) {
+            const { id: _connectionId, createdAt: _connectionCreatedAt, updatedAt: _connectionUpdatedAt, ...connectionValues } = baseConnection!;
+            const [cloneConnection] = await db.insert(toolConnections).values({
+              ...connectionValues, uid: randomUUID(), name: `GitHub bounded fairness ${index}`,
+              createdAt: sweepNow, updatedAt: sweepNow,
+            }).returning();
+            const { id: _grantId, createdAt: _grantCreatedAt, updatedAt: _grantUpdatedAt, ...grantValues } = grant!;
+            await db.insert(connectionGrants).values({
+              ...grantValues, connectionId: cloneConnection!.id, credentialSecretRefs: [],
+              providerTenant: dueTenant, createdAt: sweepNow, updatedAt: sweepNow,
+            });
+          }
+          const firstSweepAt = new Date(sweepNow);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ refreshed: 1, failed: 4, deferred: 1 });
+          const grants = await db.select().from(connectionGrants).where(and(
+            eq(connectionGrants.companyId, company.id), eq(connectionGrants.kind, "agent"),
+          ));
+          const dueAgain = grants.filter((item) => Date.parse(item.providerTenant?.github?.repositoryAccessReconciliation?.nextAttemptAt ?? "") <= sweepNow.getTime());
+          expect(dueAgain).toHaveLength(1);
+          const attemptTimes = grants.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === firstSweepAt.toISOString());
+          expect(attemptTimes).toHaveLength(5);
+          sweepNow = new Date(firstSweepAt.getTime() + 59_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 0, refreshed: 0, failed: 0, deferred: 0 });
+          const beforeRetry = await db.select().from(connectionGrants).where(and(
+            eq(connectionGrants.companyId, company.id), eq(connectionGrants.kind, "agent"),
+          ));
+          expect(beforeRetry.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === firstSweepAt.toISOString())).toHaveLength(5);
+          sweepNow = new Date(firstSweepAt.getTime() + 60_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 0, failed: 1 });
+          const settled = await db.select().from(connectionGrants).where(and(
+            eq(connectionGrants.companyId, company.id), eq(connectionGrants.kind, "agent"),
+          ));
+          expect(settled.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === firstSweepAt.toISOString()))
+            .toHaveLength(5);
+          expect(settled.filter((item) => item.providerTenant?.github?.repositoryAccessReconciliation?.lastAttemptAt === sweepNow.toISOString()))
+            .toHaveLength(1);
+          return;
+        }
+        if (concurrentChange === "leased-backoff") {
+          const prior = grant!.providerTenant!.github!.repositoryAccessReconciliation!;
+          const firstSweepAt = new Date(sweepNow);
+          const leasedTenant = { ...grant!.providerTenant!, github: { ...grant!.providerTenant!.github!, repositoryAccessReconciliation: {
+            ...prior, state: "required" as const, requiredReason: "source_event_invalidated" as const,
+            nextAttemptAt: firstSweepAt.toISOString(), lastAttemptAt: new Date(firstSweepAt.getTime() - 1_000).toISOString(),
+            reconcileLeaseId: "another-worker", reconcileLeaseUntil: new Date(firstSweepAt.getTime() + 120_000).toISOString(),
+          } } };
+          await db.update(connectionGrants).set({ providerTenant: leasedTenant, updatedAt: new Date(firstSweepAt.getTime() - 1_000) })
+            .where(eq(connectionGrants.id, grant!.id));
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 0, failed: 0, deferred: 1 });
+          sweepNow = new Date(firstSweepAt.getTime() + 59_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 0, refreshed: 0, failed: 0, deferred: 0 });
+          sweepNow = new Date(firstSweepAt.getTime() + 60_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 0, failed: 0, deferred: 1 });
+          sweepNow = new Date(firstSweepAt.getTime() + 120_000);
+          await expect(service.sweepGitHubConnectionContinuity()).resolves.toMatchObject({ checked: 1, refreshed: 1, failed: 0, deferred: 0 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", lastAttemptAt: sweepNow.toISOString(),
+          });
+          return;
+        }
+        if (concurrentChange === "rate-limit") {
+          const prior = grant!.providerTenant!.github!.repositoryAccessReconciliation!;
+          await db.update(connectionGrants).set({ providerTenant: {
+            ...grant!.providerTenant!, github: { ...grant!.providerTenant!.github!, repositoryAccessReconciliation: {
+              ...prior, state: "required", requiredReason: "source_event_invalidated", nextAttemptAt: sweepNow.toISOString(),
+            } },
+          } }).where(eq(connectionGrants.id, grant!.id));
+          forceRateLimit = true;
+          await expect(service.sweepGitHubConnectionContinuity({ force: true })).resolves.toMatchObject({ refreshed: 0, failed: 1 });
+          const [latest] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          const sync = latest!.providerTenant!.github!.repositoryAccessReconciliation!;
+          expect(sync).toMatchObject({ state: "required", requiredReason: "provider_failure", lastErrorCode: "github_rate_limited" });
+          expect(sync.lastFullReconciledAt).toBe(prior.lastFullReconciledAt);
+          expect(Date.parse(sync.rateLimitRetryAt!)).toBeGreaterThan(Date.now());
+          expect(Date.parse(sync.nextAttemptAt!)).toBeGreaterThanOrEqual(Date.parse(sync.rateLimitRetryAt!));
+          const [currentConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, connected.connectionId));
+          const lifecycle = projectToolConnectionLifecycle(currentConnection!, latest!, sweepNow);
+          expect(lifecycle.syncReconciliation).toMatchObject({ state: "required", rateLimitState: "limited" });
+          expect(JSON.stringify(lifecycle)).not.toContain("retry-after");
+          expect(JSON.stringify(lifecycle)).not.toContain("x".repeat(129));
+          return;
+        }
         if (concurrentChange !== "none") {
           beforeRepositoryResponse = async () => {
             if (concurrentChange === "one-conflict")
@@ -7461,6 +7689,7 @@ describeEmbeddedPostgres("tool access service", () => {
                     ...(concurrentChange === "event"
                       ? { lastWebhookAt: new Date().toISOString() }
                       : {}),
+                    ...(concurrentChange === "identity" ? { userId: "99" } : {}),
                     installationIds: [],
                     installationCount: 0,
                     repositoryCount: 0,
@@ -7483,6 +7712,9 @@ describeEmbeddedPostgres("tool access service", () => {
               .where(eq(connectionGrants.id, grant!.id));
             expect(latest?.status).toBe("active");
             expect(latest?.providerTenant?.github?.repositoryCount).toBe(3);
+            expect(latest?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+              state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+            });
             return;
           }
           await expect(
@@ -7504,6 +7736,10 @@ describeEmbeddedPostgres("tool access service", () => {
             service.checkHealth(connected.connectionId, actor),
           ).resolves.toMatchObject({ connection: { healthStatus: "ok" } });
           expect(connector.setWebhookBinding).toHaveBeenCalled();
+          const [refreshedGrant] = await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id));
+          expect(refreshedGrant?.providerTenant?.github?.repositoryAccessReconciliation).toMatchObject({
+            state: "reconciled", mode: "full", lastSuccessAt: expect.any(String), lastFullReconciledAt: expect.any(String),
+          });
         }
       } finally {
         githubDefinition.ownershipAvailability = previousOwnershipAvailability;
@@ -8915,6 +9151,7 @@ describeEmbeddedPostgres("tool access service", () => {
       {
         galleryKey: "slack",
         name: "Shared OAuth grant",
+        grantKind: "organization",
       },
       { actorType: "user", actorId: userId },
     );
@@ -8930,7 +9167,7 @@ describeEmbeddedPostgres("tool access service", () => {
     let gatewayAuthorization: string | null = null;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         return {
           ok: true,
           status: 200,
@@ -9061,6 +9298,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connected = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack user auth",
+      grantKind: "organization",
     });
 
     const workspaceStarted = await service.startOAuth(
@@ -9076,7 +9314,7 @@ describeEmbeddedPostgres("tool access service", () => {
     ).searchParams.get("state")!;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         const userAuthorization =
           body.get("code") === "user-authorization-code";
@@ -9398,7 +9636,7 @@ describeEmbeddedPostgres("tool access service", () => {
       );
       vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           const code = (init?.body as URLSearchParams).get("code");
           expect(["personal-code", "personal-reconnect-code"]).toContain(code);
           const reconnecting = code === "personal-reconnect-code";
@@ -9752,7 +9990,7 @@ describeEmbeddedPostgres("tool access service", () => {
     );
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         return mcpHttpResponse({
           ok: true,
           access_token: "share-access-token",
@@ -9903,7 +10141,7 @@ describeEmbeddedPostgres("tool access service", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (url, init) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           const body = init?.body as URLSearchParams;
           if (body.get("grant_type") === "refresh_token") {
             expect(body.get("refresh_token")).toBe("personal-refresh-token");
@@ -10233,14 +10471,22 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(connectRes.body.connection).toMatchObject({
         status: "draft",
         enabled: false,
+        ownership: "platform_shared",
+        credentialPolicy: "per_user",
         credentialSecretRefs: [],
-        config: expect.objectContaining({ sourceTemplateKey: "slack" }),
+        config: expect.objectContaining({
+          sourceTemplateKey: "slack",
+          connectionMethodKey: "managed-oauth",
+        }),
       });
       const startUrl = new URL(connectRes.body.auth.startUrl);
       expect(`${startUrl.origin}${startUrl.pathname}`).toBe(
-        "https://slack.com/oauth/v2/authorize",
+        "https://slack.com/oauth/v2_user/authorize",
       );
       expect(startUrl.searchParams.get("client_id")).toBe("slack-client-id");
+      expect(startUrl.searchParams.get("scope")).toBe(
+        "channels:history,channels:read,chat:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,search:read.im,search:read.mpim,search:read.private,search:read.public",
+      );
       expect(startUrl.searchParams.get("code_challenge_method")).toBe("S256");
       expect(startUrl.searchParams.get("code_challenge")).toMatch(
         /^[A-Za-z0-9_-]{43}$/,
@@ -10248,28 +10494,81 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(startUrl.searchParams.get("redirect_uri")).toBe(
         `${origin}/api/tools/oauth/callback`,
       );
+
+      const ownAppConnectRes = await request(app)
+        .post(`/api/companies/${company.id}/tools/apps/connect`)
+        .set("Host", new URL(origin).host)
+        .set("Origin", origin)
+        .send({
+          galleryKey: "slack",
+          connectionMethodKey: "mcp-oauth",
+          name: "Slack own OAuth app",
+          oauthClient: {
+            clientId: "customer-slack-client-id",
+            clientSecret: "customer-slack-client-secret",
+          },
+        });
+      expect(ownAppConnectRes.status).toBe(201);
+      expect(ownAppConnectRes.body.connection).toMatchObject({
+        ownership: "customer",
+        credentialPolicy: "per_user",
+        config: expect.objectContaining({
+          connectionMethodKey: "mcp-oauth",
+          oauth: expect.objectContaining({
+            clientId: "customer-slack-client-id",
+            clientRegistrationSource: "manual",
+          }),
+        }),
+      });
+      const ownAppStartUrl = new URL(ownAppConnectRes.body.auth.startUrl);
+      expect(`${ownAppStartUrl.origin}${ownAppStartUrl.pathname}`).toBe(
+        "https://slack.com/oauth/v2_user/authorize",
+      );
+      expect(ownAppStartUrl.searchParams.get("client_id")).toBe("customer-slack-client-id");
+      expect(ownAppStartUrl.searchParams.get("scope")).toBe(startUrl.searchParams.get("scope"));
+
       const state = startUrl.searchParams.get("state");
       expect(state).toBeTruthy();
-      await expect(db.select().from(toolOauthStates)).resolves.toEqual([
-        expect.objectContaining({
-          state,
-          connectionId: connectRes.body.connectionId,
-          companyId: company.id,
-          createdByActorType: "user",
-          createdByActorId: "board-user",
-          createdBySessionId: null,
-        }),
-      ]);
+      await expect(db.select().from(toolOauthStates)).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            state,
+            connectionId: connectRes.body.connectionId,
+            companyId: company.id,
+            createdByActorType: "user",
+            createdByActorId: "board-user",
+            createdBySessionId: null,
+            requestedScopes: expect.arrayContaining([
+              "channels:history", "channels:read", "chat:write", "search:read.public",
+            ]),
+          }),
+          expect.objectContaining({
+            state: ownAppStartUrl.searchParams.get("state"),
+            connectionId: ownAppConnectRes.body.connectionId,
+            companyId: company.id,
+            createdByActorType: "user",
+            createdByActorId: "board-user",
+            createdBySessionId: null,
+            requestedScopes: expect.arrayContaining([
+              "channels:history", "channels:read", "chat:write", "search:read.public",
+            ]),
+          }),
+        ]),
+      );
 
       const fetchMock = vi
         .spyOn(globalThis, "fetch")
         .mockImplementation(async (url, init) => {
           const href = String(url);
-          if (href === "https://slack.com/api/oauth.v2.access") {
+          if (href === "https://slack.com/api/oauth.v2.user.access") {
             const body = init?.body as URLSearchParams;
             expect(body.get("grant_type")).toBe("authorization_code");
-            expect(body.get("code")).toBe("oauth-code");
-            expect(body.get("client_secret")).toBe("slack-client-secret");
+            expect(["oauth-code", "extra-scope-code"]).toContain(body.get("code"));
+            expect(body.get("client_secret")).toBe(
+              body.get("code") === "oauth-code"
+                ? "slack-client-secret"
+                : "customer-slack-client-secret",
+            );
             expect(body.get("code_verifier")).toBeTruthy();
             expect(body.get("redirect_uri")).toBe(
               `${origin}/api/tools/oauth/callback`,
@@ -10282,7 +10581,9 @@ describeEmbeddedPostgres("tool access service", () => {
                 refresh_token: "refresh-token",
                 expires_in: 3600,
                 token_type: "Bearer",
-                scope: "channels:read chat:write search:read",
+                scope: body.get("code") === "extra-scope-code"
+                  ? "channels:history,channels:read,chat:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,search:read.im,search:read.mpim,search:read.private,search:read.public,admin:everything"
+                  : "channels:history,channels:read,chat:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,search:read.im,search:read.mpim,search:read.private,search:read.public",
               }),
             } as Response;
           }
@@ -10318,22 +10619,69 @@ describeEmbeddedPostgres("tool access service", () => {
         .query({ state, code: "oauth-code" });
 
       expect(callbackRes.status).toBe(200);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(callbackRes.body.connection).toMatchObject({
         id: connectRes.body.connectionId,
         status: "active",
         enabled: true,
+        credentialPolicy: "per_user",
+        config: expect.objectContaining({
+          oauth: expect.objectContaining({
+            provider: "slack",
+            scopes: [
+              "channels:history", "channels:read", "chat:write",
+              "groups:history", "groups:read", "im:history", "im:read",
+              "mpim:history", "mpim:read", "search:read.im",
+              "search:read.mpim", "search:read.private", "search:read.public",
+            ],
+          }),
+        }),
+        credentialSecretRefs: [],
+      });
+      const [slackGrant] = await db
+        .select()
+        .from(connectionGrants)
+        .where(eq(connectionGrants.connectionId, connectRes.body.connectionId));
+      expect(slackGrant).toMatchObject({
+        kind: "user",
+        subjectUserId: "board-user",
+        status: "active",
+        providerTenant: {
+          oauth: {
+            scopes: [
+              "channels:history", "channels:read", "chat:write",
+              "groups:history", "groups:read", "im:history", "im:read",
+              "mpim:history", "mpim:read", "search:read.im",
+              "search:read.mpim", "search:read.private", "search:read.public",
+            ],
+          },
+        },
         credentialSecretRefs: [
-          expect.objectContaining({
-            configPath: "oauth.access_token",
-            label: "OAuth access token",
-          }),
-          expect.objectContaining({
-            configPath: "oauth.refresh_token",
-            label: "OAuth refresh token",
-          }),
+          expect.objectContaining({ configPath: "oauth.access_token", label: "OAuth access token" }),
+          expect.objectContaining({ configPath: "oauth.refresh_token", label: "OAuth refresh token" }),
         ],
       });
+      const ownAppDenied = await request(app)
+        .get("/api/tools/oauth/callback")
+        .set("Host", new URL(origin).host)
+        .query({
+          state: ownAppStartUrl.searchParams.get("state"),
+          code: "extra-scope-code",
+        });
+      expect(ownAppDenied.status).toBe(403);
+      expect(ownAppDenied.body.error).toBe(
+        "Slack returned permissions outside the consent request",
+      );
+      const [stillDraftOwnApp] = await db
+        .select()
+        .from(toolConnections)
+        .where(eq(toolConnections.id, ownAppConnectRes.body.connectionId));
+      expect(stillDraftOwnApp).toMatchObject({
+        status: "draft",
+        credentialPolicy: "per_user",
+        credentialSecretRefs: [],
+      });
+      expect(JSON.stringify(stillDraftOwnApp.config)).not.toContain("access-token");
       expect(callbackRes.body.actions.readOnly).toEqual([
         expect.objectContaining({
           toolName: "search_messages",
@@ -10367,11 +10715,23 @@ describeEmbeddedPostgres("tool access service", () => {
       expect(redirectCallbackRes.headers.location).toBe(
         `/${company.issuePrefix}/apps/${redirectConnectRes.body.connectionId}/permissions?success=1`,
       );
-      expect(fetchMock).toHaveBeenCalledTimes(6);
-      await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(0);
+      expect(fetchMock).toHaveBeenCalledTimes(5);
+      const remainingOAuthStateConnections = await db
+        .select({ connectionId: toolOauthStates.connectionId })
+        .from(toolOauthStates);
+      expect(remainingOAuthStateConnections).toEqual([]);
       await expect(
-        db.select().from(companySecretBindings),
-      ).resolves.toHaveLength(6);
+        db
+          .select()
+          .from(companySecretBindings)
+          .where(
+            and(
+              eq(companySecretBindings.companyId, company.id),
+              eq(companySecretBindings.targetType, "tool_connection"),
+              eq(companySecretBindings.targetId, connectRes.body.connectionId),
+            ),
+          ),
+      ).resolves.toHaveLength(0);
       const [connection] = await db
         .select()
         .from(toolConnections)
@@ -10719,10 +11079,17 @@ describeEmbeddedPostgres("tool access service", () => {
         "other-session",
       ),
     );
+    const providerFetch = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => {
+        throw new Error("Wrong-session OAuth callback reached the provider");
+      },
+    );
     await request(otherSessionSameUserApp)
       .get("/api/tools/oauth/callback")
       .query({ state, code: "oauth-code" })
       .expect(403);
+    expect(providerFetch).not.toHaveBeenCalled();
+    await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(1);
 
     const downgradedActor = {
       ...initiatingActor,
@@ -10741,37 +11108,9 @@ describeEmbeddedPostgres("tool access service", () => {
       .query({ state, code: "oauth-code" })
       .expect(403);
 
-    await db
-      .delete(principalPermissionGrants)
-      .where(
-        and(
-          eq(principalPermissionGrants.companyId, company.id),
-          eq(principalPermissionGrants.principalType, "user"),
-          eq(principalPermissionGrants.principalId, "oauth-operator"),
-          eq(
-            principalPermissionGrants.permissionKey,
-            "tools:manage_connections",
-          ),
-        ),
-      );
-    await request(initiatingApp)
-      .get("/api/tools/oauth/callback")
-      .query({ state, code: "oauth-code" })
-      .expect(403);
-    await db.insert(principalPermissionGrants).values({
-      companyId: company.id,
-      principalType: "user",
-      principalId: "oauth-operator",
-      permissionKey: "tools:manage_connections",
-      scope: null,
-      grantedByUserId: "owner",
-    });
-
-    await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(1);
-
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         expect(body.get("grant_type")).toBe("authorization_code");
         expect(body.get("code")).toBe("oauth-code");
@@ -11921,6 +12260,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack refresh",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -11930,7 +12270,7 @@ describeEmbeddedPostgres("tool access service", () => {
     let refreshCallCount = 0;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         if (body.get("grant_type") === "authorization_code") {
           return {
@@ -12067,6 +12407,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack invalid grant",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -12077,7 +12418,7 @@ describeEmbeddedPostgres("tool access service", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (url) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           return mcpHttpResponse({
             ok: true,
             access_token: "expired-access-token",
@@ -12120,7 +12461,7 @@ describeEmbeddedPostgres("tool access service", () => {
     let refreshCallCount = 0;
     fetchMock.mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         expect(body.get("grant_type")).toBe("refresh_token");
         expect(body.get("refresh_token")).toBe("single-use-refresh-token");
@@ -12190,6 +12531,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack stale invalid grant",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -12200,7 +12542,7 @@ describeEmbeddedPostgres("tool access service", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (url) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           return mcpHttpResponse({
             ok: true,
             access_token: "expired-access-token",
@@ -12246,7 +12588,7 @@ describeEmbeddedPostgres("tool access service", () => {
 
     fetchMock.mockImplementation(async (url, init) => {
       const href = String(url);
-      if (href === "https://slack.com/api/oauth.v2.access") {
+      if (href === "https://slack.com/api/oauth.v2.user.access") {
         const body = init?.body as URLSearchParams;
         expect(body.get("refresh_token")).toBe("submitted-refresh-token");
         await secretService(db).rotate(refreshRef.secretId, {
@@ -12438,6 +12780,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(company.id, {
       galleryKey: "slack",
       name: "Slack no refresh",
+      grantKind: "organization",
     });
     const start = await service.startOAuth(company.id, connect.connectionId, {
       redirectUri: "http://paperclip.test/api/tools/oauth/callback",
@@ -12448,7 +12791,7 @@ describeEmbeddedPostgres("tool access service", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (url) => {
         const href = String(url);
-        if (href === "https://slack.com/api/oauth.v2.access") {
+        if (href === "https://slack.com/api/oauth.v2.user.access") {
           return {
             ok: true,
             json: async () => ({

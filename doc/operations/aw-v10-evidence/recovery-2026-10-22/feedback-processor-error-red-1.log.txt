@@ -1,0 +1,56 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/feedback-share-client.test.ts (9 tests | 2 failed) 91ms
+     × keeps a processor's private error body out of HTTP 400 diagnostics 21ms
+     × keeps a processor's private error body out of HTTP 500 diagnostics 8ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/feedback-share-client.test.ts > feedback trace share client > keeps a processor's private error body out of HTTP 400 diagnostics
+AssertionError: expected [Function] to throw error matching /^Feedback trace upload failed with HT…/ but got 'synthetic-private-trace-and-credentia…'
+
+- Expected:
+/^Feedback trace upload failed with HTTP 400$/
+
++ Received:
+"synthetic-private-trace-and-credential-canary"
+
+ ❯ src/__tests__/feedback-share-client.test.ts:39:8
+     37|       captureStatus: "full", notes: [], envelope: {}, surface: null, p…
+     38|       rawAdapterTrace: null, normalizedAdapterTrace: null, privacy: nu…
+     39|     })).rejects.toThrow(new RegExp(`^Feedback trace upload failed with…
+       |        ^
+     40|     expect(text).not.toHaveBeenCalled();
+     41|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/feedback-share-client.test.ts > feedback trace share client > keeps a processor's private error body out of HTTP 500 diagnostics
+AssertionError: expected [Function] to throw error matching /^Feedback trace upload failed with HT…/ but got 'synthetic-private-trace-and-credentia…'
+
+- Expected:
+/^Feedback trace upload failed with HTTP 500$/
+
++ Received:
+"synthetic-private-trace-and-credential-canary"
+
+ ❯ src/__tests__/feedback-share-client.test.ts:39:8
+     37|       captureStatus: "full", notes: [], envelope: {}, surface: null, p…
+     38|       rawAdapterTrace: null, normalizedAdapterTrace: null, privacy: nu…
+     39|     })).rejects.toThrow(new RegExp(`^Feedback trace upload failed with…
+       |        ^
+     40|     expect(text).not.toHaveBeenCalled();
+     41|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 7 passed (9)
+   Start at  19:19:28
+   Duration  757ms (transform 99ms, setup 167ms, import 82ms, tests 91ms, environment 0ms)
+

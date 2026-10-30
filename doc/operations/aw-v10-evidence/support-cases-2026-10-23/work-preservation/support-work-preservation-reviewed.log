@@ -1,0 +1,69 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ |@paperclipai/ui| src/App.cases-routing.test.tsx (6 tests | 3 failed) 3913ms
+     × keeps the real work surface mounted behind Help and returns to the same draft 1121ms
+     × keeps same-session Help over an unsettled account recheck, then drops old work when session changes 1091ms
+     × drops a background page when the selected company no longer matches it 1151ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > keeps the real work surface mounted behind Help and returns to the same draft
+AssertionError: expected 'Ask AugustLanguageHelp / SupportConta…' to contain 'Support overlay content'
+
+Expected: "Support overlay content"
+Received: "Ask AugustLanguageHelp / SupportContact support/PAP/work?view=assigned#todayUnsent workPrivate unsent work"
+
+ ❯ src/App.cases-routing.test.tsx:153:56
+    151|  */
+    152| async function waitForRoute(container: HTMLElement, text: string) {
+    153|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    154| }
+    155|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > keeps same-session Help over an unsettled account recheck, then drops old work when session changes
+AssertionError: expected 'Ask AugustLanguageHelp / SupportConta…' to contain 'Support overlay content'
+
+Expected: "Support overlay content"
+Received: "Ask AugustLanguageHelp / SupportContact support/PAP/workUnsent workAccount-private draft"
+
+ ❯ src/App.cases-routing.test.tsx:153:56
+    151|  */
+    152| async function waitForRoute(container: HTMLElement, text: string) {
+    153|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    154| }
+    155|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > drops a background page when the selected company no longer matches it
+AssertionError: expected 'Ask AugustLanguageHelp / SupportConta…' to contain 'Support overlay content'
+
+Expected: "Support overlay content"
+Received: "Ask AugustLanguageHelp / SupportContact support/PAP/workUnsent work"
+
+ ❯ src/App.cases-routing.test.tsx:153:56
+    151|  */
+    152| async function waitForRoute(container: HTMLElement, text: string) {
+    153|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    154| }
+    155|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  3 failed | 27 passed (30)
+   Start at  18:33:49
+   Duration  100.83s (transform 42.37s, setup 118ms, import 77.78s, tests 9.83s, environment 10.36s)
+

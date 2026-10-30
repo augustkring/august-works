@@ -5,14 +5,10 @@ import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { expect, it } from "vitest";
-import { automationArtifacts, automationArtifactVersions, authUsers, companyMemberships, createDb, heartbeatRuns,
-  principalPermissionGrants, workflowOptimizerSuggestions, workflowRuns } from "@paperclipai/db";
+import { automationArtifacts, automationArtifactVersions, authUsers, companyMemberships, createDb,
+  principalPermissionGrants, workflowOptimizerSuggestions } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
-import { seedV5Presences, enableV5ForTest } from "./helpers/v5-fixtures.js";
-import { instanceSettingsService } from "../services/instance-settings.js";
-import { issueService } from "../services/issues.js";
-import { workflowService } from "../services/workflows/workflow-service.js";
-import { workflowAuthoringToolsService } from "../services/workflows/workflow-authoring-tools.js";
+import { seedV5Companies } from "./helpers/v5-fixtures.js";
 import { automationArtifactService, automationArtifactVersionContentHash } from "../services/automation-artifacts/automation-artifact-service.js";
 
 it("upgrades actual historical replay relationships and quarantines missing legacy provenance without inventing an empty Source set", async () => {
@@ -29,29 +25,45 @@ it("upgrades actual historical replay relationships and quarantines missing lega
       for (const entry of entries) await copyFile(new URL(`${entry.tag}.sql`, root), join(prior, `${entry.tag}.sql`));
       await writeFile(join(prior, "meta/_journal.json"), JSON.stringify({ ...journal, entries }));
       const legacy = createDb(connection); await migrate(legacy, { migrationsFolder: prior });
-      await instanceSettingsService(legacy).getExperimental(); await enableV5ForTest(legacy);
-      const f = await seedV5Presences(legacy); companyId = f.home; userId = f.userId;
-      await instanceSettingsService(legacy).updateExperimental({ enableWorkflowsV1: true, enableWorkflowBuilderV1: true,
-        enableAiWorkflowAuthoring: true, enableAgentChat: true, enableAutomationArtifactsV1: true });
-      await legacy.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: f.presence.id, status: "active" }).onConflictDoNothing();
-      await legacy.insert(principalPermissionGrants).values(["workflows:read", "workflows:edit"].flatMap(permissionKey => [
-        { companyId, principalType: "agent", principalId: f.presence.id, permissionKey }, { companyId, principalType: "user", principalId: userId, permissionKey },
-      ])).onConflictDoNothing();
-      const source = await issueService(legacy).create(companyId, { title: "Owned historical private Source", assigneeAgentId: f.presence.id,
-        conversationAgentId: f.presence.id, conversationUserId: userId, conversationState: "waiting", status: "in_review", createdByUserId: userId });
-      const [origin] = await legacy.insert(heartbeatRuns).values({ companyId, agentId: f.presence.id, responsibleUserId: userId,
-        status: "running", contextSnapshot: { issueId: source.id, conversationSessionGeneration: 0 } }).returning();
-      const privateWorkflow = (await workflowAuthoringToolsService(legacy).create({ companyId, agentId: f.presence.id, runId: origin.id },
-        { name: "Historical private workflow", idempotencyKey: randomUUID() })).workflow;
-      privateWorkflowId = privateWorkflow.id;
-      const human = { principal: { type: "user" as const, userId } }, owner = workflowService(legacy);
-      const parent = await owner.create(companyId, { name: "Historical public parent" }, human);
-      // Structural upgrade data only, not an executed or qualified outcome.
-      const runs = await legacy.insert(workflowRuns).values(Array.from({ length: 3 }, () => ({ companyId, workflowId: parent.id,
-        workflowRevisionId: parent.draftRevisionId!, source: "manual", status: "queued", authoringSourceWorkflowIds: [privateWorkflowId] }))).returning();
+      // This callback runs at the exact pre-0497 historical schema boundary.
+      // Seed the rows the replay migration consumes using only columns that
+      // exist there; current service projections can require later columns.
+      const f = await seedV5Companies(legacy); companyId = f.home; userId = f.userId;
+      const agentId = randomUUID(), sourceIssueId = randomUUID(), originRunId = randomUUID();
+      privateWorkflowId = randomUUID();
+      const sourceRevisionId = randomUUID(), parentId = randomUUID(), parentRevisionId = randomUUID();
+      await legacy.execute(sql`insert into agents(id,company_id,name,role,status) values
+        (${agentId}::uuid,${companyId}::uuid,'Historical Author','general','idle')`);
+      await legacy.execute(sql`insert into company_memberships(company_id,principal_type,principal_id,status)
+        values(${companyId}::uuid,'agent',${agentId},'active') on conflict do nothing`);
+      await legacy.insert(principalPermissionGrants).values(["workflows:read", "workflows:edit"].map(permissionKey =>
+        ({ companyId, principalType: "user", principalId: userId, permissionKey }))).onConflictDoNothing();
+      await legacy.execute(sql`insert into issues(id,company_id,title,status,priority,assignee_agent_id,created_by_user_id,
+        conversation_agent_id,conversation_user_id,conversation_state) values(${sourceIssueId}::uuid,${companyId}::uuid,
+        'Owned historical private Source','in_review','medium',${agentId}::uuid,${userId},${agentId}::uuid,${userId},'waiting')`);
+      await legacy.execute(sql`insert into heartbeat_runs(id,company_id,agent_id,invocation_source,status,responsible_user_id,
+        native_issue_id,context_snapshot,finished_at) values(${originRunId}::uuid,${companyId}::uuid,${agentId}::uuid,
+        'api','succeeded',${userId},${sourceIssueId}::uuid,${JSON.stringify({ issueId: sourceIssueId })}::jsonb,now())`);
+      // Model a private conversation-authored Workflow and a separate public
+      // replay target with their real immutable revision/run relationships.
+      await legacy.transaction(async tx => {
+        await tx.execute(sql`insert into workflows(id,company_id,name,status,created_by_agent_id,authoring_source_run_ids)
+          values(${privateWorkflowId}::uuid,${companyId}::uuid,'Historical private workflow','active',${agentId}::uuid,'[]'::jsonb),
+          (${parentId}::uuid,${companyId}::uuid,'Historical public parent','active',null,'[]'::jsonb)`);
+        await tx.execute(sql`insert into workflow_revisions(id,company_id,workflow_id,revision_number,state,graph_json,
+          created_by_agent_id,created_by_run_id) values(${sourceRevisionId}::uuid,${companyId}::uuid,${privateWorkflowId}::uuid,
+            1,'draft','{"version":1,"nodes":[],"edges":[],"variables":[],"settings":{}}'::jsonb,${agentId}::uuid,${originRunId}::uuid),
+          (${parentRevisionId}::uuid,${companyId}::uuid,${parentId}::uuid,1,'draft',
+            '{"version":1,"nodes":[],"edges":[],"variables":[],"settings":{}}'::jsonb,null,null)`);
+        await tx.execute(sql`update workflows set draft_revision_id=${sourceRevisionId}::uuid where id=${privateWorkflowId}::uuid`);
+        await tx.execute(sql`update workflows set draft_revision_id=${parentRevisionId}::uuid where id=${parentId}::uuid`);
+      });
+      const runs = Array.from({ length: 3 }, () => ({ id: randomUUID() }));
+      for (const run of runs) await legacy.execute(sql`insert into workflow_runs(id,company_id,workflow_id,workflow_revision_id,source,status)
+        values(${run.id}::uuid,${companyId}::uuid,${privateWorkflowId}::uuid,${sourceRevisionId}::uuid,'manual','queued')`);
       for (const [artifactId, versionId, sourceRuns] of [[completeId, completeVersion, runs.map(run => run.id)], [incompleteId, incompleteVersion, Array.from({ length: 3 }, () => randomUUID())]] as const) {
-        const [suggestion] = await legacy.insert(workflowOptimizerSuggestions).values({ companyId, workflowId: parent.id,
-          workflowRevisionId: parent.draftRevisionId!, signatureHash: artifactId.replaceAll("-", "").repeat(2), status: "detected", candidateType: "transform",
+        const [suggestion] = await legacy.insert(workflowOptimizerSuggestions).values({ companyId, workflowId: parentId,
+          workflowRevisionId: parentRevisionId, signatureHash: artifactId.replaceAll("-", "").repeat(2), status: "detected", candidateType: "transform",
           stepOrdinals: [1], operationTypes: ["core.transform"], capabilityRefs: [null], sideEffectRisk: "low", observationCount: 3,
           successRate: 1, humanCorrectionRate: null, humanCorrectionEvidenceCount: 0, humanCorrectionEvidenceCoverage: 0,
           inputShapeStability: 1, outputShapeStability: 1, averageDurationMs: 1, averageCost: null,
@@ -59,7 +71,7 @@ it("upgrades actual historical replay relationships and quarantines missing lega
         // The new private column does not exist at this boundary. Native SQL
         // seeds the old records; there are no gate reports or runtime claims.
         await legacy.execute(sql`insert into automation_artifacts(id,company_id,name,kind,risk_class,side_effect_class,created_by_optimizer_suggestion_id,origin_workflow_id)
-          values(${artifactId}::uuid,${companyId}::uuid,'Historical replay fixture','expression','C0','pure',${suggestion.id}::uuid,${parent.id}::uuid)`);
+          values(${artifactId}::uuid,${companyId}::uuid,'Historical replay fixture','expression','C0','pure',${suggestion.id}::uuid,${parentId}::uuid)`);
         const testSpec = { cases: [{ input: artifactId === completeId ? "PRIVATE HISTORICAL REPLAY" : "UNRESOLVED HISTORICAL REPLAY" }] };
         const hash = automationArtifactVersionContentHash({ kind: "expression", language: null, sourceCode: "input.value", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec });
         await legacy.execute(sql`insert into automation_artifact_versions(id,company_id,artifact_id,version_number,source_code,input_schema,output_schema,dependency_manifest,test_spec,content_hash)

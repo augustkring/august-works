@@ -10,6 +10,8 @@ import {
   agentWakeupRequests,
   agents,
   activityLog,
+  authSessions,
+  authUsers,
   companies,
   companyMemberships,
   companySkills,
@@ -28,6 +30,7 @@ import { issueRoutes } from "../routes/issues.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { issueService } from "../services/issues.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { remoteTerminationReceipt } from "../services/remote-execution-termination.js";
 import { initializeRunIdentity, reconcileSteeredIdentity } from "../services/run-identity.js";
 import {
@@ -62,6 +65,7 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
   }, 30_000);
 
   const testProcesses = new Map<string, ChildProcess>();
+  const humanSessionIds = new Map<string, string>();
 
   afterEach(async () => {
     for (const [id, child] of testProcesses) {
@@ -69,6 +73,9 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
       child.kill();
     }
     testProcesses.clear();
+    await db.delete(authSessions);
+    await db.delete(authUsers);
+    humanSessionIds.clear();
     // Each case owns the entire disposable database. Clear the full company
     // graph, including attribution rows and constraints added by migrations.
     await db.execute(sql`TRUNCATE TABLE companies CASCADE`);
@@ -84,9 +91,11 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
     testApp.use((req, _res, next) => {
       (req as any).actor = {
         type: agentActor ? "agent" : "board",
-        ...(agentActor ? { ...agentActor, companyId } : {}),
-        source: "session",
+        ...(agentActor ? { ...agentActor, companyId, onBehalfOfUserId: userId,
+          onBehalfOfMemberships: [{ companyId, status: "active", membershipRole: "operator" }] } : {}),
+        source: agentActor ? "agent_key" : "session",
         userId,
+        ...(!agentActor ? { sessionId: humanSessionIds.get(userId) } : {}),
         companyIds: [companyId],
         memberships: [{ companyId, status: "active", membershipRole: "operator" }],
         isInstanceAdmin: false,
@@ -105,9 +114,17 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
     const runId = randomUUID();
     const wakeId = randomUUID();
     const commentIds = [randomUUID(), randomUUID()];
+    const now = new Date();
+    await db.insert(authUsers).values([
+      { id: "queue-owner", name: "Queue owner", email: "queue-owner@example.test", emailVerified: true, createdAt: now, updatedAt: now },
+      { id: "other-operator", name: "Other operator", email: "other-operator@example.test", emailVerified: true, createdAt: now, updatedAt: now },
+    ]);
+    humanSessionIds.set("queue-owner", await seedNativePasskeySession(db, "queue-owner"));
+    humanSessionIds.set("other-operator", await seedNativePasskeySession(db, "other-operator"));
     await db.insert(companies).values({
       id: companyId,
       name: "Queue Test Company",
+      defaultResponsibleUserId: "queue-owner",
       issuePrefix: "QUE",
       requireBoardApprovalForNewAgents: false,
     });
@@ -165,19 +182,19 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
       triggerDetail: "queue route test",
       status: "running",
       runtimeMode: "native",
+      responsibleUserId: "queue-owner",
       startedAt: new Date("2026-08-22T15:00:00.000Z"),
       contextSnapshot: { issueId },
     });
-    await db.insert(issues).values({
-      id: issueId,
-      companyId,
-      identifier: "QUE-1",
-      title: "Queued steering",
-      status: "in_progress",
-      priority: "medium",
-      assigneeAgentId: agentId,
-      executionRunId: runId,
-    });
+    // Capture only the actual Human task input through the original owner.
+    // Operational run/checkout state does not manufacture payload provenance.
+    await issueService(db).create(companyId, {
+      id: issueId, title: "Queued steering", status: "todo", priority: "medium",
+      assigneeAgentId: agentId, responsibleUserId: "queue-owner", createdByUserId: "queue-owner",
+    }, db, undefined, { manualInputActor: { type: "board", source: "session", userId: "queue-owner",
+      sessionId: humanSessionIds.get("queue-owner"), companyIds: [companyId],
+      memberships: [{ companyId, status: "active", membershipRole: "operator" }] } });
+    await db.update(issues).set({ status: "in_progress", executionRunId: runId }).where(eq(issues.id, issueId));
     await db.insert(issueComments).values(commentIds.map((id, index) => ({
       id,
       companyId,
@@ -204,7 +221,10 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
     })).rejects.toMatchObject({ status: 403, details: { code: "agent_run_cancelled" } });
     expect((await db.select().from(issues).where(eq(issues.id, seeded.issueId)))[0].status).toBe("blocked");
     // A board disposition remains authoritative.
-    expect(await issueService(db).update(seeded.issueId, { status: "done", actorUserId: "queue-owner" }))
+    expect(await issueService(db).update(seeded.issueId, { status: "done", actorUserId: "queue-owner",
+      privacyActor: { type: "board", source: "session", userId: "queue-owner",
+        sessionId: humanSessionIds.get("queue-owner"), companyIds: [seeded.companyId],
+        memberships: [{ companyId: seeded.companyId, status: "active", membershipRole: "operator" }] }, }))
       .toMatchObject({ status: "done" });
   });
 
@@ -266,7 +286,9 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
     await db.update(heartbeatRuns).set({ status: "cancelled", errorCode: "issue_reassigned",
       resultJson: { reassignmentStopConfirmed: true, issueMutationStopId: stopId },
     }).where(eq(heartbeatRuns.id, seeded.runId));
-    const data = { status: "todo", actorAgentId: seeded.agentId, actorRunId: seeded.runId };
+    const data = { status: "todo", actorAgentId: seeded.agentId, actorRunId: seeded.runId,
+      privacyActor: { type: "agent" as const, agentId: seeded.agentId, companyId: seeded.companyId,
+        runId: seeded.runId, onBehalfOfUserId: "queue-owner" } };
     await expect(issueService(db).update(seeded.issueId, { ...data, actorRunStopId: randomUUID() }))
       .rejects.toMatchObject({ status: 403, details: { code: "agent_run_cancelled" } });
     expect(await issueService(db).update(seeded.issueId, { ...data, actorRunStopId: stopId }))
@@ -887,6 +909,7 @@ describeEmbeddedPostgres("issue queued-comment routes", () => {
       triggerDetail: "queue route promotion test",
       status: "queued",
       runtimeMode: "native",
+      responsibleUserId: "queue-owner",
       wakeupRequestId: seeded.wakeId,
       contextSnapshot: {
         issueId: seeded.issueId,

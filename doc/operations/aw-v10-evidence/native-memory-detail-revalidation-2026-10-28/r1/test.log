@@ -1,0 +1,35 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > refuses an Agent candidate without its actual native producer Run 355ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > creates an evidence-backed pending candidate and keeps it company-scoped 734ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > deduplicates an equivalent shared claim without creating another record 1161ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > corroborates an equivalent claim by attaching only novel evidence 779ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > attaches contradicting evidence to an equivalent pending claim without duplicating it 428ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > creates a pending temporal update and supersedes only after acceptance 1197ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > keeps overlapping single-value claims pending as contradictions 337ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > does not force additive lessons into single-value contradiction semantics 232ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > serializes concurrent equivalent claims into one record 1092ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > enforces the private-agent memory boundary at validation and tenant scope 122ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > requires human or system review before a candidate becomes active memory 874ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > does not supersede accepted memory until its correction candidate is accepted 1127ms
+[20:36:37] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"39ffa928-ff1c-4b6b-9c1c-9a9833571743","actorAgentId":"f6b71adf-7c77-4c03-aa09-247de4d45112","responsibleUserId":"9426b5ae-d469-4ccb-b784-8d5894dfdd01"}[39m
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > excludes private agent memory from unscoped eligibility and requires explicit owner scope 222ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > rechecks Task reader authority after eligible detail evidence waits 466ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > denies private memory detail and recall to same-company non-owner principals 262ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > erases private content, its evidence and operation replay, and reapplies deletions after restore 682ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > applies a company maximum age to records without individual expiry dates 366ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > propagates source deletion and denies source recapture in the same company 657ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > keeps special metadata keys in private-memory idempotency fingerprints 300ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > serializes generic candidate writers on the same operation id 430ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > creates active owner-bound private memory only through an agent-targeted binding 341ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > corrects private memory atomically without entering shared review 777ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > promotes private memory by creating a separate pending shared candidate 913ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > allows company deletion to cascade through bindings, records, and evidence 490ms
+ ✓ src/services/memory/memory-service.test.ts > Memory Core service > revokes accepted memory durably and excludes it from eligible recall 364ms
+
+ Test Files  1 passed (1)
+      Tests  25 passed (25)
+   Start at  20:36:09
+   Duration  33.85s (transform 9.97s, setup 74ms, import 14.62s, tests 19.04s, environment 0ms)
+

@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/playbooks-project-control-v5.test.ts (14 tests | 1 failed | 13 skipped) 8378ms
+     × requires reviewed commitment changes, keeps forecasts separate, and pins an explicit baseline 728ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/playbooks-project-control-v5.test.ts > V5 canonical procedures and schedule > requires reviewed commitment changes, keeps forecasts separate, and pins an explicit baseline
+Error: Failed query: update "issues" set "forecast_start_at" = $1, "forecast_end_at" = $2, "forecast_confidence" = $3, "forecast_reason" = $4, "updated_at" = $5 where "issues"."id" = $6 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at"
+params: 2026-10-03T00:00:00.000Z,2026-10-12T00:00:00.000Z,0.6,Dependency testing extends the likely completion date,2026-10-23T21:46:55.253Z,5eaa74fa-3e8f-40c6-9890-3e721bd6313e
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ src/services/project-control.ts:173:27
+
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV5ActivityTransaction src/services/v5-mutations.ts:8:18
+ ❯ src/__tests__/playbooks-project-control-v5.test.ts:163:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issues" set "forecast_start_at" = $1, "forecast_end_at" = $2, "forecast_confidence" = $3, "forecast_reason" = $4, "updated_at" = $5 where "issues"."id" = $6 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at"', parameters: [ '2026-10-03T00:00:00.000Z', '2026-10-12T00:00:00.000Z', '0.6', 'Dependency testing extends the likely completion date', '2026-10-23T21:46:55.253Z', '5eaa74fa-3e8f-40c6-9890-3e721bd6313e' ], args: [ '2026-10-03T00:00:00.000Z', '2026-10-12T00:00:00.000Z', 0.6, 'Dependency testing extends the likely completion date', '2026-10-23T21:46:55.253Z', '5eaa74fa-3e8f-40c6-9890-3e721bd6313e' ], types: [ 1184, 1184, 701, 25, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 13 skipped (14)
+   Start at  21:46:16
+   Duration  38.42s (transform 20.27s, setup 186ms, import 29.42s, tests 8.38s, environment 0ms)
+

@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[16:49:18] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"62eb0ebc-e86b-438c-9208-252927950c28"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:49:20] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"7229cfeb-3a00-4fe9-8801-e291df1258f4"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:49:21] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"4c090a47-da2e-47b8-84e3-f04961e59328"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:49:22] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"d248d276-46db-4398-aaa8-4aeb01d1f682"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:49:24] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"8c23c148-1cbb-4164-b9d2-285d84aba9ea"}[39m
+    error: {
+      "type": "Error"
+    }
+[16:49:28] [33mWARN[39m: [36mchat publication failed[39m [90m{"endpointId":"8f203986-2354-4c08-b986-eb4fdde1795a","publicationId":"db8b538c-2060-434e-a8ea-d4931cd614b0","disposition":"delivery_unknown"}[39m
+    error: {
+      "type": "Error"
+    }
+
+ Test Files  1 passed (1)
+      Tests  12 passed | 1039 skipped (1051)
+   Start at  16:48:51
+   Duration  50.09s (transform 14.31s, setup 74ms, import 20.59s, tests 29.28s, environment 0ms)
+

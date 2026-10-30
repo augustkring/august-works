@@ -1,0 +1,2 @@
+ALTER TABLE "verification" ADD COLUMN "authenticator_version" integer;--> statement-breakpoint
+ALTER TABLE "verification" ADD CONSTRAINT "verification_authenticator_version_check" CHECK ("verification"."authenticator_version" is null or "verification"."authenticator_version" >= 0);

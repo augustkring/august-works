@@ -1,0 +1,176 @@
+[
+  {
+    "file": "ui/src/App.tsx",
+    "line": 796,
+    "sha256": "9147d5061eff18579dcc7c718986a5d87ebb55d89ee4b1175a13a609b76cd8fb",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/App.tsx",
+    "line": 925,
+    "sha256": "9147d5061eff18579dcc7c718986a5d87ebb55d89ee4b1175a13a609b76cd8fb",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "line": 42,
+    "sha256": "3e96aa47dcb6ca98d737fd4def992409dbc9b4cf283ca0ad88500b6ab53277b8",
+    "reason": "Exact deployed legacy HTTP signing/header contract; changing it would break existing integrations."
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "line": 44,
+    "sha256": "3e96aa47dcb6ca98d737fd4def992409dbc9b4cf283ca0ad88500b6ab53277b8",
+    "reason": "Exact deployed legacy HTTP signing/header contract; changing it would break existing integrations."
+  },
+  {
+    "file": "ui/src/api/client.ts",
+    "line": 46,
+    "sha256": "463cf6b3d1084ecd4bd349b4d26090d7e3f1346588894872a6ac495187d69f08",
+    "reason": "Exact deployed legacy HTTP signing/header contract; changing it would break existing integrations."
+  },
+  {
+    "file": "ui/src/components/routine-sections/editable-sections.production.tsx",
+    "line": 103,
+    "sha256": "e49441dca29eace2163b16cd6f64941512bc65db4124ded8bfb4329be6d8fc99",
+    "reason": "Exact deployed legacy HTTP signing/header contract; changing it would break existing integrations."
+  },
+  {
+    "file": "ui/src/components/routine-triggers/RoutineTriggers.tsx",
+    "line": 580,
+    "sha256": "e6c385fdb37bb05114e4063cd10cc22935681f9477986751aa379fd2e4f638dd",
+    "reason": "Exact deployed legacy HTTP signing/header contract; changing it would break existing integrations."
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "line": 1089,
+    "sha256": "35d587417e62490a38246264be27e6ce52f16a87ec8ff6b1fa81d5c7cce108e8",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/features/connections/ConnectionSetupFlow.tsx",
+    "line": 1097,
+    "sha256": "9e6a1ae50b0523bf7007fbc15e065a88cfa1283de463455e4b90f7d52236235b",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/lib/oauthHandoff.ts",
+    "line": 37,
+    "sha256": "d1cac73692db2da6bc0f4a082a635010ad3004f09856d361cc00e9b0f0e60bb1",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/lib/oauthHandoff.ts",
+    "line": 47,
+    "sha256": "d1cac73692db2da6bc0f4a082a635010ad3004f09856d361cc00e9b0f0e60bb1",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/lib/oauthHandoff.ts",
+    "line": 57,
+    "sha256": "3617d9bac7af8e1af58bc19c163b97a2a659b7bfd17cfbbb967f1878e55cc799",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/lib/oauthHandoff.ts",
+    "line": 59,
+    "sha256": "fa84107a0dc939b490eaec9854de25f385f64d72aafde7096976e07341b856b4",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/lib/oauthHandoff.ts",
+    "line": 87,
+    "sha256": "fa84107a0dc939b490eaec9854de25f385f64d72aafde7096976e07341b856b4",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/lib/oauthHandoff.ts",
+    "line": 142,
+    "sha256": "0b3f749c166846eabe18ab932ec0766f0401f2df9416cd1446dd78f771ddfaf7",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/lib/oauthHandoff.ts",
+    "line": 152,
+    "sha256": "d1cac73692db2da6bc0f4a082a635010ad3004f09856d361cc00e9b0f0e60bb1",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/pages/InstanceExperimentalSettings.tsx",
+    "line": 67,
+    "sha256": "ebda84b8ce2716658667e9c371855df97f5404ab795f74b056a168afe5c9122c",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/pages/agent-skills/AgentSkillsTab.tsx",
+    "line": 357,
+    "sha256": "f68cb834340791fc365bb0180119e785383f848ebd11311a2dc1e7d1ce1494cd",
+    "reason": "Explicit compatibility explanation for the legacy Paperclip operational Skill."
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "line": 172,
+    "sha256": "f67ab88d3d44fdbe7aeee755e7850e734f10e1c54ba8c451e1d1c0950cc1dee2",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "line": 605,
+    "sha256": "3ff4a6efb17cb0f8ff072519eebd602525be8820a7452eda0fdd63d6983d7e7d",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/pages/apps/Connections.tsx",
+    "line": 614,
+    "sha256": "03fb49c2ec86e08393f894e7f47a03b4711e02ca2111be284233f5b8374aa830",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "line": 299,
+    "sha256": "5cfccfdcf6a3fde4b04987d61c320ae68eee931dd284547913aa3f2dda94470b",
+    "reason": "Exact existing GitHub check name used by installed branch rules; migration must retain check identity."
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubBotConfiguration.tsx",
+    "line": 321,
+    "sha256": "83e0ca99f35de4ed5a916c042153fa65c91abbdd1d7ec766687936a3eebebf08",
+    "reason": "Exact existing GitHub check name used by installed branch rules; migration must retain check identity."
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubChatSetup.tsx",
+    "line": 83,
+    "sha256": "7b6fd2fd0586adc0d2b013361770934ab6300a98e8430b08eb3f9eb3af1e0a0b",
+    "reason": "Exact existing GitHub check name used by installed branch rules; migration must retain check identity."
+  },
+  {
+    "file": "ui/src/pages/apps/chat/GitHubSetupPrompt.tsx",
+    "line": 36,
+    "sha256": "f4a79eb06228f718092fd558976fcb9628bf34fb4464f2ed9e62cd15086568b8",
+    "reason": "Exact existing GitHub check name used by installed branch rules; migration must retain check identity."
+  },
+  {
+    "file": "ui/src/pages/apps/chat/SlackSetupPrompt.tsx",
+    "line": 14,
+    "sha256": "67a00e7207d82f73a6d21b9c8c5691fcee3a320e40e544f0e9fc1d7172cdbcab",
+    "reason": "Explicit legacy Paperclip Cloud service boundary, distinct from Blentera product identity."
+  },
+  {
+    "file": "ui/src/plugins/slots.tsx",
+    "line": 295,
+    "sha256": "b61302328105ad39cb7088e3290bc9949e9c7be593aa5864814818901a1b00fe",
+    "reason": "Developer diagnostic inside the existing legacy plugin bridge; protocol/global names remain compatible."
+  },
+  {
+    "file": "ui/src/plugins/slots.tsx",
+    "line": 339,
+    "sha256": "b5270ed7378f48cf1fea06eac6713f678a645ad34be82ea141236bee659b60c8",
+    "reason": "Developer diagnostic inside the existing legacy plugin bridge; protocol/global names remain compatible."
+  },
+  {
+    "file": "ui/src/components/PaperclipLockup.tsx",
+    "line": 20,
+    "sha256": "c87630e37c80169c6394de5f545fac5549317415a820da7e7db4a92a54a7e7a9",
+    "reason": "Unused upstream wordmark/provenance asset; no customer surface imports this component. Do not relabel its artwork as Blentera."
+  }
+]

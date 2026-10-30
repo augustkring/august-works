@@ -1,0 +1,1 @@
+Not run. The flock process was cancelled while queued, before acquiring the shared PostgreSQL test lock, to avoid delaying the owning end-to-end test sequence. No test log, source pin or result was produced.

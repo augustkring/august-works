@@ -1,0 +1,91 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/agent-conversations.test.ts (37 tests | 2 failed | 35 skipped) 11101ms
+     × captures selected task plan source rendition after redaction while preserving unknown history and public shape 172ms
+     × captures exact approved task plan snapshot from the selected revision and retains it after later changes 164ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-conversations.test.ts > persistent agent conversations > captures selected task plan source rendition after redaction while preserving unknown history and public shape
+AssertionError: expected undefined to deeply equal { input: { …(5) }, …(1) }
+
+- Expected:
+{
+  "input": {
+    "contentHash": "19c0434e6773214183c39f80fd5b3068cdf10778318862fc9317da18ed163fdf",
+    "documentId": "053ccffb-909b-4054-96e6-ec21b356622a",
+    "issueId": "4dd304d6-0a8c-4bf1-a590-eec0f803e619",
+    "kind": "document_revision",
+    "revisionId": "5dcab344-6e20-4aac-911e-ff8888164630",
+  },
+  "payloadSourceSnapshot": null,
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/agent-conversations.test.ts:598:27
+    596|       const initial=await read();
+    597|       expect(initial!.body).toBe("Original selected plan");
+    598|       expect(captures[0]).toEqual({input:{kind:"document_revision",doc…
+       |                           ^
+    599|         revisionId:initial!.revisionId,issueId:task.id,contentHash:cre…
+    600|         payloadSourceSnapshot:null});
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-conversations.test.ts > persistent agent conversations > captures exact approved task plan snapshot from the selected revision and retains it after later changes
+AssertionError: expected undefined to deeply equal { input: { …(5) }, …(1) }
+
+- Expected:
+{
+  "input": {
+    "contentHash": "1df8e113ffe3333db325061a0085a395f389641e596c985405b70e9f7e4830b4",
+    "documentId": "2007895f-8635-4776-b4de-cd087b41bbea",
+    "issueId": "8ae2debc-6dca-4237-97ec-88f6783f9a3c",
+    "kind": "document_revision",
+    "revisionId": "953a79a9-659c-437a-bb67-932b6fe833e6",
+  },
+  "payloadSourceSnapshot": {
+    "digest": "c97c321307228fe12cf3bc9c0893f5cc85d97df880224f2dd9fa444430cf1b2d",
+    "inputs": [],
+    "owner": {
+      "companyId": "9190fb93-6650-48ac-b91a-5c19c366a6b5",
+      "contentHash": "7a854d1ee6b088490ee605ca96e91f31424fbfaa9df66f884f98053a232708d8",
+      "id": "953a79a9-659c-437a-bb67-932b6fe833e6",
+      "kind": "document_revision",
+    },
+    "policy": {
+      "foundationRevisionIds": [],
+      "issueIds": [],
+      "memoryIds": [],
+      "projectIds": [],
+      "runIds": [],
+    },
+    "version": 1,
+  },
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/agent-conversations.test.ts:639:27
+    637|       const selected=await getTaskPlanContext({db,companyId,issueId:ta…
+    638|       expect(selected!.revisionId).toBe(revision!.id);
+    639|       expect(captures[0]).toEqual({input:{kind:"document_revision",doc…
+       |                           ^
+    640|         issueId:task.id,contentHash:createHash("sha256").update(revisi…
+    641|       await documentService(db).upsertIssueDocument({issueId:task.id,k…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 35 skipped (37)
+   Start at  07:59:01
+   Duration  58.33s (transform 33.37s, setup 684ms, import 45.77s, tests 11.10s, environment 0ms)
+

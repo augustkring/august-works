@@ -1,0 +1,13 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/platform-skill-admission.integration.test.ts > required platform procedure admission > pins the real immutable package without Fabric, reads its root and a focused reference, and validates material admission 504ms
+ ✓ src/__tests__/platform-skill-admission.integration.test.ts > required platform procedure admission > refuses missing legacy pins and changed contracts instead of silently readmitting a material effect 372ms
+ ✓ src/__tests__/platform-skill-admission.integration.test.ts > required platform procedure admission > keeps lifecycle revalidation and revoked Human membership authoritative 427ms
+[02:25:01] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"02565d05-1c79-4d6f-b850-aa95108ddf6b","actorAgentId":"ad39d4dd-01c1-4fd8-9913-a56e31a470ee","responsibleUserId":"7b0225cb-91f9-43c2-b595-c28cc2bee3f1"}[39m
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  02:24:40
+   Duration  20.54s (transform 10.45s, setup 83ms, import 14.80s, tests 5.51s, environment 0ms)
+

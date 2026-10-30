@@ -2,16 +2,17 @@ import { randomUUID } from "node:crypto";
 import { eq,sql } from "drizzle-orm";
 import { businessExperimentAnalyses,businessExperimentInterpretations,businessExperimentOutcomes,businessExperimentTransitions,type Db } from "@paperclipai/db";
 import { analyzeBusinessExperimentSchema,interpretBusinessExperimentSchema } from "@paperclipai/shared";
+import type { BusinessMetricQuery } from "@paperclipai/shared";
 import { conflict,notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { v7HumanActorId } from "../v7-authorization.js";
 import { withV7ActivityTransaction } from "../v7-mutations.js";
-import { nativeSha256 } from "../native-runtime/canonical.js";
+import { canonicalNativeJson, nativeSha256 } from "../native-runtime/canonical.js";
 import { businessMetricService } from "../business-metrics/service.js";
-import { prepareNativeMetric } from "../business-metrics/native-engine.js";
+import { prepareNativeMetric, prepareNativeMetricInput } from "../business-metrics/native-engine.js";
 import { admitBusinessExperiment,lockBusinessExperimentRoot,inspectBusinessExperimentVersion,businessExperimentRootView,auditBusinessExperiment } from "./service.js";
 import { transitionExperimentRecording } from "./recording.js";
-import { EXPERIMENT_OWNER_ENGINE,experimentBudget,experimentEdges,experimentStatementTime,signedExperimentReceipt } from "./receipts.js";
+import { EXPERIMENT_OWNER_ENGINE,experimentBudget,experimentEdges,experimentOutcomeSourceHashFromCanonicalSnapshot,experimentStatementTime,signedExperimentReceipt } from "./receipts.js";
 import { evaluateNativeBusinessExperiment } from "./kernel.js";
 import { experimentCapture,experimentInvariantDiagnostics,experimentAnalysisMaterial,experimentOutcomeMaterial,experimentInterpretationMaterial,experimentAnalysisView,experimentInterpretationView,type ExperimentAnalysis,type ExperimentOutcome,type ExperimentInterpretation } from "./results.js";
 /** Sole final native capture owner. Commands supply identities/CAS only; never
@@ -27,7 +28,8 @@ export function businessExperimentAnalysisService(db:Db){return {
       const version=pin.value,plan=version.definition.sampleOrDurationPlan,analysisId=randomUUID(),outcomes:ExperimentOutcome[]=[],pendingEdges=new Map<string,{direct:ReturnType<typeof experimentEdges>;assignmentManifestId:string;assignmentLineageHash:string;completeLineageHash:string;lineageHash:string}>();
       const metrics=version.metricPins.filter(p=>p.role!=="invariant"),definitions=new Map<string,Awaited<ReturnType<ReturnType<typeof businessMetricService>["inspectPublishedDefinition"]>>>();
       for(const metric of metrics)definitions.set(metric.key,await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,metric.metricId,metric.metricVersionId));
-      const calculations=new Map(metrics.map(metric=>[metric.key,prepareNativeMetric(definitions.get(metric.key)!.version.definition,{metricId:metric.metricId,versionId:metric.metricVersionId,from:plan.from,until:plan.until,dimensions:[],maxRows:1})]));
+      const metricQuery:BusinessMetricQuery={metricId:metrics[0]?.metricId??input.versionId,versionId:metrics[0]?.metricVersionId??input.versionId,from:plan.from,until:plan.until,dimensions:[],maxRows:1};
+      const calculations=new Map(metrics.map(metric=>[metric.key,prepareNativeMetric(definitions.get(metric.key)!.version.definition,{...metricQuery,metricId:metric.metricId,versionId:metric.metricVersionId})]));
       // Lock all current ITT sources before the common actual database capture
       // time. Never substitute status at horizon end for this current snapshot.
       // The receipt owner just admitted and share-locked every actual current
@@ -44,10 +46,13 @@ export function businessExperimentAnalysisService(db:Db){return {
         // bind the inherited manifest/hashes, rather than copying its same
         // protocol edges into every one of the seventeen outcomes.
         const direct=experimentEdges(source.edges),lineage={direct,assignmentManifestId:assignment.lineageManifestId,assignmentLineageHash:nativeSha256(experimentEdges(inherited)),completeLineageHash:nativeSha256(experimentEdges([...inherited,...direct])),lineageHash:nativeSha256(direct)};
+        const preparedInput=prepareNativeMetricInput(metricQuery,[source.snapshot]);
+        const snapshotCanonical=canonicalNativeJson(source.snapshot);
         for(const metric of metrics){
-          experimentBudget(deadline);const calculated=calculations.get(metric.key)!([source.snapshot]);
+          experimentBudget(deadline);const calculated=calculations.get(metric.key)!(preparedInput);
           if(calculated.status!=="observed"||calculated.value!==0&&calculated.value!==1)throw conflict("Every assigned unit requires exact binary native outcomes; no unit may be dropped");
-          const value:ExperimentOutcome={id:randomUUID(),companyId,experimentId:id,versionId:version.id,analysisId,assignmentId:assignment.id,key:metric.key,metricId:metric.metricId,metricVersionId:metric.metricVersionId,value:calculated.value,sourceSnapshot:source.snapshot,inputHash:calculated.inputHash,sourceHash:nativeSha256({snapshot:source.snapshot,metricHash:metric.contentHash,inputHash:calculated.inputHash,value:calculated.value}),lineageManifestId:randomUUID(),receiptHash:"",signature:"",capturedAt:at};
+          const sourceHash=experimentOutcomeSourceHashFromCanonicalSnapshot(snapshotCanonical,metric.contentHash,calculated.inputHash,calculated.value);
+          const value:ExperimentOutcome={id:randomUUID(),companyId,experimentId:id,versionId:version.id,analysisId,assignmentId:assignment.id,key:metric.key,metricId:metric.metricId,metricVersionId:metric.metricVersionId,value:calculated.value,sourceSnapshot:source.snapshot,inputHash:calculated.inputHash,sourceHash,lineageManifestId:randomUUID(),receiptHash:"",signature:"",capturedAt:at};
           Object.assign(value,signedExperimentReceipt("outcome",experimentOutcomeMaterial(value,assignment.receiptHash,version.contentHash)));outcomes.push(value);pendingEdges.set(value.id,lineage);
         }
       }
@@ -68,28 +73,31 @@ export function businessExperimentAnalysisService(db:Db){return {
       for(let offset=0;offset<outcomes.length;offset+=outcomeBatchSize){
         experimentBudget(deadline);const group=outcomes.slice(offset,offset+outcomeBatchSize);
         const manifests=group.map(outcome=>{const lineage=pendingEdges.get(outcome.id)!,edges=lineage.direct;return {id:outcome.lineageManifestId,analysis_ref:outcome.id,input_hash:outcome.sourceHash,source_watermark:outcome.sourceSnapshot.updatedAt,source_count:edges.length,parameters_json:{receiptHash:outcome.receiptHash,lineageHash:lineage.lineageHash,assignmentManifestId:lineage.assignmentManifestId,assignmentLineageHash:lineage.assignmentLineageHash,completeLineageHash:lineage.completeLineageHash}};});
+        const manifestPayload=JSON.stringify(manifests);
         await tx.execute(sql`insert into analytical_lineage_manifests
           (id,company_id,analysis_type,analysis_ref,engine_version,input_hash,definition_hash,requested_by,source_watermark,source_count,parameters_json,created_at,expires_at)
           select m.id,${companyId}::uuid,'experiment_outcome',m.analysis_ref,${EXPERIMENT_OWNER_ENGINE},m.input_hash,
             ${version.contentHash},${analysis.analyzedBy},m.source_watermark,m.source_count,m.parameters_json,
             ${at.toISOString()}::timestamptz,${version.expiresAt.toISOString()}::timestamptz
-          from json_populate_recordset(null::analytical_lineage_manifests,${JSON.stringify(manifests)}::json) m`);
+          from json_populate_recordset(null::analytical_lineage_manifests,${manifestPayload}::json) m`);
 
         const batchEdges=group.flatMap(outcome=>pendingEdges.get(outcome.id)!.direct.map(edge=>({manifest_id:outcome.lineageManifestId,input_type:edge.inputType,input_ref:edge.inputRef,input_hash:edge.inputHash,relationship:edge.relationship})));
+        const edgePayload=JSON.stringify(batchEdges);
         await tx.execute(sql`insert into analytical_lineage_edges (company_id,manifest_id,input_type,input_ref,input_hash,relationship)
           select ${companyId}::uuid,e.manifest_id,e.input_type,e.input_ref,e.input_hash,e.relationship
-          from json_populate_recordset(null::analytical_lineage_edges,${JSON.stringify(batchEdges)}::json) e`);
+          from json_populate_recordset(null::analytical_lineage_edges,${edgePayload}::json) e`);
 
         const rows=group.map(outcome=>({id:outcome.id,assignment_id:outcome.assignmentId,metric_key:outcome.key,metric_id:outcome.metricId,metric_version_id:outcome.metricVersionId,value:outcome.value,source_snapshot_json:outcome.sourceSnapshot,input_hash:outcome.inputHash,source_hash:outcome.sourceHash,lineage_manifest_id:outcome.lineageManifestId,receipt_hash:outcome.receiptHash,signature:outcome.signature}));
+        const outcomePayload=JSON.stringify(rows);
         await tx.execute(sql`insert into business_experiment_outcomes
           (id,company_id,experiment_id,version_id,analysis_id,assignment_id,metric_key,metric_id,metric_version_id,value,source_snapshot_json,input_hash,source_hash,lineage_manifest_id,receipt_hash,signature,captured_at)
           select o.id,${companyId}::uuid,${id}::uuid,${version.id}::uuid,${analysisId}::uuid,o.assignment_id,
             o.metric_key,o.metric_id,o.metric_version_id,o.value,o.source_snapshot_json,o.input_hash,o.source_hash,
             o.lineage_manifest_id,o.receipt_hash,o.signature,${at.toISOString()}::timestamptz
-          from json_populate_recordset(null::business_experiment_outcomes,${JSON.stringify(rows)}::json) o`);
-
+          from json_populate_recordset(null::business_experiment_outcomes,${outcomePayload}::json) o`);
       }
-      await auditBusinessExperiment(tx,publications,companyId,actor,id,"analyzed",{versionId:version.id,analysisId,receiptHash:analysis.receiptHash,status:result.status});experimentBudget(deadline);
+      await auditBusinessExperiment(tx,publications,companyId,actor,id,"analyzed",{versionId:version.id,analysisId,receiptHash:analysis.receiptHash,status:result.status});
+      experimentBudget(deadline);
       if(Math.min(version.expiresAt.getTime(),pin.source.expiresAt.getTime())<=Date.now())throw conflict("Experiment current Source expired before final capture completed");
       return {experiment:businessExperimentRootView(updated),analysis:experimentAnalysisView(analysis,receipts.completion,true)};
     });

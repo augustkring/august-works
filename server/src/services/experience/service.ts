@@ -1,3 +1,4 @@
+import { readCompanyResponsibilityAttention } from "./company-responsibility-attention.js";
 import { readCoreMaintenance } from "./core-maintenance.js";
 import { readMemoryMaintenanceAttention } from "./memory-maintenance-attention.js";
 import { readConnectorRecovery } from "./connector-recovery.js";
@@ -41,7 +42,7 @@ import { composeExperience } from "./projection.js";
 import { withExperienceAdmission } from "./admission.js";
 import { attentionExperienceCard } from "./attention-card.js";
 
-export function experienceService(db: Db) {
+export function experienceService(db: Db, configuredOperatorUserIds: readonly string[] = []) {
   const auth = authorizationService(db);
   async function attentionIsVisible(
     actor: AuthorizationActor,
@@ -469,18 +470,30 @@ export function experienceService(db: Db) {
                       await attentionIsVisible(actor, companyId, item, signal)
                     )
                       visible.push(item);
+                  let responsibilityCards: ExperienceCard[] = [];
+                  let responsibilityUnavailable: "source_stale" | "source_unavailable" | "overflow" | null = null;
+                  try {
+                    const companyResponsibility = await readCompanyResponsibilityAttention(db, actor, companyId, signal, configuredOperatorUserIds);
+                    responsibilityCards = [...companyResponsibility.needsYou];
+                    responsibilityUnavailable = typeof companyResponsibility.coverage === "object"
+                      ? companyResponsibility.coverage.reason : null;
+                  } catch {
+                    signal.throwIfAborted();
+                    responsibilityUnavailable = "source_stale";
+                  }
                   return {
-                    ...(feed.nextCursor
+                    ...(feed.nextCursor || responsibilityUnavailable
                       ? {
                           coverage: {
                             state: "partial" as const,
-                            reason: "more_items_available" as const,
+                            reason: responsibilityUnavailable ?? "more_items_available" as const,
                           },
                         }
                       : {}),
-                    needsYou: visible.map((item) =>
-                      attentionExperienceCard(item, feed.generatedAt),
-                    ),
+                    needsYou: [
+                      ...responsibilityCards,
+                      ...visible.map((item) => attentionExperienceCard(item, feed.generatedAt)),
+                    ],
                   };
                 },
               },
@@ -572,7 +585,7 @@ export function experienceService(db: Db) {
           // for a resource that has since become private or changed.
           const markPartial = (
             domain: string,
-            reason: "denied" | "source_stale" | "more_items_available",
+            reason: "denied" | "source_stale" | "source_unavailable" | "overflow" | "more_items_available",
           ) => {
             const dependency = result.dependencies.find(
               (entry) => entry.domain === domain,
@@ -659,6 +672,24 @@ export function experienceService(db: Db) {
                 (card) => card.source.domain !== "attention",
               ),
             ];
+          }
+          if (result.needsYou.some(card => card.source.domain === "company_responsibility")) {
+            try {
+              const current = await readCompanyResponsibilityAttention(db, actor, companyId, admittedSignal, configuredOperatorUserIds);
+              const cards = new Map(current.needsYou.map(card => [card.id, card]));
+              if (typeof current.coverage === "object") markPartial("attention", current.coverage.reason);
+              result.needsYou = result.needsYou.flatMap(card => {
+                if (card.source.domain !== "company_responsibility") return [card];
+                const fresh = cards.get(card.id);
+                if (fresh?.source.version === card.source.version) return [fresh];
+                markPartial("attention", "source_stale");
+                return [];
+              });
+            } catch {
+              admittedSignal.throwIfAborted();
+              result.needsYou = result.needsYou.filter(card => card.source.domain !== "company_responsibility");
+              markPartial("attention", "denied");
+            }
           }
           const isAutomaticPackageMaintenance = (card: ExperienceCard) => card.source.domain === "agent_package_installation" &&
             !card.evidence.includes("package_revalidation_required");

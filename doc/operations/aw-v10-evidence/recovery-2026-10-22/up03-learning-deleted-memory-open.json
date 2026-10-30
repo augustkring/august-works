@@ -1,0 +1,22 @@
+{
+  "recordedAt": "2026-10-22T23:02:00.783068+00:00",
+  "sourcePins": {
+    "recordedBeforeCapture": "2026-10-22T22:59:21.014702+00:00",
+    "files": {
+      "server/src/__tests__/learning-deleted-memory-source.integration.test.ts": "e660d14cda7b40d1661a101d155e2ecdbd9934e3e4eb116f5d69457f561a5c9f",
+      "server/src/services/learning/learning-analytical-sources.ts": "d866a84b51773948e0c52094a95b9b41085f7d9d319343647e21a8a377cc41c4",
+      "server/src/services/memory/memory-privacy.ts": "b2923f165509c6e6ccfb58775f38355bcc42ce2b2b993c228e7908ca952f0897",
+      "packages/db/src/schema/learning.ts": "fba85dd7f78f27a9e3d7e53256ffe3437ff7397f31f003069d19d26352c01dca",
+      "packages/db/src/schema/memory.ts": "7ab9c8fbcc6c3cb771551f05608376ad3119b9f3b0005b9bcb4b97d4ae1dcaf2"
+    }
+  },
+  "sessionId": 74531,
+  "exitCode": 1,
+  "failedTests": 1,
+  "failedAssertions": 2,
+  "durationSeconds": 32.36,
+  "log": "up03-learning-deleted-memory-red.log.txt",
+  "finding": "Actual Learning cycle retains one private and one independently public Memory root. Owner passes and Bob denies before deletion. Physical deletion of the private Memory cascades away its evidence; remaining public root allows Bob through the canonical Learning source guard. Both missing retained identity and false access are reproduced.",
+  "scope": "Migrated PostgreSQL original source guard; no actual model/provider/host proof.",
+  "disposition": "Open genuine source-retention regression, no correction or GREEN claimed."
+}

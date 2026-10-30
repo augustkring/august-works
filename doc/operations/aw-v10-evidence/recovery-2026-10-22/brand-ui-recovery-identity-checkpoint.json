@@ -1,0 +1,27 @@
+{
+  "scope": "Render shared Blentera identity in provider-independent error recovery and update existing UI identity fixtures",
+  "sources": {
+    "ui/src/components/ErrorRecoverySurface.tsx": "6d5bd4d0a5b582483a847cf086f459b4c580f9f6fff97dfa09c38a3137bc8f62",
+    "ui/src/components/AppErrorBoundary.test.tsx": "1ab7e87e7fd678b9913b7c319febb17ea808145ba8a42ad6014af83f77dc086a",
+    "ui/src/pages/Auth.test.tsx": "41a3c30119bd8f8c194adc56bdb81c153260d1e83d687d015e9055ae5e75eba2",
+    "ui/src/features/connections/activation-permission-statements.test.ts": "6dd80fb87d42be6374e1f4a194d4e37583d401615fe3c1408223a799500efa4e"
+  },
+  "baseline": {
+    "exit": 1,
+    "failed": 3,
+    "passed": 38,
+    "log": "brand-ui-regression-vitest.log",
+    "cause": "Raw experience JSON bypassed native i18next interpolation, exposing the literal productName placeholder on the app error surface."
+  },
+  "current": {
+    "exit": 0,
+    "files": 4,
+    "passed": 41,
+    "durationSeconds": 22.87,
+    "log": "brand-ui-regression-vitest-after-recovery-fix.log",
+    "uiTypecheckExit": 0,
+    "uiTokenGatesExit": 0
+  },
+  "review": "Error recovery retains direct EN/DA JSON loading to survive localization initialization failure; only its known app-title placeholder uses standard String.replace with existing PRODUCT_IDENTITY. Raw catalogue import scan found no other actual UI consumer besides initializer; permission fixture now uses real native i18next rendering. Original error disclosure/focus/reload and permission assertions retained. Root observed process exits and inspected final source. Bounded assistance by gpt-6-luna.",
+  "limits": "No full brand/locale/visual/manual-a11y or V10 release qualification."
+}

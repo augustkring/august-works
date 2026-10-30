@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { agents, billingAccounts, billingAccountCompanies, billingSubscriptions, companyMemberships,
+import { agents, authSessions, billingAccounts, billingAccountCompanies, billingSubscriptions, companyMemberships,
   principalPermissionGrants, type Db } from "@paperclipai/db";
 import type { PackageRelease } from "@paperclipai/shared";
 import { agentAuthoringService } from "../../services/agents/authoring-drafts.js";
@@ -12,6 +12,7 @@ import { aiGovernanceService } from "../../services/ai-governance/governance-ser
 import { purpose, oversight, reviews } from "./governance-fixture.js";
 import type { seedV5Presences } from "./v5-fixtures.js";
 import { seedHireAutomationComponents } from "./hire-automations.js";
+import { seedNativePasskeySession } from "./native-authentication-fixtures.js";
 
 /** Explicit software qualification metadata, billing and reviewed deployment
  * facts. Real package, inactive Agent, Foundation and governance owners follow;
@@ -60,7 +61,16 @@ export async function prepareHirePublicationFixture(db: Db, f: Awaited<ReturnTyp
       protectedHoldout: evidence, customerDemand: evidence, sandboxQualification: null, releaseAuthorization: evidence,
       unresolvedCritical: [], evaluatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString() } };
   const packages = agentPackageService(db, { operatorUserIds: [f.userId], sourceSha: "a".repeat(40), protectedEvidenceOrigin: "https://qualification.test.invalid" });
-  const published = await packages.publish(f.actor, release), drafts = agentAuthoringService(db);
+  // Configured package publication requires current recent phishing-resistant
+  // proof. Give this domain fixture a real persisted passkey/session carrier;
+  // the native browser suite covers actual WebAuthn ceremonies.
+  const operatorSessionId = await seedNativePasskeySession(db, f.userId);
+  const [operatorSession] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions)
+    .where(eq(authSessions.id, operatorSessionId));
+  if (!operatorSession) throw new Error("Hire fixture operator session was not persisted");
+  const operatorActor = { ...f.actor, sessionId: operatorSessionId,
+    authenticatedCredentialExpiresAt: operatorSession.expiresAt.getTime() };
+  const published = await packages.publish(operatorActor, release), drafts = agentAuthoringService(db);
   const initial = await drafts.create(f.actor, f.home, { requestId: randomUUID(), packageVersionId: published.id });
   const reviewed = await drafts.preparationReview(f.actor, f.home, initial.id);
   const draft = await drafts.prepare(f.actor, f.home, initial.id, { requestId: randomUUID(), expectedVersion: initial.version,

@@ -20,6 +20,8 @@ const NAMESPACE: Readonly<Record<PaperclipSemanticActionId, string>> =
     read_document: "documents",
     list_document_revisions: "documents",
     report_progress: "active_task",
+    update_task: "active_task",
+    propose_completion: "active_task",
     answer_status_question: "active_task",
     write_document: "documents",
     request_human_input: "documents",

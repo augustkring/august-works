@@ -1,0 +1,35 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+··x·
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/memory-routes.test.ts > Memory routes > does not attach Human Memory evidence after its original Task source is withdrawn
+AssertionError: expected { evidenceCount: +0, …(1) } to match object { evidenceCount: 1, …(1) }
+
+- Expected
++ Received
+
+  {
+-   "evidenceCount": 1,
++   "evidenceCount": 0,
+    "payloadSourceSnapshotInvalidated": false,
+  }
+
+ ❯ src/__tests__/memory-routes.test.ts:379:23
+    377|       payloadSourceSnapshotInvalidated:memoryRecords.payloadSourceSnap…
+    378|       .where(sql`${memoryRecords.id}=${created.body.record.id}::uuid`);
+    379|     expect(unchanged).toMatchObject({evidenceCount:1,payloadSourceSnap…
+       |                       ^
+    380|   });
+    381|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  02:18:46
+   Duration  23.87s (transform 9.91s, setup 70ms, import 13.98s, tests 9.71s, environment 0ms)
+

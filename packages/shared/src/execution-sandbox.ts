@@ -10,6 +10,10 @@ export const sandboxCapabilitySnapshotSchema = controlSchema.extend({
   backend: sandboxBackendSchema, backendVersion: z.string().trim().min(1).max(100), hostKernelVersion: z.string().trim().min(1).max(200).nullable(), sandboxImageDigest: digest,
   filesystemEnforcementMode: z.enum(["hard_requirement", "best_effort", "unknown"]), staticPolicyRequiresRecreate: z.boolean(), dynamicNetworkPolicy: z.boolean(),
   policyProverBoundaryCheck: z.boolean(), policyProverCoverage: z.array(z.enum(SANDBOX_CONTROLS)).max(8), credentialBindingDimensions: z.array(z.enum(["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"])).max(9),
+  credentialBrokerProviderProfile: z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/), hash }).strict().optional(),
+  /** Separately qualified OpenShell auth-injection profile for the managed
+   * worker-model endpoint. It is never interchangeable with ToolGateway. */
+  modelBrokerProviderProfile: z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/), hash }).strict().optional(),
   testedAt: z.iso.datetime(), expiresAt: z.iso.datetime(), qualificationHash: hash, evidenceKind: z.enum(["local_fixture", "protected_host_report"]),
 }).strict();
 const absolutePath = z.string().min(1).max(1000).refine(path => path.startsWith("/") && !path.includes("\u0000") && !path.includes("\\") && !path.split("/").some(part => part === "." || part === "..") && !/[\r\n*?]/.test(path) && !path.includes("//") && (path === "/" || !path.endsWith("/")), "Use a normalized absolute path without traversal or wildcard syntax");
@@ -32,10 +36,12 @@ export const sandboxPolicySchema = z.object({
 }).strict();
 export const sandboxBindingCreateSchema = z.object({ runtimeCellId: z.string().uuid(), expectedCellGeneration: z.string().regex(/^[1-9]\d{0,18}$/), backend: sandboxBackendSchema, profile: sandboxProfileSchema, boundaryPolicy: sandboxPolicySchema }).strict();
 export const sandboxCompileSchema = z.object({ expectedVersion: z.number().int().positive(), executionManifestId: z.string().uuid(), candidatePolicy: sandboxPolicySchema }).strict();
+export const sandboxAdmissionSchema = z.object({ expectedVersion: z.number().int().positive(), policySnapshotId: z.string().uuid() }).strict();
 export type SandboxPolicy = z.infer<typeof sandboxPolicySchema>;
 export type SandboxCapabilitySnapshot = z.infer<typeof sandboxCapabilitySnapshotSchema>;
 export type SandboxBindingCreateInput = z.infer<typeof sandboxBindingCreateSchema>;
 export type SandboxCompileInput = z.infer<typeof sandboxCompileSchema>;
+export type SandboxAdmissionInput = z.infer<typeof sandboxAdmissionSchema>;
 export interface SandboxPosture {
   runtimeCellId: string; generation: string;
   state: "legacy_boundary" | "awaiting_qualification" | "backend_qualified" | "quarantined";
@@ -43,7 +49,8 @@ export interface SandboxPosture {
   executionEnforced: boolean;
 }
 export interface SandboxPolicyCompilation {
-  schemaVersion: 1; compilerVersion: "aw-v7.1"; boundaryPolicyHash: string; candidatePolicyHash: string; staticPolicyFingerprint: string;
+  schemaVersion: 1; compilerVersion: "aw-v7.2"; boundaryPolicyHash: string; candidatePolicyHash: string; staticPolicyFingerprint: string;
   proverResult: "pass" | "fail" | "unsupported"; unsupportedFeatures: string[]; failedBoundaries: string[];
   enforcementProfile: SandboxPolicy["profile"]; sourcePolicyRefs: string[]; compiledPolicy: SandboxPolicy;
+  modelBrokerEndpoint?: { hostname: string; port: number; path: "/runtime-tools/model/v1/messages" };
 }

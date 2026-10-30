@@ -1,5 +1,9 @@
+import { logger } from "../middleware/logger.js";
 import { exportCompanyStateV7 } from "./enterprise/portability.js";
-import type { AuthorizationActor } from "./authorization.js";
+import { assertCompanyCeoAgentOrBoard, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, pinCurrentBoardActor, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
+import { assertAnalyticalContextPayloadAccess, assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
+import { assertNativeDocumentRevisionCurrentSourceAccess } from "./native-direct-input.js";
+import { withCurrentTaskSourceRead } from "./task-source-read-scope.js";
 import { agentAppearanceSchema } from "@paperclipai/shared";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -10,6 +14,10 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   builtInManagedResources,
   issueRelations,
+  issuePrivacySources,
+  heartbeatRuns,
+  issues as issueRows,
+  projects as projectRows,
   principalPermissionGrants,
   type Db,
 } from "@paperclipai/db";
@@ -65,8 +73,12 @@ import {
   issueCommentPresentationSchema,
   normalizeAgentUrlKey,
   PERMISSION_KEYS,
+  isUuidLike,
+  portabilityCompanyManifestEntrySchema,
+  portabilityIssueManifestEntrySchema,
+  portabilityProjectManifestEntrySchema,
 } from "@paperclipai/shared";
-import { sha256HexOfBytes } from "@paperclipai/shared/portability-hash";
+import { canonicalJson, sha256HexOfBytes } from "@paperclipai/shared/portability-hash";
 import {
   readPaperclipSkillSyncPreference,
   writePaperclipSkillSyncPreference,
@@ -74,7 +86,7 @@ import {
 import { requireOpenCodeModelId } from "@paperclipai/adapter-opencode-local/server";
 import { findServerAdapter } from "../adapters/index.js";
 import { formatAttachmentSize, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
-import { forbidden, notFound, unprocessable } from "../errors.js";
+import { HttpError, ImportPreflightError, ImportSourceChangedError, forbidden, notFound, unprocessable } from "../errors.js";
 import { ghFetch, gitHubApiBase, resolveRawGitHubUrl } from "./github-fetch.js";
 import type { StorageService } from "../storage/types.js";
 import { accessService } from "./access.js";
@@ -87,7 +99,8 @@ import { companySkillService } from "./company-skills.js";
 import { companyService } from "./companies.js";
 import { validateCron } from "./cron.js";
 import { documentService } from "./documents.js";
-import { issueService } from "./issues.js";
+import { issueService, lockIssuePrivacyTree } from "./issues.js";
+import { publishActivity, type ActivityPublication } from "./activity-log.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { projectService } from "./projects.js";
 import { workProductService } from "./work-products.js";
@@ -114,9 +127,15 @@ import {
 } from "./native-runtime/provider-profile.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
+import { customerSupportCaseService } from "./experience/support-cases.js";
 
 const EXPORT_READ_CONCURRENCY = 8;
 const EXPORT_ISSUE_READ_CONCURRENCY = 2;
+const SUPPORT_CASE_ARCHIVE_PATH = "blentera-support-cases-v1.json";
+// A bulk export needs one transaction-bound source scope for both its SQL
+// selection and the output materialized from those rows. This marker is only
+// set by the current-source owner callback below; request options cannot set it.
+const activeSourceScopedExports = new WeakSet<object>();
 
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
@@ -191,15 +210,22 @@ const DEFAULT_INCLUDE: CompanyPortabilityInclude = {
   projects: false,
   issues: false,
   skills: false,
+  supportCases: false,
 };
 
 const DEFAULT_COLLISION_STRATEGY: CompanyPortabilityCollisionStrategy = "rename";
 // The bundle shape this build reads and writes. Bundles began declaring
 // their schemaVersion in the .paperclip.yaml extension at 6; undeclared
-// bundles are read as 5, the last unstamped shape. 7 adds preserved task
-// timestamps and parent links; 5/6 bundles still import, with those fields
-// falling back to import-time defaults.
-const BUNDLE_SCHEMA_VERSION = 7;
+// bundles are read as 5, the last unstamped shape. 8 preserves native privacy
+// provenance. Older clients must refuse this shape instead of discarding its
+// restrictions. Legacy task/project copies require current source proof.
+const BUNDLE_SCHEMA_VERSION = 8;
+const portableIssuePrivacySchema = portabilityIssueManifestEntrySchema.pick({ sourceCompanyId: true, sourceIssueId: true,
+  visibility: true, privacyRootIssueId: true, privacyParentIssueId: true, privacySources: true,
+  responsibleUserId: true, createdByUserId: true });
+const portableProjectPrivacySchema = portabilityProjectManifestEntrySchema.pick({ sourceCompanyId: true, sourceProjectId: true,
+  visibility: true, privacyOwnerUserId: true, personalOwnerUserId: true, sourceIssueIds: true, sourceProjectIds: true,
+  sourceProvenanceQualified: true });
 const UNSTAMPED_BUNDLE_SCHEMA_VERSION = 5;
 const DEFAULT_IMPORTED_LABEL_COLOR = "#6366f1";
 // Blob entries are content-addressed by sha256; the store itself is
@@ -677,6 +703,7 @@ type ResolvedSource = {
   manifest: CompanyPortabilityManifest;
   files: Record<string, CompanyPortabilityFileEntry>;
   warnings: string[];
+  sourceRevision?: string;
 };
 
 type MarkdownDoc = {
@@ -751,14 +778,43 @@ type ImportPlanInternal = {
   collisionStrategy: CompanyPortabilityCollisionStrategy;
   selectedAgents: CompanyPortabilityAgentManifestEntry[];
 };
+type ImportDbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 type ImportMode = "board_full" | "agent_safe";
 
 type ImportBehaviorOptions = {
+  actor?: AuthorizationActor;
+  privateWorkAdmission?: "closed";
   mode?: ImportMode;
   sourceCompanyId?: string | null;
   pauseAutomations?: boolean;
+  checkCancellation?: () => Promise<boolean>;
+  onSourceReleaseReview?: (receipt: {
+    version: 1;
+    sourceMode: "native_owner" | "manual_open_content";
+    sourceCompanyIds: string[];
+    sourceItems: Array<{ kind: "issue" | "project"; id: string; slug: string }>;
+    sourceAccess: "verified_current_acl" | "reviewed_open_external";
+    targetMode: "new_company" | "existing_company";
+    targetCompanyId: string | null;
+    previewFingerprint: string;
+    selectedPayloadFingerprint: string;
+    reviewedByUserId: string;
+    reviewedAt: string;
+  }) => Promise<void>;
+  onSourceReleaseTargetBound?: (targetCompanyId: string) => Promise<void>;
+  onAcceptedPlan?: (plan: { previewFingerprint: string; selectedPayloadFingerprint: string;
+    targetMode: "new_company" | "existing_company"; targetCompanyId: string | null;
+    selected: Array<{ kind: "agent" | "skill" | "project" | "issue" | "routine"; slug: string; action: string }>;
+    acceptedByUserId: string | null; acceptedAt: string }) => Promise<void>;
+  onEffectCheckpoint?: (event: { phase: "started" | "completed"; key: string; kind: string;
+    sourceId?: string | null; sourceSlug?: string | null; targetIds?: string[];
+    mappings?: Array<{ sourceId?: string | null; sourceSlug?: string | null; targetIds: string[] }> }, tx?: ImportDbTransaction) => Promise<void>;
 };
+
+export class ImportCancellationError extends Error {
+  constructor(readonly effectsStarted: boolean) { super("Import cancellation requested"); }
+}
 
 type AgentLike = {
   id: string;
@@ -1904,6 +1960,7 @@ function normalizeInclude(input?: Partial<CompanyPortabilityInclude>): CompanyPo
     projects: input?.projects ?? DEFAULT_INCLUDE.projects,
     issues: input?.issues ?? DEFAULT_INCLUDE.issues,
     skills: input?.skills ?? DEFAULT_INCLUDE.skills,
+    supportCases: input?.supportCases ?? DEFAULT_INCLUDE.supportCases,
   };
 }
 
@@ -2372,7 +2429,7 @@ function isEmptyArray(value: unknown): boolean {
   return Array.isArray(value) && value.length === 0;
 }
 
-function stripEmptyValues(value: unknown, opts?: { preserveEmptyStrings?: boolean }): unknown {
+function stripEmptyValues(value: unknown, opts?: { preserveEmptyStrings?: boolean; preserveNativePrivacyProvenance?: boolean }): unknown {
   if (Array.isArray(value)) {
     const next = value
       .map((entry) => stripEmptyValues(entry, opts))
@@ -2382,6 +2439,13 @@ function stripEmptyValues(value: unknown, opts?: { preserveEmptyStrings?: boolea
   if (isPlainRecord(value)) {
     const next: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
+      if (opts?.preserveNativePrivacyProvenance && typeof value.sourceCompanyId === "string" && [
+        "privacyRootIssueId", "privacyParentIssueId", "privacySources", "responsibleUserId", "createdByUserId",
+        "privacyOwnerUserId", "personalOwnerUserId", "sourceIssueIds", "sourceProjectIds",
+      ].includes(key)) {
+        next[key] = entry;
+        continue;
+      }
       const cleaned = stripEmptyValues(entry, opts);
       if (cleaned === undefined) continue;
       next[key] = cleaned;
@@ -2862,7 +2926,7 @@ function parseYamlFile(raw: string): Record<string, unknown> {
   return parseYamlFrontmatter(raw);
 }
 
-function buildYamlFile(value: Record<string, unknown>, opts?: { preserveEmptyStrings?: boolean }) {
+function buildYamlFile(value: Record<string, unknown>, opts?: { preserveEmptyStrings?: boolean; preserveNativePrivacyProvenance?: boolean }) {
   const cleaned = stripEmptyValues(value, opts);
   if (!isPlainRecord(cleaned)) return "{}\n";
   return renderYamlBlock(cleaned, 0).join("\n") + "\n";
@@ -3134,6 +3198,34 @@ function buildManifestFromPackageFiles(
     ?? normalizeAgentUrlKey(companyName)
     ?? "company";
 
+  const parsedCompanyManifest = portabilityCompanyManifestEntrySchema.safeParse({
+    path: resolvedCompanyPath,
+    name: companyName,
+    description: asString(companyFrontmatter.description),
+    logoPath: asString(paperclipCompany.logoPath) ?? asString(paperclipCompany.logo) ?? null,
+    locale: paperclipCompany.locale,
+    timezone: paperclipCompany.timezone,
+    requireBoardApprovalForNewAgents:
+      typeof paperclipCompany.requireBoardApprovalForNewAgents === "boolean"
+        ? paperclipCompany.requireBoardApprovalForNewAgents
+        : readCompanyApprovalDefault(companyFrontmatter),
+    feedbackDataSharingEnabled:
+      typeof paperclipCompany.feedbackDataSharingEnabled === "boolean"
+        ? paperclipCompany.feedbackDataSharingEnabled
+        : false,
+    feedbackDataSharingConsentAt:
+      typeof paperclipCompany.feedbackDataSharingConsentAt === "string"
+        ? paperclipCompany.feedbackDataSharingConsentAt
+        : null,
+    feedbackDataSharingConsentByUserId:
+      asString(paperclipCompany.feedbackDataSharingConsentByUserId) ?? null,
+    feedbackDataSharingTermsVersion:
+      asString(paperclipCompany.feedbackDataSharingTermsVersion) ?? null,
+  });
+  if (!parsedCompanyManifest.success) {
+    throw unprocessable("Company package contains invalid company settings.");
+  }
+
   const includeEntries = readIncludeEntries(companyFrontmatter);
   const referencedAgentPaths = includeEntries
     .map((entry) => resolvePortablePath(resolvedCompanyPath, entry.path))
@@ -3175,28 +3267,7 @@ function buildManifestFromPackageFiles(
       issues: taskPaths.length > 0,
       skills: skillPaths.length > 0,
     },
-    company: {
-      path: resolvedCompanyPath,
-      name: companyName,
-      description: asString(companyFrontmatter.description),
-      logoPath: asString(paperclipCompany.logoPath) ?? asString(paperclipCompany.logo),
-      requireBoardApprovalForNewAgents:
-        typeof paperclipCompany.requireBoardApprovalForNewAgents === "boolean"
-          ? paperclipCompany.requireBoardApprovalForNewAgents
-          : readCompanyApprovalDefault(companyFrontmatter),
-      feedbackDataSharingEnabled:
-        typeof paperclipCompany.feedbackDataSharingEnabled === "boolean"
-          ? paperclipCompany.feedbackDataSharingEnabled
-          : false,
-      feedbackDataSharingConsentAt:
-        typeof paperclipCompany.feedbackDataSharingConsentAt === "string"
-          ? paperclipCompany.feedbackDataSharingConsentAt
-          : null,
-      feedbackDataSharingConsentByUserId:
-        asString(paperclipCompany.feedbackDataSharingConsentByUserId),
-      feedbackDataSharingTermsVersion:
-        asString(paperclipCompany.feedbackDataSharingTermsVersion),
-    },
+    company: parsedCompanyManifest.data,
     sidebar: paperclipSidebar,
     labels: paperclipLabels,
     blobs: paperclipBlobs,
@@ -3385,6 +3456,7 @@ function buildManifestFromPackageFiles(
       .map(([workspaceKey, entry]) => normalizePortableProjectWorkspaceExtension(workspaceKey, entry))
       .filter((entry): entry is CompanyPortabilityProjectWorkspaceManifestEntry => entry !== null);
     manifest.projects.push({
+      ...portableProjectPrivacySchema.parse(extension),
       slug,
       name: asString(frontmatter.name) ?? slug,
       path: projectPath,
@@ -3432,6 +3504,7 @@ function buildManifestFromPackageFiles(
       || routineExtension !== null
       || legacyRecurrence !== null;
     manifest.issues.push({
+      ...portableIssuePrivacySchema.parse(extension),
       slug,
       identifier: asString(extension.identifier),
       title: asString(frontmatter.name) ?? asString(frontmatter.title) ?? slug,
@@ -3475,7 +3548,7 @@ function buildManifestFromPackageFiles(
     }
   }
 
-  if (bundleSchemaVersion < BUNDLE_SCHEMA_VERSION && manifest.issues.length > 0) {
+  if (bundleSchemaVersion < 7 && manifest.issues.length > 0) {
     const predated = bundleSchemaVersion < 6
       ? "label, blocker, document, work product, monitor, attachment, embedded image, task timestamp, and parent link transfer"
       : "task timestamp and parent link transfer";
@@ -3559,6 +3632,167 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
   const secrets = secretService(db);
   const documentsSvc = documentService(db);
   const workProductsSvc = workProductService(db);
+
+  async function validateCopySources(manifest: CompanyPortabilityManifest, target: CompanyPortabilityImport["target"],
+    include: CompanyPortabilityInclude, actor: AuthorizationActor, admission?: "closed", sourceReleaseReviewed = false,
+    sourceDb: Db | ImportDbTransaction = db) {
+    const tasks = include.issues ? manifest.issues : [];
+    const projects = include.projects ? manifest.projects : [];
+    if (!tasks.length && !projects.length && actor.type === "agent") {
+      if (!actor.companyId || !isUuidLike(actor.companyId) || !actor.agentId || !isUuidLike(actor.agentId)
+        || !actor.runId || !isUuidLike(actor.runId)) throw unprocessable("Native content import requires a persisted run");
+      const [run] = await sourceDb.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.id, actor.runId), eq(heartbeatRuns.companyId, actor.companyId), eq(heartbeatRuns.agentId, actor.agentId)));
+      if (!run) throw notFound("Import source run is unavailable");
+      const access = await authorizationService(sourceDb).decide({ actor, action: "company_scope:read",
+        resource: { type: "company", companyId: actor.companyId }, enforceResponsibleUserIntersection: true });
+      if (!access.allowed) throw forbidden("Current source organization access is required");
+      await assertAnalyticalContextPayloadAccess(sourceDb, actor.companyId, actor, { runId: run.id });
+      // Unsupported target owners cannot retain private task, Memory, or learned
+      // Foundation sources yet. An anonymous source check only narrows admission;
+      // it does not authorize a transfer or certify the complete producer graph.
+      try { await assertAnalyticalContextPayloadAccess(sourceDb, actor.companyId, { type: "none" }, { runId: run.id }); }
+      catch (error) {
+        if (error instanceof HttpError && [403,404,409,422].includes(error.status)) {
+          throw unprocessable("Importing restricted native context requires retained target provenance");
+        }
+        throw error;
+      }
+    }
+    type TaskProof = { source: typeof issueRows.$inferSelect | null; visibility: "open" | "private";
+      sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string }> };
+    type ProjectProof = { source: typeof projectRows.$inferSelect | null; visibility: "open" | "private";
+      sourceIssueIds: string[]; sourceProjectIds: string[]; sourceProvenanceQualified: boolean };
+    if (!tasks.length && !projects.length) return { tasks: new Map<string, TaskProof>(), projects: new Map<string, ProjectProof>() };
+    const nativeRefs = [...tasks.map(task => [task.sourceCompanyId, task.sourceIssueId]),
+      ...projects.map(project => [project.sourceCompanyId, project.sourceProjectId])];
+    const anyNativeRef = nativeRefs.some(([companyId, sourceId]) => Boolean(companyId || sourceId));
+    const completeNativeRefs = nativeRefs.every(([companyId, sourceId]) => Boolean(companyId && sourceId));
+    if (sourceReleaseReviewed && !anyNativeRef) {
+      if (actor.type !== "board" || !actor.userId || actor.source !== "session")
+        throw forbidden("A current Human session must review cross-company work import");
+      const claimsPrivateSource = [...tasks, ...projects].some(item => item.visibility === "private"
+        || ("privacySources" in item && Array.isArray(item.privacySources) && item.privacySources.length > 0)
+        || ("sourceIssueIds" in item && Array.isArray(item.sourceIssueIds) && item.sourceIssueIds.length > 0)
+        || ("sourceProjectIds" in item && Array.isArray(item.sourceProjectIds) && item.sourceProjectIds.length > 0)
+        || ("privacyRootIssueId" in item && item.privacyRootIssueId != null)
+        || ("privacyParentIssueId" in item && item.privacyParentIssueId != null)
+        || ("responsibleUserId" in item && item.responsibleUserId != null)
+        || ("createdByUserId" in item && item.createdByUserId != null)
+        || ("privacyOwnerUserId" in item && item.privacyOwnerUserId != null)
+        || ("personalOwnerUserId" in item && item.personalOwnerUserId != null)
+        || ("sourceProvenanceQualified" in item && item.sourceProvenanceQualified === true));
+      if (claimsPrivateSource) throw unprocessable("Private or restricted work is not available for manual package release");
+      return {
+        tasks: new Map<string, TaskProof>(tasks.map(task => [task.slug, { source: null, visibility: "open", sources: [] }])),
+        projects: new Map<string, ProjectProof>(projects.map(project => [project.slug, {
+          source: null, visibility: "open", sourceIssueIds: [], sourceProjectIds: [], sourceProvenanceQualified: false,
+        }])),
+      };
+    }
+    const sourceCompanyIds = [...new Set([...tasks.map(task => task.sourceCompanyId), ...projects.map(project => project.sourceCompanyId)]
+      .filter((value): value is string => typeof value === "string" && value.length > 0))];
+    if (sourceCompanyIds.length !== 1)
+      throw unprocessable("Cross-company work import requires a current original-owner review of one complete source company and exact package");
+    const companyId = sourceCompanyIds[0]!;
+    const crossCompany = target.mode === "new_company" || target.companyId !== companyId;
+    if (crossCompany && (!sourceReleaseReviewed || !completeNativeRefs))
+      throw unprocessable("Cross-company work import requires a current original-owner review of one complete source company and exact package");
+    if (crossCompany && (actor.type !== "board" || !actor.userId || actor.source !== "session"))
+      throw forbidden("A current Human session must review cross-company work import");
+    const decision = await authorizationService(sourceDb).decide({ actor, action: "company_scope:read",
+      resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+    if (!decision.allowed) throw forbidden("Current source organization access is required");
+    const humanId = actor.type === "agent" ? actor.onBehalfOfUserId : actor.userId;
+    if (actor.type === "agent" && !actor.runId) throw unprocessable("Native content import requires a persisted task-bound run");
+    if (actor.type === "agent" && actor.runId && (!isUuidLike(actor.runId) || !actor.agentId || !isUuidLike(actor.agentId))) {
+      throw notFound("Import source run is unavailable");
+    }
+    const actorRun = actor.type === "agent" && actor.runId ? await sourceDb.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.id, actor.runId), eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, actor.agentId ?? ""),
+    )).then(rows => rows[0] ?? null) : null;
+    if (actor.type === "agent" && actor.runId && (!actorRun || !(await canActorReadHeartbeatRunPrivacy(sourceDb, actor, actorRun)))) {
+      throw notFound("Import source run is unavailable");
+    }
+    const taskProofs = new Map<string, TaskProof>();
+    for (const task of tasks) {
+      if (task.recurring) throw unprocessable("Copying source content into a recurring task requires retained native routine provenance");
+      if (task.sourceCompanyId !== companyId || !task.sourceIssueId || !task.visibility || !Array.isArray(task.privacySources)
+        || task.privacyRootIssueId === undefined || task.privacyParentIssueId === undefined
+        || task.responsibleUserId === undefined || task.createdByUserId === undefined) {
+        throw unprocessable("Task copy requires current native privacy provenance; legacy or foreign provenance cannot be assumed public");
+      }
+    }
+    const sourceIssueIds = [...new Set(tasks.map(task => task.sourceIssueId!))];
+    for (let offset = 0; offset < sourceIssueIds.length; offset += 256) {
+      await assertAnalyticalContextPayloadAccessBatch(sourceDb as Db, companyId, actor, sourceIssueIds.slice(offset, offset + 256));
+    }
+    const sourceIssueRows = sourceIssueIds.length
+      ? await sourceDb.select().from(issueRows).where(and(eq(issueRows.companyId, companyId), inArray(issueRows.id, sourceIssueIds)))
+      : [];
+    const sourceIssueById = new Map(sourceIssueRows.map(source => [source.id, source]));
+    const currentPrivacySources = sourceIssueIds.length
+      ? await sourceDb.select({ issueId: issuePrivacySources.issueId, sourceKind: issuePrivacySources.sourceKind,
+        sourceId: issuePrivacySources.sourceId }).from(issuePrivacySources)
+        .where(and(eq(issuePrivacySources.companyId, companyId), inArray(issuePrivacySources.issueId, sourceIssueIds)))
+      : [];
+    const currentPrivacySourcesByIssue = new Map<string, Array<(typeof currentPrivacySources)[number]>>();
+    for (const source of currentPrivacySources) {
+      const sources = currentPrivacySourcesByIssue.get(source.issueId) ?? [];
+      sources.push(source);
+      currentPrivacySourcesByIssue.set(source.issueId, sources);
+    }
+    for (const task of tasks) {
+      if (!task.sourceIssueId || !Array.isArray(task.privacySources)) throw unprocessable("Task copy requires current native privacy provenance");
+      const source = sourceIssueById.get(task.sourceIssueId);
+      if (!source || !(await canActorReadIssuePrivacy(sourceDb, actor, source))) throw notFound("Task source is unavailable");
+      if (source.visibility !== task.visibility || source.privacyRootIssueId !== task.privacyRootIssueId
+        || source.privacyParentIssueId !== task.privacyParentIssueId || source.responsibleUserId !== task.responsibleUserId
+        || source.createdByUserId !== task.createdByUserId) throw unprocessable("Task source ownership or privacy changed; export its current state");
+      const visibility = await canActorReadIssuePrivacy(sourceDb, { type: "none" }, source)
+        && (!actorRun || await canActorReadHeartbeatRunPrivacy(sourceDb, { type: "none" }, actorRun)) ? "open" : "private";
+      if (visibility === "private" && admission === "closed") throw unprocessable("Private tasks are not available");
+      if (crossCompany && (!humanId || ![source.responsibleUserId, source.createdByUserId].includes(humanId)))
+        throw forbidden("The original task owner must review cross-company import");
+      if (visibility === "private" && (!humanId || ![source.responsibleUserId, source.createdByUserId].includes(humanId))) {
+        throw forbidden("The current task source owner must copy protected content");
+      }
+      const currentSources = currentPrivacySourcesByIssue.get(source.id) ?? [];
+      const sources = [...task.privacySources, ...currentSources.map(entry => {
+        if (entry.sourceKind !== "issue" && entry.sourceKind !== "project" && entry.sourceKind !== "run" && entry.sourceKind !== "run_copy" && entry.sourceKind !== "workflow_run" && entry.sourceKind !== "routine_run") {
+          throw unprocessable("Task source provenance is invalid");
+        }
+        return { sourceKind: entry.sourceKind, sourceId: entry.sourceId };
+      }), { sourceKind: "issue" as const, sourceId: source.id }];
+      if (actorRun) sources.push({ sourceKind: "run", sourceId: actorRun.id });
+      taskProofs.set(task.slug, { source, visibility, sources });
+    }
+    const projectProofs = new Map<string, ProjectProof>();
+    for (const project of projects) {
+      if (project.sourceCompanyId !== companyId || !project.sourceProjectId || !project.visibility
+        || !Array.isArray(project.sourceIssueIds) || !Array.isArray(project.sourceProjectIds)
+        || project.privacyOwnerUserId === undefined || project.personalOwnerUserId === undefined || project.sourceProvenanceQualified !== true) {
+        throw unprocessable("Project copy requires current native privacy provenance; legacy or foreign provenance cannot be assumed public");
+      }
+      const [source] = await sourceDb.select().from(projectRows).where(and(eq(projectRows.id, project.sourceProjectId), eq(projectRows.companyId, companyId)));
+      if (!source || !source.sourceProvenanceQualified || !(await canActorReadProjectPrivacy(sourceDb, actor, source))) throw notFound("Project source is unavailable");
+      if (source.visibility !== project.visibility || source.privacyOwnerUserId !== project.privacyOwnerUserId
+        || source.personalOwnerUserId !== project.personalOwnerUserId) throw unprocessable("Project source ownership or privacy changed; export its current state");
+      const visibility = await canActorReadProjectPrivacy(sourceDb, { type: "none" }, source)
+        && (!actorRun || await canActorReadHeartbeatRunPrivacy(sourceDb, { type: "none" }, actorRun)) ? "open" : "private";
+      if (visibility === "private" && admission === "closed") throw unprocessable("Private projects are not available");
+      if (crossCompany && (!humanId || ![source.privacyOwnerUserId, source.personalOwnerUserId].includes(humanId)))
+        throw forbidden("The original project owner must review cross-company import");
+      if (visibility === "private" && (!humanId || ![source.privacyOwnerUserId, source.personalOwnerUserId].includes(humanId))) {
+        throw forbidden("The current project source owner must copy protected content");
+      }
+      if (actorRun && !actorRun.issueId) throw unprocessable("Project import requires a persisted task-bound source run");
+      projectProofs.set(project.slug, { source, visibility,
+        sourceIssueIds: [...new Set([...source.sourceIssueIds, ...(actorRun?.issueId ? [actorRun.issueId] : [])])],
+        sourceProjectIds: [...new Set([...source.sourceProjectIds, source.id])], sourceProvenanceQualified: true });
+    }
+    return { tasks: taskProofs, projects: projectProofs };
+  }
   const strictSecretsMode = process.env.PAPERCLIP_SECRETS_STRICT_MODE === "true";
   const defaultSecretProvider = getConfiguredSecretProvider();
 
@@ -3567,11 +3801,13 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     agentId: string,
     permissionGrants: PortableAgentPermissionGrant[],
     grantedByUserId: string | null,
+    executor?: Db,
   ) {
     if (permissionGrants.length === 0) return;
-    await access.ensureMembership(companyId, "agent", agentId, "member", "active");
+    const accessWriter = executor ? accessService(executor) : access;
+    await accessWriter.ensureMembership(companyId, "agent", agentId, "member", "active");
     for (const grant of permissionGrants) {
-      await access.setPrincipalPermission(
+      await accessWriter.setPrincipalPermission(
         companyId,
         "agent",
         agentId,
@@ -3675,7 +3911,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     envInputs: CompanyPortabilityEnvInput[],
     secretValues: Record<string, string> | null | undefined,
     actorUserId: string | null | undefined,
-    createdSecretIds: string[] = [],
+    checkCancellation?: () => Promise<void>,
+    checkpoint?: ImportBehaviorOptions["onEffectCheckpoint"],
   ) {
     if (envInputs.length === 0) return;
     const missingRequired = envInputs.filter((input) => {
@@ -3687,7 +3924,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       throw unprocessable(`Required environment values are missing: ${missingRequired.map(envInputScopedKey).join(", ")}`);
     }
 
-    for (const input of envInputs) {
+    for (const [inputIndex, input] of envInputs.entries()) {
+      await checkCancellation?.();
       const value = envInputValue(input, secretValues);
       if (value === null || value.trim().length === 0) continue;
 
@@ -3701,6 +3939,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
       const suffix = randomUUID().slice(0, 8);
       const label = importSecretLabel(input);
+      const effectKey = `environment:secret:${inputIndex}`;
+      const sourceId = createHash("sha256").update(canonicalJson({ key: envInputScopedKey(input), kind: input.kind })).digest("hex");
+      await checkpoint?.({ phase: "started", key: effectKey, kind: "environment_secret", sourceId });
       const secret = await secrets.create(
         companyId,
         {
@@ -3712,7 +3953,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         },
         { userId: actorUserId ?? null, agentId: null },
       );
-      createdSecretIds.push(secret.id);
+      await checkpoint?.({ phase: "completed", key: effectKey, kind: "environment_secret", sourceId,
+        targetIds: [secret.id] });
       writeManifestEnvBinding(manifest, input, {
         type: "secret_ref",
         secretId: secret.id,
@@ -3758,37 +4000,58 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const companyRelativePath = parsed.companyPath === "COMPANY.md"
       ? [parsed.basePath, "COMPANY.md"].filter(Boolean).join("/")
       : parsed.companyPath;
-    let companyMarkdown: string | null = null;
-    try {
-      companyMarkdown = await fetchOptionalText(
-        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, companyRelativePath),
-      );
-    } catch (err) {
-      if (ref === "main") {
-        ref = "master";
-        warnings.push("GitHub ref main not found; falling back to master.");
-        companyMarkdown = await fetchOptionalText(
-          resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, companyRelativePath),
-        );
-      } else {
-        throw err;
+    const apiBase = gitHubApiBase(parsed.hostname);
+    const repository = await fetchJson<{ id?: unknown }>(`${apiBase}/repos/${parsed.owner}/${parsed.repo}`);
+    if (typeof repository.id !== "number") throw unprocessable("GitHub repository identity is unavailable");
+    const resolveCommit = async (candidateRef: string) => {
+      const response = await ghFetch(`${apiBase}/repos/${parsed.owner}/${parsed.repo}/commits/${encodeURIComponent(candidateRef)}`, {
+        headers: { accept: "application/vnd.github+json" },
+      });
+      if (response.status === 404) return null;
+      if (!response.ok) throw unprocessable(`Failed to resolve GitHub ref ${candidateRef}: ${response.status}`);
+      const commit = await response.json() as { sha?: unknown; commit?: { tree?: { sha?: unknown } } };
+      if (typeof commit.sha !== "string" || !/^[a-f0-9]{40}$/i.test(commit.sha) ||
+        typeof commit.commit?.tree?.sha !== "string" || !/^[a-f0-9]{40}$/i.test(commit.commit.tree.sha)) {
+        throw unprocessable("GitHub returned an invalid commit identity");
       }
+      if (/^[a-f0-9]{40}$/i.test(candidateRef) && commit.sha.toLowerCase() !== candidateRef.toLowerCase()) {
+        throw unprocessable("GitHub resolved a different commit than the requested source revision");
+      }
+      return { sha: commit.sha.toLowerCase(), treeSha: commit.commit.tree.sha.toLowerCase() };
+    };
+    let resolvedCommit = await resolveCommit(ref);
+    if (!resolvedCommit && ref === "main") {
+      ref = "master";
+      resolvedCommit = await resolveCommit(ref);
+      if (resolvedCommit) warnings.push("GitHub ref main not found; falling back to master.");
     }
-    if (!companyMarkdown) {
-      throw unprocessable("GitHub company package is missing COMPANY.md");
-    }
+    if (!resolvedCommit) throw unprocessable(`GitHub ref ${ref} was not found`);
 
+    // Resolve the mutable name once; every package byte below is read from this commit.
+    const pinnedRef = resolvedCommit.sha;
     const companyPath = parsed.companyPath === "COMPANY.md"
       ? "COMPANY.md"
       : normalizePortablePath(path.posix.relative(parsed.basePath || ".", parsed.companyPath));
+    const basePrefix = parsed.basePath ? `${parsed.basePath.replace(/^\/+|\/+$/g, "")}/` : "";
+    const tree = await fetchJson<{ sha?: string; truncated?: boolean; tree?: Array<{ path?: string; type?: string }> }>(
+      `${apiBase}/repos/${parsed.owner}/${parsed.repo}/git/trees/${pinnedRef}?recursive=1`,
+    );
+    if (tree.sha?.toLowerCase() !== resolvedCommit.treeSha || tree.truncated !== false || !Array.isArray(tree.tree) ||
+      tree.tree.some(entry => typeof entry.path !== "string" || (entry.type !== "blob" && entry.type !== "tree" && entry.type !== "commit"))) {
+      throw unprocessable("GitHub returned an incomplete or mismatched package tree");
+    }
+    if (tree.tree.some(entry => entry.type === "commit" && (!basePrefix || entry.path!.startsWith(basePrefix)))) {
+      throw unprocessable("GitHub package contains an unsupported submodule source");
+    }
+    const companyMarkdown = await fetchOptionalText(
+      resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, pinnedRef, companyRelativePath),
+    );
+    if (!companyMarkdown) {
+      throw unprocessable("GitHub company package is missing COMPANY.md");
+    }
     const files: Record<string, CompanyPortabilityFileEntry> = {
       [companyPath]: companyMarkdown,
     };
-    const apiBase = gitHubApiBase(parsed.hostname);
-    const tree = await fetchJson<{ tree?: Array<{ path: string; type: string }> }>(
-      `${apiBase}/repos/${parsed.owner}/${parsed.repo}/git/trees/${ref}?recursive=1`,
-    ).catch(() => ({ tree: [] }));
-    const basePrefix = parsed.basePath ? `${parsed.basePath.replace(/^\/+|\/+$/g, "")}/` : "";
     const candidatePaths = (tree.tree ?? [])
       .filter((entry) => entry.type === "blob")
       .map((entry) => entry.path)
@@ -3807,7 +4070,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const relativePath = basePrefix ? repoPath.slice(basePrefix.length) : repoPath;
       if (files[relativePath] !== undefined) continue;
       files[normalizePortablePath(relativePath)] = await fetchText(
-        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, repoPath),
+        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, pinnedRef, repoPath),
       );
     }
     const companyDoc = parseFrontmatterMarkdown(companyMarkdown);
@@ -3818,7 +4081,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       if (files[relativePath] !== undefined) continue;
       if (!(repoPath.endsWith(".md") || repoPath.endsWith(".yaml") || repoPath.endsWith(".yml"))) continue;
       files[relativePath] = await fetchText(
-        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, repoPath),
+        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, pinnedRef, repoPath),
       );
     }
 
@@ -3828,7 +4091,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const repoPath = [parsed.basePath, companyLogoPath].filter(Boolean).join("/");
       try {
         const binary = await fetchBinary(
-          resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, repoPath),
+          resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, pinnedRef, repoPath),
         );
         resolved.files[companyLogoPath] = bufferToPortableBinaryFile(binary, inferContentTypeFromPath(companyLogoPath));
       } catch (err) {
@@ -3836,6 +4099,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
     }
     resolved.warnings.unshift(...warnings);
+    resolved.sourceRevision = pinnedRef;
     return resolved;
   }
 
@@ -3844,6 +4108,39 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     input: CompanyPortabilityExport,
     options: { preview?: boolean; allowExternalInstructions?: boolean; actor?: AuthorizationActor } = {},
   ): Promise<CompanyPortabilityExportResult> {
+    if (input.include?.supportCases) {
+      if (!options.actor || !input.expectedUserId) {
+        throw forbidden("A current Board account is required to export support cases");
+      }
+      const selectedArchive = !input.selectedFiles || input.selectedFiles.some(
+        (entry) => normalizePortablePath(entry) === SUPPORT_CASE_ARCHIVE_PATH,
+      );
+      if (!selectedArchive) {
+        const result = await exportBundle(companyId, { ...input, include: { ...input.include, supportCases: false } }, options);
+        result.manifest.includes.supportCases = false;
+        return result;
+      }
+      return customerSupportCaseService(db, { dataPolicy: null }).withExport(
+        options.actor,
+        companyId,
+        input.expectedUserId,
+        async (tx, archive) => {
+          const result = await companyPortabilityService(tx as Db, storage).exportBundle(
+            companyId,
+            { ...input, include: { ...input.include, supportCases: false } },
+            options,
+          );
+          if (selectedArchive) {
+            const file = JSON.stringify(archive, null, 2) + "\n";
+            if (Buffer.byteLength(file, "utf8") > 16 * 1024 * 1024)
+              throw unprocessable("Support archive exceeds the 16 MiB export limit");
+            result.files[SUPPORT_CASE_ARCHIVE_PATH] = file;
+          }
+          result.manifest.includes.supportCases = selectedArchive;
+          return result;
+        },
+      );
+    }
     const include = normalizeInclude({
       ...input.include,
       agents: input.agents && input.agents.length > 0 ? true : input.include?.agents,
@@ -3854,6 +4151,20 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           : input.include?.issues,
       skills: input.skills && input.skills.length > 0 ? true : input.include?.skills,
     });
+    if ((include.issues || include.projects) && options.actor && options.actor.type !== "none"
+      && options.actor.source !== "local_implicit" && !activeSourceScopedExports.has(db as object)) {
+      return withCurrentTaskSourceRead(db, companyId, options.actor, async (queryDb) => {
+        activeSourceScopedExports.add(queryDb as object);
+        try {
+          // Rebind the owner to the transaction that holds the current Routine
+          // and Workflow source scopes. The callback covers source selection,
+          // materialization and final source revalidation.
+          return await companyPortabilityService(queryDb, storage).exportBundle(companyId, input, options);
+        } finally {
+          activeSourceScopedExports.delete(queryDb as object);
+        }
+      });
+    }
     const company = await companies.getById(companyId);
     if (!company) throw notFound("Company not found");
 
@@ -3934,10 +4245,20 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
     const projectsSvc = projectService(db);
     const issuesSvc = issueService(db);
-    const routinesSvc = routineService(db);
-    const allProjectsRaw = include.projects || include.issues ? await projectsSvc.list(companyId) : [];
+    const exportActor = options.actor ?? { type: "none" as const };
+    const routinesSvc = routineService(db, { sourceActor: exportActor });
+    const companyDecision = await authorizationService(db).decide({ actor: exportActor, action: "company_scope:read",
+      resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+    if (!companyDecision.allowed) throw forbidden("Current organization access is required for export");
+    const issueCondition = await issueReadSqlCondition(db, exportActor);
+    const projectCondition = await projectReadSqlCondition(db, exportActor);
+    const allProjectsRaw = include.projects || include.issues ? await projectsSvc.list(companyId,
+      { readCondition: projectCondition, issueReadCondition: issueCondition }) : [];
     const allProjects = allProjectsRaw.filter((project) => !project.archivedAt);
-    const allRoutinesRaw = include.issues ? await routinesSvc.list(companyId) : [];
+    // Routine copies need their own retained native source binding before payload export.
+    const allRoutinesRaw: Awaited<ReturnType<typeof routinesSvc.list>> = include.issues
+      ? await routinesSvc.list(companyId)
+      : [];
     const builtInRoutineRows = allRoutinesRaw.filter((routine) =>
       managedRoutineIds.has(routine.id) || routine.originKind === "built_in_agent_bundle"
     );
@@ -3978,7 +4299,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     };
     for (const selector of input.issues ?? []) {
       const issue = await resolveIssueBySelector(selector);
-      if (!issue || issue.companyId !== companyId) {
+      if (!issue || issue.companyId !== companyId || !(await canActorReadIssuePrivacy(db, exportActor, issue))) {
         if (builtInRoutineById.has(selector.trim())) {
           warnings.push(`Routine selector "${selector}" is a built-in managed routine and was skipped.`);
           continue;
@@ -4009,7 +4330,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         continue;
       }
       selectedProjects.set(match.id, match);
-      const projectIssues = await issuesSvc.list(companyId, { projectId: match.id });
+      const projectIssues = await issuesSvc.list(companyId, { projectId: match.id, readCondition: issueCondition });
       for (const issue of projectIssues) {
         selectedIssues.set(issue.id, issue);
       }
@@ -4025,7 +4346,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
 
     if (include.issues && selectedIssues.size === 0) {
-      const allIssues = await issuesSvc.list(companyId);
+      const allIssues = await issuesSvc.list(companyId, { readCondition: issueCondition });
       for (const issue of allIssues) {
         selectedIssues.set(issue.id, issue);
         if (issue.projectId) {
@@ -4051,6 +4372,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       .sort((left, right) => (left.identifier ?? left.title).localeCompare(right.identifier ?? right.title));
     const selectedRoutineSummaries = Array.from(selectedRoutines.values())
       .sort((left, right) => left.title.localeCompare(right.title));
+    for (const issue of selectedIssueRows) {
+      await assertAnalyticalContextPayloadAccess(db, companyId, exportActor, { issueId: issue.id });
+    }
     const selectedRoutineRows = (
       await Promise.all(selectedRoutineSummaries.map((routine) => routinesSvc.getDetail(routine.id)))
     ).filter((routine): routine is RoutineLike => routine !== null);
@@ -4281,6 +4605,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
 
     for (const project of selectedProjectRows) {
+      if (!(await canActorReadProjectPrivacy(db, exportActor, project))) throw notFound("Project export source is unavailable");
       const slug = projectSlugById.get(project.id)!;
       const projectPath = `projects/${slug}/PROJECT.md`;
       const envInputsStart = envInputs.length;
@@ -4320,7 +4645,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           env: buildEnvInputMap(projectEnvInputs),
         };
       }
-      paperclipProjectsOut[slug] = isPlainRecord(extension) ? extension : {};
+      paperclipProjectsOut[slug] = { ...(isPlainRecord(extension) ? extension : {}),
+        sourceCompanyId: companyId, sourceProjectId: project.id, visibility: project.visibility,
+        privacyOwnerUserId: project.privacyOwnerUserId, personalOwnerUserId: project.personalOwnerUserId,
+        sourceIssueIds: project.sourceIssueIds, sourceProjectIds: project.sourceProjectIds,
+        sourceProvenanceQualified: project.sourceProvenanceQualified };
     }
 
     const referencedLabelIds = new Set<string>();
@@ -4362,6 +4691,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             workProductsSvc.listForIssue(issue.id),
             issuesSvc.listAttachments(issue.id),
           ]);
+          for (const document of issueDocumentRows) if (document.latestRevisionId)
+            await assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId, issueId: issue.id,
+              revisionId: document.latestRevisionId, actor: exportActor });
           return [issue.id, {
             comments,
             relationSummaries,
@@ -4402,6 +4734,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const relationSummaries = details.relationSummaries;
       const blockedBySlugs: string[] = [];
       for (const blocker of relationSummaries.blockedBy) {
+        if (!(await canActorReadIssuePrivacy(db, exportActor, { id: blocker.id, companyId }))) continue;
         const blockerSlug = taskSlugByIssueId.get(blocker.id);
         if (blockerSlug) {
           blockedBySlugs.push(blockerSlug);
@@ -4410,9 +4743,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         }
       }
       blockedBySlugs.sort((left, right) => left.localeCompare(right));
-      unexportedBlockerEdgeCount += relationSummaries.blocks
-        .filter((blocked) => !taskSlugByIssueId.has(blocked.id))
-        .length;
+      for (const blocked of relationSummaries.blocks) {
+        if (!taskSlugByIssueId.has(blocked.id)
+          && await canActorReadIssuePrivacy(db, exportActor, { id: blocked.id, companyId })) unexportedBlockerEdgeCount += 1;
+      }
       // Parent links travel by task slug like blockers; a parent outside the
       // export selection drops the edge and is counted for one warning.
       let parentTaskSlug: string | null = null;
@@ -4542,7 +4876,12 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           hadSchedule: issue.monitorNextCheckAt != null ? true : undefined,
         },
       });
-      paperclipTasksOut[taskSlug] = isPlainRecord(extension) ? extension : {};
+      const privacySources = await db.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
+        .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, issue.id)));
+      paperclipTasksOut[taskSlug] = { ...(isPlainRecord(extension) ? extension : {}),
+        sourceCompanyId: companyId, sourceIssueId: issue.id, visibility: issue.visibility,
+        privacyRootIssueId: issue.privacyRootIssueId, privacyParentIssueId: issue.privacyParentIssueId, privacySources,
+        responsibleUserId: issue.responsibleUserId, createdByUserId: issue.createdByUserId };
     }
 
     if (unexportedBlockerEdgeCount > 0) {
@@ -4700,6 +5039,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         schemaVersion: BUNDLE_SCHEMA_VERSION,
         company: stripEmptyValues({
           logoPath: companyLogoPath,
+          locale: company.locale,
+          timezone: company.timezone,
           requireBoardApprovalForNewAgents: company.requireBoardApprovalForNewAgents ? true : undefined,
           feedbackDataSharingEnabled: company.feedbackDataSharingEnabled ? true : undefined,
           feedbackDataSharingConsentAt: company.feedbackDataSharingConsentAt?.toISOString() ?? null,
@@ -4715,7 +5056,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         tasks: Object.keys(paperclipTasks).length > 0 ? paperclipTasks : undefined,
         routines: Object.keys(paperclipRoutines).length > 0 ? paperclipRoutines : undefined,
       },
-      { preserveEmptyStrings: true },
+      { preserveEmptyStrings: true, preserveNativePrivacyProvenance: true },
     );
 
     let finalFiles = filterExportFiles(files, input.selectedFiles, paperclipExtensionPath);
@@ -4778,6 +5119,19 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     resolved.manifest.envInputs = dedupeEnvInputs(envInputs);
     resolved.warnings.unshift(...warnings);
 
+    for (const project of selectedProjectRows) {
+      if (!(await canActorReadProjectPrivacy(db, exportActor, project))) throw notFound("Project export source is unavailable");
+    }
+    for (const issue of selectedIssueRows) {
+      if (!(await canActorReadIssuePrivacy(db, exportActor, issue))) throw notFound("Task export source is unavailable");
+      await assertAnalyticalContextPayloadAccess(db, companyId, exportActor, { issueId: issue.id });
+      for (const document of issueExportDetails.get(issue.id)?.issueDocumentRows ?? []) if (document.latestRevisionId)
+        await assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId, issueId: issue.id,
+          revisionId: document.latestRevisionId, actor: exportActor });
+    }
+    const finalCompanyDecision = await authorizationService(db).decide({ actor: exportActor, action: "company_scope:read",
+      resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+    if (!finalCompanyDecision.allowed) throw forbidden("Current organization access is required for export");
     return {
       rootPath,
       manifest: resolved.manifest,
@@ -4790,7 +5144,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
   async function previewExport(
     companyId: string,
     input: CompanyPortabilityExport,
-    options: { allowExternalInstructions?: boolean } = {},
+    options: { allowExternalInstructions?: boolean; actor?: AuthorizationActor } = {},
   ): Promise<CompanyPortabilityExportPreviewResult> {
     const previewInput: CompanyPortabilityExport = {
       ...input,
@@ -4807,6 +5161,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
     const exported = await exportBundle(companyId, previewInput, {
       preview: true,
+      actor: options.actor,
       allowExternalInstructions: options.allowExternalInstructions,
     });
     return {
@@ -4832,8 +5187,14 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     options?: ImportBehaviorOptions,
   ): Promise<ImportPlanInternal> {
     const mode = resolveImportMode(options);
+    if (input.include?.supportCases) {
+      throw unprocessable("Support case archives are informational and cannot be imported as live cases.");
+    }
     const requestedInclude = normalizeInclude(input.include);
     const source = applySelectedFilesToSource(await resolveSource(input.source), input.selectedFiles);
+    if (Object.keys(source.files).some((entry) => normalizePortablePath(entry) === SUPPORT_CASE_ARCHIVE_PATH)) {
+      throw unprocessable("Support case archives are informational and cannot be imported as live cases.");
+    }
     const manifest = source.manifest;
     const include: CompanyPortabilityInclude = {
       company: requestedInclude.company && manifest.company !== null,
@@ -4841,6 +5202,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       projects: requestedInclude.projects && manifest.projects.length > 0,
       issues: requestedInclude.issues && manifest.issues.length > 0,
       skills: requestedInclude.skills && manifest.skills.length > 0,
+      supportCases: false,
     };
     const collisionStrategy = input.collisionStrategy ?? DEFAULT_COLLISION_STRATEGY;
     if (mode === "agent_safe" && collisionStrategy === "replace") {
@@ -5181,6 +5543,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
 
     const preview: CompanyPortabilityPreviewResult = {
+      sourceFingerprint: createHash("sha256").update(canonicalJson(source.sourceRevision
+        ? { files: source.files, sourceRevision: source.sourceRevision }
+        : source.files)).digest("hex"),
+      sourceRevision: source.sourceRevision ?? null,
       include,
       targetCompanyId,
       targetCompanyName,
@@ -5225,14 +5591,24 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     actorUserId: string | null | undefined,
     options?: ImportBehaviorOptions,
   ): Promise<CompanyPortabilityImportResult> {
+    const importProfileStartedAt = performance.now();
+    const importProfile = (stage: string) => {
+      if (process.env.PORTABILITY_IMPORT_PROFILE === "1")
+        console.info(`[company-import-profile] ${stage} ${Math.round(performance.now() - importProfileStartedAt)}ms`);
+    };
     // Fail closed before any preview or write work when an inline body arrived
     // incomplete. A truncated or re-framed request can hand the parser a
     // structurally valid JSON object with fewer files than the client sent;
     // the declared count is the only signal that distinguishes it from a
     // deliberately small bundle. Reject the fragment rather than importing it.
     assertInlineSourceComplete(input.source);
+    importProfile("inline-source-validated");
     const mode = resolveImportMode(options);
+    let effectsStarted = false;
     const plan = await buildPreview(input, options);
+    importProfile("preview-built");
+    if (input.expectedSourceFingerprint && input.expectedSourceFingerprint !== plan.preview.sourceFingerprint)
+      throw new ImportSourceChangedError();
     if (plan.preview.errors.length > 0) {
       throw unprocessable(`Import preview has errors: ${plan.preview.errors.join("; ")}`);
     }
@@ -5252,6 +5628,65 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const importedAutomationPausedAt = pauseAutomations ? new Date() : null;
     const warnings = [...plan.preview.warnings];
     const include = plan.include;
+    const importActor: AuthorizationActor = options?.actor ?? (actorUserId
+      ? { type: "board", userId: actorUserId, source: "session" } : { type: "none" });
+    const sourceReleaseReviewed = input.sourceReleaseReview?.confirmed === true
+      && input.sourceReleaseReview.sourceFingerprint === plan.preview.sourceFingerprint
+      && input.expectedSourceFingerprint === plan.preview.sourceFingerprint;
+    let checkpointTargetCompanyId = input.target.mode === "existing_company" ? input.target.companyId : null;
+    let checkpointTargetMembershipEstablished = input.target.mode === "existing_company";
+    const cancellationCheckpoint = async () => {
+      if (await options?.checkCancellation?.()) throw new ImportCancellationError(effectsStarted);
+      // Actor identity passed by the API is the only live authority to recheck.
+      // The legacy actorUserId argument is a result/audit identity and cannot
+      // reconstruct a credential for direct internal service callers.
+      if (!options?.actor) return;
+      await db.transaction(async (tx) => {
+        let currentActor = importActor;
+        if (importActor.type === "board" && importActor.source !== "local_implicit" && importActor.source !== "cloud_tenant") {
+          const pinned = await pinCurrentBoardActor(tx, importActor);
+          if (!pinned || pinned.credentialExpiresAt !== null && pinned.credentialExpiresAt <= Date.now()) {
+            throw forbidden("The current import requester credential is unavailable");
+          }
+          currentActor = pinned.actor;
+        }
+        if (mode === "agent_safe" && currentActor.type === "agent" && options?.sourceCompanyId) {
+          await assertCompanyCeoAgentOrBoard(tx, options.sourceCompanyId, currentActor, "company imports");
+        }
+        await validateCopySources(sourceManifest, input.target, include, currentActor, options?.privateWorkAdmission,
+          sourceReleaseReviewed, tx);
+        if (checkpointTargetMembershipEstablished && checkpointTargetCompanyId && isUuidLike(checkpointTargetCompanyId)) {
+          const targetDecision = await authorizationService(tx).decide({ actor: currentActor,
+            action: "company_scope:read", resource: { type: "company", companyId: checkpointTargetCompanyId },
+            enforceResponsibleUserIntersection: true });
+          if (!targetDecision.allowed) throw forbidden("Current target organization access is required");
+        }
+      });
+    };
+    const checkpointEffect = async (event: { phase: "started" | "completed"; key: string; kind: string;
+      sourceId?: string | null; sourceSlug?: string | null; targetIds?: string[];
+      mappings?: Array<{ sourceId?: string | null; sourceSlug?: string | null; targetIds: string[] }> }, tx?: ImportDbTransaction) => {
+      try { await options?.onEffectCheckpoint?.(event, tx); }
+      catch (error) {
+        if (event.phase === "started" && !effectsStarted) {
+          if (error instanceof HttpError) throw new ImportPreflightError(error.status, error.message, error.details);
+          throw new ImportPreflightError(500, "Import effect admission could not be recorded.");
+        }
+        throw error;
+      }
+    };
+    let copySources: Awaited<ReturnType<typeof validateCopySources>>;
+    try {
+      copySources = await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
+        sourceReleaseReviewed);
+      importProfile("copy-sources-validated");
+    } catch (error) {
+      // This source-admission owner only reads. No company, secret, Agent,
+      // Project or Task effect has begun here. Later throws remain unknown.
+      if (error instanceof HttpError) throw new ImportPreflightError(error.status, error.message, error.details);
+      throw error;
+    }
+
 
     if (include.agents) {
       const importedAgentSlugs = new Set(
@@ -5286,6 +5721,80 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         throw unprocessable(`Bundle blob ${filePath} does not match its declared sha256; the package is corrupted or was tampered with.`);
       }
     }
+    importProfile("bundle-blobs-verified");
+
+    const nativeSourceCompanyIds = [...new Set([
+      ...(include.issues ? sourceManifest.issues.map(item => item.sourceCompanyId).filter((id): id is string => Boolean(id)) : []),
+      ...(include.projects ? sourceManifest.projects.map(item => item.sourceCompanyId).filter((id): id is string => Boolean(id)) : []),
+    ])];
+    const sourceReleaseTargetId = input.target.mode === "existing_company" ? input.target.companyId : null;
+    const sourceReleaseNeeded = nativeSourceCompanyIds.length === 0 || sourceReleaseTargetId === null
+      || nativeSourceCompanyIds.some(id => id !== sourceReleaseTargetId);
+    const acceptedSelection = [
+      ...plan.preview.plan.agentPlans.map(item => ({ kind: "agent" as const, slug: item.slug, action: item.action })),
+      ...(include.skills ? sourceManifest.skills.map(item => ({ kind: "skill" as const, slug: item.slug, action: "import" })) : []),
+      ...plan.preview.plan.projectPlans.map(item => ({ kind: "project" as const, slug: item.slug, action: item.action })),
+      ...plan.preview.plan.issuePlans.map(item => ({ kind: "issue" as const, slug: item.slug, action: item.action })),
+      ...(include.issues ? sourceManifest.issues.filter(item => item.recurring)
+        .map(item => ({ kind: "routine" as const, slug: item.slug,
+          action: plan.preview.plan.issuePlans.find(issue => issue.slug === item.slug)?.action ?? "create" })) : []),
+    ];
+    const selectedPayloadFingerprint = createHash("sha256").update(canonicalJson({
+      previewFingerprint: plan.preview.sourceFingerprint, include,
+      agents: plan.preview.plan.agentPlans.map(item => [item.slug, item.action]),
+      projects: plan.preview.plan.projectPlans.map(item => [item.slug, item.action]),
+      issues: plan.preview.plan.issuePlans.map(item => [item.slug, item.action]),
+      routines: acceptedSelection.filter(item => item.kind === "routine").map(item => [item.slug, item.action]),
+      skills: acceptedSelection.filter(item => item.kind === "skill").map(item => [item.slug, item.action]),
+    })).digest("hex");
+    if (sourceReleaseReviewed && sourceReleaseNeeded && options?.onSourceReleaseReview) {
+      if (importActor.type !== "board" || !importActor.userId || importActor.source !== "session")
+        throw forbidden("A current Human session must review source release");
+      const sourceItems = [
+        ...(include.issues ? sourceManifest.issues.map(item => ({ kind: "issue" as const,
+          id: item.sourceIssueId ?? `external:${item.slug}`, slug: item.slug })) : []),
+        ...(include.projects ? sourceManifest.projects.map(item => ({ kind: "project" as const,
+          id: item.sourceProjectId ?? `external:${item.slug}`, slug: item.slug })) : []),
+      ];
+      const sourceCompanyIds = [...new Set(sourceItems.flatMap(item => {
+        const entry = item.kind === "issue" ? sourceManifest.issues.find(value => value.slug === item.slug)
+          : sourceManifest.projects.find(value => value.slug === item.slug);
+        return entry?.sourceCompanyId ? [entry.sourceCompanyId] : [];
+      }))].sort();
+      try {
+        await options.onSourceReleaseReview({
+          version: 1,
+          sourceMode: sourceCompanyIds.length ? "native_owner" : "manual_open_content",
+          sourceCompanyIds,
+          sourceItems,
+          sourceAccess: sourceCompanyIds.length ? "verified_current_acl" : "reviewed_open_external",
+          targetMode: input.target.mode,
+          targetCompanyId: input.target.mode === "existing_company" ? input.target.companyId : null,
+          previewFingerprint: plan.preview.sourceFingerprint!,
+          selectedPayloadFingerprint,
+          reviewedByUserId: importActor.userId,
+          reviewedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        // Receipt persistence is part of preflight: the import has not written
+        // business data yet, so a failed receipt admission is a known refusal.
+        if (error instanceof HttpError) throw new ImportPreflightError(error.status, error.message, error.details);
+        throw new ImportPreflightError(500, "Source release review could not be recorded.");
+      }
+    }
+
+    if (plan.preview.sourceFingerprint && options?.onAcceptedPlan) {
+      try {
+        await options.onAcceptedPlan({ previewFingerprint: plan.preview.sourceFingerprint,
+          selectedPayloadFingerprint, targetMode: input.target.mode,
+          targetCompanyId: input.target.mode === "existing_company" ? input.target.companyId : null,
+          selected: acceptedSelection, acceptedByUserId: importActor.type === "board" ? importActor.userId ?? null : null,
+          acceptedAt: new Date().toISOString() });
+      } catch (error) {
+        if (error instanceof HttpError) throw new ImportPreflightError(error.status, error.message, error.details);
+        throw new ImportPreflightError(500, "Accepted import plan could not be recorded.");
+      }
+    }
 
     let targetCompany: {
       id: string;
@@ -5294,6 +5803,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     } | null = null;
     let companyAction: "created" | "updated" | "unchanged" = "unchanged";
 
+    await cancellationCheckpoint();
     if (input.target.mode === "new_company") {
       if (mode === "agent_safe" && !options?.sourceCompanyId) {
         throw unprocessable("Safe new-company imports require a source company context.");
@@ -5319,9 +5829,14 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               manifestCompanyName,
               (await companies.list()).map((company) => company.name),
             ));
+      await cancellationCheckpoint();
+      await checkpointEffect({ phase: "started", key: "company:create", kind: "company" });
+      effectsStarted = true;
       const created = await companies.create({
         name: companyName,
         description: include.company ? (sourceManifest.company?.description ?? null) : null,
+        locale: include.company ? (sourceManifest.company?.locale ?? "en") : "en",
+        timezone: include.company ? (sourceManifest.company?.timezone ?? "UTC") : "UTC",
         requireBoardApprovalForNewAgents: include.company
           ? (sourceManifest.company?.requireBoardApprovalForNewAgents ?? false)
           : false,
@@ -5338,11 +5853,22 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           ? (sourceManifest.company?.feedbackDataSharingTermsVersion ?? null)
           : null,
       });
+      checkpointTargetCompanyId = created.id;
+      await checkpointEffect({ phase: "completed", key: "company:create", kind: "company", targetIds: [created.id] });
+      if (sourceReleaseReviewed && sourceReleaseNeeded) {
+        await options?.onSourceReleaseTargetBound?.(created.id);
+      }
+      await checkpointEffect({ phase: "started", key: "company:ownership", kind: "company_ownership", targetIds: [created.id] });
       if (mode === "agent_safe" && options?.sourceCompanyId) {
+        await cancellationCheckpoint();
         await access.copyActiveUserMemberships(options.sourceCompanyId, created.id);
+        checkpointTargetMembershipEstablished = true;
       } else {
         const ownerPrincipalId = actorUserId ?? "board";
+        await cancellationCheckpoint();
         await access.ensureMembership(created.id, "user", ownerPrincipalId, "owner", "active");
+        checkpointTargetMembershipEstablished = true;
+        await cancellationCheckpoint();
         await access.ensureRoleDefaultGrants(
           created.id,
           ownerPrincipalId,
@@ -5350,15 +5876,21 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           actorUserId ?? null,
         );
       }
+      await checkpointEffect({ phase: "completed", key: "company:ownership", kind: "company_ownership", targetIds: [created.id] });
       targetCompany = created;
       companyAction = "created";
     } else {
       targetCompany = await companies.getById(input.target.companyId);
       if (!targetCompany) throw notFound("Target company not found");
       if (include.company && sourceManifest.company && mode === "board_full") {
+        await cancellationCheckpoint();
+        await checkpointEffect({ phase: "started", key: "company:update", kind: "company", sourceId: targetCompany.id });
+        effectsStarted = true;
         const updated = await companies.update(targetCompany.id, {
           name: sourceManifest.company.name,
           description: sourceManifest.company.description,
+          locale: sourceManifest.company.locale,
+          timezone: sourceManifest.company.timezone,
           requireBoardApprovalForNewAgents: sourceManifest.company.requireBoardApprovalForNewAgents,
           feedbackDataSharingEnabled: sourceManifest.company.feedbackDataSharingEnabled,
           feedbackDataSharingConsentAt: sourceManifest.company.feedbackDataSharingConsentAt
@@ -5367,12 +5899,17 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           feedbackDataSharingConsentByUserId: sourceManifest.company.feedbackDataSharingConsentByUserId,
           feedbackDataSharingTermsVersion: sourceManifest.company.feedbackDataSharingTermsVersion,
         });
+        await checkpointEffect({ phase: "completed", key: "company:update", kind: "company",
+          sourceId: targetCompany.id, targetIds: [updated?.id ?? targetCompany.id] });
         targetCompany = updated ?? targetCompany;
         companyAction = "updated";
       }
     }
 
     if (!targetCompany) throw notFound("Target company not found");
+    const targetCompanyId = targetCompany.id;
+    checkpointTargetCompanyId = targetCompanyId;
+    importProfile("target-company-ready");
 
     const importedAgentEnvSlugs = new Set(
       plan.preview.plan.agentPlans
@@ -5393,20 +5930,25 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
       return true;
     });
-    const createdImportSecretIds: string[] = [];
     try {
+      await cancellationCheckpoint();
+      effectsStarted = true;
       await materializeImportEnvInputValues(
         targetCompany.id,
         sourceManifest,
         importEnvInputs,
         input.secretValues,
         actorUserId,
-        createdImportSecretIds,
+        cancellationCheckpoint,
+        checkpointEffect,
       );
+      importProfile("environment-values-materialized");
 
       if (include.company) {
+        await cancellationCheckpoint();
         const logoPath = sourceManifest.company?.logoPath ?? null;
         if (!logoPath) {
+          await cancellationCheckpoint();
           const cleared = await companies.update(targetCompany.id, { logoAssetId: null });
           targetCompany = cleared ?? targetCompany;
         } else {
@@ -5422,8 +5964,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             if (!contentType || !COMPANY_LOGO_CONTENT_TYPE_EXTENSIONS[contentType]) {
               warnings.push(`Skipped company logo import for ${logoPath} because the file type is unsupported.`);
             } else {
+              await checkpointEffect({ phase: "started", key: "company:logo", kind: "company_asset",
+                sourceSlug: path.posix.basename(logoPath).slice(0, 128) });
               try {
                 const body = portableFileToBuffer(logoFile, logoPath);
+                await cancellationCheckpoint();
                 const stored = await storage.putFile({
                   companyId: targetCompany.id,
                   namespace: "assets/companies",
@@ -5431,6 +5976,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                   contentType,
                   body,
                 });
+                await cancellationCheckpoint();
                 const createdAsset = await assetRecords.create(targetCompany.id, {
                   provider: stored.provider,
                   objectKey: stored.objectKey,
@@ -5441,12 +5987,15 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                   createdByAgentId: null,
                   createdByUserId: actorUserId ?? null,
                 });
+                await cancellationCheckpoint();
                 const updated = await companies.update(targetCompany.id, {
                   logoAssetId: createdAsset.id,
                 });
                 targetCompany = updated ?? targetCompany;
+                await checkpointEffect({ phase: "completed", key: "company:logo", kind: "company_asset",
+                  sourceSlug: path.posix.basename(logoPath).slice(0, 128), targetIds: [createdAsset.id] });
               } catch (err) {
-                warnings.push(`Failed to import company logo ${logoPath}: ${err instanceof Error ? err.message : String(err)}`);
+                throw err;
               }
             }
           }
@@ -5465,6 +6014,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           warnings.push(`Skipped ${manifestEmbeddedAssets.length} embedded image asset${manifestEmbeddedAssets.length === 1 ? "" : "s"} because storage is unavailable; their references were left unchanged.`);
         } else {
           for (const embeddedAsset of manifestEmbeddedAssets) {
+            await cancellationCheckpoint();
             const embeddedAssetLabel = embeddedAsset.originalFilename ?? embeddedAsset.assetId;
             const blobPath = portableBlobPath(embeddedAsset.sha256);
             const blobFile = plan.source.files[blobPath];
@@ -5475,7 +6025,12 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             // The pre-apply loop above already verified that every blobs/*
             // entry hashes to its path, which this entry's sha256 derives.
             const body = portableFileToBuffer(blobFile, blobPath);
+            const embeddedEffectKey = `embedded_asset:${createHash("sha256").update(embeddedAsset.assetId).digest("hex").slice(0, 32)}`;
+            const embeddedSourceLabel = embeddedAssetLabel.slice(0, 128);
+            await checkpointEffect({ phase: "started", key: embeddedEffectKey, kind: "embedded_asset",
+              sourceId: embeddedAsset.assetId, sourceSlug: embeddedSourceLabel });
             try {
+              await cancellationCheckpoint();
               const stored = await storage.putFile({
                 companyId: targetCompany.id,
                 namespace: "assets/general",
@@ -5483,6 +6038,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 contentType: embeddedAsset.contentType,
                 body,
               });
+              await cancellationCheckpoint();
               const createdAsset = await assetRecords.create(targetCompany.id, {
                 provider: stored.provider,
                 objectKey: stored.objectKey,
@@ -5494,8 +6050,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 createdByUserId: actorUserId ?? null,
               });
               embeddedAssetIdMap.set(embeddedAsset.assetId, createdAsset.id);
+              await checkpointEffect({ phase: "completed", key: embeddedEffectKey, kind: "embedded_asset",
+                sourceId: embeddedAsset.assetId, sourceSlug: embeddedSourceLabel, targetIds: [createdAsset.id] });
             } catch (error) {
-              warnings.push(`Embedded image asset ${embeddedAssetLabel} could not be imported: ${error instanceof Error ? error.message : String(error)}; its references were left unchanged.`);
+              throw error;
             }
           }
         }
@@ -5519,17 +6077,24 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
       const importedSlugToProjectId = new Map<string, string>();
       const importedProjectWorkspaceIdByProjectSlug = new Map<string, Map<string, string>>();
+      const importTargetCompanyId = targetCompany.id;
       const existingProjectSlugToId = new Map<string, string>();
       const existingProjects = await projects.list(targetCompany.id);
       for (const existing of existingProjects) {
         existingProjectSlugToId.set(existing.urlKey, existing.id);
       }
 
-      const importedSkills = include.skills || include.agents
-        ? await companySkills.importPackageFiles(targetCompany.id, pickTextFiles(plan.source.files), {
-            onConflict: resolveSkillConflictStrategy(mode, plan.collisionStrategy),
-          })
-        : [];
+      let importedSkills: Awaited<ReturnType<typeof companySkills.importPackageFiles>> = [];
+      if (include.skills || include.agents) {
+        await cancellationCheckpoint();
+        await checkpointEffect({ phase: "started", key: "skills:bundle", kind: "skill" });
+        effectsStarted = true;
+        importedSkills = await companySkills.importPackageFiles(targetCompany.id, pickTextFiles(plan.source.files), {
+          onConflict: resolveSkillConflictStrategy(mode, plan.collisionStrategy),
+        });
+        await checkpointEffect({ phase: "completed", key: "skills:bundle", kind: "skill",
+          targetIds: importedSkills.map(item => item.skill.id) });
+      }
       const desiredSkillRefMap = new Map<string, string>();
       for (const importedSkill of importedSkills) {
         desiredSkillRefMap.set(importedSkill.originalKey, importedSkill.skill.key);
@@ -5542,7 +6107,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
 
       if (include.agents) {
-        for (const planAgent of plan.preview.plan.agentPlans) {
+        await cancellationCheckpoint();
+        effectsStarted = true;
+        for (const [agentIndex, planAgent] of plan.preview.plan.agentPlans.entries()) {
+          await cancellationCheckpoint();
           const manifestAgent = plan.selectedAgents.find((agent) => agent.slug === planAgent.slug);
           if (!manifestAgent) continue;
           if (planAgent.action === "skip") {
@@ -5555,6 +6123,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             });
             continue;
           }
+
+          const effectKey = `agent:${agentIndex}`;
+          await checkpointEffect({ phase: "started", key: effectKey, kind: "agent",
+            sourceSlug: manifestAgent.slug });
+          effectsStarted = true;
 
           const bundlePrefix = `agents/${manifestAgent.slug}/`;
           const bundleFiles = Object.fromEntries(
@@ -5584,6 +6157,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           }
           if (embeddedAssetIdMap.size > 0) {
             for (const [relativePath, content] of Object.entries(bundleFiles)) {
+              await cancellationCheckpoint();
               bundleFiles[relativePath] = rewriteEmbeddedAssetUrls(content, embeddedAssetIdMap);
             }
           }
@@ -5630,11 +6204,20 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             : {};
 
           if (planAgent.action === "update" && planAgent.existingAgentId) {
-            let updated = await agents.update(planAgent.existingAgentId, {
-              ...patch,
-              ...automationPausePatch,
+            await cancellationCheckpoint();
+            const updatedRow = await db.transaction(async tx => {
+              const updated = await agents.update(planAgent.existingAgentId!, {
+                ...patch,
+                ...automationPausePatch,
+              }, { transaction: tx });
+              if (updated) await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
+                sourceSlug: manifestAgent.slug, targetIds: [updated.id] }, tx);
+              return updated;
             });
+            let updated = updatedRow;
             if (!updated) {
+              await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
+                sourceSlug: manifestAgent.slug, targetIds: [] });
               warnings.push(`Skipped update for missing agent ${planAgent.existingAgentId}.`);
               resultAgents.push({
                 slug: planAgent.slug,
@@ -5645,27 +6228,54 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               });
               continue;
             }
+            const instructionEffectKey = `${effectKey}:instructions`;
+            await checkpointEffect({ phase: "started", key: instructionEffectKey, kind: "agent_instructions",
+              sourceSlug: manifestAgent.slug });
             try {
+              await cancellationCheckpoint();
               const materialized = await instructions.materializeManagedBundle(updated, bundleFiles, {
                 clearLegacyPromptTemplate: true,
                 replaceExisting: true,
               });
-              updated = await agents.update(updated.id, { adapterConfig: materialized.adapterConfig }) ?? updated;
+              await cancellationCheckpoint();
+              const agentToUpdate = updated;
+              updated = await db.transaction(async tx => {
+                const saved = await agents.update(agentToUpdate.id, { adapterConfig: materialized.adapterConfig }, { transaction: tx });
+                if (!saved) throw notFound("Imported agent disappeared during instruction materialization", { code: "import_target_changed" });
+                await checkpointEffect({ phase: "completed", key: instructionEffectKey, kind: "agent_instructions",
+                  sourceSlug: manifestAgent.slug, targetIds: [saved.id] }, tx);
+                return saved;
+              });
             } catch (err) {
-              warnings.push(`Failed to materialize instructions bundle for ${manifestAgent.slug}: ${err instanceof Error ? err.message : String(err)}`);
+              throw err;
             }
-            await applyImportedAgentPermissionGrants(
-              targetCompany.id,
-              updated.id,
-              manifestAgent.permissionGrants ?? [],
-              actorUserId ?? null,
-            );
+            await cancellationCheckpoint();
+            const permissionEffectKey = `${effectKey}:permissions`;
+            await checkpointEffect({ phase: "started", key: permissionEffectKey, kind: "agent_permissions",
+              sourceSlug: manifestAgent.slug });
+            await db.transaction(async tx => {
+              await applyImportedAgentPermissionGrants(
+                importTargetCompanyId,
+                updated.id,
+                manifestAgent.permissionGrants ?? [],
+                actorUserId ?? null,
+                tx as unknown as Db,
+              );
+              await checkpointEffect({ phase: "completed", key: permissionEffectKey, kind: "agent_permissions",
+                sourceSlug: manifestAgent.slug, targetIds: [updated.id] }, tx);
+            });
             agentStatusById.set(updated.id, updated.status ?? agentStatusById.get(updated.id) ?? null);
+            await cancellationCheckpoint();
+            const envEffectKey = `${effectKey}:env`;
+            await checkpointEffect({ phase: "started", key: envEffectKey, kind: "agent_env",
+              sourceSlug: manifestAgent.slug });
             await secrets.syncEnvBindingsForTarget?.(
               targetCompany.id,
               { targetType: "agent", targetId: updated.id },
               isPlainRecord(updated.adapterConfig) ? updated.adapterConfig.env : undefined,
             );
+            await checkpointEffect({ phase: "completed", key: envEffectKey, kind: "agent_env",
+              sourceSlug: manifestAgent.slug, targetIds: [updated.id] });
             importedSlugToAgentId.set(planAgent.slug, updated.id);
             existingSlugToAgentId.set(normalizeAgentUrlKey(updated.name) ?? updated.id, updated.id);
             resultAgents.push({
@@ -5678,41 +6288,58 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             continue;
           }
 
-          let created = await agents.create(targetCompany.id, {
-            ...patch,
-            ...automationPausePatch,
-            status: pauseAutomations ? "paused" : "idle",
+          await cancellationCheckpoint();
+          let created = await db.transaction(async tx => {
+            const txDb = tx as unknown as Db;
+            const agent = await agents.create(importTargetCompanyId, {
+              ...patch,
+              ...automationPausePatch,
+              status: pauseAutomations ? "paused" : "idle",
+            }, { transaction: tx });
+            const accessWriter = accessService(txDb);
+            await accessWriter.ensureMembership(importTargetCompanyId, "agent", agent.id, "member", "active");
+            await accessWriter.setPrincipalPermission(importTargetCompanyId, "agent", agent.id, "tasks:assign", true,
+              actorUserId ?? null);
+            await applyImportedAgentPermissionGrants(importTargetCompanyId, agent.id, manifestAgent.permissionGrants ?? [],
+              actorUserId ?? null, txDb);
+            await checkpointEffect({ phase: "completed", key: effectKey, kind: "agent",
+              sourceSlug: manifestAgent.slug, targetIds: [agent.id] }, tx);
+            return agent;
           });
-          await access.ensureMembership(targetCompany.id, "agent", created.id, "member", "active");
-          await access.setPrincipalPermission(
-            targetCompany.id,
-            "agent",
-            created.id,
-            "tasks:assign",
-            true,
-            actorUserId ?? null,
-          );
+          await cancellationCheckpoint();
+          const instructionEffectKey = `${effectKey}:instructions`;
+          await checkpointEffect({ phase: "started", key: instructionEffectKey, kind: "agent_instructions",
+            sourceSlug: manifestAgent.slug });
           try {
+            await cancellationCheckpoint();
             const materialized = await instructions.materializeManagedBundle(created, bundleFiles, {
               clearLegacyPromptTemplate: true,
               replaceExisting: true,
             });
-            created = await agents.update(created.id, { adapterConfig: materialized.adapterConfig }) ?? created;
+            await cancellationCheckpoint();
+            const agentToUpdate = created;
+            created = await db.transaction(async tx => {
+              const saved = await agents.update(agentToUpdate.id, { adapterConfig: materialized.adapterConfig }, { transaction: tx });
+              if (!saved) throw notFound("Imported agent disappeared during instruction materialization", { code: "import_target_changed" });
+              await checkpointEffect({ phase: "completed", key: instructionEffectKey, kind: "agent_instructions",
+                sourceSlug: manifestAgent.slug, targetIds: [saved.id] }, tx);
+              return saved;
+            });
           } catch (err) {
-            warnings.push(`Failed to materialize instructions bundle for ${manifestAgent.slug}: ${err instanceof Error ? err.message : String(err)}`);
+            throw err;
           }
-          await applyImportedAgentPermissionGrants(
-            targetCompany.id,
-            created.id,
-            manifestAgent.permissionGrants ?? [],
-            actorUserId ?? null,
-          );
           agentStatusById.set(created.id, created.status ?? (pauseAutomations ? "paused" : "idle"));
+          await cancellationCheckpoint();
+          const envEffectKey = `${effectKey}:env`;
+          await checkpointEffect({ phase: "started", key: envEffectKey, kind: "agent_env",
+            sourceSlug: manifestAgent.slug });
           await secrets.syncEnvBindingsForTarget?.(
             targetCompany.id,
             { targetType: "agent", targetId: created.id },
             isPlainRecord(created.adapterConfig) ? created.adapterConfig.env : undefined,
           );
+          await checkpointEffect({ phase: "completed", key: envEffectKey, kind: "agent_env",
+            sourceSlug: manifestAgent.slug, targetIds: [created.id] });
           importedSlugToAgentId.set(planAgent.slug, created.id);
           existingSlugToAgentId.set(normalizeAgentUrlKey(created.name) ?? created.id, created.id);
           resultAgents.push({
@@ -5723,9 +6350,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             reason: planAgent.reason,
           });
         }
-
         // Apply reporting links once all imported agent ids are available.
         for (const manifestAgent of plan.selectedAgents) {
+          await cancellationCheckpoint();
           const agentId = importedSlugToAgentId.get(manifestAgent.slug);
           if (!agentId) continue;
           const managerSlug = manifestAgent.reportsToSlug;
@@ -5746,20 +6373,28 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               ? importedSlugToAgentId.get(managerSlug) ?? existingSlugToAgentId.get(managerSlug) ?? null
               : null);
           if (!managerId || managerId === agentId) continue;
+          const reportingEffectKey = `agent_reporting:${agentId}`;
+          await checkpointEffect({ phase: "started", key: reportingEffectKey, kind: "agent_reporting",
+            sourceSlug: manifestAgent.slug });
           try {
-            await agents.update(agentId, { reportsTo: managerId });
-          } catch {
-            const managerRef =
-              managerSlug
-              ?? manifestAgent.reportsToExistingAgentSlug
-              ?? manifestAgent.reportsToExistingAgentId;
-            warnings.push(`Could not assign manager ${managerRef} for imported agent ${manifestAgent.slug}.`);
+            await cancellationCheckpoint();
+            await db.transaction(async tx => {
+              await agents.update(agentId, { reportsTo: managerId }, { transaction: tx });
+              await checkpointEffect({ phase: "completed", key: reportingEffectKey, kind: "agent_reporting",
+                sourceSlug: manifestAgent.slug, targetIds: [agentId, managerId] }, tx);
+            });
+          } catch (error) {
+            throw error;
           }
         }
       }
+      importProfile("agents-imported");
 
       if (include.projects) {
-        for (const planProject of plan.preview.plan.projectPlans) {
+        await cancellationCheckpoint();
+        effectsStarted = true;
+        for (const [projectIndex, planProject] of plan.preview.plan.projectPlans.entries()) {
+          await cancellationCheckpoint();
           const manifestProject = sourceManifest.projects.find((project) => project.slug === planProject.slug);
           if (!manifestProject) continue;
           if (planProject.action === "skip") {
@@ -5772,6 +6407,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             });
             continue;
           }
+
+          const effectKey = `project:${projectIndex}`;
+          await checkpointEffect({ phase: "started", key: effectKey, kind: "project",
+            sourceId: manifestProject.sourceProjectId ?? null, sourceSlug: manifestProject.slug });
+          effectsStarted = true;
 
           const projectLeadAgentId = manifestProject.leadAgentSlug
             ? importedSlugToAgentId.get(manifestProject.leadAgentSlug)
@@ -5789,7 +6429,15 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 },
               )
             : null;
+          const projectSourceProof = copySources.projects.get(manifestProject.slug);
           const projectPatch = {
+            visibility: projectSourceProof?.visibility ?? "open",
+            privacyOwnerUserId: projectSourceProof?.source?.privacyOwnerUserId ?? actorUserId ?? null,
+            personalOwnerUserId: projectSourceProof?.source?.personalOwnerUserId ?? null,
+            sourceIssueIds: projectSourceProof?.sourceIssueIds ?? [],
+            sourceProjectIds: (projectSourceProof?.sourceProjectIds ?? []).filter(sourceId =>
+              planProject.action !== "update" || sourceId !== planProject.existingProjectId),
+            sourceProvenanceQualified: projectSourceProof?.sourceProvenanceQualified ?? false,
             name: planProject.plannedName,
             description: manifestProject.description,
             leadAgentId: projectLeadAgentId,
@@ -5805,8 +6453,18 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
           let projectId: string | null = null;
           if (planProject.action === "update" && planProject.existingProjectId) {
-            const updated = await projects.update(planProject.existingProjectId, projectPatch);
+            const updated = await db.transaction(async tx => {
+              await lockIssuePrivacyTree(tx, targetCompanyId);
+              await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
+                sourceReleaseReviewed, tx);
+              const result = await projects.update(planProject.existingProjectId!, projectPatch, importActor, tx);
+              if (result) await checkpointEffect({ phase: "completed", key: effectKey, kind: "project",
+                sourceId: manifestProject.sourceProjectId ?? null, sourceSlug: manifestProject.slug, targetIds: [result.id] }, tx);
+              return result;
+            });
             if (!updated) {
+              await checkpointEffect({ phase: "completed", key: effectKey, kind: "project",
+                sourceId: manifestProject.sourceProjectId ?? null, sourceSlug: manifestProject.slug, targetIds: [] });
               warnings.push(`Skipped update for missing project ${planProject.existingProjectId}.`);
               resultProjects.push({
                 slug: planProject.slug,
@@ -5828,7 +6486,15 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               reason: planProject.reason,
             });
           } else {
-            const created = await projects.create(targetCompany.id, projectPatch);
+            const created = await db.transaction(async tx => {
+              await lockIssuePrivacyTree(tx, targetCompanyId);
+              await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
+                sourceReleaseReviewed, tx);
+              const result = await projects.create(targetCompanyId, projectPatch, tx, importActor);
+              await checkpointEffect({ phase: "completed", key: effectKey, kind: "project",
+                sourceId: manifestProject.sourceProjectId ?? null, sourceSlug: manifestProject.slug, targetIds: [result.id] }, tx);
+              return result;
+            });
             projectId = created.id;
             importedSlugToProjectId.set(planProject.slug, created.id);
             existingProjectSlugToId.set(created.urlKey, created.id);
@@ -5843,13 +6509,18 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
           if (!projectId) continue;
 
+          await checkpointEffect({ phase: "started", key: `${effectKey}:env`, kind: "project_env", sourceSlug: manifestProject.slug });
           await secrets.syncEnvBindingsForTarget?.(
             targetCompany.id,
             { targetType: "project", targetId: projectId },
             normalizedProjectEnv ?? {},
           );
+          await checkpointEffect({ phase: "completed", key: `${effectKey}:env`, kind: "project_env", sourceSlug: manifestProject.slug });
 
           for (const workspace of manifestProject.workspaces) {
+            await cancellationCheckpoint();
+            const workspaceEffectKey = `${effectKey}:workspace:${projectWorkspaceIdByKey.size}`;
+            await checkpointEffect({ phase: "started", key: workspaceEffectKey, kind: "project_workspace", sourceSlug: manifestProject.slug });
             const createdWorkspace = await projects.createWorkspace(projectId, {
               name: workspace.name,
               sourceType: workspace.sourceType ?? undefined,
@@ -5864,9 +6535,12 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             });
             if (!createdWorkspace) {
               warnings.push(`Project ${planProject.slug} workspace ${workspace.key} could not be created during import.`);
+              await checkpointEffect({ phase: "completed", key: workspaceEffectKey, kind: "project_workspace", sourceSlug: manifestProject.slug });
               continue;
             }
             projectWorkspaceIdByKey.set(workspace.key, createdWorkspace.id);
+            await checkpointEffect({ phase: "completed", key: workspaceEffectKey, kind: "project_workspace",
+              sourceSlug: manifestProject.slug, targetIds: [createdWorkspace.id] });
           }
           importedProjectWorkspaceIdByProjectSlug.set(planProject.slug, projectWorkspaceIdByKey);
 
@@ -5877,14 +6551,21 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             warnings,
           );
           if (hydratedProjectExecutionWorkspacePolicy) {
+            const policyEffectKey = `${effectKey}:workspace_policy`;
+            await checkpointEffect({ phase: "started", key: policyEffectKey, kind: "project_policy", sourceSlug: manifestProject.slug });
             await projects.update(projectId, {
               executionWorkspacePolicy: hydratedProjectExecutionWorkspacePolicy,
             });
+            await checkpointEffect({ phase: "completed", key: policyEffectKey, kind: "project_policy",
+              sourceSlug: manifestProject.slug, targetIds: [projectId] });
           }
         }
       }
+      importProfile("projects-imported");
 
       if (include.issues) {
+        await cancellationCheckpoint();
+        effectsStarted = true;
         const routines = routineService(db);
 
         // Resolve label names against the target company before creating
@@ -5899,6 +6580,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         const referencedLabelNames = new Set<string>();
         let hasLegacyLabelIds = false;
         for (const manifestIssue of sourceManifest.issues) {
+          await cancellationCheckpoint();
           if (manifestIssue.recurring) continue;
           for (const name of manifestIssue.labelNames ?? []) referencedLabelNames.add(name);
           if ((manifestIssue.labelIds ?? []).length > 0) hasLegacyLabelIds = true;
@@ -5911,6 +6593,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           for (const label of targetLabels) existingTargetLabelIds.add(label.id);
           const keptColorNames: string[] = [];
           for (const name of Array.from(referencedLabelNames).sort((left, right) => left.localeCompare(right))) {
+            await cancellationCheckpoint();
             const existing = targetLabelByName.get(name);
             if (existing) {
               labelIdByName.set(name, existing.id);
@@ -5947,8 +6630,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         const documentRows: ImportIssueDocumentRow[] = [];
         const workProductRows: ImportIssueWorkProductRow[] = [];
         const attachmentRows: ImportIssueAttachmentRow[] = [];
+        importProfile("issue-buffers-ready");
 
-        for (const manifestIssue of sourceManifest.issues) {
+        for (const [issueIndex, manifestIssue] of sourceManifest.issues.entries()) {
           const markdownRaw = readPortableTextFile(plan.source.files, manifestIssue.path);
           const parsed = markdownRaw ? parseFrontmatterMarkdown(markdownRaw) : null;
           const rawDescription = parsed?.body || manifestIssue.description || null;
@@ -5992,6 +6676,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               variables: null,
               triggers: [],
             };
+            const routineEffectKey = `routine:${issueIndex}`;
+            await checkpointEffect({ phase: "started", key: routineEffectKey, kind: "routine",
+              sourceId: manifestIssue.sourceIssueId ?? null, sourceSlug: manifestIssue.slug });
+            effectsStarted = true;
             const createdRoutine = await routines.create(targetCompany.id, {
               projectId,
               goalId: null,
@@ -6031,6 +6719,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               warnings.push(`Routine ${manifestIssue.slug} was imported without an assignee and will stay paused until one is set.`);
             }
             for (const trigger of routineDefinition.triggers) {
+              await cancellationCheckpoint();
               if (trigger.kind === "schedule") {
                 await routines.createTrigger(createdRoutine.id, {
                   kind: "schedule",
@@ -6069,6 +6758,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 userId: actorUserId ?? null,
               });
             }
+            await checkpointEffect({ phase: "completed", key: routineEffectKey, kind: "routine",
+              sourceId: manifestIssue.sourceIssueId ?? null, sourceSlug: manifestIssue.slug, targetIds: [createdRoutine.id] });
             continue;
           }
           let issueStatus = manifestIssue.status && ISSUE_STATUSES.includes(manifestIssue.status as any)
@@ -6080,6 +6771,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           }
           const resolvedLabelIds: string[] = [];
           for (const name of manifestIssue.labelNames ?? []) {
+            await cancellationCheckpoint();
             const labelId = labelIdByName.get(name);
             if (labelId && !resolvedLabelIds.includes(labelId)) resolvedLabelIds.push(labelId);
           }
@@ -6089,6 +6781,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             warnings.push(`Task ${manifestIssue.slug} dropped ${unresolvedLegacyCount} label reference${unresolvedLegacyCount === 1 ? "" : "s"} because the bundle carries raw label ids that do not exist in the target company.`);
           }
           for (const labelId of legacyLabelIds) {
+            await cancellationCheckpoint();
             if (existingTargetLabelIds.has(labelId) && !resolvedLabelIds.includes(labelId)) {
               resolvedLabelIds.push(labelId);
             }
@@ -6101,6 +6794,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           // entries can resolve their commentIndex against them.
           const createdCommentIds: Array<string | null> = [];
           for (const comment of manifestIssue.comments ?? []) {
+            await cancellationCheckpoint();
             const authorAgentId = comment.authorType === "agent" && comment.authorAgentSlug
               ? importedSlugToAgentId.get(comment.authorAgentSlug)
                 ?? existingSlugToAgentId.get(comment.authorAgentSlug)
@@ -6140,6 +6834,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             parentSlugBySlug.set(manifestIssue.slug, manifestIssue.parentSlug);
           }
           for (const documentEntry of manifestIssue.documents ?? []) {
+            await cancellationCheckpoint();
             const documentBody = readPortableTextFile(plan.source.files, documentEntry.path);
             if (documentBody === null) {
               warnings.push(`Task ${manifestIssue.slug} document ${documentEntry.key} was skipped because its file is missing from the package: ${documentEntry.path}`);
@@ -6159,6 +6854,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             });
           }
           for (const workProductEntry of manifestIssue.workProducts ?? []) {
+            await cancellationCheckpoint();
             workProductRows.push({
               companyId: targetCompany.id,
               issueId,
@@ -6193,7 +6889,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             }
             unarmedMonitorCount += 1;
           }
-          for (const attachmentEntry of manifestIssue.attachments ?? []) {
+          for (const [attachmentIndex, attachmentEntry] of (manifestIssue.attachments ?? []).entries()) {
+            await cancellationCheckpoint();
             const attachmentLabel = attachmentEntry.originalFilename ?? attachmentEntry.sha256;
             if (!storage) {
               attachmentsSkippedNoStorage += 1;
@@ -6222,6 +6919,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 warnings.push(`Task ${manifestIssue.slug} attachment ${attachmentLabel} was imported at task scope because its comment reference could not be resolved.`);
               }
             }
+            const attachmentEffectKey = `task_attachment:${manifestIssue.slug}:${attachmentIndex}`;
+            await checkpointEffect({ phase: "started", key: attachmentEffectKey, kind: "task_attachment",
+              sourceId: attachmentEntry.sha256, sourceSlug: manifestIssue.slug });
             try {
               const stored = await storage.putFile({
                 companyId: targetCompany.id,
@@ -6243,12 +6943,25 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
                 createdByAgentId: null,
                 createdByUserId: actorUserId ?? null,
               });
+              await checkpointEffect({ phase: "completed", key: attachmentEffectKey, kind: "task_attachment",
+                sourceId: attachmentEntry.sha256, sourceSlug: manifestIssue.slug,
+                targetIds: [`${stored.provider}:${stored.objectKey}`] });
             } catch (error) {
-              warnings.push(`Task ${manifestIssue.slug} attachment ${attachmentLabel} could not be imported: ${error instanceof Error ? error.message : String(error)}`);
+              throw error;
             }
           }
+          const privacyProof = copySources.tasks.get(manifestIssue.slug);
+          if (!privacyProof) throw unprocessable("Task copy privacy provenance is unavailable");
           issueRows.push({
             id: issueId,
+            visibility: privacyProof.visibility,
+            privacyRootIssueId: privacyProof.visibility === "private"
+              ? privacyProof.source?.privacyRootIssueId ?? privacyProof.source?.id ?? issueId
+              : privacyProof.source?.privacyRootIssueId ?? issueId,
+            privacyParentIssueId: privacyProof.source?.privacyParentIssueId ?? null,
+            privacySources: privacyProof.sources,
+            responsibleUserId: privacyProof.source?.responsibleUserId ?? actorUserId ?? null,
+            createdByUserId: privacyProof.source?.createdByUserId ?? actorUserId ?? null,
             ref: manifestIssue.slug,
             projectId: projectId ?? null,
             projectWorkspaceId: projectWorkspaceId ?? null,
@@ -6330,6 +7043,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             issueRows.push(...orderedRows);
           }
         }
+        importProfile("issue-row-buffers-prepared");
 
         // Flush the buffered rows in dependency order: issues first (parents of
         // every other row), then comments (attachments may reference them), then
@@ -6337,24 +7051,49 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         // statements, turning what used to be one round-trip per row into a
         // handful per table. Empty buffers are skipped so an issues-free import
         // (e.g. routines only) issues no writes at all.
-        if (issueRows.length > 0) await issues.importIssues(targetCompany.id, issueRows);
-        // Imported issues are historical work, not new inbox items. Seed a
-        // per-user inbox archive for the importing board user so a large import
-        // (a real 1,418-task company shipped every task to the inbox) does not
-        // flood it: the inbox "mine" query hides archived issues, and genuine
-        // new activity still resurfaces them. Agent/system imports (no board
-        // user) have no inbox to protect, so the seeding is skipped.
-        if (actorUserId && issueRows.length > 0) {
-          await issues.archiveImportedInbox(
-            targetCompany.id,
-            issueRows.map((row) => row.id),
-            actorUserId,
-          );
+        const publications: ActivityPublication[] = [];
+        await cancellationCheckpoint();
+        await checkpointEffect({ phase: "started", key: "tasks:batch", kind: "task_batch" });
+        await db.transaction(async (tx) => {
+          await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission,
+            sourceReleaseReviewed, tx);
+          importProfile("write-source-admission-complete");
+          await lockIssuePrivacyTree(tx, targetCompanyId);
+          importProfile("write-transaction-locked");
+          if (issueRows.length > 0) {
+            await issues.importIssues(targetCompanyId, issueRows, tx, { actor: importActor,
+              privateWorkAdmission: options?.privateWorkAdmission, postCommitActivityPublications: publications });
+            importProfile("issues-imported");
+          }
+          // Imported issues are historical work, not new inbox items. Seed a
+          // per-user inbox archive for the importing board user so a large import
+          // (a real 1,418-task company shipped every task to the inbox) does not
+          // flood it: the inbox "mine" query hides archived issues, and genuine
+          // new activity still resurfaces them. Agent/system imports (no board
+          // user) have no inbox to protect, so the seeding is skipped.
+          if (actorUserId && issueRows.length > 0) {
+            await issues.archiveImportedInbox(
+              targetCompanyId,
+              issueRows.map((row) => row.id),
+              actorUserId,
+              new Date(),
+              tx,
+            );
+          }
+          if (commentRows.length > 0) await issues.addImportedComments(commentRows, tx);
+          if (documentRows.length > 0) await documentsSvc.createIssueDocumentsForImport(documentRows, tx);
+          if (workProductRows.length > 0) await workProductsSvc.createManyForImport(workProductRows, tx);
+          if (attachmentRows.length > 0) await issues.addImportedAttachments(attachmentRows, tx);
+          await checkpointEffect({ phase: "completed", key: "tasks:batch", kind: "task_batch",
+            mappings: issueRows.map(row => ({
+              sourceId: sourceManifest.issues.find(item => item.slug === row.ref)?.sourceIssueId ?? null,
+              sourceSlug: row.ref, targetIds: [row.id],
+            })) }, tx);
+        });
+        for (const publication of publications) {
+          try { publishActivity(publication); }
+          catch (err) { logger.warn({ err }, "Failed to publish committed imported task activity"); }
         }
-        if (commentRows.length > 0) await issues.addImportedComments(commentRows);
-        if (documentRows.length > 0) await documentsSvc.createIssueDocumentsForImport(documentRows);
-        if (workProductRows.length > 0) await workProductsSvc.createManyForImport(workProductRows);
-        if (attachmentRows.length > 0) await issues.addImportedAttachments(attachmentRows);
 
         if (blockedByBySlug.size > 0) {
           const acceptedAdjacency = new Map<string, string[]>();
@@ -6375,9 +7114,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           };
           const relationRows: Array<{ issueId: string; relatedIssueId: string }> = [];
           for (const [slug, blockerSlugs] of blockedByBySlug) {
+            await cancellationCheckpoint();
             const blockedIssueId = importedIssueIdBySlug.get(slug);
             if (!blockedIssueId) continue;
             for (const blockerSlug of blockerSlugs) {
+              await cancellationCheckpoint();
               const blockerIssueId = importedIssueIdBySlug.get(blockerSlug);
               if (!blockerIssueId) {
                 warnings.push(`Task ${slug} blocker ${blockerSlug} was skipped because that task was not imported.`);
@@ -6396,17 +7137,24 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           }
           if (relationRows.length > 0) {
             const relationCompanyId = targetCompany.id;
-            await db
-              .insert(issueRelations)
-              .values(relationRows.map((row) => ({
-                companyId: relationCompanyId,
-                issueId: row.issueId,
-                relatedIssueId: row.relatedIssueId,
-                type: "blocks" as const,
-                createdByAgentId: null,
-                createdByUserId: actorUserId ?? null,
-              })))
-              .onConflictDoNothing();
+            await cancellationCheckpoint();
+            await checkpointEffect({ phase: "started", key: "tasks:relations", kind: "task_relations" });
+            await db.transaction(async tx => {
+              await validateCopySources(sourceManifest, input.target, include, importActor,
+                options?.privateWorkAdmission, sourceReleaseReviewed, tx);
+              await lockIssuePrivacyTree(tx, relationCompanyId);
+              await tx.insert(issueRelations)
+                .values(relationRows.map((row) => ({
+                  companyId: relationCompanyId,
+                  issueId: row.issueId,
+                  relatedIssueId: row.relatedIssueId,
+                  type: "blocks" as const,
+                  createdByAgentId: null,
+                  createdByUserId: actorUserId ?? null,
+                })))
+                .onConflictDoNothing();
+              await checkpointEffect({ phase: "completed", key: "tasks:relations", kind: "task_relations" }, tx);
+            });
           }
         }
 
@@ -6441,9 +7189,6 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         warnings,
       };
     } catch (error) {
-      for (const secretId of createdImportSecretIds) {
-        await secrets.remove(secretId).catch(() => undefined);
-      }
       throw error;
     }
   }

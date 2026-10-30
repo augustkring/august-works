@@ -1,0 +1,88 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T21:06:12.265563+00:00",
+  "baseCommit": "9f70d36074c369a1f622659d2de938e2a6ddd246",
+  "patchBytes": 1718922,
+  "patchSha256": "06d867fc9eb438c30455103f9a24bca2c7181f60080f59f4af3de3bfad0c5eb9",
+  "archiveSha256": "f3446b0b97356829b97641e0e5591bdef2fb16656e71e68f5d9596fb6d52af54",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/db/src/migrations/0563_wise_yellow_claw.sql",
+      "bytes": 3167,
+      "sha256": "3a657358183cd499efba154831c969c49dda4d1f7df69a5d0236eb2358a4e57d"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0563_snapshot.json",
+      "bytes": 2785918,
+      "sha256": "2cda86e5db45b3f55304bcbfbb9afd3bd6cdb405b138de8ef0d3039c86567e71"
+    },
+    {
+      "path": "packages/db/src/schema/agent_model_migration_monitor_receipts.ts",
+      "bytes": 3030,
+      "sha256": "25b781862fb45a42ef09de0802c0665234c83d8d7373e98652661a0670110d85"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.test.ts",
+      "bytes": 2094,
+      "sha256": "d840e1f3dc02097ae59d5acd5ecf1af41cbccb1b92a9827cf0dde253e81b850e"
+    },
+    {
+      "path": "packages/shared/src/agent-model-migration-monitoring.ts",
+      "bytes": 2289,
+      "sha256": "625c3d11b0eb727393bd99943fb4d099d88eced84b8d23949b231badfb8bea83"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 11181,
+      "sha256": "6f4082377ae0735990d175b0650c3f081bcdb975b6f26227efbd2f0ae30c11d9"
+    },
+    {
+      "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
+      "bytes": 19902,
+      "sha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "bytes": 3921,
+      "sha256": "e65b91fedf0b9449069d3522eda2d9d03cac40292de50caef1d3527da989fb93"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.test.tsx",
+      "bytes": 12487,
+      "sha256": "de6cc08f7d329d113302dbd3910edb772698170df93481b37b24cc83f3526bba"
+    },
+    {
+      "path": "ui/src/components/AgentModelMigrationMonitor.tsx",
+      "bytes": 8464,
+      "sha256": "42e8b125e1b0fafa348dbde920ae530404a37be2e10721e3f081807ffda70c55"
+    }
+  ],
+  "privateUnappliedResourceDrafts": [
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-governance-current.sql",
+      "archive": "unapplied-resource-private-0-b-resource-governance-current.sql.gz",
+      "bytes": 18385,
+      "sha256": "bf635f94469708e979ef5e355310d5b0190f4a1aecb4544ed8fc33b5cbd6b15e",
+      "archiveSha256": "e488817976dc44a6cca1135cf09845cdbb800c114cfd206fc13e231da0960cfc",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/manifest.json",
+      "archive": "unapplied-resource-private-1-manifest.json.gz",
+      "bytes": 1737,
+      "sha256": "a9fa75fe4ac9dde92f586e13c24113c27bb98172b9feb39febce2ce2b24da076",
+      "archiveSha256": "61d8c4b12186b74d8834b855d8a59f57e339b7b6b03ae2a8a102596a7767cda8",
+      "status": "private_unapplied_recovery_only_non_authoritative"
+    }
+  ]
+}

@@ -1085,6 +1085,10 @@ export function workflowNodeDefinitions(): WorkflowNodeDefinitionDescriptor[] {
     );
 }
 
+export function workflowNodeDefinitionByType(nodeType: string) {
+  return REGISTRY_BY_TYPE.get(nodeType)?.descriptor ?? null;
+}
+
 export function workflowNodeRegistryService(db: Db) {
   async function validateNode(
     companyId: string,
@@ -1172,8 +1176,7 @@ export function workflowNodeRegistryService(db: Db) {
 
   return {
     list: workflowNodeDefinitions,
-    get: (nodeType: string) =>
-      REGISTRY_BY_TYPE.get(nodeType)?.descriptor ?? null,
+    get: workflowNodeDefinitionByType,
     validateDraftNode: (
       companyId: string,
       node: WorkflowGraphV1["nodes"][number],

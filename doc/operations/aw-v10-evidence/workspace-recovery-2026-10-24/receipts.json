@@ -1,0 +1,101 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "d87359fe59ae0216dad0d7fd60032ab3fff72229",
+  "meaning": "Original workspace branch-reconcile route preserves its verified HTTP actor into the original Task update. Actual native local-trusted Project admission replaces raw unknown Project fixtures; no Source flags or Task authorization denials were weakened. Before and actor-only intermediate failures are retained. Final native service and route suites78PASS and server compiler0. This is software Git/worktree recovery, not provider runtime stop/kill or full V10 qualification. Separate V7 package current run retains40 genuine Source/Readiness failures and does not claim completion.",
+  "logs": [
+    {
+      "name": "workspace-recovery-before",
+      "exitCode": 1,
+      "rawSha256": "36b57a98f4035f1417e0786c4bab89d3cf0cd5e50076e8e3a77a4a0f6c8ea9b1",
+      "sanitizedSha256": "6b62d130d510dc35ee56a04ab00306a2fdba912afcb671cec8244629f5b968ed",
+      "archiveSha256": "529126c3ad7c2682c53b585dfe1270f632267726cf50c96eed329076417489ce",
+      "redactions": {
+        "ansi": 150,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 4 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  4 failed | 3 passed | 59 skipped (66)",
+        "Duration  22.21s (transform 11.67s, setup 84ms, import 16.08s, tests 5.89s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "workspace-recovery-actor",
+      "exitCode": 1,
+      "rawSha256": "04c618be61cea81eddd3ad720f40684711ef9f54b95bf28b4864b5f44677be90",
+      "sanitizedSha256": "d7ade887f7b2a0cb14872eb8d9bf725c03635eab2acb24ecf18d31ae7ea307a2",
+      "archiveSha256": "0caa83a9d0a854754abd6ed1b325d25b7a43c98d1920a84bb8ef93cb9d564312",
+      "redactions": {
+        "ansi": 150,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 4 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  4 failed | 3 passed | 59 skipped (66)",
+        "Duration  20.53s (transform 10.07s, setup 69ms, import 13.97s, tests 6.38s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "workspace-recovery-final",
+      "exitCode": 0,
+      "rawSha256": "66237bbfd498ee2efa6cc9632c8c763efb11f9996c0b3f20348e0bd9bd2f76c6",
+      "sanitizedSha256": "e2bf6e9ee594c4d8d4f508df08789ae99a4883662d9e8037e3ebccc54ad9e128",
+      "archiveSha256": "db3c4ceff3c399b1f43329a5564cc2e3dd409485d9487cfc5d7b7c7d6838d823",
+      "redactions": {
+        "ansi": 726,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  78 passed (78)",
+        "Duration  42.33s (transform 12.59s, setup 130ms, import 20.97s, tests 20.97s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "workspace-recovery-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "v7-package-current",
+      "exitCode": 1,
+      "rawSha256": "87e168e06db0269aeec45f21b8eaec1d72dcf5cd37b50e59c4bb3c88bd74c2bf",
+      "sanitizedSha256": "87e168e06db0269aeec45f21b8eaec1d72dcf5cd37b50e59c4bb3c88bd74c2bf",
+      "archiveSha256": "d3a1b2339545a7c9702e5137eff0321964993c84e3edbc660d52b73fc4ba57bd",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 40 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  40 failed | 75 passed (115)",
+        "Duration  65.33s (transform 13.03s, setup 75ms, import 17.95s, tests 47.12s, environment 0ms)"
+      ]
+    }
+  ]
+}

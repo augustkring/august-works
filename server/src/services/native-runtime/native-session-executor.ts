@@ -11,17 +11,32 @@ import { createLocalNativeQuestionBridge } from "./local-native-question-bridge.
 import { readVerifiedRemoteWorkspaceFile } from "./remote-deliverable-file.js";
 import { copyBackCodexAuth } from "@paperclipai/adapter-codex-local/server";
 import { nativeCompletionFeedback } from "./native-completion-feedback.js";
+import { V7_COMPLETION_SCHEMA } from "../orchestration/orchestration-contracts.js";
+import { NATIVE_COMPLETION_CONTRACT_SCHEMA } from "./completion-contracts.js";
 import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopIntent } from "../acknowledged-native-stop.js";
 import { stoppedCodexTurnIsTextOnly } from "./stopped-codex-turn.js";
 import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
 import { readNativeLocalProcessStop, PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
+import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
+  REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
+  REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
+  REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT } from "./remote-runner-identity.js";
+export { REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT };
 import { remoteLeaseCleanupScope } from "../remote-execution-termination.js";
+import {
+  createRemoteRuntimeAssetLocator,
+  isRemoteRuntimeAssetLocator,
+  managedOpenCodeRuntimeDirectory,
+  remoteRuntimeAssetLocatorDigest,
+  type RemoteRuntimeAssetLocator,
+} from "./runtime-asset-retention.js";
 import { resolveConnectorAssignments, isConnectorSkill } from "../connector-runtime.js";
 import {
   boundedExecutionCleanup,
   EXECUTION_CONTROL_DEADLINE_MS,
 } from "../execution-control-deadline.js";
 import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
@@ -50,7 +65,11 @@ import type {
   AdapterExecutionResult,
   AdapterRuntimeEvent,
 } from "../../adapters/index.js";
-import type { NativeFinalizationResult } from "@paperclipai/shared";
+import { conversationModelBindingSchema, nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
+  type NativeFinalizationResult, type NativePayloadSourceInput, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
+import type { NativeBootstrapSourceClosure, NativeConsumedSourceComponent, NativeModelOutputCapture, NativePayloadSourceSet } from "./native-execution-input.js";
+import { exactNativeInteractionSourceInputs } from "./native-execution-input.js";
+import { isCurrentWorkerConversationRoot } from "./worker-conversation-root.js";
 import type {
   HarnessRuntimeRequestResolution,
   NativeExecutionInput,
@@ -70,9 +89,15 @@ import {
   completeTerminatedLocalNativeSessionCleanup,
   acpxRuntimeSessionDirectoryName,
   createNativeSessionBackend,
+  nativeMcpLaunchBinding,
   createRunnerdCodexTransport,
   executeNativeSession,
+  nativeSystemInstructions,
+  nativeTaskConstraints,
+  createCodexTaskEnvelope,
+  codexSemanticToolSpecs,
   applyNativeSessionGoalControl,
+  buildNativeModelEnvelope,
   inspectWarmRunTransition,
   parseNativeExecutionInput,
   parsePaperclipQuestionSet,
@@ -109,19 +134,41 @@ import {
 import {
   agentWakeupRequests,
   documentRevisions,
+  documents,
   environmentLeases,
   heartbeatRunEvents,
   heartbeatRuns,
+  completionContracts,
+  executionWorkspaces,
+  assets,
+  issueAttachments,
+  issueComments,
   issueDocuments,
   issueThreadInteractions,
   issues,
   nativeRunFinalizations,
   nativeRunResults,
+  memoryRecords,
+  orchestrationPlans,
+  orchestrationModelReservations,
+  orchestrationWorkerAttempts,
+  toolInvocations,
 } from "@paperclipai/db";
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
-import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
+import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeManagedConsumedSourceSetCurrent, assertNativeMemorySourceInputCurrent,
+  nativeMemoryReviewTransitionStateHash, assertNativeProjectSourceCurrent,
+  assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
+import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
+import { assertNativeManagedProjectCreateReceiptCurrentInTransaction, type NativeProjectCreateReceipt } from "../native-project-output.js";
+import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource,
+  type NativeInputToolResultSource, type NativeProjectToolResultSource,
+  type NativeManagedProjectCreateCapture } from "./paperclip-runner-tool-authority.js";
 import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
@@ -133,6 +180,7 @@ import {
 import {
   renderNativeRunnerStagedAttachmentPrompt,
   stageNativeRunnerWakeAttachments,
+  type NativeRunnerAttachmentSourceCapture,
 } from "./native-runner-file-handoff.js";
 import { nativeToolContractFingerprintForTarget } from "./native-session-resume.js";
 import { verifyRetainedMaintenanceNoLaunch } from "./native-maintenance-no-launch.js";
@@ -143,7 +191,8 @@ import { reportRunFailure } from "../run-failure-report.js";
 import { persistActivity, publishActivity } from "../activity-log.js";
 import { commitNativeStatusDecision } from "./status-decision-committer.js";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
-import { documentService } from "../documents.js";
+import { assertRuntimeStorageDirectories } from "../runtime-skill-cache.js";
+import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { issueService } from "../issues.js";
 import {
@@ -209,6 +258,57 @@ export class NativeControllerDetachedForRestartError extends Error {
 }
 
 const activeNativeSessions = new Map<string, ActiveNativeSession>();
+type NativeCancelOriginTestFact = {
+  stage: "cancel_native_session" | "lease_renewal_failed" | "startup_stop_requested" | "startup_gate" | "active_cancel_requested";
+  reason: "analytical_source_access_lost" | "execution_lease_lost" | "stop_during_startup" | "run_stopped_during_startup" | "other" | null;
+  runStatus?: "running" | "cancelled" | "failed" | "interrupted" | "succeeded" | "timed_out" | "other" | "missing";
+  startupCancellationPresent?: boolean;
+  cancellationScope?: "run" | "other" | "absent";
+  cancellationDispatchState?: "pending" | "acknowledged" | "other" | "absent";
+  frames: Array<{ functionName: string | null; sourceFile: string; line: number }>;
+};
+const nativeCancelOriginTestFacts = new Map<string, NativeCancelOriginTestFact[]>();
+
+function nativeCancelOriginFrames(): NativeCancelOriginTestFact["frames"] {
+  const stack = new Error().stack?.split("\n").slice(2) ?? [];
+  const frames: NativeCancelOriginTestFact["frames"] = [];
+  for (const line of stack) {
+    const match = /^\s*at (?:(.*?) \()?(.+?):(\d+):\d+\)?$/.exec(line);
+    if (!match) continue;
+    const sourceFile = match[2]!.split(/[\\/]/).at(-1)!;
+    const row = Number(match[3]);
+    if (!/^[-\w.]+\.(?:ts|js|mjs|cjs)$/.test(sourceFile) || !Number.isSafeInteger(row)) continue;
+    frames.push({ functionName: match[1] || null, sourceFile, line: row });
+    if (frames.length >= 8) break;
+  }
+  return frames;
+}
+
+function recordNativeCancelOriginTestFact(runId: string, fact: Omit<NativeCancelOriginTestFact, "frames">) {
+  if (process.env.PAPERCLIP_NATIVE_CANCEL_ORIGIN_TEST_DIAGNOSTICS !== "1") return;
+  const values = nativeCancelOriginTestFacts.get(runId) ?? [];
+  if (values.length >= 12) return;
+  values.push({ ...fact, frames: nativeCancelOriginFrames() });
+  nativeCancelOriginTestFacts.set(runId, values);
+  while (nativeCancelOriginTestFacts.size > 64) {
+    const oldest = nativeCancelOriginTestFacts.keys().next().value;
+    if (!oldest) break;
+    nativeCancelOriginTestFacts.delete(oldest);
+  }
+}
+
+/** Bounded, opt-in fixture evidence; contains enum facts and source frames only. */
+export function nativeCancelOriginTestFactsForRun(runId: string): NativeCancelOriginTestFact[] {
+  return (nativeCancelOriginTestFacts.get(runId) ?? []).map(fact => ({ ...fact, frames: [...fact.frames] }));
+}
+
+function cancellationReasonClass(reason: string): NativeCancelOriginTestFact["reason"] {
+  if (reason === "native analytical source access lost" || reason === "Analytical source access lost") return "analytical_source_access_lost";
+  if (reason === "native session execution lease lost") return "execution_lease_lost";
+  if (reason === "Stop requested during native startup") return "stop_during_startup";
+  if (reason === "Run stopped during native session startup") return "run_stopped_during_startup";
+  return "other";
+}
 // Shutdown can race provider startup before onSession publishes its handle.
 // Retain the request for the remainder of this controller's lifetime so that
 // the late publication detaches before it can dispatch another turn.
@@ -394,6 +494,7 @@ type WarmNativeSession = {
   ownerToken: symbol;
   configDigest: string;
   companyId: string;
+  runId: string;
   environmentId: string | null;
   busy: boolean;
   closeOnReleaseReason?: string;
@@ -427,6 +528,15 @@ export async function closeWarmNativeSessionsForEnvironment(input: {
   return closeIdleWarmNativeSessions(input);
 }
 
+/** Source erasure closes the exact run-owned warm provider before its data home is removed. */
+export async function closeWarmNativeSessionsForRun(input: {
+  companyId: string;
+  runId: string;
+  reason: string;
+}): Promise<{ closed: number; busy: number; failed: number }> {
+  return closeIdleWarmNativeSessions({ ...input, closeBusyOnRelease: true });
+}
+
 /** Suspend idle owners and persist their remote backup before a controller
  * exits. Active turns keep their separate authenticated restart handoff. */
 export async function closeIdleWarmNativeSessionsForRestart(): Promise<{
@@ -440,6 +550,8 @@ export async function closeIdleWarmNativeSessionsForRestart(): Promise<{
 
 async function closeIdleWarmNativeSessions(input: {
   environmentId?: string;
+  companyId?: string;
+  runId?: string;
   reason: string;
   closeBusyOnRelease?: boolean;
 }): Promise<{ closed: number; busy: number; failed: number }> {
@@ -450,6 +562,8 @@ async function closeIdleWarmNativeSessions(input: {
     if (input.environmentId !== undefined && entry.environmentId !== input.environmentId) {
       continue;
     }
+    if ((input.companyId !== undefined && entry.companyId !== input.companyId) ||
+      (input.runId !== undefined && entry.runId !== input.runId)) continue;
     if (entry.busy || executingRunnerdSessionScopes.has(sessionId)) {
       // A busy turn can complete while another idle session is checkpointing.
       // Fence that entry now so its eventual release cannot leave a new idle
@@ -1418,8 +1532,16 @@ class SessionToolAuthorityEpoch {
   readonly runId: string;
   #authority: PaperclipRunnerToolAuthority;
   #revoked = false;
+  #managedToolCallChain: Promise<void> = Promise.resolve();
 
-  constructor(runId: string, authority: PaperclipRunnerToolAuthority, private readonly toolTrace?: NativeToolTrace) {
+  constructor(runId: string, authority: PaperclipRunnerToolAuthority, private readonly toolTrace?: NativeToolTrace,
+    private readonly onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>,
+    private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
+    private readonly onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>,
+    private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>,
+    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>,
+    private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null },
+    private readonly serializeManagedOperation?: <T>(operation: () => Promise<T>) => Promise<T>) {
     this.runId = runId;
     this.#authority = authority;
   }
@@ -1439,12 +1561,156 @@ class SessionToolAuthorityEpoch {
     return this.#authority.definitions();
   }
 
-  async execute(call: Parameters<PaperclipRunnerToolAuthority["execute"]>[0]) {
+  async execute(call: Parameters<PaperclipRunnerToolAuthority["execute"]>[0] & { turnId?: string }) {
     this.#assertCurrent();
-    return this.toolTrace
-      ? await this.toolTrace.execute(call, () => this.#authority.execute(call))
-      : await this.#authority.execute(call);
+    const execute = async () => {
+      this.#assertCurrent();
+      const toolResultDiagnostics = process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1";
+      const reportContextToolFailure = (event: string, error: unknown) => {
+        if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS !== "1" || call.tool !== "get_task_context") return;
+        const diagnostic = error && typeof error === "object"
+          ? error as Error & { code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown } } : null;
+        const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,100}$/i.test(value) ? value : null;
+        const frames = diagnostic?.stack?.split("\n").slice(1).flatMap(frame => {
+          const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+          return match ? [`${match[1]}:${match[2]}`] : [];
+        }).slice(0, 5) ?? [];
+        console.error(event, JSON.stringify({ name: diagnostic?.name ?? "UnknownError",
+          code: safeCode(diagnostic?.code), causeCode: safeCode(diagnostic?.cause?.code),
+          status: typeof diagnostic?.status === "number" ? diagnostic.status :
+            typeof diagnostic?.statusCode === "number" ? diagnostic.statusCode : null, frames }));
+      };
+      const reportCreateTaskFailure = (event: string, error: unknown) => {
+        if (!toolResultDiagnostics || !["create_task", "create_project"].includes(call.tool)) return;
+        const diagnostic = error && typeof error === "object"
+          ? error as Error & { code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown; constraint_name?: unknown } } : null;
+        const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,100}$/i.test(value) ? value : null;
+        const frames = diagnostic?.stack?.split("\n").slice(1).flatMap(frame => {
+          const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+          return match ? [`${match[1]}:${match[2]}`] : [];
+        }).slice(0, 5) ?? [];
+        console.error(event, JSON.stringify({ name: diagnostic?.name ?? "UnknownError",
+          code: safeCode(diagnostic?.code), causeCode: safeCode(diagnostic?.cause?.code),
+          causeConstraint: safeCode(diagnostic?.cause?.constraint_name),
+          status: typeof diagnostic?.status === "number" ? diagnostic.status :
+            typeof diagnostic?.statusCode === "number" ? diagnostic.statusCode : null, frames }));
+      };
+      if (toolResultDiagnostics && call.tool === "create_task")
+        console.error("managed_create_task_callback_test_facts", JSON.stringify({
+          turnIdPresent: typeof call.turnId === "string" && call.turnId.length > 0,
+          nativeToolCallCallbackPresent: typeof this.onNativeToolCall === "function",
+          managedResultCallbackPresent: typeof this.onManagedOpenCodeToolResult === "function",
+        }));
+      const argumentsHash = nativeSha256(call.arguments);
+      if (this.onManagedOpenCodeToolResult && (call.tool === "call_api" || call.tool === "create_project" || call.tool === "get_task_context" ||
+        call.tool === "get_task_history" || call.tool === "read_chat_attachment" || call.tool === "query_business_metric") && !call.turnId)
+        throw new Error("managed_opencode_tool_call_source_binding_invalid");
+      if (call.turnId) {
+        try {
+          await this.onNativeToolCall?.({ tool: call.tool, callId: call.callId,
+            turnId: call.turnId, argumentsHash, arguments: call.arguments });
+        } catch (error) {
+          reportCreateTaskFailure("managed_create_task_dispatch_failure_test_facts", error);
+          throw error;
+        }
+      }
+      const projectReadCapture: { value: NativeProjectToolResultSource | null } = { value: null };
+      const projectCreateCapture: { value: NativeManagedProjectCreateCapture | null } = { value: null };
+      let result: unknown;
+      try {
+        result = await this.#authority.execute(call, {
+          onDocumentRead: this.onDocumentRead,
+          onProjectToolResult: async source => {
+            projectReadCapture.value = source;
+            await this.onProjectToolResult?.(source);
+          },
+          onNativeInputToolResult: this.onNativeInputToolResult,
+          onManagedProjectCreateToolResult: async capture => { projectCreateCapture.value = capture; },
+          ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
+        });
+      } catch (error) {
+        reportContextToolFailure("managed_get_task_context_authority_failure_test_facts", error);
+        reportCreateTaskFailure("managed_create_task_authority_failure_test_facts", error);
+        throw error;
+      }
+      if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" ||
+        call.tool === "create_task" || call.tool === "self_remember" || call.tool === "read_context" ||
+        call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment" || call.tool === "query_business_metric")) {
+        if (toolResultDiagnostics && call.tool === "create_task")
+          console.error("managed_create_task_result_callback_invoked", JSON.stringify({ turnIdPresent: true }));
+        try {
+          await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash, result,
+            ...(call.tool === "read_context" && this.managedContextReadCapture?.value ? { contextRead: this.managedContextReadCapture.value } : {}) });
+        } catch (error) {
+          reportContextToolFailure("managed_get_task_context_result_capture_failure_test_facts", error);
+          reportCreateTaskFailure("managed_create_task_result_callback_failure_test_facts", error);
+          throw error;
+        }
+      }
+      if (call.turnId && call.tool === "call_api" && projectReadCapture.value?.source)
+        await this.onManagedOpenCodeToolResult?.({ tool: "call_api", callId: call.callId, turnId: call.turnId,
+          argumentsHash, result, projectRead: projectReadCapture.value });
+      if (call.turnId && call.tool === "create_project" && projectCreateCapture.value)
+        try {
+          await this.onManagedOpenCodeToolResult?.({ tool: "create_project", callId: call.callId, turnId: call.turnId,
+            argumentsHash, result, projectCreate: projectCreateCapture.value });
+        } catch (error) {
+          reportCreateTaskFailure("managed_create_project_result_callback_failure_test_facts", error);
+          throw error;
+        }
+      else if (call.turnId && call.tool === "create_project" && this.onManagedOpenCodeToolResult)
+        throw new Error("managed_opencode_tool_result_binding_invalid");
+      return result;
+    };
+    const run = async () => this.toolTrace ? this.toolTrace.execute(call, execute) : execute();
+    let result: unknown;
+    if (this.onManagedOpenCodeToolResult) {
+      // OpenCode may dispatch parallel tool calls from one assistant message.
+      // The source capture is mutable server state on this authority; serialize
+      // the entire verify/effect/receipt path so one call cannot inherit the
+      // next call's exact provider arguments or source set.
+      if (this.serializeManagedOperation) result = await this.serializeManagedOperation(run);
+      else {
+        const pending = this.#managedToolCallChain.then(run, run);
+        this.#managedToolCallChain = pending.then(() => undefined, () => undefined);
+        result = await pending;
+      }
+    } else result = await run();
+    if (call.tool === "read_document") this.#assertCurrent();
+    return result;
   }
+}
+
+/** Runner diagnostics are best-effort output, but a failed current-source
+ * check must still fence tools and stop the session. The onLog owner also
+ * records the durable source-loss cancellation; this is the in-memory runner
+ * stop needed to prevent another provider action while that settles. */
+export function createRunnerDiagnosticLogSink(input: {
+  runId: string;
+  onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
+  revokeToolAuthority: () => void;
+  cancelSession?: (runId: string, reason: string) => Promise<unknown>;
+}) {
+  let cancellation: Promise<void> | null = null;
+  let failedClosed = false;
+  const failClosed = () => {
+    if (failedClosed) return;
+    failedClosed = true;
+    input.revokeToolAuthority();
+    if (!cancellation) {
+      cancellation = Promise.resolve()
+        .then(() => (input.cancelSession ?? cancelNativeSession)(input.runId, "Runner diagnostic output authorization failed"))
+        .then(() => undefined, () => undefined);
+    }
+  };
+  return (chunk: string) => {
+    try {
+      const delivery = input.onLog?.("stderr", chunk);
+      if (delivery) void Promise.resolve(delivery).catch(failClosed);
+    } catch {
+      failClosed();
+    }
+  };
 }
 
 const sessionToolAuthorityEpochs = new Map<string, SessionToolAuthorityEpoch>();
@@ -1456,6 +1722,78 @@ function nativeSessionKey(execution: NativeExecutionInput): string {
     execution.session.normalizedSessionId ??
     `session-${execution.binding.runId}`
   );
+}
+
+function managedOpenCodeRuntimeDataIsolated(execution: NativeExecutionInput, environment: NodeJS.ProcessEnv) {
+  return execution.provider.kind === "opencode" &&
+    typeof environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string" &&
+    environment.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN.trim().length > 0;
+}
+
+async function persistRemoteNativeRuntimeAssetLocator(input: {
+  db: Db;
+  locator: RemoteRuntimeAssetLocator;
+  normalizedSessionId: string;
+  runnerInstanceId: string;
+  remoteCwd: string;
+}) {
+  await input.db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db;
+    const [run] = await tx.select({
+      id: heartbeatRuns.id,
+      companyId: heartbeatRuns.companyId,
+      status: heartbeatRuns.status,
+      runtimeMode: heartbeatRuns.runtimeMode,
+      driverKind: heartbeatRuns.driverKind,
+      nativeSessionId: heartbeatRuns.nativeSessionId,
+      runnerInstanceId: heartbeatRuns.runnerInstanceId,
+      runnerProfileJson: heartbeatRuns.runnerProfileJson,
+    }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.locator.companyId),
+      eq(heartbeatRuns.id, input.locator.runId),
+      eq(heartbeatRuns.status, "running"),
+      eq(heartbeatRuns.runtimeMode, "native"),
+      eq(heartbeatRuns.driverKind, "opencode_server"),
+    )).for("update");
+    const [lease] = await tx.select({
+      id: environmentLeases.id,
+      environmentId: environmentLeases.environmentId,
+      heartbeatRunId: environmentLeases.heartbeatRunId,
+      provider: environmentLeases.provider,
+      providerLeaseId: environmentLeases.providerLeaseId,
+      status: environmentLeases.status,
+      expiresAt: environmentLeases.expiresAt,
+      metadata: environmentLeases.metadata,
+    }).from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, input.locator.companyId),
+      eq(environmentLeases.id, input.locator.environmentLeaseId),
+    )).for("update");
+    const metadata = lease?.metadata && typeof lease.metadata === "object" && !Array.isArray(lease.metadata)
+      ? lease.metadata as Record<string, unknown> : {};
+    const profile = record(run?.runnerProfileJson);
+    const previous = profile.nativeRemoteRuntimeAssetLocator;
+    if (!run || run.nativeSessionId !== input.normalizedSessionId ||
+      run.runnerInstanceId !== input.runnerInstanceId ||
+      !lease || lease.heartbeatRunId !== run.id || lease.environmentId !== input.locator.environmentId ||
+      lease.provider !== input.locator.provider || lease.providerLeaseId !== input.locator.providerLeaseId ||
+      lease.status !== "active" || !lease.expiresAt || lease.expiresAt <= new Date() ||
+      typeof metadata.remoteCwd !== "string" || metadata.remoteCwd.trim() !== input.remoteCwd ||
+      !isRemoteRuntimeAssetLocator(input.locator, { companyId: run?.companyId ?? "", runId: run?.id ?? "" }) ||
+      (previous !== undefined && (!isRemoteRuntimeAssetLocator(previous, { companyId: run?.companyId ?? "", runId: run?.id ?? "" }) ||
+        remoteRuntimeAssetLocatorDigest(previous) !== remoteRuntimeAssetLocatorDigest(input.locator)))) {
+      throw new Error("native_remote_runtime_asset_locator_binding_invalid");
+    }
+    if (previous === undefined) {
+      await tx.update(heartbeatRuns).set({
+        runnerProfileJson: { ...profile, nativeRemoteRuntimeAssetLocator: input.locator },
+        updatedAt: new Date(),
+      }).where(and(
+        eq(heartbeatRuns.companyId, run.companyId),
+        eq(heartbeatRuns.id, run.id),
+        eq(heartbeatRuns.status, "running"),
+      ));
+    }
+  });
 }
 
 function nativeSessionWorkspaceScope(execution: NativeExecutionInput) {
@@ -4503,6 +4841,7 @@ async function verifyWarmTransitionRestart(input: {
 async function migrateRunnerdStateRootForExecution(input: {
   db: Db;
   execution: NativeExecutionInput;
+  conversationMode?: boolean;
   allowVerifiedBackup: boolean;
   allowRetainedWarmRunner: boolean;
   allowLocalRecovery: boolean;
@@ -4570,6 +4909,8 @@ async function migrateRunnerdStateRootForExecution(input: {
       await verifyRemoteRunnerReattachment({
         claim: input.restartRecovery, target: input.runnerExecutionTarget, identity,
         runId: input.execution.binding.runId, normalizedSessionId: nativeSessionKey(input.execution),
+        nativeHarnessState: input.conversationMode === true && input.execution.provider.kind === "opencode" &&
+          input.runnerExecutionTarget?.kind === "remote" && input.runnerExecutionTarget.transport === "sandbox",
       });
       return;
     }
@@ -5156,7 +5497,9 @@ function nativeSessionConfigDigest(
 function hasIdleWarmNativeSessionOwner(input: {
   execution: NativeExecutionInput;
   runnerExecutionTarget?: AdapterExecutionTarget | null;
+  runnerEnvironment?: NodeJS.ProcessEnv;
 }): boolean {
+  if (managedOpenCodeRuntimeDataIsolated(input.execution, input.runnerEnvironment ?? process.env)) return false;
   if (input.execution.session.lifecyclePolicy.mode !== "warm") return false;
   const entry = warmNativeSessions.get(nativeSessionScopeKey(input.execution));
   if (!entry || entry.busy) return false;
@@ -6148,6 +6491,57 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
+/** Unknown same-run Native reads are monotonic: a later qualified read cannot
+ * repair an earlier result whose owner roots were unavailable. Check these
+ * persisted observations at every managed output-capture boundary. */
+export function assertNativeRunReadSourceHistoryQualified(profile: Record<string, unknown>, input: {
+  runId: string; responsibleUserId: string | null;
+}): void {
+  const deny = () => { throw new Error("native_read_result_source_history_unavailable"); };
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const rawCaptures = profile.nativeToolResultSourceCaptures;
+  if (rawCaptures !== undefined && !Array.isArray(rawCaptures)) deny();
+  for (const raw of (rawCaptures as unknown[] | undefined) ?? []) {
+    const capture = record(raw);
+    const isReadTool = ["get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(String(capture.tool));
+    if (isReadTool && capture.nativeReadResult !== true) deny();
+    if (capture.nativeReadResult !== true) continue;
+    const sourceResult = nativePayloadSourceInputSchema.safeParse(capture.source);
+    const sourceSetValue = record(capture.sourceSet);
+    const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue.policy);
+    const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue.inputs);
+    const capturedInputs = nativePayloadSourceInputSchema.array().safeParse(capture.sourceInputs);
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) || !receipt.success || !sourceResult.success ||
+      sourceResult.data.kind !== "tool_result" || sourceResult.data.runId !== input.runId || sourceResult.data.invocationId !== null ||
+      sourceResult.data.callId !== capture.callId || sourceResult.data.toolName !== capture.tool ||
+      sourceResult.data.contentHash !== capture.resultDigest || !sourcePolicy.success || !sourceInputs.success ||
+      !capturedInputs.success || !isDeepStrictEqual(capturedInputs.data, sourceInputs.data) ||
+      !["get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(String(capture.tool)) ||
+      typeof capture.turnId !== "string" || !/^[0-9a-f]{64}$/.test(String(capture.argumentsHash)) ||
+      !receipt.data.additionalInputs.some(entry => entry.responsibleUserId === input.responsibleUserId &&
+        isDeepStrictEqual(entry.policy, sourcePolicy.data) &&
+        isDeepStrictEqual(entry.inputs, [sourceResult.data, ...sourceInputs.data]))) deny();
+  }
+  const rawProcedureReads = profile.nativeRuntimeProcedureReadObservations;
+  if (rawProcedureReads !== undefined && !Array.isArray(rawProcedureReads)) deny();
+  const procedureObservationIds = new Set<string>();
+  for (const raw of (rawProcedureReads as unknown[] | undefined) ?? []) {
+    const observation = record(raw);
+    const source = nativePayloadSourceInputSchema.safeParse(observation.source);
+    const exactReceiptCopy = receipt.success && source.success && receipt.data.additionalInputs.some(entry =>
+      entry.responsibleUserId === input.responsibleUserId && entry.inputs.some(value => isDeepStrictEqual(value, source.data)));
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) ||
+      Object.keys(observation).some(key => !["observationId", "kind", "resultDigest", "sourceQualified", "source"].includes(key)) ||
+      observation.sourceQualified !== true ||
+      typeof observation.observationId !== "string" || !/^[0-9a-f-]{36}$/i.test(observation.observationId) ||
+      procedureObservationIds.has(observation.observationId) ||
+      typeof observation.resultDigest !== "string" || !/^[0-9a-f]{64}$/.test(observation.resultDigest) ||
+      (observation.kind !== "skill_version" && observation.kind !== "playbook_revision") ||
+      !source.success || source.data.kind !== observation.kind || !exactReceiptCopy) deny();
+    procedureObservationIds.add(observation.observationId as string);
+  }
+}
+
 type FirstAgentEventKind =
   | "reasoning"
   | "agentMessage"
@@ -6467,6 +6861,10 @@ export async function cancelNativeSession(
       auditId: string | null;
     }
 > {
+  recordNativeCancelOriginTestFact(runId, {
+    stage: "cancel_native_session",
+    reason: cancellationReasonClass(reason),
+  });
   const runStop = (options?.scope ?? "run") === "run";
   let decision: NativeStatusDecision | null = null;
   let decisionContext: {
@@ -7031,8 +7429,8 @@ export async function renewNativeSessionExecutionLease(input: {
   const [updated] = await input.db
     .update(nativeRunFinalizations)
     .set({
-      leaseExpiresAt: sql`now() + (${leaseTtlMs} * interval '1 millisecond')`,
-      updatedAt: sql`now()`,
+      leaseExpiresAt: sql`clock_timestamp() + (${leaseTtlMs} * interval '1 millisecond')`,
+      updatedAt: sql`clock_timestamp()`,
     })
     .where(
       and(
@@ -7047,11 +7445,1809 @@ export async function renewNativeSessionExecutionLease(input: {
           nativeRunFinalizations.controllerProcessStartedAt,
           controller.processStartedAt,
         ),
-        gt(nativeRunFinalizations.leaseExpiresAt, sql`now()`),
+        gt(nativeRunFinalizations.leaseExpiresAt, sql`clock_timestamp()`),
       ),
     )
     .returning({ runId: nativeRunFinalizations.runId });
   if (!updated) throw new Error("native_session_lease_lost");
+}
+
+type NativeAttachmentStageReceipt = {
+  eventSeq: number;
+  attempt: number;
+  responsibleUserId: string | null;
+  baseTaskDigest: string;
+  finalTaskDigest: string;
+  sourceCaptureHash: string;
+  descriptorHash: string;
+  stageHash: string;
+  sourceCaptures: readonly NativeRunnerAttachmentSourceCapture[];
+};
+
+function nativeTaskDigest(task: unknown): string {
+  // The persisted profile is JSONB, which does not preserve JavaScript key
+  // insertion order. Use the same canonical encoding in the stage stamp and
+  // its PostgreSQL verifier.
+  return nativeSha256(task);
+}
+
+function nativeAttachmentStageRecord(profile: Record<string, unknown>, run: typeof heartbeatRuns.$inferSelect,
+  attachmentInputs: readonly Extract<NativePayloadSourceInput, { kind: "attachment" }>[],
+  identity?: { eventSeq: number; attempt: number }): NativeAttachmentStageReceipt | null | undefined {
+  const captures = Array.isArray(profile.nativeAttachmentStageSources) ? profile.nativeAttachmentStageSources : [];
+  if (!attachmentInputs.length) return captures.length === 0 ? undefined : null;
+  if (captures.length !== 1) return null;
+  const raw = record(captures[0]);
+  if (identity && (raw.eventSeq !== identity.eventSeq || raw.attempt !== identity.attempt) ||
+    (raw.responsibleUserId ?? null) !== (run.responsibleUserId ?? null) || !Array.isArray(raw.sourceCaptures)) return null;
+  const sourceCaptures = raw.sourceCaptures as unknown[];
+  if (sourceCaptures.some(capture => !capture || typeof capture !== "object" || Array.isArray(capture) ||
+    !record(capture).input || typeof record(capture).input !== "object" || Array.isArray(record(capture).input))) return null;
+  const typedSourceCaptures = sourceCaptures as NativeRunnerAttachmentSourceCapture[];
+  const sourceInputs = typedSourceCaptures.map(capture => capture.input);
+  if (!isDeepStrictEqual(sourceInputs, attachmentInputs) || typedSourceCaptures.some(capture =>
+    capture.input.kind !== "attachment" || capture.input.disposition !== "delivered" ||
+    !capture.input.assetId || !capture.input.sha256 || capture.input.byteSize === null)) return null;
+  let execution: NativeExecutionInput;
+  try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { return null; }
+  const baseTaskDigest = nativeTaskDigest(execution.task);
+  const finalTaskDigest = typeof raw.finalTaskDigest === "string" ? raw.finalTaskDigest : "";
+  const sourceCaptureHash = typeof raw.sourceCaptureHash === "string" ? raw.sourceCaptureHash : "";
+  const descriptorHash = typeof raw.descriptorHash === "string" ? raw.descriptorHash : "";
+  const stageHash = typeof raw.stageHash === "string" ? raw.stageHash : "";
+  if (!Number.isSafeInteger(raw.eventSeq) || !Number.isSafeInteger(raw.attempt) ||
+    !/^[0-9a-f]{64}$/.test(finalTaskDigest) ||
+    raw.baseTaskDigest !== baseTaskDigest || sourceCaptureHash !== nativeSha256(sourceCaptures) ||
+    !/^[0-9a-f]{64}$/.test(descriptorHash) ||
+    stageHash !== nativeSha256({ eventSeq: raw.eventSeq, attempt: raw.attempt,
+      responsibleUserId: raw.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest, sourceCaptureHash, descriptorHash })) return null;
+  return { eventSeq: raw.eventSeq as number, attempt: raw.attempt as number,
+    responsibleUserId: (raw.responsibleUserId ?? null) as string | null, baseTaskDigest, finalTaskDigest,
+    sourceCaptureHash, descriptorHash, stageHash, sourceCaptures: typedSourceCaptures };
+}
+
+function nativeAttachmentStageReceipt(profile: Record<string, unknown>, run: typeof heartbeatRuns.$inferSelect,
+  closure: NativeBootstrapSourceClosure | null | undefined,
+  identity: { eventSeq: number; attempt: number }): NativeAttachmentStageReceipt | null | undefined {
+  const attachmentInputs = closure?.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "attachment" }> =>
+    source.kind === "attachment") ?? [];
+  const stage = nativeAttachmentStageRecord(profile, run, attachmentInputs, identity);
+  if (!stage || !attachmentInputs.length) return stage;
+  return closure?.taskEnvelopeDigest === stage.finalTaskDigest ? stage : null;
+}
+
+function nativeAttachmentStageAuthorityBinding(profile: Record<string, unknown>, run: typeof heartbeatRuns.$inferSelect,
+  bootstrap: { inputs: NativePayloadSourceInput[] }, identity: { eventSeq: number; attempt: number }): { valid: boolean; stageHash: string | null } {
+  const attachmentInputs = bootstrap.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "attachment" }> =>
+    source.kind === "attachment");
+  const stage = nativeAttachmentStageRecord(profile, run, attachmentInputs, identity);
+  if (!attachmentInputs.length) return { valid: stage === undefined, stageHash: null };
+  if (!stage) return { valid: false, stageHash: null };
+  const dispatches = Array.isArray(profile.nativeModelInputDispatchIntents)
+    ? profile.nativeModelInputDispatchIntents.map(record) : [];
+  const matchingDispatches = dispatches.filter(dispatch => dispatch.eventSeq === identity.eventSeq && dispatch.attempt === identity.attempt &&
+    (dispatch.responsibleUserId ?? null) === stage.responsibleUserId);
+  return { valid: matchingDispatches.length > 0, stageHash: matchingDispatches.length > 0 ? stage.stageHash : null };
+}
+
+async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+  run: typeof heartbeatRuns.$inferSelect, turnInput: Parameters<NativeSession["startTurn"]>[0],
+  closure: NativeBootstrapSourceClosure | null | undefined, rawNativeExecutionInput: unknown,
+  identity: { eventSeq: number; attempt: number }, onMismatch?: (reason: string) => void) {
+  const no = (reason: string) => { onMismatch?.(reason); return false; };
+  if (!closure || turnInput.continuation === true || turnInput.message.role !== "user") return no("frame_kind");
+  let frame: Record<string, unknown>, parsedExecution: ReturnType<typeof parseNativeExecutionInput>, expected: unknown;
+  try {
+    frame = record(JSON.parse(turnInput.message.text));
+    parsedExecution = parseNativeExecutionInput(rawNativeExecutionInput);
+    expected = buildNativeModelEnvelope(parsedExecution);
+  } catch {
+    return no("frame_parse");
+  }
+  const task = record(frame.task);
+  const frameWithoutTurnContext = { ...frame };
+  delete frameWithoutTurnContext.turnContext;
+  const attachmentStage = nativeAttachmentStageReceipt(record(run.runnerProfileJson), run, closure, identity);
+  if (attachmentStage === null) return no("attachment_stage_binding");
+  if (attachmentStage) {
+    const expectedFrame = record(expected);
+    const expectedTask = { ...record(expectedFrame.task) };
+    const actualTask = { ...task };
+    delete expectedTask.prompt;
+    delete actualTask.prompt;
+    if (!isDeepStrictEqual({ ...frameWithoutTurnContext, task: actualTask }, { ...expectedFrame, task: expectedTask }) ||
+      nativeTaskDigest(frame.task) !== attachmentStage.finalTaskDigest) return no("staged_task_binding");
+  } else if (!isDeepStrictEqual(frameWithoutTurnContext, expected)) return no("envelope_shape");
+  if (closure.turnContext) {
+    const turnContext = record(frame.turnContext);
+    const manifestIds = closure.turnContext.manifestIds;
+    const contextSourceIds = closure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "context" }> =>
+      source.kind === "context").map(source => source.manifestId);
+    if (typeof turnContext.markdown !== "string" || typeof turnContext.digest !== "string" ||
+      createHash("sha256").update(typeof turnContext.markdown === "string" ? turnContext.markdown : "", "utf8").digest("hex") !== turnContext.digest ||
+      turnContext.digest !== closure.turnContext.markdownDigest ||
+      !Array.isArray(turnContext.manifestIds) || !isDeepStrictEqual(turnContext.manifestIds, manifestIds) ||
+      !Array.isArray(manifestIds) || new Set(manifestIds).size !== manifestIds.length ||
+      new Set(contextSourceIds).size !== contextSourceIds.length || manifestIds.some(id => !contextSourceIds.includes(id)) ||
+      turnContext.markdown.length > 256000)
+      return no("turn_context_binding");
+  } else if (Object.hasOwn(frame, "turnContext")) return no("turn_context_unqualified");
+  if (frame.schema !== "paperclip.native-model-envelope.v2") return no("envelope_schema");
+  if (nativeTaskDigest(frame.task) !== closure.taskEnvelopeDigest) return no("envelope_task_digest");
+  const workspaceSource = closure.sourceSet.inputs.find((input): input is Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> =>
+    input.kind === "workspace_metadata" && input.runId === run.id);
+  if (!workspaceSource) return no("workspace_source_missing");
+  if (workspaceSource.executionWorkspaceId !== parsedExecution.binding.executionWorkspaceId) return no("workspace_id_mismatch");
+  const workspaceIsSerialized = parsedExecution.provider.kind !== "claude_managed" && parsedExecution.provider.kind !== "aws_agentcore";
+  const workspaceTuple = { cwd: parsedExecution.workspace.cwd, repoUrl: parsedExecution.workspace.repoUrl,
+    repoRef: parsedExecution.workspace.repoRef, branchName: parsedExecution.workspace.branchName };
+  if (workspaceIsSerialized) {
+    if (!frame.workspace || typeof frame.workspace !== "object" || Array.isArray(frame.workspace)) return no("workspace_frame_missing");
+    if (!isDeepStrictEqual(frame.workspace, { cwd: parsedExecution.workspace.cwd })) return no("workspace_frame_shape");
+  } else if (frame.workspace !== null) return no("workspace_frame_shape");
+  if (createHash("sha256").update(JSON.stringify(workspaceTuple), "utf8").digest("hex") !== workspaceSource.contentHash)
+    return no("workspace_digest");
+  let workspaceProjectId: string | null = null;
+  if (workspaceSource.origin === "agent_home") {
+    if (workspaceSource.executionWorkspaceId !== run.id || workspaceSource.sourceVersion !== `agent-home:${run.agentId}:v1` ||
+      !isDeepStrictEqual(workspaceTuple, { cwd: resolveDefaultAgentWorkspaceDir(run.agentId), repoUrl: null, repoRef: null, branchName: null }))
+      return no("workspace_agent_home_binding");
+    const [unexpectedRow] = await tx.select({ id: executionWorkspaces.id }).from(executionWorkspaces).where(and(
+      eq(executionWorkspaces.companyId, run.companyId), eq(executionWorkspaces.id, workspaceSource.executionWorkspaceId)));
+    if (unexpectedRow) return no("workspace_agent_home_row");
+  } else if (workspaceSource.origin === "execution_workspace") {
+    if (workspaceSource.executionWorkspaceId === run.id) return no("workspace_execution_identity");
+    const [currentWorkspace] = await tx.select({ id: executionWorkspaces.id, projectId: executionWorkspaces.projectId,
+      cwd: executionWorkspaces.cwd,
+      repoUrl: executionWorkspaces.repoUrl, repoRef: executionWorkspaces.baseRef, branchName: executionWorkspaces.branchName,
+      updatedAt: executionWorkspaces.updatedAt }).from(executionWorkspaces).where(and(
+      eq(executionWorkspaces.companyId, run.companyId), eq(executionWorkspaces.id, workspaceSource.executionWorkspaceId)));
+    if (!currentWorkspace || currentWorkspace.updatedAt.toISOString() !== workspaceSource.sourceVersion ||
+      !isDeepStrictEqual({ id: currentWorkspace.id, cwd: currentWorkspace.cwd, repoUrl: currentWorkspace.repoUrl,
+        repoRef: currentWorkspace.repoRef, branchName: currentWorkspace.branchName, updatedAt: currentWorkspace.updatedAt },
+      { id: workspaceSource.executionWorkspaceId, ...workspaceTuple, updatedAt: currentWorkspace.updatedAt })) return no("workspace_current_binding");
+    workspaceProjectId = currentWorkspace.projectId;
+  } else if (workspaceSource.origin === "task_session") {
+    // Ephemeral task-session directories have no execution_workspaces row;
+    // the source is the exact immutable workspace tuple persisted in this run's
+    // server-built NativeExecutionInput, bound to the assigned issue below.
+    if (workspaceSource.runId !== run.id || workspaceSource.executionWorkspaceId !== parsedExecution.binding.executionWorkspaceId ||
+      workspaceSource.sourceVersion !== `task-session:${run.id}`) return no("workspace_task_session_binding");
+  } else return no("workspace_origin_unavailable");
+  const [currentTask] = await tx.select({ id: issues.id, companyId: issues.companyId, identifier: issues.identifier,
+    title: issues.title, description: issues.description, workMode: issues.workMode,
+    ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+    projectId: issues.projectId,
+    executionWorkspaceId: issues.executionWorkspaceId, assigneeAgentId: issues.assigneeAgentId,
+    executionRunId: issues.executionRunId }).from(issues).where(and(eq(issues.companyId, run.companyId),
+      eq(issues.id, run.nativeIssueId!), eq(issues.executionRunId, run.id))).for("share");
+  const taskAssignmentCurrent = currentTask?.assigneeAgentId === run.agentId;
+  // A pending completion reviewer is intentionally not the Task assignee:
+  // the source Agent remains assigned while the distinct reviewer Agent owns
+  // this run. Reuse the existing exact interaction/decision/run authority;
+  // this does not change the Task body, ACL, or dispatch source checks below.
+  const assignedReviewCurrent = !!currentTask && !taskAssignmentCurrent && !!await getNativeReviewAssignment(tx as unknown as Db, {
+    companyId: run.companyId, issueId: currentTask.id, agentId: run.agentId,
+    contextSnapshot: run.contextSnapshot, actingRunId: run.id, issueExecutionRunId: currentTask.executionRunId,
+  });
+  const sourceActor: AuthorizationActor = { type: "agent", source: "none", companyId: run.companyId,
+    agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
+  if (!currentTask || (!taskAssignmentCurrent && !assignedReviewCurrent) || workspaceSource.origin === "execution_workspace" &&
+    (currentTask.executionWorkspaceId !== workspaceSource.executionWorkspaceId || currentTask.projectId !== workspaceProjectId))
+    return no("workspace_task_binding");
+  if (!await canActorReadIssuePrivacy(tx, sourceActor, currentTask)) return no("workspace_task_acl");
+  await assertAnalyticalContextPayloadAccess(tx as unknown as Db, run.companyId, sourceActor, { issueId: run.nativeIssueId! });
+  if (attachmentStage) {
+    for (const capture of attachmentStage.sourceCaptures) {
+      const source = capture.input;
+      if (source.disposition !== "delivered" || !source.assetId || !source.sha256 || source.byteSize === null)
+        return no("attachment_not_delivered");
+      const [owner] = await tx.select({ attachment: issueAttachments, asset: assets }).from(issueAttachments)
+        .innerJoin(assets, and(eq(assets.companyId, issueAttachments.companyId), eq(assets.id, issueAttachments.assetId)))
+        .where(and(eq(issueAttachments.companyId, run.companyId), eq(issueAttachments.issueId, source.issueId),
+          eq(issueAttachments.id, source.attachmentId)));
+      if (!owner || owner.attachment.payloadSourceSnapshotInvalidated ||
+        !isDeepStrictEqual(owner.attachment.payloadSourceSnapshot, capture.payloadSourceSnapshot) ||
+        owner.attachment.issueCommentId !== source.commentId || owner.asset.id !== source.assetId ||
+        owner.asset.sha256 !== source.sha256 || owner.asset.byteSize !== source.byteSize)
+        return no("attachment_source_changed");
+      if (source.commentId) {
+        const [comment] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
+          eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, source.issueId),
+          eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt)));
+        if (!comment) return no("attachment_comment_erased");
+      }
+    }
+  }
+  if (frame.planningContext !== null) return no("envelope_planning_context");
+  const interactionSources = closure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "interaction" }> =>
+    source.kind === "interaction");
+  if (!exactNativeInteractionSourceInputs({ issueId: run.nativeIssueId ?? "", responses: parsedExecution.interactionResponses,
+    sources: interactionSources })) return no("interaction_sources");
+  if (parsedExecution.binding.companyId !== run.companyId) return no("envelope_company");
+  if (parsedExecution.binding.runId !== run.id) return no("envelope_run");
+  if (parsedExecution.binding.agentId !== run.agentId) return no("envelope_agent");
+  if (parsedExecution.binding.issueId !== run.nativeIssueId || !run.nativeIssueId) return no("envelope_issue");
+
+  const taskInput = closure.sourceSet.inputs.find((input): input is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+    input.kind === "task" && input.issueId === parsedExecution.binding.issueId);
+  const renderedTaskProjection = { identifier: parsedExecution.task.identifier, title: parsedExecution.task.title,
+    description: parsedExecution.task.description, workMode: parsedExecution.task.workMode };
+  const currentTaskProjection = currentTask && { identifier: currentTask.identifier, title: currentTask.title,
+    description: currentTask.description, workMode: currentTask.workMode };
+  const legacyRenderedTaskHash = currentTask && nativeSha256({ id: currentTask.id, ...currentTaskProjection });
+  if (!taskInput || !currentTask || taskInput.contentHash !== currentTask.ownerBodyHash &&
+    taskInput.contentHash !== legacyRenderedTaskHash ||
+    !isDeepStrictEqual(renderedTaskProjection, currentTaskProjection))
+    return no("task_source");
+
+  // Wake payload is rendered into task.prompt before the closed execution
+  // input is built; it is intentionally not a second field in that contract.
+  // The closure's taskEnvelopeDigest binds those final prompt bytes, while the
+  // server-only wake capture preserves the exact source payload hash.
+  const wakeInputs = closure.sourceSet.inputs.filter((input): input is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+    input.kind === "native_task_wake");
+  if (wakeInputs.length > 1 || wakeInputs.some(input => input.runId !== run.id || input.issueId !== run.nativeIssueId)) return no("wake_binding");
+  // The Task source was checked against its current payload-only owner hash
+  // immediately above. Bind the wake to that captured Task source version;
+  // `issues.updatedAt` also changes for operational conversation activity.
+  if (wakeInputs.length === 1 && (!taskInput || wakeInputs[0]!.sourceVersion !== taskInput.sourceVersion))
+    return no("wake_version");
+
+  if (!run.completionContractId || !run.completionContractSha256 ||
+    parsedExecution.completionContract.id !== run.completionContractId ||
+    parsedExecution.completionContract.sha256 !== run.completionContractSha256) return no("contract_binding");
+  const [contract] = await tx.select({ id: completionContracts.id, revision: completionContracts.revision,
+    schemaVersion: completionContracts.schemaVersion, policyVersion: completionContracts.policyVersion,
+    risk: completionContracts.risk, completionAuthority: completionContracts.completionAuthority,
+    canonicalSha256: completionContracts.canonicalSha256,
+    contractJson: completionContracts.contractJson })
+    .from(completionContracts).where(and(eq(completionContracts.companyId, run.companyId),
+      eq(completionContracts.issueId, run.nativeIssueId), eq(completionContracts.id, run.completionContractId))).for("share");
+  if (!contract || contract.canonicalSha256 !== parsedExecution.completionContract.sha256) return no("contract_source");
+  const contractJson = record(contract.contractJson);
+  const projectedContract = { revision: String(contractJson.revision), objective: String(contractJson.objective),
+    criteria: Array.isArray(contractJson.criteria) ? contractJson.criteria : null };
+  // V7 orchestration contracts predate the native contract policy columns and
+  // are canonically hashed as {schemaVersion, contract}. Native v1 contracts
+  // include the complete policy tuple. Keep the two retained wire formats
+  // explicit; do not accept a caller-selected hash shape.
+  const canonicalContractHash = contract.schemaVersion === V7_COMPLETION_SCHEMA
+    ? nativeSha256({ schemaVersion: contract.schemaVersion, contract: contract.contractJson })
+    : contract.schemaVersion === NATIVE_COMPLETION_CONTRACT_SCHEMA
+      ? nativeSha256({ schemaVersion: contract.schemaVersion, policyVersion: contract.policyVersion,
+        risk: contract.risk, completionAuthority: contract.completionAuthority, contract: contract.contractJson })
+      : null;
+  if (!canonicalContractHash || canonicalContractHash !== contract.canonicalSha256)
+    return no("contract_digest");
+  return isDeepStrictEqual(parsedExecution.completionContract.contract, projectedContract) || no("contract_projection");
+}
+
+const nativeTurnFrameSourceMismatchReasons = new Set([
+  "frame_kind", "frame_parse", "attachment_stage_binding", "staged_task_binding", "envelope_shape",
+  "turn_context_binding", "turn_context_unqualified", "envelope_schema", "envelope_task_digest",
+  "workspace_source_missing", "workspace_id_mismatch", "workspace_frame_missing", "workspace_frame_shape",
+  "workspace_digest", "workspace_agent_home_binding", "workspace_agent_home_row", "workspace_execution_identity",
+  "workspace_current_binding", "workspace_task_session_binding", "workspace_origin_unavailable", "workspace_task_binding",
+  "workspace_task_acl", "attachment_not_delivered", "attachment_source_changed", "attachment_comment_erased",
+  "envelope_planning_context", "interaction_sources", "envelope_company", "envelope_run", "envelope_agent",
+  "envelope_issue", "task_source", "wake_binding", "wake_version", "contract_binding", "contract_source",
+  "contract_digest", "contract_projection",
+]);
+
+// Test-only attribution for the final first-dispatch source-owner check. Keep
+// this as an exact message -> enum map: never include SQL, identifiers, or
+// source values in a run error.
+const nativeDispatchSourceOwnerDiagnosticReasons = new Map<string, string>([
+  ["The Native source prefix is unavailable", "prefix_unavailable"],
+  ["The Native source prefix owner is unavailable", "prefix_owner_unavailable"],
+  ["The Native source prefix is not in its original receipt", "receipt_membership"],
+  ["The Native source completion contract changed", "completion_contract_changed"],
+  ["A Native source workspace tuple changed", "workspace_tuple_changed"],
+  ["The Native output workspace tuple changed", "output_workspace_tuple_changed"],
+  ["The Native output agent workspace changed", "output_agent_workspace_changed"],
+  ["The Native task-session workspace source changed", "output_task_session_workspace_changed"],
+  ["The Native output workspace owner changed", "output_workspace_owner_changed"],
+  ["The Native document workspace source is unavailable", "document_workspace_source_unavailable"],
+  ["The Native document workspace tuple changed", "document_workspace_tuple_changed"],
+  ["The Native document agent workspace changed", "document_agent_workspace_changed"],
+  ["The Native document task-session workspace source changed", "document_task_session_workspace_changed"],
+  ["The Native document workspace owner changed", "document_workspace_owner_changed"],
+  ["The Native source agent workspace changed", "agent_workspace_changed"],
+  ["The Native source task-session workspace changed", "task_session_workspace_changed"],
+  ["The Native source execution workspace changed", "execution_workspace_changed"],
+  ["A Native source Foundation revision changed", "foundation_revision_changed"],
+  ["A Native task wake source changed", "task_wake_changed"],
+  ["A Native source Task changed", "task_changed"],
+  ["A Native source Task is unavailable", "task_unavailable"],
+  ["A Native Task source changed or was erased", "task_snapshot_changed_or_erased"],
+  ["A Native Task source snapshot is unavailable", "task_snapshot_unavailable"],
+  ["A Native Task source protocol is unsupported", "task_protocol_unsupported"],
+  ["A Native source Comment changed or was erased", "comment_changed_or_erased"],
+  ["A Native Task source changed or was erased", "task_source_changed_or_erased"],
+  ["The Native conversation source witness is unavailable", "conversation_witness_unavailable"],
+  ["A Native conversation source witness is unavailable", "conversation_witness_unavailable"],
+  ["A Native Context Task source changed or was erased", "context_task_source_changed_or_erased"],
+  ["The Native source Task is unavailable", "task_owner_unavailable"],
+  ["A Native source Task is unavailable", "task_reader_unavailable"],
+  ["A Native source Comment is unavailable", "comment_unavailable"],
+  ["The Native Task source snapshot is unavailable", "task_snapshot_unavailable"],
+  ["The frozen Native Task source closure has no retained dispatch receipt", "frozen_task_dispatch_missing"],
+  ["The frozen Native Task source producer is unavailable", "frozen_task_producer_unavailable"],
+  ["The frozen Native Task dispatch prefix is unavailable", "frozen_task_prefix_unavailable"],
+  ["The frozen Native Task source closure exceeds its bound", "frozen_task_bound"],
+  ["The frozen Native Task source graph contains a cycle", "frozen_task_cycle"],
+  ["The Native source Run is unavailable", "source_run_unavailable"],
+  ["The Native source reader recheck exceeds its work bound", "reader_recheck_bound"],
+  ["The Native source issue reader recheck exceeds its work bound", "issue_reader_recheck_bound"],
+  ["A Native source Comment is no longer readable", "comment_reader_unavailable"],
+  ["The Native source Interaction changed or was erased", "interaction_changed_or_erased"],
+  ["A Native source Attachment changed or was erased", "attachment_changed_or_erased"],
+]);
+
+function nativeDispatchSourceOwnerDiagnostic(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  const commentDiagnostic = /^native_source_comment_owner_diagnostic:(owner_version|snapshot_owner|projection_hash|reader_acl)$/.exec(message);
+  if (commentDiagnostic) return `comment_${commentDiagnostic[1]}`;
+  const known = nativeDispatchSourceOwnerDiagnosticReasons.get(message);
+  if (known) return known;
+  const value = error && typeof error === "object"
+    ? error as Error & { code?: unknown; status?: unknown; cause?: { code?: unknown } } : null;
+  const errorKind = value?.name === "HttpError" ? "http" : value?.name === "Error" ? "error" : "other";
+  const status = typeof value?.status === "number" && Number.isInteger(value.status) && value.status >= 400 && value.status < 600
+    ? String(value.status) : "none";
+  const codeValue = value?.code ?? value?.cause?.code;
+  const code = typeof codeValue === "string" && /^[A-Z0-9_:-]{1,32}$/.test(codeValue) ? codeValue : "none";
+  const frames = value?.stack?.split("\n").slice(1).flatMap(frame => {
+    const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+    return match ? [`${match[1]}_${match[2]}`] : [];
+  }).slice(0, 4) ?? [];
+  return `unclassified_${errorKind}_${status}_${code}${frames.length ? `_${frames.join("_")}` : ""}`;
+}
+
+async function postgresJsonbSha256(tx: Parameters<Parameters<Db["transaction"]>[0]>[0], value: unknown): Promise<string> {
+  const [row] = await tx.execute<{ digest: string }>(sql`select encode(sha256(convert_to((${JSON.stringify(value)}::jsonb)::text,'UTF8')),'hex') as digest`);
+  if (!row || !/^[0-9a-f]{64}$/.test(row.digest)) throw new Error("native_input_source_receipt_persistence_failed");
+  return row.digest;
+}
+
+/** Chosen backend-call bytes before I/O, not proof of delivery or complete
+ * source provenance. Keep unknown sends and prior attempts as separate facts. */
+function nativeSessionTaskEnvelope(execution: NativeExecutionInput) {
+  return createCodexTaskEnvelope({
+    objective: execution.completionContract.contract.objective,
+    contractRevision: execution.completionContract.contract.revision,
+    criteria: execution.completionContract.contract.criteria,
+    constraints: [
+      "Work only inside the supplied working directory.",
+      ...nativeTaskConstraints(execution),
+      "Return one semantic completion result through paperclip_finish or paperclip_block.",
+    ],
+  });
+}
+
+export async function recordNativeModelInputDispatchIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string;
+  eventSeq: number;
+  turnInput: Parameters<NativeSession["startTurn"]>[0];
+  bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
+}): Promise<string> {
+  if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0)
+    throw new Error("native_model_input_launch_binding_invalid");
+  const dispatchId = randomUUID();
+  const encoded = JSON.stringify(input.turnInput);
+  let stage:
+    | "lease_recheck_before"
+    | "run_binding"
+    | "launch_binding"
+    | "source_closure_match"
+    | "receipt_validation"
+    | "prompt_binding"
+    | "intent_persist"
+    | "source_owner_recheck"
+    | "lease_recheck_after" = "lease_recheck_before";
+  await input.db.transaction(async tx => {
+    // Source closure rechecks below use the company privacy locks. Take them
+    // before the coordinator/run rows so event admission cannot hold those
+    // advisory locks while waiting on this transaction's run row.
+    await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+    await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+    // Preserve the original coordinator -> run order after source locks, and
+    // repeat the actual lease check after intervening waits before commit.
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    stage = "run_binding";
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+    )).for("update");
+    if (!run) throw new Error("native_model_input_run_binding_changed");
+    stage = "launch_binding";
+    const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+      eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
+      eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
+      eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+    )).for("share");
+    if (!launch) throw new Error("native_model_input_launch_binding_changed");
+    stage = "source_closure_match";
+    const profile = record(run.runnerProfileJson);
+    const previous = profile.nativeModelInputDispatchIntents ?? [];
+    if (!Array.isArray(previous) || previous.length >= 64)
+      throw new Error("native_model_input_dispatch_budget_exceeded");
+    const intents = [...previous, {
+      dispatchId,
+      eventSeq: launch.seq, attempt: input.attempt, responsibleUserId: run.responsibleUserId ?? null,
+      turnInputDigest: createHash("sha256").update(encoded).digest("hex"),
+      byteSize: Buffer.byteLength(encoded), continuation: input.turnInput.continuation === true,
+    }];
+    if (Buffer.byteLength(JSON.stringify(intents)) > 2 * 1024 * 1024)
+      throw new Error("native_model_input_dispatch_budget_exceeded");
+    let receipt: NativeRunInputSourceReceipt | null = null;
+    const sourceClosure = input.bootstrapSourceClosure;
+    const attachmentStage = nativeAttachmentStageReceipt(profile, run, sourceClosure,
+      { eventSeq: input.eventSeq, attempt: input.attempt });
+    const noPriorNativeEffects = previous.length === 0 &&
+      (!Array.isArray(profile.nativeToolCallDispatchAssociations) || profile.nativeToolCallDispatchAssociations.length === 0) &&
+      (!Array.isArray(profile.nativeToolResultSourceCaptures) || profile.nativeToolResultSourceCaptures.length === 0) &&
+      (attachmentStage === undefined || attachmentStage !== null);
+    let sourceClosureMatches: boolean | null | undefined;
+    let sourceClosureMismatchReason: string | null = null;
+    sourceClosureMatches = sourceClosure && await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput,
+      sourceClosure, profile.nativeExecutionInput, { eventSeq: input.eventSeq, attempt: input.attempt },
+      reason => { sourceClosureMismatchReason = reason; });
+    const existingReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
+      (run.nativeInputSourceProtocolVersion === 0 || !existingReceipt.success)) {
+      console.warn("native_model_input_dispatch_closure_diagnostic", {
+        closurePresent: Boolean(sourceClosure),
+        closureMatches: sourceClosureMatches === true,
+        mismatch: sourceClosureMismatchReason && nativeTurnFrameSourceMismatchReasons.has(sourceClosureMismatchReason)
+          ? sourceClosureMismatchReason : sourceClosure ? "unclassified" : "closure_missing",
+        sourceProtocolVersion: run.nativeInputSourceProtocolVersion,
+        responsibleUserPresent: typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0,
+        existingReceiptValid: existingReceipt.success,
+        noPriorNativeEffects,
+        priorIntentCount: previous.length,
+        priorAssociationCount: Array.isArray(profile.nativeToolCallDispatchAssociations)
+          ? profile.nativeToolCallDispatchAssociations.length : 0,
+        priorResultCaptureCount: Array.isArray(profile.nativeToolResultSourceCaptures)
+          ? profile.nativeToolResultSourceCaptures.length : 0,
+        attachmentStagePresent: attachmentStage !== undefined,
+      });
+    }
+    if (profile.nativeOpenCodeSourceAuthority && !sourceClosureMatches) {
+      const reason = process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
+        sourceClosureMismatchReason && nativeTurnFrameSourceMismatchReasons.has(sourceClosureMismatchReason)
+        ? sourceClosureMismatchReason : null;
+      throw new Error(reason
+        ? `managed_opencode_source_prompt_closure_unavailable:${reason}`
+        : "managed_opencode_source_prompt_closure_unavailable");
+    }
+    stage = "receipt_validation";
+    if (sourceClosure && sourceClosureMatches === true && run.nativeInputSourceProtocolVersion === 0 && typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
+      profile.nativeExecutionInput !== undefined && profile.nativeInputSourceReceipt === undefined && noPriorNativeEffects) {
+      const bootstrap = {
+        executionInputDigest: await postgresJsonbSha256(tx, profile.nativeExecutionInput),
+        ...sourceClosure.sourceSet,
+      };
+      const unsigned: Omit<NativeRunInputSourceReceipt, "digest"> = {
+        version: 1,
+        binding: { companyId: run.companyId, runId: run.id, agentId: run.agentId,
+          responsibleUserId: run.responsibleUserId, issueId: run.nativeIssueId ?? null },
+        bootstrap,
+        dispatches: [],
+        additionalInputs: [],
+      };
+      const candidate = { ...unsigned, digest: await postgresJsonbSha256(tx, unsigned) };
+      const parsed = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+      if (parsed.success) receipt = parsed.data;
+    } else if (sourceClosure && sourceClosureMatches === true && existingReceipt.success && typeof run.responsibleUserId === "string" &&
+      existingReceipt.data.binding.responsibleUserId === run.responsibleUserId) {
+      const bootstrapSetHash = nativeSha256({ policy: existingReceipt.data.bootstrap.policy, inputs: existingReceipt.data.bootstrap.inputs });
+      const preparedSetHash = nativeSha256(sourceClosure.sourceSet);
+      if (preparedSetHash !== bootstrapSetHash && !existingReceipt.data.additionalInputs.some(entry =>
+        entry.responsibleUserId === run.responsibleUserId && nativeSha256({ policy: entry.policy, inputs: entry.inputs }) === preparedSetHash)) {
+        const { digest: _priorDigest, ...receiptBody } = existingReceipt.data;
+        const nextBody = { ...receiptBody, additionalInputs: [...receiptBody.additionalInputs, {
+          responsibleUserId: run.responsibleUserId, ...sourceClosure.sourceSet,
+        }] };
+        const candidate = { ...nextBody, digest: await postgresJsonbSha256(tx, nextBody) };
+        const parsed = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+        if (!parsed.success) throw new Error("native_model_input_turn_source_receipt_invalid");
+        receipt = parsed.data;
+      } else receipt = existingReceipt.data;
+    }
+    let nativeOpenCodeSourceAuthority = profile.nativeOpenCodeSourceAuthority;
+    if (nativeOpenCodeSourceAuthority && typeof nativeOpenCodeSourceAuthority === "object" && !Array.isArray(nativeOpenCodeSourceAuthority)) {
+      stage = "prompt_binding";
+      const sourceAuthority = record(nativeOpenCodeSourceAuthority);
+      const priorPrompts = sourceAuthority.authorizedPromptHashes;
+      const promptHash = nativeSha256(input.turnInput.message.text);
+      const priorBindings = sourceAuthority.promptSourceBindings;
+      if (!sourceClosure || sourceClosureMatches !== true || !receipt || !Array.isArray(priorPrompts) || priorPrompts.length >= 64 ||
+        priorPrompts.some(hash => typeof hash !== "string" || !/^[0-9a-f]{64}$/.test(hash)) ||
+        !Array.isArray(priorBindings) || priorBindings.length >= 64 ||
+        priorBindings.some(value => !value || typeof value !== "object" || typeof record(value).promptHash !== "string" ||
+          !/^[0-9a-f]{64}$/.test(record(value).promptHash as string) || typeof record(value).sourceSetHash !== "string" ||
+          !/^[0-9a-f]{64}$/.test(record(value).sourceSetHash as string)))
+        throw new Error("managed_opencode_source_prompt_budget_exceeded");
+      const sourceSetHash = nativeSha256(sourceClosure.sourceSet);
+      const existingPromptBinding = priorBindings.map(record).filter(value => value.promptHash === promptHash);
+      if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+        const wrappedPrompt = priorPrompts.length === 0
+          ? JSON.stringify({ task: nativeSessionTaskEnvelope(parseNativeExecutionInput(profile.nativeExecutionInput)),
+            message: input.turnInput.message.text })
+          : null;
+        console.warn("managed_model_prompt_source_diagnostic", {
+          runId: input.runId,
+          promptLength: input.turnInput.message.text.length,
+          promptHash,
+          firstTurnWrappedPromptLength: wrappedPrompt?.length ?? null,
+          firstTurnWrappedPromptHash: wrappedPrompt ? nativeSha256(wrappedPrompt) : null,
+          continuation: input.turnInput.continuation === true,
+          sourceClosurePresent: Boolean(sourceClosure),
+          sourceClosureMatches: sourceClosureMatches === true,
+        });
+      }
+      if (existingPromptBinding.length > 1 || existingPromptBinding.length === 1 && existingPromptBinding[0]!.sourceSetHash !== sourceSetHash)
+        throw new Error("managed_opencode_source_prompt_binding_ambiguous");
+      const authorizedPromptHashes = priorPrompts.includes(promptHash) ? priorPrompts : [...priorPrompts, promptHash];
+      const promptSourceBindings = existingPromptBinding.length ? priorBindings : [...priorBindings, { promptHash, sourceSetHash }];
+      nativeOpenCodeSourceAuthority = { ...sourceAuthority, authorizedPromptHashes, promptSourceBindings };
+    }
+    const nextProfile = { ...profile, nativeModelInputDispatchIntents: intents,
+      ...(nativeOpenCodeSourceAuthority ? { nativeOpenCodeSourceAuthority } : {}),
+      ...(receipt ? { nativeInputSourceReceipt: receipt } : {}) };
+    stage = "intent_persist";
+    const [stored] = await tx.update(heartbeatRuns).set({
+      runnerProfileJson: nextProfile,
+      ...(receipt ? { nativeInputSourceProtocolVersion: 1 } : {}),
+      updatedAt: new Date(),
+    }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+    if (!stored) throw new Error("native_model_input_dispatch_row_not_returned");
+    if (!stored.profile || typeof stored.profile !== "object" || Array.isArray(stored.profile))
+      throw new Error("native_model_input_dispatch_profile_not_returned");
+    const storedIntents = record(stored.profile).nativeModelInputDispatchIntents;
+    if (!Array.isArray(storedIntents)) throw new Error("native_model_input_dispatch_intents_not_returned");
+    if (nativeSha256(storedIntents) !== nativeSha256(intents))
+      throw new Error("native_model_input_dispatch_profile_digest_mismatch");
+    if (nativeOpenCodeSourceAuthority && sourceClosure && receipt) {
+      stage = "source_owner_recheck";
+      await assertNativePayloadSourceSetCurrent(tx as unknown as Db, {
+        companyId: run.companyId, issueId: run.nativeIssueId!, runId: run.id,
+        actor: { type: "agent", source: "none", companyId: run.companyId, agentId: run.agentId,
+          runId: run.id, onBehalfOfUserId: run.responsibleUserId ?? undefined },
+        policy: sourceClosure.sourceSet.policy, inputs: sourceClosure.sourceSet.inputs,
+      });
+    }
+    stage = "lease_recheck_after";
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+  }).catch((error: unknown) => {
+    if (stage === "source_owner_recheck" && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+      const stack = error instanceof Error ? error.stack ?? "" : "";
+      const frames = stack.split("\n").slice(1).flatMap(line => {
+        const match = /\bat (?:(.{1,100}?) \()?[^\s():]*server\/src\/services\/([^\s():]+\.ts):(\d+):\d+\)?$/.exec(line.trim());
+        if (!match) return [];
+        const fn = /^[A-Za-z0-9_.$<>-]+$/.test(match[1] ?? "") ? match[1]! : "anonymous";
+        return [`${fn} ${match[2]}:${match[3]}`];
+      }).slice(0, 6);
+      console.error("native_source_owner_failure_frames", JSON.stringify(frames));
+    }
+    // A driver's query/params can include the existing private run profile.
+    // Keep only our finite control errors; never propagate raw DB diagnostics.
+    const message = error instanceof Error ? error.message : "";
+    const sourceClosureDiagnostic = [...nativeTurnFrameSourceMismatchReasons]
+      .some(reason => message === `managed_opencode_source_prompt_closure_unavailable:${reason}`);
+    const sourceOwnerDiagnostic = stage === "source_owner_recheck" &&
+      process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
+      ? nativeDispatchSourceOwnerDiagnostic(error) : undefined;
+    throw new Error([
+      "native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_model_input_run_binding_changed", "native_model_input_launch_binding_changed",
+      "native_model_input_dispatch_budget_exceeded", "native_model_input_dispatch_persistence_failed",
+      "native_model_input_dispatch_row_not_returned", "native_model_input_dispatch_profile_not_returned",
+      "native_model_input_dispatch_intents_not_returned",
+      "native_model_input_dispatch_profile_digest_mismatch",
+      "native_input_source_receipt_persistence_failed",
+      // These are closed internal state codes with no prompt/provider payload.
+      // Preserve them for the actual managed provider path so the source seam
+      // can be fixed without dumping request or private run data.
+      "managed_opencode_source_prompt_closure_unavailable",
+      "native_model_input_turn_source_receipt_invalid",
+      "managed_opencode_source_prompt_budget_exceeded",
+      "managed_opencode_source_prompt_binding_ambiguous",
+    ].includes(message) || sourceClosureDiagnostic
+      ? message : stage === "intent_persist" &&
+      input.bootstrapSourceClosure?.sourceSet.inputs.some(source => source.kind === "attachment")
+      ? "native_model_input_attachment_stage_rejected"
+      : stage === "intent_persist"
+      ? "native_model_input_dispatch_persistence_failed"
+      : sourceOwnerDiagnostic
+      ? `native_model_input_dispatch_source_owner_recheck_failed:${sourceOwnerDiagnostic}`
+      : `native_model_input_dispatch_${stage}_failed`);
+  });
+  return dispatchId;
+}
+
+/** Attach the backend's returned turn id to the exact input intent. This is
+ * an acknowledgement fact only; it does not establish delivery or provenance. */
+export async function recordNativeModelInputDispatchAcknowledgement(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; dispatchId: string; turnInput: Parameters<NativeSession["startTurn"]>[0]; turnId: string;
+  sourceClosure?: NativeBootstrapSourceClosure | null;
+}): Promise<void> {
+  if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(input.dispatchId) ||
+    typeof input.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(input.turnId))
+    throw new Error("native_model_input_ack_binding_invalid");
+  const digest = createHash("sha256").update(JSON.stringify(input.turnInput)).digest("hex");
+  let ackPhase = "privacy_locks";
+  await input.db.transaction(async tx => {
+    // This acknowledgement repeats source-closure validation while holding
+    // the run row, so acquire the same company privacy locks first as intent
+    // persistence and native event admission.
+    await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+    await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+    ackPhase = "lease_before";
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    ackPhase = "run_lock";
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+    )).for("update");
+    if (!run) throw new Error("native_model_input_ack_binding_invalid");
+    const profile = record(run.runnerProfileJson);
+    ackPhase = "intent_match";
+    const intents = profile.nativeModelInputDispatchIntents;
+    if (!Array.isArray(intents)) throw new Error("native_model_input_ack_binding_invalid");
+    const matching = intents.map((raw, index) => ({ raw: record(raw), index })).filter(({ raw }) =>
+      raw.dispatchId === input.dispatchId && raw.eventSeq === input.eventSeq &&
+      raw.attempt === input.attempt && raw.turnInputDigest === digest);
+    if (matching.length !== 1 || matching[0]!.raw.turnId !== undefined)
+      throw new Error("native_model_input_ack_binding_invalid");
+    const acknowledged = intents.map((raw, index) => index === matching[0]!.index
+      ? { ...record(raw), turnId: input.turnId } : raw);
+    if (Buffer.byteLength(JSON.stringify(acknowledged)) > 2 * 1024 * 1024)
+      throw new Error("native_model_input_ack_budget_exceeded");
+    const parsedReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    ackPhase = "receipt_validation";
+    let nextReceipt: NativeRunInputSourceReceipt | null = null;
+    if (parsedReceipt.success && run.nativeInputSourceProtocolVersion === 1 &&
+      typeof run.responsibleUserId === "string" && run.responsibleUserId.length > 0 &&
+      matching[0]!.raw.responsibleUserId === run.responsibleUserId &&
+      await nativeTurnFrameMatchesSourceClosure(tx, run, input.turnInput, input.sourceClosure, profile.nativeExecutionInput,
+        { eventSeq: input.eventSeq, attempt: input.attempt })) {
+      const { digest: _priorDigest, ...receiptBody } = parsedReceipt.data;
+      const unsigned: Omit<NativeRunInputSourceReceipt, "digest"> = {
+        ...receiptBody,
+        dispatches: [...parsedReceipt.data.dispatches, {
+          executionInputDigest: digest,
+          responsibleUserId: run.responsibleUserId,
+          ...input.sourceClosure!.sourceSet,
+        }],
+      };
+      const candidate = { ...unsigned, digest: await postgresJsonbSha256(tx, unsigned) };
+      const validated = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+      if (validated.success) nextReceipt = validated.data;
+    }
+    const nextProfile = { ...profile, nativeModelInputDispatchIntents: acknowledged,
+      ...(nextReceipt ? { nativeInputSourceReceipt: nextReceipt } : {}) };
+    const [stored] = await tx.update(heartbeatRuns).set({
+      runnerProfileJson: nextProfile, updatedAt: new Date(),
+    }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+    ackPhase = "retained_intent_check";
+    const retained = record(stored?.profile).nativeModelInputDispatchIntents;
+    const retainedMatches = Array.isArray(retained) && nativeSha256(retained) === nativeSha256(acknowledged);
+    if (!retainedMatches) {
+      if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+        console.warn("native_model_input_ack_diagnostic", { phase: "retained_intent_check",
+          profileReturned: Boolean(stored?.profile && typeof stored.profile === "object" && !Array.isArray(stored.profile)),
+          retainedArray: Array.isArray(retained), retainedCount: Array.isArray(retained) ? retained.length : -1,
+          expectedCount: acknowledged.length, digestMatches: false });
+      throw new Error("native_model_input_ack_persistence_failed");
+    }
+    ackPhase = "lease_after";
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "";
+    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+      const details = error && typeof error === "object" ? error as Record<string, unknown> : {};
+      const causes: Record<string, unknown>[] = [details];
+      for (let depth = 0; depth < 3; depth++) {
+        const cause = causes.at(-1)?.cause;
+        if (!cause || typeof cause !== "object") break;
+        causes.push(cause as Record<string, unknown>);
+      }
+      const sqlState = causes.map(value => value.code).find(value =>
+        typeof value === "string" && /^[0-9A-Z]{5}$/.test(value)) ?? null;
+      const constraint = causes.flatMap(value => [value.constraint, value.constraint_name]).find(value =>
+        typeof value === "string" && /^[A-Za-z0-9_]{1,100}$/.test(value)) ?? null;
+      const receiptFailureMessages = new Map([
+        ["Native dispatch source capture requires one exact acknowledged input", "dispatch_ack_mismatch"],
+        ["Native run input captures are append-only", "capture_not_append_only"],
+        ["Native run input capture Human mismatch", "capture_human_mismatch"],
+        ["Malformed native input policy vectors", "policy_shape"],
+        ["Malformed native input policy vector", "policy_vector_shape"],
+        ["Duplicate native input policy identity", "duplicate_policy_identity"],
+        ["Malformed native policy identity", "policy_identity_shape"],
+        ["Duplicate native captured input", "duplicate_captured_input"],
+        ["Malformed native captured input", "captured_input_shape"],
+        ["Malformed native input capture", "capture_shape"],
+        ["Native run input receipt bounds or digest mismatch", "receipt_digest_or_bounds"],
+        ["Native run bootstrap capture is immutable", "bootstrap_mutation"],
+        ["Native run input receipt owner mismatch", "receipt_owner_mismatch"],
+        ["Native run bootstrap input digest mismatch", "bootstrap_digest_mismatch"],
+      ]);
+      const databaseReason = causes.map(value => value.message).find(value =>
+        typeof value === "string" && receiptFailureMessages.has(value));
+      const exceptionName = error instanceof Error && ["Error", "TypeError", "RangeError", "DatabaseError", "PostgresError"].includes(error.name)
+        ? error.name : "unknown";
+      const safeCode = ["native_session_lease_lost", "native_session_lease_ttl_invalid",
+        "native_model_input_ack_binding_invalid", "native_model_input_ack_budget_exceeded",
+        "native_model_input_ack_persistence_failed", "native_input_source_receipt_persistence_failed"].includes(message)
+        ? message : null;
+      const internalMessageCode = /^[a-z][a-z0-9_]{1,100}$/.test(message) ? message : null;
+      console.warn("native_model_input_ack_diagnostic", { phase: ackPhase, exceptionName, safeCode,
+        internalMessageCode, sqlState, constraint,
+        databaseReason: typeof databaseReason === "string" ? receiptFailureMessages.get(databaseReason) : null });
+    }
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_model_input_ack_binding_invalid", "native_model_input_ack_budget_exceeded",
+      "native_model_input_ack_persistence_failed", "native_input_source_receipt_persistence_failed"].includes(message)
+      ? message : "native_model_input_ack_persistence_failed");
+  });
+}
+
+/** Link a backend-authenticated tool call to the one acknowledged turn whose
+ * native turn ID exactly matches. No match or an ambiguous ID stays unknown. */
+export async function recordNativeToolCallDispatchAssociation(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; turnId: string; callId: string; tool: string; argumentsHash?: string;
+}): Promise<boolean> {
+  if (!/^[\x21-\x7e]{1,240}$/.test(input.turnId) || !/^[\x21-\x7e]{1,240}$/.test(input.callId) ||
+    !/^[\x21-\x7e]{1,240}$/.test(input.tool) || input.argumentsHash !== undefined && !/^[0-9a-f]{64}$/.test(input.argumentsHash)) return false;
+  try {
+    return await input.db.transaction(async tx => {
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+        eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+      )).for("update");
+      if (!run) throw new Error("native_tool_call_dispatch_binding_invalid");
+      const profile = record(run.runnerProfileJson);
+      const intents = profile.nativeModelInputDispatchIntents;
+      if (!Array.isArray(intents) || intents.length > 64) return false;
+      const matching = intents.map(value => record(value)).filter(value => value.turnId === input.turnId);
+      if (matching.length !== 1) return false;
+      const intent = matching[0]!;
+      if (typeof intent.dispatchId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(intent.dispatchId) ||
+        typeof intent.turnInputDigest !== "string" || !/^[0-9a-f]{64}$/.test(intent.turnInputDigest) ||
+        !Number.isSafeInteger(intent.eventSeq) || (intent.eventSeq as number) < 0 ||
+        !Number.isSafeInteger(intent.attempt) || (intent.attempt as number) < 1) return false;
+      const prior = profile.nativeToolCallDispatchAssociations;
+      if (prior !== undefined && (!Array.isArray(prior) || prior.length > 512))
+        throw new Error("native_tool_call_dispatch_binding_invalid");
+      const associations = Array.isArray(prior) ? prior.map(value => record(value)) : [];
+      if (associations.some(value => typeof value.dispatchId !== "string" ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.dispatchId) ||
+          !Number.isSafeInteger(value.eventSeq) || (value.eventSeq as number) < 0 ||
+          !Number.isSafeInteger(value.attempt) || (value.attempt as number) < 1 ||
+          typeof value.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(value.turnId) ||
+          typeof value.callId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(value.callId) ||
+          typeof value.tool !== "string" || !/^[\x21-\x7e]{1,240}$/.test(value.tool) ||
+          value.argumentsHash !== undefined && (typeof value.argumentsHash !== "string" || !/^[0-9a-f]{64}$/.test(value.argumentsHash))))
+        throw new Error("native_tool_call_dispatch_binding_invalid");
+      const existing = associations.filter(value => value.callId === input.callId && value.turnId === input.turnId);
+      if (existing.length > 1) throw new Error("native_tool_call_dispatch_binding_invalid");
+      if (existing.length === 1) {
+        const priorAssociation = existing[0]!;
+        return priorAssociation.dispatchId === intent.dispatchId && priorAssociation.eventSeq === intent.eventSeq &&
+          priorAssociation.attempt === intent.attempt && priorAssociation.tool === input.tool &&
+          priorAssociation.argumentsHash === input.argumentsHash;
+      }
+      if (associations.length >= 512) throw new Error("native_tool_call_dispatch_budget_exceeded");
+      const next = [...associations, {
+        dispatchId: intent.dispatchId, eventSeq: intent.eventSeq, attempt: intent.attempt,
+        turnId: input.turnId, callId: input.callId, tool: input.tool,
+        ...(input.argumentsHash ? { argumentsHash: input.argumentsHash } : {}),
+      }];
+      if (Buffer.byteLength(JSON.stringify(next)) > 2 * 1024 * 1024)
+        throw new Error("native_tool_call_dispatch_budget_exceeded");
+      const [stored] = await tx.update(heartbeatRuns).set({
+        runnerProfileJson: { ...profile, nativeToolCallDispatchAssociations: next }, updatedAt: new Date(),
+      }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+      const retained = record(stored?.profile).nativeToolCallDispatchAssociations;
+      if (!Array.isArray(retained) || nativeSha256(retained) !== nativeSha256(next))
+        throw new Error("native_tool_call_dispatch_persistence_failed");
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      return true;
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_tool_call_dispatch_binding_invalid", "native_tool_call_dispatch_budget_exceeded",
+      "native_tool_call_dispatch_persistence_failed"].includes(message)
+      ? message : "native_tool_call_dispatch_persistence_failed");
+  }
+}
+
+async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; turnId: string; callId: string; argumentsHash: string;
+  tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" |
+    "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; result: unknown;
+  contextRead?: NativeContextReadBinding;
+  projectRead?: NativeProjectToolResultSource;
+  projectCreate?: NativeManagedProjectCreateCapture;
+  outputCapture?: NativeModelOutputCapture | null;
+}): Promise<void> {
+  let diagnosticPhase: "capture_binding" | "transaction_locks" | "run_receipt" | "provider_dispatch" |
+    "project_source" | "memory_source" | "context_source" | "document_task_source" | "receipt_build" | "receipt_persist" | "lease_renew" = "capture_binding";
+  const projectRead = input.tool === "call_api" ? input.projectRead : undefined;
+  const projectCreate = input.tool === "create_project" ? input.projectCreate : undefined;
+  if (input.tool === "create_project" && (!projectCreate || projectCreate.receipt.tool !== "create_project" ||
+    projectCreate.receipt.callId !== input.callId || projectCreate.receipt.argumentsHash !== input.argumentsHash ||
+    projectCreate.receipt.resultDigest !== nativeSha256(input.result) || !isDeepStrictEqual(projectCreate.project, input.result) ||
+    !isDeepStrictEqual(projectCreate.sourceSet, projectCreate.outputCapture.sourceSet) ||
+    projectCreate.outputCapture.managedOpenCodeToolUse?.callId !== input.callId ||
+    projectCreate.outputCapture.managedOpenCodeToolUse?.toolName !== "create_project" ||
+    projectCreate.outputCapture.managedOpenCodeToolUse?.argumentsHash !== input.argumentsHash))
+    throw new Error("managed_opencode_tool_result_binding_invalid");
+  if (input.tool === "call_api" && (!projectRead?.source || projectRead.tool !== "call_api" ||
+    projectRead.operationId !== "GET /api/projects/{id}" || projectRead.callId !== input.callId ||
+    projectRead.turnId !== input.turnId || !/^[0-9a-f]{64}$/.test(projectRead.requestHash) ||
+    !/^[0-9a-f]{64}$/.test(projectRead.resultDigest))) throw new Error("managed_opencode_tool_result_binding_invalid");
+  const digest = projectRead?.resultDigest ?? nativeSha256(input.result);
+  try {
+    await input.db.transaction(async tx => {
+      diagnosticPhase = "transaction_locks";
+      await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+      await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      diagnosticPhase = "run_receipt";
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+        eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+      )).for("update");
+      const profile = record(run?.runnerProfileJson);
+      if (run) assertNativeRunReadSourceHistoryQualified(profile, { runId: input.runId,
+        responsibleUserId: run.responsibleUserId });
+      const sourceAuthority = record(profile.nativeOpenCodeSourceAuthority);
+      const parsed = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+      const associations = profile.nativeToolCallDispatchAssociations;
+      const call = Array.isArray(associations) ? associations.map(record).filter(value =>
+        value.callId === input.callId && value.turnId === input.turnId && value.tool === input.tool &&
+        value.argumentsHash === input.argumentsHash) : [];
+      const invocationToolName = input.tool === "self_remember" ? "paperclip-self:remember" : input.tool;
+      const nativeReadResultTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
+        input.tool === "read_chat_attachment" || input.tool === "query_business_metric";
+      const nativeReadTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
+        (input.tool === "read_chat_attachment" || input.tool === "query_business_metric") ? input.tool : null;
+      const nullInvocationTool = input.tool === "call_api" || input.tool === "create_project" || nativeReadResultTool;
+      const [invocation] = nullInvocationTool ? [] : await tx.select().from(toolInvocations).where(and(
+        eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
+        eq(toolInvocations.agentId, input.agentId),
+        eq(toolInvocations.idempotencyKey, `aw-native-tool:${input.runId}:${input.callId}`),
+        eq(toolInvocations.toolName, invocationToolName), eq(toolInvocations.status, "succeeded"),
+        eq(toolInvocations.argumentsHash, input.argumentsHash),
+      )).for("share");
+      const resultTaskCandidate = record(record(input.result).task);
+      const conversationCreateTaskWireIntents = input.tool === "create_task" && resultTaskCandidate.parentId === null &&
+        parsed.success && Array.isArray(profile.nativeAwModelWireIntents)
+        ? profile.nativeAwModelWireIntents.map(record).filter(intent => {
+            if (intent.sourcePolicyHash !== nativeSha256(parsed.data.bootstrap) ||
+              intent.modelPurpose !== "conversation_model" || typeof intent.reservationId !== "string") return false;
+            const uses = Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(record) : [];
+            return uses.some(use => {
+              let name = typeof use.name === "string" ? use.name : "";
+              for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
+                if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
+              }
+              const binding = conversationModelBindingSchema.safeParse(intent.conversationModelBinding);
+              return use.id === input.callId && name === "create_task" && use.argumentsHash === input.argumentsHash &&
+                binding.success && binding.data.issueId === input.issueId &&
+                binding.data.conversationSessionGeneration === run?.contextSnapshot?.conversationSessionGeneration;
+            });
+          }) : [];
+      const nullInvocationCreateTask = conversationCreateTaskWireIntents.length === 1;
+      const contentHash = digest;
+      let nativeReadCapture: { source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>;
+        sourceSet: NativePayloadSourceSet; additionalInput: NativeRunInputSourceReceipt["additionalInputs"][number] } | null = null;
+      if (nativeReadResultTool) {
+        const capturesRaw = profile.nativeToolResultSourceCaptures;
+        const rawCaptures = Array.isArray(capturesRaw) ? capturesRaw.map(record) : [];
+        if (capturesRaw !== undefined && !Array.isArray(capturesRaw)) throw new Error("managed_opencode_tool_result_binding_invalid");
+        const matches = rawCaptures.filter(value => value.managedOpenCode !== true && value.nativeReadResult === true &&
+          value.callId === input.callId && value.turnId === input.turnId && value.tool === input.tool &&
+          value.eventSeq === call[0]?.eventSeq && value.attempt === call[0]?.attempt &&
+          value.argumentsHash === input.argumentsHash && value.resultDigest === contentHash);
+        if (matches.length !== 1) throw new Error("managed_opencode_tool_result_binding_invalid");
+        const observed = matches[0]!;
+        const sourceResult = nativePayloadSourceInputSchema.safeParse(observed.source);
+        const sourceSetValue = record(observed.sourceSet);
+        const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue.policy);
+        const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue.inputs);
+        const observedInputs = nativePayloadSourceInputSchema.array().safeParse(observed.sourceInputs);
+        if (!sourceResult.success || sourceResult.data.kind !== "tool_result" || sourceResult.data.runId !== input.runId ||
+          sourceResult.data.callId !== input.callId || sourceResult.data.toolName !== input.tool ||
+          sourceResult.data.invocationId !== null || sourceResult.data.contentHash !== contentHash ||
+          observed.resultDigest !== contentHash || !sourcePolicy.success || !sourceInputs.success || !observedInputs.success ||
+          !isDeepStrictEqual(sourceInputs.data, observedInputs.data) ||
+          new Set(sourceInputs.data.map(value => JSON.stringify(value))).size !== sourceInputs.data.length)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const entries = parsed.success ? parsed.data.additionalInputs.filter(entry => entry.responsibleUserId === run?.responsibleUserId &&
+          isDeepStrictEqual(entry.policy, sourcePolicy.data) &&
+          isDeepStrictEqual(entry.inputs, [sourceResult.data, ...sourceInputs.data])) : [];
+        const exactCopies = parsed.success ? parsed.data.additionalInputs.reduce((count, entry) => count +
+          entry.inputs.filter(value => value.kind === "tool_result" && isDeepStrictEqual(value, sourceResult.data)).length, 0) : 0;
+        const conflictingCopies = parsed.success && parsed.data.additionalInputs.some(entry => entry.inputs.some(value =>
+          value.kind === "tool_result" && value.callId === input.callId && !isDeepStrictEqual(value, sourceResult.data)));
+        if (!parsed.success || entries.length !== 1 || exactCopies !== 1 || conflictingCopies)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const actor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId,
+          agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run?.responsibleUserId ?? undefined };
+        await assertNativeReadResultSourceSetOwnersCurrent(tx as unknown as Db, { companyId: input.companyId,
+          issueId: input.issueId, runId: input.runId, actor, tool: nativeReadTool!, resultDigest: contentHash, sourceSet: { policy: sourcePolicy.data,
+            inputs: sourceInputs.data } });
+        nativeReadCapture = { source: sourceResult.data, sourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data },
+          additionalInput: entries[0]! };
+      }
+      if (input.tool === "create_task" && process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+        console.error("managed_create_task_run_receipt_test_facts", JSON.stringify({ runPresent: Boolean(run),
+          sourceAuthorityVersion: sourceAuthority.version ?? null, receiptValid: parsed.success, callCount: call.length,
+          resultDigestPresent: Boolean(contentHash), invocationPresent: Boolean(invocation),
+          invocationResultMatches: invocation?.resultHash === contentHash, invocationIssueMatches: invocation?.issueId === input.issueId,
+          receiptCompanyMatches: parsed.success && parsed.data.binding.companyId === input.companyId,
+          receiptRunMatches: parsed.success && parsed.data.binding.runId === input.runId,
+          receiptAgentMatches: parsed.success && parsed.data.binding.agentId === input.agentId,
+          receiptHumanMatches: parsed.success && parsed.data.binding.responsibleUserId === run?.responsibleUserId }));
+      if (!run || sourceAuthority.version !== 1 || !parsed.success || call.length !== 1 ||
+        !contentHash || (!nullInvocationTool && !nullInvocationCreateTask && (!invocation || invocation.resultHash !== contentHash ||
+          invocation.issueId !== input.issueId)) ||
+        (input.tool === "self_remember" && nativeSha256(invocation?.workflowResultJson) !== contentHash) ||
+        parsed.data.binding.companyId !== input.companyId ||
+        parsed.data.binding.runId !== input.runId || parsed.data.binding.agentId !== input.agentId ||
+        parsed.data.binding.responsibleUserId !== run.responsibleUserId)
+        throw new Error("managed_opencode_tool_result_binding_invalid");
+      diagnosticPhase = "provider_dispatch";
+      const matchingModelCalls = Array.isArray(profile.nativeAwModelWireIntents)
+        ? profile.nativeAwModelWireIntents.map(record).filter(intent => {
+            const uses = Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(record) : [];
+            return intent.sourcePolicyHash === nativeSha256(parsed.data.bootstrap) &&
+              uses.some(use => {
+                let name = typeof use.name === "string" ? use.name : "";
+                for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
+                  if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
+                }
+                const expectedWireName = input.tool === "self_remember" ? "self_remember" : input.tool;
+                return use.id === input.callId && name === expectedWireName && use.argumentsHash === input.argumentsHash;
+              });
+          }) : [];
+      if (matchingModelCalls.length !== 1 || typeof matchingModelCalls[0]!.reservationId !== "string")
+        throw new Error("managed_opencode_tool_result_binding_invalid");
+      const managedOutputCapture = input.outputCapture;
+      const managedUse = managedOutputCapture?.managedOpenCodeToolUse;
+      const outputCaptureMatchesCall = Boolean(managedOutputCapture && managedOutputCapture.runId === input.runId &&
+        managedUse?.callId === input.callId && managedUse.toolName === input.tool &&
+        managedUse.argumentsHash === input.argumentsHash && managedUse.responseContentHash === matchingModelCalls[0]!.responseContentHash &&
+        managedOutputCapture.dispatch.kind === "worker_model_dispatch" &&
+        managedOutputCapture.dispatch.runId === input.runId &&
+        managedOutputCapture.dispatch.reservationId === matchingModelCalls[0]!.reservationId &&
+        managedOutputCapture.dispatch.callId === matchingModelCalls[0]!.callId &&
+        managedOutputCapture.dispatch.requestHash === matchingModelCalls[0]!.requestHash &&
+        managedOutputCapture.dispatch.wireBodyHash === matchingModelCalls[0]!.wireBodyHash);
+      let returnedProjectSource: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
+      let createdProjectSource: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
+      let createdProjectWorkspaceSources: Extract<NativePayloadSourceInput, { kind: "project_workspace" }>[] = [];
+      let projectCreateSourceSet: NativePayloadSourceSet | null = null;
+      if (input.tool === "call_api") {
+        diagnosticPhase = "project_source";
+        const source = projectRead?.source;
+        const response = record(input.result);
+        const { apiOperationId: _apiOperationId, ...responseBody } = response;
+        const responseDigest = createHash("sha256").update(JSON.stringify({ ...responseBody,
+          apiOperationId: "GET /api/projects/{id}" }), "utf8").digest("hex");
+        const projectDto = record(response.data);
+        const projectSource = source ? nativePayloadSourceInputSchema.safeParse(source) : null;
+        const apiReceipts = record(record(run.resultJson).apiToolReceipts);
+        const receiptKey = createHash("sha256").update(input.callId).digest("hex");
+        const apiReceipt = record(apiReceipts[receiptKey]);
+        const associations = profile.nativeToolCallDispatchAssociations;
+        const matchingCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
+          ? profile.nativeToolResultSourceCaptures.map(record).filter(capture => capture.callId === input.callId &&
+            capture.turnId === input.turnId && capture.tool === "call_api" && capture.operationId === "GET /api/projects/{id}" &&
+            capture.resultDigest === digest && capture.requestHash === projectRead!.requestHash &&
+            capture.pathAndQuery === projectRead!.pathAndQuery && isDeepStrictEqual(capture.source, source)) : [];
+        const matchingAssociation = Array.isArray(associations) ? associations.map(record).filter(value =>
+          value.callId === input.callId && value.turnId === input.turnId && value.tool === "call_api" &&
+          value.argumentsHash === input.argumentsHash && value.dispatchId === call[0]!.dispatchId &&
+          value.eventSeq === call[0]!.eventSeq && value.attempt === call[0]!.attempt) : [];
+        if (!source || !projectSource?.success || projectSource.data.kind !== "project" ||
+          projectSource.data.projectId !== projectRead!.projectId || projectRead!.resultDigest !== digest ||
+          matchingCaptures.length !== 1 || matchingAssociation.length !== 1 ||
+          responseDigest !== digest || response.apiOperationId !== "GET /api/projects/{id}" || response.ok !== true ||
+          response.status !== 200 || projectDto.id !== projectSource.data.projectId ||
+          createHash("sha256").update(JSON.stringify(projectDto), "utf8").digest("hex") !== projectSource.data.contentHash ||
+          apiReceipt.callId !== input.callId || apiReceipt.turnId !== input.turnId ||
+          apiReceipt.eventSeq !== call[0]!.eventSeq || apiReceipt.attempt !== call[0]!.attempt ||
+          apiReceipt.operationId !== "GET /api/projects/{id}" || apiReceipt.method !== "GET" ||
+          apiReceipt.pathAndQuery !== `/api/projects/${projectSource.data.projectId}` ||
+          apiReceipt.pathAndQuery !== projectRead!.pathAndQuery ||
+          apiReceipt.requestHash !== projectRead!.requestHash || apiReceipt.argumentsHash !== input.argumentsHash ||
+          apiReceipt.state !== "completed" || apiReceipt.status !== 200 || apiReceipt.resultDigest !== digest)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const projectActor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId,
+          agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined };
+        await assertNativeProjectSourceCurrent(tx as unknown as Db, { companyId: input.companyId,
+          actor: projectActor, source: projectSource.data });
+        returnedProjectSource = projectSource.data;
+      }
+      if (input.tool === "create_project") {
+        diagnosticPhase = "project_source";
+        const created = projectCreate!;
+        const sourcePolicyParse = nativePayloadSourcePolicySchema.safeParse(created.sourceSet.policy);
+        const sourceInputsParse = nativePayloadSourceInputSchema.array().safeParse(created.sourceSet.inputs);
+        const sourceSetParse = sourcePolicyParse.success && sourceInputsParse.success
+          ? { success: true as const, data: { policy: sourcePolicyParse.data, inputs: sourceInputsParse.data } }
+          : { success: false as const };
+        const projectSourceParse = nativePayloadSourceInputSchema.safeParse(created.receipt.projectSource);
+        const workspaceSourcesParse = nativePayloadSourceInputSchema.array().safeParse(created.receipt.workspaceSources);
+        if (!sourceSetParse.success || !projectSourceParse.success || projectSourceParse.data.kind !== "project" ||
+          !workspaceSourcesParse.success || workspaceSourcesParse.data.some(source => source.kind !== "project_workspace"))
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        await assertNativeManagedProjectCreateReceiptCurrentInTransaction(tx, { companyId: input.companyId,
+          issueId: input.issueId, runId: input.runId,
+          actor: { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
+            runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined },
+          receipt: created.receipt, sourceSet: sourceSetParse.data, outputCapture: created.outputCapture, result: input.result });
+        createdProjectSource = projectSourceParse.data;
+        createdProjectWorkspaceSources = workspaceSourcesParse.data as Extract<NativePayloadSourceInput, { kind: "project_workspace" }>[];
+        projectCreateSourceSet = sourceSetParse.data;
+      }
+      const inputSource = nativeReadCapture?.source ?? nativePayloadSourceInputSchema.parse({ kind: "tool_result", runId: input.runId,
+        callId: input.callId, toolName: invocationToolName, invocationId: invocation?.id ?? null, contentHash });
+      const resultDocument = record(record(input.result).document);
+      const documentRevision = input.tool === "write_document" && typeof resultDocument.id === "string" &&
+        typeof resultDocument.latestRevisionId === "string"
+        ? { issueId: input.issueId, documentId: resultDocument.id, revisionId: resultDocument.latestRevisionId }
+        : null;
+      let returnedMemorySource: Extract<NativePayloadSourceInput, { kind: "memory" }> | null = null;
+      if (input.tool === "self_remember") {
+        diagnosticPhase = "memory_source";
+        const resultData = record(record(input.result).data);
+        const resultMemory = record(resultData.record);
+        const memoryId = resultMemory.id;
+        const resultScope = record(resultMemory.scope);
+        if ((resultData.status !== "accepted" && resultData.status !== "pending" &&
+          resultData.status !== "duplicate" && resultData.status !== "corroborated") ||
+          typeof memoryId !== "string" || typeof resultMemory.content !== "string")
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const [memory] = await tx.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), eq(memoryRecords.id, memoryId)));
+        if (!memory || memory.payloadSourceProtocolVersion !== 1 || memory.payloadSourceSnapshotInvalidated ||
+          memory.revokedAt || memory.supersededByRecordId || memory.content !== resultMemory.content ||
+          memory.scopeType !== resultScope.type || (memory.scopeId ?? null) !== (resultScope.id ?? null) ||
+          memory.ownerAgentId !== (resultMemory.ownerAgentId ?? null) || memory.reviewState !== resultMemory.reviewState ||
+          memory.verificationState !== resultMemory.verificationState ||
+          (memory.supersedesRecordId ?? null) !== (resultMemory.supersedesRecordId ?? null) ||
+          (memory.supersededByRecordId ?? null) !== (resultMemory.supersededByRecordId ?? null))
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const memorySource = nativePayloadSourceInputSchema.parse({ kind: "memory", memoryId: memory.id,
+          sourceVersion: memory.updatedAt.toISOString(), contentHash: nativeSha256(memory.content),
+          reviewStateAtCapture: memory.reviewState, verificationStateAtCapture: memory.verificationState,
+          reviewTransitionStateHash: nativeMemoryReviewTransitionStateHash(memory) });
+        if (memorySource.kind !== "memory") throw new Error("managed_opencode_tool_result_binding_invalid");
+        await assertNativeMemorySourceInputCurrent(tx as unknown as Db, { companyId: input.companyId,
+          actor: { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
+            runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined }, source: memorySource });
+        returnedMemorySource = memorySource;
+      }
+      let contextReadCapture: Record<string, unknown> | null = null;
+      if (input.tool === "read_context") {
+        diagnosticPhase = "context_source";
+        const visible = record(input.result);
+        const context = input.contextRead;
+        const contextInputs = context?.sourceSet.inputs.filter(source => source.kind === "context") ?? [];
+        const contextSourceReferenceCount = context
+          ? context.sourceSet.inputs.length + Object.values(context.sourceSet.policy).reduce((sum, ids) => sum + ids.length, 0)
+          : Number.POSITIVE_INFINITY;
+        if (!context || typeof visible.markdown !== "string" || visible.markdown !== context.markdown ||
+          Object.keys(visible).length !== 1 || contextInputs.length !== 1 || contextSourceReferenceCount > 256 ||
+          context.manifestIds.length !== 1 || context.manifestIds[0]?.contextManifestId !== contextInputs[0]?.manifestId ||
+          context.manifestIds[0]?.companyId !== input.companyId || context.markdown.length > 64_000)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        await assertNativeContextReadSourceSetCurrent(tx as unknown as Db, { companyId: input.companyId,
+          agentId: input.agentId, runId: input.runId, issueId: input.issueId,
+          actor: { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
+            runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined },
+          sourceSet: context.sourceSet, manifestIds: context.manifestIds });
+        contextReadCapture = { manifestIds: context.manifestIds, sourceSet: context.sourceSet, contentDigest: digest };
+      }
+      let returnedDocumentSource: Extract<NativePayloadSourceInput, { kind: "document_revision" }> | null = null;
+      if (input.tool === "read_document") {
+        diagnosticPhase = "document_task_source";
+        const readCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
+          ? profile.nativeToolResultSourceCaptures.map(record).filter(value => value.managedOpenCode !== true &&
+              value.callId === input.callId && value.tool === input.tool && value.resultDigest === digest)
+          : [];
+        const readSource = record(readCaptures[0]?.source);
+        const sourceInput = nativePayloadSourceInputSchema.safeParse(readSource.input);
+        if (readCaptures.length !== 1 || readSource.returnedResultDigest !== digest || !sourceInput.success ||
+          sourceInput.data.kind !== "document_revision" || sourceInput.data.issueId !== input.issueId)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        returnedDocumentSource = sourceInput.data;
+      } else if (documentRevision) {
+        const [revision] = await tx.select({ body: documentRevisions.body }).from(issueDocuments)
+          .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+          .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, documents.companyId),
+            eq(documentRevisions.documentId, documents.id), eq(documentRevisions.id, documentRevision.revisionId)))
+          .where(and(eq(issueDocuments.companyId, input.companyId), eq(issueDocuments.issueId, input.issueId),
+            eq(issueDocuments.documentId, documentRevision.documentId)));
+        if (!revision) throw new Error("managed_opencode_tool_result_binding_invalid");
+        const parsedDocumentSource = nativePayloadSourceInputSchema.parse({ kind: "document_revision",
+          issueId: input.issueId, documentId: documentRevision.documentId, revisionId: documentRevision.revisionId,
+          contentHash: createHash("sha256").update(revision.body, "utf8").digest("hex") });
+        if (parsedDocumentSource.kind !== "document_revision") throw new Error("managed_opencode_tool_result_binding_invalid");
+        returnedDocumentSource = parsedDocumentSource;
+      }
+      let createdTask: { id: string; source: Extract<NativePayloadSourceInput, { kind: "task" }> } | null = null;
+      if (input.tool === "create_task") {
+        const resultTask = record(record(input.result).task);
+        const conversationBinding = conversationModelBindingSchema.safeParse(matchingModelCalls[0]!.conversationModelBinding);
+        const conversationTask = matchingModelCalls[0]!.modelPurpose === "conversation_model" && conversationBinding.success &&
+          conversationBinding.data.issueId === input.issueId &&
+          conversationBinding.data.conversationSessionGeneration === run.contextSnapshot?.conversationSessionGeneration;
+        // A Worker plan may use a Human-sealed conversation as its source root,
+        // but its C0 draft Tasks stay detached because conversations cannot gain child edges.
+        const workerConversationRootCall = matchingModelCalls[0]!.modelPurpose === "worker_model";
+        const [workerConversationRoot] = workerConversationRootCall ? await tx.select({
+          conversationAgentId: issues.conversationAgentId, conversationUserId: issues.conversationUserId,
+          conversationState: issues.conversationState, conversationSessionGeneration: issues.conversationSessionGeneration,
+          conversationRetiredAt: issues.conversationRetiredAt, parentId: issues.parentId,
+          assigneeAgentId: issues.assigneeAgentId, executionRunId: issues.executionRunId,
+          payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+          payloadSourceSnapshot: issues.payloadSourceSnapshot,
+          payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
+        }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)))
+          .for("share") : [];
+        // Human-authored conversation roots remain current in either live
+        // state; this Worker path still requires every exact owner/run/snapshot
+        // binding below and does not grant ordinary conversation-model use.
+        const workerConversationRootCurrent = workerConversationRootCall && isCurrentWorkerConversationRoot({
+          scope: "worker_model", root: workerConversationRoot, contextSnapshot: run.contextSnapshot,
+          companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
+          responsibleUserId: run.responsibleUserId, runId: input.runId,
+        });
+        const planBackedDraftCall = matchingModelCalls[0]!.modelPurpose === "worker_model" &&
+          resultTask.parentId === null && resultTask.status === "backlog" && outputCaptureMatchesCall;
+        const [draftPlan] = planBackedDraftCall ? await tx.select().from(orchestrationPlans).where(and(
+          eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.issueId, input.issueId),
+          eq(orchestrationPlans.status, "running"), eq(orchestrationPlans.actionClass, "internal_draft"),
+          eq(orchestrationPlans.riskClass, "C0"), isNull(orchestrationPlans.erasedAt),
+        )).for("share") : [];
+        const planBackedStandaloneDraft = planBackedDraftCall && Boolean(draftPlan);
+        const unparentedConversationTask = resultTask.parentId === null && (conversationTask || workerConversationRootCurrent);
+        const managedTaskParentBindingValid = typeof resultTask.id === "string" &&
+          (typeof resultTask.parentId === "string" || resultTask.parentId === null) &&
+          (resultTask.parentId === input.issueId || unparentedConversationTask || planBackedStandaloneDraft);
+        if (!managedTaskParentBindingValid && process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+          const workerConversationSnapshot = nativePayloadSourceSnapshotSchema.safeParse(workerConversationRoot?.payloadSourceSnapshot);
+          const workerConversationInputs = workerConversationSnapshot.success ? workerConversationSnapshot.data.inputs : [];
+          const workerContext = record(run.contextSnapshot);
+          const workerSnapshotOwner = workerConversationSnapshot.success ? workerConversationSnapshot.data.owner : null;
+          console.info("managed-create-task-output-binding-miss", JSON.stringify({
+            resultIdPresent: typeof resultTask.id === "string",
+            resultParentIdNull: resultTask.parentId === null,
+            resultParentIsCurrentIssue: resultTask.parentId === input.issueId,
+            workerConversationRootCall,
+            conversationTask,
+            conversationBindingValid: conversationBinding.success,
+            conversationBindingIssueCurrent: conversationBinding.success && conversationBinding.data.issueId === input.issueId,
+            conversationBindingGenerationCurrent: conversationBinding.success && conversationBinding.data.conversationSessionGeneration === run.contextSnapshot?.conversationSessionGeneration,
+            workerConversationRootPresent: workerConversationRoot !== undefined,
+            rootAgentCurrent: workerConversationRoot?.conversationAgentId === input.agentId,
+            rootHumanCurrent: workerConversationRoot?.conversationUserId === run.responsibleUserId,
+            rootStateActive: workerConversationRoot?.conversationState === "active",
+            rootStateWaiting: workerConversationRoot?.conversationState === "waiting",
+            rootNotRetired: workerConversationRoot?.conversationRetiredAt === null,
+            rootHasNoParent: workerConversationRoot?.parentId === null,
+            rootAssigneeCurrent: workerConversationRoot?.assigneeAgentId === input.agentId,
+            rootExecutionRunCurrent: workerConversationRoot?.executionRunId === input.runId,
+            rootProtocolCurrent: workerConversationRoot?.payloadSourceProtocolVersion === 1,
+            rootSnapshotNotInvalidated: workerConversationRoot?.payloadSourceSnapshotInvalidated === false,
+            rootGenerationCurrent: typeof workerContext.conversationSessionGeneration === "number" &&
+              workerConversationRoot?.conversationSessionGeneration === workerContext.conversationSessionGeneration,
+            rootSnapshotValid: workerConversationSnapshot.success,
+            rootSnapshotOwnerCurrent: workerSnapshotOwner?.kind === "issue" && workerSnapshotOwner.companyId === input.companyId &&
+              workerSnapshotOwner.id === input.issueId,
+            rootSnapshotHasSingleComment: workerConversationInputs.length === 1 && workerConversationInputs[0]?.kind === "comment" &&
+              workerConversationInputs[0].issueId === input.issueId,
+            rootSnapshotPolicyEmpty: workerConversationSnapshot.success &&
+              Object.values(workerConversationSnapshot.data.policy).every(values => values.length === 0),
+            unparentedConversationTask, planBackedDraftCall, draftPlanCurrent: Boolean(draftPlan), outputCaptureMatchesCall,
+          }));
+        }
+        if (!managedTaskParentBindingValid)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        // The predicate above is a composite boolean, so retain its exact
+        // validation while making the proven ID type explicit to Drizzle.
+        const createdTaskId = resultTask.id as string;
+        const [child] = await tx.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
+          description: issues.description, status: issues.status, priority: issues.priority, parentId: issues.parentId,
+          createdByAgentId: issues.createdByAgentId, originRunId: issues.originRunId, responsibleUserId: issues.responsibleUserId,
+          originKind: issues.originKind, originId: issues.originId,
+          sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+          ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+        }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, createdTaskId),
+          unparentedConversationTask || planBackedStandaloneDraft ? isNull(issues.parentId) : eq(issues.parentId, input.issueId)));
+        if (!child) throw new Error("managed_opencode_tool_result_binding_invalid");
+        if (planBackedStandaloneDraft && (child.createdByAgentId !== input.agentId || child.originRunId !== input.runId ||
+          child.responsibleUserId !== run.responsibleUserId || child.status !== "backlog" || child.originKind !== "manual" ||
+          typeof child.originId !== "string" || !child.originId.startsWith(`paperclip-runner:create-task:${input.issueId}:`)))
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const taskInput = nativePayloadSourceInputSchema.parse({ kind: "task", issueId: child.id,
+          sourceVersion: child.sourceVersion, contentHash: child.ownerBodyHash });
+        if (taskInput.kind !== "task") throw new Error("managed_opencode_tool_result_binding_invalid");
+        createdTask = { id: child.id, source: taskInput };
+      }
+      const capturesRaw = profile.nativeToolResultSourceCaptures;
+      if (capturesRaw !== undefined && !Array.isArray(capturesRaw))
+        throw new Error("managed_opencode_tool_result_budget_exceeded");
+      const captures = Array.isArray(capturesRaw) ? capturesRaw : [];
+      if (captures.some(value => {
+        const item = record(value);
+        return item.callId === input.callId && item.turnId === input.turnId && item.tool === input.tool && item.managedOpenCode === true;
+      })) throw new Error("managed_opencode_tool_result_duplicate");
+      // Replace the provisional original-owner read observation with the
+      // provider-settled capture so later validators see one exact source row.
+      const priorCaptures = nativeReadCapture ? captures.filter(value => {
+        const item = record(value);
+        return !(item.managedOpenCode !== true && item.nativeReadResult === true && item.callId === input.callId &&
+          item.turnId === input.turnId && item.tool === input.tool && item.resultDigest === contentHash);
+      }) : captures;
+      if (priorCaptures.length >= 256) throw new Error("managed_opencode_tool_result_budget_exceeded");
+      const nextCaptures = [...priorCaptures, { eventSeq: call[0]!.eventSeq, attempt: call[0]!.attempt,
+        turnId: input.turnId, callId: input.callId, tool: input.tool, argumentsHash: input.argumentsHash, resultDigest: contentHash,
+        source: { kind: "tool_result", runId: input.runId, callId: input.callId, toolName: invocationToolName,
+          invocationId: invocation?.id ?? null, contentHash }, documentRevision,
+        ...(nativeReadCapture ? { nativeReadResult: true, sourceSet: nativeReadCapture.sourceSet,
+          sourceInputs: nativeReadCapture.sourceSet.inputs } : {}),
+        ...(returnedProjectSource ? { projectSource: returnedProjectSource } : {}),
+        ...(projectCreateSourceSet ? { projectCreate: { receipt: projectCreate!.receipt,
+          sourceSet: projectCreateSourceSet, workspaceSources: createdProjectWorkspaceSources,
+          outputCapture: projectCreate!.outputCapture } } : {}),
+        taskRef: createdTask ? { issueId: createdTask.id } : null,
+        ...(contextReadCapture ? { contextRead: contextReadCapture } : {}), managedOpenCode: true }];
+      const { digest: _receiptDigest, ...body } = parsed.data;
+      const createdProjectPolicy = projectCreateSourceSet && createdProjectSource ? {
+        ...projectCreateSourceSet.policy,
+        projectIds: [...new Set([...projectCreateSourceSet.policy.projectIds, createdProjectSource.projectId])].sort(),
+      } : null;
+      const updatedReceiptBody = { ...body, additionalInputs: nativeReadCapture
+        ? parsed.data.additionalInputs
+        : [...parsed.data.additionalInputs, {
+          responsibleUserId: run.responsibleUserId,
+          ...(projectCreateSourceSet && createdProjectSource && createdProjectPolicy ? {
+            policy: createdProjectPolicy,
+            inputs: [inputSource, ...projectCreateSourceSet.inputs, createdProjectSource, ...createdProjectWorkspaceSources],
+          } : input.tool === "read_context" && input.contextRead ? {
+            policy: input.contextRead.sourceSet.policy,
+            inputs: [inputSource, ...input.contextRead.sourceSet.inputs],
+          } : {
+            // The tool_result.runId is provenance for this invocation, not a consumed
+            // retained_run source. Only returned Task/document owners add source policy.
+            policy: { issueIds: [...new Set([...(createdTask ? [createdTask.id] : []),
+              ...(returnedDocumentSource?.issueId ? [returnedDocumentSource.issueId] : [])])],
+              projectIds: returnedProjectSource ? [returnedProjectSource.projectId] : [],
+              runIds: [], memoryIds: returnedMemorySource ? [returnedMemorySource.memoryId] : [], foundationRevisionIds: [] },
+            inputs: [inputSource, ...(returnedDocumentSource ? [returnedDocumentSource] : []),
+              ...(createdTask ? [createdTask.source] : []), ...(returnedMemorySource ? [returnedMemorySource] : []),
+              ...(returnedProjectSource ? [returnedProjectSource] : [])],
+          }),
+        }] };
+      diagnosticPhase = "receipt_build";
+      const receipt = { ...updatedReceiptBody, digest: await postgresJsonbSha256(tx, updatedReceiptBody) };
+      if (!nativeRunInputSourceReceiptSchema.safeParse(receipt).success || Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024)
+        throw new Error("managed_opencode_tool_result_budget_exceeded");
+      const [stored] = await tx.update(heartbeatRuns).set({ runnerProfileJson: {
+        ...profile, nativeInputSourceReceipt: receipt, nativeToolResultSourceCaptures: nextCaptures,
+      }, updatedAt: new Date() }).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.status, "running")))
+        .returning({ profile: heartbeatRuns.runnerProfileJson });
+      diagnosticPhase = "receipt_persist";
+      const retained = record(stored?.profile);
+      if (!nativeRunInputSourceReceiptSchema.safeParse(retained.nativeInputSourceReceipt).success ||
+        !Array.isArray(retained.nativeToolResultSourceCaptures) || nativeSha256(retained.nativeToolResultSourceCaptures) !== nativeSha256(nextCaptures))
+        throw new Error("managed_opencode_tool_result_persistence_failed");
+      diagnosticPhase = "lease_renew";
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
+      const diagnostic = error && typeof error === "object" ? error as Error & { code?: unknown; cause?: { code?: unknown }; status?: unknown } : null;
+      const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,80}$/i.test(value) ? value : null;
+      const frames = diagnostic?.stack?.split("\n").slice(1).flatMap(frame => {
+        const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+        return match ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 6) ?? [];
+      console.error("managed_opencode_tool_result_test_failure", JSON.stringify({
+        name: diagnostic?.name ?? "UnknownError", code: safeCode(diagnostic?.code), causeCode: safeCode(diagnostic?.cause?.code),
+        status: typeof diagnostic?.status === "number" && Number.isInteger(diagnostic.status) ? diagnostic.status : null,
+        mappedCode: ["native_session_lease_lost", "native_session_lease_ttl_invalid",
+          "managed_opencode_tool_result_binding_invalid", "managed_opencode_tool_result_budget_exceeded",
+          "managed_opencode_tool_result_duplicate", "managed_opencode_tool_result_persistence_failed"].includes(message)
+          ? message : "managed_opencode_tool_result_persistence_failed",
+        phase: diagnosticPhase,
+        frames,
+      }));
+    }
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "managed_opencode_tool_result_binding_invalid", "managed_opencode_tool_result_budget_exceeded",
+      "managed_opencode_tool_result_duplicate", "managed_opencode_tool_result_persistence_failed"].includes(message)
+      ? message : "managed_opencode_tool_result_persistence_failed");
+  }
+}
+
+async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; turnId: string; callId: string; tool: string; argumentsHash: string; arguments: unknown;
+}): Promise<void> {
+  await assertNativeAnalyticalRunPayloadAccess(input.db, input.companyId, input.runId);
+  const [run] = await input.db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+    eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+  ));
+  const profile = record(run?.runnerProfileJson);
+  const authority = record(profile.nativeOpenCodeSourceAuthority);
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const attachmentStage = run && receipt.success
+    ? nativeAttachmentStageAuthorityBinding(profile, run, receipt.data.bootstrap,
+      { eventSeq: input.eventSeq, attempt: input.attempt }) : { valid: false, stageHash: null };
+  if (!run || !receipt.success || authority.version !== 1 ||
+    authority.executionInputHash !== nativeSha256(profile.nativeExecutionInput) || !attachmentStage.valid ||
+    (authority.attachmentStageHash ?? null) !== attachmentStage.stageHash)
+    throw new Error("managed_opencode_tool_call_source_binding_invalid");
+  const bootstrapHash = nativeSha256(receipt.data.bootstrap);
+  const sourceIntents = Array.isArray(profile.nativeAwModelWireIntents)
+    ? profile.nativeAwModelWireIntents.map(record).filter(intent => intent.sourcePolicyHash === bootstrapHash) : [];
+  const matchingCallId = sourceIntents.flatMap(intent =>
+    Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(record).map(use => ({ intent, use })) : [])
+    .filter(value => value.use.id === input.callId);
+  if (matchingCallId.length !== 1) throw new Error(matchingCallId.length === 0
+    ? "managed_opencode_tool_call_response_id_unmatched" : "managed_opencode_tool_call_response_id_ambiguous");
+  const callName = typeof matchingCallId[0]!.use.name === "string" ? matchingCallId[0]!.use.name : "";
+  let normalizedName = callName;
+  for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
+    if (normalizedName.startsWith(prefix)) { normalizedName = normalizedName.slice(prefix.length); break; }
+  }
+  if (normalizedName !== input.tool) throw new Error("managed_opencode_tool_call_response_tool_mismatch");
+  if (matchingCallId[0]!.use.argumentsHash !== input.argumentsHash)
+    throw new Error("managed_opencode_tool_call_response_arguments_mismatch");
+  if (input.tool === "call_api") {
+    const args = record(input.arguments), pathParams = record(args.pathParams);
+    const uuid = typeof pathParams.id === "string" &&
+      /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(pathParams.id) && pathParams.id === pathParams.id.toLowerCase();
+    if (!isDeepStrictEqual(Object.keys(args).sort(), ["operationId", "pathParams"]) ||
+      args.operationId !== "GET /api/projects/{id}" ||
+      !isDeepStrictEqual(Object.keys(pathParams), ["id"]) || !uuid)
+      throw new Error("managed_opencode_project_api_operation_not_supported");
+  }
+  if (input.tool === "create_project") {
+    const args = record(input.arguments);
+    const workspace = args.workspace === undefined ? undefined : record(args.workspace);
+    const allowed = ["description", "idempotencyKey", "name", "workspace"];
+    if (Object.keys(args).some(key => !allowed.includes(key)) ||
+      typeof args.name !== "string" || args.name.trim().length < 1 || args.name.length > 200 ||
+      typeof args.idempotencyKey !== "string" || args.idempotencyKey.trim().length < 1 || args.idempotencyKey.length > 255 ||
+      workspace === undefined ||
+      (args.description !== undefined && (typeof args.description !== "string" || args.description.length > 4_000)) ||
+      (workspace !== undefined && (Object.keys(workspace).length !== 1 || typeof workspace.name !== "string" ||
+        workspace.name.trim().length < 1 || workspace.name.length > 200)))
+      throw new Error("managed_opencode_project_create_arguments_not_supported");
+  }
+  const matchedIntent = matchingCallId[0]!.intent;
+  if (typeof matchedIntent.responseContentHash !== "string" || typeof matchedIntent.reservationId !== "string")
+    throw new Error("managed_opencode_tool_call_response_receipt_missing");
+  const purpose = matchedIntent.modelPurpose === "conversation_model" ? "conversation_model" :
+    matchedIntent.modelPurpose === "worker_model" ? "worker_model" : null;
+  const [reservation] = purpose ? await input.db.select().from(orchestrationModelReservations).where(and(
+    eq(orchestrationModelReservations.companyId, input.companyId),
+    eq(orchestrationModelReservations.id, matchedIntent.reservationId),
+    eq(orchestrationModelReservations.purpose, purpose),
+    eq(orchestrationModelReservations.status, "completed"),
+  )) : [];
+  const binding = purpose === "conversation_model"
+    ? conversationModelBindingSchema.safeParse(matchedIntent.conversationModelBinding) : null;
+  if (!reservation || reservation.status !== "completed" || typeof reservation.providerResponseHash !== "string" ||
+    (purpose === "conversation_model" && (!binding?.success || reservation.conversationAgentId !== input.agentId ||
+      reservation.conversationRunId !== input.runId || reservation.conversationIssueId !== input.issueId ||
+      reservation.conversationSessionGeneration !== binding?.data.conversationSessionGeneration ||
+      reservation.executionManifestId !== binding?.data.executionManifestId ||
+      reservation.executionManifestHash !== binding?.data.executionManifestHash)))
+    throw new Error("managed_opencode_tool_call_response_unsettled");
+}
+
+async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; turnId: string; callId: string; tool: string; argumentsHash: string; arguments: unknown;
+}): Promise<NativeModelOutputCapture> {
+  await assertManagedOpenCodeToolCallCurrent(input);
+  const [run] = await input.db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+    eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+  ));
+  const profile = record(run?.runnerProfileJson);
+  if (run) assertNativeRunReadSourceHistoryQualified(profile, { runId: input.runId,
+    responsibleUserId: run.responsibleUserId });
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  if (!run || !receipt.success) throw new Error("managed_opencode_output_capture_source_unavailable");
+  const bootstrapHash = nativeSha256(receipt.data.bootstrap);
+  const matching = Array.isArray(profile.nativeAwModelWireIntents)
+    ? profile.nativeAwModelWireIntents.map(record).filter(intent => {
+        const calls = Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(record) : [];
+        return intent.sourcePolicyHash === bootstrapHash && calls.some(call => {
+          let name = typeof call.name === "string" ? call.name : "";
+          for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
+            if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
+          }
+          return call.id === input.callId && name === input.tool && call.argumentsHash === input.argumentsHash;
+        });
+      }) : [];
+  if (matching.length !== 1 || typeof matching[0]!.reservationId !== "string" ||
+    typeof matching[0]!.responseContentHash !== "string")
+    throw new Error("managed_opencode_output_capture_tool_use_ambiguous");
+  const intent = matching[0]!;
+  const purpose = intent.modelPurpose === "conversation_model" ? "conversation_model" :
+    intent.modelPurpose === "worker_model" ? "worker_model" : null;
+  const [reservation] = purpose ? await input.db.select().from(orchestrationModelReservations).where(and(
+    eq(orchestrationModelReservations.companyId, input.companyId),
+    eq(orchestrationModelReservations.id, intent.reservationId as string),
+    eq(orchestrationModelReservations.purpose, purpose), eq(orchestrationModelReservations.status, "completed"),
+  )) : [];
+  const conversationBinding = purpose === "conversation_model"
+    ? conversationModelBindingSchema.safeParse(intent.conversationModelBinding) : null;
+  const conversationBindingData = conversationBinding?.success ? conversationBinding.data : null;
+  if (!reservation || reservation.status !== "completed" || typeof reservation.providerResponseHash !== "string" ||
+    reservation.inputHash !== intent.requestHash || (purpose === "conversation_model" &&
+      (!conversationBinding?.success || reservation.conversationAgentId !== input.agentId ||
+        reservation.conversationRunId !== input.runId || reservation.conversationIssueId !== input.issueId ||
+        reservation.conversationSessionGeneration !== conversationBindingData?.conversationSessionGeneration ||
+        reservation.executionManifestId !== conversationBindingData?.executionManifestId ||
+        reservation.executionManifestHash !== conversationBindingData?.executionManifestHash)))
+    throw new Error("managed_opencode_output_capture_reservation_unavailable");
+  const parsedDispatchInput = nativePayloadSourceInputSchema.parse(purpose === "conversation_model" ? {
+    kind: "conversation_model_dispatch", runId: input.runId, agentId: input.agentId, issueId: input.issueId,
+    conversationSessionGeneration: conversationBindingData!.conversationSessionGeneration,
+    executionManifestId: conversationBindingData!.executionManifestId,
+    executionManifestHash: conversationBindingData!.executionManifestHash, reservationId: reservation.id,
+    callId: intent.callId, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash,
+    responseHash: reservation.providerResponseHash,
+  } : { kind: "worker_model_dispatch", runId: input.runId, reservationId: reservation.id,
+    callId: intent.callId, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash,
+    responseHash: reservation.providerResponseHash });
+  if (parsedDispatchInput.kind !== "worker_model_dispatch" && parsedDispatchInput.kind !== "conversation_model_dispatch")
+    throw new Error("managed_opencode_output_capture_dispatch_unavailable");
+  const dispatchInput: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" | "conversation_model_dispatch" }> = parsedDispatchInput;
+  const dispatches = receipt.data.dispatches;
+  const matchingDispatches = dispatches.filter(dispatch => dispatch.inputs.some(source => source.kind === dispatchInput.kind &&
+    source.reservationId === reservation.id && source.callId === intent.callId && source.requestHash === intent.requestHash &&
+    source.wireBodyHash === intent.wireBodyHash && source.responseHash === reservation.providerResponseHash));
+  if (matchingDispatches.length < 1) throw new Error("managed_opencode_output_capture_dispatch_unavailable");
+  const consumedRaw = record(intent.consumedSourceSet);
+  const consumedPolicy = nativePayloadSourcePolicySchema.safeParse(consumedRaw.policy);
+  const consumedInputs = nativePayloadSourceInputSchema.array().safeParse(consumedRaw.inputs);
+  const sourceComponents = intent.consumedSourceComponents;
+  if (!consumedPolicy.success || !consumedInputs.success || !Array.isArray(sourceComponents) ||
+    intent.consumedSourceSetHash !== nativeSha256({ policy: consumedPolicy.data, inputs: consumedInputs.data }))
+    throw new Error("managed_opencode_output_capture_consumed_sources_invalid");
+  const sourceSet: NativePayloadSourceSet = { policy: consumedPolicy.data, inputs: consumedInputs.data };
+  const typedComponents = sourceComponents as NativeConsumedSourceComponent[];
+  if (input.tool !== "self_remember") {
+    await assertNativeManagedConsumedSourceSetCurrent(input.db, { companyId: input.companyId, issueId: input.issueId,
+      runId: input.runId, actor: { type: "agent", source: "none", companyId: input.companyId,
+        agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined },
+      components: typedComponents, sourceSet });
+  }
+  // Managed self_remember rechecks the complete captured source closure after
+  // its canonical Memory detail read and before the creating transaction commits;
+  // the succeeded-result sealing pass rechecks it again after the Gateway settles.
+  return {
+    runId: input.runId,
+    sourceSet,
+    consumedSourceComponents: typedComponents,
+    dispatch: dispatchInput,
+    managedOpenCodeToolUse: {
+      callId: input.callId,
+      toolName: input.tool === "self_remember" ? "paperclip-self:remember" : input.tool,
+      argumentsHash: input.argumentsHash,
+      responseContentHash: intent.responseContentHash as string,
+    },
+  };
+}
+
+/** A fact about one document result selected for return, not delivery,
+ * source permission or a complete model-input receipt. */
+async function persistNativeToolResultSourceCapture(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number;
+}, capture: NativeDocumentToolResultSource | NativeProjectToolResultSource, family: "document" | "project"): Promise<void> {
+  const bindingError = `native_${family}_tool_capture_binding_invalid`;
+  const budgetError = `native_${family}_tool_capture_budget_exceeded`;
+  const persistenceError = `native_${family}_tool_capture_persistence_failed`;
+  try {
+    await input.db.transaction(async tx => {
+      if (family === "project") {
+        await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+        await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+      }
+      // Same owned coordinator -> run -> launch order as selected turn inputs.
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+        eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+      )).for("update");
+      if (!run) throw new Error(bindingError);
+      const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+        eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
+        eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
+        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+      )).for("share");
+      if (!launch) throw new Error(bindingError);
+      const profile = record(run.runnerProfileJson);
+      if (family === "project") {
+        const projectCapture = capture as NativeProjectToolResultSource;
+        if (projectCapture.source) {
+          const source = nativePayloadSourceInputSchema.parse(projectCapture.source);
+          if (source.kind !== "project" || source.projectId !== projectCapture.projectId ||
+            !/^[0-9a-f]{64}$/.test(projectCapture.requestHash)) throw new Error(bindingError);
+          const projectActor: AuthorizationActor = {
+            type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
+            runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined,
+          };
+          if (projectCapture.projectId !== source.projectId) throw new Error(bindingError);
+          await assertNativeProjectSourceCurrent(tx as unknown as Db, { companyId: input.companyId,
+            actor: projectActor, source });
+        }
+      }
+      const legacy = profile.nativeDocumentToolResultSources;
+      const current = profile.nativeToolResultSourceCaptures;
+      if ((legacy !== undefined && !Array.isArray(legacy)) || (current !== undefined && !Array.isArray(current)))
+        throw new Error(bindingError);
+      // During a rolling deploy, an older node may still append to the legacy
+      // document-only field while this writer appends to the shared field.
+      // Preserve both histories and collapse only exact duplicate facts.
+      const previous: unknown[] = [];
+      const seenFacts = new Set<string>();
+      for (const fact of [...(legacy as unknown[] | undefined ?? []), ...(current as unknown[] | undefined ?? [])]) {
+        const factHash = nativeSha256(fact);
+        if (!seenFacts.has(factHash)) {
+          seenFacts.add(factHash);
+          previous.push(fact);
+        }
+      }
+      if (previous.length >= 256) throw new Error(budgetError);
+      const selectedDispatch = resolveNativeInputDispatchReceiptIdentity(profile,
+        capture.turnId === null ? null : { turnId: capture.turnId, callId: capture.callId, tool: capture.tool }, capture.tool);
+      const nativeInputDispatch = selectedDispatch?.eventSeq === launch.seq && selectedDispatch.attempt === input.attempt
+        ? selectedDispatch : null;
+      const projectBinding = capture.tool === "call_api"
+        ? { operationId: capture.operationId, projectId: capture.projectId, requestHash: capture.requestHash,
+          pathAndQuery: capture.pathAndQuery } : {};
+      const captures = [...previous, { eventSeq: launch.seq, attempt: input.attempt, turnId: capture.turnId,
+        nativeInputDispatch, responsibleUserId: run.responsibleUserId ?? null, callId: capture.callId,
+        tool: capture.tool, ...projectBinding, resultDigest: capture.resultDigest, source: capture.source }];
+      if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024) throw new Error(budgetError);
+      const nextProfile: Record<string, unknown> = { ...profile, nativeToolResultSourceCaptures: captures };
+      delete nextProfile.nativeDocumentToolResultSources;
+      const [stored] = await tx.update(heartbeatRuns).set({
+        runnerProfileJson: nextProfile, updatedAt: new Date(),
+      }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+      const retained = record(stored?.profile).nativeToolResultSourceCaptures;
+      if (!Array.isArray(retained) || nativeSha256(retained) !== nativeSha256(captures)) throw new Error(persistenceError);
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid", bindingError, budgetError].includes(message)
+      ? message : persistenceError);
+  }
+}
+
+export async function recordNativeDocumentToolResultIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; capture: NativeDocumentToolResultSource;
+}): Promise<void> {
+  try {
+    const capture = input.capture;
+    if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || capture.tool !== "read_document" ||
+      !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[0-9a-f]{64}$/.test(capture.resultDigest) ||
+      capture.turnId !== null && (typeof capture.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(capture.turnId)))
+      throw new Error("native_document_tool_capture_binding_invalid");
+    let source: DocumentRevisionSourceCapture | null = null;
+    if (capture.source !== null) {
+      const inputSource = nativePayloadSourceInputSchema.parse(capture.source.input);
+      const snapshot = capture.source.payloadSourceSnapshot === null ? null
+        : nativePayloadSourceSnapshotSchema.parse(capture.source.payloadSourceSnapshot);
+      if (inputSource.kind !== "document_revision" || inputSource.issueId !== input.issueId ||
+      capture.source.returnedResultDigest !== capture.resultDigest ||
+        snapshot && (snapshot.owner.kind !== "document_revision" || snapshot.owner.companyId !== input.companyId ||
+          snapshot.owner.id !== inputSource.revisionId))
+        throw new Error("native_document_tool_capture_binding_invalid");
+    source = { input: inputSource, payloadSourceSnapshot: snapshot, returnedResultDigest: capture.source.returnedResultDigest };
+    }
+    await persistNativeToolResultSourceCapture(input, { ...capture, source }, "document");
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_document_tool_capture_binding_invalid", "native_document_tool_capture_budget_exceeded"].includes(message)
+      ? message : "native_document_tool_capture_persistence_failed");
+  }
+}
+
+/** Retains a Native tool result and, only when its original owner supplied a
+ * complete source set and the acknowledged provider dispatch association is
+ * exact, appends that result plus its source inputs to the run receipt. */
+export async function recordNativeInputToolResultIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; capture: NativeInputToolResultSource;
+}): Promise<void> {
+  const bindingError = "native_tool_result_capture_binding_invalid";
+  const budgetError = "native_tool_result_capture_budget_exceeded";
+  try {
+    const capture = input.capture;
+    const readTool = capture.tool === "get_task_context" || capture.tool === "get_task_history" ||
+      (capture.tool === "read_chat_attachment" || capture.tool === "query_business_metric") ? capture.tool : null;
+    const supportedNativeRead = readTool !== null;
+    if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || !supportedNativeRead ||
+      !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[\x21-\x7e]{1,240}$/.test(capture.tool) ||
+      !/^[0-9a-f]{64}$/.test(capture.argumentsHash) ||
+      !/^[0-9a-f]{64}$/.test(capture.resultDigest) || nativeSha256(capture.result) !== capture.resultDigest ||
+      capture.turnId !== null && !/^[\x21-\x7e]{1,240}$/.test(capture.turnId)) throw new Error(bindingError);
+    const observedInputs = nativePayloadSourceInputSchema.array().safeParse(capture.observedSourceInputs);
+    const capturedSourceSet = capture.sourceSet;
+    const sourcePolicy = capturedSourceSet ? nativePayloadSourcePolicySchema.safeParse(capturedSourceSet.policy) : null;
+    const sourceInputs = capturedSourceSet ? nativePayloadSourceInputSchema.array().safeParse(capturedSourceSet.inputs) : null;
+    const sourceSetContainsObservedInputs = observedInputs.success && sourceInputs?.success &&
+      new Set(sourceInputs.data.map(value => JSON.stringify(value))).size === sourceInputs.data.length &&
+      new Set(observedInputs.data.map(value => JSON.stringify(value))).size === observedInputs.data.length &&
+      observedInputs.data.every(observed => sourceInputs.data.filter(value => isDeepStrictEqual(value, observed)).length === 1);
+    if (!observedInputs.success || capturedSourceSet && (!sourcePolicy?.success || !sourceInputs?.success ||
+      !sourceSetContainsObservedInputs)) throw new Error(bindingError);
+    const qualifiedSourceSet = capturedSourceSet && sourcePolicy?.success && sourceInputs?.success
+      ? { policy: sourcePolicy.data, inputs: sourceInputs.data }
+      : null;
+
+    await input.db.transaction(async tx => {
+      await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
+      await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+        eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+      )).for("update");
+      const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+        eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
+        eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
+        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+      )).for("share");
+      if (!run || !launch || launch.seq !== input.eventSeq) throw new Error(bindingError);
+      const profile = record(run.runnerProfileJson);
+      const capturesRaw = profile.nativeToolResultSourceCaptures;
+      if (capturesRaw !== undefined && !Array.isArray(capturesRaw)) throw new Error(bindingError);
+      const captures = (capturesRaw as unknown[] | undefined) ?? [];
+      if (captures.some(value => {
+        const row = record(value);
+        return !value || typeof value !== "object" || Array.isArray(value) ||
+          typeof row.callId !== "string" || typeof row.tool !== "string" ||
+          typeof row.resultDigest !== "string" || !/^[0-9a-f]{64}$/.test(row.resultDigest);
+      })) throw new Error(bindingError);
+      if (captures.length >= 256 || Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024)
+        throw new Error(budgetError);
+      const dispatch = capture.turnId ? resolveNativeInputDispatchReceiptIdentity(profile,
+        { tool: capture.tool, callId: capture.callId, turnId: capture.turnId }, capture.tool) : null;
+      const nativeInputDispatch = dispatch?.eventSeq === input.eventSeq && dispatch.attempt === input.attempt
+        ? dispatch : null;
+      const associations = Array.isArray(profile.nativeToolCallDispatchAssociations)
+        ? profile.nativeToolCallDispatchAssociations.map(record).filter(value => value.callId === capture.callId &&
+          value.turnId === capture.turnId && value.tool === capture.tool && value.argumentsHash === capture.argumentsHash &&
+          value.dispatchId === nativeInputDispatch?.dispatchId && value.eventSeq === input.eventSeq && value.attempt === input.attempt)
+        : [];
+      let source: Extract<NativePayloadSourceInput, { kind: "tool_result" }> | null = null;
+      let nextReceipt: NativeRunInputSourceReceipt | null = null;
+      const parsedReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+      if (qualifiedSourceSet && nativeInputDispatch && associations.length === 1 && parsedReceipt.success &&
+        typeof run.responsibleUserId === "string" && parsedReceipt.data.binding.companyId === input.companyId &&
+        parsedReceipt.data.binding.runId === input.runId && parsedReceipt.data.binding.agentId === input.agentId &&
+        parsedReceipt.data.binding.issueId === input.issueId &&
+        parsedReceipt.data.binding.responsibleUserId === run.responsibleUserId) {
+        const parsedSource = nativePayloadSourceInputSchema.safeParse({ kind: "tool_result", runId: input.runId,
+          callId: capture.callId, toolName: capture.tool, invocationId: null, contentHash: capture.resultDigest });
+        if (parsedSource.success && parsedSource.data.kind === "tool_result") {
+            // Validate exact source rows while holding the same privacy and run
+            // transaction locks used to append the additional-input receipt.
+            await assertNativeReadResultSourceSetOwnersCurrent(tx as unknown as Db, { companyId: input.companyId,
+              issueId: input.issueId, runId: input.runId,
+              tool: readTool!, resultDigest: capture.resultDigest,
+              actor: { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
+                runId: input.runId, onBehalfOfUserId: run.responsibleUserId },
+              sourceSet: qualifiedSourceSet });
+            source = parsedSource.data;
+            const existing = parsedReceipt.data.additionalInputs.filter(entry => entry.responsibleUserId === run.responsibleUserId &&
+              isDeepStrictEqual(entry.policy, qualifiedSourceSet.policy) &&
+              isDeepStrictEqual(entry.inputs, [source, ...qualifiedSourceSet.inputs]));
+            if (existing.length > 1) throw new Error(bindingError);
+            if (existing.length === 0) {
+              const { digest: _previousDigest, ...body } = parsedReceipt.data;
+              const nextBody = { ...body, additionalInputs: [...body.additionalInputs, {
+                responsibleUserId: run.responsibleUserId, policy: qualifiedSourceSet.policy,
+                inputs: [source, ...qualifiedSourceSet.inputs],
+              }] };
+              const candidate = { ...nextBody, digest: await postgresJsonbSha256(tx, nextBody) };
+              const parsed = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+              if (!parsed.success) throw new Error(bindingError);
+              nextReceipt = parsed.data;
+            } else nextReceipt = parsedReceipt.data;
+        }
+      }
+      if (captures.some(value => {
+        const row = record(value);
+        return row.callId === capture.callId && row.tool === capture.tool && row.resultDigest === capture.resultDigest;
+      })) throw new Error(bindingError);
+      const nextCaptures = [...captures, { eventSeq: launch.seq, attempt: input.attempt,
+        turnId: capture.turnId, nativeInputDispatch, callId: capture.callId, tool: capture.tool,
+        argumentsHash: capture.argumentsHash, resultDigest: capture.resultDigest, source,
+        sourceInputs: qualifiedSourceSet?.inputs ?? observedInputs.data,
+        ...(qualifiedSourceSet ? { sourceSet: qualifiedSourceSet } : {}), nativeReadResult: true }];
+      if (Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024) throw new Error(budgetError);
+      const nextProfile = { ...profile, nativeToolResultSourceCaptures: nextCaptures,
+        ...(nextReceipt ? { nativeInputSourceReceipt: nextReceipt } : {}) };
+      const [stored] = await tx.update(heartbeatRuns).set({ runnerProfileJson: nextProfile, updatedAt: new Date() })
+        .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.status, "running")))
+        .returning({ profile: heartbeatRuns.runnerProfileJson });
+      const retained = record(stored?.profile);
+      if (!Array.isArray(retained.nativeToolResultSourceCaptures) ||
+        nativeSha256(retained.nativeToolResultSourceCaptures) !== nativeSha256(nextCaptures) ||
+        nextReceipt && !nativeRunInputSourceReceiptSchema.safeParse(retained.nativeInputSourceReceipt).success)
+        throw new Error("native_tool_result_capture_persistence_failed");
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid", bindingError, budgetError].includes(message)
+      ? message : "native_tool_result_capture_persistence_failed");
+  }
+}
+
+/** Records the exact public Project projection returned by one authenticated
+ * Native API tool result. It does not assert provider consumption, source
+ * permission after this read, or closure completeness. */
+export async function recordNativeProjectToolResultIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; capture: NativeProjectToolResultSource;
+}): Promise<void> {
+  try {
+    const capture = input.capture;
+    if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || capture.tool !== "call_api" ||
+      capture.operationId !== "GET /api/projects/{id}" || !/^[\x21-\x7e]{1,240}$/.test(capture.callId) ||
+      !/^[0-9a-f]{64}$/.test(capture.resultDigest) ||
+      !/^[0-9a-f]{64}$/.test(capture.requestHash) ||
+      !/^\/api\/projects\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(capture.pathAndQuery) ||
+      capture.pathAndQuery !== `/api/projects/${capture.projectId}` ||
+      capture.turnId !== null && !/^[\x21-\x7e]{1,240}$/.test(capture.turnId) ||
+      capture.projectId !== null && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(capture.projectId))
+      throw new Error("native_project_tool_capture_binding_invalid");
+    let source: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
+    if (capture.source !== null) {
+      const parsed = nativePayloadSourceInputSchema.parse(capture.source);
+      if (parsed.kind !== "project" || parsed.projectId !== capture.projectId)
+        throw new Error("native_project_tool_capture_binding_invalid");
+      source = parsed;
+    }
+    await persistNativeToolResultSourceCapture(input, { ...capture, source }, "project");
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_project_tool_capture_binding_invalid", "native_project_tool_capture_budget_exceeded"].includes(message)
+      ? message : "native_project_tool_capture_persistence_failed");
+  }
 }
 
 function startNativeSessionExecutionLeaseRenewal(input: {
@@ -7078,6 +9274,11 @@ function startNativeSessionExecutionLeaseRenewal(input: {
           error instanceof Error
             ? error
             : new Error("native_session_lease_lost");
+        recordNativeCancelOriginTestFact(input.runId, {
+          stage: "lease_renewal_failed",
+          reason: leaseLost instanceof HttpError && (leaseLost.details as {code?:unknown}|undefined)?.code === "analytical_source_access_lost"
+            ? "analytical_source_access_lost" : "execution_lease_lost",
+        });
         await cancelNativeSession(
           input.runId,
           leaseLost instanceof HttpError && (leaseLost.details as {code?:unknown}|undefined)?.code === "analytical_source_access_lost"
@@ -7102,6 +9303,22 @@ function startNativeSessionExecutionLeaseRenewal(input: {
 export async function executePaperclipNativeSession(input: {
   db: Db;
   execution: NativeExecutionInput;
+  /** Canonical immutable Heartbeat input hash, before per-run staged descriptors are appended. */
+  nativeBootstrapExecutionInputHash?: string;
+  /** Compiler-owned closed bootstrap source set; NULL means unknown. */
+  bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
+  /** Rebuild the exact bootstrap closure after inbound files are verified and staged. */
+  prepareBootstrapSourceClosure?: (input: {
+    execution: NativeExecutionInput;
+    attachmentStage: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>;
+  }) => NativeBootstrapSourceClosure | null;
+  /** Trusted Heartbeat-owned per-turn source refresh. The returned turnInput
+   * is the exact value passed to startTurn and its closure is bound at dispatch. */
+  prepareTurnSourceClosure?: (turnInput: Parameters<NativeSession["startTurn"]>[0],
+    bootstrapSourceClosure?: NativeBootstrapSourceClosure | null) => Promise<{
+    turnInput: Parameters<NativeSession["startTurn"]>[0];
+    sourceClosure?: NativeBootstrapSourceClosure;
+  }>;
   runnerInstanceId: string;
   /** Trusted task identity from the heartbeat orchestration. */
   conversationMode?: boolean;
@@ -7113,6 +9330,8 @@ export async function executePaperclipNativeSession(input: {
     pid: number;
     processGroupId: number | null;
     startedAt: string;
+    identitySource?: "remote_marker";
+    remoteRunnerInstanceId?: string;
   }) => Promise<void>;
   /** Test seam at the provider boundary; production uses a qualified package backend. */
   backend?: NativeSessionBackend;
@@ -7130,6 +9349,12 @@ export async function executePaperclipNativeSession(input: {
   preparationSpans?: NativeRunHistoricalSpan[];
   /** Use a session-owned GitHub broker, rebound only after run ownership is acquired. */
   managedGitHub?: boolean;
+  /** Test fixture only: pause at the original Project owner before mutation. */
+  testBeforeManagedProjectCreate?: (capture: NativeModelOutputCapture) => Promise<void>;
+  /** Test fixture only: exercise same-call replay after the original Project transaction commits. */
+  testAfterManagedProjectCreate?: (input: { actor: AuthorizationActor; companyId: string; issueId: string; capture: NativeModelOutputCapture; callId: string;
+    arguments: Record<string, unknown>; result: { project: Record<string, unknown>; receipt: NativeProjectCreateReceipt;
+      sourceSet: NativePayloadSourceSet } }) => Promise<void>;
   /** Resolved adapter env; the runner transport applies a provider allowlist before spawn. */
   runnerEnvironment?: NodeJS.ProcessEnv;
   /** Private grant materialization; never a user-configured host path. */
@@ -7179,6 +9404,13 @@ export async function executePaperclipNativeSession(input: {
   try {
     await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
     if (!input.useRunnerd) {
+      const [wake] = await input.db.select({ contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, input.execution.binding.companyId), eq(heartbeatRuns.id, runId),
+      )).limit(1);
+      const savedSources = record(wake?.contextSnapshot).selectedSavedSources;
+      if (Array.isArray(savedSources) && savedSources.length > 0) {
+        throw new Error("native_reconstruction_selected_saved_source_staging_unavailable");
+      }
       return await executePaperclipNativeSessionWithinScope(input);
     }
     // The session scope is unaffected by appending server-staged attachment
@@ -7205,7 +9437,7 @@ export async function executePaperclipNativeSession(input: {
       workspaceRoot: input.execution.workspace.cwd,
       executionTargetKind: targetKind,
     });
-    preparedInput = { ...input, chatAttachmentReadScope };
+    preparedInput = { ...input, nativeBootstrapExecutionInputHash: nativeSha256(input.execution), chatAttachmentReadScope };
     cleanupStagedAttachments = () => chatAttachmentReadScope.close();
     const attachmentStage = await stageNativeRunnerWakeAttachments({
       db: input.db,
@@ -7227,6 +9459,18 @@ export async function executePaperclipNativeSession(input: {
         throw new Error("paperclip_runner_attachment_staging_cleanup_failed");
       }
     };
+    for (const requiredSource of attachmentStage.requiredSavedSources ?? []) {
+      const capture = attachmentStage.sourceCaptures.find(item => item.input.attachmentId === requiredSource.attachmentId);
+      if (capture?.input.disposition === "remote_workspace_staging_unsupported") {
+        throw new Error("native_reconstruction_remote_workspace_staging_unsupported");
+      }
+      if (capture?.input.disposition !== "delivered" || !capture.input.sha256) {
+        throw new Error("native_reconstruction_selected_saved_source_unavailable");
+      }
+      if (capture.input.sha256.toLowerCase() !== requiredSource.sha256) {
+        throw new Error("native_reconstruction_selected_saved_source_hash_mismatch");
+      }
+    }
     const stagedPrompt = renderNativeRunnerStagedAttachmentPrompt(
       attachmentStage.attachments,
     );
@@ -7242,7 +9486,15 @@ export async function executePaperclipNativeSession(input: {
         }),
       };
     }
-    return await executePaperclipNativeSessionWithinScope(preparedInput);
+    if (input.prepareBootstrapSourceClosure) {
+      preparedInput = { ...preparedInput,
+        bootstrapSourceClosure: input.prepareBootstrapSourceClosure({
+          execution: preparedInput.execution,
+          attachmentStage,
+        }) };
+    }
+    return await executePaperclipNativeSessionWithinScope(preparedInput, attachmentStage.sourceCaptures,
+      attachmentStage.attachments, input.execution);
   } catch (error) {
     executionFailure = error;
     throw error;
@@ -7284,7 +9536,11 @@ export async function executePaperclipNativeSession(input: {
 
 async function executePaperclipNativeSessionWithinScope(
   input: Parameters<typeof executePaperclipNativeSession>[0],
+  stagedAttachmentSources?: readonly NativeRunnerAttachmentSourceCapture[],
+  stagedAttachments?: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>["attachments"],
+  baseExecution?: NativeExecutionInput,
 ): Promise<AdapterExecutionResult> {
+  const runId = input.execution.binding.runId;
   if (
     input.execution.provider.kind !== "codex" &&
     input.execution.provider.kind !== "opencode" &&
@@ -7371,6 +9627,7 @@ async function executePaperclipNativeSessionWithinScope(
       onLog: input.onLog,
       restartRecovery: input.restartRecovery,
       runnerExecutionTarget: input.runnerExecutionTarget,
+      conversationMode: input.conversationMode,
     });
   }
   const durableRunnerBinding = input.useRunnerd
@@ -7689,6 +9946,14 @@ async function executePaperclipNativeSessionWithinScope(
     binding: { ...input.execution.binding, normalizedSessionId: nativeSessionKey(input.execution), runnerSourceInstanceId: effectiveRunnerInstanceId },
     resolve: resolveNativeRuntimeRequest,
   });
+  // Event source reviews and managed tool effects update the same Run. Keep
+  // their transactions ordered from startup; post-commit callbacks run outside.
+  let sourceOperationChain: Promise<void> = Promise.resolve();
+  const serializeSourceOperation = <T>(operation: () => Promise<T>): Promise<T> => {
+    const pending = sourceOperationChain.then(operation, operation);
+    sourceOperationChain = pending.then(() => undefined, () => undefined);
+    return pending;
+  };
   let completedConversationReply: PrpEvent | null = null;
   const controlPlane = new PaperclipControlPlanePort(
     input.db,
@@ -7707,15 +9972,20 @@ async function executePaperclipNativeSessionWithinScope(
         : {}),
     },
     {
-      onCommittedEvent: async (event) => {
+      serializeTransaction: serializeSourceOperation,
+      onCommittedEvent: async (event, markAppendDiagnosticStage) => {
+        markAppendDiagnosticStage?.("callback_tool_trace_observe");
         await toolTrace.observe(event);
         if (event.eventType === "item.completed" &&
             record(event.payload).kind === "agentMessage" &&
             record(event.payload).channel === "final") {
           completedConversationReply = event;
         }
+        markAppendDiagnosticStage?.("callback_live_questions_observe");
         await liveQuestions.observe(event);
+        markAppendDiagnosticStage?.("callback_runner_goal_projection");
         await projectSessionGoalEvent(event);
+        markAppendDiagnosticStage?.("callback_event_accounting");
         providerUsageLimitObserved ||= nativeProviderUsageLimitFromEvent(event);
         const eventAtMs = Date.parse(event.emittedAt);
         const milestoneAtMs = Number.isFinite(eventAtMs)
@@ -7834,11 +10104,11 @@ async function executePaperclipNativeSessionWithinScope(
           });
           trace.activate(taskSettleScope);
         }
-        if (input.onLog)
-          await input.onLog(
-            "stdout",
-            `${JSON.stringify({ type: "paperclip.prp.event", event })}\n`,
-          );
+        // appendEvent commits this canonical event to heartbeat_run_events
+        // before entering the callback. Native transcript consumers read that
+        // retained event stream directly, so copying the full structured
+        // provider payload into stdout would duplicate private content and
+        // trigger a second source check/log write for every event.
         if (
           input.onEvent &&
           [
@@ -7959,8 +10229,12 @@ async function executePaperclipNativeSessionWithinScope(
     mode: "per_turn" as const,
     idleTimeoutMs: null,
   };
+  const managedOpenCodeDataHome = managedOpenCodeRuntimeDataIsolated(
+    input.execution,
+    input.runnerEnvironment ?? process.env,
+  );
   const warmSessionId =
-    lifecyclePolicy.mode === "warm"
+    lifecyclePolicy.mode === "warm" && !managedOpenCodeDataHome
       ? nativeSessionScopeKey(input.execution)
       : null;
   const warmConfigDigest =
@@ -8030,6 +10304,11 @@ async function executePaperclipNativeSessionWithinScope(
       );
     }
   }
+  // Provider history survives across warm-session runs, but no exact prior-run
+  // history receipt is available at this owner. Keep ordinary warm execution
+  // intact while withholding any closure that would claim the fresh envelope
+  // is the complete provider input.
+  const retainedSessionHistoryUnknown = existingWarmSession !== undefined || persistedWarmSession != null;
   async function resolvePendingGovernedWait() {
     const continuingInteractionIds = continuingPendingInteractionIds(
       input.execution,
@@ -8149,6 +10428,21 @@ async function executePaperclipNativeSessionWithinScope(
       input.db,
       input.execution.binding,
     );
+    // Staging, warm-session cleanup and the claim may all wait after the
+    // initial source admission. Recheck before preparing a provider backend.
+    await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, input.execution.binding.runId);
+    let launchEventSeq: number | null = null;
+    const managedOpenCodeOutputCaptureRef = input.execution.provider.kind === "opencode" &&
+      (input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()
+      ? { value: null as NativeModelOutputCapture | null } : undefined;
+    const managedContextReadCaptureRef = managedOpenCodeOutputCaptureRef ? { value: null as NativeContextReadBinding | null } : undefined;
+    if (managedOpenCodeDataHome) {
+      await assertRuntimeStorageDirectories(
+        managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId, runId }),
+        resolvePaperclipInstanceRoot(),
+        true,
+      );
+    }
     const runnerdBackend =
       input.useRunnerd && input.backend === undefined
         ? await createRunnerdBackend({
@@ -8159,8 +10453,88 @@ async function executePaperclipNativeSessionWithinScope(
             execution: input.execution,
             runnerInstanceId: effectiveRunnerInstanceId,
             durableEnvironmentLeaseId: durableRunnerBinding?.environmentLeaseId,
+            nativeModelOutputCapture: managedOpenCodeOutputCaptureRef,
+            managedNativeContextReadCapture: managedContextReadCaptureRef,
             trace,
             toolTrace,
+            serializeManagedOperation: serializeSourceOperation,
+            onDocumentRead: async capture => {
+              if (launchEventSeq === null) throw new Error("native_document_tool_capture_binding_invalid");
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await recordNativeDocumentToolResultIntent({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                agentId: input.execution.binding.agentId, leaseOwner, attempt, controller, eventSeq: launchEventSeq, capture });
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await renewNativeSessionExecutionLease({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                leaseOwner, attempt, controller });
+            },
+            onNativeInputToolResult: async capture => {
+              if (launchEventSeq === null) throw new Error("native_tool_result_capture_binding_invalid");
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await recordNativeInputToolResultIntent({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                agentId: input.execution.binding.agentId, leaseOwner, attempt, controller,
+                eventSeq: launchEventSeq, capture });
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await renewNativeSessionExecutionLease({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                leaseOwner, attempt, controller });
+            },
+            onProjectToolResult: async capture => {
+              if (launchEventSeq === null) throw new Error("native_project_tool_capture_binding_invalid");
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await recordNativeProjectToolResultIntent({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                agentId: input.execution.binding.agentId, leaseOwner, attempt, controller, eventSeq: launchEventSeq, capture });
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await renewNativeSessionExecutionLease({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                leaseOwner, attempt, controller });
+            },
+            onNativeToolCall: async call => {
+              if (managedOpenCodeOutputCaptureRef) {
+                managedOpenCodeOutputCaptureRef.value = null;
+                if (managedContextReadCaptureRef) managedContextReadCaptureRef.value = null;
+                if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
+                await assertManagedOpenCodeToolCallCurrent({ db: input.db, runId, companyId: input.execution.binding.companyId,
+                  issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                  leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call });
+              }
+              await recordNativeToolCallDispatchAssociation({
+                db: input.db, runId, companyId: input.execution.binding.companyId,
+                issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                leaseOwner, attempt, controller, ...call,
+              });
+              if (managedOpenCodeOutputCaptureRef && ["write_document", "create_task", "create_project", "self_remember"].includes(call.tool)) {
+                if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
+                managedOpenCodeOutputCaptureRef.value = await prepareManagedOpenCodeOutputCapture({
+                  db: input.db, runId, companyId: input.execution.binding.companyId,
+                  issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                  leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call,
+                });
+              }
+            },
+            ...(input.execution.provider.kind === "opencode" && (input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()
+              ? { onManagedOpenCodeToolResult: async call => {
+                  if (launchEventSeq === null) throw new Error("managed_opencode_tool_result_binding_invalid");
+                  await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+                  try {
+                    await recordManagedOpenCodeToolResult({ db: input.db, runId,
+                      companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                      agentId: input.execution.binding.agentId, leaseOwner, attempt, controller,
+                      outputCapture: managedOpenCodeOutputCaptureRef?.value ?? null,
+                      ...call });
+                  } finally {
+                    if (managedOpenCodeOutputCaptureRef) managedOpenCodeOutputCaptureRef.value = null;
+                    if (managedContextReadCaptureRef) managedContextReadCaptureRef.value = null;
+                  }
+                  await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+                  await renewNativeSessionExecutionLease({ db: input.db, runId,
+                    companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                    leaseOwner, attempt, controller });
+                } }
+              : {}),
           })
         : null;
     const remoteCleanupLease = input.runnerExecutionTarget?.kind === "remote" &&
@@ -8184,7 +10558,7 @@ async function executePaperclipNativeSessionWithinScope(
           executeNativeSession({
             onSessionAdmission: async () => {
               // Invalidate prior stop evidence before a backend can spawn.
-              await appendHeartbeatRunEvent(input.db, {
+              const launchIntent = await appendHeartbeatRunEvent(input.db, {
                 companyId: input.execution.binding.companyId,
                 runId: input.execution.binding.runId,
                 agentId: input.execution.binding.agentId,
@@ -8192,6 +10566,106 @@ async function executePaperclipNativeSessionWithinScope(
                 stream: "system",
                 level: "info",
                 message: "Native execution requested; prior local stop evidence no longer applies.",
+              });
+              launchEventSeq = launchIntent.row.seq;
+              // The launch-intent transaction can wait on the run row too.
+              // A committed intent never substitutes for current source access.
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, input.execution.binding.runId);
+              if (stagedAttachmentSources?.length) {
+                await input.db.transaction(async (tx) => {
+                  // Reuse the exact coordinator lease fence, then the original
+                  // run lock order. This partial capture grants no source access.
+                  await renewNativeSessionExecutionLease({ db: tx as unknown as Db,
+                    runId, companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                    leaseOwner, attempt, controller });
+                  const [run] = await tx.select().from(heartbeatRuns).where(and(
+                    eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, input.execution.binding.companyId),
+                    eq(heartbeatRuns.agentId, input.execution.binding.agentId),
+                    eq(heartbeatRuns.nativeIssueId, input.execution.binding.issueId),
+                    eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+                  )).for("update");
+                  if (!run) throw new Error("native_attachment_stage_capture_binding_changed");
+                  const profile = record(run.runnerProfileJson);
+                  const previous = profile.nativeAttachmentStageSources ?? [];
+                  if (!Array.isArray(previous) || previous.length >= 64)
+                    throw new Error("native_attachment_stage_capture_budget_exceeded");
+                  if (launchEventSeq === null || !stagedAttachments)
+                    throw new Error("native_attachment_stage_capture_binding_changed");
+                  const immutableExecution = baseExecution ?? input.execution;
+                  const baseTaskDigest = nativeTaskDigest(immutableExecution.task);
+                  const finalTaskDigest = nativeTaskDigest(input.execution.task);
+                  const closureAttachmentInputs = input.bootstrapSourceClosure?.sourceSet.inputs.filter(
+                    (source): source is Extract<NativePayloadSourceInput, { kind: "attachment" }> => source.kind === "attachment") ?? [];
+                  // Ordinary historical staging remains an observation. Only a
+                  // new qualified source closure requires the immutable profile binding.
+                  if (previous.length === 0 && closureAttachmentInputs.length &&
+                    nativeSha256(immutableExecution) !== nativeSha256(parseNativeExecutionInput(profile.nativeExecutionInput)))
+                    throw new Error("native_attachment_stage_capture_binding_changed");
+                  const sourceInputs = stagedAttachmentSources.map(capture => capture.input);
+                  if (closureAttachmentInputs.length && (!isDeepStrictEqual(closureAttachmentInputs, sourceInputs) ||
+                    input.bootstrapSourceClosure?.taskEnvelopeDigest !== finalTaskDigest))
+                    throw new Error("native_attachment_stage_capture_binding_changed");
+                  const sourceCaptureHash = nativeSha256(stagedAttachmentSources);
+                  // The descriptor hash excludes workspace paths. The final task digest binds those exact paths
+                  // without retaining temporary filesystem paths in the run profile.
+                  const descriptorHash = nativeSha256(stagedAttachments.map(({ id, filename, contentType, byteSize, unavailableReason }) =>
+                    ({ id, filename, contentType, byteSize, unavailableReason })));
+                  const stageHash = nativeSha256({ eventSeq: launchIntent.row.seq, attempt,
+                    responsibleUserId: run.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest,
+                    sourceCaptureHash, descriptorHash });
+                  const currentCapture = { eventSeq: launchIntent.row.seq, attempt,
+                    responsibleUserId: run.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest,
+                    sourceCaptureHash, descriptorHash, stageHash, sourceCaptures: stagedAttachmentSources };
+                  const captures = [...previous, currentCapture];
+                  if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024)
+                    throw new Error("native_attachment_stage_capture_budget_exceeded");
+                  const authority = record(profile.nativeOpenCodeSourceAuthority);
+                  const nextAuthority = authority.version === 1 && previous.length === 0 && closureAttachmentInputs.length
+                    ? { ...authority, attachmentStageHash: stageHash } : profile.nativeOpenCodeSourceAuthority;
+                  await tx.update(heartbeatRuns).set({
+                    runnerProfileJson: { ...profile, nativeAttachmentStageSources: captures,
+                      ...(nextAuthority ? { nativeOpenCodeSourceAuthority: nextAuthority } : {}) }, updatedAt: new Date(),
+                  }).where(eq(heartbeatRuns.id, runId));
+                });
+                // Capture persistence may itself wait; it is never a grant.
+                await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              }
+            },
+            prepareTurn: async turnInput => {
+              const prepared = input.prepareTurnSourceClosure
+                ? await input.prepareTurnSourceClosure(turnInput, input.bootstrapSourceClosure)
+                : { turnInput, sourceClosure: input.bootstrapSourceClosure ?? undefined };
+              return retainedSessionHistoryUnknown
+                ? { turnInput: prepared.turnInput, sourceClosure: undefined }
+                : prepared;
+            },
+            onTurnInput: async (turnInput, sourceClosure) => {
+              if (launchEventSeq === null) throw new Error("native_model_input_launch_binding_invalid");
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              const preparedClosure = sourceClosure && typeof sourceClosure === "object" && !Array.isArray(sourceClosure)
+                ? sourceClosure as NativeBootstrapSourceClosure : null;
+              const dispatchId = await recordNativeModelInputDispatchIntent({
+                db: input.db, runId, companyId: input.execution.binding.companyId,
+                issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                leaseOwner, attempt, controller, eventSeq: launchEventSeq, turnInput,
+                bootstrapSourceClosure: preparedClosure,
+              });
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await renewNativeSessionExecutionLease({
+                db: input.db, runId, companyId: input.execution.binding.companyId,
+                issueId: input.execution.binding.issueId, leaseOwner, attempt, controller,
+              });
+              return dispatchId;
+            },
+            onTurnStarted: async (turnInput, turnId, dispatchId, sourceClosure) => {
+              if (launchEventSeq === null || !dispatchId) throw new Error("native_model_input_ack_binding_invalid");
+              const preparedClosure = sourceClosure && typeof sourceClosure === "object" && !Array.isArray(sourceClosure)
+                ? sourceClosure as NativeBootstrapSourceClosure : null;
+              await recordNativeModelInputDispatchAcknowledgement({
+                db: input.db, runId, companyId: input.execution.binding.companyId,
+                issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                leaseOwner, attempt, controller, eventSeq: launchEventSeq, dispatchId, turnInput, turnId,
+                sourceClosure: preparedClosure,
               });
             },
             input: runnerExecution,
@@ -8205,12 +10679,15 @@ async function executePaperclipNativeSessionWithinScope(
                 onSpawn: input.onSpawn,
                 opencodeEnvironment: input.runnerEnvironment ?? process.env,
                 acpxEnvironment: input.runnerEnvironment ?? process.env,
-                opencodeRuntimeDirectory: resolve(
-                  resolvePaperclipInstanceRoot(),
-                  "runtime",
-                  "paperclip-runner",
-                  "opencode",
-                ),
+                opencodeRuntimeDirectory: managedOpenCodeDataHome
+                  ? managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId,
+                    runId: input.execution.binding.runId })
+                  : resolve(
+                      resolvePaperclipInstanceRoot(),
+                      "runtime",
+                      "paperclip-runner",
+                      "opencode",
+                    ),
                 acpxRuntimeDirectory: resolve(
                   resolvePaperclipInstanceRoot(),
                   "runtime",
@@ -8237,12 +10714,57 @@ async function executePaperclipNativeSessionWithinScope(
                   eq(issues.companyId, input.execution.binding.companyId),
                 ))
                 .limit(1);
-              return nativeConversationReplyResult({
-                conversation: conversation?.agentId === input.execution.binding.agentId,
+              const [activeWorkerAttempt] = await input.db
+                .select({ id: orchestrationWorkerAttempts.id })
+                .from(orchestrationWorkerAttempts)
+                .where(and(
+                  eq(orchestrationWorkerAttempts.companyId, input.execution.binding.companyId),
+                  eq(orchestrationWorkerAttempts.agentId, input.execution.binding.agentId),
+                  eq(orchestrationWorkerAttempts.runId, runId),
+                  eq(orchestrationWorkerAttempts.status, "running"),
+                ))
+                .limit(1);
+              const [currentRunProfile] = await input.db
+                .select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+                .from(heartbeatRuns)
+                .where(and(
+                  eq(heartbeatRuns.companyId, input.execution.binding.companyId),
+                  eq(heartbeatRuns.agentId, input.execution.binding.agentId),
+                  eq(heartbeatRuns.id, runId),
+                ))
+                .limit(1);
+              const modelWireIntents = record(currentRunProfile?.runnerProfileJson).nativeAwModelWireIntents;
+              const workerModelPurposeWasUsed = Array.isArray(modelWireIntents) &&
+                modelWireIntents.some(value => record(value).modelPurpose === "worker_model");
+              const replyResult = nativeConversationReplyResult({
+                // A Worker plan may run against a sealed conversation root,
+                // but it still needs its ordinary semantic finish. Only a
+                // conversation turn without an active Worker attempt may use
+                // the plain-reply completion path.
+                conversation: conversation?.agentId === input.execution.binding.agentId &&
+                  !activeWorkerAttempt && !workerModelPurposeWasUsed,
                 terminalEvent,
                 replyEvent: completedConversationReply,
                 completionContract: input.execution.completionContract.contract,
               });
+              if (!replyResult && process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1") {
+                const reply = completedConversationReply;
+                const payload = record(reply?.payload);
+                const replyText = typeof payload.text === "string" ? payload.text.trim() : "";
+                await input.onLog?.("stderr", `[paperclip-runner] conversation reply result predicates: ${JSON.stringify({
+                  conversationAgentMatches: conversation?.agentId === input.execution.binding.agentId,
+                  terminalIsCompleted: terminalEvent.eventType === "turn.completed",
+                  replyExists: reply !== null,
+                  replyIsCompletedItem: reply?.eventType === "item.completed",
+                  replyIsAgentMessage: payload.kind === "agentMessage",
+                  replyIsFinalChannel: payload.channel === "final",
+                  replyHasText: replyText.length > 0,
+                  replyRunMatches: reply?.runId === terminalEvent.runId,
+                  replyTurnMatches: reply?.turnId === terminalEvent.turnId,
+                  replySessionMatches: reply?.normalizedSessionId === terminalEvent.normalizedSessionId,
+                })}\n`);
+              }
+              return replyResult;
             },
             existingSession: existingWarmSession,
             persistedSession: persistedWarmSession,
@@ -8356,6 +10878,7 @@ async function executePaperclipNativeSessionWithinScope(
                     ownerToken: warmSessionOwnerToken,
                     configDigest: warmConfigDigest,
                     companyId: input.execution.binding.companyId,
+                    runId: input.execution.binding.runId,
                     environmentId:
                       input.runnerExecutionTarget?.environmentId ?? null,
                     busy: true,
@@ -8380,6 +10903,10 @@ async function executePaperclipNativeSessionWithinScope(
                 const startup = nativeSessionStartups.get(input.execution.binding.runId);
                 startup?.resolve(active);
                 if (startup?.stopRequested) {
+                  recordNativeCancelOriginTestFact(input.execution.binding.runId, {
+                    stage: "startup_stop_requested",
+                    reason: "stop_during_startup",
+                  });
                   // Publication wakes the Stop caller; wait for its durable ACK
                   // before unwinding. No provider turn may be submitted between
                   // session startup and the execution-owned cleanup below.
@@ -8406,6 +10933,18 @@ async function executePaperclipNativeSessionWithinScope(
                     currentRun.resultJson?.startupCancellation ||
                     (cancellation.scope === "run" &&
                       ["pending", "acknowledged"].includes(String(cancellation.dispatchState)))) {
+                  const status = currentRun?.status;
+                  recordNativeCancelOriginTestFact(input.execution.binding.runId, {
+                    stage: "startup_gate",
+                    reason: "run_stopped_during_startup",
+                    runStatus: status === "running" || status === "cancelled" || status === "failed" ||
+                      status === "interrupted" || status === "succeeded" || status === "timed_out"
+                      ? status : currentRun ? "other" : "missing",
+                    startupCancellationPresent: Boolean(currentRun?.resultJson?.startupCancellation),
+                    cancellationScope: cancellation.scope === "run" ? "run" : cancellation.scope ? "other" : "absent",
+                    cancellationDispatchState: cancellation.dispatchState === "pending" || cancellation.dispatchState === "acknowledged"
+                      ? cancellation.dispatchState : cancellation.dispatchState ? "other" : "absent",
+                  });
                   await cancelNativeSession(input.execution.binding.runId, "Run stopped during native session startup");
                   // The execution-owned finally closes the session when this
                   // callback fails; no provider turn may follow publication.
@@ -8415,7 +10954,13 @@ async function executePaperclipNativeSessionWithinScope(
                 if (nativeRunsDetachingForRestart.has(input.execution.binding.runId)) {
                   if (session.detachControllerForRestart) await detachActiveNativeSessionForRestart(active);
                 }
-                if (active.cancelRequested) throw new NativeCancellationPendingRecoveryError();
+                if (active.cancelRequested) {
+                  recordNativeCancelOriginTestFact(input.execution.binding.runId, {
+                    stage: "active_cancel_requested",
+                    reason: null,
+                  });
+                  throw new NativeCancellationPendingRecoveryError();
+                }
               } else {
                 liveQuestions.close();
                 activeNativeSessions.delete(input.execution.binding.runId);
@@ -8626,6 +11171,28 @@ async function executePaperclipNativeSessionWithinScope(
       // transitions the run into "failed". Read after the transaction
       // commits, so a rolled-back write never reports a false failure.
       let terminalRunToReport: typeof heartbeatRuns.$inferSelect | null = null;
+      // Preserve the execution error even if recording its state later fails
+      // on a separate database lock or storage error.
+      await attemptFailureStep(() =>
+        input.onLog?.(
+          "stderr",
+          `[paperclip-runner] native session execution failed: ${executionFailureMessage}\n`,
+        ),
+      );
+      if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1" ||
+          process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1") {
+        const originalError = error instanceof Error ? error as Error & { code?: unknown; cause?: { code?: unknown } } : null;
+        const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_]{1,32}$/.test(value)
+          ? value : undefined;
+        const frames = originalError?.stack?.split("\n").slice(1).flatMap(line => {
+          const match = /\/server\/src\/services\/([^():]+\.ts):(\d+):\d+/.exec(line);
+          return match ? [`${match[1]}:${match[2]}`] : [];
+        }).slice(0, 4) ?? [];
+        const failureFacts = { name: originalError?.name ?? "UnknownError",
+          code: safeCode(originalError?.code), causeCode: safeCode(originalError?.cause?.code), frames };
+        await attemptFailureStep(() => input.onLog?.("stderr",
+          `[paperclip-runner] native session original failure facts: ${JSON.stringify(failureFacts)}\n`));
+      }
       await input.db.transaction(async (tx) => {
         await tx.execute(
           sql`select set_config('statement_timeout', '15000', true), set_config('lock_timeout', '1000', true)`,
@@ -8878,12 +11445,6 @@ async function executePaperclipNativeSessionWithinScope(
       if (terminalRunToReport) void reportRunFailure(input.db, terminalRunToReport);
       await boundedExecutionCleanup(async () => {
         await stoppedLeaseRenewal;
-        await attemptFailureStep(() =>
-          input.onLog?.(
-            "stderr",
-            `[paperclip-runner] native session execution failed: ${executionFailureMessage}\n`,
-          ),
-        );
         if (runnerSessionStartupScope) {
           await attemptFailureStep(() =>
             trace.end(runnerSessionStartupScope!, {
@@ -9149,6 +11710,25 @@ function processEnvironment(
       (entry): entry is [string, string] => typeof entry[1] === "string",
     ),
   );
+}
+
+function sandboxRunnerProcessEnvironment(
+  environment: NodeJS.ProcessEnv,
+): Record<string, string> {
+  const result = processEnvironment(environment);
+  // These values belong to RuntimeControl's typed broker credentials. The
+  // runner transport keeps its selected environment, while sandboxExec
+  // receives none of the caller-controlled reserved keys and injects the
+  // current server-issued tuple into the launched process itself.
+  for (const key of [
+    "PAPERCLIP_SANDBOX_BROKER_TOKEN",
+    "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN",
+    "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
+    "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+  ]) delete result[key];
+  return result;
 }
 
 /** Preserve package-manager shims that resolve dependencies relative to argv[0]. */
@@ -9440,15 +12020,28 @@ export function assertRemoteRunnerBuildMetadata(
   }
 }
 
-async function stageRemoteRunnerFile(input: {
+export async function stageRemoteRunnerFile(input: {
   target: Extract<AdapterExecutionTarget, { kind: "remote" }>;
   runner: CommandManagedRuntimeRunner;
   sourcePath: string;
   targetPath: string;
   mode: number;
+  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+  forceRelayChunking?: boolean;
 }): Promise<void> {
   const runner = input.runner;
-  if (runner.syncIn) {
+  if (input.forceRelayChunking && input.nativePreparationPurpose === "provider_artifact") {
+    const bytes = readFileSync(input.sourcePath);
+    await stageRemoteArtifactBytesInChunks({
+      runner,
+      cwd: input.target.remoteCwd,
+      targetPath: input.targetPath,
+      mode: input.mode,
+      bytes,
+    });
+    return;
+  }
+  if (runner.syncIn && input.nativePreparationPurpose !== "native_runtime_context_prepare") {
     await runner.syncIn([
       {
         operationId: `runner-stage-${randomUUID()}`,
@@ -9475,6 +12068,7 @@ async function stageRemoteRunnerFile(input: {
     args: ["-c", script],
     stdin: bytes.toString("base64"),
     bypassSession: true,
+    nativePreparationPurpose: input.nativePreparationPurpose,
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_staging_failed");
@@ -9508,9 +12102,15 @@ export async function stageRemoteRunnerDirectory(input: {
   targetPath: string;
   mode: number;
   excludeEntries?: readonly string[];
+  nativePreparationPurpose?: "provider_artifact" | "native_runtime_context_prepare" | "native_harness_state" | "native_provider_data_erasure_probe";
 }): Promise<void> {
   const excludeArgs = archiveExcludeArgs(input.excludeEntries ?? []);
-  if (input.runner.syncIn) {
+  // Runtime context is a source-pinned, server-owned preparation phase. Route
+  // it through the signed execute relay so RuntimeControl can bind the exact
+  // run/profile and private context target; native provider sync has no owner
+  // field and cannot prove those bindings.
+  if (input.runner.syncIn && input.nativePreparationPurpose !== "native_runtime_context_prepare" &&
+    input.nativePreparationPurpose !== "native_harness_state") {
     let stagingRoot: string | null = null;
     let sourcePath = input.sourcePath;
     try {
@@ -9560,16 +12160,61 @@ export async function stageRemoteRunnerDirectory(input: {
     args: ["-c", script],
     stdin: archive.toString("base64"),
     bypassSession: true,
+    nativePreparationPurpose: input.nativePreparationPurpose,
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_directory_staging_failed");
   }
 }
 
-async function remoteRunnerPathExists(input: {
+/**
+ * Transfer trusted, build-owned artifacts through the existing bounded signed
+ * exec relay. Each stdin is small enough for the relay's nested base64 request
+ * envelope; the target and temporary path remain inside the task's private
+ * runtime directory and RuntimeControl checks the exact command forms.
+ */
+async function stageRemoteArtifactBytesInChunks(input: {
+  runner: CommandManagedRuntimeRunner;
+  cwd: string;
+  targetPath: string;
+  mode: number;
+  bytes: Buffer;
+}): Promise<void> {
+  const MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
+  const CHUNK_BYTES = 256 * 1024;
+  if (input.bytes.length === 0 || input.bytes.length > MAX_ARTIFACT_BYTES) {
+    throw new Error("runner_remote_provider_artifact_incompatible: artifact size is outside the bounded relay transfer");
+  }
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const parent = posix.dirname(input.targetPath);
+  const tempPath = `${input.targetPath}.paperclip-upload.${randomUUID()}`;
+  const run = async (script: string, stdin = "") => {
+    const result = await input.runner.execute({
+      command: "sh",
+      args: ["-c", script],
+      cwd: input.cwd,
+      stdin,
+      bypassSession: true,
+      nativePreparationPurpose: "provider_artifact",
+    });
+    if (result.exitCode !== 0 || result.timedOut) {
+      throw new Error("runner_remote_provider_artifact_incompatible: bounded relay staging failed");
+    }
+  };
+  await run(`umask 077; mkdir -p ${quote(parent)} && rm -f ${quote(tempPath)} && : > ${quote(tempPath)}`);
+  for (let offset = 0; offset < input.bytes.length; offset += CHUNK_BYTES) {
+    const chunk = input.bytes.subarray(offset, Math.min(input.bytes.length, offset + CHUNK_BYTES));
+    const append = `current=$(wc -c < ${quote(tempPath)}); test "$current" -le ${MAX_ARTIFACT_BYTES} && test $((current + ${chunk.length})) -le ${MAX_ARTIFACT_BYTES} && base64 -d >> ${quote(tempPath)}`;
+    await run(append, chunk.toString("base64"));
+  }
+  await run(`chmod ${input.mode.toString(8)} ${quote(tempPath)} && mv -f ${quote(tempPath)} ${quote(input.targetPath)}`);
+}
+
+export async function remoteRunnerPathExists(input: {
   runner: CommandManagedRuntimeRunner;
   path: string;
   kind: "file" | "directory";
+  nativeHarnessState?: boolean;
 }): Promise<boolean> {
   const escapedPath = input.path.replaceAll("'", "'\\''");
   const result = await input.runner.execute({
@@ -9577,6 +12222,7 @@ async function remoteRunnerPathExists(input: {
     args: ["-c", `test -${input.kind === "file" ? "f" : "d"} '${escapedPath}'`],
     bypassSession: true,
     timeoutMs: 10_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   return result.exitCode === 0 && !result.timedOut;
 }
@@ -9689,12 +12335,14 @@ export async function syncRemoteRunnerDirectoryOut(input: {
   targetPath: string;
   mode: number;
   excludeEntries?: readonly string[];
+  nativeHarnessState?: boolean;
 }): Promise<void> {
   if (
     !(await remoteRunnerPathExists({
       runner: input.runner,
       path: input.sourcePath,
       kind: "directory",
+      nativeHarnessState: input.nativeHarnessState,
     }))
   )
     return;
@@ -9727,6 +12375,7 @@ export async function syncRemoteRunnerDirectoryOut(input: {
         ],
         bypassSession: true,
         timeoutMs: 120_000,
+        ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
       });
       if (snapshotResult.exitCode !== 0 || snapshotResult.timedOut) {
         throw new Error("runner_remote_checkpoint_snapshot_failed");
@@ -9756,6 +12405,7 @@ export async function syncRemoteRunnerDirectoryOut(input: {
             args: ["-c", `rm -rf -- '${escapedSnapshot}'`],
             bypassSession: true,
             timeoutMs: 30_000,
+            ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
           })
           .catch(() => undefined);
       }
@@ -9763,11 +12413,13 @@ export async function syncRemoteRunnerDirectoryOut(input: {
     return;
   }
   const escapedSource = input.sourcePath.replaceAll("'", "'\\''");
+  const exclusionPrefix = excludeArgs.length > 0 ? `${excludeArgs} ` : "";
   const result = await input.runner.execute({
     command: "sh",
-    args: ["-c", `tar ${excludeArgs} -czf - -C '${escapedSource}' . | base64`],
+    args: ["-c", `tar ${exclusionPrefix}-czf - -C '${escapedSource}' . | base64`],
     bypassSession: true,
     timeoutMs: 120_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_checkpoint_failed");
@@ -9835,6 +12487,7 @@ export async function syncRemoteRunnerDirectoryOut(input: {
 async function readRemoteRunnerState(input: {
   runner: CommandManagedRuntimeRunner;
   stateDirectory: string;
+  nativeHarnessState?: boolean;
 }): Promise<Record<string, unknown>> {
   const statePath = posix.join(input.stateDirectory, "runner-state.json");
   const escapedPath = statePath.replaceAll("'", "'\\''");
@@ -9843,6 +12496,7 @@ async function readRemoteRunnerState(input: {
     args: ["-c", `test -f '${escapedPath}' && base64 < '${escapedPath}'`],
     bypassSession: true,
     timeoutMs: 10_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error(
@@ -9860,6 +12514,7 @@ async function readRemoteRunnerProviderState(input: {
   runner: CommandManagedRuntimeRunner;
   stateDirectory: string;
   execution: NativeExecutionInput;
+  nativeHarnessState?: boolean;
 }): Promise<Record<string, unknown>> {
   const statePath = posix.join(
     input.stateDirectory,
@@ -9871,6 +12526,7 @@ async function readRemoteRunnerProviderState(input: {
     args: ["-c", `test -f '${escapedPath}' && base64 < '${escapedPath}'`],
     bypassSession: true,
     timeoutMs: 10_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   if (result.exitCode !== 0 || result.timedOut) {
     throw new Error("runner_remote_provider_state_unavailable");
@@ -9884,22 +12540,6 @@ async function readRemoteRunnerProviderState(input: {
 
 const REMOTE_RUNNER_PROCESS_IDENTITY_WAIT_MS = 20_000;
 const REMOTE_RUNNER_PROCESS_POLL_MS = 1_000;
-
-// Linux boot identity plus start ticks identifies a process generation across
-// PID reuse. exec preserves both the launch shell's PID and its start ticks.
-const REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT =
-  "process_fingerprint=$(node -e 'const fs=require(\"node:fs\");try{const stat=fs.readFileSync(\"/proc/\"+process.argv[1]+\"/stat\",\"utf8\");const end=stat.lastIndexOf(\") \");const ticks=stat.slice(end+2).trim().split(/\\s+/)[19];const boot=fs.readFileSync(\"/proc/sys/kernel/random/boot_id\",\"utf8\").trim();if(end<0||!/^\\d+$/.test(ticks||\"\")||!/^[-a-fA-F0-9]+$/.test(boot))process.exit(4);process.stdout.write(\"linux:\"+boot+\":\"+ticks)}catch{process.exit(4)}' \"$pid\")";
-
-const REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT =
-  'set -eu; identity_path=$1; expected_nonce=$2; expected_runner_id=$3; expected_pid=$4; test -f "$identity_path" && test ! -L "$identity_path" || exit 3; { IFS= read -r nonce; IFS= read -r pid; IFS= read -r started_at; IFS= read -r runner_id; } < "$identity_path"; test "$nonce" = "$expected_nonce" && test "$runner_id" = "$expected_runner_id" && test "$pid" = "$expected_pid" && test -n "$started_at" || exit 4; kill -0 "$pid" 2>/dev/null || exit 3; if test -r "/proc/$pid/cmdline"; then command_line=$(tr "\\000" "\\n" < "/proc/$pid/cmdline"); printf "%s\\n" "$command_line" | grep -Fqx -- "--runner-id" || exit 4; printf "%s\\n" "$command_line" | grep -Fqx -- "$expected_runner_id" || exit 4; fi';
-
-export const REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT =
-  'set -eu; identity_path=$1; identity_nonce=$2; runner_instance_id=$3; diagnostics_directory=$4; shift 4; umask 077; test ! -L "$diagnostics_directory"; if test -e "$diagnostics_directory"; then test -d "$diagnostics_directory"; else mkdir -p -- "$diagnostics_directory"; fi; chmod 0700 "$diagnostics_directory"; started_at=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ"); pid=$$; process_fingerprint=""; if ' +
-  REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT +
-  '; then :; else process_fingerprint=""; fi; identity_tmp="${identity_path}.tmp.$$"; printf "%s\\n%s\\n%s\\n%s\\n%s\\n" "$identity_nonce" "$$" "$started_at" "$runner_instance_id" "$process_fingerprint" > "$identity_tmp"; chmod 0600 "$identity_tmp"; mv -f -- "$identity_tmp" "$identity_path"; exec "$@"';
-
-const REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT =
-  'set -eu; identity_path=$1; expected_nonce=$2; expected_runner_id=$3; marker_wait=0; while { test ! -f "$identity_path" || test -L "$identity_path"; } && test "$marker_wait" -lt 50; do marker_wait=$((marker_wait + 1)); sleep 0.1; done; test -f "$identity_path" && test ! -L "$identity_path" || exit 3; { IFS= read -r nonce; IFS= read -r pid; IFS= read -r started_at; IFS= read -r runner_id; } < "$identity_path"; test "$nonce" = "$expected_nonce" && test "$runner_id" = "$expected_runner_id" && test -n "$started_at" || exit 4; case "$pid" in ""|*[!0-9]*) exit 4 ;; esac; test "$pid" -gt 0 || exit 4; if kill -0 "$pid" 2>/dev/null; then if test -r "/proc/$pid/cmdline"; then command_line=$(tr "\\000" "\\n" < "/proc/$pid/cmdline"); printf "%s\\n" "$command_line" | grep -Fqx -- "--runner-id" || exit 4; printf "%s\\n" "$command_line" | grep -Fqx -- "$expected_runner_id" || exit 4; fi; signal_target=$pid; if command -v ps >/dev/null 2>&1; then session_id=$(ps -o sid= -p "$pid" 2>/dev/null | tr -d " ") || true; if test "$session_id" = "$pid"; then signal_target="-$pid"; fi; fi; kill -TERM -- "$signal_target" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true; term_wait=0; while kill -0 "$pid" 2>/dev/null && test "$term_wait" -lt 50; do term_wait=$((term_wait + 1)); sleep 0.1; done; if kill -0 "$pid" 2>/dev/null; then kill -KILL -- "$signal_target" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true; kill_wait=0; while kill -0 "$pid" 2>/dev/null && test "$kill_wait" -lt 50; do kill_wait=$((kill_wait + 1)); sleep 0.1; done; fi; kill -0 "$pid" 2>/dev/null && exit 5; fi; test -f "$identity_path" && test ! -L "$identity_path" || exit 4; { IFS= read -r final_nonce; IFS= read -r final_pid; IFS= read -r final_started_at; IFS= read -r final_runner_id; } < "$identity_path"; test "$final_nonce" = "$nonce" && test "$final_pid" = "$pid" && test "$final_started_at" = "$started_at" && test "$final_runner_id" = "$runner_id" || exit 4; rm -f -- "$identity_path"';
 
 export function parseRemoteRunnerProcessIdentity(
   value: string,
@@ -9934,6 +12574,7 @@ export async function verifyRemoteRunnerReattachment(input: {
   identity: Record<string, unknown>;
   runId: string;
   normalizedSessionId: string;
+  nativeHarnessState?: boolean;
 }) {
   const { claim, target, identity } = input;
   if (
@@ -9959,7 +12600,7 @@ export async function verifyRemoteRunnerReattachment(input: {
     createHash("sha256").update(input.normalizedSessionId).digest("hex"),
     "runner",
   );
-  const runnerState = await readRemoteRunnerState({ runner, stateDirectory });
+  const runnerState = await readRemoteRunnerState({ runner, stateDirectory, nativeHarnessState: input.nativeHarnessState });
   for (const field of [
     "runId",
     "normalizedSessionId",
@@ -9987,6 +12628,7 @@ export async function verifyRemoteRunnerReattachment(input: {
     ],
     bypassSession: true,
     timeoutMs: 10_000,
+    ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
   });
   const nonce = marker.stdout.split("\n")[0] ?? "";
   const runnerInstanceId = identity.runnerInstanceId as string;
@@ -10017,6 +12659,7 @@ export async function verifyRemoteRunnerReattachment(input: {
       ],
       bypassSession: true,
       timeoutMs: 10_000,
+      ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
     });
     return result.exitCode === 0 && !result.timedOut;
   };
@@ -10037,7 +12680,8 @@ async function waitForRemoteRunnerProcessIdentity(input: {
   identityPath: string;
   nonce: string;
   runnerInstanceId: string;
-}): Promise<{ pid: number; startedAt: string }> {
+  nativeHarnessState?: boolean;
+}): Promise<{ pid: number; startedAt: string; processStartFingerprint?: string }> {
   const deadline = Date.now() + REMOTE_RUNNER_PROCESS_IDENTITY_WAIT_MS;
   while (Date.now() < deadline) {
     const result = await input.runner
@@ -10051,6 +12695,7 @@ async function waitForRemoteRunnerProcessIdentity(input: {
         ],
         bypassSession: true,
         timeoutMs: 2_000,
+        ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
       })
       .catch(() => null);
     const identity =
@@ -10068,6 +12713,7 @@ async function cleanupRemoteRunnerAfterIdentityFailure(input: {
   identityPath: string;
   nonce: string;
   runnerInstanceId: string;
+  nativeHarnessState?: boolean;
 }): Promise<boolean> {
   const result = await input.runner
     .execute({
@@ -10079,9 +12725,11 @@ async function cleanupRemoteRunnerAfterIdentityFailure(input: {
         input.identityPath,
         input.nonce,
         input.runnerInstanceId,
+        REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
       ],
       bypassSession: true,
       timeoutMs: 20_000,
+      ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
     })
     .catch(() => null);
   return result?.exitCode === 0 && result.timedOut === false;
@@ -10090,6 +12738,10 @@ async function cleanupRemoteRunnerAfterIdentityFailure(input: {
 export function createRemoteRunnerProcessLauncher(input: {
   target: Extract<AdapterExecutionTarget, { kind: "remote" }>;
   runner: CommandManagedRuntimeRunner;
+  /** Exact server-selected conversation OpenCode startup phase, never user supplied. */
+  nativeSessionStart?: boolean;
+  /** Exact read-only Runner state owner; never user or model supplied. */
+  nativeHarnessState?: boolean;
   remoteBinary: string;
   processIdentityPath: string;
   stateDirectory: string;
@@ -10100,6 +12752,8 @@ export function createRemoteRunnerProcessLauncher(input: {
     pid: number;
     processGroupId: number | null;
     startedAt: string;
+    identitySource?: "remote_marker";
+    remoteRunnerInstanceId?: string;
   }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   trace?: NativeRunTrace;
@@ -10139,9 +12793,11 @@ export function createRemoteRunnerProcessLauncher(input: {
             identity.nonce,
             input.runnerInstanceId,
             String(identity.pid),
+            "require-fingerprint",
           ],
           bypassSession: true,
           timeoutMs: 10_000,
+          ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
         }).catch(async () => {
           // kill() follows Node's synchronous child-process contract. A deleted
           // sandbox or failed signal RPC must not reject outside that boundary
@@ -10212,9 +12868,10 @@ export function createRemoteRunnerProcessLauncher(input: {
           ...remoteArgs,
         ],
         cwd: input.target.remoteCwd,
-        env: processEnvironment(spec.environment),
+        env: sandboxRunnerProcessEnvironment(spec.environment),
         timeoutMs: 20_000,
         bypassSession: true,
+        ...(input.nativeSessionStart ? { nativePreparationPurpose: "native_session_start" as const } : {}),
         onLog: input.onLog,
       });
       if (launchResult.exitCode !== 0 || launchResult.timedOut) {
@@ -10224,13 +12881,14 @@ export function createRemoteRunnerProcessLauncher(input: {
             : "runner_remote_process_launch_failed",
         );
       }
-      let identity: { pid: number; startedAt: string };
+      let identity: { pid: number; startedAt: string; processStartFingerprint?: string };
       try {
         identity = await waitForRemoteRunnerProcessIdentity({
           runner,
           identityPath: input.processIdentityPath,
           nonce: identityNonce,
           runnerInstanceId: input.runnerInstanceId,
+          nativeHarnessState: input.nativeHarnessState,
         });
       } catch {
         const cleanupStartedAtMs = Date.now();
@@ -10239,6 +12897,7 @@ export function createRemoteRunnerProcessLauncher(input: {
           identityPath: input.processIdentityPath,
           nonce: identityNonce,
           runnerInstanceId: input.runnerInstanceId,
+          nativeHarnessState: input.nativeHarnessState,
         });
         await input.trace?.record({
           name: "runner.process.identity_failure_cleanup",
@@ -10260,6 +12919,8 @@ export function createRemoteRunnerProcessLauncher(input: {
         pid: identity.pid,
         processGroupId: null,
         startedAt: identity.startedAt,
+        identitySource: "remote_marker",
+        remoteRunnerInstanceId: input.runnerInstanceId,
       });
       await input.trace?.record({
         name: "runner.process.launch",
@@ -10269,21 +12930,33 @@ export function createRemoteRunnerProcessLauncher(input: {
         attributes: { identitySource: "remote_marker", detached: true },
       });
 
+      let statusObservationFailures = 0;
       while (true) {
-        const observed = await runner.execute({
-          command: "sh",
-          args: [
-            "-c",
-            REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
-            "paperclip-runner-monitor",
-            input.processIdentityPath,
-            identityNonce,
-            input.runnerInstanceId,
-            String(identity.pid),
-          ],
-          bypassSession: true,
-          timeoutMs: 10_000,
-        });
+        let observed: Awaited<ReturnType<CommandManagedRuntimeRunner["execute"]>>;
+        try {
+          observed = await runner.execute({
+            command: "sh",
+            args: [
+              "-c",
+              REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
+              "paperclip-runner-monitor",
+              input.processIdentityPath,
+              identityNonce,
+              input.runnerInstanceId,
+              String(identity.pid),
+            ],
+            bypassSession: true,
+            timeoutMs: 10_000,
+            ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+          });
+        } catch (error) {
+          if (!input.nativeHarnessState || !(error instanceof Error) ||
+            error.message !== "runner_process_status_unavailable" || statusObservationFailures >= 3) throw error;
+          statusObservationFailures++;
+          await new Promise<void>(resolve => setTimeout(resolve, REMOTE_RUNNER_PROCESS_POLL_MS));
+          continue;
+        }
+        statusObservationFailures = 0;
         if (observed.exitCode === 0 && !observed.timedOut) {
           await new Promise<void>((resolve) =>
             setTimeout(resolve, REMOTE_RUNNER_PROCESS_POLL_MS),
@@ -10303,6 +12976,7 @@ export function createRemoteRunnerProcessLauncher(input: {
             ],
             bypassSession: true,
             timeoutMs: 10_000,
+            ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
           })
           .catch(() => null);
         const diagnosticTail =
@@ -10312,6 +12986,7 @@ export function createRemoteRunnerProcessLauncher(input: {
         const durableState = await readRemoteRunnerState({
           runner,
           stateDirectory: input.stateDirectory,
+          nativeHarnessState: input.nativeHarnessState,
         }).catch(() => null);
         const lifecycle =
           typeof durableState?.lifecycle === "string"
@@ -10329,6 +13004,55 @@ export function createRemoteRunnerProcessLauncher(input: {
               .slice(-4)
               .map((value) => redactSensitiveText(value).slice(-1_000))
           : [];
+        if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1") {
+          const recoveryReasons: ReadonlySet<string> = new Set([
+            "transport_reconnect_grace_exceeded",
+            "transport_reconnect_deadline_exceeded",
+            "lease_expired_requires_bootstrap",
+          ]);
+          const knownLifecycles: readonly string[] = [
+            "connecting", "ready", "terminal", "backpressure", "draining", "revoked", "stopped",
+            "recoverable_failure", "unrecoverable",
+          ];
+          const knownFailureMarkers = [
+            ["transport reconnect grace exceeded; durable state is preserved", "transport_reconnect_grace_exceeded"],
+            ["transport reconnect deadline elapsed; durable state is preserved", "transport_reconnect_deadline_exceeded"],
+            ["connection lease expired; a fresh bootstrap is required", "lease_expired_requires_bootstrap"],
+            ["active connection lease expired", "active_connection_lease_expired"],
+          ] as const;
+          const classify = (value: string) => knownFailureMarkers
+            .find(([marker]) => value.includes(marker))?.[1] ?? null;
+          const ownerFrames = (new Error().stack?.split("\n").slice(1, 6) ?? [])
+            .flatMap((line) => {
+              const match = /^\s*at (?:(.*?) \()?(.+?):(\d+):\d+\)?$/.exec(line);
+              return match && /^[-\w.]+\.(?:ts|js|mjs|cjs)$/.test(match[2]!.split(/[\\/]/).at(-1)!)
+                ? [{ functionName: match[1] || null, sourceFile: match[2]!.split(/[\\/]/).at(-1), line: Number(match[3]) }]
+                : [];
+            }).slice(0, 4);
+          console.info("native remote runner exit facts", JSON.stringify({
+            runnerInstanceId: input.runnerInstanceId,
+            pid: identity.pid,
+            phase: input.nativeSessionStart ? "native_session_start" : "remote_process_monitor",
+            ownerFrames,
+            processStartFingerprintRecorded: Boolean(identity.processStartFingerprint),
+            monitorExitCode: observed.exitCode,
+            monitorTimedOut: observed.timedOut,
+            monitorSignal: observed.signal,
+            identityMismatch,
+            remoteProcessSignal: child.signalCode ?? null,
+            signalObservation: "remote_identity_probe_does_not_report_process_signal",
+            lifecycle: knownLifecycles.includes(lifecycle) ? lifecycle : "unavailable",
+            durableStateAvailable: Boolean(durableState),
+            runnerDiagnosticAvailable: diagnostic?.exitCode === 0 && !diagnostic.timedOut,
+            recoverableFailure: typeof recoverableFailure === "string" && recoveryReasons.has(recoverableFailure)
+              ? recoverableFailure : null,
+            stderrFailureMarker: classify(diagnosticTail),
+            stateFailureMarkers: stateDiagnostics.flatMap((value) => {
+              const marker = classify(value);
+              return marker ? [marker] : [];
+            }),
+          }));
+        }
         const stateSummary = `runner_remote_process_exited lifecycle=${lifecycle}${recoverableFailure ? ` recoverableFailure=${redactSensitiveText(recoverableFailure).slice(-1_000)}` : ""}${stateDiagnostics.length > 0 ? ` diagnostics=${JSON.stringify(stateDiagnostics)}` : ""}`;
         return {
           code: null,
@@ -10386,14 +13110,26 @@ export function remoteCheckpointIncompleteFailure(
 export async function createRunnerdBackend(input: {
   db: Db;
   execution: NativeExecutionInput;
+  /** Trusted Heartbeat-owned route-created conversation owner context. */
+  conversationMode?: boolean;
+  nativeBootstrapExecutionInputHash?: string;
+  bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
   runnerInstanceId: string;
   chatAttachmentReadScope?: NativeChatAttachmentReadScope;
   restartRecovery?: NativeRestartRecoveryClaim;
   durableEnvironmentLeaseId?: string;
+  nativeModelOutputCapture?: { readonly value: NativeModelOutputCapture | null };
+  testBeforeManagedProjectCreate?: (capture: NativeModelOutputCapture) => Promise<void>;
+  testAfterManagedProjectCreate?: (input: { actor: AuthorizationActor; companyId: string; issueId: string; capture: NativeModelOutputCapture; callId: string;
+    arguments: Record<string, unknown>; result: { project: Record<string, unknown>; receipt: NativeProjectCreateReceipt;
+      sourceSet: NativePayloadSourceSet } }) => Promise<void>;
+  managedNativeContextReadCapture?: { value: NativeContextReadBinding | null };
   onSpawn?: (meta: {
     pid: number;
     processGroupId: number | null;
     startedAt: string;
+    identitySource?: "remote_marker";
+    remoteRunnerInstanceId?: string;
   }) => Promise<void>;
   runnerEnvironment?: NodeJS.ProcessEnv;
   /** Private grant materialization; never a user-configured host path. */
@@ -10409,6 +13145,12 @@ export async function createRunnerdBackend(input: {
   runnerRemoteProviderPackPath?: string | null;
   trace?: NativeRunTrace;
   toolTrace?: NativeToolTrace;
+  serializeManagedOperation?: <T>(operation: () => Promise<T>) => Promise<T>;
+  onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
+  onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
+  onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
+  onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>;
+  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
   enqueueWakeup?: (
@@ -10457,6 +13199,7 @@ export async function createRunnerdBackend(input: {
         onLog: input.onLog,
         restartRecovery: input.restartRecovery,
         runnerExecutionTarget: input.runnerExecutionTarget,
+        conversationMode: input.conversationMode,
       });
     }
     return await createRunnerdBackendWithinSessionClaim(
@@ -10474,9 +13217,24 @@ async function createRunnerdBackendWithinSessionClaim(
   sessionScopeId: string,
   retainedTransition?: VerifiedWarmTransitionBinding,
 ): Promise<NativeSessionBackend & { bindManagedSession(session: NativeSession): NativeSession }> {
+  const managedOpenCodeDataHome = managedOpenCodeRuntimeDataIsolated(
+    input.execution,
+    input.runnerEnvironment ?? process.env,
+  );
   let recoveryPending = retainedTransition !== undefined;
   const target = input.runnerExecutionTarget ?? { kind: "local" as const };
   const remoteTarget = target.kind === "remote" ? target : null;
+  const remoteRuntimeRoot = remoteTarget
+    ? posix.join(remoteTarget.remoteCwd, ".paperclip-runtime", "paperclip-runner")
+    : null;
+  const remoteSessionDigest = createHash("sha256")
+    .update(nativeSessionKey(input.execution))
+    .digest("hex");
+  const remoteSessionRoot = remoteRuntimeRoot
+    ? posix.join(remoteRuntimeRoot, "sessions", remoteSessionDigest)
+    : null;
+  const nativeConversationHarnessState = input.conversationMode === true && remoteTarget?.transport === "sandbox" &&
+    input.execution.provider.kind === "opencode" && input.execution.session.driverKind === "opencode_server";
   const remoteCommandRunner = remoteTarget
     ? remoteTarget.transport === "ssh"
       ? createNativeSshCommandRunner({
@@ -10490,6 +13248,37 @@ async function createRunnerdBackendWithinSessionClaim(
       "runner_transport_ineligible: remote process runner is unavailable",
     );
   }
+  const withRemoteSessionFilesystemFence = async <T>(
+    purpose: "native_harness_state" | "native_runtime_context_prepare",
+    work: () => Promise<T>,
+  ): Promise<T> => {
+    if (!managedOpenCodeDataHome || remoteTarget?.transport !== "sandbox" ||
+      !remoteCommandRunner || !remoteSessionRoot) return await work();
+    const nonce = randomUUID();
+    const fenceCommand = async (action: "acquire" | "release") => remoteCommandRunner.execute({
+      command: "sh",
+      args: ["-c", action === "acquire" ? REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT : REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT,
+        `paperclip-native-session-fence-${action}`, remoteTarget.remoteCwd, remoteSessionDigest, nonce],
+      cwd: remoteTarget.remoteCwd,
+      bypassSession: true,
+      timeoutMs: 10_000,
+      nativePreparationPurpose: purpose,
+    });
+    const acquired = await fenceCommand("acquire");
+    if (acquired.exitCode !== 0 || acquired.timedOut)
+      throw new Error("runner_remote_session_filesystem_fence_unavailable");
+    let workFailed = false;
+    try {
+      return await work();
+    } catch (error) {
+      workFailed = true;
+      throw error;
+    } finally {
+      const released = await fenceCommand("release").catch(() => null);
+      if (!workFailed && (!released || released.exitCode !== 0 || released.timedOut))
+        throw new Error("runner_remote_session_filesystem_fence_release_failed");
+    }
+  };
   const currentWakeComments = await resolveCurrentWakeCommentsBinding(
     input.db,
     input.execution.binding,
@@ -10531,6 +13320,10 @@ async function createRunnerdBackendWithinSessionClaim(
         workMode: input.execution.task.workMode,
       })
     : undefined;
+  const sandboxOpenCodeMcp = remoteTarget?.transport === "sandbox"
+    && input.execution.provider.kind === "opencode"
+    ? nativeMcpLaunchBinding(input.runnerEnvironment ?? {})
+    : null;
   const authority = new PaperclipRunnerToolAuthority(input.db, {
     managementToolsEnabled: !nativeReview && await nativeManagementToolsAvailable(input.db,input.execution.binding,reviewRun?.responsibleUserId??null),
     ...(nativeReview ? { nativeReview } : {}),
@@ -10553,6 +13346,31 @@ async function createRunnerdBackendWithinSessionClaim(
       : undefined,
     currentWakeComments: currentWakeComments ?? undefined,
     chatAttachmentReadScope: input.chatAttachmentReadScope,
+    nativeModelOutputCapture: input.nativeModelOutputCapture,
+    managedNativeContextReadCapture: input.managedNativeContextReadCapture,
+    testBeforeManagedProjectCreate: input.testBeforeManagedProjectCreate,
+    testAfterManagedProjectCreate: input.testAfterManagedProjectCreate,
+    ...(input.managedNativeContextReadCapture ? { managedNativeContextRead: async (query: string, callId?: string) => {
+      const [current] = await input.db.select({ projectId: issues.projectId, responsibleUserId: heartbeatRuns.responsibleUserId })
+        .from(heartbeatRuns).innerJoin(issues, and(eq(issues.companyId, heartbeatRuns.companyId),
+          eq(issues.id, input.execution.binding.issueId))).where(and(
+          eq(heartbeatRuns.companyId, input.execution.binding.companyId),
+          eq(heartbeatRuns.id, input.execution.binding.runId),
+          eq(heartbeatRuns.agentId, input.execution.binding.agentId),
+        ));
+      if (!current) throw new Error("managed_native_context_read_binding_invalid");
+      let binding: NativeContextReadBinding;
+      binding = await assembleNativeContextRead(input.db, {
+        companyId: input.execution.binding.companyId, agentId: input.execution.binding.agentId,
+        runId: input.execution.binding.runId, issueId: input.execution.binding.issueId,
+        projectId: current.projectId ?? null, responsibleUserId: current.responsibleUserId ?? null,
+        actor: { type: "agent", source: "none", companyId: input.execution.binding.companyId,
+          agentId: input.execution.binding.agentId, runId: input.execution.binding.runId,
+          onBehalfOfUserId: current.responsibleUserId ?? undefined }, query,
+      });
+      input.managedNativeContextReadCapture!.value = binding;
+      return { markdown: binding.markdown };
+    } } : {}),
     stopTaskForReassignment: input.stopTaskForReassignment,
     enqueueWakeup: input.enqueueWakeup,
   });
@@ -10560,7 +13378,19 @@ async function createRunnerdBackendWithinSessionClaim(
     input.execution.binding.runId,
     authority,
     input.toolTrace,
+    input.onDocumentRead,
+    input.onProjectToolResult,
+    input.onNativeInputToolResult,
+    input.onNativeToolCall,
+    input.onManagedOpenCodeToolResult,
+    input.managedNativeContextReadCapture,
+    input.serializeManagedOperation,
   );
+  const logRunnerDiagnostic = createRunnerDiagnosticLogSink({
+    runId: input.execution.binding.runId,
+    onLog: input.onLog,
+    revokeToolAuthority: () => authorityEpoch.revoke(),
+  });
   let dynamicTools: Awaited<
     ReturnType<SessionToolAuthorityEpoch["definitions"]>
   >;
@@ -10569,6 +13399,177 @@ async function createRunnerdBackendWithinSessionClaim(
   } catch (error) {
     authorityEpoch.revoke();
     throw error;
+  }
+  // Persist the managed OpenCode source authority for an authenticated
+  // conversation before any model credential exists. Runtime-context bundles
+  // are staged in this pre-receipt phase, so source pinning must derive from
+  // the server-owned conversation mode and current Run/manifest binding, not
+  // from whether this particular setup command carries broker credentials.
+  const managedOpenCode = input.execution.provider.kind === "opencode" &&
+    (input.conversationMode === true ||
+      Boolean((input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()));
+  let managedOpenCodeTools: Readonly<Record<string, unknown>>[] | null = null;
+  let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
+  if (managedOpenCode) {
+    const allowedNames = new Set(["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context",
+      "call_api", "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"]);
+    const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
+      if (typeof raw.name !== "string") return [];
+      let name = raw.name;
+      for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
+        if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
+      }
+      if (!allowedNames.has(name)) return [];
+      if (name === "create_project" && !input.nativeModelOutputCapture) return [];
+      const schema = structuredClone(raw);
+      if (name === "call_api") {
+        // The managed source contract currently qualifies only the existing
+        // authenticated Project GET. Pin this exact operation into the
+        // provider-visible schema; the ordinary Native API authority remains
+        // responsible for every call and does not gain an alternate route.
+        schema.description = "Read one current Project through the existing authenticated API route. This managed provider profile supports only GET /api/projects/{id}.";
+        schema.inputSchema = {
+          type: "object", additionalProperties: false,
+          properties: {
+            operationId: { type: "string", enum: ["GET /api/projects/{id}"] },
+            pathParams: { type: "object", additionalProperties: false,
+              properties: { id: { type: "string", format: "uuid" } }, required: ["id"] },
+          },
+          required: ["operationId", "pathParams"],
+        };
+      }
+      if (name === "create_project") {
+        // Managed OpenCode may create only an internal private Project from a
+        // minimal name/description/workspace label. Repository attachment,
+        // environment, publication, and policy fields remain unavailable.
+        schema.description = "Create one private internal Project from the current governed task context with a required server-managed local workspace name. This managed profile supports only name, optional description, that workspace label, and an idempotency key; it cannot attach repositories or configure execution policy.";
+        schema.inputSchema = {
+          type: "object", additionalProperties: false,
+          properties: {
+            name: { type: "string", minLength: 1, maxLength: 200 },
+            description: { type: "string", maxLength: 4000 },
+            workspace: { type: "object", additionalProperties: false,
+              properties: { name: { type: "string", minLength: 1, maxLength: 200 } }, required: ["name"] },
+            idempotencyKey: { type: "string", minLength: 1, maxLength: 255 },
+          },
+          required: ["name", "workspace", "idempotencyKey"],
+        };
+      }
+      return [{ ...schema, name }];
+    });
+    // The pinned OpenCode MCP bridge appends these canonical terminal tools at
+    // discovery time. Include the same server-owned definitions in the
+    // immutable tool catalog/hash so the broker can verify that exact list.
+    // Runnerd's OpenCode path appends this canonical semantic catalog from the
+    // Codex driver values. Hash those exact bridge-owned definitions so the
+    // managed broker validates the actual provider-visible list.
+    schemas.push(...codexSemanticToolSpecs().map(tool => {
+      const providerTool = structuredClone(tool) as Record<string, unknown>;
+      const inputSchema = record(providerTool.inputSchema);
+      if (inputSchema.type !== "object" || inputSchema.additionalProperties !== true)
+        throw new Error("managed_opencode_terminal_tool_schema_invalid");
+      // Pinned OpenCode 1.18.32's Anthropic conversion sets this root flag to
+      // false for these two terminal schemas. Model the exact provider-visible
+      // projection; server-side terminal parsing still enforces the complete
+      // canonical completion contract after the tool call returns.
+      providerTool.inputSchema = { ...inputSchema, additionalProperties: false };
+      return providerTool;
+    }));
+    const names = schemas.map((tool) => tool.name);
+    if (!names.includes("read_document") || !names.includes("write_document") || !names.includes("create_task") ||
+      (input.nativeModelOutputCapture && !names.includes("self_remember")) ||
+      (input.nativeModelOutputCapture && !names.includes("read_context")) ||
+      !names.includes("paperclip_finish") || !names.includes("paperclip_block") || new Set(names).size !== names.length)
+      throw new Error("managed_opencode_source_profile_tools_incomplete");
+    managedOpenCodeTools = schemas;
+    // Runnerd's original MCP bridge owns and appends the two canonical
+    // terminal controls. Keep them in the broker's exact catalog proof, but
+    // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
+    managedOpenCodeDynamicTools = schemas.filter((tool) =>
+      ["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
+        "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(String(tool.name)));
+    const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
+    if (new Set(resumeToolNames).size !== resumeToolNames.length ||
+      !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name)) ||
+      (input.nativeModelOutputCapture && !resumeToolNames.includes("create_project")) ||
+      (input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
+      (input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
+      resumeToolNames.some(name => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
+        "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(name)))
+      throw new Error("managed_opencode_resume_tool_catalog_invalid");
+    const taskEnvelope = nativeSessionTaskEnvelope(input.execution);
+    const sourceContextForAuthority = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
+    const remoteInstructionRootForAuthority = remoteSessionRoot && sourceContextForAuthority
+      ? posix.join(remoteSessionRoot, "filesystem", "context", "instructions")
+      : null;
+    const systemInstructions = nativeSystemInstructions(input.execution);
+    // Runnerd replaces the local source bundle root with this exact staged
+    // root before the provider sees system instructions. Bind that resulting
+    // text so the broker verifies the actual remote prompt without relaxing
+    // its equality check.
+    const sourceBoundSystemInstructions = remoteInstructionRootForAuthority && sourceContextForAuthority
+      ? systemInstructions.replaceAll(sourceContextForAuthority.instructions.bundle.rootPath,
+        remoteInstructionRootForAuthority)
+      : systemInstructions;
+    const sourceAuthority = {
+      version: 1,
+      executionInputHash: input.nativeBootstrapExecutionInputHash ?? nativeSha256(input.execution),
+      attachmentStageHash: null as string | null,
+      systemInstructionsHash: nativeSha256(sourceBoundSystemInstructions),
+      toolSchemasHash: nativeSha256(schemas),
+      toolSchemas: schemas,
+      // A prompt becomes authorized only from the exact prepared turn passed
+      // through onTurnInput and persisted as a dispatch intent. In particular,
+      // do not pre-authorize a guessed wrapper that the managed driver does not
+      // send on the wire.
+      authorizedPromptHashes: [],
+      promptSourceBindings: [],
+    };
+    await input.db.transaction(async (tx) => {
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, input.execution.binding.companyId),
+        eq(heartbeatRuns.id, input.execution.binding.runId),
+        eq(heartbeatRuns.agentId, input.execution.binding.agentId),
+        eq(heartbeatRuns.status, "running"),
+      )).for("update");
+      const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+        ? run.runnerProfileJson as Record<string, unknown> : null;
+      if (!run || !profile || nativeSha256(profile.nativeExecutionInput) !== sourceAuthority.executionInputHash)
+        throw new Error("managed_opencode_source_authority_input_changed");
+      const previous = profile?.nativeOpenCodeSourceAuthority;
+      const previousAuthority = previous && typeof previous === "object" && !Array.isArray(previous)
+        ? previous as Record<string, unknown> : null;
+      const priorPrompts = previousAuthority?.authorizedPromptHashes;
+      const priorBindings = previousAuthority?.promptSourceBindings;
+      const priorPromptSet = Array.isArray(priorPrompts) ? new Set(priorPrompts) : null;
+      const previousAuthorityMatches = previous === undefined || Boolean(previousAuthority &&
+        isDeepStrictEqual({
+          version: previousAuthority.version,
+          executionInputHash: previousAuthority.executionInputHash,
+          systemInstructionsHash: previousAuthority.systemInstructionsHash,
+          toolSchemasHash: previousAuthority.toolSchemasHash,
+          toolSchemas: previousAuthority.toolSchemas,
+        }, {
+          version: sourceAuthority.version,
+          executionInputHash: sourceAuthority.executionInputHash,
+          systemInstructionsHash: sourceAuthority.systemInstructionsHash,
+          toolSchemasHash: sourceAuthority.toolSchemasHash,
+          toolSchemas: sourceAuthority.toolSchemas,
+        }) && Array.isArray(priorPrompts) && priorPrompts.length <= 64 &&
+        priorPrompts.every(hash => typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash)) &&
+        priorPromptSet?.size === priorPrompts.length && Array.isArray(priorBindings) &&
+        priorBindings.length === priorPrompts.length && priorBindings.every(binding => {
+          const value = record(binding);
+          return typeof value.promptHash === "string" && priorPromptSet.has(value.promptHash) &&
+            typeof value.sourceSetHash === "string" && /^[0-9a-f]{64}$/.test(value.sourceSetHash);
+        }));
+      if (!run || !profile || nativeSha256(profile.nativeExecutionInput) !== sourceAuthority.executionInputHash ||
+        !previousAuthorityMatches)
+        throw new Error("managed_opencode_source_profile_binding_changed");
+      await tx.update(heartbeatRuns).set({
+        runnerProfileJson: { ...profile, nativeOpenCodeSourceAuthority: previousAuthority ?? sourceAuthority }, updatedAt: new Date(),
+      }).where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
+    });
   }
   const root = runnerdStateRoot(input.execution);
   const durableIdentity = readRunnerdDurableIdentity(root);
@@ -10582,15 +13583,44 @@ async function createRunnerdBackendWithinSessionClaim(
   const effectiveEnvironmentLeaseId =
     durableBinding?.environmentLeaseId ??
     input.durableEnvironmentLeaseId ??
-    input.execution.binding.executionWorkspaceId;
+    (remoteTarget?.transport === "sandbox" && remoteTarget.leaseId
+      ? remoteTarget.leaseId
+      : input.execution.binding.executionWorkspaceId);
+  if (managedOpenCodeDataHome && remoteTarget?.transport === "sandbox") {
+    const environmentLeaseId = remoteTarget.leaseId;
+    const environmentId = remoteTarget.environmentId;
+    const [lease] = environmentLeaseId && environmentId
+      ? await input.db.select({ provider: environmentLeases.provider, providerLeaseId: environmentLeases.providerLeaseId })
+          .from(environmentLeases).where(and(
+            eq(environmentLeases.companyId, input.execution.binding.companyId),
+            eq(environmentLeases.id, environmentLeaseId),
+            eq(environmentLeases.heartbeatRunId, input.execution.binding.runId),
+          )).limit(1)
+      : [];
+    if (!environmentLeaseId || !environmentId || !lease?.provider || lease.provider === "local" || !lease.providerLeaseId ||
+      environmentLeaseId !== effectiveEnvironmentLeaseId) {
+      throw new Error("native_remote_runtime_asset_locator_binding_invalid");
+    }
+    const locator = createRemoteRuntimeAssetLocator({
+      companyId: input.execution.binding.companyId,
+      runId: input.execution.binding.runId,
+      environmentId,
+      environmentLeaseId,
+      provider: lease.provider!,
+      providerLeaseId: lease.providerLeaseId!,
+      runnerInstanceId: effectiveRunnerInstanceId,
+      normalizedSessionId: nativeSessionKey(input.execution),
+      remoteCwd: remoteTarget.remoteCwd,
+    });
+    await persistRemoteNativeRuntimeAssetLocator({
+      db: input.db,
+      locator,
+      normalizedSessionId: nativeSessionKey(input.execution),
+      runnerInstanceId: effectiveRunnerInstanceId,
+      remoteCwd: remoteTarget.remoteCwd,
+    });
+  }
   mkdirSync(root, { recursive: true, mode: 0o700 });
-  const remoteRuntimeRoot = remoteTarget
-    ? posix.join(
-        remoteTarget.remoteCwd,
-        ".paperclip-runtime",
-        "paperclip-runner",
-      )
-    : null;
   const requiresRemoteProviderPack =
     remoteTarget !== null &&
     (input.execution.provider.kind === "opencode" ||
@@ -10645,18 +13675,29 @@ async function createRunnerdBackendWithinSessionClaim(
           )
         : posix.join(remoteRuntimeRoot, "bin", "codex")
       : null;
-  const remoteSessionDigest = createHash("sha256")
-    .update(nativeSessionKey(input.execution))
-    .digest("hex");
-  const remoteSessionRoot = remoteRuntimeRoot
-    ? posix.join(remoteRuntimeRoot, "sessions", remoteSessionDigest)
-    : null;
   const remoteStateDirectory = remoteSessionRoot
     ? posix.join(remoteSessionRoot, "runner")
     : undefined;
   const remoteRunnerFilesystemRoot = remoteSessionRoot
     ? posix.join(remoteSessionRoot, "filesystem")
     : null;
+  if (managedOpenCodeDataHome && remoteRunnerFilesystemRoot) {
+    if (remoteTarget?.transport !== "sandbox" || !remoteCommandRunner)
+      throw new Error("Managed OpenCode provider data erasure is not qualified for remote runner storage");
+    const probeNonce = randomUUID();
+    const probe = await remoteCommandRunner.execute({
+      command: "sh",
+      args: ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT,
+        "paperclip-native-asset-erasure-probe", remoteTarget.remoteCwd, remoteSessionDigest,
+        input.execution.binding.runId, probeNonce],
+      cwd: remoteTarget.remoteCwd,
+      timeoutMs: 15_000,
+      bypassSession: true,
+      nativePreparationPurpose: "native_provider_data_erasure_probe",
+    });
+    if (probe.exitCode !== 0 || probe.timedOut || probe.stdout.trim() !== "qualified")
+      throw new Error("Managed OpenCode provider data erasure is not qualified for remote runner storage");
+  }
   const persistenceProfile = resolveNativeHarnessPersistenceProfile(
     input.execution,
   );
@@ -10726,6 +13767,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (metadataResult.exitCode !== 0 || metadataResult.timedOut) {
       throw new Error("runner_remote_artifact_verification_failed");
@@ -10750,6 +13792,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (versionResult.exitCode !== 0 || versionResult.timedOut) {
       throw new Error("runner_remote_codex_artifact_verification_failed");
@@ -10809,6 +13852,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (verified.exitCode !== 0 || verified.timedOut) {
       throw new Error(
@@ -10825,6 +13869,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (
       opencodeVersion.exitCode !== 0 ||
@@ -10848,6 +13893,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 10_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (result.exitCode !== 0 || result.timedOut) return null;
     return parseRemoteExecutableCandidate(result.stdout);
@@ -10871,6 +13917,7 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 10_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (result.exitCode !== 0 || result.timedOut) return null;
     return parseRemoteExecutableCandidate(result.stdout);
@@ -10896,13 +13943,14 @@ async function createRunnerdBackendWithinSessionClaim(
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 10_000,
+      nativePreparationPurpose: "provider_artifact",
     });
     if (result.exitCode !== 0 || result.timedOut) {
       throw new Error("runner_remote_preinstalled_link_failed");
     }
   };
 
-  const prepareRemoteRunner = async (
+  const prepareRemoteRunnerUnlocked = async (
     requiredMode: "dial_wss" | "listen_ws",
   ) => {
     if (
@@ -10940,6 +13988,7 @@ async function createRunnerdBackendWithinSessionClaim(
           cwd: remoteTarget.remoteCwd,
           bypassSession: true,
           timeoutMs: 10_000,
+          nativePreparationPurpose: "provider_artifact",
         });
         return probe.exitCode === 0 && !probe.timedOut &&
           /^[a-f0-9]{64}\s/.test(probe.stdout) &&
@@ -11008,6 +14057,7 @@ async function createRunnerdBackendWithinSessionClaim(
           cwd: remoteTarget.remoteCwd,
           bypassSession: true,
           timeoutMs: 10_000,
+          nativePreparationPurpose: "provider_artifact",
         });
         const [remoteOs = "", remoteArch = ""] = platform.stdout
           .trim()
@@ -11044,6 +14094,8 @@ async function createRunnerdBackendWithinSessionClaim(
         sourcePath: sourceBinary,
         targetPath: remoteBinary,
         mode: 0o700,
+        nativePreparationPurpose: "provider_artifact",
+        forceRelayChunking: nativeConversationHarnessState,
       });
     }
     await measureNativeRunnerSpan(input.trace, "runner.artifact.verify", () =>
@@ -11059,6 +14111,8 @@ async function createRunnerdBackendWithinSessionClaim(
         sourcePath: explicitRemoteCodex,
         targetPath: remoteCodexBinary,
         mode: 0o700,
+        nativePreparationPurpose: "provider_artifact",
+        forceRelayChunking: nativeConversationHarnessState,
       });
       await verifyRemoteCodex();
     }
@@ -11190,6 +14244,7 @@ async function createRunnerdBackendWithinSessionClaim(
                 cwd: remoteTarget.remoteCwd,
                 bypassSession: true,
                 timeoutMs: 10_000,
+                nativePreparationPurpose: "provider_artifact",
               });
               if (linked.exitCode !== 0 || linked.timedOut) {
                 throw new Error(
@@ -11201,7 +14256,15 @@ async function createRunnerdBackendWithinSessionClaim(
                 "stderr",
                 "[paperclip-runner] using manifest-matched provider pack from the sandbox image\n",
               );
-            } catch {
+            } catch (error) {
+              const reason = error instanceof Error && error.message.includes("preinstalled provider pack could not be linked")
+                ? "preinstalled_link_failed"
+                : error instanceof Error && error.message.includes("OpenCode version mismatch")
+                  ? "opencode_version_mismatch"
+                  : error instanceof Error && error.message.includes("provider pack verification failed")
+                    ? "pack_verification_failed"
+                    : "preinstalled_pack_rejected";
+              await input.onLog?.("stderr", `[paperclip-runner] preinstalled provider pack rejected: ${reason}\n`);
               preinstalledProviderPack = null;
             }
           }
@@ -11223,6 +14286,7 @@ async function createRunnerdBackendWithinSessionClaim(
             cwd: remoteTarget.remoteCwd,
             bypassSession: true,
             timeoutMs: 10_000,
+            nativePreparationPurpose: "provider_artifact",
           });
           if (cleared.exitCode !== 0 || cleared.timedOut) {
             throw new Error(
@@ -11235,6 +14299,7 @@ async function createRunnerdBackendWithinSessionClaim(
             sourcePath: configuredProviderPackRoot,
             targetPath: stagedRemoteProviderPackRoot,
             mode: 0o700,
+            nativePreparationPurpose: "provider_artifact",
           });
           await measureNativeRunnerSpan(input.trace, "provider_pack.verify", () =>
             verifyRemoteProviderPack(stagedRemoteProviderPackRoot),
@@ -11252,6 +14317,11 @@ async function createRunnerdBackendWithinSessionClaim(
     }
     remotePrepared = true;
   };
+
+  const prepareRemoteRunner = async (
+    requiredMode: "dial_wss" | "listen_ws",
+  ) => withRemoteSessionFilesystemFence("native_harness_state", () =>
+    prepareRemoteRunnerUnlocked(requiredMode));
 
   const inspectRemoteHarnessState = async (): Promise<{
     complete: boolean;
@@ -11289,6 +14359,7 @@ async function createRunnerdBackendWithinSessionClaim(
       ],
       bypassSession: true,
       timeoutMs: 10_000,
+      ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
     });
     if (inspected.exitCode !== 0 || inspected.timedOut) {
       return {
@@ -11330,6 +14401,7 @@ async function createRunnerdBackendWithinSessionClaim(
         runner: remoteCommandRunner,
         stateDirectory: remoteStateDirectory,
         execution: input.execution,
+        nativeHarnessState: nativeConversationHarnessState,
       });
     } catch {
       throw new Error("runner_harness_state_mismatch: provider_state_unreadable");
@@ -11489,6 +14561,7 @@ async function createRunnerdBackendWithinSessionClaim(
             sourcePath: resolve(backup.root, directory.name),
             targetPath,
             mode: 0o700,
+            ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
           });
         }
       },
@@ -11532,6 +14605,7 @@ async function createRunnerdBackendWithinSessionClaim(
         args: ["-c", `umask 077; install -d -m 0700 '${escapedTarget}'`],
         bypassSession: true,
         timeoutMs: 10_000,
+        ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
       });
       if (created.exitCode !== 0 || created.timedOut) {
         throw new Error("runner_remote_directory_staging_failed");
@@ -11556,7 +14630,7 @@ async function createRunnerdBackendWithinSessionClaim(
     }
   };
 
-  const ensureRemoteRunner = async (stageLaunchAssets = true) => {
+  const ensureRemoteRunnerUnlocked = async (stageLaunchAssets = true) => {
     await measureNativeRunnerSpan(
       input.trace,
       "stage.sync",
@@ -11577,7 +14651,7 @@ async function createRunnerdBackendWithinSessionClaim(
           }
         } catch {
           remotePrepared = false;
-          await prepareRemoteRunner(selectedRemoteMode);
+          await prepareRemoteRunnerUnlocked(selectedRemoteMode);
         }
         if (!remoteHarnessStatePrepared) {
           await measureNativeRunnerSpan(input.trace, "stage.asset.home", () =>
@@ -11726,6 +14800,7 @@ async function createRunnerdBackendWithinSessionClaim(
                             : remoteDirectory,
                         kind:
                           directory.name === "runner" ? "file" : "directory",
+                        nativeHarnessState: nativeConversationHarnessState,
                       }))
                     ) {
                       await stageRemoteRunnerDirectory({
@@ -11735,6 +14810,7 @@ async function createRunnerdBackendWithinSessionClaim(
                         targetPath: remoteDirectory,
                         mode: 0o700,
                         excludeEntries: directory.excludeEntries,
+                        ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
                       });
                     }
                   }
@@ -11776,6 +14852,7 @@ async function createRunnerdBackendWithinSessionClaim(
                 sourcePath: sourceRuntimeContext.instructions.bundle.rootPath,
                 targetPath: remoteRuntimeContext.instructions.bundle.rootPath,
                 mode: 0o555,
+                nativePreparationPurpose: "native_runtime_context_prepare",
               });
               for (
                 let index = 0;
@@ -11790,6 +14867,7 @@ async function createRunnerdBackendWithinSessionClaim(
                   targetPath:
                     remoteRuntimeContext.skills[index]!.bundle.rootPath,
                   mode: 0o555,
+                  nativePreparationPurpose: "native_runtime_context_prepare",
                 });
               }
               await stageRemoteRunnerFile({
@@ -11801,6 +14879,7 @@ async function createRunnerdBackendWithinSessionClaim(
                   "runtime-context.json",
                 ),
                 mode: 0o600,
+                nativePreparationPurpose: "native_runtime_context_prepare",
               });
             },
           );
@@ -11830,7 +14909,11 @@ async function createRunnerdBackendWithinSessionClaim(
     );
   };
 
-  const checkpointRemoteRunner = async (
+  const ensureRemoteRunner = async (stageLaunchAssets = true) =>
+    withRemoteSessionFilesystemFence("native_harness_state", () =>
+      ensureRemoteRunnerUnlocked(stageLaunchAssets));
+
+  const checkpointRemoteRunnerUnlocked = async (
     settlement: "settled" | "unsettled",
   ) => {
     if (
@@ -11912,6 +14995,7 @@ async function createRunnerdBackendWithinSessionClaim(
                     targetPath,
                     mode: 0o700,
                     excludeEntries: directory.excludeEntries,
+                    nativeHarnessState: nativeConversationHarnessState,
                   });
                   if (!existsSync(targetPath)) {
                     throw new Error("runner_harness_state_mismatch");
@@ -12002,6 +15086,11 @@ async function createRunnerdBackendWithinSessionClaim(
     }
   };
 
+  const checkpointRemoteRunner = async (
+    settlement: "settled" | "unsettled",
+  ) => withRemoteSessionFilesystemFence("native_harness_state", () =>
+    checkpointRemoteRunnerUnlocked(settlement));
+
   const prepareExternalRunnerState =
     remoteTarget && remoteCommandRunner
       ? async () => {
@@ -12012,7 +15101,7 @@ async function createRunnerdBackendWithinSessionClaim(
           await ensureRemoteRunner(false);
         }
       : undefined;
-  const archiveExternalRunnerState =
+  const archiveExternalRunnerStateUnlocked =
     remoteCommandRunner && remoteStateDirectory && remoteSessionRoot
       ? async (archive: { archiveKey: string }) => {
           if (!/^[0-9a-f]{24}$/.test(archive.archiveKey)) {
@@ -12062,11 +15151,20 @@ async function createRunnerdBackendWithinSessionClaim(
         }
       : undefined;
 
+  const archiveExternalRunnerState = archiveExternalRunnerStateUnlocked
+    ? async (archive: { archiveKey: string }) => withRemoteSessionFilesystemFence(
+        "native_harness_state", () => archiveExternalRunnerStateUnlocked(archive))
+    : undefined;
+
   const remoteProcessLauncher =
     remoteTarget && remoteCommandRunner && remoteBinary && remoteStateDirectory
       ? createRemoteRunnerProcessLauncher({
           target: remoteTarget,
           runner: remoteCommandRunner,
+          nativeHarnessState: nativeConversationHarnessState,
+          nativeSessionStart: input.conversationMode === true &&
+            remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
+            input.execution.session.driverKind === "opencode_server",
           remoteBinary,
           processIdentityPath: posix.join(
             remoteStateDirectory,
@@ -12094,7 +15192,7 @@ async function createRunnerdBackendWithinSessionClaim(
   const effectiveRunnerEnvironmentBase: NodeJS.ProcessEnv = {
     ...(input.runnerEnvironment ?? process.env),
   };
-  if (relayAssignedMcp) {
+  if (relayAssignedMcp || (remoteTarget?.transport === "sandbox" && input.execution.provider.kind === "opencode")) {
     // The server-held tool authority owns this credential. Do not deliver a
     // duplicate HTTP MCP server or its bearer token to the remote provider.
     delete effectiveRunnerEnvironmentBase.PAPERCLIP_NATIVE_MCP_NAME;
@@ -12144,18 +15242,21 @@ async function createRunnerdBackendWithinSessionClaim(
       const escapedSource = remoteSessionRoot.replaceAll("'", "'\\''");
       const archivedRemote = `${remoteSessionRoot}.continuity-break-${archiveToken}`;
       const escapedArchive = archivedRemote.replaceAll("'", "'\\''");
-      const result = await remoteCommandRunner.execute({
-        command: "sh",
-        args: [
-          "-c",
-          `if test -d '${escapedSource}'; then mv '${escapedSource}' '${escapedArchive}'; fi`,
-        ],
-        bypassSession: true,
-        timeoutMs: 30_000,
+      await withRemoteSessionFilesystemFence("native_harness_state", async () => {
+        const result = await remoteCommandRunner.execute({
+          command: "sh",
+          args: [
+            "-c",
+            `if test -d '${escapedSource}'; then mv '${escapedSource}' '${escapedArchive}'; fi`,
+          ],
+          bypassSession: true,
+          timeoutMs: 30_000,
+          ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+        });
+        if (result.exitCode !== 0 || result.timedOut) {
+          throw new Error("runner_continuity_break_archive_failed");
+        }
       });
-      if (result.exitCode !== 0 || result.timedOut) {
-        throw new Error("runner_continuity_break_archive_failed");
-      }
     }
     remotePrepared = false;
   };
@@ -12171,6 +15272,8 @@ async function createRunnerdBackendWithinSessionClaim(
           identity: durableIdentity ?? {},
           runId: input.execution.binding.runId,
           normalizedSessionId: nativeSessionKey(input.execution),
+          nativeHarnessState: input.conversationMode === true && input.execution.provider.kind === "opencode" &&
+            target.kind === "remote" && target.transport === "sandbox",
         })
       : target.kind === "local" && localRecoveryProcess
         ? {
@@ -12185,7 +15288,7 @@ async function createRunnerdBackendWithinSessionClaim(
     markSpawned?.();
   }
   const executeCurrentToolAuthority = (
-    call: Parameters<SessionToolAuthorityEpoch["execute"]>[0],
+    call: Parameters<SessionToolAuthorityEpoch["execute"]>[0] & { turnId?: string },
   ) => {
     const current = sessionToolAuthorityEpochs.get(sessionScopeId);
     if (!current) throw new Error("native_session_tool_authority_unavailable");
@@ -12195,11 +15298,13 @@ async function createRunnerdBackendWithinSessionClaim(
     runnerInstanceId:
       retainedTransition?.runnerInstanceId ?? input.runnerInstanceId,
     environment: effectiveRunnerEnvironment,
+    opencodeEnvironment: effectiveRunnerEnvironment,
+    opencodeAssignedMcp: sandboxOpenCodeMcp,
     workingDirectoryAuthority: remoteTarget
       ? "remote_runner"
       : "local_filesystem",
     onSpawn: input.onSpawn,
-    dynamicTools,
+    dynamicTools: managedOpenCodeDynamicTools ?? dynamicTools,
     completionFeedback: async (result) => {
       const current = sessionToolAuthorityEpochs.get(sessionScopeId);
       if (!current) throw new Error("native_session_tool_authority_unavailable");
@@ -12208,12 +15313,10 @@ async function createRunnerdBackendWithinSessionClaim(
     },
     dynamicToolHandler: executeCurrentToolAuthority,
     acpxDynamicToolHandler: executeCurrentToolAuthority,
-    opencodeRuntimeDirectory: resolve(
-      resolvePaperclipInstanceRoot(),
-      "runtime",
-      "paperclip-runner",
-      "opencode",
-    ),
+    opencodeRuntimeDirectory: managedOpenCodeDataHome
+      ? managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId,
+          runId: input.execution.binding.runId })
+      : resolve(resolvePaperclipInstanceRoot(), "runtime", "paperclip-runner", "opencode"),
     acpxRuntimeDirectory: resolve(
       resolvePaperclipInstanceRoot(),
       "runtime",
@@ -12222,6 +15325,9 @@ async function createRunnerdBackendWithinSessionClaim(
     ),
     codexTransportFactory: (recoveryContext) =>
       createRunnerdCodexTransport({
+        // This factory owns the remote provider process environment; it must
+        // receive the exact server-selected managed-model tuple.
+        environment: effectiveRunnerEnvironment,
         onSpawn: input.onSpawn,
         provider:
           input.execution.provider.kind === "codex"
@@ -12326,6 +15432,7 @@ async function createRunnerdBackendWithinSessionClaim(
                 readRemoteRunnerState({
                   runner: remoteCommandRunner,
                   stateDirectory: remoteStateDirectory,
+                  nativeHarnessState: nativeConversationHarnessState,
                 })
             : undefined,
         prepareExternalRunnerState,
@@ -12338,10 +15445,8 @@ async function createRunnerdBackendWithinSessionClaim(
         runnerProcessLauncher: remoteProcessLauncher,
         runnerReconnectGraceMs: remoteTarget ? 120_000 : undefined,
         adoptExistingRunner: adoptedProcess,
-        environment: effectiveRunnerEnvironment,
         onDiagnostic: (message) => {
-          void input.onLog?.(
-            "stderr",
+          logRunnerDiagnostic(
             `[paperclip-runner] runnerd diagnostic: ${redactSensitiveText(message).slice(-4_096)}\n`,
           );
         },
@@ -12354,10 +15459,16 @@ async function createRunnerdBackendWithinSessionClaim(
         runnerFilesystemRoot: remoteRunnerFilesystemRoot ?? undefined,
         resumeWorkingDirectory: runnerExecution.workspace.cwd,
         externallySandboxed: remoteTarget?.transport === "sandbox",
-        opencodeRuntimeDirectory: remoteRunnerFilesystemRoot
-          ? posix.join(remoteRunnerFilesystemRoot, "opencode")
-          : undefined,
-        resumeDynamicTools: dynamicTools,
+        opencodeRuntimeDirectory: managedOpenCodeDataHome
+          ? managedOpenCodeRuntimeDirectory({ companyId: input.execution.binding.companyId,
+              runId: input.execution.binding.runId })
+          : remoteRunnerFilesystemRoot
+            ? posix.join(remoteRunnerFilesystemRoot, "opencode")
+            : undefined,
+        // A warm attach must retain the same qualified CRUD catalog as the
+        // original managed session; terminal tools are appended by Runnerd's
+        // trusted bridge. Never restore the generic Native tool inventory.
+        resumeDynamicTools: managedOpenCodeDynamicTools ?? dynamicTools,
         resumeCompletionContract: {
           revision: input.execution.completionContract.contract.revision,
           criterionIds:
@@ -12619,8 +15730,7 @@ async function createRunnerdBackendWithinSessionClaim(
                         authority,
                         endpoint: transport.ingress,
                         onStateChange: (state, failureCode) => {
-                          void input.onLog?.(
-                            "stderr",
+                          logRunnerDiagnostic(
                             `[paperclip-runner] transport mode=provider_ingress state=${state}${failureCode ? ` failure=${failureCode}` : ""}\n`,
                           );
                         },

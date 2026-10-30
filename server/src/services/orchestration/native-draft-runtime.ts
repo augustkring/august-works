@@ -1,4 +1,5 @@
-import { and, eq } from "drizzle-orm";
+import { isDeepStrictEqual } from "node:util";
+import { and, eq, sql } from "drizzle-orm";
 import {
   heartbeatRuns,
   issues,
@@ -7,17 +8,19 @@ import {
   orchestrationWorkerAttempts,
   type Db,
 } from "@paperclipai/db";
-import { orchestrationCompletionSchema } from "@paperclipai/shared";
+import { orchestrationCompletionSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import type {
   NativeExecutionInput,
   NativeSessionBackend,
 } from "../../vendor/paperclip-runner/index.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
 import { conflict, forbidden } from "../../errors.js";
 import { assertV7Authorization } from "../v7-authorization.js";
 import type { workerModelGateway } from "./worker-model-gateway.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
 import { readNativeRuntimeAssetText } from "../native-runtime/runtime-context.js";
 import { createAwTextDraftBackend } from "../native-runtime/aw-text-draft-backend.js";
+import type { NativeBootstrapSourceClosure } from "../native-runtime/native-execution-input.js";
 
 type Gateway = ReturnType<typeof workerModelGateway>;
 type Plan = typeof orchestrationPlans.$inferSelect;
@@ -29,12 +32,13 @@ const installed = new WeakMap<Db, Gateway>();
 export async function selectNativeHeartbeatBackend(
   db: Db,
   execution: NativeExecutionInput,
+  sourceClosure?: NativeBootstrapSourceClosure | null,
   otherProviderFactory?: (
     input: NativeExecutionInput,
   ) => NativeSessionBackend | undefined,
 ) {
   return execution.provider.kind === "aw_text_only"
-    ? prepareNativeDraftBackend(db, execution)
+    ? prepareNativeDraftBackend(db, execution, sourceClosure)
     : otherProviderFactory?.(execution);
 }
 
@@ -143,8 +147,8 @@ export async function qualifyNativeDraftWorker(
   );
   if (
     !contract ||
-    orchestrationCompletionSchema.parse(contract.row.contractJson.v7)
-      .requiredOutputs.length !== 1
+    orchestrationCompletionSchema.parse(contract.row.contractJson.v7).requiredOutputs.length !== 1 ||
+    orchestrationCompletionSchema.parse(contract.row.contractJson.v7).requiredOutputs[0]?.kind !== "task_document"
   )
     throw forbidden(
       "The one-call draft requires one declared canonical output",
@@ -209,6 +213,7 @@ export async function qualifyNativeDraftPlan(
 export async function prepareNativeDraftBackend(
   db: Db,
   execution: NativeExecutionInput,
+  sourceClosure?: NativeBootstrapSourceClosure | null,
 ) {
   const gateway = installed.get(db);
   if (
@@ -216,6 +221,7 @@ export async function prepareNativeDraftBackend(
     execution.provider.kind !== "aw_text_only" ||
     !("runtimeContext" in execution) ||
     execution.session.lifecyclePolicy.mode !== "per_turn" ||
+    !sourceClosure ||
     ("continuationPrompt" in execution && execution.continuationPrompt) ||
     execution.runtimeContext.mcp.bindingId !== null
   )
@@ -304,6 +310,59 @@ export async function prepareNativeDraftBackend(
     bound.run.completionContractSha256 !== contract.row.canonicalSha256
   )
     throw forbidden("The persisted native draft completion contract changed");
+  const taskSource = sourceClosure?.sourceSet.inputs.find((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+    source.kind === "task" && source.issueId === execution.binding.issueId);
+  const completionSource = sourceClosure?.sourceSet.inputs.find((source) =>
+    source.kind === "completion_contract" && source.issueId === execution.binding.issueId &&
+    source.contractId === contract.row.id && source.revision === String(contract.row.revision) &&
+    source.contentHash === contract.row.canonicalSha256);
+  const instructionSource = sourceClosure?.sourceSet.inputs.find((source) =>
+    source.kind === "runtime_instructions" && source.agentId === execution.binding.agentId &&
+    source.bundleDigest === execution.runtimeContext.instructions.bundle.digest &&
+    source.manifestDigest === execution.runtimeContext.instructions.bundle.manifestDigest);
+  const skillSources = sourceClosure?.sourceSet.inputs.filter((source) => source.kind === "runtime_skill") ?? [];
+  const [currentTask] = await db.select({
+    id: issues.id,
+    identifier: issues.identifier,
+    title: issues.title,
+    description: issues.description,
+    workMode: issues.workMode,
+    ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+  }).from(issues).where(and(
+    eq(issues.companyId, execution.binding.companyId),
+    eq(issues.id, execution.binding.issueId),
+  )).for("share");
+  const currentTaskProjection = currentTask && {
+    identifier: currentTask.identifier,
+    title: currentTask.title,
+    description: currentTask.description,
+    workMode: currentTask.workMode,
+  };
+  const renderedTaskProjection = {
+    identifier: execution.task.identifier,
+    title: execution.task.title,
+    description: execution.task.description,
+    workMode: execution.task.workMode,
+  };
+  const legacyRenderedTaskHash = currentTask && nativeSha256({
+    id: currentTask.id,
+    ...currentTaskProjection,
+  });
+  const taskSourceMatchesCurrentOwner = Boolean(taskSource && currentTask && (
+    taskSource.contentHash === currentTask.ownerBodyHash ||
+    taskSource.contentHash === legacyRenderedTaskHash
+  ) && isDeepStrictEqual(renderedTaskProjection, currentTaskProjection));
+  const taskEnvelopeMatches = Boolean(sourceClosure &&
+    sourceClosure.taskEnvelopeDigest === nativeSha256(execution.task));
+  const completionContractMatches = Boolean(completionSource);
+  const runtimeInstructionsMatch = Boolean(instructionSource);
+  const runtimeSkillsMatch = execution.runtimeContext.skills.every((skill) => skillSources.some((source) =>
+    source.kind === "runtime_skill" && source.key === skill.key && source.versionId === skill.versionId &&
+    source.bundleDigest === skill.bundle.digest && source.manifestDigest === skill.bundle.manifestDigest));
+  const sourceClosureComplete = Boolean(sourceClosure && taskSourceMatchesCurrentOwner && taskEnvelopeMatches && completionContractMatches &&
+    runtimeInstructionsMatch && skillSources.length === execution.runtimeContext.skills.length && runtimeSkillsMatch);
+  if (!sourceClosureComplete)
+    throw forbidden("The native draft source closure does not cover its exact Task, contract, instructions and Skills");
   const completion = orchestrationCompletionSchema.parse(
     contract.row.contractJson.v7,
   );
@@ -335,10 +394,12 @@ export async function prepareNativeDraftBackend(
     },
     outputKey: completion.requiredOutputs[0]!.key,
     maxOutputTokens: qualified.maxOutputTokens,
+    expectedTask: execution.task,
     runtimeContextText: {
       aggregateDigest: execution.runtimeContext.aggregateDigest,
       instructionFiles,
       skills,
     },
+    sourceClosure,
   });
 }

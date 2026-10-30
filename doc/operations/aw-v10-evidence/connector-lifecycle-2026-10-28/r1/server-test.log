@@ -1,0 +1,82 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > projects owned active Native health without errors, configuration or recovery effects
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > projects a shared grant reauthorization as one safe manager recovery action and withdraws it after repair
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > uses Original AI revoked-credential enrichment and withdraws the finding when its grant recovers
+ × src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > uses the current native user for GitHub per-user reauthorization rather than another user's active grant 144ms
+   → expected [ { …(9) } ] to deeply equal []
+ ✓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > projects the current personal grant's active refresh expiry and withdraws it after repair 87ms
+ ✓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > projects the current personal grant's GitHub access invalidation until the verified repository snapshot returns 71ms
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > uses the Original manager role/grant policy and denies viewer/admin bypass
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > lets a regular member review only their own fixed personal identity without gaining management authority
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > uses the Original fixed subject when a creator-less historical personal connection has retained grants
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > withdraws a personal recovery finding when its actual retained grant is restored
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > requires a verified account/current rollout and bounds the findings
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > withdraws a repaired connection after dashboard fan-out
+ ↓ src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > withdraws findings when the native manager role is revoked after its first read
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v9-connector-recovery.integration.test.ts > V9 Original connector recovery projection > uses the current native user for GitHub per-user reauthorization rather than another user's active grant
+AssertionError: expected [ { …(9) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "actions": [
++       {
++         "criticality": "C4",
++         "href": "/apps/d92371e6-49f9-49b0-b830-8d3559a74e52/permissions",
++         "id": "review-connection",
++         "label": "Review app connection",
++         "labelKey": "review",
++         "operation": "open",
++         "requiresCurrentAuthorization": true,
++         "source": {
++           "companyId": "2be335c4-065e-4cd3-817f-215dbaf5acfa",
++           "domain": "connection",
++           "observedAt": "2026-10-28T12:02:32.204Z",
++           "resourceId": "d92371e6-49f9-49b0-b830-8d3559a74e52",
++           "version": "d9f4a4a3952fa743f79a82b14db165fbe471e108b8026e43e023e2dfd2589a6c",
++         },
++       },
++     ],
++     "consequence": "Review current access in the existing app controls before reconnecting or changing permissions.",
++     "evidence": [
++       "connector_access_review",
++     ],
++     "freshness": "fresh",
++     "id": "connector-recovery:d92371e6-49f9-49b0-b830-8d3559a74e52",
++     "kind": "recovery",
++     "source": {
++       "companyId": "2be335c4-065e-4cd3-817f-215dbaf5acfa",
++       "domain": "connection",
++       "observedAt": "2026-10-28T12:02:32.204Z",
++       "resourceId": "d92371e6-49f9-49b0-b830-8d3559a74e52",
++       "version": "d9f4a4a3952fa743f79a82b14db165fbe471e108b8026e43e023e2dfd2589a6c",
++     },
++     "title": "Review app connection",
++     "whyYou": "You manage this company's app connections.",
++   },
++ ]
+
+ ❯ src/__tests__/v9-connector-recovery.integration.test.ts:78:37
+     76|     expect((await read()).needsYou[0]?.evidence).toEqual(["connector_a…
+     77|     await db.insert(connectionGrants).values({ companyId: fixture.home…
+     78|     expect((await read()).needsYou).toEqual([]);
+       |                                     ^
+     79|   });
+     80|   it("projects the current personal grant's active refresh expiry and …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed | 10 skipped (13)
+   Start at  12:02:13
+   Duration  19.41s (transform 10.03s, setup 85ms, import 14.26s, tests 4.92s, environment 0ms)
+

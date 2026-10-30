@@ -24,10 +24,12 @@ import {
   companySecretBindings,
   companySecrets,
   companySecretVersions,
+  companyMemberships,
   createDb,
   documentRevisions,
   documents,
   projects,
+  principalPermissionGrants,
   routineDocuments,
   routineRuns,
   routines,
@@ -40,6 +42,7 @@ import {
 import { routineService } from "../services/routines.ts";
 import { secretService } from "../services/secrets.ts";
 import { resolveExecutionRunAdapterConfig } from "../services/heartbeat.ts";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const describeEmbedded = support.supported ? describe : describe.skip;
@@ -70,6 +73,8 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
     await db.delete(documentRevisions);
     await db.delete(companySecretVersions);
     await db.delete(companySecrets);
+    await db.delete(principalPermissionGrants);
+    await db.delete(companyMemberships);
     await db.delete(projects);
     await db.delete(agents);
     await db.delete(companies);
@@ -93,6 +98,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    const actor = await seedCurrentHumanSourceActor(db, [companyId], "responsible-user");
     // Note: executor agent has NO secret bindings of its own — this is the
     // whole point of routine env (the secret rides with the routine, not the agent).
     await db.insert(agents).values({
@@ -106,7 +112,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
       runtimeConfig: {},
       permissions: {},
     });
-    return { companyId, executorAgentId };
+    return { companyId, executorAgentId, actor };
   }
 
   const ROUTINE_VALUE = "super-sekret-routine-value";
@@ -114,7 +120,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
   const AGENT_VALUE = "agent-base-value";
 
   it("resolves routine env for an executing agent that has no direct binding, with routine winning precedence and zero value in access events", async () => {
-    const { companyId, executorAgentId } = await seed();
+    const { companyId, executorAgentId, actor } = await seed();
     const secrets = secretService(db);
     const routines = routineService(db, { heartbeat: { wakeup: async () => null } });
 
@@ -142,7 +148,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
           ROUTINE_API_KEY: { type: "secret_ref", secretId: secret.id, version: "latest" },
         },
       },
-      {},
+      actor,
     );
 
     // Verify binding is owned by the routine, not the executing agent.
@@ -200,7 +206,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
   });
 
   it("rejects routine env that references a secret from a different company", async () => {
-    const { companyId } = await seed();
+    const { companyId, actor } = await seed();
     const { companyId: otherCompanyId } = await seed();
     const secrets = secretService(db);
     const routines = routineService(db, { heartbeat: { wakeup: async () => null } });
@@ -229,13 +235,13 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
             BAD: { type: "secret_ref", secretId: foreignSecret.id, version: "latest" },
           },
         },
-        {},
+        actor,
       ),
     ).rejects.toThrow(/same company/i);
   });
 
   it("surfaces a clear, value-free error when a routine secret is missing/deleted at resolution time", async () => {
-    const { companyId, executorAgentId } = await seed();
+    const { companyId, executorAgentId, actor } = await seed();
     const secrets = secretService(db);
     const routines = routineService(db, { heartbeat: { wakeup: async () => null } });
 
@@ -262,7 +268,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
           DOOMED: { type: "secret_ref", secretId: secret.id, version: "latest" },
         },
       },
-      {},
+      actor,
     );
 
     // Hard delete the secret out from under the routine; the routine env now
@@ -292,7 +298,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
   });
 
   it("restoring an older revision re-syncs company_secret_bindings to the snapshot env", async () => {
-    const { companyId, executorAgentId } = await seed();
+    const { companyId, executorAgentId, actor } = await seed();
     const secrets = secretService(db);
     const routines = routineService(db, { heartbeat: { wakeup: async () => null } });
 
@@ -324,7 +330,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
           ALPHA: { type: "secret_ref", secretId: secretA.id, version: "latest" },
         },
       },
-      {},
+      actor,
     );
     const rev1Id = routine.latestRevisionId!;
 
@@ -356,7 +362,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
   });
 
   it("legacy run with null routine_revision_id falls back to the routine's current env (still resolves)", async () => {
-    const { companyId, executorAgentId } = await seed();
+    const { companyId, executorAgentId, actor } = await seed();
     const secrets = secretService(db);
     const routines = routineService(db, { heartbeat: { wakeup: async () => null } });
 
@@ -383,7 +389,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
           LEGACY: { type: "secret_ref", secretId: secret.id, version: "latest" },
         },
       },
-      {},
+      actor,
     );
 
     // Simulate an old routine_run row (predating the migration) with no
@@ -418,7 +424,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
   });
 
   it("routines created with null env (no Secrets tab interaction) still resolve normally with empty env", async () => {
-    const { companyId, executorAgentId } = await seed();
+    const { companyId, executorAgentId, actor } = await seed();
     const secrets = secretService(db);
     const routines = routineService(db, { heartbeat: { wakeup: async () => null } });
 
@@ -436,7 +442,7 @@ describeEmbedded("PAP-9522 QA: routine secrets end-to-end", () => {
         concurrencyPolicy: "coalesce_if_active",
         catchUpPolicy: "skip_missed",
       },
-      {},
+      actor,
     );
 
     expect(routine.env ?? null).toBeNull();

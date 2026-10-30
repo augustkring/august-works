@@ -19,6 +19,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import {
   authUsers,
+  authAccounts,
+  authSessions,
   billingAccounts,
   billingCatalogMappings,
   billingCheckoutIntents,
@@ -50,6 +52,8 @@ import {
   type TransactionalEmailProvider,
 } from "../services/notifications/mailgun-provider.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
+import type { AuthorizationActor } from "../services/authorization.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const suite = support.supported ? describe : describe.skip;
@@ -60,6 +64,7 @@ suite("V6 durable SaaS domains against migrated PostgreSQL", () => {
   let db: ReturnType<typeof createDb>;
   const userId = "v6-founder";
   let companyId: string, accountId: string;
+  let operatorActor: AuthorizationActor;
   let baselineEnvironments: number;
   const provider: BillingProvider = {
     getSubscription: vi.fn(),
@@ -108,6 +113,22 @@ suite("V6 durable SaaS domains against migrated PostgreSQL", () => {
       createdAt: NOW,
       updatedAt: NOW,
     });
+    await db.insert(authUsers).values({
+      id: "operator", email: "operator@example.test", name: "Operator",
+      emailVerified: true, createdAt: NOW, updatedAt: NOW,
+    });
+    // Structural credential row only, used to prove a password session is
+    // rejected for operator actions; these bytes are not a usable password.
+    await db.insert(authAccounts).values({
+      id: randomUUID(), issuer: "local:credential", accountId: "operator",
+      providerId: "credential", userId: "operator",
+      password: "structural-fixture-not-a-password-hash",
+      createdAt: NOW, updatedAt: NOW,
+    });
+    operatorActor = {
+      type: "board", source: "session", userId: "operator",
+      sessionId: await seedNativePasskeySession(db, "operator"),
+    };
     baselineEnvironments = (await db.select().from(environments)).length;
     const run = await saasOnboardingService(db).create(userId, {
       name: "V6 company",
@@ -346,6 +367,7 @@ suite("V6 durable SaaS domains against migrated PostgreSQL", () => {
     expect(await service.rebuildDirtyDays(new Date(Date.now() + 2000))).toBe(0);
   });
   it("requires independent owner-approved support scope, expires and revokes access, and replays audited overrides", async () => {
+    const supportNow = new Date();
     const service = saasSupportService(db, {
       operatorUserIds: ["operator"],
     } as SaasPlatformConfig);
@@ -357,50 +379,62 @@ suite("V6 durable SaaS domains against migrated PostgreSQL", () => {
       expiresInMinutes: 10,
     };
     await expect(
-      service.approve(companyId, "operator", input, NOW),
+      service.approve(companyId, "operator", input, supportNow),
     ).rejects.toMatchObject({ status: 403 });
     await expect(
-      service.approve(companyId, "outsider", input, NOW),
+      service.approve(companyId, "outsider", input, supportNow),
     ).rejects.toMatchObject({ status: 403 });
-    const session = await service.approve(companyId, userId, input, NOW);
+    const session = await service.approve(companyId, userId, input, supportNow);
     await expect(
-      service.authorize(session.id, "operator", "runtime:manage", NOW),
+      service.authorize(session.id, operatorActor, "runtime:manage", supportNow),
     ).rejects.toMatchObject({ status: 403 });
     await expect(
-      service.authorize(session.id, userId, "status:read", NOW),
+      service.authorize(session.id, { type: "board", source: "session", userId }, "status:read", supportNow),
     ).rejects.toMatchObject({ status: 403 });
     const override = {
       companyId,
       key: "platform.access",
       value: true,
       reason: "Temporary onboarding assistance",
-      expiresAt: new Date(NOW.getTime() + 86400000).toISOString(),
+      expiresAt: new Date(supportNow.getTime() + 86400000).toISOString(),
       idempotencyKey: "override-fixture-key-001",
     };
+    await expect(service.status(session.id, { ...operatorActor, sessionId: undefined }))
+      .rejects.toMatchObject({ status: 403 });
+    const passwordTime = new Date();
+    const [operator] = await db.select({ version: authUsers.authenticatorVersion })
+      .from(authUsers).where(eq(authUsers.id, "operator"));
+    const passwordSessionId = randomUUID();
+    await db.insert(authSessions).values({
+      id: passwordSessionId, userId: "operator", token: randomUUID(),
+      createdAt: passwordTime, updatedAt: passwordTime,
+      expiresAt: new Date(passwordTime.getTime() + 3600000),
+      authenticationMethod: "password", authenticatedAt: passwordTime,
+      authenticatorVersion: operator!.version,
+    });
+    await expect(service.override(session.id, { ...operatorActor, sessionId: passwordSessionId }, override, supportNow))
+      .rejects.toMatchObject({ status: 403 });
     const records = await Promise.all([
-      service.override(session.id, "operator", override, NOW),
-      service.override(session.id, "operator", override, NOW),
+      service.override(session.id, operatorActor, override, supportNow),
+      service.override(session.id, operatorActor, override, supportNow),
     ]);
     expect(records[0]!.id).toBe(records[1]!.id);
     await expect(
       service.override(
         session.id,
-        "operator",
+        operatorActor,
         { ...override, value: false },
-        NOW,
+        supportNow,
       ),
     ).rejects.toMatchObject({ status: 409 });
+    const expired = await service.approve(companyId, userId, { ...input, reason: "Expired approval fixture" },
+      new Date(supportNow.getTime() - 600001));
+    // A stale caller timestamp cannot revive an approval expired by database time.
+    await expect(service.authorize(expired.id, operatorActor, "status:read",
+      new Date(supportNow.getTime() - 600001))).rejects.toMatchObject({ status: 403 });
+    await service.revoke(companyId, userId, session.id, supportNow);
     await expect(
-      service.authorize(
-        session.id,
-        "operator",
-        "status:read",
-        new Date(NOW.getTime() + 600001),
-      ),
-    ).rejects.toMatchObject({ status: 403 });
-    await service.revoke(companyId, userId, session.id, NOW);
-    await expect(
-      service.authorize(session.id, "operator", "status:read", NOW),
+      service.authorize(session.id, operatorActor, "status:read", supportNow),
     ).rejects.toMatchObject({ status: 403 });
   });
   it("keeps one expiring encrypted email, handles lost acknowledgement by logical message ID and suppresses complaints", async () => {

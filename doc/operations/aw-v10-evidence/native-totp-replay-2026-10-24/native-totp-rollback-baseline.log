@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts (10 tests | 1 failed | 9 skipped) 8747ms
+     × keeps a verified OTP consumed when the subsequent native session write fails 633ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-two-factor.integration.test.ts > maintained native TOTP and recovery lifecycle > keeps a verified OTP consumed when the subsequent native session write fails
+AssertionError: expected 200 to be 401 // Object.is equality
+
+- Expected
++ Received
+
+- 401
++ 200
+
+ ❯ src/__tests__/native-two-factor.integration.test.ts:279:28
+    277|     } finally { spy.mockRestore(); }
+    278|     const retried = await post("two-factor/verify-totp", fixture.cooki…
+    279|     expect(retried.status).toBe(401);
+       |                            ^
+    280|     expect(retried.body.code).toBe("OTP_ALREADY_USED");
+    281|     expect(await db.select().from(authSessions).where(eq(authSessions.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  01:40:25
+   Duration  40.59s (transform 21.51s, setup 116ms, import 31.24s, tests 8.75s, environment 0ms)
+

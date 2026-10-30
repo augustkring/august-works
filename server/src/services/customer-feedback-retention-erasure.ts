@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, inArray, sql } from "drizzle-orm";
 import { activityLog, companies, customerFeedback, customerFeedbackImages, customerFeedbackRetention,
-  feedbackImageDeletions, feedbackRetentionErasures, type Db } from "@paperclipai/db";
+  customerFeedbackExperienceMeasures, feedbackImageDeletions, feedbackRetentionErasures, type Db } from "@paperclipai/db";
 import { feedbackRetentionErasureCommandSchema, feedbackRetentionErasureReceiptSchema,
   feedbackRetentionErasureReviewSchema } from "@paperclipai/shared";
 import { feedbackRetentionErasureHistorySchema } from "@paperclipai/shared";
@@ -150,13 +150,18 @@ export function customerFeedbackRetentionErasureService(db: Db, storage: Storage
               transportSettledAt: image.transportSettledAt }).onConflictDoNothing({ target: feedbackImageDeletions.imageId });
           }
         }
-        if (command.target.kind === "case") await reader.delete(customerFeedback).where(and(
-          eq(customerFeedback.companyId, companyId), eq(customerFeedback.id, feedbackId),
-        ));
+        if (command.target.kind === "case") {
+          await reader.delete(customerFeedbackExperienceMeasures).where(and(
+            eq(customerFeedbackExperienceMeasures.companyId, companyId), eq(customerFeedbackExperienceMeasures.feedbackId, feedbackId),
+          ));
+          await reader.delete(customerFeedback).where(and(
+            eq(customerFeedback.companyId, companyId), eq(customerFeedback.id, feedbackId),
+          ));
+        }
         await reader.insert(activityLog).values({ companyId, actorType: "user", actorId: principal,
           action: "customer_feedback.retention_erasure_requested", entityType: "customer_feedback_access", entityId: randomUUID(), details: null });
         return row!;
-      });
+      }, true);
       if (operation.status === "completed") return publicReceipt(operation);
       // Exact approved object IDs only. Provider calls hold no DB locks. An
       // unknown DELETE/HEAD keeps the original durable receipt pending.

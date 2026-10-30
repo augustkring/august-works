@@ -1,0 +1,4 @@
+v24.19.0
+9.15.4
+/usr/bin/chromium
+fe526163448a0eadc7abac68c651582b99f8f23b

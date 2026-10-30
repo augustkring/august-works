@@ -1,0 +1,45 @@
+{
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=2GiB GOMAXPROCS=2 node node_modules/vitest/vitest.mjs run server/src/__tests__/issue-native-memory-source-privacy.integration.test.ts --maxWorkers=1",
+  "verdict": "RED:1 case failed with8 assertions;83.10s;exit1. Seven assertions directly demonstrate the target privacy gap. The count assertion expectation was corrected after this capture as described below.",
+  "qualifiedBeforeAssertions": [
+    "Actual public source Task and current native Agent/Alice run with initialized native identity.",
+    "Actual private Memory creation and read by its owning Agent/Human; current Bob cannot read that Memory but can read the public source Task.",
+    "Original Context creation persisted the private Memory root and exact source version.",
+    "Original native issueService.create copied the actually returned Memory content using actual creator Agent/run; persisted child originRunId and retained run edge were verified."
+  ],
+  "observedGaps": [
+    "Native list returned the derived child ID and copied private canary.",
+    "Native search returned issuecount1 and copied private canary.",
+    "Native extraction returned the derived child and copied content.",
+    "Canonical detail admission allowed; the original analytical Context payload guard resolved instead of rejecting. This is native owner evidence, not an HTTP status test."
+  ],
+  "countQualification": "Native count ignores q as a text predicate; actual2 included the legitimately readable public source Task. The old expectation0 was incorrect. Current test now counts without q and expects1; the observed2 remains consistent with one extra private derivative, but the corrected expectation has not yet been executed.",
+  "fixtureFailure": "The first62.16s attempt failed private Memory validation because its citation lacked a required label; no leak assertions ran. Only that fixture field was corrected before the semantic RED.",
+  "sourcePinsVerifiedUnchangedAtSemanticExit": {
+    "server/src/__tests__/issue-native-memory-source-privacy.integration.test.ts": "ed9d23b45577616aad21a7d2b107485a97e1ea6de8a443a90683c2e70cc02ebf",
+    "server/src/services/issues.ts": "4e3f0b6647a1b150181beca5be1c2da8fbfc0069c61d700a3b8465d2df5e3b23",
+    "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+    "server/src/services/memory/memory-privacy.ts": "b2923f165509c6e6ccfb58775f38355bcc42ce2b2b993c228e7908ca952f0897",
+    "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502"
+  },
+  "redTestSource": {
+    "path": "up03-task-native-memory-source-red.test-source.txt",
+    "sha256": "ed9d23b45577616aad21a7d2b107485a97e1ea6de8a443a90683c2e70cc02ebf"
+  },
+  "currentTestSha256": "4043b13bd2bde011a152e62d74f0c1df096fef8df7c20cebd5f4ed2ba5587d44",
+  "logs": [
+    {
+      "path": "up03-task-native-memory-source-fixture-failure.log.txt",
+      "sha256": "bbc007f10db7d6e84bd7bbdaf6eb58da2c5e3a3c3676a1b243e9ddd2df5a9d9f"
+    },
+    {
+      "path": "up03-task-native-memory-source-red.log.txt",
+      "sha256": "6c286707c6cb7d8c11131415584cd3734367f7c7e889e811e6152a0b7bdcc32e"
+    }
+  ],
+  "limits": [
+    "No production code changed and no fix or GREEN is claimed.",
+    "Only one actual native regression case ran. No HTTP or full source graph qualification is claimed.",
+    "Creation-time captured payload roots must remain separate from run policy anchors; following all later producer Contexts would add false cycles and retroactive dependencies."
+  ]
+}

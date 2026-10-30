@@ -1,0 +1,35 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (43 tests | 1 failed | 42 skipped) 5951ms
+     × appends only an actual acknowledged Native history read with current source owners 1699ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > appends only an actual acknowledged Native history read with current source owners
+Error: Failed query: update "issue_comments" set "body" = $1 where "issue_comments"."id" = $2
+params: Changed after the actual read,91d89927-bee0-444e-88de-212336ab1768
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:974:5
+    972|       actor: nativeActor, policy: readInput!.policy as never, inputs: …
+    973|     expect(() => assertNativeRunReadSourceHistoryQualified(positivePro…
+    974|     await db.update(issueComments).set({ body: "Changed after the actu…
+       |     ^
+    975|       (readInput!.inputs.find(source => source.kind === "comment") as …
+    976|     await expect(assertNativePayloadSourceSetCurrent(db, { companyId, …
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 105 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issue_comments" set "body" = $1 where "issue_comments"."id" = $2', parameters: [ 'Changed after the actual read', '91d89927-bee0-444e-88de-212336ab1768' ], args: [ 'Changed after the actual read', '91d89927-bee0-444e-88de-212336ab1768' ], types: [ 25, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 42 skipped (43)
+   Start at  06:51:21
+   Duration  20.49s (transform 10.28s, setup 86ms, import 14.32s, tests 5.95s, environment 0ms)
+

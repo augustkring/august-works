@@ -1,0 +1,452 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stderr | src/pages/apps/AppDetail.test.tsx > AppDetail > shows normalized grant recovery state, scopes, and token freshness
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/apps/AppDetail.test.tsx > AppDetail > shows normalized grant recovery state, scopes, and token freshness
+An update to AppDetail inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/apps/AppDetail.test.tsx > AppDetail > shows normalized grant recovery state, scopes, and token freshness
+An update to Popper inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Popper inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Popper inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Popper inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Popper inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Popper inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Presence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/apps/AppDetail.test.tsx > AppDetail > shows normalized grant recovery state, scopes, and token freshness
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Tooltip inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows replacement and explicit removal for a retired Composio record
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows replacement and explicit removal for a retired Composio record
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > uses Permissions as the primary connection page and has no Setup tab
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > allows the gallery logo fallback after application identity lookup fails
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > keeps a customized connection logo after application identity lookup fails
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > keeps the unverified-server marker on URL-only connection details
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > redirects a missing tab to Permissions
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > renders the review tab panel
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > renders the permissions tab panel
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > counts only active catalog entries as available actions
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > redirects the retired setup route to Permissions
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > redirects the retired advanced route to Permissions
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows an explicit lazy-loading state while a tool tab discovers actions
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > redirects the retired Test tab into Permissions
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > confirms a successful connection on Permissions and clears the one-time URL flag
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > normalizes the retired post-OAuth Setup URL into Permissions
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > reviews quarantined actions as one toggle list and saves allowed and blocked choices together
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows the Smoke OAuth connection action for the installed HTTP fixture
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > keeps reconnect off a healthy Notion permissions page
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > renders searchable action groups with three-way permission toggles
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > opens an action test modal with agent selection, inputs, and result-ready chrome
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > persists ask-first for read-only actions from the three-way toggle
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > persists off by removing an action from enabled and ask-first sets
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > removes the separate always-installed controls from Permissions
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > persists agent access independently from always-installed agents
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > keeps always-installed agents in the access allowlist
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > uses the setup-style agent access question without install terminology
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > gives a viewer a read-only Permissions tab with no mutation affordances
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > redirects legacy connection activity to the filtered company Audit feed
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > removes the per-connection activity surface
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > redirects lifecycle history to the same Audit destination
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > keeps the header and reconnect banner across tabs
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > offers a supported replacement for an obsolete Anthropic connection on permissions
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > offers a supported replacement for an obsolete Anthropic connection on review
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > offers retry for a transient GitHub error without asking for another login
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows terminal OAuth failures as reconnect-required sign-in
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > reconnects an OAuth warning through the connection's existing personal identity
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > does not offer a personal reconnect to someone other than its fixed owner
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > does not offer personal key replacement to someone other than its fixed owner
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > never navigates to a javascript: authorization url
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > never navigates to a data: authorization url
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > never navigates to a file: authorization url
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > never navigates to a plaintext http authorization url
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > never navigates to a credentials authorization url
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > does not label a revoked AI credential as Connected
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > keeps the app header concise on every tab
+ ✓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows normalized grant recovery state, scopes, and token freshness 96ms
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > lets a regular member connect their own identity and never someone else's
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > keeps personal managed authorization in the tenant until the provider is ready
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > keeps a viewer read-only across identities and installs
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows one fixed personal identity without an organization switch
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows the personal GitHub username and every accessible repository
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > loads missing GitHub app configuration instead of linking legacy settings (undefined)
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > loads missing GitHub app configuration instead of linking legacy settings (https://github.com/settings/installations)
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows repositories across accounts without filter controls (empty: false)
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows repositories across accounts without filter controls (empty: true)
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > shows dedicated GitHub access as compact action rows and links to the agent
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > warns about all-repository GitHub access within the repository row
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > labels mixed GitHub repository access explicitly
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > labels none GitHub repository access explicitly
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > persists an empty audience as all organization members
+ ↓ |@paperclipai/ui| src/pages/apps/AppDetail.test.tsx > AppDetail > persists a selected audience and keeps the dialog open when the server refuses
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 61 skipped (62)
+   Start at  12:10:06
+   Duration  6.24s (transform 3.21s, setup 23ms, import 5.34s, tests 98ms, environment 643ms)
+

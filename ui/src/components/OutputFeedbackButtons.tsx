@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FeedbackDataSharingPreference, FeedbackVoteValue } from "@paperclipai/shared";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +18,20 @@ import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 
+export function useFeedbackPolicy() {
+  const general = useQuery({
+    queryKey: queryKeys.instance.generalSettings,
+    queryFn: () => instanceSettingsApi.getGeneral(),
+  });
+  const feedback = useV9FeatureEnabled("customer_feedback_v9");
+  return {
+    localOnly: !general.isSuccess || !feedback.query.isSuccess ||
+      general.data.outputFeedbackPolicyVersion === "aw-v9-local-v1" ||
+      feedback.enabled,
+    productFeedbackEnabled: feedback.enabled,
+  };
+}
+
 export function OutputFeedbackButtons({
   activeVote,
   disabled = false,
@@ -36,9 +50,7 @@ export function OutputFeedbackButtons({
   inline?: boolean;
 }) {
   const {t}=useTranslation("experience");
-  const general=useQuery({queryKey:queryKeys.instance.generalSettings,queryFn:()=>instanceSettingsApi.getGeneral()});
-  const feedback=useV9FeatureEnabled("customer_feedback_v9");
-  const awLocalOnly=!general.isSuccess||general.data.outputFeedbackPolicyVersion==="aw-v9-local-v1"||feedback.enabled;
+  const { localOnly: awLocalOnly, productFeedbackEnabled } = useFeedbackPolicy();
   const [saveFailed,setSaveFailed]=useState(false);
   const [pendingVote, setPendingVote] = useState<{
     vote: FeedbackVoteValue;
@@ -58,11 +70,11 @@ export function OutputFeedbackButtons({
     }
   }, [activeVote, optimisticVote]);
 
-  async function submitVote(
+  const submitVote = useCallback(async (
     vote: FeedbackVoteValue,
     options?: { allowSharing?: boolean; reason?: string },
     behavior?: { keepReasonPromptOpen?: boolean },
-  ) {
+  ) => {
     setIsSaving(true);
     setSaveFailed(false);
     try {
@@ -79,7 +91,18 @@ export function OutputFeedbackButtons({
     } finally {
       setIsSaving(false);
     }
-  }
+  }, [onVote]);
+
+  useEffect(() => {
+    if (!awLocalOnly || !pendingVote) return;
+    const vote = pendingVote;
+    setPendingVote(null);
+    void submitVote(
+      vote.vote,
+      { allowSharing: false, ...(vote.reason ? { reason: vote.reason } : {}) },
+      { keepReasonPromptOpen: vote.keepReasonPromptOpen },
+    );
+  }, [awLocalOnly, pendingVote, submitVote]);
 
   function beginVote(
     vote: FeedbackVoteValue,
@@ -156,7 +179,7 @@ export function OutputFeedbackButtons({
         {rightSlot ? <div className="ml-auto">{rightSlot}</div> : null}
       </div>
       {saveFailed&&<p role="alert" className="mt-2 text-sm">{t("feedback.voteFailed")}</p>}
-      {awLocalOnly&&<div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><span>{t("feedback.voteLocal")}</span>{feedback.enabled&&<Button variant="ghost" className="min-h-11" onClick={()=>document.dispatchEvent(new Event("paperclip:open-feedback"))}>{t("feedback.shareProduct")}</Button>}</div>}
+      {awLocalOnly&&<div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><span>{t("feedback.voteLocal")}</span>{productFeedbackEnabled&&<Button variant="ghost" className="min-h-11" onClick={()=>document.dispatchEvent(new Event("paperclip:open-feedback"))}>{t("feedback.shareProduct")}</Button>}</div>}
       {collectingDownvoteReason ? (
         <div className="mt-2 rounded-md border border-border/60 bg-accent/20 p-3">
           <div className="mb-2 text-sm font-medium">What could have been better?</div>
@@ -187,7 +210,11 @@ export function OutputFeedbackButtons({
               disabled={disabled || isSaving || !downvoteReason.trim()}
               onClick={() => {
                 void submitVote("down", {
-                  ...(downvoteAllowSharing ? { allowSharing: true } : {}),
+                  ...(awLocalOnly
+                    ? { allowSharing: false }
+                    : downvoteAllowSharing
+                      ? { allowSharing: true }
+                      : {}),
                   reason: downvoteReason,
                 });
               }}
@@ -211,8 +238,9 @@ export function OutputFeedbackButtons({
           <DialogHeader>
             <DialogTitle>Save your feedback sharing preference</DialogTitle>
             <DialogDescription>
-              Choose whether voted AI outputs can be shared with Paperclip Labs. This
-              answer becomes the default for future thumbs up and thumbs down votes.
+              Choose whether voted AI outputs can be sent to the feedback service chosen by your
+              server operator. This answer becomes the default for future thumbs up and thumbs
+              down votes.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm text-muted-foreground">

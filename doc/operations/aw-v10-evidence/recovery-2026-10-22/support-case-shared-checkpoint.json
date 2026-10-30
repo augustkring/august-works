@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-23",
+  "status": "shared intake policy only; no storage, delivery or end-to-end case qualification",
+  "tests": {
+    "passed": 5,
+    "seconds": 2.04,
+    "observedExit": 0,
+    "durableExit": 0
+  },
+  "sharedTypecheck": {
+    "observedExit": 0,
+    "durableExit": 0
+  },
+  "files": {
+    "packages/shared/src/customer-support.ts": "dff6ac51ef4ce6084630cf5ce24828999fde028379899b5ccb5bb2a244c6b281",
+    "packages/shared/src/customer-support.test.ts": "801bb682c4acc64b9dfcc3e7bdeda12367af91f6b5563c7b08b044d4d006d3b3"
+  },
+  "scope": "Original V6 support approval history unchanged. Shared description/category/nullable impact/optional edited subject and safe-context rules, exact EN/DA wording and limits. Case storage, canonical authority, idempotent receipts, delivery/reconciliation, reply/reopen, attachments, diagnostics, support-session linkage, erasure/restore/export and UI still pending. Root implementation/review; Luna text candidate not adopted."
+}

@@ -7,9 +7,15 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowDetail, WorkflowRunDetail, WorkflowRevision } from "@paperclipai/shared";
 import { WorkflowRun } from "./WorkflowRun";
+import { authApi } from "../api/auth";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
+import { i18n } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
   cancelRun: vi.fn(),
+  startRun: vi.fn(),
+  startTaskRun: vi.fn(),
   retryRun: vi.fn(),
   get: vi.fn(),
   getRun: vi.fn(),
@@ -132,8 +138,13 @@ async function flush() {
 
 describe("WorkflowRun", () => {
   let container: HTMLDivElement;
+  let continuationRoot: ReturnType<typeof createRoot> | null = null;
+  let continuationClient: QueryClient | null = null;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+    vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("user-1"));
+    apiMock.startRun.mockReset(); apiMock.startTaskRun.mockReset();
     container = document.createElement("div");
     document.body.appendChild(container);
     apiMock.get.mockResolvedValue(workflow);
@@ -142,8 +153,125 @@ describe("WorkflowRun", () => {
   });
 
   afterEach(() => {
+    if (continuationRoot) flushSync(() => continuationRoot!.unmount());
+    continuationRoot = null;
+    continuationClient?.clear(); continuationClient = null;
     container.remove();
-    vi.clearAllMocks();
+    vi.clearAllMocks(); vi.restoreAllMocks();
+  });
+
+  function childWait(source: "manual" | "task" = "manual"): WorkflowRunDetail {
+    return { ...runDetail, run: { ...runDetail.run, status: "waiting", finishedAt: null, source,
+      executionPrincipal: { type: "user", userId: "user-1" }, executionAgentRunId: null,
+      humanCoverageId: "10000000-0000-4000-8000-000000000001",
+      triggerPayload: { customerId: "acme", ...(source === "task" ? { task: { id: "task-1", title: "Original Task input", status: "backlog" } } : {}) },
+    }, steps: [{ ...runDetail.steps[0]!, nodeId: "child", status: "waiting", outputJson: null, finishedAt: null }],
+      waits: [{ id: "child-wait", companyId: "company-1", workflowRunId: runDetail.run.id,
+        nodeId: "child", waitKey: "child", kind: "subworkflow", status: "active", wakeAt: null, timeoutAt: null,
+        referenceType: "workflow_run", referenceId: "original-child", signalTokenHash: null, resolutionJson: null,
+        resolvedByType: null, resolvedById: null, resolvedAt: null, createdAt: new Date(), updatedAt: new Date() }] };
+  }
+
+  async function showContinuation(detail: WorkflowRunDetail, userId = "user-1", localImplicit = false) {
+    apiMock.getRun.mockResolvedValue(detail);
+    vi.mocked(authApi.getSession).mockResolvedValue(v9SessionFixture(userId, localImplicit));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture(userId, localImplicit));
+    continuationClient = client; continuationRoot = createRoot(container);
+    flushSync(() => continuationRoot!.render(<QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={["/workflows/workflow-1/runs/run-12345678"]}>
+        <Routes><Route path="/workflows/:workflowId/runs/:runId" element={<WorkflowRun />} /></Routes>
+      </MemoryRouter></QueryClientProvider>));
+    await flush(); return client;
+  }
+
+  const continueButton = () => Array.from(container.querySelectorAll("button")).find(button =>
+    ["Continue existing run", "Fortsæt eksisterende kørsel"].includes(button.textContent?.trim() ?? ""));
+
+  it.each(["manual", "task"] as const)("continues the exact retained %s request after reload without minting another run", async source => {
+    const waiting = childWait(source);
+    if (source === "manual") waiting.run.triggerPayload.task = { literalManualInput: "Preserve this user field" };
+    const completed = { ...waiting, run: { ...waiting.run, status: "succeeded" as const }, waits: [] };
+    apiMock.startRun.mockResolvedValue(completed); apiMock.startTaskRun.mockResolvedValue(completed);
+    const client = await showContinuation(waiting);
+    expect(continueButton()).toBeDefined(); continueButton()!.click(); await flush();
+    const args = ["company-1", ...(source === "task" ? ["task-1"] : []), "workflow-1",
+      { input: source === "manual" ? waiting.run.triggerPayload : { customerId: "acme" }, revisionId: "revision-1" }, "run-key", waiting.run.humanCoverageId];
+    expect(source === "task" ? apiMock.startTaskRun : apiMock.startRun).toHaveBeenCalledExactlyOnceWith(...args);
+    expect(source === "task" ? apiMock.startRun : apiMock.startTaskRun).not.toHaveBeenCalled();
+    expect(apiMock.retryRun).not.toHaveBeenCalled(); expect(apiMock.cancelRun).not.toHaveBeenCalled();
+    expect(client.getQueryData<WorkflowRunDetail>(queryKeys.workflows.run("company-1", waiting.run.id))?.run.id).toBe(waiting.run.id);
+    expect(continueButton()).toBeUndefined();
+  });
+
+  it("replays only the original genuine Local system request without a fabricated Human coverage", async () => {
+    const waiting = childWait(); waiting.run.executionPrincipal = { type: "system", service: "local-board" };
+    waiting.run.humanCoverageId = null; waiting.run.responsibleUserId = null;
+    apiMock.startRun.mockResolvedValue({ ...waiting, run: { ...waiting.run, status: "succeeded" } });
+    await showContinuation(waiting, "local-board", true); expect(continueButton()).toBeDefined();
+    continueButton()!.click(); await flush();
+    expect(apiMock.startRun).toHaveBeenCalledExactlyOnceWith("company-1", "workflow-1",
+      { input: waiting.run.triggerPayload, revisionId: "revision-1" }, "run-key", null);
+    expect(apiMock.startTaskRun).not.toHaveBeenCalled(); expect(apiMock.retryRun).not.toHaveBeenCalled();
+  });
+
+  it.each(["borrowed_coverage", "other_system"])("does not promote Local identity for %s", async mode => {
+    const waiting = childWait(); waiting.run.executionPrincipal = { type: "system", service: mode === "other_system" ? "workflow-subworkflow" : "local-board" };
+    if (mode === "other_system") waiting.run.humanCoverageId = null;
+    await showContinuation(waiting, "local-board", true);
+    expect(continueButton()).toBeUndefined(); expect(apiMock.startRun).not.toHaveBeenCalled();
+  });
+
+  it("renders the new continuation action in Danish", async () => {
+    await i18n.changeLanguage("da"); await showContinuation(childWait());
+    expect(continueButton()?.textContent).toContain("Fortsæt eksisterende kørsel");
+    expect(container.textContent).toContain("Personen, der startede kørslen");
+  });
+
+  it.each(["wrong_human", "stale_revision", "missing_key", "retry_run", "agent", "malformed_task"])(
+    "offers no retained continuation for %s", async mode => {
+    const waiting = childWait(mode === "malformed_task" ? "task" : "manual");
+    if (mode === "stale_revision") apiMock.get.mockResolvedValue({ ...workflow, publishedRevisionId: "new-revision" });
+    if (mode === "missing_key") waiting.run.idempotencyKey = null;
+    if (mode === "retry_run") waiting.run.retryOfRunId = "original-parent";
+    if (mode === "agent") waiting.run.executionPrincipal = { type: "agent", agentId: "agent-1" };
+    if (mode === "malformed_task") waiting.run.triggerPayload.task = { title: "No retained Task ID" };
+    await showContinuation(waiting, mode === "wrong_human" ? "other-user" : "user-1");
+    expect(continueButton()).toBeUndefined(); expect(apiMock.startRun).not.toHaveBeenCalled(); expect(apiMock.startTaskRun).not.toHaveBeenCalled();
+  });
+
+  it.each(["coverage_revoked", "task_input_changed", "different_run"])("keeps the original binding when %s is refused", async mode => {
+    const waiting = childWait(mode === "task_input_changed" ? "task" : "manual");
+    if (mode === "different_run") apiMock.startRun.mockResolvedValue({ ...waiting, run: { ...waiting.run, id: "replacement-run" } });
+    else (mode === "task_input_changed" ? apiMock.startTaskRun : apiMock.startRun).mockRejectedValue(new Error("PRIVATE refusal detail"));
+    const client = await showContinuation(waiting); continueButton()!.click(); await flush();
+    expect(container.textContent).toContain("This run could not be continued.");
+    expect(container.textContent).not.toContain("PRIVATE refusal detail");
+    expect(client.getQueryData<WorkflowRunDetail>(queryKeys.workflows.run("company-1", waiting.run.id))?.run.status).toBe("waiting");
+    expect(apiMock.retryRun).not.toHaveBeenCalled();
+    expect(apiMock.startRun.mock.calls.length + apiMock.startTaskRun.mock.calls.length).toBe(1);
+  });
+
+  it("checks the actual current session cache before dispatching a stale visible action", async () => {
+    const client = await showContinuation(childWait()), action = continueButton()!;
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("other-user"));
+    action.click(); await flush();
+    expect(apiMock.startRun).not.toHaveBeenCalled(); expect(apiMock.startTaskRun).not.toHaveBeenCalled();
+  });
+
+  it.each(["account", "unmount"])("withholds a late private continuation result after %s changes", async mode => {
+    const waiting = childWait(); let answer!: (result: WorkflowRunDetail) => void;
+    apiMock.startRun.mockImplementation(() => new Promise(resolve => { answer = resolve; }));
+    const client = await showContinuation(waiting); continueButton()!.click(); await flush();
+    expect(apiMock.startRun).toHaveBeenCalledTimes(1);
+    if (mode === "account") client.setQueryData(queryKeys.auth.session, v9SessionFixture("other-user"));
+    else { flushSync(() => continuationRoot!.unmount()); continuationRoot = null; }
+    answer({ ...waiting, run: { ...waiting.run, status: "succeeded" },
+      steps: [{ ...waiting.steps[0]!, outputJson: { privateValue: "PRIVATE late child result" } }] });
+    await flush();
+    expect(client.getQueryData<WorkflowRunDetail>(queryKeys.workflows.run("company-1", waiting.run.id))?.run.status).toBe("waiting");
+    expect(container.textContent).not.toContain("PRIVATE late child result");
+    expect(JSON.stringify(client.getMutationCache().getAll().map(mutation => mutation.state))).not.toContain("PRIVATE late child result");
   });
 
   it("shows a linear attempt-level execution log for the immutable revision", async () => {

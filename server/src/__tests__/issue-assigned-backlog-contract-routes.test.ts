@@ -6,6 +6,20 @@ const assigneeAgentId = "22222222-2222-4222-8222-222222222222";
 
 const mockWakeup = vi.hoisted(() => vi.fn(async () => undefined));
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
+let lastRouteError: unknown = null;
+
+function routeErrorSummary() {
+  if (!(lastRouteError instanceof Error)) return String(lastRouteError);
+  const cause = lastRouteError.cause;
+  return JSON.stringify({
+    name: lastRouteError.name,
+    message: lastRouteError.message,
+    stack: lastRouteError.stack?.split("\n").slice(0, 8),
+    cause: cause instanceof Error
+      ? { name: cause.name, message: cause.message, code: (cause as NodeJS.ErrnoException).code }
+      : cause == null ? null : String(cause).slice(0, 200),
+  });
+}
 const mockIssueService = vi.hoisted(() => ({
   create: vi.fn(),
   createChild: vi.fn(),
@@ -17,6 +31,28 @@ const mockIssueService = vi.hoisted(() => ({
   listWakeableBlockedDependents: vi.fn(),
   getWakeableParentAfterChildCompletion: vi.fn(),
   findMentionedAgents: vi.fn(async () => []),
+}));
+const mockCanReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn(async () => undefined));
+
+// This route fixture intentionally supplies an empty DB. Keep the feature
+// setting read used by issue sync side effects inside that fixture boundary.
+vi.mock("../services/instance-settings.js", () => ({
+  instanceSettingsService: () => ({
+    getExperimental: vi.fn(async () => ({ enableExternalObjects: false })),
+  }),
+}));
+
+// The route contract is exercised with domain service mocks; PostgreSQL
+// privacy qualification is covered by the route integration suites.
+vi.mock("../services/authorization.js", async () => ({
+  ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+  canActorReadIssuePrivacy: mockCanReadIssuePrivacy,
+}));
+
+vi.mock("../services/analytical-context-authority.js", async () => ({
+  ...await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js"),
+  assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
 }));
 
 vi.mock("../services/index.js", () => ({
@@ -132,7 +168,10 @@ async function createApp() {
     next();
   });
   app.use("/api", issueRoutes({} as any, {} as any));
-  app.use(errorHandler);
+  app.use((err, req, res, next) => {
+    lastRouteError = err;
+    errorHandler(err, req, res, next);
+  });
   return app;
 }
 
@@ -163,7 +202,7 @@ function makeIssue(input: {
 }
 
 function expectClearAssignedStatusValidation(res: request.Response) {
-  expect([400, 422]).toContain(res.status);
+  expect([400, 422], `unexpected status ${res.status}: ${routeErrorSummary()}`).toContain(res.status);
   expect(String(res.body?.error ?? res.text)).toMatch(/assign|assignee|status|backlog|todo/i);
 }
 
@@ -178,7 +217,10 @@ describe("assigned backlog creation contract", () => {
   });
 
   beforeEach(() => {
+    lastRouteError = null;
     vi.clearAllMocks();
+    mockCanReadIssuePrivacy.mockReset().mockResolvedValue(true);
+    mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockIssueService.getById.mockResolvedValue(makeIssue({
       id: "parent-1",
       title: "Parent issue",

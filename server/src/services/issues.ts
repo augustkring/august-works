@@ -8,10 +8,18 @@ import { createdFromIssueCondition } from "./issue-creation-origin.js";
 import { executionProjectionsForRuns } from "./execution-projection.js";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { Buffer } from "node:buffer";
+import { isDeepStrictEqual } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import { suppressAnalyticalSource } from "./analytical-privacy.js";
-import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { forgetMemoryForDeletedIssue, lockMemoryPrivacy, canActorReadMemorySources } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadTypedTaskSourcePrivacy, issueReadSqlCondition, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
+import { assertHumanAuthentication, isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
+import { directHumanPayloadSnapshotSql, nativePayloadSnapshotSql, captureNativeTemporalContext,
+  assertDirectInputSessionCurrent as assertManualInputCredentialCurrent, readNativeIssueEffectPrefix, assertManualRelatedSourcesCurrent } from "./native-direct-input.js";
+import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
+import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
+import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
 import {
   and,
   asc,
@@ -21,6 +29,7 @@ import {
   getTableColumns,
   gte,
   inArray,
+  is,
   isNotNull,
   isNull,
   like,
@@ -30,7 +39,7 @@ import {
   notInArray,
   or,
   sql,
-  type SQL,
+  SQL,
 } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -44,6 +53,7 @@ import {
   agentWakeupRequests,
   agents,
   authUsers,
+  instanceUserRoles,
   approvals,
   assets,
   companies,
@@ -52,9 +62,19 @@ import {
   documents,
   goals,
   heartbeatRuns,
+  workflowRuns,
+  workflowRevisions,
+  workflows,
   routineRuns,
+  routineRevisions,
+  routines,
+  pluginManagedResources,
+  plugins,
   executionWorkspaces,
   issueApprovals,
+  issueAccessGrants,
+  issuePrivacySources,
+  memoryDeletionMarkers,
   issueAttachments,
   issueCreateIdempotencyKeys,
   issueInboxArchives,
@@ -94,21 +114,30 @@ import type {
   IssueRelationIssueSummary,
   IssueWatchdogSummary,
   LowTrustBoundary,
+  NativePayloadSourceInput,
+  NativePayloadSourcePolicy,
+  NativePayloadSourceSnapshot,
   SuccessfulRunHandoffState,
 } from "@paperclipai/shared";
 import {
   clampIssueRequestDepth,
   extractAgentMentionIds,
   extractProjectMentionIds,
+  ISSUE_WORK_MODES,
   issueCommentAuthorTypeSchema,
   issueCommentMetadataSchema,
   issueCommentPresentationSchema,
   isUuidLike,
+  isPluginOperationIssueOriginKind,
+  pluginOperationIssueOriginKind,
+  nativePayloadSourceSnapshotSchema,
   normalizeIssueIdentifier as normalizeIssueReferenceIdentifier,
+  routineRevisionSnapshotV1Schema,
 } from "@paperclipai/shared";
-import { conflict, HttpError, notFound, unprocessable } from "../errors.js";
+import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { isForeignKeyViolation } from "../db-errors.js";
 import { logger } from "../middleware/logger.js";
+import { DELIVERY_QUEUES, notifyDeliveryWork } from "./delivery-work-notifications.js";
 import { parseObject } from "../adapters/utils.js";
 import {
   hydrateSuccessfulRunHandoffLiveness,
@@ -170,6 +199,7 @@ import type {
 } from "./import-write-types.js";
 import {
   summarizeIssueWatchdog,
+  taskWatchdogService,
   upsertIssueWatchdogForIssue,
 } from "./task-watchdogs.js";
 import {
@@ -1871,6 +1901,7 @@ export interface IssueFilters {
   includeLiveDescendantSummary?: boolean;
   hasPlanDocument?: boolean;
   lowTrustBoundary?: LowTrustBoundary & { companyId: string };
+  readCondition?: SQL<boolean>;
   q?: string;
   limit?: number;
   offset?: number;
@@ -1964,6 +1995,11 @@ type IssueUserContextInput = {
 };
 type ProjectGoalReader = Pick<Db, "select">;
 type DbReader = Pick<Db, "select">;
+/** Selected Task rendition, not source completeness, permission or final wire bytes. */
+export interface NativeTaskSourceCapture {
+  readonly input: Extract<NativePayloadSourceInput, { kind: "task" }>;
+  readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
+}
 /** Conversation containers cannot acquire new child edges, even with the experiment disabled. */
 async function assertExecutionTaskParent(db: Db, companyId: string, parentId?: string | null) {
   if (!parentId) return;
@@ -1973,7 +2009,327 @@ async function assertExecutionTaskParent(db: Db, companyId: string, parentId?: s
 }
 
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * The exact pre-first-comment conversation shell is hidden by ordinary issue
+ * privacy. Its sole exception is the current authenticated Human who opened
+ * it, and only while its source-free, unsealed shape remains unchanged.
+ */
+export async function isCurrentUnsealedConversationShell(
+  tx: DbTransaction,
+  actor: AuthorizationActor,
+  issue: { id: string; companyId: string },
+  action: "issue:read" | "issue:comment",
+) {
+  const ownerUserId = actor.userId;
+  if (actor.type !== "board" || typeof ownerUserId !== "string" || actor.source === "local_implicit") return false;
+  const pinned = await pinCurrentBoardActor(tx, actor);
+  if (!pinned || pinned.credentialExpiresAt === null) return false;
+  await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+    "The current conversation owner session is unavailable");
+  const [current] = await tx.select().from(issues).where(and(
+    eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+    eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
+    eq(issues.payloadSourceSnapshotInvalidated, false),
+    isNull(issues.projectId), isNull(issues.parentId), isNull(issues.description),
+    isNull(issues.createdByAgentId), eq(issues.originKind, "manual"), isNull(issues.originId),
+    eq(issues.createdByUserId, ownerUserId), eq(issues.conversationUserId, ownerUserId),
+    isNotNull(issues.conversationAgentId), eq(issues.conversationState, "waiting"),
+    eq(issues.conversationSessionGeneration, 0), isNull(issues.conversationBoundaryCommentId),
+    isNull(issues.conversationRetiredAt), isNull(issues.executionRunId), eq(issues.status, "in_review"),
+  )).for("share");
+  await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+    "The current conversation owner session is unavailable");
+  if (!current) return false;
+  const [priorComment] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
+    eq(issueComments.companyId, issue.companyId), eq(issueComments.issueId, issue.id),
+  )).limit(1);
+  if (priorComment) return false;
+  const [opened] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+    eq(activityLog.companyId, current.companyId), eq(activityLog.actorType, "user"),
+    eq(activityLog.actorId, ownerUserId), eq(activityLog.action, "issue.conversation_opened"),
+    eq(activityLog.entityType, "issue"), eq(activityLog.entityId, current.id),
+    sql`${activityLog.details}->>'agentId'=${current.conversationAgentId}`,
+  )).limit(1);
+  if (!opened) return false;
+  const [linkedSource] = await tx.select({ id: issuePrivacySources.id }).from(issuePrivacySources).where(and(
+    eq(issuePrivacySources.companyId, current.companyId), eq(issuePrivacySources.issueId, current.id),
+  )).limit(1);
+  const [linkedDocument] = await tx.select({ id: issueDocuments.id }).from(issueDocuments).where(and(
+    eq(issueDocuments.companyId, current.companyId), eq(issueDocuments.issueId, current.id),
+  )).limit(1);
+  const [linkedAttachment] = await tx.select({ id: issueAttachments.id }).from(issueAttachments).where(and(
+    eq(issueAttachments.companyId, current.companyId), eq(issueAttachments.issueId, current.id),
+  )).limit(1);
+  if (linkedSource || linkedDocument || linkedAttachment) return false;
+  const membership = await pinIssueMutationHuman(tx, pinned.actor, current.companyId, true);
+  await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+    "The current conversation owner session is unavailable");
+  return (action === "issue:read" || action === "issue:comment") &&
+    (membership === "member" || membership === "instance_admin");
+}
+
+export async function lockIssuePrivacyTree(tx: DbTransaction, companyId: string, mode: "read" | "write" = "write") {
+  await lockBusinessEventCompany(tx, companyId, mode);
+  await lockMemoryPrivacy(tx as unknown as Db, companyId, mode);
+  if (mode === "read") {
+    await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtextextended(${`issue-privacy-tree:${companyId}`}, 0))`);
+    return;
+  }
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`issue-privacy-tree:${companyId}`}, 0))`);
+}
+
+/** Assignment is a retained reason, independent of explicit sharing and current membership. */
+export async function ensureAssignmentIssueAccessGrant(
+  tx: DbTransaction,
+  issue: typeof issues.$inferSelect,
+  previous: Pick<typeof issues.$inferSelect, "assigneeAgentId" | "assigneeUserId" | "visibility"> | null,
+  actor: { agentId?: string | null; userId?: string | null },
+) {
+  if (issue.visibility !== "private" || (previous?.visibility === "private"
+    && previous.assigneeAgentId === issue.assigneeAgentId && previous.assigneeUserId === issue.assigneeUserId)) return null;
+  const subjectType = issue.assigneeAgentId ? "agent" as const : issue.assigneeUserId ? "user" as const : null;
+  const subjectId = issue.assigneeAgentId ?? issue.assigneeUserId;
+  if (!subjectType || !subjectId) return null;
+  const [grant] = await tx.insert(issueAccessGrants).values({
+    companyId: issue.companyId, issueId: issue.id, subjectType, subjectId, source: "assignment",
+    grantedByAgentId: actor.agentId ?? null, grantedByUserId: actor.userId ?? null,
+  }).onConflictDoNothing().returning();
+  if (!grant) return null;
+  // The caller publishes only after its owning transaction commits.
+  const activity = await persistActivity(tx as unknown as Db, {
+    companyId: issue.companyId, actorType: actor.agentId ? "agent" : actor.userId ? "user" : "system",
+    actorId: actor.agentId ?? actor.userId ?? "issue_service", agentId: actor.agentId ?? null,
+    action: "issue_access_grant.created", entityType: "issue_access_grant", entityId: grant.id,
+    details: { issueId: issue.id, subjectType, subjectId, source: "assignment" },
+  });
+  return { grant, publication: activity.publication };
+}
+
+async function retainIssuePrivacySources(tx: DbTransaction, issue: typeof issues.$inferSelect,
+  sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string | null | undefined; contextManifestId?: string | null }>) {
+  const rows = sources.filter((source): source is { sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string; contextManifestId?: string | null } => Boolean(source.sourceId))
+    .filter(source => source.sourceKind !== "issue" || source.sourceId !== issue.id)
+    .map(source => ({ companyId: issue.companyId, issueId: issue.id, ...source }));
+  if (rows.some(source => !isUuidLike(source.sourceId))) throw unprocessable("Task privacy source identity is invalid");
+  if (rows.length) await tx.insert(issuePrivacySources).values(rows).onConflictDoNothing();
+}
+
+async function resolveIssuePrivacy(
+  tx: DbTransaction,
+  companyId: string,
+  next: Partial<typeof issues.$inferInsert> & { id: string },
+  previous: typeof issues.$inferSelect | null,
+  actorRunId?: string | null,
+  additionalIssueSources: string[] = [],
+  freezeCurrentRunContext = false,
+  nativeOutputRunId?: string | null,
+) {
+  const sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string; contextManifestId?: string | null }> = [];
+  const parents = new Set([...additionalIssueSources, previous?.privacyParentIssueId, previous?.parentId, next.privacyParentIssueId,
+    next.privacyRootIssueId !== next.id ? next.privacyRootIssueId : null, next.parentId].filter((id): id is string => Boolean(id)));
+  const independentParents = new Set(parents);
+  const contextOnlyParents = new Set<string>();
+  const projectIds = new Set([previous?.projectId, next.projectId].filter((id): id is string => Boolean(id)));
+  let privacyParentIssueId = previous?.privacyParentIssueId ?? previous?.parentId ?? next.privacyParentIssueId ?? next.parentId ?? null;
+  let visibility = previous?.visibility === "private" || next.visibility === "private" ? "private" as const : "open" as const;
+  let privacyRootIssueId = previous?.privacyRootIssueId ?? null;
+  if (previous?.visibility === "private" && next.visibility === "open") {
+    throw unprocessable("Publishing private source content requires an authorized publication operation");
+  }
+  const typedOrigins = [previous, next].filter((row): row is NonNullable<typeof row> & { originRunId: string; originId: string } =>
+    Boolean(row && (row.originKind === "workflow_task" || row.originKind === "routine_execution"
+      || isPluginOperationIssueOriginKind(row.originKind))));
+  for (const origin of typedOrigins) {
+    const pluginOperationOrigin = isPluginOperationIssueOriginKind(origin.originKind);
+    if (!origin.originRunId || !isUuidLike(origin.originRunId) || !origin.originId
+      || (!pluginOperationOrigin && !isUuidLike(origin.originId)))
+      throw unprocessable("Task typed source identity is invalid");
+    if (origin.originKind === "workflow_task") {
+      const [run] = await tx.select({ workflowId: workflowRuns.workflowId, workflowRevisionId: workflowRuns.workflowRevisionId })
+        .from(workflowRuns).where(and(eq(workflowRuns.id, origin.originRunId), eq(workflowRuns.companyId, companyId)));
+      const [workflow] = run && run.workflowId.toLowerCase() === origin.originId.toLowerCase()
+        ? await tx.select({ id: workflows.id, projectId: workflows.projectId }).from(workflows).where(and(eq(workflows.id, origin.originId), eq(workflows.companyId, companyId))) : [];
+      const [revision] = run ? await tx.select({ id: workflowRevisions.id }).from(workflowRevisions).where(and(
+        eq(workflowRevisions.id, run.workflowRevisionId), eq(workflowRevisions.workflowId, origin.originId), eq(workflowRevisions.companyId, companyId))) : [];
+      if (!run || !workflow || !revision) throw notFound("Task typed source is unavailable");
+      sources.push({ sourceKind: "workflow_run", sourceId: origin.originRunId });
+      if (workflow.projectId) projectIds.add(workflow.projectId);
+      if (!(await canActorReadTypedTaskSourcePrivacy(tx, { type: "none" }, { sourceKind: "workflow_run", id: origin.originRunId, companyId }))) visibility = "private";
+    } else {
+      const [run] = await tx.select({ routineId: routineRuns.routineId, routineRevisionId: routineRuns.routineRevisionId })
+        .from(routineRuns).where(and(eq(routineRuns.id, origin.originRunId), eq(routineRuns.companyId, companyId)));
+      const routineId = run?.routineId ?? null;
+      const [routine] = run && (pluginOperationOrigin || run.routineId.toLowerCase() === origin.originId.toLowerCase())
+        ? await tx.select({ id: routines.id, projectId: routines.projectId }).from(routines).where(and(eq(routines.id, routineId!), eq(routines.companyId, companyId))) : [];
+      if (pluginOperationOrigin) {
+        const bindingRows = routine ? await tx.select({ pluginKey: pluginManagedResources.pluginKey,
+          defaultsJson: pluginManagedResources.defaultsJson })
+          .from(pluginManagedResources).innerJoin(plugins, and(eq(pluginManagedResources.pluginId, plugins.id),
+            eq(pluginManagedResources.pluginKey, plugins.pluginKey)))
+          .where(and(eq(pluginManagedResources.companyId, companyId), eq(pluginManagedResources.resourceKind, "routine"),
+            eq(pluginManagedResources.resourceId, routine.id))) : [];
+        const binding = bindingRows[0] ?? null;
+        const defaults = binding?.defaultsJson && typeof binding.defaultsJson === "object" && !Array.isArray(binding.defaultsJson)
+          ? binding.defaultsJson as Record<string, unknown> : null;
+        const issueTemplate = defaults?.issueTemplate && typeof defaults.issueTemplate === "object" && !Array.isArray(defaults.issueTemplate)
+          ? defaults.issueTemplate as Record<string, unknown> : null;
+        if (!binding || pluginOperationIssueOriginKind(binding.pluginKey) !== origin.originKind
+          || issueTemplate?.surfaceVisibility !== "plugin_operation"
+          || typeof issueTemplate.originId !== "string" || issueTemplate.originId.trim() !== origin.originId)
+          throw notFound("Task typed source is unavailable");
+      }
+      const [revision] = run?.routineRevisionId ? await tx.select({ id: routineRevisions.id, snapshot: routineRevisions.snapshot }).from(routineRevisions).where(and(
+        eq(routineRevisions.id, run.routineRevisionId), eq(routineRevisions.routineId, routineId!), eq(routineRevisions.companyId, companyId))) : [];
+      if (!run || !routine || !revision) throw notFound("Task typed source is unavailable");
+      const snapshot = routineRevisionSnapshotV1Schema.safeParse(revision.snapshot);
+      if (!snapshot.success || snapshot.data.routine.id.toLowerCase() !== routine.id.toLowerCase() ||
+        snapshot.data.routine.companyId.toLowerCase() !== companyId.toLowerCase()) throw notFound("Task typed source is unavailable");
+      sources.push({ sourceKind: "routine_run", sourceId: origin.originRunId });
+      if (routine.projectId) projectIds.add(routine.projectId);
+      if (snapshot.data.routine.projectId) projectIds.add(snapshot.data.routine.projectId);
+      if (snapshot.data.routine.parentIssueId) parents.add(snapshot.data.routine.parentIssueId);
+      if (pluginOperationOrigin) {
+        // Plugin operation source Runs are readable only through the current
+        // responsible-Human owner below. Keep them private by default instead
+        // of running the broad public Routine graph predicate here.
+        visibility = "private";
+      } else if (!(await canActorReadTypedTaskSourcePrivacy(tx, { type: "none" },
+        { sourceKind: "routine_run", id: origin.originRunId, companyId }))) visibility = "private";
+    }
+  }
+  const heartbeatRunIds = new Set([actorRunId, previous?.originRunId && !typedOrigins.some(origin => origin === previous) ? previous.originRunId : null,
+    next.originRunId && !typedOrigins.some(origin => origin === next) ? next.originRunId : null].filter((id): id is string => Boolean(id)));
+  const temporalContextInputs: Extract<NativePayloadSourceInput, { kind: "context" }>[] = [];
+  let temporalContextComplete = freezeCurrentRunContext && !!actorRunId;
+  for (const runId of heartbeatRunIds) {
+    if (!isUuidLike(runId)) throw unprocessable("Task privacy source run is invalid");
+    const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId)));
+    if (!run) throw notFound("Task privacy source is unavailable");
+    const context = run.contextSnapshot ?? {};
+    const candidates = [run.issueId, run.nativeIssueId, context.issueId, context.taskId].filter((id): id is string => typeof id === "string" && id.length > 0);
+    if (candidates.some(id => !isUuidLike(id)) || new Set(candidates).size > 1) throw unprocessable("Task privacy source run is ambiguous");
+    const sourceId = candidates[0];
+    if (run.scopeKind === "issue" && !sourceId) throw notFound("Task privacy source is unavailable");
+    if (sourceId === next.id) continue;
+    if (runId === nativeOutputRunId) {
+      // The model-dispatch Run is an output provenance/retention edge. Its
+      // later private Context must not retroactively become this Task's input.
+      sources.push({ sourceKind: "run_copy", sourceId: runId });
+      continue;
+    }
+    sources.push({ sourceKind: "run", sourceId: runId });
+    if (!(await canActorReadHeartbeatRunPrivacy(tx, { type: "none" }, run))) visibility = "private";
+    if (sourceId) { parents.add(sourceId); privacyParentIssueId ??= sourceId; }
+    if (freezeCurrentRunContext && runId === actorRunId) {
+      const capture = await captureNativeTemporalContext(tx, companyId, runId, "issue");
+      temporalContextComplete = temporalContextComplete && capture.complete;
+      temporalContextInputs.push(...capture.inputs);
+      for (const edge of capture.issueEdges) {
+        if (edge.issueId === next.id) continue;
+        parents.add(edge.issueId);
+        if (!independentParents.has(edge.issueId)) contextOnlyParents.add(edge.issueId);
+        sources.push({ sourceKind: "issue", sourceId: edge.issueId, contextManifestId: edge.manifestId });
+      }
+      capture.projectIds.forEach(id => projectIds.add(id));
+    }
+  }
+  for (const parentId of parents) {
+    if (parentId === next.id) throw unprocessable("A task cannot inherit its own privacy source");
+    const [parent] = await tx.select().from(issues).where(and(eq(issues.id, parentId), eq(issues.companyId, companyId)));
+    if (!parent) throw notFound("Task privacy source is unavailable");
+    if (!contextOnlyParents.has(parentId)) sources.push({ sourceKind: "issue", sourceId: parentId });
+    if (!(await canActorReadIssuePrivacy(tx, { type: "none" }, parent))) {
+      visibility = "private";
+      privacyRootIssueId ??= parent.privacyRootIssueId ?? parent.id;
+    }
+  }
+  for (const projectId of projectIds) {
+    const [project] = await tx.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.companyId, companyId)));
+    if (!project) throw notFound("Project not found");
+    sources.push({ sourceKind: "project", sourceId: projectId });
+    if (!(await canActorReadProjectPrivacy(tx, { type: "none" }, project))) visibility = "private";
+  }
+  if (visibility === "private") privacyRootIssueId ??= next.id;
+  return { visibility, privacyParentIssueId, privacyRootIssueId, sources,
+    temporalContextInputs: temporalContextComplete ? temporalContextInputs : null };
+}
+
+async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: AuthorizationActor,
+  companyId: string, sources: Array<{ sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string }>) {
+  for (const source of sources) {
+    const readable = source.sourceKind === "run_copy"
+      ? await isNativeOutputRunCopyCurrent(tx, companyId, source.sourceId)
+      : source.sourceKind === "run"
+      ? await canActorReadHeartbeatRunPrivacy(tx, actor, { id: source.sourceId, companyId })
+      : source.sourceKind === "workflow_run" || source.sourceKind === "routine_run"
+      ? await canActorReadTypedTaskSourcePrivacy(tx, actor, { sourceKind: source.sourceKind, id: source.sourceId, companyId })
+      : source.sourceKind === "issue"
+      ? await canActorReadIssuePrivacy(tx, actor, { id: source.sourceId, companyId })
+      : await canActorReadProjectPrivacy(tx, actor, { id: source.sourceId, companyId });
+    if (!readable) throw notFound("Task privacy source is unavailable");
+  }
+}
+
+async function isNativeOutputRunCopyCurrent(tx: DbTransaction, companyId: string, runId: string) {
+  const [run] = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId)));
+  if (!run) return false;
+  const [marker] = await tx.select({ key: memoryDeletionMarkers.key }).from(memoryDeletionMarkers).where(and(
+    eq(memoryDeletionMarkers.companyId, companyId), eq(memoryDeletionMarkers.kind, "source"),
+    eq(memoryDeletionMarkers.key, `memory-run-source-erasure:v1:${runId}`)));
+  return !marker;
+}
+
+export async function pinIssueMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string, noWait = false) {
+  if (actor.type === "none" || actor.source === "local_implicit") return;
+  const userId = actor.type === "agent" ? actor.onBehalfOfUserId : actor.userId;
+  if (!userId) throw forbidden("Current organization access is required");
+  const [user] = await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share", noWait ? { noWait: true } : undefined);
+  if (!user) throw forbidden("Current organization access is required");
+  const [member] = await tx.select({ role: companyMemberships.membershipRole }).from(companyMemberships).where(and(
+    eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+    eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+  )).for("share", noWait ? { noWait: true } : undefined);
+  if (member && member.role !== "viewer") return "member" as const;
+  if (actor.type === "board") {
+    const [role] = await tx.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
+      eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
+    )).for("share", noWait ? { noWait: true } : undefined);
+    if (role) return "instance_admin" as const;
+  }
+  throw forbidden("Current organization access is required");
+}
+
+/** Classification follows descendants; retained source edges remain authoritative. */
+export async function protectIssuePrivacyDescendants(tx: DbTransaction, source: typeof issues.$inferSelect,
+  publications: ActivityPublication[]) {
+  const result = await tx.execute(sql<{ id: string }>`
+    with recursive descendants(id) as (
+      select ${issues.id} from ${issues} where ${issues.companyId} = ${source.companyId} and ${issues.parentId} = ${source.id}
+      union
+      select child.id from ${issues} child join descendants parent on child.parent_id = parent.id
+      where child.company_id = ${source.companyId}
+    ) update ${issues} set visibility = 'private',
+      privacy_root_issue_id = coalesce(${issues.privacyRootIssueId}, ${source.privacyRootIssueId ?? source.id}::uuid),
+      privacy_parent_issue_id = coalesce(${issues.privacyParentIssueId}, ${issues.parentId}), updated_at = now()
+      where ${issues.companyId} = ${source.companyId} and ${issues.id} in (select id from descendants)
+      and ${issues.visibility} <> 'private' returning ${issues.id}
+  `);
+  const changedIds = result.map(row => {
+    if (typeof row.id !== "string") throw new Error("Invalid task privacy update receipt");
+    return row.id;
+  });
+  if (!changedIds.length) return;
+  const changed = await tx.select().from(issues).where(inArray(issues.id, changedIds));
+  for (const child of changed) {
+    const grant = await ensureAssignmentIssueAccessGrant(tx, child, null, {});
+    if (grant) publications.push(grant.publication);
+  }
+}
+
 type IssueCreateInput = Omit<typeof issues.$inferInsert, "companyId"> & {
+  privateWorkAdmission?: "closed";
   retireConversationId?: string;
   initialPlan?: string | null;
   labelIds?: string[];
@@ -1989,6 +2345,61 @@ type IssueCreateInput = Omit<typeof issues.$inferInsert, "companyId"> & {
   allowDuplicate?: boolean;
   onDeduplicated?: (reason: "idempotency_key" | "recent_open_title") => void;
 };
+
+/** This first producer handles only direct text in an otherwise independent
+ * manual task. Related, generated and historical bodies remain unknown. */
+function isManualRootPayloadInput(data: IssueCreateInput) {
+  return (!data.originKind || data.originKind === "manual") &&
+    (!data.visibility || data.visibility === "open" || data.visibility === "private") &&
+    (!data.status || data.status === "backlog" || data.status === "todo") &&
+    !data.blockedByIssueIds?.length && !data.labelIds?.length &&
+    (data.payloadSourceProtocolVersion == null || data.payloadSourceProtocolVersion === 0) &&
+    !data.payloadSourceSnapshot && !data.payloadSourceSnapshotInvalidated &&
+    [data.parentId, data.projectId, data.privacyParentIssueId, data.privacyRootIssueId,
+      data.originId, data.originRunId, data.originFingerprint, data.originIdentityContextId,
+      data.continuationIdentityContextId, data.actorRunId, data.watchdogActorRunId,
+      data.createdByAgentId, data.assigneeUserId, data.assigneeAdapterOverrides,
+      data.projectWorkspaceId, data.executionWorkspaceId, data.executionWorkspacePreference,
+      data.executionWorkspaceSettings, data.inheritExecutionWorkspaceFromIssueId,
+      data.conversationAgentId, data.conversationUserId, data.executionState, data.monitorNotes,
+      data.unblockDescriptor, data.forecastReason, data.initialPlan, data.watchdog, data.retireConversationId,
+    ].every(value => value == null);
+}
+
+/** Literal text is independent input; selected parent/Project links remain privacy dependencies. */
+export function isManualRelatedPayloadInput(data: IssueCreateInput) {
+  return !!(data.parentId || data.projectId) && (!data.parentId || isUuidLike(data.parentId)) &&
+    (!data.projectId || isUuidLike(data.projectId)) && isManualRootPayloadInput({ ...data, parentId: null, projectId: null });
+}
+
+async function bindManualTaskPayload(tx: DbTransaction, issue: typeof issues.$inferSelect,
+  actor: AuthorizationActor, publications: ActivityPublication[], related?: { parentId: string | null; projectId: string | null } | null) {
+  // A protocol-1 new row has no source snapshot until its authenticated
+  // manual input is captured. Bind that exact inserted body first inside the
+  // same transaction, then make the ordinary current issue:mutate decision on
+  // the now-valid row. Any denial rolls the provisional snapshot back.
+  const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: related ? nativePayloadSnapshotSql("issue", {
+    issueIds: related.parentId ? [related.parentId] : [], projectIds: related.projectId ? [related.projectId] : [], runIds: [], memoryIds: [], foundationRevisionIds: [],
+  }, []) : directHumanPayloadSnapshotSql("issue") })
+    .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+    eq(issues.createdByUserId, actor.userId!), eq(issues.payloadSourceProtocolVersion, 1),
+    isNull(issues.payloadSourceSnapshot), eq(issues.payloadSourceSnapshotInvalidated, false))).returning();
+  if (!captured?.payloadSourceSnapshot) throw conflict("Manual input source capture was not stored");
+  const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+  const activity = await persistActivity(tx as unknown as Db, {
+    companyId: issue.companyId, actorType: "user", actorId: actor.userId!,
+    action: "issue.payload_source_captured", entityType: "issue", entityId: issue.id,
+    details: { producer: related ? "direct_manual_related_input" : "direct_manual_input",
+      ...(related ?? {}), contentHash: snapshot.owner.contentHash, digest: snapshot.digest },
+  });
+  publications.push(activity.publication);
+  const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
+    resource: { type: "issue", companyId: captured.companyId, issueId: captured.id,
+      status: captured.status, assigneeAgentId: captured.assigneeAgentId, assigneeUserId: captured.assigneeUserId },
+    enforceResponsibleUserIntersection: true });
+  if (!decision.allowed) throw forbidden("Current task write authority is required");
+  return captured;
+}
 type IssueChildCreateInput = IssueCreateInput & {
   acceptanceCriteria?: string[];
   blockParentUntilDone?: boolean;
@@ -3492,6 +3903,7 @@ async function liveDescendantCountMapForIssues(
   dbOrTx: any,
   companyId: string,
   issueIds: string[],
+  readCondition?: SQL<boolean>,
 ): Promise<Map<string, number>> {
   const uniqueIssueIds = [...new Set(issueIds)];
   const map = new Map<string, number>();
@@ -3507,12 +3919,17 @@ async function liveDescendantCountMapForIssues(
       liveDescendantCount: number;
     }>`
       WITH RECURSIVE
+        readable_issues AS MATERIALIZED (
+          SELECT ${issues.id} FROM ${issues} WHERE ${issues.companyId} = ${companyId}
+            AND ${readCondition ?? sql`true`}
+        ),
         target_issues(issue_id) AS (
           VALUES ${sql.join(targetRows, sql`, `)}
         ),
         live_issues(live_issue_id, parent_id) AS (
           SELECT DISTINCT live_issue.id, live_issue.parent_id
           FROM issues live_issue
+          JOIN readable_issues readable ON readable.id = live_issue.id
           JOIN heartbeat_runs live_run ON live_run.id = live_issue.execution_run_id
           WHERE live_issue.company_id = ${companyId}
             AND live_issue.hidden_at IS NULL
@@ -3523,6 +3940,7 @@ async function liveDescendantCountMapForIssues(
           SELECT DISTINCT live_issue.id, live_issue.parent_id
           FROM heartbeat_runs live_run
           JOIN issues live_issue ON live_issue.id::text = (live_run.context_snapshot ->> 'issueId')
+          JOIN readable_issues readable ON readable.id = live_issue.id
           WHERE live_issue.company_id = ${companyId}
             AND live_issue.hidden_at IS NULL
             AND live_issue.harness_kind IS NULL
@@ -3533,6 +3951,7 @@ async function liveDescendantCountMapForIssues(
           SELECT live_issues.live_issue_id, parent.id, parent.parent_id, ARRAY[live_issues.live_issue_id, parent.id]
           FROM live_issues
           JOIN issues parent ON parent.id = live_issues.parent_id
+          JOIN readable_issues readable ON readable.id = parent.id
           WHERE parent.company_id = ${companyId}
             AND parent.hidden_at IS NULL
             AND parent.harness_kind IS NULL
@@ -3544,6 +3963,7 @@ async function liveDescendantCountMapForIssues(
             live_ancestors.visited_issue_ids || parent.id
           FROM live_ancestors
           JOIN issues parent ON parent.id = live_ancestors.next_parent_id
+          JOIN readable_issues readable ON readable.id = parent.id
           WHERE parent.company_id = ${companyId}
             AND parent.hidden_at IS NULL
             AND parent.harness_kind IS NULL
@@ -3742,6 +4162,7 @@ async function listIssueBlockerAttentionMap(
   dbOrTx: any,
   companyId: string,
   issueRows: IssueBlockerAttentionInputNode[],
+  readCondition?: SQL<boolean>,
 ): Promise<Map<string, IssueBlockerAttention>> {
   const roots = issueRows.filter(
     (row) => row.companyId === companyId && row.status === "blocked",
@@ -3806,6 +4227,7 @@ async function listIssueBlockerAttentionMap(
             eq(issueRelations.type, "blocks"),
             inArray(issueRelations.relatedIssueId, chunk),
             eq(issues.companyId, companyId),
+            readCondition,
           ),
         );
       const childRowsPromise: Promise<IssueBlockerAttentionQueryRow[]> = dbOrTx
@@ -3827,6 +4249,7 @@ async function listIssueBlockerAttentionMap(
           and(
             eq(issues.companyId, companyId),
             inArray(issues.parentId, chunk),
+            readCondition,
             notInArray(
               issues.status,
               BLOCKER_ATTENTION_CHILD_TERMINAL_STATUSES,
@@ -4004,6 +4427,7 @@ async function listIssueBlockerAttentionMap(
           and(
             eq(issues.companyId, companyId),
             eq(issues.originKind, BLOCKER_ATTENTION_OPEN_RECOVERY_ORIGIN_KIND),
+            readCondition,
             visibleIssueCondition(),
             notInArray(
               issues.status,
@@ -4883,6 +5307,12 @@ async function listIssueReviewAttentionMap(
 }
 
 const issueListSelect = {
+  payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+  payloadSourceSnapshot: issues.payloadSourceSnapshot,
+  payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
+  visibility: issues.visibility,
+  privacyRootIssueId: issues.privacyRootIssueId,
+  privacyParentIssueId: issues.privacyParentIssueId,
   externalConversationState: externalConversationStateSql(),
   conversationAgentId: issues.conversationAgentId,
   conversationUserId: issues.conversationUserId,
@@ -5568,6 +5998,7 @@ async function listIssueBlockedInboxAttentionMap(
   dbOrTx: any,
   companyId: string,
   issueRows: BlockedInboxIssueRow[],
+  readCondition?: SQL<boolean>,
 ): Promise<Map<string, IssueBlockedInboxAttention>> {
   const rowIssueIds = [...new Set(issueRows.map((row) => row.id))];
   const result = new Map<string, IssueBlockedInboxAttention>();
@@ -5582,6 +6013,7 @@ async function listIssueBlockedInboxAttentionMap(
           and(
             eq(issues.companyId, companyId),
             visibleIssueCondition(),
+            readCondition,
             ne(issues.status, "done"),
           ),
         ),
@@ -6177,6 +6609,7 @@ async function listIssueBlockedInboxAttentionMap(
       dbOrTx,
       companyId,
       [row],
+      readCondition,
     );
     const blockerState = blockerAttention.get(row.id);
     if (
@@ -6242,6 +6675,7 @@ async function blockedInboxIssueConditions(
     visibleIssueCondition(),
     notInArray(issues.status, [...BLOCKED_INBOX_TERMINAL_STATUSES]),
   ];
+  if (filters?.readCondition) conditions.push(filters.readCondition);
   const touchedByUserId = filters?.touchedByUserId?.trim() || undefined;
   const inboxArchivedByUserId =
     filters?.inboxArchivedByUserId?.trim() || undefined;
@@ -6433,11 +6867,11 @@ async function listBlockedInboxIssues(
       : Promise.resolve([]),
     lastActivityStatsForIssues(dbOrTx, companyId, issueIds),
     blockedByMapForIssues(dbOrTx, companyId, issueIds),
-    listIssueBlockerAttentionMap(dbOrTx, companyId, withRuns),
+    listIssueBlockerAttentionMap(dbOrTx, companyId, withRuns, filters?.readCondition),
     listIssueReviewAttentionMap(dbOrTx, companyId, withRuns),
-    listIssueBlockedInboxAttentionMap(dbOrTx, companyId, withRuns),
+    listIssueBlockedInboxAttentionMap(dbOrTx, companyId, withRuns, filters?.readCondition),
     includeLiveDescendantSummary
-      ? liveDescendantCountMapForIssues(dbOrTx, companyId, issueIds)
+      ? liveDescendantCountMapForIssues(dbOrTx, companyId, issueIds, filters?.readCondition)
       : Promise.resolve(new Map<string, number>()),
   ]);
 
@@ -6558,7 +6992,7 @@ async function countBlockedInboxIssues(
   if (rows.length === 0) return 0;
 
   const blockedInboxAttentionByIssueId =
-    await listIssueBlockedInboxAttentionMap(dbOrTx, companyId, rows);
+    await listIssueBlockedInboxAttentionMap(dbOrTx, companyId, rows, filters?.readCondition);
   const rawSearchInput = filters?.q?.trim() ?? "";
   const rawSearch = rawSearchInput.toLowerCase();
   const commentSearchMatchIssueIds = new Set<string>();
@@ -7878,6 +8312,18 @@ export function issueService(db: Db) {
     clearCheckoutRunIfTerminal,
     addStopRelayCommentIfNeeded,
 
+    currentReadMetrics: async (companyId: string, issueIds: string[], readCondition: SQL<boolean>,
+      include: { blockers: boolean; inbox: boolean; descendants: boolean }) => {
+      const rows = issueIds.length ? await db.select().from(issues).where(and(eq(issues.companyId, companyId),
+        inArray(issues.id, issueIds), readCondition)) : [];
+      const [blockers, inbox, descendants] = await Promise.all([
+        include.blockers ? listIssueBlockerAttentionMap(db, companyId, rows, readCondition) : Promise.resolve(new Map<string, IssueBlockerAttention>()),
+        include.inbox ? listIssueBlockedInboxAttentionMap(db, companyId, rows, readCondition) : Promise.resolve(new Map<string, IssueBlockedInboxAttention>()),
+        include.descendants ? liveDescendantCountMapForIssues(db, companyId, rows.map(row => row.id), readCondition) : Promise.resolve(new Map<string, number>()),
+      ]);
+      return { blockers, inbox, descendants };
+    },
+
     list: async (companyId: string, filters?: IssueFilters) => {
       if (filters?.sortField === "id" && filters.attention) {
         throw unprocessable("ID ordering is not supported for blocked attention lists");
@@ -7907,6 +8353,7 @@ export function issueService(db: Db) {
         }
       }
       if (filters?.afterId) conditions.push(gt(issues.id, filters.afterId));
+      if (filters?.readCondition) conditions.push(filters.readCondition);
       const assigneeAgentFilter = parseIssueAssigneeAgentFilter(
         filters?.assigneeAgentId,
       );
@@ -8058,7 +8505,7 @@ export function issueService(db: Db) {
       const issueSource = db.select(issueListSelect).from(issues);
       const searchedSource = hasSearch
         ? issueSource.innerJoin(sql`(
-            ${taskSearchCtes(companyId, taskSearch, true, and(...conditions))}
+            ${taskSearchCtes(companyId, taskSearch, true, and(...conditions), filters?.readCondition)}
             SELECT m.id, ${taskSearchScore(taskSearch)} AS score FROM matched m
           ) task_search`, sql`task_search.id = ${issues.id}`)
         : issueSource;
@@ -8118,7 +8565,7 @@ export function issueService(db: Db) {
           ? blockedByMapForIssues(db, companyId, issueIds)
           : Promise.resolve(new Map<string, IssueRelationIssueSummary[]>()),
         includeLiveDescendantSummary
-          ? liveDescendantCountMapForIssues(db, companyId, issueIds)
+          ? liveDescendantCountMapForIssues(db, companyId, issueIds, filters?.readCondition)
           : Promise.resolve(new Map<string, number>()),
       ]);
       const statsByIssueId = new Map(
@@ -8135,10 +8582,10 @@ export function issueService(db: Db) {
         reviewAttentionByIssueId,
         blockedInboxAttentionByIssueId,
       ] = await Promise.all([
-        listIssueBlockerAttentionMap(db, companyId, withRuns),
+        listIssueBlockerAttentionMap(db, companyId, withRuns, filters?.readCondition),
         listIssueReviewAttentionMap(db, companyId, withRuns),
         includeBlockedInboxAttention
-          ? listIssueBlockedInboxAttentionMap(db, companyId, withRuns)
+          ? listIssueBlockedInboxAttentionMap(db, companyId, withRuns, filters?.readCondition)
           : Promise.resolve(new Map<string, IssueBlockedInboxAttention>()),
       ]);
 
@@ -8234,6 +8681,7 @@ export function issueService(db: Db) {
       }
 
       const conditions = [eq(issues.companyId, companyId), visibleIssueCondition()];
+      if (filters?.readCondition) conditions.push(filters.readCondition);
       if (!filters?.q?.trim()) {
         conditions.push(isNull(issues.conversationAgentId));
         if (!filters?.touchedByUserId && !filters?.unreadForUserId && !filters?.inboxArchivedByUserId) {
@@ -8382,6 +8830,7 @@ export function issueService(db: Db) {
       issueIds: string[],
       userId: string,
       archivedAt: Date = new Date(),
+      dbOrTx: Db | DbTransaction = db,
     ): Promise<void> => {
       if (issueIds.length === 0) return;
       const now = new Date();
@@ -8396,7 +8845,7 @@ export function issueService(db: Db) {
         createdAt: now,
         updatedAt: now,
       }));
-      await insertRowsInChunks(db, issueInboxArchives, rows);
+      await insertRowsInChunks(dbOrTx, issueInboxArchives, rows);
     },
 
     unarchiveInbox: async (
@@ -9085,8 +9534,9 @@ export function issueService(db: Db) {
       companyId: string,
       issueRows: IssueBlockerAttentionInputNode[],
       dbOrTx: any = db,
+      readCondition?: SQL<boolean>,
     ) => {
-      return listIssueBlockerAttentionMap(dbOrTx, companyId, issueRows);
+      return listIssueBlockerAttentionMap(dbOrTx, companyId, issueRows, readCondition);
     },
 
     listReviewAttention: async (
@@ -9257,7 +9707,12 @@ export function issueService(db: Db) {
       };
     },
 
-    createChild: async (parentIssueId: string, data: IssueChildCreateInput) => {
+    createChild: async (
+      parentIssueId: string,
+      data: IssueChildCreateInput,
+      options: { privacyActor?: AuthorizationActor; nativeModelOutputCapture?: NativeModelOutputCapture;
+        nativeModelOutputToolName?: string } = {},
+    ) => {
       const parent = await db
         .select()
         .from(issues)
@@ -9373,7 +9828,8 @@ export function issueService(db: Db) {
         ...(inheritStrategyOnly
           ? { skipExecutionWorkspaceInheritance: true }
           : { inheritExecutionWorkspaceFromIssueId: parent.id }),
-      });
+      }, db, undefined, { privacyActor: options.privacyActor, nativeModelOutputCapture: options.nativeModelOutputCapture,
+        nativeModelOutputToolName: "create_task" });
 
       if (blockParentUntilDone) {
         const existingBlockers = await db
@@ -9772,8 +10228,50 @@ export function issueService(db: Db) {
       companyId: string,
       data: IssueCreateInput,
       dbOrTx: Db | DbTransaction = db,
+      postCommitActivityPublications?: ActivityPublication[],
+      options: { manualInputActor?: AuthorizationActor; privacyActor?: AuthorizationActor; sourceAccessActor?: AuthorizationActor;
+        nativeEffectClaim?: NativeToolEffectClaim; nativeModelOutputCapture?: NativeModelOutputCapture;
+        nativeModelOutputToolName?: string } = {},
     ) => {
+      const ownedPrivacyPublications: ActivityPublication[] = [];
+      const privacyPublications = postCommitActivityPublications ?? ownedPrivacyPublications;
+      // This carrier is supplied by the original HTTP owner, never the DTO.
+      const manualActor = options.manualInputActor ? { ...options.manualInputActor } : null;
+      const suppliedPrivacyActor = options.privacyActor ? { ...options.privacyActor } : null;
+      const suppliedSourceAccessActor = options.sourceAccessActor ? { ...options.sourceAccessActor } : null;
+      const nativeEffectClaim = options.nativeEffectClaim ?? null;
+      const nativeModelOutputCapture = options.nativeModelOutputCapture;
+      const nativeModelOutputToolName = options.nativeModelOutputToolName;
+      if (nativeEffectClaim && (!suppliedPrivacyActor || suppliedPrivacyActor.type !== "agent" ||
+        !suppliedPrivacyActor.nativeToolEffect || !isDeepStrictEqual(suppliedPrivacyActor.nativeToolEffect, nativeEffectClaim)))
+        throw forbidden("The authenticated native Task effect is unavailable");
+      if (nativeModelOutputCapture && (!suppliedPrivacyActor || suppliedPrivacyActor.type !== "agent" ||
+        !nativeModelOutputToolName || nativeModelOutputCapture.runId !== suppliedPrivacyActor.runId))
+        throw forbidden("The authenticated native Task output capture is unavailable");
+      if (manualActor && (manualActor.type !== "board" || manualActor.source !== "session" ||
+          !manualActor.userId || !manualActor.sessionId || manualActor.runId ||
+          data.createdByUserId !== manualActor.userId || data.createdByAgentId))
+        throw forbidden("A current native manual input actor is required");
+      if (manualActor && data.visibility === "private" &&
+          data.responsibleUserId !== manualActor.userId)
+        throw forbidden("Private manual Task sources require the authenticated Human as responsible user");
+      if (suppliedPrivacyActor && (
+        suppliedPrivacyActor.type === "none" ||
+        (suppliedPrivacyActor.type === "board" && suppliedPrivacyActor.source === "local_implicit" && data.createdByAgentId) ||
+        (suppliedPrivacyActor.type === "board" && suppliedPrivacyActor.source !== "local_implicit" &&
+          (!suppliedPrivacyActor.userId || suppliedPrivacyActor.userId !== data.createdByUserId || data.createdByAgentId)) ||
+        (suppliedPrivacyActor.type === "agent" &&
+          (suppliedPrivacyActor.agentId !== data.createdByAgentId || suppliedPrivacyActor.companyId !== companyId ||
+            data.createdByUserId != null || (suppliedPrivacyActor.runId ?? null) !== (data.actorRunId ?? null)))
+      )) throw forbidden("Task creator does not match the current native actor");
+      if (suppliedSourceAccessActor && (suppliedSourceAccessActor.type === "none" || suppliedSourceAccessActor.source === "local_implicit"))
+        throw forbidden("A current Task source reader is required");
+      const captureManualInput = !!manualActor && (isManualRootPayloadInput(data) || isManualRelatedPayloadInput(data)) &&
+        (!data.responsibleUserId || data.responsibleUserId === manualActor.userId) &&
+        (!data.actorResponsibleUserId || data.actorResponsibleUserId === manualActor.userId);
+      const captureManualRelated = captureManualInput && isManualRelatedPayloadInput(data);
       const {
+        privateWorkAdmission,
         initialPlan,
         retireConversationId,
         labelIds: inputLabelIds,
@@ -9817,7 +10315,94 @@ export function issueService(db: Db) {
         throw unprocessable("in_progress issues require an assignee");
       }
       const persist = async (tx: DbTransaction) => {
-        await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
+          let manualExpiresAt: number | null = null;
+        let manualOperator = false;
+        let privacyActorExpiresAt: number | null = null;
+        let privacyActorPinned = false;
+        let currentPrivacyActor = suppliedPrivacyActor;
+        let nativeEffectPrefix: Awaited<ReturnType<typeof readNativeIssueEffectPrefix>> | null = null;
+        let sourceAccessActorExpiresAt: number | null = null;
+        let sourceAccessActorPinned = false;
+        let currentSourceAccessActor = suppliedSourceAccessActor;
+        const finishManualInput = async <T>(result: T) => {
+          if (captureManualInput && manualActor && manualExpiresAt !== null) {
+            if (captureManualRelated) await assertManualRelatedSourcesCurrent(tx, companyId,
+              { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null });
+            if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
+            await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
+          }
+          if (privacyActorPinned && currentPrivacyActor)
+            await assertManualInputCredentialCurrent(tx, currentPrivacyActor, privacyActorExpiresAt,
+              "The authenticated task creator credential is unavailable");
+          if (sourceAccessActorPinned && currentSourceAccessActor?.type === "board")
+            await assertManualInputCredentialCurrent(tx, currentSourceAccessActor, sourceAccessActorExpiresAt,
+              "The authenticated Task source reader credential is unavailable");
+          if (nativeEffectClaim || nativeModelOutputCapture) {
+            if (!currentPrivacyActor) throw forbidden("The authenticated native Task effect is unavailable");
+            const currentPrefix = await readNativeIssueEffectPrefix(tx, currentPrivacyActor, nativeEffectClaim,
+              nativeModelOutputCapture, nativeModelOutputToolName);
+            if (!nativeEffectPrefix || !isDeepStrictEqual(currentPrefix, nativeEffectPrefix))
+              throw forbidden("Native Task input prefix changed");
+          }
+          return result;
+        };
+        if (captureManualInput && manualActor) {
+          const pinned = await pinCurrentBoardActor(tx, manualActor);
+          if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+            throw forbidden("The current manual input session is unavailable");
+          manualExpiresAt = pinned.credentialExpiresAt;
+          manualOperator = await pinIssueMutationHuman(tx, manualActor, companyId, true) === "instance_admin";
+          if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
+          await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
+        }
+        if (currentPrivacyActor?.type === "board" && currentPrivacyActor.source !== "local_implicit") {
+          const pinned = await pinCurrentBoardActor(tx, currentPrivacyActor).catch(error => {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          });
+          if (!pinned || (pinned.credentialExpiresAt !== null && !Number.isFinite(pinned.credentialExpiresAt)))
+            throw forbidden("The authenticated task creator credential is unavailable");
+          currentPrivacyActor = pinned.actor;
+          privacyActorExpiresAt = pinned.credentialExpiresAt;
+          privacyActorPinned = true;
+          try {
+            await pinIssueMutationHuman(tx, currentPrivacyActor, companyId, true);
+          } catch (error) {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          }
+        }
+        if (currentSourceAccessActor?.type === "board") {
+          const pinned = await pinCurrentBoardActor(tx, currentSourceAccessActor).catch(error => {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          });
+          if (!pinned || (pinned.credentialExpiresAt !== null && !Number.isFinite(pinned.credentialExpiresAt)))
+            throw forbidden("The authenticated Task source reader credential is unavailable");
+          currentSourceAccessActor = pinned.actor;
+          sourceAccessActorExpiresAt = pinned.credentialExpiresAt;
+          sourceAccessActorPinned = true;
+        }
+        if (nativeEffectClaim || nativeModelOutputCapture) {
+          if (!currentPrivacyActor || currentPrivacyActor.type !== "agent")
+            throw forbidden("The authenticated native Task effect is unavailable");
+          nativeEffectPrefix = await readNativeIssueEffectPrefix(tx, currentPrivacyActor, nativeEffectClaim,
+            nativeModelOutputCapture, nativeModelOutputToolName);
+        }
+        if (currentSourceAccessActor) {
+          const sourceReaderDecision = await authorizationService(tx).decide({ actor: currentSourceAccessActor,
+            action: "company_scope:read", resource: { type: "company", companyId },
+            enforceResponsibleUserIntersection: true });
+          if (!sourceReaderDecision.allowed) throw forbidden("The current Task source reader is unavailable");
+        }
+          await lockIssuePrivacyTree(tx, companyId);
+          await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
+          if (captureManualRelated && manualActor)
+            await assertManualRelatedSourcesCurrent(tx, companyId,
+              { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null });
         if (issueData.conversationAgentId && issueData.conversationUserId) {
           await lockBusinessEventCompany(tx, companyId);
           await lockMemoryPrivacy(tx as unknown as Db, companyId);
@@ -9826,19 +10411,48 @@ export function issueService(db: Db) {
           const [existing] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId),
             eq(issues.conversationAgentId, issueData.conversationAgentId), eq(issues.conversationUserId, issueData.conversationUserId)));
           if (existing) {
-            const [source] = await tx.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${companyId}::uuid, null, ${existing.id}::uuid) as erased`);
+            const observeRecoveryDbFailure = (stage: string, error: unknown) => {
+              if (process.env.PAPERCLIP_CHAT_RECOVERY_DB_DIAGNOSTICS !== "1") return;
+              let current: unknown = error;
+              let sqlState: string | null = null, routine: string | null = null, position: number | null = null;
+              for (let depth = 0; depth < 5 && current && typeof current === "object"; depth++) {
+                const candidate = current as Record<string, unknown>;
+                if (!sqlState && typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)) sqlState = candidate.code;
+                if (!routine && typeof candidate.routine === "string" && /^[A-Za-z0-9_.$]+$/.test(candidate.routine)) routine = candidate.routine;
+                if (position === null && typeof candidate.position === "string" && /^\d{1,7}$/.test(candidate.position)) position = Number(candidate.position);
+                current = candidate.cause;
+              }
+              console.warn("native-conversation-recovery-db-diagnostic", JSON.stringify({ stage, sqlState, routine, position }));
+            };
+            let source: { erased: boolean } | undefined;
+            try {
+              [source] = await tx.execute<{ erased: boolean }>(sql`select aw_workflow_memory_erased(${companyId}::uuid, null, ${existing.id}::uuid) as erased`);
+            } catch (error) {
+              observeRecoveryDbFailure("classify_existing_conversation", error);
+              throw error;
+            }
             if (!source?.erased && retireConversationId !== existing.id) {
               const [enriched] = await withIssueLabels(tx, [existing]);
               const [withRelations] = await withIssueRelationSummaries(companyId, [enriched], tx);
-              return withRelations;
+              return finishManualInput(withRelations);
             }
             const {eraseAnalyticalConversationRootsUnderMemory} = await import("./analytical-context-privacy.js");
-            await eraseAnalyticalConversationRootsUnderMemory(tx as unknown as Db,companyId,existing.id);
+            try {
+              await eraseAnalyticalConversationRootsUnderMemory(tx as unknown as Db,companyId,existing.id);
+            } catch (error) {
+              observeRecoveryDbFailure("erase_conversation_retention", error);
+              throw error;
+            }
             const at = new Date();
-            await tx.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
-              conversationRetiredAt: at, status: "cancelled", cancelledAt: at, hiddenAt: at,
-              assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null, updatedAt: at,
-            }).where(and(eq(issues.companyId, companyId), eq(issues.id, existing.id)));
+            try {
+              await tx.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
+                conversationRetiredAt: at, status: "cancelled", cancelledAt: at, hiddenAt: at,
+                assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null, updatedAt: at,
+              }).where(and(eq(issues.companyId, companyId), eq(issues.id, existing.id)));
+            } catch (error) {
+              observeRecoveryDbFailure("retire_existing_conversation", error);
+              throw error;
+            }
           }
         }
         const idempotencyKey = rawIdempotencyKey?.trim() || null;
@@ -9916,6 +10530,14 @@ export function issueService(db: Db) {
           if (existingIssue) deduplicationReason = "recent_open_title";
         }
         if (existingIssue) {
+          if (privateWorkAdmission === "closed" && !(await canActorReadIssuePrivacy(tx, { type: "none" }, existingIssue))) {
+            throw unprocessable("Private tasks are not available");
+          }
+          const actor: AuthorizationActor = issueData.createdByAgentId
+            ? { type: "agent", agentId: issueData.createdByAgentId, companyId, runId: actorRunId,
+                onBehalfOfUserId: actorResponsibleUserId }
+            : issueData.createdByUserId ? { type: "board", userId: issueData.createdByUserId, source: "session" } : { type: "none" };
+          if (!(await canActorReadIssuePrivacy(tx, actor, existingIssue))) throw notFound("Task not found");
           if (idempotencyKey) {
             await tx
               .insert(issueCreateIdempotencyKeys)
@@ -9929,7 +10551,7 @@ export function issueService(db: Db) {
             [enriched],
             tx,
           );
-          return withRelations;
+          return finishManualInput(withRelations);
         }
 
         const defaultCompanyGoal = await getDefaultCompanyGoal(tx, companyId);
@@ -10172,8 +10794,72 @@ export function issueService(db: Db) {
           },
         );
 
+        issueData.id ??= randomUUID();
+        const privacy = await resolveIssuePrivacy(tx, companyId, { ...issueData, id: issueData.id }, null, actorRunId,
+          workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : [], !!suppliedPrivacyActor && suppliedPrivacyActor.type === "agent" && !nativeEffectClaim,
+          nativeEffectPrefix?.runId);
+          if (nativeEffectPrefix) {
+          const addCapturedSources = async (kind: "issue" | "project" | "run", ids: readonly string[]) => {
+            for (const sourceId of ids) {
+              if (kind === "issue" && sourceId === issueData.id) throw forbidden("Native Task input source is ambiguous");
+              if (!privacy.sources.some(source => source.sourceKind === kind && source.sourceId === sourceId))
+                privacy.sources.push({ sourceKind: kind, sourceId });
+              const readableWithoutActor = kind === "issue"
+                ? await canActorReadIssuePrivacy(tx, { type: "none" }, { id: sourceId, companyId })
+                : kind === "project"
+                  ? await canActorReadProjectPrivacy(tx, { type: "none" }, { id: sourceId, companyId })
+                  : await canActorReadHeartbeatRunPrivacy(tx, { type: "none" }, { id: sourceId, companyId });
+              if (!readableWithoutActor) {
+                privacy.visibility = "private";
+                if (kind === "issue") {
+                  const [source] = await tx.select({ id: issues.id, privacyRootIssueId: issues.privacyRootIssueId })
+                    .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, sourceId)));
+                  privacy.privacyRootIssueId ??= source?.privacyRootIssueId ?? source?.id ?? null;
+                }
+              }
+            }
+          };
+          await addCapturedSources("issue", nativeEffectPrefix.policy.issueIds);
+          await addCapturedSources("project", nativeEffectPrefix.policy.projectIds);
+          await addCapturedSources("run", nativeEffectPrefix.policy.runIds);
+          for (const memoryId of nativeEffectPrefix.policy.memoryIds) if (!await canActorReadMemorySources(tx,
+            companyId, { type: "none" }, memoryId)) privacy.visibility = "private";
+          if (nativeEffectPrefix.policy.foundationRevisionIds.length) {
+            const foundationAccess = await authorizationService(tx).decide({ actor: { type: "none" }, action: "foundation:read",
+              resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+            if (!foundationAccess.allowed) privacy.visibility = "private";
+          }
+        }
+        const temporalContextPolicy: NativePayloadSourcePolicy = {
+          issueIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "issue").map(source => source.sourceId))].sort(),
+          projectIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "project").map(source => source.sourceId))].sort(),
+          runIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "run").map(source => source.sourceId))].sort(),
+          memoryIds: [], foundationRevisionIds: [],
+        };
+        // The provider-bound prefix is the Task's exact read set. The
+        // producer Run is represented separately as run_copy and must not
+        // import Context that was added after this dispatch.
+        const nativeEffectPolicy: NativePayloadSourcePolicy | null = nativeEffectPrefix?.policy ?? null;
+        const freezeTemporalContext = !nativeEffectPrefix && privacy.temporalContextInputs !== null &&
+          privacy.temporalContextInputs.length + temporalContextPolicy.issueIds.length + temporalContextPolicy.projectIds.length +
+            temporalContextPolicy.runIds.length <= 256;
+        const freezeNativeEffectPrefix = nativeEffectPrefix !== null &&
+          nativeEffectPrefix.inputs.length + nativeEffectPolicy!.issueIds.length + nativeEffectPolicy!.projectIds.length +
+            nativeEffectPolicy!.runIds.length + nativeEffectPolicy!.memoryIds.length + nativeEffectPolicy!.foundationRevisionIds.length <= 256;
+        if (nativeEffectPrefix && !freezeNativeEffectPrefix) throw forbidden("Native Task input prefix exceeds its bound");
+        if (privateWorkAdmission === "closed" && privacy.visibility === "private" && !captureManualRelated) throw unprocessable("Private tasks are not available");
+        if (privacy.visibility === "private" && !responsibleUserId) throw unprocessable("Private tasks require a responsible user");
+        const creatorActor: AuthorizationActor = currentPrivacyActor ?? (issueData.createdByAgentId
+          ? { type: "agent", agentId: issueData.createdByAgentId, companyId, runId: actorRunId ?? undefined,
+              onBehalfOfUserId: responsibleUserId ?? undefined }
+          : issueData.createdByUserId ? { type: "board", userId: issueData.createdByUserId, source: "session" } : { type: "none" });
+          await assertIssuePrivacySourcesReadable(tx, currentSourceAccessActor ?? creatorActor, companyId, privacy.sources);
+          if (privacy.visibility === "private") await pinIssueMutationHuman(tx, currentSourceAccessActor ?? creatorActor, companyId);
         const values = {
           ...issueData,
+          visibility: privacy.visibility,
+          privacyRootIssueId: privacy.privacyRootIssueId,
+          privacyParentIssueId: privacy.privacyParentIssueId,
           originRunId: issueData.originRunId ?? actorRunId ?? null,
           responsibleUserId,
           requestDepth: clampIssueRequestDepth(issueData.requestDepth),
@@ -10215,7 +10901,288 @@ export function issueService(db: Db) {
           }),
         );
 
-        const [issue] = await tx.insert(issues).values(values).returning();
+        if (captureManualInput) Object.assign(values, {
+          payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
+        });
+        if (freezeTemporalContext || freezeNativeEffectPrefix) Object.assign(values, {
+          payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
+        });
+        let [issue] = await tx.insert(issues).values(values).returning();
+        await retainIssuePrivacySources(tx, issue, privacy.sources);
+        if (freezeTemporalContext || freezeNativeEffectPrefix) {
+          const snapshotInputs = nativeEffectPrefix?.inputs ?? privacy.temporalContextInputs!;
+          const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: nativePayloadSnapshotSql(
+            "issue", nativeEffectPolicy ?? temporalContextPolicy, snapshotInputs,
+          ) }).where(and(eq(issues.companyId, companyId), eq(issues.id, issue.id),
+            eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
+            eq(issues.payloadSourceSnapshotInvalidated, false))).returning();
+          if (!captured?.payloadSourceSnapshot) throw conflict("Temporal Task source capture was not stored");
+          issue = captured;
+        }
+        if (issue.visibility === "private" && issue.createdByAgentId) {
+          const [grant] = await tx.insert(issueAccessGrants).values({
+            companyId, issueId: issue.id, subjectType: "agent", subjectId: issue.createdByAgentId,
+            source: "explicit", grantedByAgentId: issue.createdByAgentId,
+          }).onConflictDoNothing().returning();
+          if (grant) {
+            const activity = await persistActivity(tx as unknown as Db, {
+              companyId, actorType: "agent", actorId: issue.createdByAgentId, agentId: issue.createdByAgentId,
+              action: "issue_access_grant.created", entityType: "issue_access_grant", entityId: grant.id,
+              details: { issueId: issue.id, subjectType: "agent", subjectId: issue.createdByAgentId, source: "explicit" },
+            });
+            privacyPublications.push(activity.publication);
+          }
+        }
+        const assignmentGrant = await ensureAssignmentIssueAccessGrant(tx, issue, null, {
+          agentId: issue.createdByAgentId, userId: issue.createdByUserId,
+        });
+        if (assignmentGrant) privacyPublications.push(assignmentGrant.publication);
+        if (captureManualInput && manualActor && manualExpiresAt !== null) {
+          issue = await bindManualTaskPayload(tx, issue,
+            { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, privacyPublications,
+            captureManualRelated ? { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null } : null);
+        }
+        if (issue.visibility === "private") {
+          const finalPrivacyReader = currentSourceAccessActor ?? manualActor ?? creatorActor;
+          const finalPrivateRead = await canActorReadIssuePrivacy(tx, finalPrivacyReader, issue);
+          if (!finalPrivateRead) {
+            if (process.env.PAPERCLIP_NATIVE_ISSUE_PRIVACY_DIAGNOSTICS === "1") {
+              let facts: {
+                activeHumanMembership: boolean;
+                activeAgent: boolean;
+                currentRun: boolean;
+                issueAgentPrincipal: boolean;
+                issueHumanPrincipal: boolean;
+                snapshotOwnerCurrent: boolean;
+                snapshotOwnerKindCurrent: boolean;
+                snapshotOwnerIdCurrent: boolean;
+                snapshotOwnerCompanyCurrent: boolean;
+                snapshotBodyHashCurrent: boolean;
+                snapshotDigestCurrent: boolean;
+                allTaskInputSourceVersionsCurrent: boolean;
+                allCommentInputSourceVersionsCurrent: boolean;
+                policyIssueEdgesExact: boolean;
+                allTaskInputsCurrent: boolean;
+                allDispatchesMatchOriginRun: boolean;
+                allDispatchesMatchReceiptPrefix: boolean;
+                allDispatchesMatchAnyPrefix: boolean;
+                workerDispatchInputCount: number;
+                allRunCopySourcesCurrent: boolean;
+                conversationBindingCurrent: boolean;
+                snapshotPolicyIssueCount: number;
+                issueSourceEdgeCount: number;
+                sourceKinds: string[];
+                inputKinds: string[];
+              } | undefined;
+              try {
+                const [row] = await tx.execute<NonNullable<typeof facts>>(sql`
+                select
+                  exists(select 1 from "user" u join company_memberships m on m.principal_type='user'
+                    and m.principal_id=u.id and m.company_id=${companyId} and m.status='active'
+                    where u.id=${finalPrivacyReader.type === "board" ? finalPrivacyReader.userId ?? null
+                      : finalPrivacyReader.type === "agent" ? finalPrivacyReader.onBehalfOfUserId ?? null : null})
+                    as "activeHumanMembership",
+                  exists(select 1 from agents a where a.id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId ?? null : null}
+                    and a.company_id=${companyId} and a.status not in ('paused','terminated','pending_approval','error')) as "activeAgent",
+                  exists(select 1 from heartbeat_runs r where r.id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.runId ?? null : null}
+                    and r.company_id=${companyId} and r.agent_id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId ?? null : null}
+                    and r.responsible_user_id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.onBehalfOfUserId ?? null : null}
+                    and r.status='running') as "currentRun",
+                  exists(select 1 from issue_access_grants g where g.company_id=${companyId} and g.issue_id=${issue.id}
+                    and g.subject_type='agent' and g.subject_id=${finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId ?? null : null}
+                    and g.revoked_at is null) or ${issue.assigneeAgentId === (finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId : null)}
+                    as "issueAgentPrincipal",
+                  ${issue.responsibleUserId === (finalPrivacyReader.type === "board" ? finalPrivacyReader.userId
+                    : finalPrivacyReader.type === "agent" ? finalPrivacyReader.onBehalfOfUserId : null)} as "issueHumanPrincipal",
+                  exists(select 1 from issues i where i.company_id=${companyId} and i.id=${issue.id}
+                    and i.payload_source_protocol_version=1 and i.payload_source_snapshot is not null
+                    and i.payload_source_snapshot_invalidated=false
+                    and i.payload_source_snapshot->'owner'->>'kind'='issue'
+                    and i.payload_source_snapshot->'owner'->>'id'=i.id::text
+                    and i.payload_source_snapshot->'owner'->>'companyId'=i.company_id::text
+                    and i.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(i))
+                    and i.payload_source_snapshot->>'digest'=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))
+                    as "snapshotOwnerCurrent",
+                  (${issue.payloadSourceSnapshot && typeof issue.payloadSourceSnapshot === "object"
+                    ? (issue.payloadSourceSnapshot as Record<string, unknown>).owner &&
+                      typeof (issue.payloadSourceSnapshot as Record<string, unknown>).owner === "object" &&
+                      ((issue.payloadSourceSnapshot as Record<string, unknown>).owner as Record<string, unknown>).kind === "issue"
+                    : false}) as "snapshotOwnerKindCurrent",
+                  (${issue.payloadSourceSnapshot && typeof issue.payloadSourceSnapshot === "object"
+                    ? (issue.payloadSourceSnapshot as Record<string, unknown>).owner &&
+                      typeof (issue.payloadSourceSnapshot as Record<string, unknown>).owner === "object" &&
+                      ((issue.payloadSourceSnapshot as Record<string, unknown>).owner as Record<string, unknown>).id === issue.id
+                    : false}) as "snapshotOwnerIdCurrent",
+                  (${issue.payloadSourceSnapshot && typeof issue.payloadSourceSnapshot === "object"
+                    ? (issue.payloadSourceSnapshot as Record<string, unknown>).owner &&
+                      typeof (issue.payloadSourceSnapshot as Record<string, unknown>).owner === "object" &&
+                      ((issue.payloadSourceSnapshot as Record<string, unknown>).owner as Record<string, unknown>).companyId === companyId
+                    : false}) as "snapshotOwnerCompanyCurrent",
+                  exists(select 1 from issues i where i.company_id=${companyId} and i.id=${issue.id}
+                    and i.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(i)))
+                    as "snapshotBodyHashCurrent",
+                  exists(select 1 from issues i where i.company_id=${companyId} and i.id=${issue.id}
+                    and i.payload_source_snapshot->>'digest'=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))
+                    as "snapshotDigestCurrent",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured
+                    where captured->>'kind'='task' and not exists(select 1 from issues source
+                      where source.company_id=${companyId}
+                        and source.id=case when captured->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                          then (captured->>'issueId')::uuid end
+                        and extract(epoch from source.updated_at)::text=captured->>'sourceVersion'))
+                    as "allTaskInputSourceVersionsCurrent",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured
+                    where captured->>'kind'='comment' and not exists(select 1 from issue_comments source
+                      where source.company_id=${companyId}
+                        and source.id=case when captured->>'commentId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                          then (captured->>'commentId')::uuid end
+                        and extract(epoch from source.updated_at)::text=captured->>'sourceVersion'))
+                    as "allCommentInputSourceVersionsCurrent",
+                  ${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'->'issueIds' = coalesce((
+                    select jsonb_agg(source_id::text order by source_id::text) from (
+                      select distinct source_id from issue_privacy_sources where company_id=${companyId}
+                        and issue_id=${issue.id} and source_kind='issue') source_ids), '[]'::jsonb)
+                    as "policyIssueEdgesExact",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured
+                    where captured->>'kind'='task' and (
+                      captured->>'issueId' !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                      or not exists(select 1 from issues source join issue_privacy_sources edge
+                        on edge.company_id=source.company_id and edge.issue_id=${issue.id}
+                          and edge.source_kind='issue' and edge.context_manifest_id is null and edge.source_id=source.id
+                        where source.company_id=${companyId} and source.id=(captured->>'issueId')::uuid
+                          and source.payload_source_protocol_version=1 and source.payload_source_snapshot is not null
+                          and source.payload_source_snapshot_invalidated=false
+                          and source.payload_source_snapshot->'owner'->>'kind'='issue'
+                          and source.payload_source_snapshot->'owner'->>'id'=source.id::text
+                          and source.payload_source_snapshot->'owner'->>'companyId'=source.company_id::text
+                          and source.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(source))
+                          and source.payload_source_snapshot->>'digest'=encode(sha256(convert_to((source.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))))
+                    as "allTaskInputsCurrent",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured
+                    where captured->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')
+                      and captured->>'runId' is distinct from ${issue.originRunId}) as "allDispatchesMatchOriginRun",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured_dispatch
+                    where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch') and not exists(
+                      select 1 from heartbeat_runs producer
+                      cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
+                      where producer.company_id=${companyId} and producer.id::text=captured_dispatch->>'runId'
+                        and producer.native_input_source_protocol_version=1
+                        and prefix.value->'policy'=${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'
+                        and prefix.value->'inputs'=(select coalesce(jsonb_agg(captured_input.value order by captured_input.ordinality),'[]'::jsonb)
+                          from jsonb_array_elements(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs') with ordinality captured_input(value,ordinality)
+                          where captured_input.value is distinct from captured_dispatch)))
+                    as "allDispatchesMatchReceiptPrefix",
+                  not exists(select 1 from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured_dispatch
+                    where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch') and not (
+                      exists(select 1 from heartbeat_runs producer
+                        cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
+                        where producer.company_id=${companyId} and producer.id::text=captured_dispatch->>'runId'
+                          and producer.native_input_source_protocol_version=1
+                          and prefix.value->'policy'=${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'
+                          and prefix.value->'inputs'=(select coalesce(jsonb_agg(captured_input.value order by captured_input.ordinality),'[]'::jsonb)
+                            from jsonb_array_elements(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs') with ordinality captured_input(value,ordinality)
+                            where captured_input.value is distinct from captured_dispatch))
+                      or exists(select 1 from heartbeat_runs producer
+                        where producer.company_id=${companyId} and producer.id::text=captured_dispatch->>'runId'
+                          and producer.native_input_source_protocol_version=1
+                          and producer.runner_profile_json->'nativeInputSourceReceipt'->'bootstrap'->'policy'=${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'
+                          and producer.runner_profile_json->'nativeInputSourceReceipt'->'bootstrap'->'inputs'=(select coalesce(jsonb_agg(captured_input.value order by captured_input.ordinality),'[]'::jsonb)
+                            from jsonb_array_elements(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs') with ordinality captured_input(value,ordinality)
+                            where captured_input.value is distinct from captured_dispatch))))
+                    as "allDispatchesMatchAnyPrefix",
+                  (select count(*)::int from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) captured_dispatch
+                    where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')) as "workerDispatchInputCount",
+                  not exists(select 1 from issue_privacy_sources edge where edge.company_id=${companyId}
+                    and edge.issue_id=${issue.id} and edge.source_kind='run_copy' and (
+                      not exists(select 1 from heartbeat_runs copy_run where copy_run.company_id=edge.company_id and copy_run.id=edge.source_id)
+                      or exists(select 1 from memory_deletion_markers marker where marker.company_id=edge.company_id
+                        and marker.kind='source' and marker.key='memory-run-source-erasure:v1:'||edge.source_id::text)))
+                    as "allRunCopySourcesCurrent",
+                  (${issue.conversationRetiredAt === null}) and
+                    (${issue.conversationAgentId === null && issue.conversationUserId === null
+                      || issue.conversationAgentId === (finalPrivacyReader.type === "agent" ? finalPrivacyReader.agentId : null)
+                        && issue.conversationUserId === (finalPrivacyReader.type === "board" ? finalPrivacyReader.userId : finalPrivacyReader.onBehalfOfUserId)})
+                    as "conversationBindingCurrent",
+                  jsonb_array_length(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'policy'->'issueIds','[]'::jsonb))::int
+                    as "snapshotPolicyIssueCount",
+                  (select count(*)::int from issue_privacy_sources s where s.company_id=${companyId} and s.issue_id=${issue.id}
+                    and s.source_kind='issue') as "issueSourceEdgeCount",
+                  coalesce((select array_agg(distinct s.source_kind order by s.source_kind)
+                    from issue_privacy_sources s where s.company_id=${companyId} and s.issue_id=${issue.id}),array[]::text[])
+                    as "sourceKinds",
+                  coalesce((select array_agg(distinct input->>'kind' order by input->>'kind')
+                    from jsonb_array_elements(coalesce(${JSON.stringify(issue.payloadSourceSnapshot)}::jsonb->'inputs','[]'::jsonb)) input),array[]::text[])
+                    as "inputKinds"
+                `);
+                facts = row;
+              } catch (diagnosticError) {
+                // Diagnostics must never replace the original privacy denial.
+                const candidate = diagnosticError as {
+                  name?: unknown;
+                  code?: unknown;
+                  status?: unknown;
+                  stack?: unknown;
+                  cause?: { code?: unknown; stack?: unknown };
+                };
+                const safeLiteral = (value: unknown) =>
+                  typeof value === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(value)
+                    ? value
+                    : null;
+                const stack = typeof candidate.stack === "string" ? candidate.stack : "";
+                const sourceFrames = [...stack.matchAll(/(?:^|\n)\s*at\s+(?:[^\n(]*\s+\()?([^()\n]*\.ts):(\d+):(\d+)\)?/g)]
+                  .slice(0, 4)
+                  .map((match) => ({
+                    file: match[1]?.split(/[\\/]/).at(-1) ?? "unknown.ts",
+                    line: Number(match[2]),
+                    column: Number(match[3]),
+                  }));
+                console.info("native-private-task-reader-diagnostic-failure", JSON.stringify({
+                  errorClass: safeLiteral(candidate.name) ?? "Error",
+                  code: safeLiteral(candidate.code),
+                  status: typeof candidate.status === "number" && Number.isInteger(candidate.status)
+                    ? candidate.status
+                    : null,
+                  sqlState: typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)
+                    ? candidate.code
+                    : typeof candidate.cause?.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.cause.code)
+                      ? candidate.cause.code
+                      : null,
+                  sourceFrames,
+                }));
+              }
+              console.info("native-private-task-reader-denied", JSON.stringify({
+                diagnosticAvailable: facts !== undefined,
+                readerType: finalPrivacyReader.type,
+                activeHumanMembership: facts?.activeHumanMembership === true,
+                activeAgent: facts?.activeAgent === true,
+                currentRun: facts?.currentRun === true,
+                issueAgentPrincipal: facts?.issueAgentPrincipal === true,
+                issueHumanPrincipal: facts?.issueHumanPrincipal === true,
+                snapshotOwnerCurrent: facts?.snapshotOwnerCurrent === true,
+                snapshotOwnerKindCurrent: facts?.snapshotOwnerKindCurrent === true,
+                snapshotOwnerIdCurrent: facts?.snapshotOwnerIdCurrent === true,
+                snapshotOwnerCompanyCurrent: facts?.snapshotOwnerCompanyCurrent === true,
+                snapshotBodyHashCurrent: facts?.snapshotBodyHashCurrent === true,
+                snapshotDigestCurrent: facts?.snapshotDigestCurrent === true,
+                allTaskInputSourceVersionsCurrent: facts?.allTaskInputSourceVersionsCurrent === true,
+                allCommentInputSourceVersionsCurrent: facts?.allCommentInputSourceVersionsCurrent === true,
+                policyIssueEdgesExact: facts?.policyIssueEdgesExact === true,
+                allTaskInputsCurrent: facts?.allTaskInputsCurrent === true,
+                allDispatchesMatchOriginRun: facts?.allDispatchesMatchOriginRun === true,
+                allDispatchesMatchReceiptPrefix: facts?.allDispatchesMatchReceiptPrefix === true,
+                allDispatchesMatchAnyPrefix: facts?.allDispatchesMatchAnyPrefix === true,
+                workerDispatchInputCount: facts?.workerDispatchInputCount ?? -1,
+                allRunCopySourcesCurrent: facts?.allRunCopySourcesCurrent === true,
+                conversationBindingCurrent: facts?.conversationBindingCurrent === true,
+                snapshotPolicyIssueCount: facts?.snapshotPolicyIssueCount ?? -1,
+                issueSourceEdgeCount: facts?.issueSourceEdgeCount ?? -1,
+                sourceKinds: facts?.sourceKinds ?? [],
+                inputKinds: facts?.inputKinds ?? [],
+              }));
+            }
+            throw forbidden("Private task creation is outside the current actor authority");
+          }
+        }
         if (idempotencyKey) {
           await tx.insert(issueCreateIdempotencyKeys).values({
             companyId,
@@ -10262,9 +11229,16 @@ export function issueService(db: Db) {
           [enriched],
           tx,
         );
-        return withRelations;
+        return finishManualInput(withRelations);
       };
-      if (dbOrTx === db) return db.transaction(persist);
+      if (dbOrTx === db) {
+        const created = await db.transaction(persist);
+        if (!postCommitActivityPublications) for (const publication of ownedPrivacyPublications) {
+          try { publishActivity(publication); }
+          catch (err) { logger.warn({ err }, "Failed to publish committed task privacy activity"); }
+        }
+        return created;
+      }
       return persist(dbOrTx as DbTransaction);
     },
 
@@ -10289,12 +11263,39 @@ export function issueService(db: Db) {
     importIssues: async (
       companyId: string,
       rows: ImportIssueRow[],
+      dbOrTx: Db | DbTransaction = db,
+      options: { actor?: AuthorizationActor; privateWorkAdmission?: "closed"; postCommitActivityPublications?: ActivityPublication[] } = {},
     ): Promise<void> => {
       if (rows.length === 0) return;
+      const importProfileStartedAt = performance.now();
+      const importProfile = (stage: string) => {
+        if (process.env.PORTABILITY_IMPORT_PROFILE === "1")
+          console.info(`[issue-import-profile] ${stage} ${Math.round(performance.now() - importProfileStartedAt)}ms`);
+      };
+      for (const row of rows) {
+        if (!["open", "private"].includes(row.visibility) || !Array.isArray(row.privacySources)
+          || row.privacySources.some(source => !["issue", "project", "run", "workflow_run", "routine_run"].includes(source.sourceKind) || !isUuidLike(source.sourceId))
+          || [row.privacyRootIssueId, row.privacyParentIssueId].some(id => id !== null && !isUuidLike(id))) {
+          throw unprocessable("Imported task privacy provenance is required");
+        }
+        if (row.visibility === "private" && (!row.responsibleUserId || !row.privacyRootIssueId)) {
+          throw unprocessable("Imported private tasks require retained ownership and privacy provenance");
+        }
+      }
+      if (dbOrTx !== db && !options.postCommitActivityPublications) throw new Error("Nested task import requires an outer-commit publication queue");
+      const privacyPublications = options.postCommitActivityPublications ?? [];
       const isolatedWorkspacesEnabled = (
         await instanceSettings.getExperimental()
       ).enableIsolatedWorkspaces;
-      await db.transaction(async (tx) => {
+      importProfile("preflight-complete");
+      await dbOrTx.transaction(async (tx) => {
+        // Keep the shared analytical -> Memory -> Task-tree order before any
+        // row lock can wait. This lets the post-wait source review below pin
+        // current source ownership without inverting erasure locks.
+        const { lockAnalyticalCompany } = await import("./analytical-privacy.js");
+        await lockAnalyticalCompany(tx as unknown as Db, companyId);
+        await lockMemoryPrivacy(tx as unknown as Db, companyId);
+        await lockIssuePrivacyTree(tx, companyId);
         // Self-correcting counter: seed from max(issue_number) so a drifted
         // company counter cannot mint colliding identifiers, then reserve the
         // whole range in one bump instead of one-per-issue.
@@ -10318,7 +11319,17 @@ export function issueService(db: Db) {
           .update(companies)
           .set({ issueCounter: base + rows.length })
           .where(eq(companies.id, companyId));
+        importProfile("counter-reserved");
 
+        if (options.actor) {
+          await pinIssueMutationHuman(tx, options.actor, companyId);
+          const admission = await authorizationService(tx).decide({ actor: options.actor, action: "company_scope:read",
+            resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+          if (!admission.allowed) throw forbidden("Current organization access is required for import");
+        }
+        if (options.privateWorkAdmission === "closed" && rows.some(row => row.visibility === "private")) {
+          throw unprocessable("Private tasks are not available");
+        }
         const defaultCompanyGoal = await getDefaultCompanyGoal(tx, companyId);
         const defaultGoalId = defaultCompanyGoal?.id ?? null;
 
@@ -10328,6 +11339,7 @@ export function issueService(db: Db) {
           string,
           {
             goalId: string | null;
+            visibility: string;
             defaultProjectWorkspaceId: string | null;
             defaultExecutionWorkspaceSettings: Record<string, unknown> | null;
           }
@@ -10338,6 +11350,7 @@ export function issueService(db: Db) {
           const projectRow = await tx
             .select({
               goalId: projects.goalId,
+              visibility: projects.visibility,
               executionWorkspacePolicy: projects.executionWorkspacePolicy,
             })
             .from(projects)
@@ -10379,6 +11392,7 @@ export function issueService(db: Db) {
             ) as Record<string, unknown> | null;
           const derived = {
             goalId: projectRow?.goalId ?? null,
+            visibility: projectRow?.visibility ?? "private",
             defaultProjectWorkspaceId,
             defaultExecutionWorkspaceSettings,
           };
@@ -10427,6 +11441,9 @@ export function issueService(db: Db) {
           let projectGoalId: string | null = null;
           if (projectId) {
             const derived = await loadProjectDerived(projectId);
+            if (derived.visibility === "private" && row.visibility !== "private") {
+              throw unprocessable("Imported task privacy conflicts with its destination project");
+            }
             projectGoalId = derived.goalId;
             if (!projectWorkspaceId)
               projectWorkspaceId = derived.defaultProjectWorkspaceId;
@@ -10458,6 +11475,9 @@ export function issueService(db: Db) {
           issueRows.push({
             id: row.id,
             companyId,
+            visibility: row.visibility,
+            privacyRootIssueId: row.privacyRootIssueId,
+            privacyParentIssueId: row.privacyParentIssueId,
             issueNumber,
             identifier,
             title: row.title,
@@ -10471,7 +11491,8 @@ export function issueService(db: Db) {
             projectWorkspaceId,
             executionWorkspaceSettings,
             goalId,
-            responsibleUserId: null,
+            responsibleUserId: row.responsibleUserId,
+            createdByUserId: row.createdByUserId,
             requestDepth: clampIssueRequestDepth(undefined),
             originKind: "manual",
             // The caller resolves parentId against ids in this same batch, so a
@@ -10497,10 +11518,90 @@ export function issueService(db: Db) {
             labelRows.push({ issueId: row.id, labelId, companyId });
           }
         }
+        importProfile("rows-prepared");
 
         await insertRowsInChunks(tx, issues, issueRows);
         await insertRowsInChunks(tx, issueLabels, labelRows);
+        importProfile("issue-and-label-inserts");
+        const retainedRows = rows.flatMap(row => [...row.privacySources,
+          { sourceKind: "issue" as const, sourceId: row.privacyParentIssueId },
+          { sourceKind: "issue" as const, sourceId: row.privacyRootIssueId },
+          { sourceKind: "issue" as const, sourceId: row.parentId },
+          { sourceKind: "project" as const, sourceId: row.projectId },
+        ].filter((source): source is { sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string } =>
+          Boolean(source.sourceId) && !(source.sourceKind === "issue" && source.sourceId === row.id))
+          .map(source => ({ companyId, issueId: row.id, ...source })));
+        for (let offset = 0; offset < retainedRows.length; offset += DEFAULT_INSERT_CHUNK_ROWS) {
+          await tx.insert(issuePrivacySources).values(retainedRows.slice(offset, offset + DEFAULT_INSERT_CHUNK_ROWS)).onConflictDoNothing();
+        }
+        const originals = new Map(rows.map(row => [row.id, row]));
+        const storedRows = await tx.select().from(issues).where(and(eq(issues.companyId, companyId),
+          inArray(issues.id, rows.map(row => row.id))));
+        if (storedRows.length !== rows.length) throw unprocessable("Imported task rows are incomplete");
+        const allSources = storedRows.flatMap(issue => {
+          const original = originals.get(issue.id)!;
+          return [...original.privacySources,
+            { sourceKind: "issue" as const, sourceId: original.privacyParentIssueId },
+            { sourceKind: "issue" as const, sourceId: original.privacyRootIssueId },
+            { sourceKind: "issue" as const, sourceId: original.parentId },
+            { sourceKind: "project" as const, sourceId: original.projectId },
+          ].filter((source): source is { sourceKind: "issue" | "project" | "run" | "run_copy" | "workflow_run" | "routine_run"; sourceId: string } => Boolean(source.sourceId));
+        });
+        const issueSourceIds = [...new Set(allSources.filter(source => source.sourceKind === "issue").map(source => source.sourceId))];
+        if (options.actor && issueSourceIds.length) {
+          // Recheck each exact Original issue source once after the importing
+          // Task-tree lock/wait, using the same complete lineage owner as the
+          // single-Task path. Manual bundles qualify for its bounded batch
+          // predicate; any retained/typed source takes the full validator.
+          const { assertAnalyticalContextPayloadAccessBatch } = await import("./analytical-context-authority.js");
+          for (let offset = 0; offset < issueSourceIds.length; offset += 256)
+            await assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db, companyId, options.actor, issueSourceIds.slice(offset, offset + 256));
+        }
+        const checkedSources = new Set<string>();
+        for (const source of allSources) {
+          const key = `${source.sourceKind}:${source.sourceId}`;
+          if (checkedSources.has(key)) continue;
+          if (source.sourceKind === "issue") { checkedSources.add(key); continue; }
+          const table = source.sourceKind === "project" ? projects
+            : source.sourceKind === "workflow_run" ? workflowRuns : source.sourceKind === "routine_run" ? routineRuns : heartbeatRuns;
+          const [current] = await tx.select({ companyId: table.companyId }).from(table).where(eq(table.id, source.sourceId));
+          if (current && current.companyId !== companyId) throw unprocessable("Imported task privacy source belongs to another organization");
+          checkedSources.add(key);
+        }
+        const checkedNonIssueSources = new Set<string>();
+        if (options.actor) for (const source of allSources) {
+          if (source.sourceKind === "issue") continue;
+          const key = `${source.sourceKind}:${source.sourceId}`;
+          if (checkedNonIssueSources.has(key)) continue;
+          await assertIssuePrivacySourcesReadable(tx, options.actor, companyId, [source]);
+          checkedNonIssueSources.add(key);
+        }
+        for (const issue of storedRows) {
+          const original = originals.get(issue.id)!;
+          const grant = await ensureAssignmentIssueAccessGrant(tx, issue, null, { userId: original.createdByUserId });
+          if (grant) privacyPublications.push(grant.publication);
+        }
+        const openIds = storedRows.filter(issue => issue.visibility === "open").map(issue => issue.id);
+        if (openIds.length) {
+          const publicCondition = await issueReadSqlCondition(tx, { type: "none" });
+          const publicRows = await tx.select({ id: issues.id }).from(issues).where(and(eq(issues.companyId, companyId),
+            inArray(issues.id, openIds), publicCondition));
+          if (publicRows.length !== openIds.length) throw unprocessable("Imported task source content is private or unavailable");
+        }
+        if (options.actor) {
+          const { assertAnalyticalContextPayloadAccessBatch } = await import("./analytical-context-authority.js");
+          const importedIds = storedRows.map(issue => issue.id);
+          for (let offset = 0; offset < importedIds.length; offset += 256)
+            await assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db, companyId, options.actor, importedIds.slice(offset, offset + 256));
+        }
+        importProfile(`source-validation-${rows.length}`);
+        importProfile("transaction-body-complete");
       });
+      importProfile("transaction-committed");
+      if (!options.postCommitActivityPublications) for (const publication of privacyPublications) {
+        try { publishActivity(publication); }
+        catch (err) { logger.warn({ err }, "Failed to publish committed imported task privacy activity"); }
+      }
     },
 
     /**
@@ -10509,11 +11610,12 @@ export function issueService(db: Db) {
      */
     addImportedComments: async (
       rows: ImportIssueCommentRow[],
+      dbOrTx: Db | DbTransaction = db,
     ): Promise<void> => {
       if (rows.length === 0) return;
       const censorUsernameInLogs = (await instanceSettings.getGeneral())
         .censorUsernameInLogs;
-      await db.transaction(async (tx) => {
+      await dbOrTx.transaction(async (tx) => {
         const commentRows = rows.map((row) => {
           const createdAt = row.createdAt ? new Date(row.createdAt) : null;
           return {
@@ -10580,9 +11682,10 @@ export function issueService(db: Db) {
      */
     addImportedAttachments: async (
       rows: ImportIssueAttachmentRow[],
+      dbOrTx: Db | DbTransaction = db,
     ): Promise<void> => {
       if (rows.length === 0) return;
-      await db.transaction(async (tx) => {
+      await dbOrTx.transaction(async (tx) => {
         const assetRows: Array<Record<string, unknown>> = [];
         const attachmentRows: Array<Record<string, unknown>> = [];
         for (const row of rows) {
@@ -10620,6 +11723,8 @@ export function issueService(db: Db) {
         actorRunId?: string | null;
         actorRunStopId?: string | null;
         actorUserId?: string | null;
+        privacyActor?: AuthorizationActor;
+        privateWorkAdmission?: "closed" | "owned_conversation_work_mode";
         companyGuard?: string;
       },
       dbOrTx: any = db,
@@ -10669,6 +11774,8 @@ export function issueService(db: Db) {
         actorRunId,
         actorRunStopId,
         actorUserId,
+        privacyActor,
+        privateWorkAdmission,
         companyGuard,
         ...issueData
       } = data;
@@ -10931,6 +12038,9 @@ export function issueService(db: Db) {
       }
 
       const runUpdate = async (tx: any) => {
+        const changesPrivacy = [issueData.visibility, issueData.parentId, issueData.projectId,
+          issueData.originRunId, issueData.privacyParentIssueId, issueData.privacyRootIssueId].some(value => value !== undefined);
+        if (changesPrivacy) await lockIssuePrivacyTree(tx, existing.companyId);
         // The receipt baseline must be read under the same row lock as the
         // write. Otherwise a concurrent update can be mistaken for a change
         // made by this request.
@@ -10941,6 +12051,36 @@ export function issueService(db: Db) {
           .for("update")
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
         if (!receiptExisting) return null;
+        if (privateWorkAdmission === "owned_conversation_work_mode") {
+          const modeOnly = Object.keys(issueData).length === 1 && Object.hasOwn(issueData, "workMode") &&
+            ISSUE_WORK_MODES.includes(issueData.workMode as typeof ISSUE_WORK_MODES[number]);
+          if (!modeOnly || privacyActor?.type !== "board" || privacyActor.source !== "session" ||
+              !privacyActor.userId || !privacyActor.sessionId ||
+              !receiptExisting.conversationAgentId || receiptExisting.conversationUserId !== privacyActor.userId) {
+            throw forbidden("The native conversation work mode change is unavailable");
+          }
+          const pinned = await pinCurrentBoardActor(tx, privacyActor).catch(error => {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          });
+          if (!pinned || pinned.credentialExpiresAt === null) throw notFound("Issue not found");
+          await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt);
+          if (!await isCurrentUnsealedConversationShell(tx, pinned.actor, receiptExisting, "issue:comment"))
+            throw notFound("Issue not found");
+        }
+        if (privateWorkAdmission === "closed" && (!(await canActorReadIssuePrivacy(tx, { type: "none" }, receiptExisting))
+          || issueData.visibility === "private")) throw unprocessable("Private tasks are not available");
+        let privacy: Awaited<ReturnType<typeof resolveIssuePrivacy>> | undefined;
+        if (changesPrivacy) {
+          privacy = await resolveIssuePrivacy(tx, receiptExisting.companyId, {
+            ...receiptExisting, ...issueData, id: receiptExisting.id,
+          }, receiptExisting);
+          patch.visibility = privacy.visibility;
+          patch.privacyRootIssueId = privacy.privacyRootIssueId;
+          patch.privacyParentIssueId = privacy.privacyParentIssueId;
+          if (privateWorkAdmission === "closed" && privacy.visibility === "private") throw unprocessable("Private tasks are not available");
+        }
         if (actorAgentId && actorRunId) {
           // Recheck under a run lock: a request admitted before Stop must not
           // commit a late Done after cancellation revoked its credentials.
@@ -10997,6 +12137,120 @@ export function issueService(db: Db) {
                 (blockedByIssueIds !== undefined || issueData.unblockDescriptor !== undefined)))) {
           patch.statusVersion = sql`${issues.statusVersion} + 1` as unknown as number;
         }
+        let currentActor = privacyActor;
+        if (!currentActor && actorUserId) currentActor = { type: "board", userId: actorUserId, source: "session" };
+        if (!currentActor && actorAgentId) {
+          const [run] = actorRunId ? await tx.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.id, actorRunId), eq(heartbeatRuns.agentId, actorAgentId), eq(heartbeatRuns.companyId, receiptExisting.companyId),
+          )) : [];
+          currentActor = { type: "agent", agentId: actorAgentId, companyId: receiptExisting.companyId,
+            runId: actorRunId ?? undefined, onBehalfOfUserId: run?.responsibleUserId ?? undefined };
+        }
+        let mutationCredentialExpiresAt = currentActor?.authenticatedCredentialExpiresAt ?? null;
+        let pinnedBoardCredential = false;
+        if (mutationCredentialExpiresAt !== null && !Number.isFinite(mutationCredentialExpiresAt))
+          throw forbidden("The authenticated Task mutation credential is unavailable");
+        if (currentActor?.type === "board" && currentActor.source !== "local_implicit"
+          && (currentActor.sessionId != null || currentActor.keyId != null
+            || mutationCredentialExpiresAt !== null || currentActor.source === "board_key")) {
+          // Reuse the original credential verifier's identity after the Task
+          // wait. NOWAIT pins avoid reversing account-erasure lock ordering.
+          const pinned = await pinCurrentBoardActor(tx, currentActor).catch(error => {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          });
+          if (!pinned || (pinned.credentialExpiresAt !== null && !Number.isFinite(pinned.credentialExpiresAt)))
+            throw forbidden("The authenticated Task mutation credential is unavailable");
+          currentActor = pinned.actor;
+          mutationCredentialExpiresAt = pinned.credentialExpiresAt;
+          pinnedBoardCredential = true;
+        }
+        if (currentActor) {
+          const scope = await resolveTaskWatchdogMutationScope(tx, currentActor);
+          if (scope.kind === "invalid") throw forbidden(scope.detail);
+          if (scope.kind === "watchdog") {
+            const allowed = await taskWatchdogScopeAllowsIssueMutation(tx, scope, receiptExisting);
+            if (allowed.kind !== "watchdog") throw forbidden("Task-watchdog target is unavailable");
+            if (scope.watchdogIssueId !== receiptExisting.id) {
+              const current = await taskWatchdogService(tx).revalidateMutationScope(scope);
+              if (!current.allowed) throw conflict(current.reason);
+            }
+          } else {
+            if (privateWorkAdmission === "owned_conversation_work_mode") {
+              if (currentActor.type !== "board" || currentActor.userId !== receiptExisting.conversationUserId ||
+                  !await isCurrentUnsealedConversationShell(tx, currentActor, receiptExisting, "issue:comment"))
+                throw notFound("Issue not found");
+            } else {
+              await pinIssueMutationHuman(tx, currentActor, receiptExisting.companyId);
+              const decision = await authorizationService(tx).decide({ actor: currentActor,
+                action: "issue:mutate", enforceResponsibleUserIntersection: true,
+                resource: { type: "issue", companyId: receiptExisting.companyId, issueId: receiptExisting.id,
+                  projectId: receiptExisting.projectId, parentIssueId: receiptExisting.parentId,
+                  assigneeAgentId: receiptExisting.assigneeAgentId, assigneeUserId: receiptExisting.assigneeUserId,
+                  status: receiptExisting.status, originKind: receiptExisting.originKind, originId: receiptExisting.originId } });
+              if (!decision.allowed) throw forbidden("Task mutation is outside the current actor authority");
+            }
+          }
+        }
+        if (currentActor && privateWorkAdmission !== "owned_conversation_work_mode" &&
+            !(await canActorReadIssuePrivacy(tx, currentActor, receiptExisting))) {
+          throw forbidden("Task not found");
+        }
+        if (issueData.visibility !== undefined && issueData.visibility !== receiptExisting.visibility) {
+          if (!currentActor || currentActor.type !== "board" || currentActor.source === "local_implicit"
+            || !currentActor.userId || ![receiptExisting.responsibleUserId, receiptExisting.createdByUserId].includes(currentActor.userId)) {
+            throw forbidden("Only the current task privacy owner can change its audience");
+          }
+          const [member] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+            eq(companyMemberships.companyId, receiptExisting.companyId), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, currentActor.userId), eq(companyMemberships.status, "active"),
+            sql`${companyMemberships.membershipRole} <> 'viewer'`,
+          ));
+          if (!member) throw forbidden("Current organization access is required");
+        }
+        if (currentActor && privacy) await assertIssuePrivacySourcesReadable(tx, currentActor, receiptExisting.companyId, privacy.sources);
+        const retainedBefore: Array<{ sourceKind: string; sourceId: string }> = privacy ? await tx.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
+          .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, receiptExisting.companyId), eq(issuePrivacySources.issueId, id))) : [];
+        const retainedKeys = new Set(retainedBefore.map(source => `${source.sourceKind}:${source.sourceId}`));
+        const privacyGraphChanged = privacy && (privacy.visibility !== receiptExisting.visibility || privacy.sources.some(source =>
+          source.sourceId !== id && !retainedKeys.has(`${source.sourceKind}:${source.sourceId}`)));
+        const agentBodyActor = currentActor?.type === "agent" ? currentActor : null;
+        if (receiptExisting.payloadSourceSnapshot !== null || agentBodyActor) {
+          // Compare the effective native row under its write lock. A body edit
+          // makes its old capture unknown; operational edits keep the capture.
+          // Keep the database's direct-write rejection and no-rebinding latch.
+          const columns = getTableColumns(issues);
+          const bodyPatch = sql.join(Object.entries(patch)
+            .filter(([, value]) => value !== undefined)
+            .map(([key, value]) => sql`jsonb_build_object(
+              ${columns[key as keyof typeof columns].name}::text,
+              ${is(value, SQL) ? sql`to_jsonb(${value})` : sql`${JSON.stringify(value)}::jsonb`})`), sql` || `);
+          const [body] = await tx.execute(sql`select
+            public.aw_native_payload_body_hash('issue', to_jsonb(${issues})) is distinct from
+            public.aw_native_payload_body_hash('issue', to_jsonb(jsonb_populate_record(
+              ${issues}, to_jsonb(${issues}) || ${bodyPatch}))) as changed
+            from ${issues} where ${idPredicate}`);
+          if (body?.changed) {
+            // A self-Run edge cannot retain a body's restricted source closure:
+            // it would form a cycle. Until exact payload sources are captured,
+            // keep the old body rather than copy private run input into it.
+            if (agentBodyActor && (!agentBodyActor.runId || !await canActorReadHeartbeatRunPrivacy(
+              tx, { type: "none" }, { companyId: receiptExisting.companyId, id: agentBodyActor.runId },
+            ))) throw unprocessable("Task body changes require retained access to the run's restricted sources");
+            patch.payloadSourceSnapshot = null;
+          }
+        }
+        const monitorSchedulingFields = [
+          "monitorNextCheckAt", "monitorWakeRequestedAt", "monitorLastTriggeredAt",
+          "monitorAttemptCount", "monitorNotes", "monitorScheduledBy",
+        ] as const;
+        const monitorScheduleChanged = (receiptExisting.monitorNextCheckAt != null || patch.monitorNextCheckAt != null) && (
+          monitorSchedulingFields.some(field => Object.hasOwn(patch, field))
+          || (patch.status !== undefined && patch.status !== receiptExisting.status)
+          || (patch.assigneeAgentId !== undefined && patch.assigneeAgentId !== receiptExisting.assigneeAgentId)
+          || (patch.assigneeUserId !== undefined && patch.assigneeUserId !== receiptExisting.assigneeUserId));
+        if (monitorScheduleChanged) await notifyDeliveryWork(tx, DELIVERY_QUEUES.issueMonitors);
         const updated = await tx
           .update(issues)
           .set(patch)
@@ -11004,6 +12258,17 @@ export function issueService(db: Db) {
           .returning()
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
         if (!updated) return null;
+        if (privacy) await retainIssuePrivacySources(tx, updated, privacy.sources);
+        const assignmentGrant = await ensureAssignmentIssueAccessGrant(tx, updated, receiptExisting, {
+          agentId: actorAgentId, userId: actorUserId,
+        });
+        if (assignmentGrant) activityPublications.push(assignmentGrant.publication);
+        if (currentActor && privacyGraphChanged && !(await canActorReadIssuePrivacy(tx, currentActor, updated))) {
+          throw unprocessable("Task source graph is unavailable");
+        }
+        if (updated.visibility === "private" && receiptExisting.visibility !== "private") {
+          await protectIssuePrivacyDescendants(tx, updated, activityPublications);
+        }
         // An operator explicitly choosing a disposition owns that decision,
         // including choosing In Review while the conversation is Idle.
         if (actorUserId && issueData.status !== undefined) {
@@ -11287,6 +12552,16 @@ export function issueService(db: Db) {
           });
           activityPublications.push(publication);
         }
+        if (pinnedBoardCredential || mutationCredentialExpiresAt !== null) {
+          // Child-row effects can wait after authorization and the Task write.
+          // Check the original ceiling after this owner's effects.
+          const humanId = currentActor?.type === "agent" ? currentActor.onBehalfOfUserId : currentActor?.userId;
+          const [credential] = await tx.execute(sql`select
+            (${mutationCredentialExpiresAt}::double precision is null
+              or ${mutationCredentialExpiresAt}::double precision>extract(epoch from clock_timestamp())*1000)
+            and not exists(select 1 from account_deletion_operations where user_id=${humanId ?? null}) as active`);
+          if (!credential?.active) throw forbidden("The authenticated Task mutation credential is unavailable");
+        }
         return {
           ...enriched,
           ...(nextBlockedByIssueIds !== undefined
@@ -11309,40 +12584,14 @@ export function issueService(db: Db) {
       return result;
     },
 
-    clearExecutionWorkspaceEnvironmentSelection: async (
-      companyId: string,
-      environmentId: string,
-    ) => {
-      const rows = await db
-        .select({
-          id: issues.id,
-          executionWorkspaceSettings: issues.executionWorkspaceSettings,
-        })
-        .from(issues)
-        .where(eq(issues.companyId, companyId));
-
-      let cleared = 0;
-      for (const row of rows) {
-        const settings = parseIssueExecutionWorkspaceSettings(
-          row.executionWorkspaceSettings,
-          { includeEnvironmentId: true },
-        );
-        if (settings?.environmentId !== environmentId) continue;
-
-        await db
-          .update(issues)
-          .set({
-            executionWorkspaceSettings: {
-              ...settings,
-              environmentId: null,
-            },
-            updatedAt: new Date(),
-          })
-          .where(eq(issues.id, row.id));
-        cleared += 1;
-      }
-
-      return cleared;
+    clearExecutionWorkspaceEnvironmentSelection: async (companyId: string, environmentId: string) => {
+      const cleared = await db.update(issues).set({
+        executionWorkspaceSettings: sql`jsonb_set(${issues.executionWorkspaceSettings}, '{environmentId}', 'null'::jsonb)`,
+        payloadSourceSnapshot: null,
+        updatedAt: new Date(),
+      }).where(and(eq(issues.companyId, companyId),
+        sql`${issues.executionWorkspaceSettings}->>'environmentId' = ${environmentId}`)).returning({ id: issues.id });
+      return cleared.length;
     },
 
     remove: (id: string) =>
@@ -12139,6 +13388,9 @@ export function issueService(db: Db) {
           .update(issueComments)
           .set({
             body: DELETED_ISSUE_COMMENT_BODY,
+            payloadSourceSnapshot: sql`case when ${issueComments.body} is distinct from ${DELETED_ISSUE_COMMENT_BODY}
+              or ${issueComments.presentation} is not null or ${issueComments.metadata} is not null
+              then null else ${issueComments.payloadSourceSnapshot} end`,
             presentation: null,
             metadata: null,
             deletedAt: now,
@@ -12195,27 +13447,113 @@ export function issueService(db: Db) {
         clientRequestId?: string;
         /** Server-only: authenticated Paperclip messages also belong in the Slack thread. */
         mirrorToSlack?: boolean;
+        /** Actual HTTP actor, never inferred from author attribution. */
+        manualInputActor?: AuthorizationActor;
+        /**
+         * Caller-owned transactions must publish source activity only after
+         * their outer transaction commits. The callback must retain this value
+         * and publish it after commit; it must not publish inline.
+         */
+        onManualInputSourcePublication?: (publication: ActivityPublication) => void;
       },
       dbOrTx: any = db,
+      manualInputProtocol?: 1,
     ): Promise<IssueComment> {
-      if (dbOrTx === db && (actor.runId || actor.userId)) {
-        const append = () =>
-          db.transaction(async (tx) => {
-            // Serialize run-authored comments on the issue so a provider retry
-            // cannot publish the same visible result twice. This needs no schema
-            // change: the issue row is the transaction fence, and the recursive
-            // call below performs the lookup and insert while holding it.
-            await tx
-              .select({ id: issues.id })
-              .from(issues)
-              .where(eq(issues.id, issueId))
-              .for("update");
-            return addComment(issueId, body, actor, options, tx);
+      const candidate = options?.manualInputActor;
+      const directActor = candidate?.type === "board" && candidate.source === "session" &&
+        candidate.userId === actor.userId && candidate.sessionId && !candidate.runId && !actor.agentId && !actor.runId &&
+        (!options?.authorType || options.authorType === "user") && !options?.presentation && !options?.metadata &&
+        !options?.createdAt && (!options?.authorizationReason || options.authorizationReason === "allow_board_actor") &&
+        !options?.attachmentIds?.length ? { ...candidate } : null;
+      const appendWithManualInput = async (tx: any) => {
+        let sourcePublication: ActivityPublication | null = null;
+        let expiresAt: number | null = null;
+        let operator = false;
+        let companyId: string | null = null;
+        if (directActor) {
+          const pinned = await pinCurrentBoardActor(tx, directActor);
+          if (!pinned || typeof pinned.credentialExpiresAt !== "number" || !Number.isFinite(pinned.credentialExpiresAt))
+            throw forbidden("The current manual input session is unavailable");
+          const credentialExpiresAt = pinned.credentialExpiresAt;
+          expiresAt = credentialExpiresAt;
+          const [target] = await tx.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, issueId));
+          if (!target?.companyId) throw notFound("Issue not found");
+          const targetCompanyId = target.companyId;
+          companyId = targetCompanyId;
+          operator = await pinIssueMutationHuman(tx, directActor, targetCompanyId, true) === "instance_admin";
+          if (operator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
+          await assertManualInputCredentialCurrent(tx, directActor, credentialExpiresAt);
+          await lockIssuePrivacyTree(tx, targetCompanyId);
+        }
+        // Serialize user and run-authored comments on the issue row. The same
+        // transaction also carries the current Human ACL check and source seal.
+        const [lockedIssue] = await tx
+          .select({ id: issues.id, companyId: issues.companyId, status: issues.status,
+            assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId })
+          .from(issues)
+          .where(eq(issues.id, issueId))
+          .for("update");
+        let freshInput = false;
+        if (directActor) {
+          if (!lockedIssue || lockedIssue.companyId !== companyId) throw notFound("Issue not found");
+          const currentActor = { ...directActor, isInstanceAdmin: false, ignoreInstanceAdmin: !operator };
+          const decision = await authorizationService(tx).decide({ actor: currentActor, action: "issue:comment",
+            resource: { type: "issue", companyId: lockedIssue.companyId, issueId,
+              status: lockedIssue.status, assigneeAgentId: lockedIssue.assigneeAgentId,
+              assigneeUserId: lockedIssue.assigneeUserId }, enforceResponsibleUserIntersection: true });
+          if (!decision.allowed || !await canActorReadIssuePrivacy(tx, currentActor, lockedIssue))
+            throw forbidden("Current task comment authority is required");
+          const existing = options?.clientRequestId ? await tx.select({ id: issueComments.id }).from(issueComments)
+            .where(and(eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, directActor.userId!),
+              eq(issueComments.clientRequestId, options.clientRequestId))).limit(1) : [];
+          freshInput = existing.length === 0;
+        }
+        const insertOptions = directActor ? { ...options, manualInputActor: undefined,
+          onManualInputSourcePublication: undefined } : options;
+        const comment = await addComment(issueId, body, actor, insertOptions, tx, freshInput ? 1 : undefined);
+        if (directActor && expiresAt !== null && companyId) {
+          if (freshInput) {
+            const [captured] = await tx.update(issueComments)
+              .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("comment") })
+              .where(and(eq(issueComments.id, comment.id), eq(issueComments.companyId, companyId),
+                eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, directActor.userId!),
+                eq(issueComments.payloadSourceProtocolVersion, 1), isNull(issueComments.payloadSourceSnapshot),
+                eq(issueComments.payloadSourceSnapshotInvalidated, false), isNull(issueComments.deletedAt))).returning();
+            if (!captured?.payloadSourceSnapshot) throw conflict("Manual comment source capture was not stored");
+            const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+            const activity = await persistActivity(tx as unknown as Db, { companyId, actorType: "user",
+              actorId: directActor.userId!, action: "comment.payload_source_captured", entityType: "issue",
+              entityId: issueId, details: { commentId: comment.id, producer: "direct_manual_input",
+                contentHash: snapshot.owner.contentHash, digest: snapshot.digest } });
+            sourcePublication = activity.publication;
+          }
+          if (operator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
+          await assertManualInputCredentialCurrent(tx, directActor, expiresAt);
+        }
+        return { comment, sourcePublication };
+      };
+      if ((actor.runId || actor.userId) && dbOrTx === db) {
+        const append = async () => {
+          let sourcePublication: ActivityPublication | null = null;
+          const comment = await db.transaction(async (tx) => {
+            const result = await appendWithManualInput(tx);
+            sourcePublication = result.sourcePublication;
+            return result.comment;
           });
-        return options?.authorizationReason ===
-          CHAT_RUN_PRESENTATION_AUTHORIZATION_REASON
+          if (sourcePublication) {
+            try { publishActivity(sourcePublication); }
+            catch (err) { logger.warn({ err }, "Failed to publish committed comment source activity"); }
+          }
+          return comment;
+        };
+        return options?.authorizationReason === CHAT_RUN_PRESENTATION_AUTHORIZATION_REASON
           ? retryNativeChatReviewPresentation(append)
           : append();
+      }
+      if (directActor && actor.userId && dbOrTx !== db) {
+        const result = await appendWithManualInput(dbOrTx);
+        if (result.sourcePublication) options?.onManualInputSourcePublication?.(result.sourcePublication);
+        return result.comment;
       }
       // Callers supplying a transaction still share the settlement fence.
       if (actor.userId && dbOrTx !== db) {
@@ -12425,6 +13763,10 @@ export function issueService(db: Db) {
               currentUserRedactionOptions.enabled,
             );
           }
+          const upgradedMetadata = {
+            ...(existing.metadata ?? {}),
+            ...(metadata ?? {}),
+          };
           comment =
             shouldUpgradeExternalAuthorization ||
             shouldUpgradeAttachmentAuthorization
@@ -12434,10 +13776,8 @@ export function issueService(db: Db) {
                     // Preserve any structured provenance the provisional comment
                     // carried; the presentation pass only elevates its narrowly
                     // resolved external-publication authorization.
-                    metadata: {
-                      ...(existing.metadata ?? {}),
-                      ...(metadata ?? {}),
-                    },
+                    metadata: upgradedMetadata,
+                    payloadSourceSnapshot: sql`case when ${issueComments.metadata} is distinct from ${JSON.stringify(upgradedMetadata)}::jsonb then null else ${issueComments.payloadSourceSnapshot} end`,
                     updatedAt: new Date(),
                   })
                   .where(
@@ -12466,6 +13806,7 @@ export function issueService(db: Db) {
             authorType,
             createdByRunId,
             body: redactedBody,
+            ...(manualInputProtocol ? { payloadSourceProtocolVersion: manualInputProtocol } : {}),
             clientRequestId: options?.clientRequestId ?? null,
             presentation,
             metadata,
@@ -12596,7 +13937,7 @@ export function issueService(db: Db) {
         const attached = unboundAttachmentIds.length
           ? await dbOrTx
               .update(issueAttachments)
-              .set({ issueCommentId: comment.id, updatedAt: new Date() })
+              .set({ issueCommentId: comment.id, payloadSourceSnapshot: null, updatedAt: new Date() })
               .where(
                 and(
                   eq(issueAttachments.companyId, issue.companyId),
@@ -12824,7 +14165,14 @@ export function issueService(db: Db) {
       createdByAgentId?: string | null;
       createdByUserId?: string | null;
       createdByRunId?: string | null;
-    }) => {
+    }, directUpload?: { actor: AuthorizationActor; bytes: Buffer }) => {
+      const candidate = directUpload?.actor;
+      const manualActor = candidate?.type === "board" && candidate.source === "session" && candidate.userId && candidate.sessionId &&
+        candidate.userId === input.createdByUserId && !candidate.runId && !input.createdByAgentId && !input.createdByRunId &&
+        Buffer.isBuffer(directUpload?.bytes) ? { ...candidate } : null;
+      if (manualActor && (!directUpload!.bytes.length || input.byteSize !== directUpload!.bytes.length ||
+        createHash("sha256").update(directUpload!.bytes).digest("hex") !== input.sha256))
+        throw unprocessable("The uploaded file could not be verified. Try uploading it again.", { code: "attachment_upload_integrity_mismatch" });
       const issue = await db
         .select({ id: issues.id, companyId: issues.companyId })
         .from(issues)
@@ -12832,7 +14180,36 @@ export function issueService(db: Db) {
         .then((rows) => rows[0] ?? null);
       if (!issue) throw notFound("Issue not found");
 
-      return db.transaction(async (tx) => {
+      let sourcePublication: ActivityPublication | null = null;
+      const result = await db.transaction(async (tx) => {
+        let sourceExpiresAt: number | null = null, sourceOperator = false, ownerShell = false;
+        const finishManualInput = async () => {
+          if (manualActor && sourceExpiresAt !== null) {
+            if (sourceOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
+            await assertManualInputCredentialCurrent(tx, manualActor, sourceExpiresAt);
+          }
+        };
+        if (manualActor) {
+          const pinned = await pinCurrentBoardActor(tx, manualActor);
+          if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+            throw forbidden("The current manual input session is unavailable");
+          sourceExpiresAt = pinned.credentialExpiresAt;
+          sourceOperator = await pinIssueMutationHuman(tx, manualActor, issue.companyId, true) === "instance_admin";
+          await finishManualInput();
+          await lockIssuePrivacyTree(tx, issue.companyId);
+          const [current] = await tx.select({ id: issues.id, companyId: issues.companyId, status: issues.status,
+            assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId }).from(issues)
+            .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId))).for("update");
+          if (!current) throw notFound("Issue not found");
+          await finishManualInput();
+          const actor = { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !sourceOperator };
+          ownerShell = await isCurrentUnsealedConversationShell(tx, actor, current, "issue:comment");
+          const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
+            resource: { type: "issue", companyId: issue.companyId, issueId: issue.id, status: current.status,
+              assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId }, enforceResponsibleUserIntersection: true });
+          if (!ownerShell && (!decision.allowed || !await canActorReadIssuePrivacy(tx, actor, current)))
+            throw forbidden("Current attachment write authority is required");
+        }
         if (input.createdByAgentId && input.issueCommentId) {
           const [lockedIssue] = await tx
             .select({ id: issues.id })
@@ -12965,6 +14342,7 @@ export function issueService(db: Db) {
             assetId: asset.id,
             issueCommentId: input.issueCommentId ?? null,
             originatingRunId: registeredRunId,
+            ...(manualActor ? { payloadSourceProtocolVersion: 1 } : {}),
           })
           .returning();
         const contentPath = `/api/attachments/${attachment.id}/content`;
@@ -13033,6 +14411,32 @@ export function issueService(db: Db) {
           }
         }
 
+        if (manualActor) {
+          const [captured] = await tx.update(issueAttachments)
+            .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("attachment") })
+            .where(and(eq(issueAttachments.id, attachment.id), eq(issueAttachments.companyId, issue.companyId),
+              eq(issueAttachments.issueId, issue.id), eq(issueAttachments.assetId, asset.id),
+              eq(issueAttachments.payloadSourceProtocolVersion, 1), isNull(issueAttachments.payloadSourceSnapshot),
+              eq(issueAttachments.payloadSourceSnapshotInvalidated, false))).returning();
+          if (!captured?.payloadSourceSnapshot) throw conflict("Manual upload source capture was not stored");
+          const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+          if (ownerShell) {
+            const [sealed] = await tx.update(issues).set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue",
+              { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
+              [{ kind: "attachment", issueId: issue.id, attachmentId: attachment.id, commentId: null,
+                assetId: asset.id, sha256: asset.sha256, byteSize: asset.byteSize, disposition: "delivered" }]) })
+              .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+                eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
+                eq(issues.payloadSourceSnapshotInvalidated, false))).returning({ snapshot: issues.payloadSourceSnapshot });
+            if (!sealed?.snapshot) throw conflict("Conversation upload source capture was not stored");
+          }
+          const source = await persistActivity(tx as unknown as Db, { companyId: issue.companyId, actorType: "user",
+            actorId: manualActor.userId!, action: "attachment.payload_source_captured", entityType: "issue", entityId: issue.id,
+            details: { attachmentId: attachment.id, assetId: asset.id, producer: "direct_manual_upload",
+              contentHash: snapshot.owner.contentHash, digest: snapshot.digest } });
+          sourcePublication = source.publication;
+          await finishManualInput();
+        }
         return {
           id: attachment.id,
           companyId: attachment.companyId,
@@ -13053,6 +14457,11 @@ export function issueService(db: Db) {
           artifactWorkProductId: artifactWorkProduct?.id ?? null,
         };
       });
+      if (sourcePublication) {
+        try { publishActivity(sourcePublication); }
+        catch (err) { logger.warn({ err }, "Failed to publish committed upload source activity"); }
+      }
+      return result;
     },
 
     listAttachments: async (issueId: string) =>
@@ -13206,7 +14615,10 @@ export function issueService(db: Db) {
       return [...mentionedIds].filter((projectId) => valid.has(projectId));
     },
 
-    getAncestors: async (issueId: string) => {
+    getAncestors: async (issueId: string, options?: {
+      onSourceCapture?: (capture: NativeTaskSourceCapture) => void;
+    }) => {
+      const onSourceCapture = options?.onSourceCapture;
       const raw: Array<{
         id: string;
         identifier: string | null;
@@ -13227,6 +14639,9 @@ export function issueService(db: Db) {
       let currentId = start?.parentId ?? null;
       while (currentId && !visited.has(currentId) && raw.length < 50) {
         visited.add(currentId);
+        // The native Task Markdown renders only the first six ancestors.
+        // Default public reads neither select nor return capture metadata.
+        const captureSource = Boolean(onSourceCapture) && raw.length < 6;
         const parent = await db
           .select({
             id: issues.id,
@@ -13239,6 +14654,11 @@ export function issueService(db: Db) {
             projectId: issues.projectId,
             goalId: issues.goalId,
             parentId: issues.parentId,
+            ...(captureSource ? {
+              sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+              ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+              payloadSourceSnapshot: issues.payloadSourceSnapshot,
+            } : {}),
           })
           .from(issues)
           .where(eq(issues.id, currentId))
@@ -13255,6 +14675,18 @@ export function issueService(db: Db) {
           projectId: parent.projectId ?? null,
           goalId: parent.goalId ?? null,
         });
+        if (captureSource) {
+          const sourceVersion = parent.sourceVersion;
+          const ownerBodyHash = parent.ownerBodyHash;
+          if (typeof sourceVersion !== "string" || typeof ownerBodyHash !== "string")
+            throw new Error("Selected ancestor source version is unavailable");
+          onSourceCapture?.({
+            input: { kind: "task", issueId: parent.id, sourceVersion,
+              contentHash: ownerBodyHash },
+            // An absent historical closure remains unknown, never source-free.
+            payloadSourceSnapshot: parent.payloadSourceSnapshot ?? null,
+          });
+        }
         currentId = parent.parentId ?? null;
       }
 

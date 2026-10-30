@@ -1,4 +1,5 @@
-import { experienceTaskReceiptSchema, v9FeatureEnabled } from "@paperclipai/shared";
+import { publicNativePayloadRow } from "../services/native-payload-public.js";
+import { experienceTaskReceiptSchema, nativePayloadSourceSnapshotSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { queuedInteractionId, readQueuedInteractionResponse, hasQueuedInteractionResponse } from "../services/queued-interaction-response.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import { deliverConversationComments, isConversation } from "../services/agent-conversations.js";
@@ -6,6 +7,8 @@ import { issueRecoveryActionReadModel } from "../services/issue-recovery-actions
 import { getExecutionBlocker } from "../services/execution-blocker.js";
 import { extractIssueReferenceIdentifiers, requiresExecutionReconciliation } from "@paperclipai/shared";
 import {
+  canReadCurrentWorkspaceCommentSource,
+  describeWorkspaceReconstruction,
   validateExecutionReconciliation,
   markExecutionReconciliation,
 } from "../services/execution-recovery-resolution.js";
@@ -26,9 +29,11 @@ import {
   desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   notInArray,
   sql,
+  type SQL,
 } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import type { ChatChannelService } from "../services/chat-channels.js";
@@ -36,11 +41,17 @@ import {
   activityLog,
   agentWakeupRequests,
   agents,
+  authUsers,
   approvals,
   chatConversations,
   chatEndpoints,
   chatPublications,
   companyMemberships,
+  issueAccessGrants,
+  issueAttachments,
+  issuePrivacySources,
+  projectAccessMembers,
+  projects,
   documents,
   executionWorkspaces,
   heartbeatRuns,
@@ -232,6 +243,7 @@ import {
   assertCompanyAccess,
   getAccessibleResource,
   getActorInfo,
+  hasCompanyAccess,
 } from "./authz.js";
 import {
   assertNoAgentHostWorkspaceCommandMutation,
@@ -277,10 +289,20 @@ import {
   ISSUE_WAKE_DIAGNOSTICS_LOOKBACK_DAYS,
   ISSUE_WAKE_DIAGNOSTICS_MAX_ACTIVITY_RECORDS,
   ISSUE_WAKE_DIAGNOSTICS_MAX_WAKE_REQUESTS,
+  isCurrentUnsealedConversationShell,
+  isManualRelatedPayloadInput,
   readAcceptedPlanConfirmationTarget,
+  lockIssuePrivacyTree,
+  pinIssueMutationHuman,
   type IssuePostCommitAction,
 } from "../services/issues.js";
-import { authorizationDeniedDetails } from "../services/authorization.js";
+import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, pinCurrentBoardActor, type AuthorizationActor } from "../services/authorization.js";
+import { assertDirectInputSessionCurrent, assertNativeDocumentRevisionCurrentSourceAccess,
+  directHumanPayloadSnapshotSql, nativePayloadSnapshotSql } from "../services/native-direct-input.js";
+import { withCurrentTaskSourceRead } from "../services/task-source-read-scope.js";
+import type { AnnouncementSearchProjection } from "../services/announcement-feed.js";
+import { persistActivity } from "../services/activity-log.js";
+import { nativeCommentProjectionHash } from "../services/native-runtime/canonical.js";
 import { stalledReviewDecisionService } from "../services/stalled-review-decisions.js";
 import { environmentService } from "../services/environments.js";
 import { environmentRuntimeService } from "../services/environment-runtime.js";
@@ -468,12 +490,15 @@ type CompanySearchService = {
   extract(
     companyId: string,
     query: CompanySearchExtractQuery,
+    options?: { issueReadCondition?: SQL<boolean> },
   ): Promise<CompanySearchExtractResponse>;
   search(
     companyId: string,
     query: CompanySearchQuery,
+    options?: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean>; actor?: AuthorizationActor; noticeProjection?: AnnouncementSearchProjection },
   ): Promise<CompanySearchResponse>;
 };
+type CompanySearchServiceFactory = (queryDb: Db) => CompanySearchService;
 type ActivityIssueRelationSummary = {
   id: string;
   identifier: string | null;
@@ -573,6 +598,30 @@ function noopTaskWatchdogService(): TaskWatchdogService {
 
 function buildAttachmentContentPath(attachmentId: string): string {
   return `/api/attachments/${attachmentId}/content`;
+}
+
+async function verifySelectedSavedAttachmentBytes(input: {
+  storage: StorageService;
+  companyId: string;
+  objectKey: string;
+  sha256: string;
+  byteSize: number;
+}) {
+  if (!Number.isSafeInteger(input.byteSize) || input.byteSize < 0 || input.byteSize > 32 * 1024 * 1024) {
+    throw conflict("A selected saved file exceeds the reconstruction size limit.");
+  }
+  const stored = await input.storage.getObject(input.companyId, input.objectKey);
+  const digest = createHash("sha256");
+  let size = 0;
+  for await (const chunk of stored.stream) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += bytes.byteLength;
+    if (size > input.byteSize || size > 32 * 1024 * 1024) throw conflict("A selected saved file changed after it was captured.");
+    digest.update(bytes);
+  }
+  if (size !== input.byteSize || digest.digest("hex") !== input.sha256) {
+    throw conflict("A selected saved file no longer matches its captured bytes.");
+  }
 }
 
 const GENERIC_RESPONSE_ATTACHMENT_CONTENT_TYPES = new Set(
@@ -2987,6 +3036,8 @@ function toCompactIssue(issue: any): CompactIssue {
     projectWorkspaceId: issue.projectWorkspaceId,
     goalId: issue.goalId,
     parentId: issue.parentId,
+    visibility: issue.visibility,
+    privacyRootIssueId: issue.privacyRootIssueId,
     title: issue.title,
     description: issue.description,
     status: issue.status,
@@ -3081,7 +3132,7 @@ type IssueListPreparedResponse =
     }
   | {
       kind: "full";
-      body: unknown[];
+      body: Array<{ id: string }>;
     };
 
 type IssueListCacheStatus = "miss" | "hit" | "coalesced" | "stale" | "retry";
@@ -3125,6 +3176,7 @@ type IssueListInflightEntry = {
 const issueListResponseCache = new Map<string, IssueListCacheEntry>();
 const issueListInflight = new Map<string, IssueListInflightEntry>();
 const issueListActorClientInflight = new Map<string, number>();
+let issueListResponseCacheMaxEntries = ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES;
 
 export function __getIssueListResponseCacheSizeForTests() {
   return issueListResponseCache.size;
@@ -3132,6 +3184,14 @@ export function __getIssueListResponseCacheSizeForTests() {
 
 export function __clearIssueListResponseCacheForTests() {
   issueListResponseCache.clear();
+  issueListResponseCacheMaxEntries = ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES;
+}
+
+export function __setIssueListResponseCacheMaxEntriesForTests(maxEntries: number) {
+  if (!Number.isSafeInteger(maxEntries) || maxEntries < 1) {
+    throw new Error("Issue list cache test limit must be a positive integer");
+  }
+  issueListResponseCacheMaxEntries = maxEntries;
 }
 
 function shortHash(value: string): string {
@@ -3277,7 +3337,7 @@ function touchIssueListResponseCacheEntry(
 }
 
 function trimIssueListResponseCache() {
-  while (issueListResponseCache.size > ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES) {
+  while (issueListResponseCache.size > issueListResponseCacheMaxEntries) {
     const oldestKey = issueListResponseCache.keys().next().value as
       string | undefined;
     if (oldestKey === undefined) return;
@@ -3304,6 +3364,7 @@ async function coordinateIssueListGet(input: {
   companyId: string;
   requestKey: ReturnType<typeof issueListRequestKey>;
   allowTtlCache: boolean;
+  bypassSharedResult?: boolean;
   diagnostics?: IssueListDiagnostics;
   compute: () => Promise<IssueListPreparedResponse>;
 }): Promise<{
@@ -3315,7 +3376,7 @@ async function coordinateIssueListGet(input: {
   const now = Date.now();
   pruneIssueListResponseCache(now);
 
-  const cached = input.allowTtlCache
+  const cached = input.allowTtlCache && !input.bypassSharedResult
     ? issueListResponseCache.get(input.requestKey.key)
     : undefined;
   if (cached && cached.expiresAt > now) {
@@ -3327,7 +3388,9 @@ async function coordinateIssueListGet(input: {
     };
   }
 
-  const existing = issueListInflight.get(input.requestKey.key);
+  const existing = input.bypassSharedResult
+    ? undefined
+    : issueListInflight.get(input.requestKey.key);
   if (existing) {
     existing.waiterCount += 1;
     const identicalInFlightCount = existing.waiterCount + 1;
@@ -3362,7 +3425,7 @@ async function coordinateIssueListGet(input: {
   const actorClientInflight =
     issueListActorClientInflight.get(actorClientKey) ?? 0;
   if (actorClientInflight >= ISSUE_LIST_MAX_ACTOR_CLIENT_INFLIGHT) {
-    if (cached && cached.staleUntil > now) {
+    if (!input.bypassSharedResult && cached && cached.staleUntil > now) {
       touchIssueListResponseCacheEntry(input.requestKey.key, cached);
       return {
         response: cached.response,
@@ -3392,11 +3455,13 @@ async function coordinateIssueListGet(input: {
     waiterCount: 0,
     stormLogged: false,
   };
-  issueListInflight.set(input.requestKey.key, inflightEntry);
+  if (!input.bypassSharedResult) {
+    issueListInflight.set(input.requestKey.key, inflightEntry);
+  }
 
   try {
     const response = await promise;
-    if (input.allowTtlCache) {
+    if (input.allowTtlCache && !input.bypassSharedResult) {
       setIssueListResponseCacheEntry(input.requestKey.key, {
         response,
         expiresAt: Date.now() + ISSUE_LIST_SERVER_CACHE_TTL_MS,
@@ -3405,7 +3470,7 @@ async function coordinateIssueListGet(input: {
     }
     return { response, cacheStatus: "miss", identicalInFlightCount: 1 };
   } finally {
-    if (issueListInflight.get(input.requestKey.key) === inflightEntry) {
+    if (!input.bypassSharedResult && issueListInflight.get(input.requestKey.key) === inflightEntry) {
       issueListInflight.delete(input.requestKey.key);
     }
     decrementIssueListActorClientInflight(actorClientKey);
@@ -3475,9 +3540,12 @@ export function issueRoutes(
         now?: Date;
       }): Promise<unknown>;
     };
-    searchService?: CompanySearchService;
+    searchService?: CompanySearchService | CompanySearchServiceFactory;
+    announcementSearch?: () => Promise<AnnouncementSearchProjection>;
     searchRateLimiter?: CompanySearchRateLimiter;
     pluginWorkerManager?: PluginWorkerManager;
+    /** The application heartbeat owner, including its configured native sandbox executor. */
+    heartbeat?: ReturnType<typeof heartbeatService>;
     taskWatchdogEnqueueWakeup?: TaskWatchdogServiceDeps["enqueueWakeup"] | null;
     recoveryActionEnqueueWakeup?: (
       agentId: string,
@@ -3515,14 +3583,93 @@ export function issueRoutes(
 ) {
   const router = Router();
   const svc = issueService(db);
+  // Temporary admission closure while every private derivative and delivery
+  // owner is qualified. This is removed by the complete privacy release, not
+  // by an operator flag or a client assertion of safe source content.
+  async function assertPublicTaskWriteAdmission(req: Request, companyId: string, issueIds: string[] = [], res?: Response) {
+    if (req.body?.visibility === "private") throw unprocessable("Private tasks are not available");
+    const sources = new Set(issueIds);
+    for (const value of [req.body?.parentId, req.body?.privacyParentIssueId, req.body?.privacyRootIssueId,
+      req.body?.inheritExecutionWorkspaceFromIssueId]) if (typeof value === "string" && isUuidLike(value)) sources.add(value);
+    if (req.actor.type === "agent" && req.actor.runId) {
+      const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, req.actor.runId),
+        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, req.actor.agentId!)));
+      const context = run?.contextSnapshot ?? {};
+      for (const value of [run?.issueId, run?.nativeIssueId, context.issueId, context.taskId]) {
+        if (typeof value === "string" && isUuidLike(value)) sources.add(value);
+      }
+    }
+    for (const id of sources) {
+      const canReadCurrentPrivacy = await canActorReadIssuePrivacy(db, req.actor, { id, companyId });
+      const requestPath = req.originalUrl.split("?")[0]!;
+      const isNativeConversationCommentWrite = req.method === "POST" && requestPath.endsWith(`/issues/${id}/comments`);
+      const isNativeConversationWorkModeWrite = req.method === "PATCH" && requestPath.endsWith(`/issues/${id}`) &&
+        req.body != null && typeof req.body === "object" && !Array.isArray(req.body) &&
+        Object.keys(req.body).length === 1 && Object.hasOwn(req.body, "workMode");
+      const isNativeConversationAttachmentWrite = req.method === "POST" && requestPath.endsWith(`/issues/${id}/attachments`);
+      const isNativeConversationShellWrite = isNativeConversationCommentWrite || isNativeConversationWorkModeWrite || isNativeConversationAttachmentWrite;
+      const isNativeConversationInteractionResolution = req.method === "POST" &&
+        new RegExp(`/issues/${id}/interactions/[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}/(?:respond|accept|reject)$`).test(requestPath);
+      if (!canReadCurrentPrivacy && !(isNativeConversationShellWrite && req.actor.type === "board" &&
+          req.actor.source === "session" && req.actor.sessionId && req.actor.userId &&
+          await db.transaction(tx => isCurrentUnsealedConversationShell(tx, req.actor, { id, companyId }, "issue:comment"))))
+        throw notFound("Issue not found");
+      let ownedNativeConversation = false;
+      if ((isNativeConversationShellWrite || isNativeConversationInteractionResolution) &&
+          req.actor.type === "board" && req.actor.source === "session" && req.actor.sessionId && req.actor.userId) {
+        ownedNativeConversation = await db.transaction(async tx => {
+          const [conversation] = await tx.select({ conversationAgentId: issueRows.conversationAgentId,
+            conversationUserId: issueRows.conversationUserId }).from(issueRows)
+            .where(and(eq(issueRows.id, id), eq(issueRows.companyId, companyId)));
+          if (!conversation?.conversationAgentId || conversation.conversationUserId !== req.actor.userId) return false;
+          const pinned = await pinCurrentBoardActor(tx, req.actor);
+          if (!pinned || pinned.credentialExpiresAt === null) throw notFound("Issue not found");
+          await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt);
+          const ownerShell = await isCurrentUnsealedConversationShell(tx, pinned.actor, { id, companyId }, "issue:comment");
+          if (ownerShell && isNativeConversationShellWrite) return true;
+          if (!await canActorReadIssuePrivacy(tx, pinned.actor, { id, companyId })) throw notFound("Issue not found");
+          return true;
+        });
+      }
+      const ownedConversationWorkModeWrite = ownedNativeConversation && isNativeConversationWorkModeWrite;
+      if (ownedConversationWorkModeWrite && res) res.locals.ownedConversationWorkModeWrite = true;
+      const literalHumanRelated = req.method === "POST" && req.originalUrl.split("?")[0]!.endsWith(`/companies/${companyId}/issues`) &&
+        req.actor.type === "board" && req.actor.source === "session" && !!req.actor.userId && !!req.actor.sessionId &&
+        !req.actor.runId && req.body?.parentId === id && isManualRelatedPayloadInput(req.body);
+      if (!ownedNativeConversation && !literalHumanRelated && !(await canActorReadIssuePrivacy(db, { type: "none" }, { id, companyId })))
+        throw unprocessable("Private tasks are not available");
+    }
+    const projectId = req.body?.projectId;
+    if (typeof projectId === "string" && isUuidLike(projectId)) {
+      if (!(await canActorReadProjectPrivacy(db, req.actor, { id: projectId, companyId }))) throw notFound("Project not found");
+      if (!(await canActorReadProjectPrivacy(db, { type: "none" }, { id: projectId, companyId }))) {
+        const literalHumanRelated = req.method === "POST" && req.originalUrl.split("?")[0]!.endsWith(`/companies/${companyId}/issues`) &&
+          req.actor.type === "board" && req.actor.source === "session" && !!req.actor.userId && !!req.actor.sessionId &&
+          !req.actor.runId && isManualRelatedPayloadInput(req.body);
+        if (!literalHumanRelated) throw unprocessable("Private tasks are not available");
+      }
+    }
+  }
+  router.use("/issues/:id", async (req, _res, next) => {
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+    const issue = await svc.getById(req.params.id as string);
+    if (issue) await assertPublicTaskWriteAdmission(req, issue.companyId, [issue.id], _res);
+    next();
+  });
+  router.use("/companies/:companyId/issues", async (req, _res, next) => {
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+      await assertPublicTaskWriteAdmission(req, req.params.companyId as string, [], _res);
+    }
+    next();
+  });
   const runRedactions = createRunSecretRedactionRegistry(db);
   async function redactIssueResponse<T>(req:Request,companyId:string,issueId:string,value:T) {
-    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{issueId});
+    await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{issueId},undefined,{privacyLockMode:req.method==="GET"||req.method==="HEAD"?"read":"write"});
     return runRedactions.redactForIssue(companyId,issueId,value);
   }
   const access = accessService(db);
   const secretProposals = createSecretProposalsService(db);
-  const heartbeat = heartbeatService(db, {
+  const heartbeat = opts.heartbeat ?? heartbeatService(db, {
     pluginWorkerManager: opts.pluginWorkerManager,
   });
   const commentWasCreatedByAssigneeRun = async (
@@ -3545,13 +3692,16 @@ export function issueRoutes(
     opts.recoveryActionEnqueueWakeup ?? heartbeat.wakeup;
   const feedback = feedbackService(db);
   const companiesSvc = companyService(db);
-  let searchSvc = opts.searchService ?? null;
-  const getSearchService = () => {
-    searchSvc ??= companySearchService(db);
-    return searchSvc;
-  };
+  const getSearchService = (queryDb: Db = db): CompanySearchService =>
+    typeof opts.searchService === "function" ? opts.searchService(queryDb)
+      : opts.searchService ?? companySearchService(queryDb);
   const searchRateLimiter =
     opts.searchRateLimiter ?? defaultCompanySearchRateLimiter;
+  async function runCompanySearchRead<T>(req: Request, companyId: string,
+    read: (queryDb: Db, search: CompanySearchService) => Promise<T>, needsTaskSources = true): Promise<T> {
+    return withCurrentTaskSourceRead(db, companyId, req.actor,
+      (queryDb) => read(queryDb, getSearchService(queryDb)), needsTaskSources);
+  }
   const instanceSettings = instanceSettingsService(db);
   const agentsSvc = agentService(db);
   const projectsSvc = projectService(db);
@@ -3679,10 +3829,6 @@ export function issueRoutes(
   >({
     shouldCache: (issue) => issue !== null,
   });
-  const memoizeIssueReadDecision = createRequestPromiseMemo<
-    Request,
-    Awaited<ReturnType<typeof decideIssueAccess>>
-  >();
 
   function getIssueById(req: Request, id: string) {
     if (req.method !== "GET") return svc.getById(id);
@@ -5014,8 +5160,9 @@ export function issueRoutes(
       status: string;
     },
     action: "issue:comment" | "issue:read" | "issue:mutate",
+    executor: Db = db,
   ) {
-    return access.decide({
+    return accessService(executor).decide({
       actor: req.actor,
       action,
       resource: {
@@ -5122,18 +5269,14 @@ export function issueRoutes(
     res: Response,
     issue: Parameters<typeof decideIssueAccess>[1],
   ) {
-    const key = `${issue.id}:${issue.companyId}:${issue.projectId ?? ""}:${issue.parentId ?? ""}:${issue.assigneeAgentId ?? ""}:${issue.assigneeUserId ?? ""}:${issue.status}`;
-    const value = memoizeIssueReadDecision(req, key, () =>
-      decideIssueAccess(req, issue, "issue:read"),
-    );
-    const decision = await value;
+    const decision = await decideIssueAccess(req, issue, "issue:read");
     if (decision.allowed) {
-      await assertAnalyticalContextPayloadAccess(db,issue.companyId,req.actor,{issueId:issue.id});
+      await assertAnalyticalContextPayloadAccess(db,issue.companyId,req.actor,{issueId:issue.id},undefined,{privacyLockMode:req.method==="GET"||req.method==="HEAD"?"read":"write"});
       return true;
     }
     res
-      .status(403)
-      .json({ error: "Issue is outside this actor's authorization boundary" });
+      .status(404)
+      .json({ error: "Issue not found" });
     return false;
   }
 
@@ -5142,6 +5285,7 @@ export function issueRoutes(
     res: Response,
     issue: Parameters<typeof decideIssueAccess>[1],
   ) {
+    if (!(await assertIssueReadAllowed(req, res, issue))) return false;
     if (req.actor.type !== "agent") return true;
     // Watchdog child creation keeps its dedicated subtree/revalidation grant;
     // assertTaskWatchdogCreateIssueAllowed performs that check immediately
@@ -5173,6 +5317,7 @@ export function issueRoutes(
       identifier?: string | null;
     },
   ) {
+    if (!(await assertIssueReadAllowed(req, res, issue))) return false;
     if (req.actor.type !== "agent") return true;
     const actorAgentId = req.actor.agentId;
     if (!actorAgentId) {
@@ -5240,11 +5385,154 @@ export function issueRoutes(
 
   async function filterIssuesForActor<
     T extends Parameters<typeof decideIssueAccess>[1],
-  >(req: Request, rows: T[]) {
+  >(req: Request, rows: T[], executor: Db = db) {
     const decisions = await Promise.all(
-      rows.map((issue) => decideIssueAccess(req, issue, "issue:read")),
+      rows.map((issue) => decideIssueAccess(req, issue, "issue:read", executor)),
     );
     return rows.filter((_, index) => decisions[index]?.allowed);
+  }
+
+  async function readableIssueEdgeIds(req: Request, companyId: string, ids: Iterable<string>, executor: Db = db) {
+    const unique = [...new Set(ids)].filter(isUuidLike);
+    if (!unique.length) return new Set<string>();
+    const rows = await executor.select({ id: issueRows.id, companyId: issueRows.companyId,
+      projectId: issueRows.projectId, parentId: issueRows.parentId, assigneeAgentId: issueRows.assigneeAgentId,
+      assigneeUserId: issueRows.assigneeUserId, status: issueRows.status }).from(issueRows)
+      .where(and(eq(issueRows.companyId, companyId), inArray(issueRows.id, unique)));
+    return new Set((await filterIssuesForActor(req, rows, executor)).map(row => row.id));
+  }
+
+  async function requireIssuePrivacyOwner(executor: Db, req: Request, issue: typeof issueRows.$inferSelect) {
+    if (!(await canActorReadIssuePrivacy(executor, req.actor, issue))) throw notFound("Issue not found");
+    if (req.actor.type !== "board" || req.actor.source === "local_implicit" || !req.actor.userId
+      || ![issue.responsibleUserId, issue.createdByUserId].includes(req.actor.userId)) {
+      throw forbidden("Only the current task privacy owner can change its audience");
+    }
+    const [user] = await executor.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, req.actor.userId)).for("share");
+    if (!user) throw forbidden("Current organization access is required");
+    const [member] = await executor.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, issue.companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, req.actor.userId), eq(companyMemberships.status, "active"),
+      sql`${companyMemberships.membershipRole} <> 'viewer'`,
+    )).for("share");
+    if (!member) throw forbidden("Current organization access is required");
+    if (!(await canActorReadIssuePrivacy(executor, req.actor, issue))) throw notFound("Issue not found");
+  }
+
+  function presentIssueAccessReason<T>(reason: T) {
+    return { ...reason, subjectDisplayName: null, subjectAvatarUrl: null, subjectInitials: null, agentVisibility: null };
+  }
+
+  function projectReadableRelation(issue: IssueRelationIssueSummary, readable: Set<string>, seen = new Set<string>()): IssueRelationIssueSummary | null {
+    if (!readable.has(issue.id) || seen.has(issue.id)) return null;
+    const projected = { ...issue };
+    if (issue.terminalBlockers) projected.terminalBlockers = issue.terminalBlockers
+      .map(child => projectReadableRelation(child, readable, new Set(seen).add(issue.id)))
+      .filter((child): child is IssueRelationIssueSummary => child !== null);
+    const recovery = issue.activeRecoveryAction;
+    if (recovery && (!readable.has(recovery.sourceIssueId) || (recovery.recoveryIssueId && !readable.has(recovery.recoveryIssueId)))) {
+      projected.activeRecoveryAction = null;
+    }
+    return projected;
+  }
+
+  async function redactIssueRelationEdgesOnRows<T extends {
+    id: string; blockedBy?: IssueRelationIssueSummary[]; blocks?: IssueRelationIssueSummary[];
+    blockedByIssueIds?: string[]; blockerAttention?: CompactIssue["blockerAttention"];
+    blockedInboxAttention?: CompactIssue["blockedInboxAttention"]; activeRecoveryAction?: CompactIssue["activeRecoveryAction"];
+  }>(req: Request, companyId: string, rows: T[], executor: Db = db): Promise<Array<Omit<T, "payloadSourceProtocolVersion" | "payloadSourceSnapshot" | "payloadSourceSnapshotInvalidated">>> {
+    const ids = new Set(rows.map(row => row.id));
+    const pending = rows.flatMap(row => [...(row.blockedBy ?? []), ...(row.blocks ?? [])]);
+    for (const row of rows) {
+      for (const id of row.blockedByIssueIds ?? []) ids.add(id);
+      const blocker = row.blockerAttention;
+      for (const id of [blocker?.directBlockerIssueId, blocker?.terminalBlockerIssueId, blocker?.terminalBlocker?.id,
+        ...(blocker?.pendingFinalizeBlockerIssueIds ?? [])]) if (id) ids.add(id);
+      const inbox = row.blockedInboxAttention;
+      for (const issue of [inbox?.sourceIssue, inbox?.leafIssue, inbox?.recoveryIssue]) if (issue) ids.add(issue.id);
+      const recovery = row.activeRecoveryAction;
+      if (recovery) { ids.add(recovery.sourceIssueId); if (recovery.recoveryIssueId) ids.add(recovery.recoveryIssueId); }
+    }
+    const expanded = new Set<string>();
+    while (pending.length) {
+      const issue = pending.pop()!;
+      if (expanded.has(issue.id)) continue;
+      expanded.add(issue.id); ids.add(issue.id);
+      if (issue.activeRecoveryAction) {
+        ids.add(issue.activeRecoveryAction.sourceIssueId);
+        if (issue.activeRecoveryAction.recoveryIssueId) ids.add(issue.activeRecoveryAction.recoveryIssueId);
+      }
+      pending.push(...(issue.terminalBlockers ?? []));
+    }
+    const readable = await readableIssueEdgeIds(req, companyId, ids, executor);
+    return rows.map(row => {
+      const projected = { ...row };
+      const projectRelations = (relations: IssueRelationIssueSummary[]) => relations
+        .map(issue => projectReadableRelation(issue, readable)).filter((issue): issue is IssueRelationIssueSummary => issue !== null);
+      if (row.blockedBy) projected.blockedBy = projectRelations(row.blockedBy);
+      if (row.blocks) projected.blocks = projectRelations(row.blocks);
+      if (row.blockedByIssueIds) projected.blockedByIssueIds = row.blockedByIssueIds.filter(id => readable.has(id));
+      const blocker = row.blockerAttention;
+      if (blocker && [blocker.directBlockerIssueId, blocker.terminalBlockerIssueId, blocker.terminalBlocker?.id,
+        ...(blocker.pendingFinalizeBlockerIssueIds ?? []), ...(row.blockedBy ?? []).map(issue => issue.id)]
+        .some(id => id && !readable.has(id))) delete projected.blockerAttention;
+      const inbox = row.blockedInboxAttention;
+      if (inbox && [inbox.sourceIssue, inbox.leafIssue, inbox.recoveryIssue].some(issue => issue && !readable.has(issue.id))) {
+        delete projected.blockedInboxAttention;
+      }
+      const recovery = row.activeRecoveryAction;
+      if (recovery && (!readable.has(recovery.sourceIssueId) || (recovery.recoveryIssueId && !readable.has(recovery.recoveryIssueId)))) {
+        projected.activeRecoveryAction = null;
+      }
+      return publicNativePayloadRow(projected);
+    });
+  }
+
+  async function redactIssueRelationEdges(req: Request, companyId: string, relations: {
+    blockedBy: IssueRelationIssueSummary[]; blocks: IssueRelationIssueSummary[];
+  }) {
+    const [projected] = await redactIssueRelationEdgesOnRows(req, companyId, [{ id: "", ...relations }]);
+    return { blockedBy: projected.blockedBy, blocks: projected.blocks };
+  }
+
+  async function currentIssueListBody<T extends Parameters<typeof redactIssueRelationEdgesOnRows>[2][number] & { liveDescendantCount?: number }>(
+    req: Request, companyId: string, rows: T[],
+  ) {
+    return withCurrentTaskSourceRead(db, companyId, req.actor, async (queryDb) => {
+      const currentIds = await readableIssueEdgeIds(req, companyId, rows.map(issue => issue.id), queryDb);
+      const currentRows = rows.filter(issue => currentIds.has(issue.id));
+      const include = { blockers: currentRows.some(row => row.blockerAttention !== undefined),
+        inbox: currentRows.some(row => row.blockedInboxAttention !== undefined),
+        descendants: currentRows.some(row => row.liveDescendantCount !== undefined) };
+      if (!include.blockers && !include.inbox && !include.descendants) return redactIssueRelationEdgesOnRows(req, companyId, currentRows, queryDb);
+      // Cached counts and attention also depend on other Tasks' current ACLs.
+      const metrics = await issueService(queryDb).currentReadMetrics(companyId, currentRows.map(row => row.id),
+        await issueReadSqlCondition(queryDb, req.actor), include);
+      return redactIssueRelationEdgesOnRows(req, companyId, currentRows.map(row => ({ ...row,
+        ...(row.blockerAttention !== undefined ? { blockerAttention: metrics.blockers.get(row.id) } : {}),
+        ...(row.blockedInboxAttention !== undefined ? { blockedInboxAttention: metrics.inbox.get(row.id) ?? null } : {}),
+        ...(row.liveDescendantCount !== undefined ? { liveDescendantCount: metrics.descendants.get(row.id) ?? 0 } : {}),
+      })), queryDb);
+    }, true, false);
+  }
+
+  async function currentBlockerAttentionForIssue(req: Request, issue: typeof issueRows.$inferSelect) {
+    return withCurrentTaskSourceRead(db, issue.companyId, req.actor, async (queryDb) =>
+      issueService(queryDb).listBlockerAttention(
+        issue.companyId,
+        [issue],
+        queryDb,
+        await issueReadSqlCondition(queryDb, req.actor),
+      ).then((map) => map.get(issue.id) ?? null), true, false);
+  }
+
+  async function redactIssueReferenceEdges<T extends {
+    outbound: Array<{ issue: IssueRelationIssueSummary }>;
+    inbound: Array<{ issue: IssueRelationIssueSummary }>;
+  }>(req: Request, companyId: string, summary: T) {
+    const readable = await readableIssueEdgeIds(req, companyId,
+      [...summary.outbound, ...summary.inbound].map(item => item.issue.id));
+    return { outbound: summary.outbound.filter(item => readable.has(item.issue.id)), inbound: summary.inbound.filter(item => readable.has(item.issue.id)) };
   }
 
   async function actorCanReadCompanyScope(req: Request, companyId: string) {
@@ -5294,6 +5582,7 @@ export function issueRoutes(
     },
     options: { allowVisibleIssueWrite?: boolean } = {},
   ) {
+    if (!(await assertIssueReadAllowed(req, res, issue))) return false;
     if (req.actor.type !== "agent") return true;
     const actorAgentId = req.actor.agentId;
     if (!actorAgentId) {
@@ -6119,6 +6408,7 @@ export function issueRoutes(
 
   async function blockWatchdogParentOnCurrentChild(input: {
     actor: ReturnType<typeof getActorInfo>;
+    requestActor: Request["actor"];
     watchdogParentIssueId: string | null | undefined;
     currentChildIssueId: string | null | undefined;
   }) {
@@ -6141,6 +6431,7 @@ export function issueRoutes(
       input.currentChildIssueId,
     );
     await svc.update(watchdogParent.id, {
+      privacyActor: input.requestActor,
       status: "blocked",
       blockedByIssueIds: nextBlockedByIssueIds,
       actorAgentId: input.actor.agentId,
@@ -7405,7 +7696,6 @@ export function issueRoutes(
     outcome: "reopened" | "already-open";
     generation: number;
   } | null> {
-    const actor = getActorInfo(req);
     const result =
       await executionWorkspacesSvc.reopenClosedIsolatedExecutionWorkspaceForIssue(
         {
@@ -7415,7 +7705,7 @@ export function issueRoutes(
             companyId: issue.companyId,
             projectId: issue.projectId ?? null,
           },
-          actor: { agentId: actor.agentId, actorType: actor.actorType },
+          actor: req.actor,
         },
       );
     if (result.ok) {
@@ -7606,7 +7896,7 @@ export function issueRoutes(
     return rawId;
   }
 
-  async function resolveIssueProjectAndGoal(issue: {
+  async function resolveIssueProjectAndGoal(req: Request, issue: {
     companyId: string;
     projectId: string | null;
     goalId: string | null;
@@ -7617,10 +7907,12 @@ export function issueRoutes(
     const directGoalPromise = issue.goalId
       ? goalsSvc.getById(issue.goalId)
       : Promise.resolve(null);
-    const [project, directGoal] = await Promise.all([
+    const [candidateProject, directGoal] = await Promise.all([
       projectPromise,
       directGoalPromise,
     ]);
+    const project = candidateProject && await canActorReadProjectPrivacy(db, req.actor, candidateProject)
+      ? candidateProject : null;
 
     if (directGoal) {
       return { project, goal: directGoal };
@@ -7850,10 +8142,11 @@ export function issueRoutes(
       });
       return;
     }
-    const result = await getSearchService().extract(
+    const result = await runCompanySearchRead(req, companyId, async (queryDb, search) => search.extract(
       companyId,
       parsedQuery.data,
-    );
+      { issueReadCondition: await issueReadSqlCondition(queryDb, req.actor) },
+    ));
     res.json(result);
   });
 
@@ -7901,7 +8194,19 @@ export function issueRoutes(
       });
       return;
     }
-    const result = await getSearchService().search(companyId, query);
+    const needsTaskSources = query.scope !== "help" && query.scope !== "agents";
+    const hasIssueOnlyFilters = Boolean(query.status?.length || query.priority?.length || query.assigneeAgentId
+      || query.assigneeUserId || query.projectId || query.labelId || query.updatedWithin || query.updatedAfter);
+    const noticeProjection = query.scope === "all" && !hasIssueOnlyFilters
+      && req.actor.type === "board" && req.actor.source === "session"
+      ? await opts.announcementSearch?.()
+      : undefined;
+    const result = await runCompanySearchRead(req, companyId, async (queryDb, search) => search.search(companyId, query, {
+      issueReadCondition: await issueReadSqlCondition(queryDb, req.actor),
+      projectReadCondition: await projectReadSqlCondition(queryDb, req.actor),
+      actor: req.actor,
+      noticeProjection,
+    }), needsTaskSources);
     res.json(result);
   });
 
@@ -8137,30 +8442,46 @@ export function issueRoutes(
       sortDir: sortDir === "asc" || sortDir === "desc" ? sortDir : undefined,
       updatedSince: rawUpdatedSince,
     };
+    const { readCondition: _readCondition, ...requestKeyFilters } = listFilters;
     const requestKey = issueListRequestKey({
       req,
       companyId,
       normalizedQuery: {
-        ...listFilters,
+        ...requestKeyFilters,
         view: compactView ? "compact" : undefined,
       },
     });
-    const coordinated = await coordinateIssueListGet({
-      req,
+    const coordinated = await withCurrentTaskSourceRead(
+      db,
       companyId,
-      requestKey,
-      allowTtlCache: compactView,
-      diagnostics: opts.issueListDiagnostics,
-      compute: async () => {
-        const rawResult = await svc.list(companyId, listFilters);
-        const result = (await actorCanReadCompanyScope(req, companyId))
-          ? rawResult
-          : await filterIssuesForActor(req, rawResult);
+      req.actor,
+      async (queryDb, hasTaskSourceReferences) => {
+        const queryService = issueService(queryDb);
+        const scopedListFilters: IssueFilters = {
+          ...listFilters,
+          readCondition: await issueReadSqlCondition(queryDb, req.actor),
+        };
+        return coordinateIssueListGet({
+          req,
+          companyId,
+          requestKey,
+          allowTtlCache: compactView && !hasTaskSourceReferences,
+          bypassSharedResult: hasTaskSourceReferences,
+          diagnostics: opts.issueListDiagnostics,
+          compute: async () => {
+        const rawResult = await queryService.list(companyId, scopedListFilters);
+        const result = await filterIssuesForActor(req, rawResult, queryDb);
         const issueIds = result.map((issue) => issue.id);
+        // Keep every leader-compute query on the read transaction already
+        // held by withCurrentTaskSourceRead. Coalesced waiters retain their
+        // own read transactions while awaiting this result; reaching back to
+        // the outer pool here can exhaust its connections and deadlock the
+        // leader behind those waiters.
+        const scopedRecoveryActions = issueRecoveryActionService(queryDb);
         if (compactView) {
           const [handoffStates, recoveryActionByIssue] = await Promise.all([
-            listSuccessfulRunHandoffStates(db, companyId, issueIds),
-            recoveryActionsSvc.listActiveForIssues(companyId, issueIds),
+            listSuccessfulRunHandoffStates(queryDb, companyId, issueIds),
+            scopedRecoveryActions.listActiveForIssues(companyId, issueIds),
           ]);
           const actor = getActorInfo(req);
           await Promise.all(
@@ -8193,8 +8514,8 @@ export function issueRoutes(
           };
         }
         const [handoffStates, recoveryActionByIssue] = await Promise.all([
-          listSuccessfulRunHandoffStates(db, companyId, issueIds),
-          recoveryActionsSvc.listActiveForIssues(companyId, issueIds),
+          listSuccessfulRunHandoffStates(queryDb, companyId, issueIds),
+          scopedRecoveryActions.listActiveForIssues(companyId, issueIds),
         ]);
         const actor = getActorInfo(req);
         await Promise.all(
@@ -8220,8 +8541,12 @@ export function issueRoutes(
             activeRecoveryAction: recoveryActionByIssue.get(issue.id) ?? null,
           })),
         };
+          },
+        });
       },
-    });
+      true,
+      false,
+    );
 
     res.setHeader("X-Paperclip-Request-Cache", coordinated.cacheStatus);
     if (!coordinated.response) {
@@ -8245,12 +8570,16 @@ export function issueRoutes(
       return;
     }
 
+    // Coordinated bodies are content caches. Authority must be checked again
+    // after joining an in-flight request or receiving a warm cache entry.
     if (coordinated.response.kind === "compact") {
+      const currentBody = await currentIssueListBody(req, companyId, coordinated.response.body);
+      const currentEtag = compactIssueListEtag(currentBody);
       res.setHeader("Cache-Control", coordinated.response.cacheControl);
-      res.setHeader("ETag", coordinated.response.etag);
+      res.setHeader("ETag", currentEtag);
       const etagMatched = requestMatchesEtag(
         req.header("if-none-match"),
-        coordinated.response.etag,
+        currentEtag,
       );
       logIssueListRequest({
         req,
@@ -8261,7 +8590,7 @@ export function issueRoutes(
         cacheStatus: coordinated.cacheStatus,
         bodyBytes: etagMatched
           ? 0
-          : estimatedJsonBytes(coordinated.response.body),
+          : estimatedJsonBytes(currentBody),
         etagOutcome: etagMatched ? "not_modified" : "fresh",
         identicalInFlightCount: coordinated.identicalInFlightCount,
       });
@@ -8269,10 +8598,11 @@ export function issueRoutes(
         res.status(304).end();
         return;
       }
-      res.json(coordinated.response.body);
+      res.json(currentBody);
       return;
     }
 
+    const currentBody = await currentIssueListBody(req, companyId, coordinated.response.body);
     logIssueListRequest({
       req,
       res,
@@ -8280,11 +8610,11 @@ export function issueRoutes(
       requestKey,
       startedAt,
       cacheStatus: coordinated.cacheStatus,
-      bodyBytes: estimatedJsonBytes(coordinated.response.body),
+      bodyBytes: estimatedJsonBytes(currentBody),
       etagOutcome: "none",
       identicalInFlightCount: coordinated.identicalInFlightCount,
     });
-    res.json(coordinated.response.body);
+    res.json(currentBody);
   });
 
   router.get("/companies/:companyId/issues/count", async (req, res) => {
@@ -8352,47 +8682,58 @@ export function issueRoutes(
       q: req.query.q as string | undefined,
     } as const;
 
-    if (!(await actorCanReadCompanyScope(req, companyId))) {
-      const trustResolution =
-        req.actor.type === "agent"
-          ? await resolveAgentTrustForIssue(
-              {
-                agentId: req.actor.agentId,
-                runId: req.actor.runId,
-              },
-              companyId,
-              null,
-            )
-          : null;
-      if (trustResolution?.kind === "denied") {
-        throw forbidden(trustResolution.detail);
-      }
-      if (trustResolution?.kind === "low_trust_review") {
-        const count = await svc.count(companyId, {
+    const canReadCompanyScope = await actorCanReadCompanyScope(req, companyId);
+    const count = await withCurrentTaskSourceRead(
+      db,
+      companyId,
+      req.actor,
+      async (queryDb) => {
+        const queryService = issueService(queryDb);
+        const scopedFilters = {
           ...blockedCountFilters,
-          lowTrustBoundary: trustResolution.boundary,
-        });
-        res.json({ count });
-        return;
-      }
+          readCondition: await issueReadSqlCondition(queryDb, req.actor),
+        };
+        if (!canReadCompanyScope) {
+          const trustResolution =
+            req.actor.type === "agent"
+              ? await resolveAgentTrustForIssue(
+                  {
+                    agentId: req.actor.agentId,
+                    runId: req.actor.runId,
+                  },
+                  companyId,
+                  null,
+                )
+              : null;
+          if (trustResolution?.kind === "denied") {
+            throw forbidden(trustResolution.detail);
+          }
+          if (trustResolution?.kind === "low_trust_review") {
+            return queryService.count(companyId, {
+              ...scopedFilters,
+              lowTrustBoundary: trustResolution.boundary,
+            });
+          }
 
-      let offset = 0;
-      let visibleCount = 0;
-      while (true) {
-        const rows = await svc.list(companyId, {
-          ...blockedCountFilters,
-          limit: ISSUE_LIST_MAX_LIMIT,
-          offset,
-        });
-        visibleCount += (await filterIssuesForActor(req, rows)).length;
-        if (rows.length < ISSUE_LIST_MAX_LIMIT) break;
-        offset += rows.length;
-      }
-      res.json({ count: visibleCount });
-      return;
-    }
-
-    const count = await svc.count(companyId, blockedCountFilters);
+          let offset = 0;
+          let visibleCount = 0;
+          while (true) {
+            const rows = await queryService.list(companyId, {
+              ...scopedFilters,
+              limit: ISSUE_LIST_MAX_LIMIT,
+              offset,
+            });
+            visibleCount += (await filterIssuesForActor(req, rows, queryDb)).length;
+            if (rows.length < ISSUE_LIST_MAX_LIMIT) break;
+            offset += rows.length;
+          }
+          return visibleCount;
+        }
+        return queryService.count(companyId, scopedFilters);
+      },
+      true,
+      false,
+    );
     res.json({ count });
   });
 
@@ -8560,6 +8901,7 @@ export function issueRoutes(
     const currentExecutionWorkspacePromise = issue.executionWorkspaceId
       ? executionWorkspacesSvc.getById(issue.executionWorkspaceId)
       : Promise.resolve(null);
+    let continuationSummaryRevisionId: string | null = null;
     const [
       { project, goal },
       ancestors,
@@ -8574,35 +8916,36 @@ export function issueRoutes(
       currentExecutionWorkspace,
       activeRecoveryAction,
     ] = await Promise.all([
-      resolveIssueProjectAndGoal(issue),
+      resolveIssueProjectAndGoal(req, issue),
       svc.getAncestors(issue.id),
       svc.getCommentCursor(issue.id),
       wakeCommentId ? svc.getComment(wakeCommentId) : null,
       svc.getRelationSummaries(issue.id),
-      svc
-        .listBlockerAttention(issue.companyId, [issue])
-        .then((map) => map.get(issue.id) ?? null),
+      currentBlockerAttentionForIssue(req, issue),
       svc
         .listReviewAttention(issue.companyId, [issue])
         .then((map) => map.get(issue.id) ?? null),
       svc.getCurrentScheduledRetry(issue.id),
       svc.listAttachments(issue.id),
-      documentsSvc.getIssueDocumentByKey(
-        issue.id,
-        ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY,
-      ),
+      documentsSvc.getIssueDocumentByKey(issue.id, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY, {
+        onSourceCapture: capture => { continuationSummaryRevisionId = capture?.input.revisionId ?? null; },
+      }),
       currentExecutionWorkspacePromise,
       recoveryActionsSvc.getActiveForIssue(issue.companyId, issue.id),
     ]);
+    const summaryRevisionId = continuationSummaryRevisionId ?? continuationSummary?.latestRevisionId;
+    if (summaryRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: summaryRevisionId, actor: req.actor,
+    });
     const recoveryActionsByRelationIssue = await relationRecoveryActionMap(
       recoveryActionsSvc,
       issue.companyId,
       relations,
     );
-    const relationsWithRecoveryActions = withRecoveryActionsOnRelationSummaries(
+    const relationsWithRecoveryActions = await redactIssueRelationEdges(req, issue.companyId, withRecoveryActionsOnRelationSummaries(
       relations,
       recoveryActionsByRelationIssue,
-    );
+    ));
     const revalidatedActiveRecoveryAction =
       await revalidateActiveSourceRecoveryForRead({
         issue,
@@ -8638,6 +8981,7 @@ export function issueRoutes(
       includeForIssueComment: wakeCommentId !== null,
     });
 
+    const readableAncestorIds = await readableIssueEdgeIds(req, issue.companyId, ancestors.map(ancestor => ancestor.id));
     const response = {
       issue: {
         id: issue.id,
@@ -8662,7 +9006,7 @@ export function issueRoutes(
         originId: issue.originId,
         updatedAt: issue.updatedAt,
       },
-      ancestors: ancestors.map((ancestor) => ({
+      ancestors: ancestors.filter(ancestor => readableAncestorIds.has(ancestor.id)).map((ancestor) => ({
         id: ancestor.id,
         identifier: ancestor.identifier,
         title: ancestor.title,
@@ -8687,7 +9031,7 @@ export function issueRoutes(
           }
         : null,
       commentCursor,
-      wakeComment: safeWakeComment,
+      wakeComment: safeWakeComment ? publicNativePayloadRow(safeWakeComment) : null,
       attachments: attachments.map((a) => ({
         id: a.id,
         filename: a.originalFilename,
@@ -8713,9 +9057,9 @@ export function issueRoutes(
         currentExecutionWorkspace,
       ),
     };
-    res.json(
-      await redactIssueResponse(req, issue.companyId, issue.id, response),
-    );
+    const [currentIssue] = await redactIssueRelationEdgesOnRows(req, issue.companyId, [response.issue]);
+    if (!(await assertIssueReadAllowed(req, res, issue))) return;
+    res.json(await redactIssueResponse(req, issue.companyId, issue.id, { ...response, issue: currentIssue }));
   });
 
   router.get("/issues/:id/diagnostics/blockers", async (req, res) => {
@@ -8892,15 +9236,144 @@ export function issueRoutes(
     res.json(experienceTaskReceiptSchema.parse(issue));
   });
 
+  router.get("/issues/:id/privacy-constraints", async (req, res) => {
+    const issue = await getAccessibleResource(req, res, svc.getById(req.params.id as string), "Issue not found");
+    if (!issue || !(await assertIssueReadAllowed(req, res, issue))) return;
+    const sources = await db.select().from(issuePrivacySources).where(and(
+      eq(issuePrivacySources.companyId, issue.companyId), eq(issuePrivacySources.issueId, issue.id),
+    ));
+    let blocked: "project" | "parent" | null = null;
+    for (const source of sources) {
+      if (source.sourceKind === "project" && !(await canActorReadProjectPrivacy(db, { type: "none" },
+        { id: source.sourceId, companyId: issue.companyId }))) blocked = "project";
+      if (blocked !== "project" && source.sourceKind === "issue" && !(await canActorReadIssuePrivacy(db, { type: "none" },
+        { id: source.sourceId, companyId: issue.companyId }))) blocked = "parent";
+      if (blocked === null && source.sourceKind === "run") blocked = "parent";
+    }
+    if (!(await assertIssueReadAllowed(req, res, issue))) return;
+    res.json({ publicBlockedBy: blocked, leavesPersonalProject: false });
+  });
+
+  router.get("/issues/:id/access-grants", async (req, res) => {
+    const issue = await getAccessibleResource(req, res, svc.getById(req.params.id as string), "Issue not found");
+    if (!issue || !(await assertIssueReadAllowed(req, res, issue))) return;
+    const ancestry = await db.select().from(issueRows).where(and(eq(issueRows.companyId, issue.companyId), inArray(issueRows.id, sql`(
+      with recursive ancestry(id) as (
+        select id from issues where id=${issue.id} and company_id=${issue.companyId}
+        union select p.id from issues p join issues c on p.id=c.privacy_parent_issue_id
+          join ancestry a on a.id=c.id where p.company_id=${issue.companyId} and c.company_id=${issue.companyId}
+      ) select id from ancestry
+    )`)));
+    const readable = await filterIssuesForActor(req, ancestry);
+    const ids = readable.map(task => task.id);
+    const grants = ids.length ? await db.select().from(issueAccessGrants).where(and(
+      eq(issueAccessGrants.companyId, issue.companyId), inArray(issueAccessGrants.issueId, ids),
+    )).orderBy(desc(issueAccessGrants.createdAt), desc(issueAccessGrants.id)) : [];
+    const reasons = grants.map(grant => presentIssueAccessReason({ ...grant, inherited: grant.issueId !== issue.id }));
+    // Live assignment, retained assignment, ownership and explicit sharing are
+    // independent reasons. Revoking one never claims to revoke the others.
+    const live = readable.flatMap(task => {
+      const own = [...new Set([task.responsibleUserId, task.createdByUserId].filter((id): id is string => Boolean(id)))].map(subjectId =>
+        presentIssueAccessReason({ id: `owner:${task.id}:${subjectId}`, companyId: issue.companyId, issueId: task.id,
+          subjectType: "user", subjectId, source: "owner", inherited: task.id !== issue.id,
+          grantedByUserId: null, grantedByAgentId: null, createdAt: task.createdAt, revokedAt: null }));
+      const subjectId = task.assigneeAgentId ?? task.assigneeUserId;
+      return subjectId ? [...own, presentIssueAccessReason({ id: `assignment:${task.id}:${subjectId}`, companyId: issue.companyId,
+        issueId: task.id, subjectType: task.assigneeAgentId ? "agent" : "user", subjectId, source: "assignment",
+        inherited: task.id !== issue.id, grantedByUserId: null, grantedByAgentId: null, createdAt: task.createdAt, revokedAt: null })] : own;
+    });
+    const projectIds = readable.flatMap(task => task.projectId ? [task.projectId] : []);
+    const memberships = projectIds.length ? await db.select({ member: projectAccessMembers }).from(projectAccessMembers)
+      .innerJoin(projects, and(eq(projects.id, projectAccessMembers.projectId), eq(projects.companyId, issue.companyId), eq(projects.visibility, "private")))
+      .where(and(eq(projectAccessMembers.companyId, issue.companyId), inArray(projectAccessMembers.projectId, projectIds))) : [];
+    const projectReasons = memberships.map(({ member }) => presentIssueAccessReason({ ...member, id: `project:${member.id}`,
+      issueId: issue.id, source: "project", inherited: true, grantedByUserId: null, grantedByAgentId: null, revokedAt: null }));
+    if (!(await assertIssueReadAllowed(req, res, issue))) return;
+    res.json([...reasons, ...live, ...projectReasons]);
+  });
+
+  router.post("/issues/:id/access-grants", validate(z.object({ subjectType: z.enum(["user", "agent"]),
+    subjectId: z.string().trim().min(1).max(255) }).strict()), async (req, res) => {
+    const existing = await getAccessibleResource(req, res, svc.getById(req.params.id as string), "Issue not found");
+    if (!existing || !(await assertIssueReadAllowed(req, res, existing))) return;
+    const result = await db.transaction(async tx => {
+      await lockIssuePrivacyTree(tx, existing.companyId);
+      const [issue] = await tx.select().from(issueRows).where(eq(issueRows.id, existing.id)).for("update");
+      if (!issue) throw notFound("Issue not found");
+      await requireIssuePrivacyOwner(tx as unknown as Db, req, issue);
+      if (issue.visibility !== "private") throw conflict("Open tasks do not require access grants");
+      const { subjectType, subjectId } = req.body as { subjectType: "user" | "agent"; subjectId: string };
+      if (subjectType === "agent" && !isUuidLike(subjectId)) throw unprocessable("Agent identity must be a UUID");
+      const [subject] = subjectType === "agent"
+        ? await tx.select({ id: agents.id }).from(agents).where(and(eq(agents.id, subjectId), eq(agents.companyId, issue.companyId)))
+        : await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, issue.companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, subjectId), eq(companyMemberships.status, "active")));
+      if (!subject) throw unprocessable("Task access recipient must belong to this organization");
+      const sources = await tx.select().from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, issue.companyId), eq(issuePrivacySources.issueId, issue.id)));
+      for (const source of sources) {
+        const target = subjectType === "user" ? { type: "board" as const, userId: subjectId, source: "session" as const } : { type: "none" as const };
+        const canRead = source.sourceKind === "run_copy" ? true
+          : source.sourceKind === "run" ? await canActorReadHeartbeatRunPrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId })
+          : source.sourceKind === "issue" ? await canActorReadIssuePrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId })
+          : await canActorReadProjectPrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId });
+        if (!canRead) throw unprocessable("Sharing inherited source content requires an authorized publication operation");
+      }
+      const actor = getActorInfo(req);
+      const [grant] = await tx.insert(issueAccessGrants).values({ companyId: issue.companyId, issueId: issue.id, subjectType, subjectId,
+        source: "explicit", grantedByUserId: actor.actorType === "user" ? actor.actorId : null,
+        grantedByAgentId: actor.agentId }).onConflictDoNothing().returning();
+      if (!grant) {
+        const [prior] = await tx.select().from(issueAccessGrants).where(and(eq(issueAccessGrants.companyId, issue.companyId),
+          eq(issueAccessGrants.issueId, issue.id), eq(issueAccessGrants.subjectType, subjectType), eq(issueAccessGrants.subjectId, subjectId),
+          eq(issueAccessGrants.source, "explicit"), isNull(issueAccessGrants.revokedAt)));
+        return { grant: prior, created: false, publication: null };
+      }
+      const activity = await persistActivity(tx as unknown as Db, { companyId: issue.companyId, actorType: actor.actorType,
+        actorId: actor.actorId, agentId: actor.agentId, action: "issue_access_grant.created", entityType: "issue_access_grant", entityId: grant.id,
+        details: { issueId: issue.id, subjectType, subjectId, source: "explicit" } });
+      return { grant, created: true, publication: activity.publication };
+    });
+    if (result.publication) publishActivity(result.publication);
+    res.status(result.created ? 201 : 200).json(presentIssueAccessReason(result.grant));
+  });
+
+  router.post("/issues/:id/access-grants/:grantId/revoke", validate(z.object({}).strict().default({})), async (req, res) => {
+    if (!isUuidLike(req.params.grantId as string)) throw notFound("Task access grant not found");
+    const existing = await getAccessibleResource(req, res, svc.getById(req.params.id as string), "Issue not found");
+    if (!existing || !(await assertIssueReadAllowed(req, res, existing))) return;
+    const result = await db.transaction(async tx => {
+      await lockIssuePrivacyTree(tx, existing.companyId);
+      const [issue] = await tx.select().from(issueRows).where(eq(issueRows.id, existing.id)).for("update");
+      if (!issue) throw notFound("Issue not found");
+      await requireIssuePrivacyOwner(tx as unknown as Db, req, issue);
+      const [grant] = await tx.update(issueAccessGrants).set({ revokedAt: new Date() }).where(and(
+        eq(issueAccessGrants.id, req.params.grantId as string), eq(issueAccessGrants.companyId, issue.companyId),
+        eq(issueAccessGrants.issueId, issue.id), isNull(issueAccessGrants.revokedAt))).returning();
+      if (!grant) throw notFound("Task access grant not found");
+      const actor = getActorInfo(req);
+      const activity = await persistActivity(tx as unknown as Db, { companyId: issue.companyId, actorType: actor.actorType,
+        actorId: actor.actorId, agentId: actor.agentId, action: "issue_access_grant.revoked", entityType: "issue_access_grant", entityId: grant.id,
+        details: { issueId: issue.id, subjectType: grant.subjectType, subjectId: grant.subjectId, source: grant.source } });
+      return { grant, publication: activity.publication };
+    });
+    publishActivity(result.publication);
+    res.json(presentIssueAccessReason(result.grant));
+  });
+
   router.get("/issues/:id", async (req, res) => {
     const requestStartedAt = performance.now();
     const id = req.params.id as string;
-    const issue = await getAccessibleResource(
-      req,
-      res,
-      getIssueById(req, id),
-      "Issue not found",
-    );
+    const candidate = await getIssueById(req, id);
+    const shellOwner = candidate && hasCompanyAccess(req, candidate.companyId) && req.actor.type === "board" &&
+      req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+        { ...req.actor, userId: req.actor.userId ?? undefined }, candidate, "issue:read"));
+    if (shellOwner && candidate) {
+      assertCompanyAccess(req, candidate.companyId);
+      res.json(publicNativePayloadRow(candidate));
+      return;
+    }
+    const issue = await getAccessibleResource(req, res, candidate, "Issue not found");
     if (!issue) return;
     if (!(await assertIssueReadAllowed(req, res, issue))) return;
     const inboxArchiveFieldsPromise =
@@ -8923,14 +9396,12 @@ export function issueRoutes(
       inboxArchiveFields,
       externalChannelBinding,
     ] = await Promise.all([
-      resolveIssueProjectAndGoal(issue),
+      resolveIssueProjectAndGoal(req, issue),
       svc.getAncestors(issue.id),
       svc.findMentionedProjectIds(issue.id, { includeCommentBodies: false }),
       documentsSvc.getIssueDocumentPayload(issue),
       svc.getRelationSummaries(issue.id),
-      svc
-        .listBlockerAttention(issue.companyId, [issue])
-        .then((map) => map.get(issue.id) ?? null),
+      currentBlockerAttentionForIssue(req, issue),
       svc
         .listReviewAttention(issue.companyId, [issue])
         .then((map) => map.get(issue.id) ?? null),
@@ -8947,10 +9418,10 @@ export function issueRoutes(
       issue.companyId,
       relations,
     );
-    const relationsWithRecoveryActions = withRecoveryActionsOnRelationSummaries(
+    const relationsWithRecoveryActions = await redactIssueRelationEdges(req, issue.companyId, withRecoveryActionsOnRelationSummaries(
       relations,
       recoveryActionsByRelationIssue,
-    );
+    ));
     const revalidatedActiveRecoveryAction =
       await revalidateActiveSourceRecoveryForRead({
         issue,
@@ -8958,10 +9429,15 @@ export function issueRoutes(
         actor: getActorInfo(req),
         activeRecoveryAction,
       });
-    const mentionedProjects =
+    const candidateMentionedProjects =
       mentionedProjectIds.length > 0
         ? await projectsSvc.listByIds(issue.companyId, mentionedProjectIds)
         : [];
+    const mentionedProjectDecisions = await Promise.all(candidateMentionedProjects.map(project => canActorReadProjectPrivacy(db, req.actor, project)));
+    const mentionedProjects = candidateMentionedProjects.filter((_, index) => mentionedProjectDecisions[index]);
+    const readableAncestorIds = await readableIssueEdgeIds(req, issue.companyId, ancestors.map(ancestor => ancestor.id));
+    const readableAncestors = ancestors.filter(ancestor => readableAncestorIds.has(ancestor.id));
+    const readableReferences = await redactIssueReferenceEdges(req, issue.companyId, referenceSummary);
     const currentExecutionWorkspace = issue.executionWorkspaceId
       ? await executionWorkspacesSvc.getById(issue.executionWorkspaceId)
       : null;
@@ -8970,11 +9446,11 @@ export function issueRoutes(
       "Server-Timing",
       `paperclip_issue;dur=${(performance.now() - requestStartedAt).toFixed(1)}`,
     );
-    res.json({
+    const response = {
       ...issue,
       ...inboxArchiveFields,
       goalId: goal?.id ?? issue.goalId,
-      ancestors,
+      ancestors: readableAncestors,
       ...(blockerAttention ? { blockerAttention } : {}),
       ...(reviewAttention ? { reviewAttention } : {}),
       successfulRunHandoff: successfulRunHandoffStates.get(issue.id) ?? null,
@@ -8983,21 +9459,25 @@ export function issueRoutes(
       activeRecoveryAction: revalidatedActiveRecoveryAction,
       blockedBy: relationsWithRecoveryActions.blockedBy,
       blocks: relationsWithRecoveryActions.blocks,
-      relatedWork: referenceSummary,
-      referencedIssueIdentifiers: referenceSummary.outbound.map(
+      relatedWork: readableReferences,
+      referencedIssueIdentifiers: readableReferences.outbound.map(
         (item) => item.issue.identifier ?? item.issue.id,
       ),
       ...documentPayload,
       project: compactIssueProject(project),
       goal: goal ?? null,
-      mentionedProjects,
+      mentionedProjects: mentionedProjects.map(publicNativePayloadRow),
       currentExecutionWorkspace: compactIssueExecutionWorkspace(
         currentExecutionWorkspace,
       ),
       workProducts,
       linkedCases,
       externalChannelBinding,
-    });
+    };
+    const [projected] = await redactIssueRelationEdgesOnRows(req, issue.companyId, [response]);
+    const latestIssue = await svc.getById(issue.id);
+    if (!latestIssue || !(await assertIssueReadAllowed(req, res, latestIssue))) return;
+    res.json(projected);
   });
 
   router.get("/issues/:id/watchdog", async (req, res) => {
@@ -9141,9 +9621,45 @@ export function issueRoutes(
       trigger: "read_projection",
       actor: getActorInfo(req),
     });
+    const evidenceRunId = active?.evidence.runId ?? active?.evidence.sourceRunId ?? null;
+    const workspaceReconstruction = req.actor.type !== "board"
+      ? {
+          state: "unavailable" as const,
+          reason: "board_authorization_required",
+          sourceRunId: typeof evidenceRunId === "string" ? evidenceRunId : null,
+          currentOwnerAgentId: issue.assigneeAgentId,
+          destruction: { state: "unknown" as const, receiptHash: null, bindingId: null, cellId: null, generation: null },
+          continuation: { available: false, mode: "unavailable" as const, stagingScope: "local_only" as const, reason: "board_authorization_required" },
+          sources: [],
+        }
+      : active && requiresExecutionReconciliation(active.cause)
+      ? await describeWorkspaceReconstruction({
+          db,
+          companyId: issue.companyId,
+          issueId: issue.id,
+          sourceRunId: evidenceRunId,
+          currentOwnerAgentId: issue.assigneeAgentId,
+          canReadCommentSource: (commentId) => req.actor.type === "board" && (req.actor.source === "session" || req.actor.source === "local_implicit")
+            ? canReadCurrentWorkspaceCommentSource({ db, companyId: issue.companyId, issueId: issue.id, commentId, actor: req.actor })
+            : Promise.resolve(false),
+          commentSourceUnavailableReason: req.actor.type === "board" && req.actor.source === "board_key"
+            ? "comment_source_requires_board_session" : undefined,
+          verifySavedSourceBytes: ({ companyId, objectKey, sha256, byteSize }) =>
+            verifySelectedSavedAttachmentBytes({ storage, companyId, objectKey, sha256, byteSize }),
+        })
+      : {
+          state: "unavailable" as const,
+          reason: "no_current_execution_recovery_action",
+          sourceRunId: typeof evidenceRunId === "string" ? evidenceRunId : null,
+          currentOwnerAgentId: issue.assigneeAgentId,
+          destruction: { state: "unknown" as const, receiptHash: null, bindingId: null, cellId: null, generation: null },
+          continuation: { available: false, mode: "unavailable" as const, stagingScope: "local_only" as const, reason: "no_current_execution_recovery_action" },
+          sources: [],
+        };
     res.json({
       active,
       actions: active ? [active] : [],
+      workspaceReconstruction,
     });
   });
 
@@ -9203,6 +9719,52 @@ export function issueRoutes(
         resolutionNote,
         executionReconciliation,
       } = req.body;
+      const canReadCurrentCommentSource = (commentId: string) => req.actor.type === "board" && (req.actor.source === "session" || req.actor.source === "local_implicit")
+        ? canReadCurrentWorkspaceCommentSource({ db, companyId: existing.companyId, issueId: existing.id, commentId, actor: req.actor })
+        : Promise.resolve(false);
+      const workspaceReconstructionRequestHash = executionReconciliation?.workspaceReconstruction
+        ? createHash("sha256").update(JSON.stringify({
+            actionId: actionId ?? null,
+            outcome,
+            sourceIssueStatus,
+            resolutionNote: resolutionNote ?? null,
+            executionReconciliation: {
+              ...executionReconciliation,
+              workspaceReconstruction: {
+                ...executionReconciliation.workspaceReconstruction,
+                selectedSources: [...executionReconciliation.workspaceReconstruction.selectedSources]
+                  .sort((a, b) => a.attachmentId.localeCompare(b.attachmentId)),
+              },
+            },
+          })).digest("hex")
+        : null;
+      if (executionReconciliation?.workspaceReconstruction) {
+        // Reconstruction is a deliberate task-owner choice. Verify the actual
+        // selected object bytes now; the transaction below rechecks current
+        // issue, tenant, source snapshot, and provider receipt before commit.
+        assertBoard(req);
+        if (executionReconciliation.actionOutcome === "mixed" && req.actor.isInstanceAdmin !== true) {
+          throw forbidden("An administrator must reconcile incomplete external-effect evidence before reconstruction.");
+        }
+        let selectedBytes = 0;
+        for (const selected of executionReconciliation.workspaceReconstruction.selectedSources) {
+          const attachment = await svc.getAttachmentById(selected.attachmentId);
+          if (!attachment || attachment.companyId !== existing.companyId || attachment.issueId !== existing.id
+            || attachment.sha256 !== selected.sha256) {
+            throw conflict("A selected saved file is no longer available on this task.");
+          }
+          if (attachment.issueCommentId && !await canReadCurrentCommentSource(attachment.issueCommentId))
+            throw conflict(req.actor.type === "board" && req.actor.source === "board_key"
+              ? "Comment-bound saved files require a current board session; API-key authorization cannot continue them."
+              : "A selected saved file's current comment source is no longer available.");
+          selectedBytes += attachment.byteSize;
+          if (selectedBytes > 64 * 1024 * 1024) throw conflict("Selected saved files exceed the reconstruction size limit.");
+          await verifySelectedSavedAttachmentBytes({
+            storage, companyId: existing.companyId, objectKey: attachment.objectKey,
+            sha256: selected.sha256, byteSize: attachment.byteSize,
+          });
+        }
+      }
       if (outcome === "false_positive" || outcome === "cancelled") {
         assertBoard(req);
       }
@@ -9254,6 +9816,13 @@ export function issueRoutes(
             );
             const automatic = settled.evidence.automaticRecovery as
               { replay?: string } | undefined;
+            const priorReconstructionHash = settled.evidence.workspaceReconstructionRequestHash;
+            if (typeof priorReconstructionHash === "string"
+              && priorReconstructionHash !== workspaceReconstructionRequestHash) {
+              throw conflict("This reconstruction request already has a receipt with different sources or decisions.", {
+                code: "workspace_reconstruction_idempotency_conflict",
+              });
+            }
             if (automatic?.replay === "blocked" && executionReconciliation) {
               // An automatic no-replay disposition is final until new evidence
               // arrives. Keep the supported evidence API usable without a dialog.
@@ -9368,6 +9937,7 @@ export function issueRoutes(
               activeRecoveryAction.evidence.runId ??
               activeRecoveryAction.evidence.sourceRunId,
             decision: executionReconciliation,
+            canReadCommentSource: canReadCurrentCommentSource,
           });
         } else if (executionReconciliation) {
           throw conflict(
@@ -9431,6 +10001,13 @@ export function issueRoutes(
             chatRetry
               ? { kind: "chat_failed_run_retry", actionId: chatRetry.actionId }
               : undefined,
+            workspaceReconstructionRequestHash ?? undefined,
+            req.actor.type === "board" && req.actor.source === "local_implicit"
+              ? { source: "local_implicit" as const }
+              : req.actor.type === "board" && req.actor.source === "session" && req.actor.userId && req.actor.sessionId
+              ? { source: "session" as const, userId: req.actor.userId, sessionId: req.actor.sessionId,
+                  credentialExpiresAt: req.actor.authenticatedCredentialExpiresAt ?? null }
+              : null,
           );
         }
         let issue = lockedIssue;
@@ -9549,6 +10126,7 @@ export function issueRoutes(
             ...updateFields,
             actorAgentId: actor.agentId ?? null,
             actorUserId: actor.actorType === "user" ? actor.actorId : null,
+            privacyActor: req.actor,
           };
           const updatedIssue =
             sourceIssueStatus === "done" || sourceIssueStatus === "cancelled"
@@ -9799,12 +10377,7 @@ export function issueRoutes(
     validate(refreshExternalObjectsSchema),
     async (req, res) => {
       const id = req.params.id as string;
-      const issue = await getAccessibleResource(
-        req,
-        res,
-        svc.getById(id),
-        "Issue not found",
-      );
+      const issue = await getAccessibleResource(req, res, svc.getById(id), "Issue not found");
       if (!issue) return;
       if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;
       const actor = getActorInfo(req);
@@ -9845,6 +10418,14 @@ export function issueRoutes(
     const docs = await documentsSvc.listIssueDocuments(issue.id, {
       includeSystem: req.query.includeSystem === "true",
     });
+    for (const doc of docs) if (doc.latestRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: doc.latestRevisionId, actor: req.actor,
+    });
+    const currentIssue = await svc.getById(issue.id);
+    if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
+    for (const doc of docs) if (doc.latestRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: doc.latestRevisionId, actor: req.actor,
+    });
     res.json(docs);
   });
 
@@ -9857,7 +10438,13 @@ export function issueRoutes(
       "Issue not found",
     );
     if (!issue) return;
-    if (!(await assertIssueReadAllowed(req, res, issue))) return;
+    // Check the Task boundary before looking up the selected document. Its
+    // frozen source receipt, checked below, governs a protocol-1 body; later
+    // Context on the Task must not retroactively restrict an earlier output.
+    if (!(await decideIssueAccess(req, issue, "issue:read")).allowed) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
     const keyParsed = issueDocumentKeySchema.safeParse(
       String(req.params.key ?? "")
         .trim()
@@ -9870,15 +10457,49 @@ export function issueRoutes(
       });
       return;
     }
-    const doc = await documentsSvc.getIssueDocumentByKey(
-      issue.id,
-      keyParsed.data,
-    );
+    // Annotation responses always include the Task's current Context. Check
+    // that authority before fetching any document or annotation body, then
+    // retain the post-read checks below for changes during owner-row waits.
+    if (shouldIncludeDocumentAnnotations(req) && !(await assertIssueReadAllowed(req, res, issue))) return;
+    let revisionId: string | null = null;
+    let capturedSnapshot: unknown = null;
+    const doc = await documentsSvc.getIssueDocumentByKey(issue.id, keyParsed.data, {
+      onSourceCapture: capture => {
+        revisionId = capture?.input.revisionId ?? null;
+        capturedSnapshot = capture?.payloadSourceSnapshot ?? null;
+      },
+    });
+    const selectedRevisionId = revisionId ?? doc?.latestRevisionId;
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(capturedSnapshot);
+    const sourceBoundBody = Boolean(doc && selectedRevisionId && snapshot.success &&
+      snapshot.data.owner.kind === "document_revision" && snapshot.data.owner.companyId === issue.companyId &&
+      snapshot.data.owner.id === selectedRevisionId && !shouldIncludeDocumentAnnotations(req));
+    async function assertSelectedDocumentReadAllowed(currentIssue: NonNullable<typeof issue>) {
+      if (!sourceBoundBody) return assertIssueReadAllowed(req, res, currentIssue);
+      if (!(await decideIssueAccess(req, currentIssue, "issue:read")).allowed) {
+        res.status(404).json({ error: "Issue not found" });
+        return false;
+      }
+      await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+        companyId: currentIssue.companyId, issueId: currentIssue.id,
+        revisionId: selectedRevisionId!, actor: req.actor,
+      });
+      return true;
+    }
+    if (!(await assertSelectedDocumentReadAllowed(issue))) return;
+    if (doc && selectedRevisionId && !sourceBoundBody) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: selectedRevisionId, actor: req.actor,
+    });
+    const currentIssue = await svc.getById(issue.id);
+    if (!currentIssue || !(await assertSelectedDocumentReadAllowed(currentIssue))) return;
     if (!doc) {
       res.status(404).json({ error: "Document not found" });
       return;
     }
     if (!shouldIncludeDocumentAnnotations(req)) {
+      if (selectedRevisionId && !sourceBoundBody) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+        companyId: issue.companyId, issueId: issue.id, revisionId: selectedRevisionId, actor: req.actor,
+      });
       res.json(doc);
       return;
     }
@@ -9891,6 +10512,11 @@ export function issueRoutes(
           includeComments: shouldIncludeDocumentAnnotationComments(req),
         },
       );
+    const latestIssue = await svc.getById(issue.id);
+    if (!latestIssue || !(await assertIssueReadAllowed(req, res, latestIssue))) return;
+    if (selectedRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: selectedRevisionId, actor: req.actor,
+    });
     res.json({ ...doc, annotations });
   });
 
@@ -9928,6 +10554,8 @@ export function issueRoutes(
         includeComments: parseBooleanQuery(req.query.includeComments),
       },
     );
+    const currentIssue = await svc.getById(issue.id);
+    if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
     res.json(threads);
   });
 
@@ -10128,7 +10756,7 @@ export function issueRoutes(
         },
       });
 
-      res.status(201).json(comment);
+      res.status(201).json(publicNativePayloadRow(comment));
     },
   );
 
@@ -10238,6 +10866,7 @@ export function issueRoutes(
         sourceTrust,
         lockedDocumentStrategy:
           req.actor.type === "agent" ? "create_new_document" : "conflict",
+        ...(req.actor.type === "board" && req.actor.source === "session" ? { manualInputActor: { ...req.actor } } : {}),
       });
       const doc = result.document;
       const redirectedFromLockedDocument =
@@ -10497,6 +11126,14 @@ export function issueRoutes(
       issue.id,
       keyParsed.data,
     );
+    for (const revision of revisions) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: revision.id, actor: req.actor, requireLatest: false,
+    });
+    const currentIssue = await svc.getById(issue.id);
+    if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
+    for (const revision of revisions) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: revision.id, actor: req.actor, requireLatest: false,
+    });
     res.json(revisions);
   });
 
@@ -10779,6 +11416,7 @@ export function issueRoutes(
         return;
       const actor = getActorInfo(req);
       const createInput = {
+        privateWorkAdmission: "closed" as const,
         ...req.body,
         projectId: req.body.projectId ?? issue.projectId ?? null,
         sourceTrust: await sourceTrustForActorWrite(issue, actor),
@@ -11907,6 +12545,7 @@ export function issueRoutes(
       let deduplicationReason: "idempotency_key" | "recent_open_title" | null =
         null;
       const createInput = {
+        privateWorkAdmission: "closed" as const,
         ...createBody,
         ...(taskBridgeOriginForActor(req) ?? {}),
         id: issueId,
@@ -11926,7 +12565,15 @@ export function issueRoutes(
       };
       let issue: Awaited<ReturnType<typeof svc.create>>;
       try {
-        issue = await svc.create(companyId, createInput);
+        issue = req.actor.type === "agent" && req.actor.nativeToolEffect
+          ? await svc.create(companyId, createInput, db, undefined, {
+              privacyActor: req.actor,
+              nativeEffectClaim: req.actor.nativeToolEffect,
+            })
+          : req.actor.type === "board" && req.actor.source === "session" &&
+          req.actor.userId && req.actor.sessionId && !req.actor.runId
+          ? await svc.create(companyId, createInput, db, undefined, { manualInputActor: req.actor })
+          : await svc.create(companyId, createInput);
       } catch (error) {
         // Concurrent onboarding creates can both pass the zero-count fast path;
         // the issues_onboarding_first_task_uq index rejects the loser here. Fail
@@ -11943,7 +12590,7 @@ export function issueRoutes(
         const referenceSummary =
           await issueReferencesSvc.listIssueReferenceSummary(issue.id);
         res.status(200).json({
-          ...issue,
+          ...publicNativePayloadRow(issue),
           deduplicated: true,
           deduplicationReason,
           relatedWork: referenceSummary,
@@ -12128,7 +12775,7 @@ export function issueRoutes(
       await queueTaskWatchdogEvaluation(issue, actor.runId);
 
       res.status(201).json({
-        ...issue,
+        ...publicNativePayloadRow(issue),
         relatedWork: referenceSummary,
         referencedIssueIdentifiers: referenceSummary.outbound.map(
           (item) => item.issue.identifier ?? item.issue.id,
@@ -12253,6 +12900,7 @@ export function issueRoutes(
         actor,
       );
       const { issue, parentBlockerAdded } = await svc.createChild(parent.id, {
+        privateWorkAdmission: "closed",
         ...createBody,
         ...(taskBridgeOriginForActor(req) ?? {}),
         id: issueId,
@@ -12366,12 +13014,13 @@ export function issueRoutes(
       }
       await blockWatchdogParentOnCurrentChild({
         actor,
+        requestActor: req.actor,
         watchdogParentIssueId: serializationContext?.watchdogParentIssueId,
         currentChildIssueId: currentSerializedChild?.id ?? issue.id,
       });
       await queueTaskWatchdogEvaluation(issue, actor.runId);
 
-      res.status(201).json(issue);
+      res.status(201).json(publicNativePayloadRow(issue));
     },
   );
 
@@ -12627,6 +13276,7 @@ export function issueRoutes(
       }
       await blockWatchdogParentOnCurrentChild({
         actor,
+        requestActor: req.actor,
         watchdogParentIssueId: serializationContext?.watchdogParentIssueId,
         currentChildIssueId:
           existingSerializedChild?.id ?? result.newlyCreatedIssues[0]?.id,
@@ -12848,12 +13498,14 @@ export function issueRoutes(
     validateIssueMutationBody(updateIssueRouteSchema),
     async (req, res) => {
       const id = req.params.id as string;
-      const existing = await getAccessibleResource(
-        req,
-        res,
-        svc.getById(id),
-        "Issue not found",
-      );
+      const candidate = await svc.getById(id);
+      const isOwnedConversationWorkModeOnly = req.body != null && typeof req.body === "object" && !Array.isArray(req.body) &&
+        Object.keys(req.body).length === 1 && Object.hasOwn(req.body, "workMode");
+      const ownedConversationShell = candidate && isOwnedConversationWorkModeOnly && req.actor.type === "board" &&
+        req.actor.source === "session" && req.actor.sessionId && req.actor.userId &&
+        await db.transaction(tx => isCurrentUnsealedConversationShell(tx, req.actor, candidate, "issue:comment"));
+      const existing = ownedConversationShell ? candidate : await getAccessibleResource(
+        req, res, Promise.resolve(candidate), "Issue not found");
       if (!existing) return;
       assertNoAgentHostWorkspaceCommandMutation(
         req,
@@ -12875,12 +13527,18 @@ export function issueRoutes(
         );
         return;
       }
-      const issueMutationAccess = await assertAgentIssueMutationAllowed(
-        req,
-        res,
-        existing,
-        { allowVisibleIssueWrite: true },
-      );
+      // Selecting the mode on the creator's exact unsealed conversation shell
+      // is the one pre-source write available before the first Human comment.
+      // The normal read gate correctly hides that shell, so this branch carries
+      // only that already-pinned, workMode-only owner decision past it.
+      const issueMutationAccess = ownedConversationShell && isOwnedConversationWorkModeOnly
+        ? true
+        : await assertAgentIssueMutationAllowed(
+          req,
+          res,
+          existing,
+          { allowVisibleIssueWrite: true },
+        );
       if (!issueMutationAccess) return;
       if (req.body.comment && !(await assertBoardCommentNotPaused(req, res, existing))) return;
       const issueMutationAuthorizationReason =
@@ -13605,6 +14263,9 @@ export function issueRoutes(
       const postCommitIssueActions: IssuePostCommitAction[] = [];
       const issueUpdateData = {
         ...updateFields,
+        privacyActor: req.actor,
+        privateWorkAdmission: res.locals.ownedConversationWorkModeWrite === true
+          ? "owned_conversation_work_mode" as const : "closed" as const,
         actorAgentId: actor.agentId ?? null,
         actorRunId: actor.agentId ? actor.runId : null,
         actorRunStopId: actor.agentId && interruptedRunId === actor.runId ? issueMutationStopId : null,
@@ -15056,6 +15717,7 @@ export function issueRoutes(
 
       await queueTaskWatchdogEvaluation(issue, actor.runId);
       const changes = issueResponse.changes ?? {};
+      const publicComment = comment ? publicNativePayloadRow(comment) : comment;
       if (prefersMinimalIssueUpdateResponse(req)) {
         res.setHeader("Preference-Applied", "return=minimal");
         res.json({
@@ -15063,11 +15725,11 @@ export function issueRoutes(
           identifier: issueResponse.identifier,
           updatedAt: issueResponse.updatedAt,
           changes,
-          comment,
+          comment: publicComment,
         });
         return;
       }
-      res.json({ ...issueResponse, changes, comment });
+      res.json({ ...publicNativePayloadRow(issueResponse), changes, comment: publicComment });
     },
   );
 
@@ -15114,7 +15776,7 @@ export function issueRoutes(
     });
 
     await queueTaskWatchdogEvaluation(existing, actor.runId);
-    res.json(issue);
+    res.json(publicNativePayloadRow(issue));
   });
 
   router.post(
@@ -15267,7 +15929,7 @@ export function issueRoutes(
           );
       }
 
-      res.json(updated);
+      res.json(publicNativePayloadRow(updated));
     },
   );
 
@@ -15355,18 +16017,20 @@ export function issueRoutes(
       },
     });
 
-    res.json(result);
+    res.json({ ...result, issue: publicNativePayloadRow(result.issue) });
   });
 
   router.get("/issues/:id/comments", async (req, res) => {
     const id = req.params.id as string;
-    const issue = await getAccessibleResource(
-      req,
-      res,
-      getIssueById(req, id),
-      "Issue not found",
-    );
+    const candidate = await getIssueById(req, id);
+    const shellOwner = candidate && hasCompanyAccess(req, candidate.companyId) && req.actor.type === "board" &&
+      req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+        { ...req.actor, userId: req.actor.userId ?? undefined }, candidate, "issue:read"));
+    const issue = shellOwner && candidate
+      ? (assertCompanyAccess(req, candidate.companyId), candidate)
+      : await getAccessibleResource(req, res, candidate, "Issue not found");
     if (!issue) return;
+    if (shellOwner) { res.json([]); return; }
     if (!(await assertIssueReadAllowed(req, res, issue))) return;
     const afterCommentId =
       typeof req.query.after === "string" && req.query.after.trim().length > 0
@@ -15394,7 +16058,7 @@ export function issueRoutes(
       limit,
     });
     res.json(
-      await redactIssueResponse(req, issue.companyId, issue.id, comments),
+      await redactIssueResponse(req, issue.companyId, issue.id, comments.map(publicNativePayloadRow)),
     );
   });
 
@@ -16142,6 +16806,7 @@ export function issueRoutes(
         );
       const { interaction, createdIssues, continuationIssue } =
         await interactionSvc.acceptInteraction(issue, interactionId, req.body, {
+          requestActor: { ...req.actor },
           agentId: actor.agentId,
           runId: actor.runId,
           userId: actor.actorType === "user" ? actor.actorId : null,
@@ -16457,6 +17122,7 @@ export function issueRoutes(
         interactionId,
         req.body,
         {
+          requestActor: { ...req.actor },
           agentId: actor.agentId,
           runId: actor.runId,
           userId: actor.actorType === "user" ? actor.actorId : null,
@@ -16977,7 +17643,7 @@ export function issueRoutes(
       return;
     }
     res.json(
-      await redactIssueResponse(req, issue.companyId, issue.id, comment),
+      await redactIssueResponse(req, issue.companyId, issue.id, publicNativePayloadRow(comment)),
     );
   });
 
@@ -17115,7 +17781,7 @@ export function issueRoutes(
     }
 
     if (comment.deletedAt) {
-      res.json(comment);
+      res.json(publicNativePayloadRow(comment));
       return;
     }
 
@@ -17323,7 +17989,9 @@ export function issueRoutes(
       const existing = await svc.getConversation(companyId, agent.id, req.actor.userId);
       let retireConversationId: string | undefined;
       if (existing) {
-        try { if (!(await assertIssueReadAllowed(req,res,existing))) return; }
+        const ownerShell = await db.transaction((tx) => isCurrentUnsealedConversationShell(tx,
+          { ...req.actor, userId: req.actor.userId ?? undefined }, existing, "issue:read"));
+        try { if (!ownerShell && !(await assertIssueReadAllowed(req,res,existing))) return; }
         catch (error) {
           if (!(error instanceof HttpError) || (error.details as {code?:unknown}|undefined)?.code !== "analytical_source_access_lost") throw error;
           if (method === "post" && input.replaceInaccessibleIssueId === existing.id) retireConversationId=existing.id;
@@ -17332,15 +18000,30 @@ export function issueRoutes(
         if (input.replaceInaccessibleIssueId === existing.id && !retireConversationId) throw conflict("The current conversation does not require source recovery");
       }
       if ((existing && !retireConversationId) || method === "get") { res.json(existing); return; }
-      const issue = await svc.create(companyId, {
-        title: `Chat with ${agent.name}`, assigneeAgentId: agent.id,
-        conversationAgentId: agent.id, conversationUserId: req.actor.userId,
-        conversationState: "waiting", status: "in_review", createdByUserId: req.actor.userId, retireConversationId,
+      const publications: ActivityPublication[] = [];
+      const issue = await db.transaction(async (tx) => {
+        const created = await svc.create(companyId, {
+          privateWorkAdmission: "closed",
+          title: `Chat with ${agent.name}`, assigneeAgentId: agent.id,
+          conversationAgentId: agent.id, conversationUserId: req.actor.userId,
+          conversationState: "waiting", status: "in_review", createdByUserId: req.actor.userId, retireConversationId,
+          // The first authenticated Human message will seal this conversation
+          // Task to its exact captured comment inside the same guarded write.
+          payloadSourceProtocolVersion: 1,
+        }, tx, publications);
+        const [opened] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+          eq(activityLog.companyId, companyId), eq(activityLog.actorType, "user"),
+          eq(activityLog.actorId, req.actor.userId!), eq(activityLog.action, "issue.conversation_opened"),
+          eq(activityLog.entityType, "issue"), eq(activityLog.entityId, created.id),
+          sql`${activityLog.details}->>'agentId'=${agent.id}`,
+        )).limit(1);
+        if (!opened) await logActivity(tx as unknown as Db, { companyId, actorType: "user", actorId: req.actor.userId!,
+          action: "issue.conversation_opened", entityType: "issue", entityId: created.id,
+          details: { agentId: agent.id } }, publications);
+        return created;
       });
-      await logActivity(db, { companyId, actorType: "user", actorId: req.actor.userId,
-        action: "issue.conversation_opened", entityType: "issue", entityId: issue.id,
-        details: { agentId: agent.id } });
-      res.json(issue);
+      for (const publication of publications) publishActivity(publication);
+      res.json(publicNativePayloadRow(issue));
     });
   }
 
@@ -17349,34 +18032,91 @@ export function issueRoutes(
     validate(addIssueCommentSchema),
     async (req, res) => {
       const id = req.params.id as string;
-      const issue = await getAccessibleResource(
-        req,
-        res,
-        svc.getById(id),
-        "Issue not found",
-      );
+      const candidate = await svc.getById(id);
+      const shellOwner = candidate && hasCompanyAccess(req, candidate.companyId) && req.actor.type === "board" &&
+        req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+          { ...req.actor, userId: req.actor.userId ?? undefined }, candidate, "issue:comment"));
+      const issue = shellOwner && candidate
+        ? (assertCompanyAccess(req, candidate.companyId), candidate)
+        : await getAccessibleResource(req, res, candidate, "Issue not found");
       if (!issue) return;
       if (issue.conversationAgentId && req.actor.type === "board") {
         if (!(await instanceSettings.getExperimental()).enableAgentChat) throw notFound("Agent Chat is disabled");
         if (!req.actor.userId) throw forbidden("Board user access required");
         if (req.actor.userId !== issue.conversationUserId) throw forbidden("Only the conversation owner can send messages or start a new session");
         if (!req.body.clientRequestId) throw unprocessable("Chat messages require a clientRequestId for safe retries");
-        if (!(await assertAgentIssueCommentAllowed(req, res, issue))) return;
         if (req.body.body.trim() !== "/new" && !(await assertBoardCommentNotPaused(req, res, issue))) return;
         const actor = getActorInfo(req);
         const userId = req.actor.userId;
         const publications: ActivityPublication[] = [];
         const comment = await db.transaction(async (tx) => {
-          await tx.select({ id: issueRows.id }).from(issueRows).where(and(
+          const pinned = await pinCurrentBoardActor(tx, req.actor);
+          if (!pinned || pinned.credentialExpiresAt === null)
+            throw forbidden("The current conversation owner session is unavailable");
+          await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+            "The current conversation owner session is unavailable");
+          await pinIssueMutationHuman(tx, pinned.actor, issue.companyId, true);
+          const [lockedIssue] = await tx.select().from(issueRows).where(and(
             eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
           )).for("update");
+          if (!lockedIssue || lockedIssue.conversationAgentId == null || lockedIssue.conversationUserId !== userId)
+            throw notFound("Conversation not found");
+          const issueCommentDecision = await authorizationService(tx).decide({ actor: pinned.actor, action: "issue:comment",
+            resource: { type: "issue", companyId: lockedIssue.companyId, issueId: lockedIssue.id,
+              projectId: lockedIssue.projectId, parentIssueId: lockedIssue.parentId,
+              assigneeAgentId: null, assigneeUserId: userId,
+              status: lockedIssue.status }, enforceResponsibleUserIntersection: true });
+          const ownerShell = await isCurrentUnsealedConversationShell(tx, { ...pinned.actor, userId }, lockedIssue, "issue:comment");
+          if ((!issueCommentDecision.allowed && !ownerShell) ||
+            (!ownerShell && !await canActorReadIssuePrivacy(tx, pinned.actor, lockedIssue)))
+            throw notFound("Conversation not found");
           const [existing] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
             eq(issueComments.issueId, issue.id), eq(issueComments.authorUserId, userId),
             eq(issueComments.clientRequestId, req.body.clientRequestId),
           ));
           const saved = await svc.addComment(issue.id, req.body.body, { userId }, {
             clientRequestId: req.body.clientRequestId, authorType: "user", attachmentIds: req.body.attachmentIds,
-          }, tx);
+          }, tx, 1);
+          const [savedCaptureState] = await tx.select({ protocolVersion: issueComments.payloadSourceProtocolVersion,
+            snapshot: issueComments.payloadSourceSnapshot }).from(issueComments).where(and(
+              eq(issueComments.companyId, issue.companyId), eq(issueComments.issueId, issue.id), eq(issueComments.id, saved.id)));
+          if (!existing && savedCaptureState?.protocolVersion === 1 && !savedCaptureState.snapshot) {
+            const [capturedComment] = await tx.update(issueComments)
+              .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("comment") })
+              .where(and(eq(issueComments.id, saved.id), eq(issueComments.companyId, issue.companyId),
+                eq(issueComments.issueId, issue.id), eq(issueComments.authorUserId, userId),
+                eq(issueComments.payloadSourceProtocolVersion, 1), isNull(issueComments.payloadSourceSnapshot),
+                eq(issueComments.payloadSourceSnapshotInvalidated, false), isNull(issueComments.deletedAt)))
+              .returning({ payloadSourceSnapshot: issueComments.payloadSourceSnapshot });
+            if (!capturedComment?.payloadSourceSnapshot) throw conflict("Conversation Human input capture was not stored");
+            const source = { kind: "comment" as const, issueId: issue.id, commentId: saved.id,
+              sourceVersion: String((await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` })
+                .from(issueComments).where(and(eq(issueComments.companyId, issue.companyId),
+                  eq(issueComments.issueId, issue.id), eq(issueComments.id, saved.id), isNull(issueComments.deletedAt))))[0]?.sourceVersion ?? ""),
+              contentHash: nativeCommentProjectionHash({ body: saved.body, presentation: saved.presentation, metadata: saved.metadata }) };
+            if (!source.sourceVersion) throw conflict("Conversation Human input version is unavailable");
+            const commentSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedComment.payloadSourceSnapshot);
+            let taskDigest: string | null = null;
+            if (ownerShell) {
+              const sourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+              const [capturedIssue] = await tx.update(issueRows)
+                .set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue", sourcePolicy, [source]) })
+                .where(and(eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
+                  eq(issueRows.payloadSourceProtocolVersion, 1), isNull(issueRows.payloadSourceSnapshot),
+                  eq(issueRows.payloadSourceSnapshotInvalidated, false)))
+                .returning({ payloadSourceSnapshot: issueRows.payloadSourceSnapshot });
+              if (!capturedIssue?.payloadSourceSnapshot) throw conflict("Conversation Task source capture was not stored");
+              taskDigest = nativePayloadSourceSnapshotSchema.parse(capturedIssue.payloadSourceSnapshot).digest;
+            }
+            await logActivity(tx as unknown as Db, { companyId: issue.companyId,
+              actorType: "user", actorId: userId, action: "conversation.input_source_captured",
+              entityType: "issue", entityId: issue.id,
+              details: { producer: "direct_human_conversation_input", commentId: saved.id,
+                commentDigest: commentSnapshot.digest, ...(taskDigest ? { taskDigest } : {}) },
+            }, publications);
+          }
+          await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
+            "The current conversation owner session is unavailable");
           if (!existing) await logActivity(tx as unknown as Db, {
             companyId: issue.companyId, actorType: actor.actorType, actorId: actor.actorId,
             action: "issue.comment_added", entityType: "issue", entityId: issue.id,
@@ -17387,7 +18127,7 @@ export function issueRoutes(
         for (const publication of publications) publishActivity(publication);
         await issueReferencesSvc.syncComment(comment.id);
         await deliverConversationComments(db, issue, heartbeat.wakeup);
-        res.status(201).json(comment);
+        res.status(201).json(publicNativePayloadRow(comment));
         return;
       }
       if (req.actor.type === "agent" && req.body.onBehalfOfUserId != null) {
@@ -17744,6 +18484,7 @@ export function issueRoutes(
 
         issueBeforeCommentDecision = currentIssue;
         const updatePatch = {
+          privacyActor: req.actor,
           ...transition.patch,
           status:
             typeof transition.patch.status === "string"
@@ -17878,6 +18619,7 @@ export function issueRoutes(
           mirrorToSlack: actor.actorType === "user",
           authorizationReason: commentAuthorizationReason,
           sourceTrust: await sourceTrustForActorWrite(currentIssue, actor),
+          ...(req.actor.type === "board" && req.actor.source === "session" ? { manualInputActor: { ...req.actor } } : {}),
         };
         const add = (dbOrTx: Db = db) =>
           svc.addComment(
@@ -18419,7 +19161,7 @@ export function issueRoutes(
       })();
 
       await queueTaskWatchdogEvaluation(currentIssue, actor.runId);
-      res.status(201).json(comment);
+      res.status(201).json(publicNativePayloadRow(comment));
     },
   );
 
@@ -18537,12 +19279,12 @@ export function issueRoutes(
 
   router.get("/issues/:id/attachments", async (req, res) => {
     const issueId = req.params.id as string;
-    const issue = await getAccessibleResource(
-      req,
-      res,
-      getIssueById(req, issueId),
-      "Issue not found",
-    );
+    const candidate = await getIssueById(req, issueId);
+    const shellOwner = candidate && hasCompanyAccess(req, candidate.companyId) && req.actor.type === "board" &&
+      req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+        { ...req.actor, userId: req.actor.userId ?? undefined }, candidate, "issue:read"));
+    if (shellOwner) { res.json([]); return; }
+    const issue = await getAccessibleResource(req, res, candidate, "Issue not found");
     if (!issue) return;
     if (!(await assertIssueReadAllowed(req, res, issue))) return;
     const attachments = await svc.listAttachments(issueId);
@@ -18570,7 +19312,10 @@ export function issueRoutes(
       if (issue.conversationAgentId && req.actor.type === "board" && req.actor.userId !== issue.conversationUserId) {
         throw forbidden("Only the conversation owner can upload attachments");
       }
-      if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;
+      const ownerShell = req.actor.type === "board" && hasCompanyAccess(req, companyId) &&
+        req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
+          { ...req.actor, userId: req.actor.userId ?? undefined }, issue, "issue:comment"));
+      if (!ownerShell && !(await assertAgentIssueMutationAllowed(req, res, issue))) return;
       if (
         !(await assertDeliverableMutationAllowedByRunContext(req, res, issue))
       )
@@ -18632,7 +19377,7 @@ export function issueRoutes(
 
       let attachment: Awaited<ReturnType<typeof svc.createAttachment>>;
       try {
-        attachment = await svc.createAttachment({
+        const uploadInput = {
           issueId,
           issueCommentId: parsedMeta.data.issueCommentId ?? null,
           provider: stored.provider,
@@ -18644,7 +19389,10 @@ export function issueRoutes(
           createdByAgentId: actor.agentId,
           createdByUserId: actor.actorType === "user" ? actor.actorId : null,
           createdByRunId: actor.runId,
-        });
+        };
+        attachment = req.actor.type === "board" && req.actor.source === "session" && req.actor.userId && req.actor.sessionId
+          ? await svc.createAttachment(uploadInput, { actor: { ...req.actor }, bytes: file.buffer })
+          : await svc.createAttachment(uploadInput);
       } catch (err) {
         // A known 4xx means the registration transaction definitely rejected
         // the request, so the just-written object is orphaned and safe to

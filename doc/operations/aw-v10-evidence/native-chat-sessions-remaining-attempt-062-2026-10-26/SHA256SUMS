@@ -1,0 +1,17 @@
+b14ff4e9ef2beff1e10630425fa21841df35d0b1a3d26b2c841f5245b9eaebbb  ./README.md
+5ac74f1d666510e16a0cece78ef03631ffdba91836391ab07ea729766d0c0d8d  ./db-prune.log
+0f6a354a2752af9fc40e041cc1ba27f3fb063e78db6d14235373300a077243da  ./list.log
+d5e7516382b7cb5d2d4cf6ab0a8c16a929f68936cadb45022dd5d2a6e3c9b3cf  ./playwright-output/.last-run.json
+8ded2d955e49b540cacf60f9c38812a6fc0d6ee74e5cd8edc4597d1cb397226e  ./playwright-output/agent-chat-sessions-an-own-7b69c-iginal-metric-facts-survive-chromium/error-context.md
+3878570f4a62a0d65f57cf1754e0269e56ec797f4e36e26b44c172eb6e800401  ./playwright-output/agent-chat-sessions-an-own-7b69c-iginal-metric-facts-survive-chromium/test-failed-1.png
+6908b738fff24f771b82bcae77b2ea2c6cafbee8a365258a25c3b0f3726bd701  ./playwright-output/agent-chat-sessions-an-own-7b69c-iginal-metric-facts-survive-chromium/trace.zip
+75b8457cb8af33102e88702a46c3eaba4a902afecccf1a3ba08d8f7bd8496044  ./playwright-output/native-chat-provider-events.ndjson
+195afa343d1ef3026c0d8f424ab6682038e3e841c2df13a1c601e9a28be70e1c  ./playwright.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./privacy-regression.exit
+33ad175b4c1d65cea8f15c9926a32af52c47aa7c069b2d4a5191eb5fcbe74f87  ./privacy.log
+6c63da5946f4d80ef00fc3eedfea3609a45b70d6d76e7a5176e3e823ca92ba0d  ./resource-check.log
+423ea28064940d7cf532b8982effcdb99afb26e18f099de2888459df9f2dbc33  ./snapshot.log
+6ab7189f059c45be14bef23eedcc7a466ed30241e6922f63a383c06e4ed56ec3  ./socket-cleanup.log
+77ba981ed23812af72536d406102eeb5572d899fb49e8d1d4c3d05e87f96ae7a  ./source-pins.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./syntax.log
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  ./test-exit.txt

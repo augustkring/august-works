@@ -1,5 +1,8 @@
 import { createRequire } from "node:module";
 import { expect, test } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 // Built UI with explicit synthetic authentication responses. No reset mail is
 // sent and no actual account password or hosted authentication is qualified.
@@ -38,14 +41,14 @@ test("a different reset link cannot inherit the old password or its late acknowl
     await route.fulfill({ status: 200, json: { status: true } });
   });
   await page.goto("/saas/reset-password?token=first");
-  await page.getByLabel("New password", { exact: true }).fill("PRIVATE-FIRST-PASSWORD");
+  await page.getByLabel(/^New password/).fill("PRIVATE-FIRST-PASSWORD");
   await page.getByRole("button", { name: "Change password", exact: true }).click();
   await expect.poll(() => requests).toBe(1);
   await page.evaluate(() => {
     history.pushState(history.state, "", "/saas/reset-password?token=second");
     dispatchEvent(new PopStateEvent("popstate", { state: history.state }));
   });
-  await expect(page.getByLabel("New password", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel(/^New password/)).toHaveValue("");
   const response = page.waitForResponse(value => new URL(value.url()).pathname === "/api/auth/reset-password");
   release(); await response;
   await expect(page.getByRole("status")).toHaveCount(0);

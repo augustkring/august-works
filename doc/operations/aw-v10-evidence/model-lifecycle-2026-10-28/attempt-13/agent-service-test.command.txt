@@ -1,0 +1,1 @@
+flock -x /workspace/v10-preparation/v10-pg-tests.lock /workspace/v10-preparation/pinned-bin/pnpm --filter @paperclipai/server exec vitest run src/__tests__/agent-persona-persistence.test.ts

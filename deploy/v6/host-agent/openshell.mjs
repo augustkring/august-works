@@ -1,18 +1,40 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { createHash } from "node:crypto";
-import { readFile, stat, realpath } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { readFile, stat, realpath, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { atomicJson } from "./journal.mjs";
 
 const runFile = promisify(execFile);
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+const probeContracts = Object.freeze({
+  filesystem_allow: ["filesystemPolicy", "allow"],
+  filesystem_deny: ["filesystemPolicy", "deny"],
+  filesystem_escape: ["filesystemPolicy", "deny"],
+  process_nonprivileged: ["processPrivilegePolicy", "observe"],
+  process_privilege_denied: ["processPrivilegePolicy", "deny"],
+  syscall_allow: ["syscallPolicy", "allow"],
+  syscall_deny: ["syscallPolicy", "deny"],
+  network_allow: ["networkDestinationPolicy", "allow"],
+  network_host_port_deny: ["networkDestinationPolicy", "deny"],
+  network_dns_redirect_deny: ["networkDestinationPolicy", "deny"],
+  network_l7_allow: ["networkLayer7Policy", "allow"],
+  network_l7_deny: ["networkLayer7Policy", "deny"],
+  credential_allow: ["credentialBrokering", "allow"],
+  credential_raw_read_deny: ["credentialBrokering", "deny"],
+  credential_wrong_destination_deny: ["credentialBrokering", "deny"],
+  credential_revoke_deny: ["credentialBrokering", "deny"],
+  resource_exhaustion_contained: ["resourceLimits", "deny"],
+  force_stop: ["forceStop", "observe"],
+});
 const actions = new Set([
   "capabilities",
   "prepare",
   "inspect",
   "effective_policy",
+  "apply",
+  "start",
   "probe",
   "revoke_providers",
   "stop",
@@ -25,6 +47,7 @@ export function openShellHostEngine({
   epoch,
   root = "/var/lib/aw-runtime",
   run = runFile,
+  spawnProcess = spawn,
 }) {
   const journalFile = path.join(root, "openshell-journal.json");
   let journal = { version: 2, scopes: {}, commands: {} },
@@ -45,6 +68,17 @@ export function openShellHostEngine({
       /^[1-9][0-9]{0,18}$/.test(scope.cellGeneration) &&
       scope.sandboxRef === `aw-v7-${scope.bindingId}`
     );
+  }
+  function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object")
+      return Object.fromEntries(
+        Object.keys(value).sort().map((key) => [key, canonical(value[key])]),
+      );
+    return value;
+  }
+  function sameDocument(left, right) {
+    return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
   }
   async function privateConfiguration() {
     if (
@@ -77,10 +111,11 @@ export function openShellHostEngine({
       throw new Error("sandbox_host_unavailable");
     return {
       executable,
+      stateHome,
       env: { HOME: stateHome, PATH: "/usr/bin:/bin", LANG: "C", NO_COLOR: "1" },
     };
   }
-  async function cli(args, deadlineAt, json = true) {
+  async function cli(args, deadlineAt, json = true, envOverrides = {}, timeoutCapMs = 6000) {
     const privateConfig = await privateConfiguration();
     const remaining = new Date(deadlineAt).getTime() - Date.now();
     if (!Number.isFinite(remaining) || remaining <= 0)
@@ -89,14 +124,311 @@ export function openShellHostEngine({
       privateConfig.executable,
       ["--gateway", config.gateway, "--workspace", config.workspace, ...args],
       {
-        env: privateConfig.env,
-        timeout: Math.min(6000, remaining),
+        env: { ...privateConfig.env, ...envOverrides },
+        timeout: Math.min(timeoutCapMs, remaining),
         maxBuffer: 262144,
         windowsHide: true,
         killSignal: "SIGKILL",
       },
     );
     return json ? JSON.parse(stdout) : stdout;
+  }
+  async function inspectBrokerProviderProfile(request, deadlineAt, model = false, expectedBinaries = null) {
+    const broker = model ? request.modelBrokerCredential : request.brokerCredential;
+    if (!broker) return null;
+    const profile = await cli(["profile", "describe", broker.profileId, "--output", "json"], deadlineAt);
+    if (!profile || profile.id !== broker.profileId || hash(JSON.stringify(canonical(profile))) !== broker.profileHash ||
+      !Array.isArray(profile.credentials) || profile.credentials.length !== 1 ||
+      !Array.isArray(profile.endpoints) || profile.endpoints.length !== 1 ||
+      !Array.isArray(profile.binaries)) throw new Error("sandbox_operation_unsupported");
+    if (expectedBinaries !== null) {
+      const actualBinaries = profile.binaries.map(value => value?.path).sort();
+      const wantedBinaries = [...expectedBinaries].sort();
+      if (profile.binaries.some(value => !value || Object.keys(value).length !== 1 || typeof value.path !== "string") ||
+        new Set(actualBinaries).size !== actualBinaries.length || new Set(wantedBinaries).size !== wantedBinaries.length ||
+        JSON.stringify(actualBinaries) !== JSON.stringify(wantedBinaries)) throw new Error("sandbox_operation_unsupported");
+    }
+    const credential = profile.credentials[0];
+    if (credential?.auth_style !== "bearer" || credential.header_name?.toLowerCase() !== "authorization" ||
+      credential.env_vars?.length !== 1 || credential.env_vars[0] !== (model ? "PAPERCLIP_SANDBOX_MODEL_TOKEN" : "PAPERCLIP_SANDBOX_BROKER_TOKEN") ||
+      credential.token_grant || credential.refresh) throw new Error("sandbox_operation_unsupported");
+    const endpoint = profile.endpoints[0];
+    const origin = new URL(request.env[model ? "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN" : "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN"] ?? "");
+    const port = origin.port ? Number(origin.port) : origin.protocol === "https:" ? 443 : 80;
+    const rules = endpoint?.rules;
+    if (origin.protocol !== "https:" || endpoint?.host !== origin.hostname || endpoint?.port !== port ||
+      endpoint.protocol !== "rest" || endpoint.enforcement !== "enforce" || endpoint.allow_uninspected_credentials === true ||
+      endpoint.path || !Array.isArray(rules) || rules.length !== 1 ||
+      rules[0]?.allow?.method !== "POST" || rules[0]?.allow?.path !== (model ? "/runtime-tools/model/v1/messages" : "/mcp/gateways/*"))
+      throw new Error("sandbox_operation_unsupported");
+    return { profile, origin };
+  }
+  async function attachBrokerProvider(request, scope, deadlineAt, providerName) {
+    const broker = request.brokerCredential;
+    if (!broker) return;
+    if (Date.parse(broker.expiresAt) <= Date.now() || Date.parse(broker.expiresAt) > Date.parse(deadlineAt))
+      throw new Error("exec_timeout");
+    const decoded = (() => {
+      try { return JSON.parse(Buffer.from(broker.capabilityToken.split(".")[1], "base64url").toString("utf8")); }
+      catch { return null; }
+    })();
+    const capability = decoded?.sandbox_broker;
+    if (!decoded || decoded.purpose !== "sandbox_broker" || decoded.aud !== "paperclip-sandbox-broker" ||
+      !Array.isArray(capability?.bindings) || capability.bindings.some(binding => !binding ||
+        !(binding.binary === null || typeof binding.binary === "string" && binding.binary.startsWith("/"))) ||
+      decoded.jti !== request.requestId || capability?.parentRequestId !== request.requestId ||
+      capability.bindingId !== request.bindingId || capability.cellId !== scope.cellId ||
+      capability.generation !== scope.cellGeneration || capability.hostEpoch !== request.hostEpoch ||
+      capability.runId !== request.runId || capability.attemptId !== request.attemptId || capability.attempt !== request.attempt ||
+      capability.manifestId !== request.manifestId || capability.manifestHash !== request.manifestHash ||
+      capability.policySnapshotId !== request.policySnapshotId || capability.policyHash !== request.policyHash ||
+      capability?.endpointOrigin !== request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN ||
+      capability?.brokerSessionId !== request.env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID ||
+      Date.parse(capability?.expiresAt ?? "") !== Date.parse(broker.expiresAt) || decoded.exp * 1000 > Date.parse(broker.expiresAt) + 999 ||
+      decoded.company_id !== scope.companyId || decoded.run_id !== request.runId || !Number.isFinite(decoded.exp) || decoded.exp * 1000 <= Date.now())
+      throw new Error("sandbox_scope_changed");
+    const binaries = capability.bindings.map(binding => binding.binary ?? null);
+    const expectedBinaries = binaries.some(binary => binary !== null)
+      ? (binaries.every(binary => binary !== null) && new Set(binaries).size === 1 ? [binaries[0]] : null)
+      : null;
+    if (binaries.some(binary => binary !== null) && expectedBinaries === null)
+      throw new Error("sandbox_operation_unsupported");
+    const { origin } = await inspectBrokerProviderProfile(request, deadlineAt, false, expectedBinaries);
+    if (origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash)
+      throw new Error("sandbox_operation_unsupported");
+    const providerCredentialEnv = "PAPERCLIP_SANDBOX_BROKER_TOKEN";
+    const providerEnv = { [providerCredentialEnv]: broker.capabilityToken };
+    await cli(["provider", "create", "--name", providerName, "--type", broker.profileId, "--credential", providerCredentialEnv], deadlineAt, false, providerEnv);
+    await cli(["provider", "update", providerName, "--credential-expires-at", `${providerCredentialEnv}=${broker.expiresAt}`], deadlineAt, false);
+    const waitSeconds = Math.max(1, Math.min(15, Math.floor((Date.parse(deadlineAt) - Date.now()) / 1000)));
+    await cli(["sandbox", "provider", "attach", scope.sandboxRef, providerName, "--wait", "--timeout", String(waitSeconds), "--output", "json"], deadlineAt, true, {}, 18_000);
+    const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
+    if (!Array.isArray(attached.providers) || !attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "")
+      throw new Error("sandbox_observation_unavailable");
+  }
+  async function attachModelBrokerProvider(request, scope, deadlineAt, providerName) {
+    const broker = request.modelBrokerCredential;
+    if (!broker) return;
+    if (Date.parse(broker.expiresAt) <= Date.now() || Date.parse(broker.expiresAt) > Date.parse(deadlineAt)) throw new Error("exec_timeout");
+    const decoded = (() => { try { return JSON.parse(Buffer.from(broker.capabilityToken.split(".")[1], "base64url").toString("utf8")); } catch { return null; } })();
+    if (!decoded || decoded.scope !== "worker_model" || decoded.company_id !== scope.companyId || decoded.run_id !== request.runId ||
+      decoded.exp * 1000 <= Date.now() || decoded.exp * 1000 < Date.parse(broker.expiresAt) ||
+      decoded.worker_model?.executionManifestId !== request.manifestId || !decoded.worker_model?.workerAttemptId)
+      throw new Error("sandbox_scope_changed");
+    const { origin } = await inspectBrokerProviderProfile(request, deadlineAt, true);
+    if (origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) throw new Error("sandbox_operation_unsupported");
+    const credentialEnv = "PAPERCLIP_SANDBOX_MODEL_TOKEN";
+    await cli(["provider", "create", "--name", providerName, "--type", broker.profileId, "--credential", credentialEnv], deadlineAt, false, { [credentialEnv]: broker.capabilityToken });
+    await cli(["provider", "update", providerName, "--credential-expires-at", `${credentialEnv}=${broker.expiresAt}`], deadlineAt, false);
+    const waitSeconds = Math.max(1, Math.min(15, Math.floor((Date.parse(deadlineAt) - Date.now()) / 1000)));
+    await cli(["sandbox", "provider", "attach", scope.sandboxRef, providerName, "--wait", "--timeout", String(waitSeconds), "--output", "json"], deadlineAt, true, {}, 18_000);
+    const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
+    if (!Array.isArray(attached.providers) || !attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "") throw new Error("sandbox_observation_unavailable");
+  }
+  async function detachAndDeleteBrokerProvider(scope, deadlineAt, providerName) {
+    await cli(["sandbox", "provider", "detach", scope.sandboxRef, providerName, "--wait", "--timeout", "15", "--output", "json"], deadlineAt, true, {}, 18_000);
+    const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
+    if (!Array.isArray(attached.providers) || attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "")
+      throw new Error("sandbox_observation_unavailable");
+    await cli(["provider", "delete", providerName], deadlineAt, false);
+  }
+  async function deleteQuiescedBrokerProviders(scope, deadlineAt) {
+    const pending = Object.values(journal.commands).flatMap(command => {
+      return [command?.brokerProvider, command?.modelBrokerProvider].filter(provider => provider && validScope(provider.scope) && sameDocument(provider.scope, scope) &&
+        /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name ?? "")).map(provider => provider.name);
+    });
+    const names = [...new Set(pending)].slice(0, 32);
+    for (const name of names) await cli(["provider", "delete", name], deadlineAt, false);
+    if (names.length) await serial(async () => {
+      for (const command of Object.values(journal.commands)) {
+        if (command?.brokerProvider && names.includes(command.brokerProvider.name) && validScope(command.brokerProvider.scope) && sameDocument(command.brokerProvider.scope, scope))
+          delete command.brokerProvider;
+        if (command?.modelBrokerProvider && names.includes(command.modelBrokerProvider.name) && validScope(command.modelBrokerProvider.scope) && sameDocument(command.modelBrokerProvider.scope, scope))
+          delete command.modelBrokerProvider;
+      }
+      await atomicJson(journalFile, journal);
+    });
+  }
+  async function docker(args, deadlineAt, json = true) {
+    const privateConfig = await privateConfiguration();
+    const remaining = new Date(deadlineAt).getTime() - Date.now();
+    if (!Number.isFinite(remaining) || remaining <= 0)
+      throw new Error("sandbox_host_unavailable");
+    const { stdout } = await run("docker", args, {
+      env: {
+        ...privateConfig.env,
+        PATH: process.env.PATH,
+        DOCKER_HOST: "unix:///var/run/docker.sock",
+      },
+      timeout: Math.min(6000, remaining),
+      maxBuffer: 262144,
+      windowsHide: true,
+      killSignal: "SIGKILL",
+    });
+    return json ? JSON.parse(stdout) : stdout;
+  }
+  function validResourceLimits(value) {
+    return value && Number.isSafeInteger(value.cpuMillis) && value.cpuMillis >= 100 && value.cpuMillis <= 64000 &&
+      Number.isSafeInteger(value.memoryBytes) && value.memoryBytes >= 67108864 && value.memoryBytes <= 137438953472 &&
+      Number.isSafeInteger(value.pidsLimit) && value.pidsLimit >= 16 && value.pidsLimit <= 16384;
+  }
+  function resourceHostConfigMatches(container, limits) {
+    const host = container?.HostConfig;
+    return validResourceLimits(limits) && host?.NanoCpus === limits.cpuMillis * 1_000_000 &&
+      host?.Memory === limits.memoryBytes && host?.MemorySwap === limits.memoryBytes && host?.PidsLimit === limits.pidsLimit;
+  }
+  function dockerResourceUpdateArgs(containerId, limits) {
+    if (!/^[a-f0-9]{64}$/.test(containerId ?? "") || !validResourceLimits(limits))
+      throw new Error("sandbox_scope_changed");
+    const cpus = (limits.cpuMillis / 1000).toFixed(3).replace(/\.?0+$/, "");
+    return ["update", "--cpus", cpus, "--memory", String(limits.memoryBytes), "--memory-swap", String(limits.memoryBytes),
+      "--pids-limit", String(limits.pidsLimit), containerId];
+  }
+  async function applyDockerResourceLimits(scope, sandbox, imageDigest, limits, deadlineAt, expectedContainerId) {
+    const before = await container(scope, sandbox, imageDigest, deadlineAt);
+    if (before.Id !== expectedContainerId || before.State.Running)
+      throw new Error("sandbox_scope_changed");
+    await docker(dockerResourceUpdateArgs(before.Id, limits), deadlineAt, false);
+    const after = await container(scope, sandbox, imageDigest, deadlineAt);
+    if (after.Id !== before.Id || !resourceHostConfigMatches(after, limits))
+      throw new Error("sandbox_observation_unavailable");
+    return after;
+  }
+  async function inspectCredentialProviderProfile(expected, deadlineAt) {
+    if (!expected || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(expected.id ?? "") ||
+      !/^[a-f0-9]{64}$/.test(expected.hash ?? "") || !Array.isArray(expected.binaries) || expected.binaries.length > 32)
+      throw new Error("sandbox_operation_unsupported");
+    const profile = await cli(["profile", "describe", expected.id, "--output", "json"], deadlineAt);
+    if (!profile || profile.id !== expected.id || hash(JSON.stringify(canonical(profile))) !== expected.hash ||
+      !Array.isArray(profile.binaries) || profile.binaries.length > 32 ||
+      profile.binaries.some(value => !value || Object.keys(value).length !== 1 || typeof value.path !== "string")) {
+      throw new Error("sandbox_operation_unsupported");
+    }
+    const actual = profile.binaries.map(value => value.path).sort();
+    const wanted = [...expected.binaries].sort();
+    if (new Set(actual).size !== actual.length || new Set(wanted).size !== wanted.length ||
+      JSON.stringify(actual) !== JSON.stringify(wanted))
+      throw new Error("sandbox_operation_unsupported");
+  }
+  async function sandboxExec(scope, argv, deadlineAt) {
+    const remaining = Date.parse(deadlineAt) - Date.now();
+    if (!Number.isFinite(remaining) || remaining < 1500) throw new Error("exec_timeout");
+    const privateConfig = await privateConfiguration();
+    try {
+      const { stdout } = await run(
+        privateConfig.executable,
+        ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", scope.sandboxRef, "--no-login-shell", "--timeout", String(Math.min(3, Math.floor(remaining / 1000))), "--", ...argv],
+        { env: privateConfig.env, timeout: Math.min(4500, remaining), maxBuffer: 8192, windowsHide: true, killSignal: "SIGKILL" },
+      );
+      return { exitCode: 0, stdout: String(stdout).slice(0, 256) };
+    } catch (error) {
+      const status = Number.isInteger(error?.code) ? error.code : Number.isInteger(error?.status) ? error.status : null;
+      return { exitCode: status, stdout: "" };
+    }
+  }
+  async function hostCapabilities(request, scope, deadlineAt) {
+    const version = await cli(["--version"], deadlineAt, false);
+    if (version.trim() !== "openshell 0.1.2") return null;
+    const detail = await observed(scope, deadlineAt);
+    const currentPolicy = await policy(scope, deadlineAt);
+    const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+    if (!workload || !currentPolicy.policy || !currentPolicy.policy.filesystem_policy || !currentPolicy.policy.landlock || !currentPolicy.policy.process) return null;
+    const fs = currentPolicy.policy.filesystem_policy;
+    const process = currentPolicy.policy.process;
+    const network = currentPolicy.policy.network_policies;
+    const testedAt = new Date().toISOString();
+    const evidence = {
+      backend: "openshell", backendVersion: "0.1.2", sandboxId: detail.id,
+      containerId: workload.Id, imageDigest: request.imageDigest,
+      policyHash: currentPolicy.hash, policyVersion: currentPolicy.version,
+      configRevision: currentPolicy.config_revision, phase: detail.phase,
+    };
+    const qualificationHash = hash(JSON.stringify(canonical(evidence)));
+    return {
+      filesystemPolicy: fs.include_workdir === false && currentPolicy.policy.landlock.compatibility === "hard_requirement",
+      processPrivilegePolicy: typeof process.run_as_user === "string" && typeof process.run_as_group === "string" && process.run_as_user !== "0",
+      syscallPolicy: false,
+      networkDestinationPolicy: Boolean(network && typeof network === "object" && Object.values(network).every(value => Array.isArray(value?.endpoints))),
+      networkLayer7Policy: Boolean(network && typeof network === "object" && Object.values(network).every(value => (value?.endpoints ?? []).every(endpoint => endpoint?.protocol === "rest" && endpoint?.enforcement === "enforce" && Array.isArray(endpoint.rules)))),
+      credentialBrokering: false,
+      resourceLimits: false,
+      forceStop: detail.phase === "Stopped" && workload.State.Running === false,
+      backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: null,
+      sandboxImageDigest: request.imageDigest,
+      filesystemEnforcementMode: currentPolicy.policy.landlock.compatibility === "hard_requirement" ? "hard_requirement" : "unknown",
+      staticPolicyRequiresRecreate: true,
+      dynamicNetworkPolicy: true,
+      policyProverBoundaryCheck: false,
+      policyProverCoverage: [], credentialBindingDimensions: [],
+      testedAt, expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      qualificationHash, evidenceKind: "protected_host_report",
+    };
+  }
+  async function probeBoundary(request, deadlineAt) {
+    const probe = request.probe;
+    const expected = probeContracts[probe.caseId];
+    if (!expected || expected[0] !== probe.control || expected[1] !== probe.expected || !/^[a-f0-9]{64}$/.test(probe.contractHash ?? ""))
+      throw new Error("sandbox_scope_changed");
+    const detail = await observed(request.scope, deadlineAt);
+    const effective = await policy(request.scope, deadlineAt);
+    if (detail.phase !== "Ready")
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    if (!["process_nonprivileged", "filesystem_allow", "filesystem_deny"].includes(probe.caseId))
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    const workload = await container(request.scope, detail, request.imageDigest, deadlineAt);
+    const targetQualificationHash = hash(JSON.stringify(canonical({
+      backend: "openshell", backendVersion: "0.1.2", sandboxId: detail.id,
+      containerId: workload.Id, imageDigest: request.imageDigest, policyHash: effective.hash,
+      policyVersion: effective.version, configRevision: effective.config_revision, phase: detail.phase,
+    })));
+    const probeReply = (verdict, observationHash) => ({ action: "probe", verdict, observationHash,
+      contractHash: probe.contractHash, targetQualificationHash });
+    const policyDeniedFor = async (needle) => {
+      try {
+        const logs = await cli(["logs", request.scope.sandboxRef, "--since", "1m", "--source", "sandbox"], deadlineAt, false, {}, 4500);
+        return logs.includes("policy_denied") && logs.includes(needle);
+      } catch { return false; }
+    };
+    let observation;
+    if (probe.caseId === "process_nonprivileged") {
+      const user = effective.policy?.process?.run_as_user;
+      if (!/^[1-9][0-9]{0,8}$/.test(user ?? ""))
+        return probeReply("unsupported", null);
+      const result = await sandboxExec(request.scope, ["/usr/bin/id", "-u"], deadlineAt);
+      if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
+        return probeReply("unsupported", null);
+      if (result.exitCode !== 0 || result.stdout.trim() !== user)
+        return probeReply("fail", null);
+      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, observedUid: Number(user) };
+    } else if (probe.caseId === "filesystem_allow") {
+      const allowed = effective.policy?.filesystem_policy?.read_only ?? [];
+      if (!allowed.some(value => value === "/etc" || value === "/" || value.startsWith("/etc/")))
+        return probeReply("unsupported", null);
+      const result = await sandboxExec(request.scope, ["/bin/sh", "-c", "test -r /etc/os-release"], deadlineAt);
+      if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
+        return probeReply("unsupported", null);
+      if (result.exitCode !== 0)
+        return probeReply("fail", null);
+      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, operation: "read_os_release" };
+    } else if (probe.caseId === "filesystem_deny") {
+      const allowed = [...(effective.policy?.filesystem_policy?.read_only ?? []), ...(effective.policy?.filesystem_policy?.read_write ?? [])];
+      const target = "/etc/os-release";
+      if (allowed.some(value => value === "/" || target === value || target.startsWith(value.endsWith("/") ? value : `${value}/`)))
+        return probeReply("unsupported", null);
+      // test(1) reads metadata only. A pass requires OpenShell's own denial
+      // event for this exact path, so DAC errors or a missing file cannot pass.
+      const result = await sandboxExec(request.scope, ["/bin/sh", "-c", "test -r /etc/os-release"], deadlineAt);
+      if (result.exitCode === 0)
+        return probeReply("fail", null);
+      if (result.exitCode === null || !(await policyDeniedFor("/etc/os-release")))
+        return probeReply("unsupported", null);
+      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, denial: "policy_denied:/etc/os-release" };
+    } else {
+      // No other v0.1.2 probe is reported as passing without its dedicated
+      // runtime assertion (including a policy_denied observation for denies).
+      return probeReply("unsupported", null);
+    }
+    return probeReply("pass", hash(JSON.stringify(canonical(observation))));
   }
   async function observed(scope, deadlineAt) {
     const detail = await cli(
@@ -135,46 +467,419 @@ export function openShellHostEngine({
     }
     return detail;
   }
+  async function policy(scope, deadlineAt) {
+    const result = await cli(
+      ["policy", "get", scope.sandboxRef, "--full", "--output", "json"],
+      deadlineAt,
+    );
+    if (
+      result.sandbox !== scope.sandboxRef ||
+      result.status !== "effective" ||
+      !/^[a-f0-9]{64}$/.test(result.hash ?? "") ||
+      !Number.isSafeInteger(result.version) ||
+      result.version < 0 ||
+      !Number.isSafeInteger(result.config_revision) ||
+      result.config_revision < 0 ||
+      !result.policy
+    )
+      throw new Error("sandbox_observation_unavailable");
+    await observed(scope, deadlineAt);
+    return result;
+  }
+  async function container(scope, sandbox, imageDigest, deadlineAt) {
+    const engineId = (await docker(["info", "--format", "{{.ID}}"], deadlineAt, false)).trim();
+    if (!engineId || engineId.length > 200 || /[\r\n\0]/.test(engineId))
+      throw new Error("sandbox_operation_unsupported");
+    const engineIdHash = hash(engineId);
+    const enginePin = journal.scopes[scope.bindingId]?.dockerEngineId;
+    if (enginePin && enginePin !== engineIdHash)
+      throw new Error("sandbox_scope_changed");
+    const idsOutput = await docker(
+      [
+        "ps",
+        "-aq",
+        "--filter",
+        `label=openshell.ai/sandbox-id=${sandbox.id}`,
+        "--filter",
+        "label=openshell.ai/isolation-role=sandbox",
+      ],
+      deadlineAt,
+      false,
+    );
+    const ids = idsOutput.trim().split(/\s+/).filter(Boolean);
+    if (ids.length !== 1 || !/^[a-f0-9]{64}$/.test(ids[0]))
+      throw new Error("sandbox_operation_unsupported");
+    const values = await docker(["inspect", ids[0]], deadlineAt);
+    if (!Array.isArray(values) || values.length !== 1)
+      throw new Error("sandbox_observation_unavailable");
+    const value = values[0];
+    const labels = value.Config?.Labels;
+    const expectedLabels = {
+      "openshell.ai/managed-by": "openshell",
+      "openshell.ai/sandbox-id": sandbox.id,
+      "openshell.ai/sandbox-name": scope.sandboxRef,
+      "openshell.ai/sandbox-workspace": config.workspace,
+      "openshell.ai/isolation-backend": "openshell-sandbox",
+      "openshell.ai/isolation-role": "sandbox",
+      "aw.company_id": scope.companyId,
+      "aw.binding_id": scope.bindingId,
+      "aw.cell_id": scope.cellId,
+      "aw.generation": scope.cellGeneration,
+    };
+    if (
+      value.Id !== ids[0] ||
+      Object.entries(expectedLabels).some(([key, expected]) => labels?.[key] !== expected) ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(labels?.["openshell.ai/sandbox-namespace"] ?? "") ||
+      value.Config?.Image !== value.Image ||
+      !Array.isArray(value.RepoDigests) ||
+      !value.RepoDigests.includes(imageDigest) ||
+      !/^sha256:[a-f0-9]{64}$/.test(value.Image ?? "") ||
+      typeof value.State?.Running !== "boolean"
+    )
+      throw new Error("sandbox_scope_changed");
+    const pinned = journal.scopes[scope.bindingId];
+    if (pinned.containerId && pinned.containerId !== value.Id)
+      throw new Error("sandbox_scope_changed");
+    if (pinned.imageId && pinned.imageId !== value.Image)
+      throw new Error("sandbox_scope_changed");
+    if (
+      pinned.namespace &&
+      pinned.namespace !== labels["openshell.ai/sandbox-namespace"]
+    )
+      throw new Error("sandbox_scope_changed");
+    if (!pinned.containerId || !pinned.dockerEngineId) {
+      journal.scopes[scope.bindingId] = {
+        ...pinned,
+        containerId: value.Id,
+        imageId: value.Image,
+        namespace: labels["openshell.ai/sandbox-namespace"],
+        dockerEngineId: engineIdHash,
+      };
+      await atomicJson(journalFile, journal);
+    }
+    return value;
+  }
+  async function contain(scope, imageDigest, deadlineAt) {
+    try {
+      await revokeProviders(scope, deadlineAt);
+      await cli(["sandbox", "stop", scope.sandboxRef], deadlineAt, false);
+      const stopped = await observed(scope, deadlineAt);
+      const workload = await container(scope, stopped, imageDigest, deadlineAt);
+      if (stopped.phase !== "Stopped" || workload.State.Running)
+        throw new Error("sandbox_observation_unavailable");
+      await deleteQuiescedBrokerProviders(scope, deadlineAt);
+    } catch {
+      throw new Error("sandbox_host_unavailable");
+    }
+  }
+  function staticPolicyMatches(left, right) {
+    return (
+      sameDocument(left.filesystem_policy, right.filesystem_policy) &&
+      sameDocument(left.landlock, right.landlock) &&
+      sameDocument(left.process, right.process)
+    );
+  }
+  async function revokeProviders(scope, deadlineAt) {
+    const before = await cli(
+      ["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "4", "--output", "json"],
+      deadlineAt,
+    );
+    if (!Array.isArray(before.providers) || before.providers.length > 4 || before.next_page_token !== "")
+      throw new Error("sandbox_operation_unsupported");
+    for (const provider of before.providers) {
+      await observed(scope, deadlineAt);
+      if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name ?? ""))
+        throw new Error("sandbox_observation_unavailable");
+      await cli(
+        ["sandbox", "provider", "detach", scope.sandboxRef, provider.name, "--wait", "--timeout", "2", "--output", "json"],
+        deadlineAt,
+      );
+    }
+    const after = await cli(
+      ["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "4", "--output", "json"],
+      deadlineAt,
+    );
+    if (!Array.isArray(after.providers) || after.providers.length || after.next_page_token !== "")
+      throw new Error("sandbox_observation_unavailable");
+    await observed(scope, deadlineAt);
+  }
+  function samePolicyRevision(result, pinned) {
+    return (
+      result.hash === pinned.effectivePolicyHash &&
+      result.version === pinned.policyVersion &&
+      result.config_revision === pinned.configRevision &&
+      sameDocument(result.policy, pinned.document)
+    );
+  }
   async function executeAction(request, deadlineAt) {
     const scope = request.scope;
-    // Neither a private JSON file nor CLI version/kernel output is physical
-    // qualification of credentials, syscalls, resource limits or forced Stop.
-    if (request.action === "capabilities")
-      return { action: "capabilities", capabilities: null };
-    if (request.action === "probe")
-      return { action: "probe", verdict: "unsupported", observationHash: null };
+    const sourceExpiry = request.action === "apply"
+      ? request.admission?.expiresAt
+      : request.action === "start"
+        ? request.start?.expiresAt
+        : null;
+    if (sourceExpiry !== null && sourceExpiry !== undefined &&
+      (!Number.isFinite(Date.parse(sourceExpiry)) ||
+        Date.parse(sourceExpiry) <= Date.now() ||
+        Date.parse(deadlineAt) > Date.parse(sourceExpiry))) {
+      throw new Error("sandbox_scope_changed");
+    }
+    // Capabilities come from live CLI, gateway, policy and container
+    // observations. Probes execute inside that observed sandbox; unavailable
+    // runtimes never inherit a fixture or request-body success.
+    if (!config && request.action === "capabilities") return { action: "capabilities", capabilities: null };
+    if (!config && request.action === "probe") return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: request.probe.contractHash };
     if (!config) throw new Error("sandbox_host_unavailable");
     const version = await cli(["--version"], deadlineAt, false);
-    if (version.trim() !== "openshell 0.1.2")
-      throw new Error("sandbox_host_unavailable");
+    if (version.trim() !== "openshell 0.1.2") throw new Error("sandbox_host_unavailable");
+    if (request.action === "capabilities") {
+      try { return { action: "capabilities", capabilities: await hostCapabilities(request, scope, deadlineAt) }; }
+      catch { return { action: "capabilities", capabilities: null }; }
+    }
+    if (request.action === "probe") return probeBoundary(request, deadlineAt);
     const detail = await observed(scope, deadlineAt);
-    if (request.action === "inspect")
+    if (request.action === "inspect") {
+      try {
+        const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+        let policyHash = null;
+        const pinnedPolicy = journal.scopes[scope.bindingId]?.policy;
+        if (pinnedPolicy) {
+          const currentPolicy = await policy(scope, deadlineAt);
+          if (samePolicyRevision(currentPolicy, pinnedPolicy) &&
+            resourceHostConfigMatches(workload, pinnedPolicy.resourceLimits))
+            policyHash = pinnedPolicy.policyHash;
+        }
+        return {
+          action: "inspect",
+          state: detail.phase === "Error" ? "failed" :
+            detail.phase === "Stopped" && !workload.State.Running ? "stopped" :
+            detail.phase === "Ready" && workload.State.Running ? "running" : "unknown",
+          policyHash,
+          imageDigest: request.imageDigest,
+          generation: scope.cellGeneration,
+          // The command path has physical observations, but the release profile
+          // still has no complete qualified capability snapshot.
+          controlsHealthy: false,
+        };
+      } catch {
+        return {
+          action: "inspect",
+          state: "unknown",
+          policyHash: null,
+          imageDigest: null,
+          generation: scope.cellGeneration,
+          controlsHealthy: false,
+        };
+      }
+    }
+    if (request.action === "prepare") {
+      // Preparation is verification of a controller-pinned, pre-provisioned
+      // sandbox. OpenShell v0.1.2's `sandbox get` does not expose the image,
+      // so bind this receipt to the actual Docker daemon/container observation
+      // rather than echoing the requested image digest. This action never
+      // creates or adopts a sandbox and cannot qualify the physical controls.
+      if (detail.phase !== "Stopped")
+        throw new Error("sandbox_operation_unsupported");
+      const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+      if (workload.State.Running)
+        throw new Error("sandbox_operation_unsupported");
       return {
-        action: "inspect",
-        state:
-          detail.phase === "Stopped"
-            ? "stopped"
-            : detail.phase === "Error"
-              ? "failed"
-              : "unknown",
-        policyHash: null,
-        imageDigest: null,
-        generation: scope.cellGeneration,
-        controlsHealthy: false,
+        action: "prepare",
+        backendVersion: "0.1.2",
+        imageDigest: request.imageDigest,
       };
+    }
     if (request.action === "effective_policy") {
-      const policy = await cli(
-        ["policy", "get", scope.sandboxRef, "--full", "--output", "json"],
+      const current = await policy(scope, deadlineAt);
+      return { action: "effective_policy", document: current.policy };
+    }
+    if (request.action === "apply") {
+      const admission = request.admission;
+      if (!admission || Date.parse(admission.expiresAt) <= Date.now()) throw new Error("sandbox_scope_changed");
+      const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+      if (detail.phase !== "Stopped" || workload.State.Running)
+        throw new Error("sandbox_operation_unsupported");
+      if (!validResourceLimits(admission.resourceLimits)) throw new Error("sandbox_scope_changed");
+      if (admission.credentialProviderProfile) await inspectCredentialProviderProfile(admission.credentialProviderProfile, deadlineAt);
+      await revokeProviders(scope, deadlineAt);
+      const before = await policy(scope, deadlineAt);
+      if (!staticPolicyMatches(before.policy, admission.document))
+        return {
+          action: "apply",
+          applied: false,
+          policyHash: null,
+          requiresRecreate: true,
+          effectivePolicyHash: before.hash,
+        };
+      const boundedWorkload = await applyDockerResourceLimits(scope, detail, request.imageDigest,
+        admission.resourceLimits, deadlineAt, workload.Id);
+      if (!resourceHostConfigMatches(boundedWorkload, admission.resourceLimits))
+        throw new Error("sandbox_observation_unavailable");
+      const privateConfig = await privateConfiguration();
+      const filename = path.join(privateConfig.stateHome, `policy-${randomUUID()}.json`);
+      try {
+        await writeFile(filename, JSON.stringify(admission.document), {
+          flag: "wx",
+          mode: 0o600,
+        });
+        const remaining = Math.floor(
+          (new Date(deadlineAt).getTime() - Date.now()) / 1000,
+        );
+        if (remaining < 1) throw new Error("sandbox_host_unavailable");
+        await cli(
+          [
+            "policy",
+            "set",
+            scope.sandboxRef,
+            "--policy",
+            filename,
+            "--wait",
+            "--timeout",
+            String(Math.min(6, remaining)),
+          ],
+          deadlineAt,
+          false,
+        );
+      } catch (error) {
+        let committed = false;
+        try {
+          committed = sameDocument(
+            (await policy(scope, deadlineAt)).policy,
+            admission.document,
+          );
+        } catch {}
+        if (!committed) await contain(scope, request.imageDigest, deadlineAt);
+        if (committed) {
+          const observedPolicy = await policy(scope, deadlineAt);
+          journal.scopes[scope.bindingId] = {
+            ...journal.scopes[scope.bindingId],
+            policy: {
+              policyHash: admission.policyHash,
+              effectivePolicyHash: observedPolicy.hash,
+              policyVersion: observedPolicy.version,
+              configRevision: observedPolicy.config_revision,
+              document: observedPolicy.policy,
+              resourceLimits: admission.resourceLimits,
+              ...(admission.credentialProviderProfile ? { credentialProviderProfile: admission.credentialProviderProfile } : {}),
+              appliedAt: new Date().toISOString(),
+            },
+          };
+          await atomicJson(journalFile, journal);
+          return {
+            action: "apply",
+            applied: true,
+            policyHash: admission.policyHash,
+            requiresRecreate: false,
+            effectivePolicyHash: observedPolicy.hash,
+          };
+        }
+        if ([
+          "sandbox_host_unavailable",
+          "sandbox_scope_changed",
+          "sandbox_operation_unsupported",
+          "sandbox_observation_unavailable",
+        ].includes(error?.message)) throw error;
+        throw new Error("sandbox_observation_unavailable");
+      } finally {
+        await unlink(filename).catch(() => {});
+      }
+      const after = await policy(scope, deadlineAt);
+      if (!sameDocument(after.policy, admission.document)) {
+        await contain(scope, request.imageDigest, deadlineAt);
+        throw new Error("sandbox_observation_unavailable");
+      }
+      journal.scopes[scope.bindingId] = {
+        ...journal.scopes[scope.bindingId],
+        policy: {
+          policyHash: admission.policyHash,
+          effectivePolicyHash: after.hash,
+          policyVersion: after.version,
+          configRevision: after.config_revision,
+          document: after.policy,
+          resourceLimits: admission.resourceLimits,
+          ...(admission.credentialProviderProfile ? { credentialProviderProfile: admission.credentialProviderProfile } : {}),
+          appliedAt: new Date().toISOString(),
+        },
+      };
+      await atomicJson(journalFile, journal);
+      return {
+        action: "apply",
+        applied: true,
+        policyHash: admission.policyHash,
+        requiresRecreate: false,
+        effectivePolicyHash: after.hash,
+      };
+    }
+    if (request.action === "start") {
+      const start = request.start;
+      if (
+        !start ||
+        new Date(start.expiresAt) <= new Date() ||
+        !/^[a-f0-9]{64}$/.test(start.policyHash)
+      )
+        throw new Error("sandbox_scope_changed");
+      const pinnedPolicy = journal.scopes[scope.bindingId]?.policy;
+      if (!pinnedPolicy || pinnedPolicy.policyHash !== start.policyHash)
+        throw new Error("sandbox_scope_changed");
+      await revokeProviders(scope, deadlineAt);
+      const beforePolicy = await policy(scope, deadlineAt);
+      if (!samePolicyRevision(beforePolicy, pinnedPolicy))
+        throw new Error("sandbox_scope_changed");
+      const beforeWorkload = await container(
+        scope,
+        detail,
+        request.imageDigest,
+        deadlineAt,
+      );
+      if (detail.phase === "Ready" && beforeWorkload.State.Running) {
+        if (!resourceHostConfigMatches(beforeWorkload, pinnedPolicy.resourceLimits))
+          throw new Error("sandbox_observation_unavailable");
+        return {
+          action: "start",
+          started: true,
+          operationId: hash(start.idempotencyKey),
+          sandboxId: detail.id,
+          containerId: beforeWorkload.Id,
+          imageDigest: request.imageDigest,
+          policyHash: start.policyHash,
+          effectivePolicyHash: beforePolicy.hash,
+        };
+      }
+      if (detail.phase !== "Stopped" || beforeWorkload.State.Running ||
+        !resourceHostConfigMatches(beforeWorkload, pinnedPolicy.resourceLimits))
+        throw new Error("sandbox_operation_unsupported");
+      try {
+        await cli(["sandbox", "start", scope.sandboxRef], deadlineAt, false);
+      } catch {
+        // A lost CLI response is resolved from independent gateway and Docker
+        // observations below; it is never treated as success by itself.
+      }
+      const afterDetail = await observed(scope, deadlineAt);
+      const afterPolicy = await policy(scope, deadlineAt);
+      const afterWorkload = await container(
+        scope,
+        afterDetail,
+        request.imageDigest,
         deadlineAt,
       );
       if (
-        policy.sandbox !== scope.sandboxRef ||
-        policy.status !== "effective" ||
-        !policy.policy
-      )
+        afterDetail.phase !== "Ready" ||
+        !afterWorkload.State.Running ||
+        !samePolicyRevision(afterPolicy, pinnedPolicy)
+      ) {
+        await contain(scope, request.imageDigest, deadlineAt);
         throw new Error("sandbox_observation_unavailable");
-      await observed(scope, deadlineAt);
-      return { action: "effective_policy", document: policy.policy };
+      }
+      return {
+        action: "start",
+        started: true,
+        operationId: hash(start.idempotencyKey),
+        sandboxId: afterDetail.id,
+        containerId: afterWorkload.Id,
+        imageDigest: request.imageDigest,
+        policyHash: start.policyHash,
+        effectivePolicyHash: afterPolicy.hash,
+      };
     }
     if (request.action === "stop") {
       await cli(["sandbox", "stop", scope.sandboxRef], deadlineAt, false);
@@ -276,6 +981,154 @@ export function openShellHostEngine({
     // Configured image/labels therefore cannot earn a preparation receipt.
     throw new Error("sandbox_operation_unsupported");
   }
+  async function executeStream(input, onOutput, signal) {
+    const request = input?.request;
+    const requestKeys = ["requestId", "bindingId", "hostEpoch", "runId", "attemptId", "attempt", "manifestId", "manifestHash", "policySnapshotId", "policyHash", "commandDigest", "deadlineAt", "sandboxRef", "imageDigest", "argv", "cwd", "env", "stdinBase64"];
+    const requestVariants = [requestKeys, [...requestKeys, "brokerCredential"], [...requestKeys, "modelBrokerCredential"], [...requestKeys, "brokerCredential", "modelBrokerCredential"]];
+    if (!input || !validScope(input.scope) || !request ||
+      !requestVariants.some(keys => Object.keys(request).sort().join(",") === keys.slice().sort().join(",")) ||
+      !uuid.test(request.requestId) || request.bindingId !== input.scope.bindingId ||
+      request.hostEpoch !== epoch || !uuid.test(request.runId) ||
+      (request.attemptId !== null && !uuid.test(request.attemptId)) ||
+      !Number.isSafeInteger(request.attempt) || request.attempt < 1 ||
+      !uuid.test(request.manifestId) || !/^[a-f0-9]{64}$/.test(request.manifestHash) ||
+      !uuid.test(request.policySnapshotId) || !/^[a-f0-9]{64}$/.test(request.policyHash) ||
+      !/^[a-f0-9]{64}$/.test(request.commandDigest) ||
+      request.sandboxRef !== input.scope.sandboxRef ||
+      !/^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/i.test(request.imageDigest) ||
+      !Array.isArray(request.argv) || request.argv.length < 1 || request.argv.length > 64 ||
+      request.argv.some(value => typeof value !== "string" || !value.length || value.length > 8192) ||
+      typeof request.cwd !== "string" || !path.isAbsolute(request.cwd) ||
+      !request.env || typeof request.env !== "object" || Array.isArray(request.env) || Object.keys(request.env).length > 64 ||
+      Object.entries(request.env).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || typeof value !== "string" || value.length > 8192 ||
+        (/(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key) &&
+          !(request.modelBrokerCredential && (
+            (key === "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND" && value === String(request.modelBrokerCredential.inputTokensUpperBound)) ||
+            (key === "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS" && value === String(request.modelBrokerCredential.maxOutputTokens))
+          )))) ||
+      (request.brokerCredential !== undefined && (!request.brokerCredential || typeof request.brokerCredential.capabilityToken !== "string" || request.brokerCredential.capabilityToken.length > 16_384 ||
+        typeof request.brokerCredential.profileId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(request.brokerCredential.profileId) ||
+        typeof request.brokerCredential.profileHash !== "string" || !/^[a-f0-9]{64}$/.test(request.brokerCredential.profileHash) ||
+        typeof request.brokerCredential.expiresAt !== "string" || !Number.isFinite(Date.parse(request.brokerCredential.expiresAt)))) ||
+      (!!request.brokerCredential !== (typeof request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN === "string" && typeof request.env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID === "string")) ||
+      (request.modelBrokerCredential !== undefined && (!request.modelBrokerCredential || typeof request.modelBrokerCredential.capabilityToken !== "string" || request.modelBrokerCredential.capabilityToken.length > 16_384 ||
+        typeof request.modelBrokerCredential.profileId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(request.modelBrokerCredential.profileId) ||
+        typeof request.modelBrokerCredential.profileHash !== "string" || !/^[a-f0-9]{64}$/.test(request.modelBrokerCredential.profileHash) ||
+        typeof request.modelBrokerCredential.expiresAt !== "string" || !Number.isFinite(Date.parse(request.modelBrokerCredential.expiresAt)) ||
+        !Number.isSafeInteger(request.modelBrokerCredential.inputTokensUpperBound) || request.modelBrokerCredential.inputTokensUpperBound < 1 || request.modelBrokerCredential.inputTokensUpperBound > 2_000_000 ||
+        !Number.isSafeInteger(request.modelBrokerCredential.maxOutputTokens) || request.modelBrokerCredential.maxOutputTokens < 256 || request.modelBrokerCredential.maxOutputTokens > 8192)) ||
+      (!!request.modelBrokerCredential !== (typeof request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string")) ||
+      (request.modelBrokerCredential && (request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND !== String(request.modelBrokerCredential.inputTokensUpperBound) ||
+        request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS !== String(request.modelBrokerCredential.maxOutputTokens))) ||
+      typeof request.stdinBase64 !== "string" || request.stdinBase64.length > 512 * 1024 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(request.stdinBase64) ||
+      typeof input.capabilityToken !== "string" || input.capabilityToken.length > 16384 ||
+      typeof onOutput !== "function") throw new Error("sandbox_scope_changed");
+    const deadlineAt = request.deadlineAt;
+    if (!Number.isFinite(Date.parse(deadlineAt)) || Date.parse(deadlineAt) <= Date.now()) throw new Error("sandbox_host_unavailable");
+    const commandDigest = hash(JSON.stringify(canonical({ argv: request.argv, cwd: request.cwd, env: request.env,
+      stdinHash: hash(Buffer.from(request.stdinBase64, "base64")), timeoutDeadline: deadlineAt,
+      brokerCapabilityHash: request.brokerCredential ? hash(request.brokerCredential.capabilityToken) : null,
+      brokerProviderProfile: request.brokerCredential ? { id: request.brokerCredential.profileId, hash: request.brokerCredential.profileHash } : null,
+      modelBrokerCapabilityHash: request.modelBrokerCredential ? hash(request.modelBrokerCredential.capabilityToken) : null,
+      modelBrokerProviderProfile: request.modelBrokerCredential ? { id: request.modelBrokerCredential.profileId, hash: request.modelBrokerCredential.profileHash } : null,
+    })));
+    if (commandDigest !== request.commandDigest) throw new Error("sandbox_scope_changed");
+    const detail = await observed(input.scope, deadlineAt);
+    const pinnedPolicy = journal.scopes[input.scope.bindingId]?.policy;
+    const effectivePolicy = await policy(input.scope, deadlineAt);
+    const workload = await container(input.scope, detail, request.imageDigest, deadlineAt);
+    if (!pinnedPolicy || pinnedPolicy.policyHash !== request.policyHash || !samePolicyRevision(effectivePolicy, pinnedPolicy) ||
+      detail.phase !== "Ready" || !workload.State.Running) throw new Error("sandbox_operation_unsupported");
+    if (signal?.aborted) throw new Error("exec_unknown");
+    if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
+
+    const requestHash = hash(JSON.stringify(canonical({ request: { ...request, stdinBase64: undefined }, stdinHash: hash(Buffer.from(request.stdinBase64, "base64")), scope: input.scope })));
+    const privateConfig = await privateConfiguration();
+    if (signal?.aborted) throw new Error("exec_unknown");
+    if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
+    await serial(async () => {
+      const existing = journal.commands[request.requestId];
+      if (existing) {
+        if (existing.requestHash !== requestHash) throw new Error("sandbox_scope_changed");
+        throw new Error("exec_unknown");
+      }
+      if (Object.keys(journal.commands).length >= 10256) throw new Error("sandbox_host_unavailable");
+      journal.commands[request.requestId] = { requestHash, result: null, kind: "exec", state: "claimed",
+        ...(request.brokerCredential ? { brokerProvider: {
+          name: `awbr-${request.requestId.replaceAll("-", "")}`,
+          expiresAt: request.brokerCredential.expiresAt,
+          scope: input.scope,
+        } } : {}),
+        ...(request.modelBrokerCredential ? { modelBrokerProvider: {
+          name: `awmb-${request.requestId.replaceAll("-", "")}`,
+          expiresAt: request.modelBrokerCredential.expiresAt,
+          scope: input.scope,
+        } } : {}),
+      };
+      await atomicJson(journalFile, journal);
+    });
+    if (signal?.aborted) throw new Error("exec_unknown");
+    if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
+    const brokerProviderName = request.brokerCredential ? `awbr-${request.requestId.replaceAll("-", "")}` : null;
+    const modelBrokerProviderName = request.modelBrokerCredential ? `awmb-${request.requestId.replaceAll("-", "")}` : null;
+    if (brokerProviderName) await attachBrokerProvider(request, input.scope, deadlineAt, brokerProviderName);
+    if (modelBrokerProviderName) await attachModelBrokerProvider(request, input.scope, deadlineAt, modelBrokerProviderName);
+    const cliArgs = ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", input.scope.sandboxRef, "--workdir", request.cwd];
+    for (const key of Object.keys(request.env).sort()) cliArgs.push("--env", `${key}=${request.env[key]}`);
+    cliArgs.push("--", ...request.argv);
+    const remaining = Math.max(1, Math.min(60_000, Date.parse(deadlineAt) - Date.now()));
+    if (signal?.aborted) throw new Error("exec_unknown");
+    if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
+    const child = spawnProcess(privateConfig.executable, cliArgs, {
+      cwd: privateConfig.stateHome,
+      env: privateConfig.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      shell: false,
+      windowsHide: true,
+    });
+    let timedOut = false, outputBytes = 0, settled = false;
+    const terminate = () => { if (!settled) child.kill("SIGKILL"); };
+    const onAbort = () => terminate();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    const timeout = setTimeout(() => { timedOut = true; terminate(); }, remaining);
+    timeout.unref?.();
+    const forward = async (stream, source) => {
+      for await (const chunk of source) {
+        outputBytes += chunk.length;
+        if (outputBytes > 64 * 1024 * 1024) { terminate(); throw new Error("exec_rejected"); }
+        await onOutput(stream, Buffer.from(chunk));
+      }
+    };
+    const readOutput = Promise.all([forward("stdout", child.stdout), forward("stderr", child.stderr)]);
+    child.stdin.end(Buffer.from(request.stdinBase64, "base64"));
+    let exitCode;
+    try {
+      const exited = new Promise((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", (code, signalName) => resolve({ code, signalName }));
+      });
+      const result = await exited;
+      await readOutput;
+      settled = true;
+      exitCode = Number.isInteger(result.code) ? result.code : (timedOut ? 124 : 1);
+    } catch (error) {
+      terminate();
+      await Promise.allSettled([readOutput]);
+      throw error;
+    } finally {
+      settled = true;
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+    }
+    if (timedOut) throw new Error("exec_unknown");
+    if (brokerProviderName) await detachAndDeleteBrokerProvider(input.scope, deadlineAt, brokerProviderName);
+    if (modelBrokerProviderName) await detachAndDeleteBrokerProvider(input.scope, deadlineAt, modelBrokerProviderName);
+    await serial(async () => {
+      journal.commands[request.requestId] = { requestHash, result: { exitCode, timedOut }, kind: "exec", state: "completed" };
+      await atomicJson(journalFile, journal);
+    });
+    return { exitCode, timedOut };
+  }
   return {
     async initialize() {
       try {
@@ -321,14 +1174,37 @@ export function openShellHostEngine({
           !/^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/.test(
             request.imageDigest ?? "",
           ) ||
-          typeof request.requesterUserId !== "string" ||
-          request.requesterUserId.length > 200 ||
+          (!request.cleanupAttestation && (typeof request.requesterUserId !== "string" ||
+            request.requesterUserId.length < 1 || request.requesterUserId.length > 200)) ||
           !Number.isFinite(new Date(deadlineAt).getTime()) ||
           new Date(deadlineAt) <= new Date()
         )
           throw new Error("sandbox_scope_changed");
         if (
           (request.action === "probe") !== Boolean(request.probe) ||
+          (request.action === "apply") !== Boolean(request.admission) ||
+          (request.action === "start") !== Boolean(request.start) ||
+          (Boolean(request.cleanupAttestation) &&
+            (!['capabilities', 'probe'].includes(request.action) ||
+              request.requesterUserId !== undefined ||
+              Object.keys(request.cleanupAttestation).length !== 8 ||
+              Object.keys(request.cleanupAttestation).some(key => ![
+                "version", "jobId", "jobKey", "attemptNumber", "executionOwnerId",
+                "locatorDigest", "companyPurgeOperationId", "startBindingDigest",
+              ].includes(key)) ||
+              request.cleanupAttestation.version !== 1 ||
+              !uuid.test(request.cleanupAttestation.jobId ?? "") ||
+              typeof request.cleanupAttestation.jobKey !== "string" ||
+              request.cleanupAttestation.jobKey.length < 1 || request.cleanupAttestation.jobKey.length > 300 ||
+              !Number.isSafeInteger(request.cleanupAttestation.attemptNumber) ||
+              request.cleanupAttestation.attemptNumber < 1 ||
+              typeof request.cleanupAttestation.executionOwnerId !== "string" ||
+              request.cleanupAttestation.executionOwnerId.length < 1 ||
+              request.cleanupAttestation.executionOwnerId.length > 300 ||
+              !/^[a-f0-9]{64}$/.test(request.cleanupAttestation.locatorDigest ?? "") ||
+              !(request.cleanupAttestation.companyPurgeOperationId === null ||
+                uuid.test(request.cleanupAttestation.companyPurgeOperationId ?? "")) ||
+              !/^[a-f0-9]{64}$/.test(request.cleanupAttestation.startBindingDigest ?? ""))) ||
           Object.keys(request).some(
             (key) =>
               ![
@@ -339,6 +1215,9 @@ export function openShellHostEngine({
                 "imageDigest",
                 "requesterUserId",
                 "probe",
+                "admission",
+                "start",
+                "cleanupAttestation",
                 "claimToken",
               ].includes(key),
           )
@@ -350,7 +1229,13 @@ export function openShellHostEngine({
         if (existing) {
           if (existing.requestHash !== requestHash)
             throw new Error("sandbox_scope_changed");
-          return existing.result;
+          // An intent persisted before an effect without its completion receipt
+          // is ambiguous. Never replay the external operation after that point.
+          return existing.result ?? {
+            success: false,
+            reply: null,
+            errorCode: "sandbox_observation_unavailable",
+          };
         }
         if (
           Object.keys(journal.commands).length >=
@@ -359,6 +1244,8 @@ export function openShellHostEngine({
             : 10000)
         )
           throw new Error("sandbox_host_unavailable");
+        journal.commands[id] = { requestHash, result: null };
+        await atomicJson(journalFile, journal);
         let result;
         try {
           result = {
@@ -385,6 +1272,7 @@ export function openShellHostEngine({
         return result;
       });
     },
+    executeStream,
     acknowledge(id) {
       return serial(async () => {
         delete journal.commands[id];

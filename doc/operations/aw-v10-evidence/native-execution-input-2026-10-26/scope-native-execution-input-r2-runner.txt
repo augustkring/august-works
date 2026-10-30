@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/services/native-runtime/native-execution-input.test.ts
+test_pattern=.

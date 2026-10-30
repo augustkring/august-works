@@ -63,9 +63,35 @@ export interface CompanyMembersResponse {
   };
 }
 
+export interface HumanWorkflowCoverage {
+  id: string;
+  companyId: string;
+  principalUserId: string;
+  delegateeUserId: string;
+  actionKey: "workflows:run";
+  workflowId: string;
+  workflowRevisionId: string;
+  scopeType: "manual" | "task";
+  taskId: string | null;
+  startsAt: Date;
+  expiresAt: Date;
+  reason: string;
+  revokedAt: Date | null;
+  revokedByUserId: string | null;
+  createdAt: Date;
+}
+
 export interface ArchiveCompanyMemberResponse {
   member: CompanyMemberRecord;
   reassignedIssueCount: number;
+  reassignedRoutineCount: number;
+  pausedRoutineCount: number;
+  ownerActionRoutineCount: number;
+}
+
+export interface SecuritySuspendCompanyMemberResponse {
+  member: CompanyMemberRecord;
+  ownerRecoveryRequired: boolean;
 }
 
 export interface Invite {

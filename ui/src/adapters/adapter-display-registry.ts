@@ -6,6 +6,7 @@
  * `getAdapterDisplay()`.
  */
 import type { ComponentType } from "react";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import {
   Bot,
   Code,
@@ -81,7 +82,7 @@ const adapterDisplayMap: Record<string, AdapterDisplayInfo> = {
     recommended: true,
   },
   paperclip_runner: {
-    label: "Paperclip Runner",
+    label: `${PRODUCT_IDENTITY.productName} Runner`,
     description: "Experimental Rust runner with a Codex provider",
     icon: Cpu,
     experimental: true,

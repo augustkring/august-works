@@ -1,0 +1,90 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > returns immutable validated output, resumes after recovery and never creates a Task 932ms
+ ✓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > recovers a lost dispatch binding through the same wake receipt without repeating the execution 692ms
+ ✓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > blocks prompt hydration and result submission when the initiating member is suspended 650ms
+ ✓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > fails missing output and cancels the child when the call deadline expires 936ms
+ ✓ src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > preserves a failed asynchronous call and follows its published failure branch 1056ms
+ × src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > erases delegated payloads, queues log erasure and blocks late or restored agent writes 428ms
+   → Memory record not found
+ × src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > uses the native version workspace for actual generated-code replay, shadow, canary and active execution 4810ms
+   → Qualified Linux sandbox process budget is unavailable on this host.
+ ✓ src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > uses generated contracts, reviewed runs, shadow observations, bound approval, canary and fallback 27449ms
+ ✓ src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > quarantines an active replacement when an authoritative reviewer corrects its output 31338ms
+ ✓ src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > quarantines a replacement when its pinned published workflow changes 25383ms
+ ✓ src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > falls back when an activated candidate artifact is revoked 39795ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/automation-artifacts/automation-artifact-service.test.ts [ src/services/automation-artifacts/automation-artifact-service.test.ts ]
+AutomationArtifactCodeRuntimeError: Qualified Linux sandbox process budget is unavailable on this host.
+ ❯ resolveSandboxProcessLimit src/services/automation-artifacts/automation-artifact-code-runtime.ts:548:13
+    546|     currentUidThreads += threads;
+    547|     if (currentUidThreads > MAX_UID_THREAD_CEILING) {
+    548|       throw new AutomationArtifactCodeRuntimeError(
+       |             ^
+    549|         "automation_artifact_code_runtime_unavailable",
+    550|         "Qualified Linux sandbox process budget is unavailable on this…
+ ❯ executeAutomationArtifactTypeScriptSandbox src/services/automation-artifacts/automation-artifact-code-runtime.ts:806:26
+ ❯ getArtifactSandboxTestSupport src/__tests__/helpers/artifact-sandbox.ts:8:5
+ ❯ src/services/automation-artifacts/automation-artifact-service.test.ts:64:40
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'automation_artifact_code_runtime_unavailable' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/optimizer/optimizer-evaluation.integration.test.ts > governed optimizer workflow integration > uses the native version workspace for actual generated-code replay, shadow, canary and active execution
+AutomationArtifactCodeRuntimeError: Qualified Linux sandbox process budget is unavailable on this host.
+ ❯ resolveSandboxProcessLimit src/services/automation-artifacts/automation-artifact-code-runtime.ts:548:13
+    546|     currentUidThreads += threads;
+    547|     if (currentUidThreads > MAX_UID_THREAD_CEILING) {
+    548|       throw new AutomationArtifactCodeRuntimeError(
+       |             ^
+    549|         "automation_artifact_code_runtime_unavailable",
+    550|         "Qualified Linux sandbox process budget is unavailable on this…
+ ❯ executeAutomationArtifactTypeScriptSandbox src/services/automation-artifacts/automation-artifact-code-runtime.ts:806:26
+ ❯ src/services/automation-artifacts/automation-artifact-workspace.ts:69:22
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ executeCase src/services/automation-artifacts/automation-artifact-security.ts:147:14
+ ❯ Object.evaluateLatestVersion src/services/automation-artifacts/automation-artifact-security.ts:339:28
+ ❯ Object.evaluate src/services/optimizer/optimizer-evaluation.ts:261:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'automation_artifact_code_runtime_unavailable' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/services/workflows/workflow-direct-agent.test.ts > Bounded Direct Agent Call > erases delegated payloads, queues log erasure and blocks late or restored agent writes
+Error: Memory record not found
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertMemorySourceAccess src/services/memory/memory-service.ts:596:103
+ ❯ src/services/memory/memory-service.ts:1194:30
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ Object.forget src/services/memory/memory-service.ts:1188:22
+ ❯ src/services/workflows/workflow-direct-agent.test.ts:172:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 404, details: undefined }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  2 failed | 9 passed (11)
+   Start at  00:48:06
+   Duration  161.77s (transform 8.89s, setup 195ms, import 15.91s, tests 141.00s, environment 0ms)
+

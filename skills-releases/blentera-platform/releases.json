@@ -1,0 +1,236 @@
+[
+  {
+    "id": "v1",
+    "releaseName": "Blentera Platform V1",
+    "releasedAt": "2026-10-27T00:00:00Z",
+    "notes": "Canonical platform-owned operating procedure; runtime/profile qualification remains separate.",
+    "dir": "v1",
+    "skillKey": "blentera-platform",
+    "owner": "Blentera platform",
+    "mutableByCustomer": false,
+    "sourceSha": "0fcea368aa1ed3e4c7a20aaaf53be81c7dde5910",
+    "contentDigest": "sha256:25598388d69d9a7f5dd561a03fadfea63ad62aedff6bac12acf9e4cd7844e4b4",
+    "files": [
+      {
+        "path": "SKILL.md",
+        "sha256": "2a7741db4940ec0fc23d26f54148adf86de4a3275763534f00f07dbf577a0f3d"
+      },
+      {
+        "path": "references/advanced-boundaries.md",
+        "sha256": "619510e8ca025d1a63b6b136eacc0c42af93ee0c9d55d1eb960f701b9fec9f14"
+      },
+      {
+        "path": "references/approvals-and-governance.md",
+        "sha256": "6b5ec29c55e1260f044761d88f239ec42bf54f4260eea85a0d61e594f6e961fc"
+      },
+      {
+        "path": "references/apps-and-connections.md",
+        "sha256": "a6bb20de6095e5b81380731474e865baaee5b611ab349058d54989dd9a47f6b2"
+      },
+      {
+        "path": "references/artifacts-and-evidence.md",
+        "sha256": "22958bfd698139281a3c8370fbe561c0ea67301c3ddf79f6c3ae81536875cff0"
+      },
+      {
+        "path": "references/channels-and-representation.md",
+        "sha256": "a6f2cfd2e941e7d3148bffca5b035910824fe4e048ec89ac30ed3134de8920ee"
+      },
+      {
+        "path": "references/co-workers-and-delegation.md",
+        "sha256": "2b04113a175aade1f07768210e5220487611b08bb26c54fe6ed4312671245c39"
+      },
+      {
+        "path": "references/errors-retries-and-recovery.md",
+        "sha256": "8f0f439d35647814db0b75ae81f2f968b2dad73dcb835f97ecddd06cdff5ac30"
+      },
+      {
+        "path": "references/foundation-and-context.md",
+        "sha256": "9295f642aebceda3fb8d4de16e177e0ef59763432f9eba7f3a97e03bf73bb90b"
+      },
+      {
+        "path": "references/memory-and-learning.md",
+        "sha256": "c35964b611ec1ce7768ad72cf06fedd2238fbe5bf18d1a07343aee9f51d3d7bf"
+      },
+      {
+        "path": "references/support-and-service-status.md",
+        "sha256": "45f6642a8dd4b7321003cf9775ea48e08119d22a1705b065aa23cdc7998cb668"
+      },
+      {
+        "path": "references/terminology.md",
+        "sha256": "f2d9d2c4747500480c3e82b11234e797159fbcefd2ff0745b18672ce33ebadcd"
+      },
+      {
+        "path": "references/work.md",
+        "sha256": "6809117677f89e5a4a1080968ffccbb7cd771ed99942d185cfef947de475e2bf"
+      },
+      {
+        "path": "references/workflows-and-routines.md",
+        "sha256": "6ad51ab0400f491f6364f692aabd1fc49918da3701dc874815897d7ce8c68f52"
+      }
+    ],
+    "minimumControlPlaneVersion": "0.3.1",
+    "runtimeCompatibility": [
+      "qualified_blentera_native",
+      "qualified_agent_skills_adapter"
+    ],
+    "supersedes": null,
+    "operationManifestHash": "22c7ebc0014d5df6b5716751b41838d8a5c786515b35e86f019bae7023df3a69",
+    "toolCatalogContractHash": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825"
+  },
+  {
+    "id": "v2",
+    "releaseName": "Blentera Platform V2",
+    "releasedAt": "2026-10-28T19:15:00Z",
+    "notes": "Same immutable operating-procedure bytes, revalidated for the expanded existing-API operation manifest. API-only metadata does not register tools or qualify runtime profiles. Fresh admissions may refresh this identical-byte contract binding; existing Run pins remain unchanged.",
+    "dir": "v2",
+    "skillKey": "blentera-platform",
+    "owner": "Blentera platform",
+    "mutableByCustomer": false,
+    "sourceSha": "0fcea368aa1ed3e4c7a20aaaf53be81c7dde5910",
+    "contentDigest": "sha256:25598388d69d9a7f5dd561a03fadfea63ad62aedff6bac12acf9e4cd7844e4b4",
+    "files": [
+      {
+        "path": "SKILL.md",
+        "sha256": "2a7741db4940ec0fc23d26f54148adf86de4a3275763534f00f07dbf577a0f3d"
+      },
+      {
+        "path": "references/advanced-boundaries.md",
+        "sha256": "619510e8ca025d1a63b6b136eacc0c42af93ee0c9d55d1eb960f701b9fec9f14"
+      },
+      {
+        "path": "references/approvals-and-governance.md",
+        "sha256": "6b5ec29c55e1260f044761d88f239ec42bf54f4260eea85a0d61e594f6e961fc"
+      },
+      {
+        "path": "references/apps-and-connections.md",
+        "sha256": "a6bb20de6095e5b81380731474e865baaee5b611ab349058d54989dd9a47f6b2"
+      },
+      {
+        "path": "references/artifacts-and-evidence.md",
+        "sha256": "22958bfd698139281a3c8370fbe561c0ea67301c3ddf79f6c3ae81536875cff0"
+      },
+      {
+        "path": "references/channels-and-representation.md",
+        "sha256": "a6f2cfd2e941e7d3148bffca5b035910824fe4e048ec89ac30ed3134de8920ee"
+      },
+      {
+        "path": "references/co-workers-and-delegation.md",
+        "sha256": "2b04113a175aade1f07768210e5220487611b08bb26c54fe6ed4312671245c39"
+      },
+      {
+        "path": "references/errors-retries-and-recovery.md",
+        "sha256": "8f0f439d35647814db0b75ae81f2f968b2dad73dcb835f97ecddd06cdff5ac30"
+      },
+      {
+        "path": "references/foundation-and-context.md",
+        "sha256": "9295f642aebceda3fb8d4de16e177e0ef59763432f9eba7f3a97e03bf73bb90b"
+      },
+      {
+        "path": "references/memory-and-learning.md",
+        "sha256": "c35964b611ec1ce7768ad72cf06fedd2238fbe5bf18d1a07343aee9f51d3d7bf"
+      },
+      {
+        "path": "references/support-and-service-status.md",
+        "sha256": "45f6642a8dd4b7321003cf9775ea48e08119d22a1705b065aa23cdc7998cb668"
+      },
+      {
+        "path": "references/terminology.md",
+        "sha256": "f2d9d2c4747500480c3e82b11234e797159fbcefd2ff0745b18672ce33ebadcd"
+      },
+      {
+        "path": "references/work.md",
+        "sha256": "6809117677f89e5a4a1080968ffccbb7cd771ed99942d185cfef947de475e2bf"
+      },
+      {
+        "path": "references/workflows-and-routines.md",
+        "sha256": "6ad51ab0400f491f6364f692aabd1fc49918da3701dc874815897d7ce8c68f52"
+      }
+    ],
+    "minimumControlPlaneVersion": "0.3.1",
+    "runtimeCompatibility": [
+      "qualified_blentera_native",
+      "qualified_agent_skills_adapter"
+    ],
+    "supersedes": "v1",
+    "operationManifestHash": "24b568c81d493c84218a55e8efdea6c9cce5b77b5107b5a1c62e7322fce198b8",
+    "toolCatalogContractHash": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825"
+  },
+  {
+    "id": "v3",
+    "releaseName": "Blentera Platform V3",
+    "releasedAt": "2026-10-28T22:04:54Z",
+    "notes": "Same immutable operating-procedure bytes as V2, bound to the source-corrected existing-API operation manifest. API-only metadata does not register tools or qualify runtime profiles. Fresh admissions may bind V3; existing Run pins remain unchanged.",
+    "dir": "v3",
+    "skillKey": "blentera-platform",
+    "owner": "Blentera platform",
+    "mutableByCustomer": false,
+    "sourceSha": "0fcea368aa1ed3e4c7a20aaaf53be81c7dde5910",
+    "contentDigest": "sha256:25598388d69d9a7f5dd561a03fadfea63ad62aedff6bac12acf9e4cd7844e4b4",
+    "files": [
+      {
+        "path": "SKILL.md",
+        "sha256": "2a7741db4940ec0fc23d26f54148adf86de4a3275763534f00f07dbf577a0f3d"
+      },
+      {
+        "path": "references/advanced-boundaries.md",
+        "sha256": "619510e8ca025d1a63b6b136eacc0c42af93ee0c9d55d1eb960f701b9fec9f14"
+      },
+      {
+        "path": "references/approvals-and-governance.md",
+        "sha256": "6b5ec29c55e1260f044761d88f239ec42bf54f4260eea85a0d61e594f6e961fc"
+      },
+      {
+        "path": "references/apps-and-connections.md",
+        "sha256": "a6bb20de6095e5b81380731474e865baaee5b611ab349058d54989dd9a47f6b2"
+      },
+      {
+        "path": "references/artifacts-and-evidence.md",
+        "sha256": "22958bfd698139281a3c8370fbe561c0ea67301c3ddf79f6c3ae81536875cff0"
+      },
+      {
+        "path": "references/channels-and-representation.md",
+        "sha256": "a6f2cfd2e941e7d3148bffca5b035910824fe4e048ec89ac30ed3134de8920ee"
+      },
+      {
+        "path": "references/co-workers-and-delegation.md",
+        "sha256": "2b04113a175aade1f07768210e5220487611b08bb26c54fe6ed4312671245c39"
+      },
+      {
+        "path": "references/errors-retries-and-recovery.md",
+        "sha256": "8f0f439d35647814db0b75ae81f2f968b2dad73dcb835f97ecddd06cdff5ac30"
+      },
+      {
+        "path": "references/foundation-and-context.md",
+        "sha256": "9295f642aebceda3fb8d4de16e177e0ef59763432f9eba7f3a97e03bf73bb90b"
+      },
+      {
+        "path": "references/memory-and-learning.md",
+        "sha256": "c35964b611ec1ce7768ad72cf06fedd2238fbe5bf18d1a07343aee9f51d3d7bf"
+      },
+      {
+        "path": "references/support-and-service-status.md",
+        "sha256": "45f6642a8dd4b7321003cf9775ea48e08119d22a1705b065aa23cdc7998cb668"
+      },
+      {
+        "path": "references/terminology.md",
+        "sha256": "f2d9d2c4747500480c3e82b11234e797159fbcefd2ff0745b18672ce33ebadcd"
+      },
+      {
+        "path": "references/work.md",
+        "sha256": "6809117677f89e5a4a1080968ffccbb7cd771ed99942d185cfef947de475e2bf"
+      },
+      {
+        "path": "references/workflows-and-routines.md",
+        "sha256": "6ad51ab0400f491f6364f692aabd1fc49918da3701dc874815897d7ce8c68f52"
+      }
+    ],
+    "minimumControlPlaneVersion": "0.3.1",
+    "runtimeCompatibility": [
+      "qualified_blentera_native",
+      "qualified_agent_skills_adapter"
+    ],
+    "supersedes": "v2",
+    "operationManifestHash": "52fe608c583066221d3cee9562cd2216e17abdb9d0860ba74d9b9adf33e50e20",
+    "toolCatalogContractHash": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825"
+  }
+]

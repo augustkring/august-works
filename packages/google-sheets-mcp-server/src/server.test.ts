@@ -1,6 +1,7 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { CallToolResultSchema, type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport } from "@modelcontextprotocol/client";
+import { CallToolResultSchema } from "@modelcontextprotocol/core";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { describe, expect, it, vi } from "vitest";
 import { createGoogleSheetsMcpServer } from "./index.js";
 import type { GoogleSheetsClient } from "./google-client.js";
@@ -95,20 +96,18 @@ describe("Google Sheets MCP server protocol", () => {
         destructiveHint: true,
       });
 
-      const result = await mcpClient.callTool(
-        {
-          name: "read_values",
-          arguments: {
-            spreadsheetId: "sheet-1",
-            range: "Sheet1!A1:B2",
-          },
+      const result = await mcpClient.callTool({
+        name: "read_values",
+        arguments: {
+          spreadsheetId: "sheet-1",
+          range: "Sheet1!A1:B2",
         },
-        CallToolResultSchema,
-      );
+      });
 
       expect(googleClient.readValues).toHaveBeenCalledWith("sheet-1", "Sheet1!A1:B2");
-      expect("content" in result).toBe(true);
-      expect(firstText(result as CallToolResult)).toContain("paper");
+      const checkedResult = CallToolResultSchema.parse(result) as CallToolResult;
+      expect("content" in checkedResult).toBe(true);
+      expect(firstText(checkedResult)).toContain("paper");
     } finally {
       await mcpClient.close();
       await server.close();

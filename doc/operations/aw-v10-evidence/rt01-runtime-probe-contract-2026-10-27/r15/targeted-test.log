@@ -1,0 +1,24 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > fails closed before queueing unless the configured operator has a current passkey session
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > caps the durable apply command at the original policy expiry and rejects an already expired request before queueing
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > persists an encrypted current native scope and rejects mismatched receipts without earning capability
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > cancels queued scope after generation changes
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > cancels queued scope after host epoch changes
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > cancels queued scope after owner revocation changes
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > cancels queued scope after rollout rollback changes
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > keeps the legacy engine out of the sandbox lane and permits scoped Stop after rollout rollback
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > rejects host 6.0.0 without immutable instance pinning
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > rejects host 6.0.1 without immutable instance pinning
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > retains unsupported host qualification without treating configured image as physical preparation
+[03:56:48] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"f8134ba3-9298-47a5-98e3-b05eea20f4a0","failureCode":"setup_failed"}[39m
+[03:56:48] [32mINFO[39m: [36mskipping late setup failure finalization because the run already left running state[39m [90m{"runId":"f8134ba3-9298-47a5-98e3-b05eea20f4a0","attemptedStatus":"failed","currentStatus":"cancelled"}[39m
+ ✓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > admits a qualified native Task through the HTTP route and meters only the signed host start/stop receipts (CI transport simulation) 22020ms
+ ↓ src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > rejects a late completion after host fencing and expires bounded pending work
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 12 skipped (13)
+   Start at  03:56:08
+   Duration  40.30s (transform 9.89s, setup 78ms, import 14.02s, tests 26.08s, environment 0ms)
+

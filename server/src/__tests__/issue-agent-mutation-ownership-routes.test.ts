@@ -42,6 +42,7 @@ const mockAccessService = vi.hoisted(() => ({
   decide: vi.fn(),
   hasPermission: vi.fn(),
 }));
+const mockCanActorReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
 
 const mockAgentService = vi.hoisted(() => ({
   getById: vi.fn(),
@@ -160,6 +161,7 @@ const mockIssueTreeControlService = vi.hoisted(() => ({ getActivePauseHoldGate: 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockObserveCrossIssueInfluence = vi.hoisted(() => vi.fn(async () => null));
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+let lastErrorContext: unknown;
 
 function registerRouteMocks() {
   // The legacy route stub models checkout/recovery ownership, not a real
@@ -178,6 +180,32 @@ function registerRouteMocks() {
 
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
+  }));
+
+  vi.doMock("../services/authorization.js", async () => {
+    const actual = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
+    return { ...actual, canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy };
+  });
+
+  vi.doMock("../services/task-source-read-scope.js", () => ({
+    withCurrentTaskSourceRead: async (
+      db: unknown,
+      scopedCompanyId: string,
+      actor: Record<string, unknown>,
+      read: (queryDb: unknown, hasTaskSourceReferences: boolean) => Promise<unknown>,
+      _includeTaskSources = true,
+      requireCompanyScope = true,
+    ) => {
+      const decision = await mockAccessService.decide({
+        actor,
+        action: "company_scope:read",
+        resource: { type: "company", companyId: scopedCompanyId },
+      });
+      if (requireCompanyScope && !decision.allowed) {
+        throw new HttpError(403, "Company search is outside this actor's authorization boundary");
+      }
+      return read(db, false);
+    },
   }));
 
   vi.doMock("../services/agents.js", () => ({
@@ -327,6 +355,7 @@ function createRunContextDb(
   runAgentOrRows: string | Record<string, unknown>[] = ownerAgentId,
   runId: string = ownerRunId,
   chatBindings: Array<{ id: string; companyId: string; issueId: string; state: string }> = [],
+  currentIssueRows: Record<string, unknown>[] = [],
 ) {
   const chatBindingQueries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
   const runRows = Array.isArray(runAgentOrRows)
@@ -341,13 +370,16 @@ function createRunContextDb(
   const firstRun = runRows[0] ?? {};
   const runAgentId = typeof firstRun.agentId === "string" ? firstRun.agentId : ownerAgentId;
   const runAgentCompanyId = typeof firstRun.agentCompanyId === "string" ? firstRun.agentCompanyId : companyId;
-  const rowsForSelection = async (selection: Record<string, unknown>, chatBindingQuery = false, settledRecoveryQuery = false) => {
+  const rowsForSelection = async (selection: Record<string, unknown>, chatBindingQuery = false, settledRecoveryQuery = false, currentIssueRows: Record<string, unknown>[] = []) => {
     if (chatBindingQuery) return chatBindings;
     // An unknown selector has no settled recovery receipt. Returning the
     // generic issue fixture here would invent an unrelated replay row.
     if (settledRecoveryQuery) return [];
     const keys = Object.keys(selection);
     if (keys.includes("entityId")) return [];
+    // The issue-list route re-reads the exact issue rows after its cached
+    // projection. Model only that explicit SQL boundary in this route test.
+    if (keys.includes("companyId") && keys.includes("projectId") && keys.includes("assigneeAgentId")) return currentIssueRows;
     if (keys.includes("contextSnapshot")) return runRows;
     if (keys.includes("agentCompanyId")) return runRows;
     if (keys.length === 0) {
@@ -356,16 +388,16 @@ function createRunContextDb(
     }
     return [{ id: runAgentId, companyId: runAgentCompanyId, permissions: {}, role: "engineer", reportsTo: null }];
   };
-  const buildQuery = (selection: Record<string, unknown>, chatBindingQuery = false, settledRecoveryQuery = false) => {
+  const buildQuery = (selection: Record<string, unknown>, chatBindingQuery = false, settledRecoveryQuery = false, currentIssueRows: Record<string, unknown>[] = []) => {
     const whereResult = {
       orderBy: vi.fn(async () => []),
       limit: vi.fn(() => ({
-        then: async (resolve: (limitedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery)),
+        then: async (resolve: (limitedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery, currentIssueRows)),
       })),
       for: vi.fn(() => ({
-        then: async (resolve: (selectedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery)),
+        then: async (resolve: (selectedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery, currentIssueRows)),
       })),
-      then: async (resolve: (selectedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery)),
+      then: async (resolve: (selectedRows: unknown[]) => unknown) => resolve(await rowsForSelection(selection, chatBindingQuery, settledRecoveryQuery, currentIssueRows)),
     };
     const query = {
       innerJoin: vi.fn(() => query),
@@ -384,7 +416,8 @@ function createRunContextDb(
         if (getTableName(table) === "issue_thread_interactions") {
           return { where: vi.fn(() => ({ limit: vi.fn(async () => []) })) };
         }
-        return buildQuery(selection, getTableName(table) === "chat_conversations", getTableName(table) === "issue_recovery_actions");
+        return buildQuery(selection, getTableName(table) === "chat_conversations", getTableName(table) === "issue_recovery_actions",
+          getTableName(table) === "issues" ? currentIssueRows : []);
       }),
     })),
     insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),
@@ -445,7 +478,11 @@ describe("agent issue mutation checkout ownership", () => {
     );
     const app = express();
     app.use(express.json());
-    app.use((req, _res, next) => {
+    lastErrorContext = undefined;
+    app.use((req, res, next) => {
+      res.on("finish", () => {
+        lastErrorContext = (res as any).__errorContext ?? null;
+      });
       (req as any).actor = actor;
       next();
     });
@@ -462,6 +499,7 @@ describe("agent issue mutation checkout ownership", () => {
     __clearIssueListResponseCacheForTests();
     vi.clearAllMocks();
     mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
+    mockCanActorReadIssuePrivacy.mockReset().mockResolvedValue(true);
     mockIssueTreeControlService.getActivePauseHoldGate.mockReset().mockResolvedValue(null);
     mockChatRunRetries.prepareFailedChatRunRetry.mockReset();
     mockChatRunRetries.processFailedChatRunRetry.mockReset();
@@ -799,7 +837,9 @@ describe("agent issue mutation checkout ownership", () => {
     expect(mockIssueService.list).not.toHaveBeenCalled();
   });
 
-  it("uses the company-scope fast path on the issue list route", async () => {
+  it("rechecks issue access for company-scope readers on the issue list route", async () => {
+    mockIssueService.list.mockResolvedValue([makeIssue()]);
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
     mockAccessService.decide.mockImplementation(async (input: { action: string }) => {
       if (input.action === "company_scope:read") {
         return {
@@ -809,9 +849,6 @@ describe("agent issue mutation checkout ownership", () => {
           explanation: "Allowed by test company scope.",
         };
       }
-      if (input.action === "issue:read") {
-        throw new Error("issue:read should not be evaluated for company-scope readers");
-      }
       return {
         allowed: true,
         action: input.action,
@@ -820,17 +857,51 @@ describe("agent issue mutation checkout ownership", () => {
       };
     });
 
-    const app = await createApp(boardActor());
+    const app = await createApp(boardActor(), createRunContextDb({}, ownerAgentId, ownerRunId, [], [makeIssue()]));
     const res = await request(app).get(`/api/companies/${companyId}/issues`);
 
-    expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(res.body).toEqual([expect.objectContaining({ id: issueId })]);
+    expect(res.status, JSON.stringify({ body: res.body, errorContext: lastErrorContext })).toBe(200);
+    const listedRows = await mockIssueService.list.mock.results[0]?.value;
+    const accessResults = await Promise.all(mockAccessService.decide.mock.results.map(async (result) =>
+      result.type === "return" ? await result.value : String(result.value)));
+    expect(res.body, JSON.stringify({ listCalls: mockIssueService.list.mock.calls.length,
+      listedRows,
+      decisionCalls: mockAccessService.decide.mock.calls.map(([input]) => input),
+      accessResults }))
+      .toEqual([expect.objectContaining({ id: issueId })]);
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({
       action: "company_scope:read",
       resource: { type: "company", companyId },
     }));
-    expect(mockAccessService.decide).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({
       action: "issue:read",
+    }));
+  });
+
+  it("does not let company-scope access override a denied issue-read decision", async () => {
+    mockIssueService.list.mockResolvedValue([makeIssue()]);
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
+    mockAccessService.decide.mockImplementation(async (input: { action: string }) => ({
+      allowed: input.action === "company_scope:read",
+      action: input.action,
+      reason: input.action === "company_scope:read" ? "allow_explicit_grant" : "deny_missing_grant",
+      explanation: input.action === "company_scope:read"
+        ? "Allowed by test company scope."
+        : "Issue read remains separately denied.",
+    }));
+
+    const db = createRunContextDb({}, ownerAgentId, ownerRunId, [], [makeIssue()]);
+    const res = await request(await createApp(boardActor(), db)).get(`/api/companies/${companyId}/issues`);
+
+    expect(res.status, JSON.stringify({ body: res.body, errorContext: lastErrorContext })).toBe(200);
+    expect(res.body).toEqual([]);
+    expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({
+      action: "company_scope:read",
+      resource: { type: "company", companyId },
+    }));
+    expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({
+      action: "issue:read",
+      resource: expect.objectContaining({ type: "issue", companyId, issueId }),
     }));
   });
 
@@ -882,12 +953,14 @@ describe("agent issue mutation checkout ownership", () => {
 
   it("allows mentioned peer agents to post comments without ownership of an active checkout", async () => {
     mockAccessService.decide.mockImplementation(async (input: { action: string }) => ({
-      allowed: input.action === "issue:comment",
+      allowed: input.action === "issue:comment" || input.action === "issue:read",
       action: input.action,
-      reason: input.action === "issue:comment" ? "allow_issue_mention_grant" : "deny_missing_grant",
+      reason: input.action === "issue:comment" ? "allow_issue_mention_grant" : input.action === "issue:read" ? "allow_visible_issue_read" : "deny_missing_grant",
       explanation:
         input.action === "issue:comment"
           ? "Allowed by a mention-scoped issue comment grant."
+          : input.action === "issue:read"
+            ? "Allowed to read this visible issue."
           : "Missing permission.",
     }));
 
@@ -965,8 +1038,8 @@ describe("agent issue mutation checkout ownership", () => {
     const res = await request(await createApp(peerActor()))
       .get(`/api/issues/${issueId}/comments`);
 
-    expect(res.status, JSON.stringify(res.body)).toBe(403);
-    expect(res.body.error).toBe("Issue is outside this actor's authorization boundary");
+    expect(res.status, JSON.stringify(res.body)).toBe(404);
+    expect(res.body.error).toBe("Issue not found");
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "issue:read" }));
   });
 
@@ -981,8 +1054,8 @@ describe("agent issue mutation checkout ownership", () => {
     const res = await request(await createApp(peerActor()))
       .get(`/api/issues/${issueId}/interactions`);
 
-    expect(res.status, JSON.stringify(res.body)).toBe(403);
-    expect(res.body.error).toBe("Issue is outside this actor's authorization boundary");
+    expect(res.status, JSON.stringify(res.body)).toBe(404);
+    expect(res.body.error).toBe("Issue not found");
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "issue:read" }));
     expect(mockIssueThreadInteractionService.listForIssue).not.toHaveBeenCalled();
   });
@@ -1021,7 +1094,7 @@ describe("agent issue mutation checkout ownership", () => {
     mockAnalyticalPayloadAccess.mockRejectedValue(new CurrentHttpError(403, "Analytical Source unavailable"));
     const res = await request(createApp(peerActor())).get(`/api/issues/${issueId}/comments`);
     expect(res.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ agentId: peerAgentId }), { issueId });
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ agentId: peerAgentId }), { issueId }, undefined, { privacyLockMode: "read" });
     expect(mockIssueService.listComments).not.toHaveBeenCalled();
   });
 
@@ -1036,8 +1109,8 @@ describe("agent issue mutation checkout ownership", () => {
     const res = await request(await createApp(peerActor()))
       .get(`/api/issues/${issueId}/comments/comment-1`);
 
-    expect(res.status, JSON.stringify(res.body)).toBe(403);
-    expect(res.body.error).toBe("Issue is outside this actor's authorization boundary");
+    expect(res.status, JSON.stringify(res.body)).toBe(404);
+    expect(res.body.error).toBe("Issue not found");
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "issue:read" }));
     expect(mockIssueService.getComment).not.toHaveBeenCalled();
   });
@@ -1045,17 +1118,21 @@ describe("agent issue mutation checkout ownership", () => {
   it("allows visible issue field updates for peer agents", async () => {
     mockIssueService.getById.mockResolvedValue(makeIssue({ status: "todo", assigneeAgentId: ownerAgentId }));
     mockAccessService.decide.mockImplementation(async (input: { action: string }) => ({
-      allowed: input.action === "issue:comment" || input.action === "issue:mutate",
+      allowed: input.action === "issue:read" || input.action === "issue:comment" || input.action === "issue:mutate",
       action: input.action,
       reason:
         input.action === "issue:comment"
           ? "allow_issue_mention_grant"
+          : input.action === "issue:read"
+            ? "allow_visible_issue_read"
           : input.action === "issue:mutate"
             ? "allow_explicit_grant"
             : "deny_missing_grant",
       explanation:
         input.action === "issue:comment"
           ? "Allowed by a mention-scoped issue comment grant."
+          : input.action === "issue:read"
+            ? "Allowed to read this visible issue."
           : input.action === "issue:mutate"
             ? "Allowed by test boundary default."
             : "Missing permission.",
@@ -1644,15 +1721,17 @@ describe("agent issue mutation checkout ownership", () => {
 
   it("allows agents with the active-checkout management grant to mutate active checkouts", async () => {
     mockAccessService.decide.mockImplementation(async (input: { action: string }) => ({
-      allowed: input.action === "issue:mutate" || input.action === "tasks:manage_active_checkouts",
+      allowed: input.action === "issue:read" || input.action === "issue:mutate" || input.action === "tasks:manage_active_checkouts",
       action: input.action,
       reason:
-        input.action === "issue:mutate" || input.action === "tasks:manage_active_checkouts"
+        input.action === "issue:read" || input.action === "issue:mutate" || input.action === "tasks:manage_active_checkouts"
           ? "allow_explicit_grant"
           : "deny_missing_grant",
       explanation:
         input.action === "tasks:manage_active_checkouts"
           ? "Allowed by checkout management grant."
+          : input.action === "issue:read"
+            ? "Allowed to read this visible issue."
           : input.action === "issue:mutate"
             ? "Allowed by test boundary default."
             : "Missing permission.",
@@ -1663,6 +1742,19 @@ describe("agent issue mutation checkout ownership", () => {
     expect(res.status).toBe(200);
     expect(mockIssueService.assertCheckoutOwner).not.toHaveBeenCalled();
     expect(mockIssueService.update).toHaveBeenCalled();
+  });
+
+  it("keeps a private issue hidden before a peer mutation is evaluated", async () => {
+    mockIssueService.getById.mockResolvedValue(makeIssue({ status: "todo" }));
+    mockCanActorReadIssuePrivacy.mockResolvedValue(false);
+
+    const res = await request(await createApp(peerActor()))
+      .patch(`/api/issues/${issueId}`)
+      .send({ title: "Should not be written" });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("Issue not found");
+    expect(mockIssueService.update).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -2549,7 +2641,7 @@ describe("agent issue mutation checkout ownership", () => {
       explanation: "Target agent requires approval before task assignment.",
     }));
     decide.mockImplementation(async (input: { action: string }) => ({
-      allowed: input.action === "issue:mutate",
+      allowed: input.action === "issue:read" || input.action === "issue:mutate",
       action: input.action,
       reason: input.action === "issue:mutate" ? "allow_self" : "deny_policy_restricted",
       explanation:

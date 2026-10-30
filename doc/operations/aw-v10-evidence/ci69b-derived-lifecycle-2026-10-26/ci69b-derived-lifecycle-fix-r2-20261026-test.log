@@ -1,0 +1,58 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts (8 tests | 2 failed) 15158ms
+     × rejects foreign roots, private-to-company promotion, lower sensitivity and agent self-approval 322ms
+     × propagates Context root erasure into run/Task payloads and blocks late restored writes 940ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > rejects foreign roots, private-to-company promotion, lower sensitivity and agent self-approval
+AssertionError: expected Error: Derived source access is unavailab… { …(2) } to match object { status: 409 }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "status": 409,
++ HttpError {
++   "status": 403,
+  }
+
+ ❯ src/__tests__/v7-derived-memory.integration.test.ts:124:78
+    122|     await expect(svc.createObservation(owner, companyId, observationIn…
+    123|     await db.update(memoryRecords).set({ sensitivityLabel: "internal",…
+    124|     await expect(svc.createObservation(owner, companyId, observationIn…
+       |                                                                              ^
+    125|     await expect(svc.reviewObservation({ type: "agent", agentId, compa…
+    126|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/v7-derived-memory.integration.test.ts > V7 evidence-rooted derived Memory > propagates Context root erasure into run/Task payloads and blocks late restored writes
+Error: Context requires its actual accountable run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:587:19
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ Object.create src/services/context/context-manifest.ts:533:14
+ ❯ withProviderDeadline src/services/context/context-engine.ts:174:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:204:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 43 passed (45)
+   Start at  13:10:31
+   Duration  46.82s (transform 10.98s, setup 164ms, import 19.19s, tests 27.22s, environment 0ms)
+

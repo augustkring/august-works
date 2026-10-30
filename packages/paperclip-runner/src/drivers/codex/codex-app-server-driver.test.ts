@@ -550,6 +550,36 @@ describe("Codex app-server Codex driver", () => {
     });
   });
 
+  it("sends a managed Native envelope verbatim without switching to direct-chat semantics", async () => {
+    const transport = new FakeCodexTransport();
+    const tool = {
+      name: "read_document",
+      description: "Read an authorized Paperclip document.",
+      inputSchema: { type: "object", properties: { id: { type: "string" } } },
+    };
+    const driver = makeDriver([transport], {
+      verbatimNativeEnvelope: true,
+      dynamicTools: [tool],
+    });
+    const session = await driver.openSession({
+      runId: "run-managed-envelope",
+      normalizedSessionId: "normalized-managed-envelope",
+      workingDirectory: TEST_WORKING_DIRECTORY,
+    });
+    const submitted = JSON.stringify({
+      schema: "paperclip.native-model-envelope.v2",
+      task: { id: "task-managed-envelope" },
+    });
+    await session.startTurn({ message: { role: "user", text: submitted } });
+    const threadStart = transport.calls.find(call => call.method === "thread/start");
+    const turnStart = transport.calls.find(call => call.method === "turn/start");
+    expect(threadStart?.params.dynamicTools).toContainEqual(tool);
+    expect(turnStart?.params.input).toEqual([
+      { type: "text", text: submitted, text_elements: [] },
+    ]);
+    expect(turnStart?.params).toHaveProperty("outputSchema");
+  });
+
   it("forwards the persisted native model to the runner transport", async () => {
     const transport = new FakeCodexTransport();
     const driver = makeDriver([transport], { model: "qualified-provider-model" });

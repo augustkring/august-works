@@ -1,0 +1,4197 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef",
+  "meaning": "Saved Workflow source checkpoint; authoring18 and executor51 pass, latest full Learning39pass3fail retained explicitly, current server compiler0",
+  "logs": [
+    {
+      "name": "workflow-source-owner-current-final",
+      "exitCode": 0,
+      "rawSha256": "12a843abe7be00cbcc66188a366ab493f095a11b80f73fbef7346bd08630e2b1",
+      "sanitizedSha256": "12a843abe7be00cbcc66188a366ab493f095a11b80f73fbef7346bd08630e2b1",
+      "archiveSha256": "77bd2bb92fd9177a3240b24812fdd73cec3d44dfbd07f76a678e006c30862991",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  18 passed (18)",
+        "Duration  69.27s (transform 9.10s, setup 74ms, import 12.58s, tests 56.50s, environment 0ms)"
+      ],
+      "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef"
+    },
+    {
+      "name": "workflow-source-executor-current-final",
+      "exitCode": 0,
+      "rawSha256": "09bc975a153b1d70b864e78d517fc4869c6096ddf572ee685feab2fc9359bcad",
+      "sanitizedSha256": "4d7e1221fb12c5120834b14d050156ed3849d922b586cdd22878d52e0aed2f60",
+      "archiveSha256": "7b67eeff41430cc0f26cec76075f00edf8369c13af89fb7e2cbef008de56fa00",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  51 passed (51)",
+        "Duration  38.83s (transform 9.96s, setup 69ms, import 14.03s, tests 24.61s, environment 0ms)"
+      ],
+      "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef"
+    },
+    {
+      "name": "learning-workflow-source-final42-current",
+      "exitCode": 1,
+      "rawSha256": "955c020f1eb3f5838575862e2a7d75ec8f06affe7c926bb4e65ee85e9e775d1b",
+      "sanitizedSha256": "b3e70d6b2255f2a70300b5ce1b36b27114288858e7874b1465967ccfa6f32739",
+      "archiveSha256": "5b8d2c5d8ff0118b1f353c0b0f8eea39607768967b04c146f3261814a6c7c88a",
+      "redactions": {
+        "ansi": 30,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 3 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  3 failed | 39 passed (42)",
+        "Duration  443.78s (transform 9.51s, setup 75ms, import 13.48s, tests 430.10s, environment 0ms)"
+      ],
+      "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef"
+    },
+    {
+      "name": "workflow-source-checkpoint-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef"
+    },
+    {
+      "name": "learning-workflow-promoted-300-current",
+      "exitCode": 0,
+      "rawSha256": "2d43eb7d92a102741b8c6ec87f99b5c1e6f8aecde41039823e8bd4662337cd2d",
+      "sanitizedSha256": "7645b5c4e86e99d60c0f8347831bc3cc36f3a6725c8ece0fdb263da66dba32cd",
+      "archiveSha256": "2e3e229b30b01960ba592892a854f5b4249defe99e0684e9c251feecd7fc7efc",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 41 skipped (42)",
+        "Duration  233.59s (transform 10.08s, setup 78ms, import 14.16s, tests 219.23s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-source-final42-300",
+      "exitCode": 1,
+      "rawSha256": "065e7aba0118b4622ec0e3afe491a97395a8a0ed937c792aa571c4d91cbd8788",
+      "sanitizedSha256": "6128f6b4e2eea3ab36f9011c13810500ab3f68294ac56a309b0c686d005218aa",
+      "archiveSha256": "789438c4a5b195ff8de445655c7dae61377b7c254fe23b323f29ffd1284f8294",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 passed (42)",
+        "Duration  645.55s (transform 9.23s, setup 71ms, import 13.01s, tests 632.36s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-source-artifact-roots-final",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-source-artifact-roots-final.exit",
+      "rawSha256": "41c728a72abb30aa870cc311a151b50f87f500ff2c2189018ea9460ba9bcbd73",
+      "sanitizedSha256": "41c728a72abb30aa870cc311a151b50f87f500ff2c2189018ea9460ba9bcbd73",
+      "archiveSha256": "a66e9aca349a8ab9fca40e8c268e5c972563ecb2f91890e07a26c15a2ebcca97",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 2 passed | 39 skipped (42)",
+        "Duration  313.33s (transform 9.25s, setup 71ms, import 13.11s, tests 300.04s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-source-artifact-roots-optimized",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-source-artifact-roots-optimized.exit",
+      "rawSha256": "8e0c7601648c8d035d9b969f7cb18276cf70a20297fbc4995ed560ee3377e643",
+      "sanitizedSha256": "8e0c7601648c8d035d9b969f7cb18276cf70a20297fbc4995ed560ee3377e643",
+      "archiveSha256": "2489f173ad5ca5e81f04e9aa5b54979e074785fe8080492ca52bf0663fd9b6cb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 2 passed | 39 skipped (42)",
+        "Duration  265.35s (transform 9.11s, setup 80ms, import 12.89s, tests 252.24s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-timing",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-timing.exit",
+      "rawSha256": "836dbcf0512629ac5690eb84901d5123bf5a3648aa4b6df262555410dda34af5",
+      "sanitizedSha256": "836dbcf0512629ac5690eb84901d5123bf5a3648aa4b6df262555410dda34af5",
+      "archiveSha256": "1a4f4bc636f0690ce5871eb9f4af64c8dee451f266c6a8e23a3423accfc8c89c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  138.03s (transform 9.33s, setup 69ms, import 13.23s, tests 124.61s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-phases",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-phases.exit",
+      "rawSha256": "e8361bb80bb6660e001916380f213c8fb304a514a061c9cffe8e850d78d1da21",
+      "sanitizedSha256": "e8361bb80bb6660e001916380f213c8fb304a514a061c9cffe8e850d78d1da21",
+      "archiveSha256": "a1c230efc01d2aae4ad9acb1656370ebef4695a9a9e6125d04f3993acdace926",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  138.31s (transform 9.68s, setup 72ms, import 13.59s, tests 124.51s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-180-current",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-180-current.exit",
+      "rawSha256": "f138cca286afc560b48e41af9e8195590f8ee510a04133060181ad76cff51894",
+      "sanitizedSha256": "f138cca286afc560b48e41af9e8195590f8ee510a04133060181ad76cff51894",
+      "archiveSha256": "2110b0e1082f13f79c52f4a05d395cac574be9fa1de8ea736444d36201ae95ff",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  199.82s (transform 10.58s, setup 73ms, import 14.74s, tests 184.88s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-live-phases-run",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-live-phases-run.exit",
+      "rawSha256": "dc4a03fc43bbf1bd609d648b0f9698a1fc4e1b399ad8cdb9a10a38a886af7e11",
+      "sanitizedSha256": "dc4a03fc43bbf1bd609d648b0f9698a1fc4e1b399ad8cdb9a10a38a886af7e11",
+      "archiveSha256": "5a5adf53cfbc6b4c65b88f69b0928ca44ee005c46abc97f38f8eaa45e7144a87",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  199.79s (transform 10.21s, setup 73ms, import 14.47s, tests 185.12s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-promoted-50pct",
+      "exitCode": 1,
+      "exitSidecar": "learning-workflow-promoted-50pct.exit",
+      "rawSha256": "4b509375ffb9717788b406e9737cfe98f78ec878383e758729b207e92e487bd2",
+      "sanitizedSha256": "4b509375ffb9717788b406e9737cfe98f78ec878383e758729b207e92e487bd2",
+      "archiveSha256": "9440c9933356af318b2266c6b66c82f5aafa6f091b68ca857018a3703410c3a0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 41 skipped (42)",
+        "Duration  202.78s (transform 12.46s, setup 95ms, import 17.19s, tests 185.33s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-signal-180",
+      "exitCode": 0,
+      "exitSidecar": "learning-workflow-signal-180.exit",
+      "rawSha256": "f58f0437f56bc316e4418ee20d65993d772daecd2acb46f3df05664806422888",
+      "sanitizedSha256": "f58f0437f56bc316e4418ee20d65993d772daecd2acb46f3df05664806422888",
+      "archiveSha256": "a2121179276b8bb7716c1d2fe9a0b0ef45325183127a9c191a2621269ce5afc5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 40 skipped (42)",
+        "Duration  132.42s (transform 9.48s, setup 73ms, import 13.49s, tests 118.74s, environment 0ms)"
+      ],
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861"
+    },
+    {
+      "name": "learning-workflow-source-final42-scoped",
+      "exitCode": 0,
+      "exitSidecar": "learning-workflow-source-final42-scoped.exit",
+      "rawSha256": "1d9c96e519a727fb155a1829fada741f26b518f362a52f1915a26c9fbab3426c",
+      "sanitizedSha256": "636352871e7f0a03848f719748337df28b94ad43286f9af60f5e3c8fd5c569a9",
+      "archiveSha256": "776c944d8f1454b6b4c5e060350ddf56cd29c669549ced265b8f905dd2c1a77c",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  42 passed (42)",
+        "Duration  571.20s (transform 9.48s, setup 81ms, import 13.19s, tests 557.82s, environment 0ms)"
+      ],
+      "sourceCommit": "102ae29e96061744df46c84b3850aacf532f6ab1"
+    },
+    {
+      "name": "workflow-source-owner-final-optimized",
+      "exitCode": 0,
+      "exitSidecar": "workflow-source-owner-final-optimized.exit",
+      "rawSha256": "81b75417e74dca8a82ec8d209b7e6aba1cbdd87b3a9303aa4d80c1641e2e94e6",
+      "sanitizedSha256": "81b75417e74dca8a82ec8d209b7e6aba1cbdd87b3a9303aa4d80c1641e2e94e6",
+      "archiveSha256": "2405aaef5da8ca364a0762710a808bee08a3bbf836131c4ba51c16e07e58cac9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  18 passed (18)",
+        "Duration  69.88s (transform 11.58s, setup 68ms, import 15.44s, tests 54.25s, environment 0ms)"
+      ],
+      "sourceCommit": "7b6a662f30661ecda31f8cee4c5bf2e407c0035c"
+    },
+    {
+      "name": "workflow-source-executor-final-optimized",
+      "exitCode": 0,
+      "exitSidecar": "workflow-source-executor-final-optimized.exit",
+      "rawSha256": "837b1b351ae678720e10e26cd95664a3dc752ae6d5d95458eb2911370478bc73",
+      "sanitizedSha256": "d80f224613fd55e77c1790a0caa163f96fe00b469c6330a469d84fadde2166eb",
+      "archiveSha256": "ae65bb389a4974d1e4d48fb3d0654b61b4e7442741943b70df20bcb0ca55a505",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  51 passed (51)",
+        "Duration  35.71s (transform 8.81s, setup 75ms, import 12.51s, tests 23.02s, environment 0ms)"
+      ],
+      "sourceCommit": "7b6a662f30661ecda31f8cee4c5bf2e407c0035c"
+    },
+    {
+      "name": "tool-gateway-workflow-source-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "tool-gateway-workflow-source-diagnostic.exit",
+      "rawSha256": "ef42a3ddd7d6c4fdc9ec73fff9822486442cfdbc261a0160e530da31ad84d57d",
+      "sanitizedSha256": "ef42a3ddd7d6c4fdc9ec73fff9822486442cfdbc261a0160e530da31ad84d57d",
+      "archiveSha256": "d63cd2b7593d1ddf6372afad2ddfaecef187b3a235e21d34dc4af75b89832822",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 50 skipped (52)",
+        "Duration  22.38s (transform 12.54s, setup 78ms, import 17.37s, tests 4.79s, environment 0ms)"
+      ],
+      "sourceCommit": "8f8733afeeef37b52d5a5854e106e94baa685173"
+    },
+    {
+      "name": "tool-gateway-workflow-source-current-principals",
+      "exitCode": 0,
+      "exitSidecar": "tool-gateway-workflow-source-current-principals.exit",
+      "rawSha256": "e64f706d4f3a8bb597fd50883ff00522927ee5f252b8365ef54b359c79253465",
+      "sanitizedSha256": "e64f706d4f3a8bb597fd50883ff00522927ee5f252b8365ef54b359c79253465",
+      "archiveSha256": "e4487a58d9b8b13205c9fff1127d4a8616ef6f6da2c9fa7cd16e5b38166fc5f8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 50 skipped (52)",
+        "Duration  28.44s (transform 14.90s, setup 81ms, import 20.13s, tests 8.08s, environment 0ms)"
+      ],
+      "sourceCommit": "8f8733afeeef37b52d5a5854e106e94baa685173"
+    },
+    {
+      "name": "tool-gateway-workflow-principals-full",
+      "exitCode": 0,
+      "exitSidecar": "tool-gateway-workflow-principals-full.exit",
+      "rawSha256": "751f600044f4109c9fd2aa7201897b22eccc5f148a8d4a233e03169a70e4bef6",
+      "sanitizedSha256": "4c09db22c270ad2f869b07839659352d0208fef376b2441221ab4e1b0797d65f",
+      "archiveSha256": "888116a5088c3a3e19e288c1f07c3633392190ddc4538d91803e3a36fe5e94a0",
+      "redactions": {
+        "ansi": 600,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  52 passed (52)",
+        "Duration  37.37s (transform 12.98s, setup 88ms, import 17.81s, tests 19.34s, environment 0ms)"
+      ],
+      "sourceCommit": "8f8733afeeef37b52d5a5854e106e94baa685173"
+    },
+    {
+      "name": "v9-publication-safe-tests-full-retry2",
+      "exitCode": 0,
+      "exitSidecar": "v9-publication-safe-tests-full-retry2.exit",
+      "rawSha256": "6175317d5f7651ec33de2ea0de2aab38777a56d4f5bbee564524189646a109ef",
+      "sanitizedSha256": "60c98dbb58fca26c298f7b4c342222390cf5ecb1c010e60d9d090bd0d9f2e4a1",
+      "archiveSha256": "b03e0926967da02c4477996991022a252379642caa4519d4aebadabb7d39a5ce",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  49 passed (49)",
+        "Duration  182.98s (transform 10.61s, setup 138ms, import 18.89s, tests 163.70s, environment 0ms)"
+      ],
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78"
+    },
+    {
+      "name": "native-plan-fixture-suite",
+      "exitCode": 0,
+      "exitSidecar": "native-plan-fixture-suite.exit",
+      "rawSha256": "cd679870fb6e3cd633e2f3e096d234ed84d83f6b80c591abce46efc415231d2a",
+      "sanitizedSha256": "d6d2f00b15327e3aecc89bbb9320064a838805bb62c7dac751e3f4becf1cc5b0",
+      "archiveSha256": "84b8735f5d48f14075609552944a50812ca67b84facc3196e3fc90c499cd8694",
+      "redactions": {
+        "ansi": 78,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)",
+        "Duration  29.76s (transform 12.11s, setup 87ms, import 16.74s, tests 12.80s, environment 0ms)"
+      ],
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78"
+    },
+    {
+      "name": "learning-worker-namespace-unconfined-probe",
+      "exitCode": 0,
+      "exitSidecar": "learning-worker-namespace-unconfined-probe.exit",
+      "rawSha256": "a37186cc16e3ccf0e458b7359f365fded400230687c43f730d5c8364f7c186c7",
+      "sanitizedSha256": "a37186cc16e3ccf0e458b7359f365fded400230687c43f730d5c8364f7c186c7",
+      "archiveSha256": "d8203e00b4a2e0fe1233a3bd3ae86dc3f9f276fcc5154da12a2986b7ee4523f1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-namespaces",
+      "exitCode": 1,
+      "exitSidecar": "learning-artifact-isolated-worker-namespaces.exit",
+      "rawSha256": "611a8fc57464fafbcb08c3813fde4c700c6847dd988f6fcdbca0f8f5786e01de",
+      "sanitizedSha256": "de1cc0dfd1e52dbc52d912f18aea894eb2494c20ac703b4c9903a341f9020bfa",
+      "archiveSha256": "c6aa2064976ceed64f940d7733cc1872574e320438f6f69b3a39e314d2aa6037",
+      "redactions": {
+        "ansi": 290,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 40 skipped (42)",
+        "Duration  35.96s (transform 16.02s, setup 122ms, import 22.13s, tests 13.52s, environment 0ms)"
+      ],
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78"
+    },
+    {
+      "name": "issue-tree-control-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "issue-tree-control-diagnostic.exit",
+      "rawSha256": "f0dc0edccd51d232fa11643ad58a4a1913c5e0ce4f792c003e0cca4c064b7754",
+      "sanitizedSha256": "f0dc0edccd51d232fa11643ad58a4a1913c5e0ce4f792c003e0cca4c064b7754",
+      "archiveSha256": "329085b5f544ba81bbb9b23fb232b18e476d0f8808e035ed571f2a5df7f6f7a5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 5 passed (6)",
+        "Duration  24.97s (transform 13.33s, setup 80ms, import 18.19s, tests 6.57s, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "issue-tree-control-current-human",
+      "exitCode": 1,
+      "exitSidecar": "issue-tree-control-current-human.exit",
+      "rawSha256": "d2edd1c951f9424f6dfc3a5b080b7a9881c1882c234adf77a658d282268d62cb",
+      "sanitizedSha256": "d2edd1c951f9424f6dfc3a5b080b7a9881c1882c234adf77a658d282268d62cb",
+      "archiveSha256": "dfe0f5bd2d9341cd83582230a9ce8d4ee3c4134e561ea7bc7604ca505e6291da",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 3 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  3 failed | 3 passed (6)",
+        "Duration  27.47s (transform 15.92s, setup 99ms, import 21.45s, tests 5.77s, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "issue-tree-control-current-human-final",
+      "exitCode": 0,
+      "exitSidecar": "issue-tree-control-current-human-final.exit",
+      "rawSha256": "1e567b1a063affaceec79cd29b4363bce65191fff954176d9a17e033d1aa23de",
+      "sanitizedSha256": "1e567b1a063affaceec79cd29b4363bce65191fff954176d9a17e033d1aa23de",
+      "archiveSha256": "c36db8efe16ea0728160abfc4594f774f2d0f2d8a13662765442f514478e7507",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  6 passed (6)",
+        "Duration  19.49s (transform 10.26s, setup 85ms, import 14.39s, tests 4.87s, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "learning-artifact-isolated-worker-diagnostic.exit",
+      "rawSha256": "36e09f7882d7a72046b23811d3f1553dc663ca9f134c95c8d30b63d79b8f8e93",
+      "sanitizedSha256": "387dd2021ee76488fbe820b5480dba2675857e98b4b55243c66fe9832995c627",
+      "archiveSha256": "a89252db0fe9c65367217ae74a89ff0afa28afb34300f748aece2a1075933c12",
+      "redactions": {
+        "ansi": 66,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Duration  229ms (transform 21ms, setup 89ms, import 0ms, tests 0ms, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-diagnostic2",
+      "exitCode": 1,
+      "exitSidecar": "learning-artifact-isolated-worker-diagnostic2.exit",
+      "rawSha256": "65602818004b411243036c2111ead4bc9a5c7259a094ba0a193a43cc27be2836",
+      "sanitizedSha256": "a643498bcd543d37f1eb241d322208cecf6c2ad5158354d7751d5f2aca074d82",
+      "archiveSha256": "4625ddc66623c11010b8d2b38a0dd5491fe70affb3c923ed2c2f23e0a6781e9c",
+      "redactions": {
+        "ansi": 312,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "AssertionError: {\"status\":\"failed\",\"reasonCode\":\"optimizer_replay_case_failed\",\"criticalInvariantFailure\":false,\"requiredCategories\":[\"representative\",\"boundary\",\"shape_variant\"],\"missingCategories\":[],\"caseResults\":[{\"id\":\"run:0f2a027e-eda5-41f3-8911-5f8f8a167606\",\"category\":\"representative\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]},{\"id\":\"run:2cf4b013-3055-44a7-88d2-6834eabc08de\",\"category\":\"representative\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]},{\"id\":\"run:bbc39e62-f021-417e-8a96-3e671916d28f\",\"category\":\"representative\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]},{\"id\":\"fixture:generated-boundary\",\"category\":\"boundary\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]},{\"id\":\"fixture:generated-shape-variant\",\"category\":\"shape_variant\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]}],\"passedCaseCount\":0,\"failedCaseCount\":5,\"unsupportedCaseCount\":0,\"totalDurationMs\":0,\"totalCostEstimate\":null}: expected false to be true // Object.is equality",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 40 skipped (42)",
+        "Duration  29.09s (transform 12.32s, setup 81ms, import 16.95s, tests 11.92s, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "learning-worker-native-sandbox-direct",
+      "exitCode": 1,
+      "exitSidecar": "learning-worker-native-sandbox-direct.exit",
+      "rawSha256": "53ed11bd1b1582f73a2832b1e27dca51421e39b84f441bdc142df6da72d7137f",
+      "sanitizedSha256": "73e2abcaa0395a0acb36dd60d9d96ce24adb722dfe6376bda898632d7bbe2e1e",
+      "archiveSha256": "80fd5fd9f8b6b4688d529c4a699f8fc32a52a11f5cd83f38077223e75b936080",
+      "redactions": {
+        "ansi": 128,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Duration  427ms (transform 144ms, setup 91ms, import 0ms, tests 0ms, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "routine-cron-human-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "routine-cron-human-diagnostic.exit",
+      "rawSha256": "d2d58eca89b1736983a38191844b362011835f1f1ec4e8443e763ad38c4cb4b9",
+      "sanitizedSha256": "d2d58eca89b1736983a38191844b362011835f1f1ec4e8443e763ad38c4cb4b9",
+      "archiveSha256": "a2228bdc380089dfd833f30938a0aa87b5d2a809467bd3bf3cb04bcabf227aa3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 10 skipped (11)",
+        "Duration  30.97s (transform 17.79s, setup 112ms, import 24.66s, tests 6.04s, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "routine-cron-human-full",
+      "exitCode": 0,
+      "exitSidecar": "routine-cron-human-full.exit",
+      "rawSha256": "3d69231e1736ae4db7202b0f5a6c72bc9ac6c3585043859dbdaa62421feb4fd9",
+      "sanitizedSha256": "3d69231e1736ae4db7202b0f5a6c72bc9ac6c3585043859dbdaa62421feb4fd9",
+      "archiveSha256": "35c63bcb6e77b382c931772e9015d0d859dfdd7a600d98f639c2dbdf94388a59",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  29.46s (transform 12.32s, setup 69ms, import 17.14s, tests 12.12s, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "project-tool-rendition-diagnostic",
+      "exitCode": 0,
+      "exitSidecar": "project-tool-rendition-diagnostic.exit",
+      "rawSha256": "de0a1ff4120f5fca62902da2f8238828ace2af585316d90f9d25a192d219f5f0",
+      "sanitizedSha256": "de0a1ff4120f5fca62902da2f8238828ace2af585316d90f9d25a192d219f5f0",
+      "archiveSha256": "c11032f589d270df2a999b602f5c3d97dff5a9172d543af7b798b956c6baa1b9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 13 skipped (14)",
+        "Duration  41.64s (transform 26.37s, setup 149ms, import 35.91s, tests 5.36s, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "learning-worker-native-sandbox-systempaths",
+      "exitCode": 0,
+      "exitSidecar": "learning-worker-native-sandbox-systempaths.exit",
+      "rawSha256": "1d8309cfd818102c3d031abdc3e73fa26b0ede8d5be4a0cb333c4ed7c0fb0eab",
+      "sanitizedSha256": "8528fd3a442ada74a6dd3a54ed70e479e75ae41ddc8d8eefdbf64900298b426d",
+      "archiveSha256": "c3917d0e48268a074e0085b4e367b45cd362fdbe69ce1b1e830343bf1c45bef6",
+      "redactions": {
+        "ansi": 56,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 28 skipped (29)",
+        "Duration  640ms (transform 173ms, setup 89ms, import 323ms, tests 78ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "learning-worker-native-sandbox-full",
+      "exitCode": 0,
+      "exitSidecar": "learning-worker-native-sandbox-full.exit",
+      "rawSha256": "3c36fe20ecdc1d42ee47464f99886b3c5ee8e633c885cb28a69eda1d1245b503",
+      "sanitizedSha256": "9e65a65970145c0511ca66bf1766d9d8ecb87eb461b30c67eecc8e875c1ae577",
+      "archiveSha256": "39775edc18d149d78fe43c0288f8b44616458e75f5ca14d9f680e5f65feff0b5",
+      "redactions": {
+        "ansi": 48,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  29 passed (29)",
+        "Duration  1.70s (transform 172ms, setup 94ms, import 330ms, tests 1.15s, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-qualified-boundary",
+      "exitCode": 1,
+      "exitSidecar": "learning-artifact-isolated-worker-qualified-boundary.exit",
+      "rawSha256": "c6871640cf383bba44930ef6c7e8c15dd7e19a8014006d5fff600518c4954ffc",
+      "sanitizedSha256": "ac1b10346c2cd13d49b2317ce0212845778a5d7d3f79d59a9c0f2ead5deaabb3",
+      "archiveSha256": "791a52f6428f805e2916cb184707db63b39484b2100a61ebc3baee9286124f4d",
+      "redactions": {
+        "ansi": 110,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files   (1)",
+        "Tests  40 skipped (42)",
+        "Duration  75.29s (transform 13.91s, setup 81ms, import 19.77s, tests 0ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "native-plan-canonical-project-suite",
+      "exitCode": 0,
+      "exitSidecar": "native-plan-canonical-project-suite.exit",
+      "rawSha256": "b8af203d38a1b96828436d1def7b52766e168c06905cdebc6fcdff1ce96c28a9",
+      "sanitizedSha256": "416750da171af0dd12aaaf2831af3a31114f2060d1ce16e45f8227d4934c714a",
+      "archiveSha256": "f540a9773b3c64ac18b49a647cbfc7ec275c6c1adde24e4631360790efdbc2c8",
+      "redactions": {
+        "ansi": 78,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)",
+        "Duration  34.39s (transform 15.35s, setup 95ms, import 20.60s, tests 13.53s, environment 0ms)"
+      ],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
+    },
+    {
+      "name": "workspace-busy-native-project-fixtures",
+      "exitCode": 0,
+      "exitSidecar": "workspace-busy-native-project-fixtures.exit",
+      "rawSha256": "23e7b44fa8adf4d03dd70bb49c9084687ae24b3b039f11d468ebf2fe6e0d39c2",
+      "sanitizedSha256": "2987d59c00cbba52101be34b4037cc3dd5e34c7f001c05e3b137086986b74b3e",
+      "archiveSha256": "75ddbcd5d2651b05be55482f5b6a2dd663773b4f546ba0b4273a4b2c5fd6681d",
+      "redactions": {
+        "ansi": 168,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  18 passed (18)",
+        "Duration  53.45s (transform 11.83s, setup 80ms, import 16.48s, tests 36.76s, environment 0ms)"
+      ],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
+    },
+    {
+      "name": "heartbeat-plugin-native-project-fixtures",
+      "exitCode": 0,
+      "exitSidecar": "heartbeat-plugin-native-project-fixtures.exit",
+      "rawSha256": "0110dbdcdd37b66cb24fe210912f25d39c19e0dac04dff93f85de8a0637a7f18",
+      "sanitizedSha256": "312570f74ab832e1e117adc68d607b2ef1cf5e617dd5c6fbaf2d2ff3d19e9ff0",
+      "archiveSha256": "2966af044107f44bf1b4875ba48312254df539016c73f0cc435d051d57df8338",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  3 passed (3)",
+        "Duration  29.57s (transform 15.37s, setup 75ms, import 21.13s, tests 8.23s, environment 0ms)"
+      ],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
+    },
+    {
+      "name": "v10-workspace-tests",
+      "exitCode": 130,
+      "exitSidecar": "v10-workspace-tests.exit",
+      "rawSha256": "df369c01894327f7c148c676710162aaaaeec83d1ebbc8ba27878b8b3da7c159",
+      "sanitizedSha256": "a3c93eca554aa33e93338c65b803455050931df5e48187e4b841eb727975ac58",
+      "archiveSha256": "bcad1b471f03744fbfda4ebf5b427455645bb8b26db45867254bcb023d403443",
+      "redactions": {
+        "ansi": 7276,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "fb2e755f81486f5854d8d228c28964f52b036a0d"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-reduced-heap",
+      "exitCode": 0,
+      "exitSidecar": "learning-artifact-isolated-worker-reduced-heap.exit",
+      "rawSha256": "5543dba9ea1e66a3460658745326fe8ceb624ad186da845cbd2a431551ec2f7a",
+      "sanitizedSha256": "64d43699becbb02b8177d074ae255d5c95811338b47d8a05edba518bdf6db318",
+      "archiveSha256": "9927fc159482086cf4e9e448ce2e331718f40da74d6be31a2afa598ccff53302",
+      "redactions": {
+        "ansi": 78,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 40 skipped (42)",
+        "Duration  248.31s (transform 11.04s, setup 137ms, import 15.90s, tests 232.14s, environment 0ms)"
+      ],
+      "sourceCommit": "9239f756eb11f27e33a8d77611444e2c441d3117"
+    },
+    {
+      "name": "v10-typecheck-checkpoint-99b7",
+      "exitCode": 1,
+      "exitSidecar": "v10-typecheck-checkpoint-99b7.exit",
+      "rawSha256": "19a6bc3bafe46c3cfc367e1c2055daa46aebccaa6cc9fda890e8a944114b5522",
+      "sanitizedSha256": "19a6bc3bafe46c3cfc367e1c2055daa46aebccaa6cc9fda890e8a944114b5522",
+      "archiveSha256": "7a2e4ddf57426111afb468af01c79de5d32bb0a9b5ac3c0d808dbaa9e626c4dc",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "9239f756eb11f27e33a8d77611444e2c441d3117"
+    },
+    {
+      "name": "analytical-retention-batch-typecheck-final4",
+      "exitCode": 0,
+      "exitSidecar": "analytical-retention-batch-typecheck-final4.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "analytical-retention-batch-full56-final",
+      "exitCode": 0,
+      "exitSidecar": "analytical-retention-batch-full56-final.exit",
+      "rawSha256": "26ccd3eae939ac011cca2c45eb6809a586ea28a17b56efe60f4e1434c150d044",
+      "sanitizedSha256": "1b33616c0036a64ad17587a232146d62ab4fb2fa5c66ec71b7ec2095e487b07f",
+      "archiveSha256": "13f7382d4e4ed1d666c92bd946ee07bae8e433f57ea64c213ceba79a8836af9f",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  56 passed (56)",
+        "Duration  222.60s (transform 10.38s, setup 69ms, import 14.33s, tests 208.09s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "current-human-source-57-final",
+      "exitCode": 0,
+      "exitSidecar": "current-human-source-57-final.exit",
+      "rawSha256": "cf00968bb03cde4a569bd5f9fea1f464d0acc562f4ff2b95ebbf1b92315f0284",
+      "sanitizedSha256": "cf00968bb03cde4a569bd5f9fea1f464d0acc562f4ff2b95ebbf1b92315f0284",
+      "archiveSha256": "3a359c0ff295d258d740b159e6ea10330224cfa2151a2f5105c779ed73d96aa6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  4 passed (4)",
+        "Tests  57 passed (57)",
+        "Duration  175.32s (transform 12.67s, setup 243ms, import 27.61s, tests 146.95s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "pipeline-final34",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "11842add1ba53fe18189028babd2018bc3f0179cefa30206b650699d00da2703",
+      "sanitizedSha256": "11842add1ba53fe18189028babd2018bc3f0179cefa30206b650699d00da2703",
+      "archiveSha256": "e061a36f8a64645811a828e2e72ff2c5b41df9a8646b86db2e036f53fb79f6a2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  34 passed (34)",
+        "Duration  27.73s (transform 11.67s, setup 83ms, import 16.04s, tests 11.48s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "pipeline-final-tsc",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "native-source-project-fixtures-attempt1",
+      "exitCode": 1,
+      "exitSidecar": "native-source-project-fixtures-attempt1.exit",
+      "rawSha256": "33dd639bce4029c72d36e44177a5adf380bfbbdc78b85655a5c9ec8faba721d0",
+      "sanitizedSha256": "93296210cbfdf66d5e488751e8a97423dcaa08b5e85c52f79009321dd6ea423b",
+      "archiveSha256": "a5cfdb260152fe37d0bbd058df59cf774a280a6478717742a3d64025c5f2391d",
+      "redactions": {
+        "ansi": 270,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 2 passed (3)",
+        "Tests  2 failed | 20 passed (22)",
+        "Duration  66.41s (transform 11.75s, setup 177ms, import 23.52s, tests 42.34s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "native-source-project-fixtures-attempt2",
+      "exitCode": 0,
+      "exitSidecar": "native-source-project-fixtures-attempt2.exit",
+      "rawSha256": "fe38f0ce972e6b4a12eba797060c9aea35b3a86edfc7a341d9c50c33436a44c9",
+      "sanitizedSha256": "a037b36da91f1fb45bc2e9f9acb181f39b28bac65c2c9c8a8e7bb0ca4d569046",
+      "archiveSha256": "4197d0eb8c61aaaee6c8128f97e2561db3d46c1353464940f9b37b1e2389b2f6",
+      "redactions": {
+        "ansi": 294,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  22 passed (22)",
+        "Duration  71.73s (transform 11.04s, setup 199ms, import 24.07s, tests 47.03s, environment 0ms)"
+      ],
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972"
+    },
+    {
+      "name": "agent-conversations-owner-gate-full4",
+      "exitCode": 0,
+      "exitSidecar": "agent-conversations-owner-gate-full4.exit",
+      "rawSha256": "b41cf492d1cd1ae80654380562d4de16ad6ca77df28227cc23c8f5c1e033b31e",
+      "sanitizedSha256": "01e1ba6f09946d78918b68ed6da63097baa93fd34c2ea2e7d7276162278831c3",
+      "archiveSha256": "8403809a548c6503453c0076f769db3a51ff365788deb70ea084d78c1e4d5eee",
+      "redactions": {
+        "ansi": 66,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  37 passed (37)",
+        "Duration  29.52s (transform 10.99s, setup 88ms, import 15.70s, tests 13.61s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "forecast-full-final",
+      "exitCode": 0,
+      "exitSidecar": "forecast-full-final.exit",
+      "rawSha256": "edbc42b6e8ca419fe066052d5805545f71e8e4ee90902cbaab864f40d13858a0",
+      "sanitizedSha256": "edbc42b6e8ca419fe066052d5805545f71e8e4ee90902cbaab864f40d13858a0",
+      "archiveSha256": "3f031815657147cbc39dde2f31e6c0b5c421347ca56271ef3002e3c386abad98",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  25 passed | 7 skipped (32)",
+        "Duration 116.70s"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "analytical-context-forecast-combined-final",
+      "exitCode": 0,
+      "exitSidecar": "analytical-context-forecast-combined-final.exit",
+      "rawSha256": "a78493bf53d76196f90c227c152b38df3291995f2366df6a1ae1ab6ee6daeab3",
+      "sanitizedSha256": "a78493bf53d76196f90c227c152b38df3291995f2366df6a1ae1ab6ee6daeab3",
+      "archiveSha256": "6a2ead1dd7fe7a85b385f5a9970acba996fb23f92d04111c52aff8c02303bc25",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  81 passed | 7 skipped (88)",
+        "Duration 373.54s (transform 10.56s, setup 127ms, import 18.63s, tests 354.55s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-dispatch-final2",
+      "exitCode": 0,
+      "exitSidecar": "native-input-dispatch-final2.exit",
+      "rawSha256": "d6d067c275a6a378d2fc32f33e3656dec81c15e64643cc08e1eef8fc41f633b8",
+      "sanitizedSha256": "d6d067c275a6a378d2fc32f33e3656dec81c15e64643cc08e1eef8fc41f633b8",
+      "archiveSha256": "159957fad8465bfa9f5c0579d4448e661264181a3bdb6560271ca10f8e057b16",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  38 passed (38)",
+        "Duration  22.21s (transform 10.10s, setup 81ms, import 13.73s, tests 8.27s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-receipt-db-final",
+      "exitCode": 0,
+      "exitSidecar": "native-input-receipt-db-final.exit",
+      "rawSha256": "982c452ba3f8c2bbd9c9629dbb1fdb2165b69d89c1ced8852d34c2a1243ae49a",
+      "sanitizedSha256": "982c452ba3f8c2bbd9c9629dbb1fdb2165b69d89c1ced8852d34c2a1243ae49a",
+      "archiveSha256": "18a17d9f7aa5c75df8ad86984cd3492263748a65ac1c516d8a109b65e60726d7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed (9)",
+        "Duration  7.65s (transform 2.11s, setup 0ms, import 3.39s, tests 4.15s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-renderer-final",
+      "exitCode": 0,
+      "exitSidecar": "native-input-renderer-final.exit",
+      "rawSha256": "9cea2b13ea58b2c5d61d6a6bef1d113133a2727b52bc83bb72f31b3c20d4e76d",
+      "sanitizedSha256": "9cea2b13ea58b2c5d61d6a6bef1d113133a2727b52bc83bb72f31b3c20d4e76d",
+      "archiveSha256": "121b9a03054e9b067900d56732c9501e2aad47ede465e438b4eb2d29a1ebdffc",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  39 passed (39)",
+        "Duration  12.47s (transform 8.94s, setup 71ms, import 12.27s, tests 14ms, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-exact-closure-final2",
+      "exitCode": 0,
+      "exitSidecar": "native-input-exact-closure-final2.exit",
+      "rawSha256": "d330a0b19c3ca8b05e188d7b64c6805053c3f3788f36138cf3a448b2ff3f3cd9",
+      "sanitizedSha256": "d330a0b19c3ca8b05e188d7b64c6805053c3f3788f36138cf3a448b2ff3f3cd9",
+      "archiveSha256": "6e97a1468d0cbaa61c60837c7ec64c584f3a91844bc439ec4a97e4a669a39686",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  56 passed (56)",
+        "Duration  22.76s (transform 9.45s, setup 128ms, import 14.48s, tests 7.91s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "native-input-actual-document-fields-final",
+      "exitCode": 0,
+      "exitSidecar": "native-input-actual-document-fields-final.exit",
+      "rawSha256": "720c01d451437844696bd784ec2bceeb732db83509c059e0ca45ee45a1d31026",
+      "sanitizedSha256": "720c01d451437844696bd784ec2bceeb732db83509c059e0ca45ee45a1d31026",
+      "archiveSha256": "194d8188b32243260e67059adf8f98e6953e98501b9993119b2250427b7e26a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  38 passed (38)",
+        "Duration  22.55s (transform 10.10s, setup 73ms, import 13.55s, tests 8.79s, environment 0ms)"
+      ],
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "runtime-fabric-current",
+      "exitCode": 1,
+      "exitSidecar": "runtime-fabric-current.exit",
+      "rawSha256": "d5c825b70a4b2d97a612f23f7653f675f52a0be15bffdd11176cf6db261a185d",
+      "sanitizedSha256": "732b76f05531a56a67822d8440bee0ee46c54657b059945a7165075f0027d8a4",
+      "archiveSha256": "4228538c8016b74c8145758df27664bb455287457d164c3a7041f6669b6ab11a",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 3 passed (5)",
+        "Duration  34.95s (transform 18.82s, setup 75ms, import 25.78s, tests 8.91s, environment 0ms)"
+      ],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "agent-conversations-current-human-pin-full5",
+      "exitCode": 0,
+      "exitSidecar": "agent-conversations-current-human-pin-full5.exit",
+      "rawSha256": "a9c546bb7a4e9bdab5c05ea67e1bbf0be7c34a51eaf87d39691dd8e6d71f29f4",
+      "sanitizedSha256": "ac36579e73174d914de853fb1289162cd15da0c4baf38a748a115f4b6a545c32",
+      "archiveSha256": "72942105953289b62cc9f33383d8d6acfbe57a28b1595201084bdc3333218e76",
+      "redactions": {
+        "ansi": 66,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  37 passed (37)",
+        "Duration  27.07s (transform 9.97s, setup 77ms, import 14.00s, tests 12.87s, environment 0ms)"
+      ],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "adaptive-planning-cross-project-fixtures-rerun",
+      "exitCode": 0,
+      "exitSidecar": "adaptive-planning-cross-project-fixtures-rerun.exit",
+      "rawSha256": "51200bc3947f99799701a4d0396eb14ba41d663022d0abd539e4421a1aea26b7",
+      "sanitizedSha256": "51200bc3947f99799701a4d0396eb14ba41d663022d0abd539e4421a1aea26b7",
+      "archiveSha256": "93f7489f1d80ec2c911e1775e699c86e2f5927e26c05aacb71e013aa8dd3d73b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  19 passed (19)",
+        "Duration  100.72s (transform 11.56s, setup 75ms, import 15.84s, tests 84.69s, environment 0ms)"
+      ],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "company-portability-import-batching-final2",
+      "exitCode": 0,
+      "exitSidecar": "company-portability-import-batching-final2.exit",
+      "rawSha256": "da18ce7ba58d8803da3af48ed77980c05cf58e8f83c8009cd5dd8b98826ed5d2",
+      "sanitizedSha256": "da18ce7ba58d8803da3af48ed77980c05cf58e8f83c8009cd5dd8b98826ed5d2",
+      "archiveSha256": "c10ac86eb658510f9e0f8d9b0681bdb8b049a0fcf096e4f54a8a1f01a999754e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  14 passed | 1 skipped (15)",
+        "Duration  64.05s (transform 12.22s, setup 73ms, import 17.26s, tests 46.60s, environment 0ms)"
+      ],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "learning-artifact-worker-cd1061d20",
+      "exitCode": 0,
+      "exitSidecar": "learning-artifact-worker-cd1061d20.exit",
+      "rawSha256": "5e8beda366922cdb78ffa306490c342345ff1f4b2039981d0e1e78872b81a2bb",
+      "sanitizedSha256": "6d5eddfa44679cf75f23cf1e649117ae8ceb98b7034b510f518628e40cb2c332",
+      "archiveSha256": "ab14bc5bf86ff4957c4ad857cfe14f7599ea4170492c4ded12dcef42397a3d11",
+      "redactions": {
+        "ansi": 78,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 40 skipped (42)",
+        "Duration  375.14s (transform 12.83s, setup 155ms, import 18.64s, tests 356.19s, environment 0ms)"
+      ],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "worker-source-cd1061d20-update",
+      "exitCode": 2,
+      "exitSidecar": "worker-source-cd1061d20-update.exit",
+      "rawSha256": "07e4be5e3e608b34fb31a15f145ddfa0d4537fb34f11ab4a0322bde75dc8f01b",
+      "sanitizedSha256": "07e4be5e3e608b34fb31a15f145ddfa0d4537fb34f11ab4a0322bde75dc8f01b",
+      "archiveSha256": "4cce63e79bbfc9d56eecec85dfb14e3cac6f3322812248659bbbabc74b7bb17e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "worker-source-cd1061d20-root-update",
+      "exitCode": 2,
+      "exitSidecar": "worker-source-cd1061d20-root-update.exit",
+      "rawSha256": "6e1f1030794abcaee2c32dc8eb04906e7af9ca695fded9ece8b1d67803392b8c",
+      "sanitizedSha256": "6e1f1030794abcaee2c32dc8eb04906e7af9ca695fded9ece8b1d67803392b8c",
+      "archiveSha256": "a8e73f172331fc9cf77ab2bc48174c9bb5d51b3c63e02455151aefc59240eb3e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "v10-shared-contracts-current",
+      "exitCode": 0,
+      "exitSidecar": "v10-shared-contracts-current.exit",
+      "rawSha256": "c522cc96a2b3503456d98bbd7bc070b529bb060e429910c390c6971a83e88696",
+      "sanitizedSha256": "c522cc96a2b3503456d98bbd7bc070b529bb060e429910c390c6971a83e88696",
+      "archiveSha256": "ab8bb850d9143dd81b0eaf92f0107120a0f869b7dae472447314d8566818907f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  137 passed (137)",
+        "Tests  1205 passed (1205)",
+        "Duration  42.33s (transform 3.35s, setup 0ms, import 15.26s, tests 9.51s, environment 14ms)"
+      ],
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8"
+    },
+    {
+      "name": "v10-context-runtime-server-typecheck-current",
+      "exitCode": 0,
+      "exitSidecar": "v10-context-runtime-server-typecheck-current.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8"
+    },
+    {
+      "name": "delegated-context-v5-runtime-purgefix",
+      "exitCode": 0,
+      "exitSidecar": "delegated-context-v5-runtime-purgefix.exit",
+      "rawSha256": "f6adaf98bc66891f9041d6679a95ff3076097e9eeb8f9aac3cf658add1b5702f",
+      "sanitizedSha256": "59990141d4fd03f71b470fc31086d10fb86228745b164d2e29202ff0f8669686",
+      "archiveSha256": "b165563d92417c24462cf1a56540b8da0da37816ce835f5b4d73a59e90bcf028",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)",
+        "Duration  30.26s (transform 11.78s, setup 91ms, import 16.35s, tests 13.68s, environment 0ms)"
+      ],
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8"
+    },
+    {
+      "name": "native-payload-temporal-final2",
+      "exitCode": 1,
+      "exitSidecar": "native-payload-temporal-final2.exit",
+      "rawSha256": "2fc1af5435baee42368aeb32df8b05053c1b96fe3bc2ace12d1541b945062b39",
+      "sanitizedSha256": "2fc1af5435baee42368aeb32df8b05053c1b96fe3bc2ace12d1541b945062b39",
+      "archiveSha256": "2999953af50a8d15e7dfebcd16c5f98201c3c8d07e02df652e2c06bad83e3bbb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 1 passed (3)",
+        "Duration  30.90s (transform 12.44s, setup 116ms, import 17.15s, tests 13.52s, environment 0ms)"
+      ],
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8"
+    },
+    {
+      "name": "current-human-business-experiment-analysis-final-2",
+      "exitCode": 0,
+      "exitSidecar": "current-human-business-experiment-analysis-final-2.log.exit",
+      "rawSha256": "e0c8699e620f67afdae0e33a1e190021792555cde817e5a06e63e2ac434eb580",
+      "sanitizedSha256": "e0c8699e620f67afdae0e33a1e190021792555cde817e5a06e63e2ac434eb580",
+      "archiveSha256": "bbb56f96c6fd9c277cbd9dca0893abce58ec74ef6f14eb5cba5ac8c5d287aa9a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  20 passed (20)",
+        "Duration  224.88s (transform 13.21s, setup 78ms, import 18.04s, tests 206.64s, environment 0ms)"
+      ],
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c"
+    },
+    {
+      "name": "current-human-process-experiments-final",
+      "exitCode": 0,
+      "exitSidecar": "current-human-process-experiments-final.log.exit",
+      "rawSha256": "b6f2f685f914e32d4c0e869cd2a4fb895702a4c1d529c9875d8f3504f07e1725",
+      "sanitizedSha256": "b6f2f685f914e32d4c0e869cd2a4fb895702a4c1d529c9875d8f3504f07e1725",
+      "archiveSha256": "e23a8154baedc0cef6d45fb5b7971c48b1614edd0df39307d16635bdac17ad7c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  32 passed (32)",
+        "Duration  150.46s (transform 12.46s, setup 142ms, import 21.64s, tests 128.42s, environment 0ms)"
+      ],
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c"
+    },
+    {
+      "name": "current-human-business-experiment-recording-foreign-project-focus",
+      "exitCode": 0,
+      "exitSidecar": "current-human-business-experiment-recording-foreign-project-focus.log.exit",
+      "rawSha256": "b0fede81147893b6f3b15c9a6f88aec4f23128e9a202df21f824858c0ee8e94b",
+      "sanitizedSha256": "b0fede81147893b6f3b15c9a6f88aec4f23128e9a202df21f824858c0ee8e94b",
+      "archiveSha256": "06c7ee2202e1b3b52076bfad63da2c457f1256ab61c3bf15c3743f3335374aa9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 15 skipped (16)",
+        "Duration  25.37s (transform 14.14s, setup 99ms, import 19.09s, tests 6.02s, environment 0ms)"
+      ],
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c"
+    },
+    {
+      "name": "decision-outcome-reviews-learning-closed-bundle-clean1",
+      "exitCode": 0,
+      "exitSidecar": "decision-outcome-reviews-learning-closed-bundle-clean1.exit",
+      "rawSha256": "aa7bd773bc042acbd221c9ffd4b212dcdc4327f92d603e3f886c1543caef7f96",
+      "sanitizedSha256": "aa7bd773bc042acbd221c9ffd4b212dcdc4327f92d603e3f886c1543caef7f96",
+      "archiveSha256": "a3c968ebdb93276c625824a3c068ea97baa3d36ae3cb3e764c55047053cecee0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 14 skipped (15)",
+        "Duration  40.99s (transform 11.62s, setup 81ms, import 16.01s, tests 24.78s, environment 0ms)"
+      ],
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c"
+    },
+    {
+      "name": "decision-outcome-reviews-full-final2",
+      "exitCode": 0,
+      "exitSidecar": "decision-outcome-reviews-full-final2.exit",
+      "rawSha256": "a5730469960074fd26c04a3effce5fcbc5e8222da64c2a9a758d5795087ef263",
+      "sanitizedSha256": "a5730469960074fd26c04a3effce5fcbc5e8222da64c2a9a758d5795087ef263",
+      "archiveSha256": "27bfeb070db5320b4acb34904f43003d43c202a5784b19fc6670e3c85bc4fc65",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  15 passed (15)",
+        "Duration  230.13s (transform 11.69s, setup 72ms, import 16.10s, tests 213.83s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "decisions-service-cyclic-full-final2",
+      "exitCode": 0,
+      "exitSidecar": "decisions-service-cyclic-full-final2.exit",
+      "rawSha256": "a708daefbfacdf5b6ea7968b6269485d271e1ff2119a98996d05a53f241da4cd",
+      "sanitizedSha256": "61b9620ba8ebde4d2cba3b3835b02a979f86413af88f7fe1aa2b4ddb171a2e6c",
+      "archiveSha256": "b860d4175f2d51f61fc5352ff1d4135508e1154a05810e1c7dc5f485041813a4",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  34 passed (34)",
+        "Duration  34.06s (transform 13.54s, setup 149ms, import 18.12s, tests 15.64s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "delegated-context-v5-runtime-full-current",
+      "exitCode": 0,
+      "exitSidecar": "delegated-context-v5-runtime-full-current.exit",
+      "rawSha256": "17e4e4a52e6374bdd9f3a96d012711bdba70ffea1fa8fd2bfe835c9a03b41c98",
+      "sanitizedSha256": "7d94c976683351e25039703bb9418b8a367b8aa7591ca2cc9f06b22fde6593cf",
+      "archiveSha256": "a5e3b750398b193db7b67b5fac45b84a3e6a44c44b175beb0c1846953a696eb5",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)",
+        "Duration  33.56s (transform 12.30s, setup 67ms, import 16.95s, tests 16.43s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "delegated-context-v5-runtime-purge-control",
+      "exitCode": 0,
+      "exitSidecar": "delegated-context-v5-runtime-purge-control.exit",
+      "rawSha256": "92105bc2051effda67e1353095a038a3c8241227775d3d0e375690e960f73121",
+      "sanitizedSha256": "92105bc2051effda67e1353095a038a3c8241227775d3d0e375690e960f73121",
+      "archiveSha256": "f7970f3eeef7b4014b9c701cd797d2982986586fe67224161f2f7b3546a82f61",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 4 skipped (5)",
+        "Duration  25.98s (transform 11.98s, setup 94ms, import 16.77s, tests 8.98s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "native-call-carrier-full",
+      "exitCode": 0,
+      "exitSidecar": "native-call-carrier-full.exit",
+      "rawSha256": "757ecac90100b853a8cb6530c6e15f23cee7102935d2e032b31a3716647ab23f",
+      "sanitizedSha256": "757ecac90100b853a8cb6530c6e15f23cee7102935d2e032b31a3716647ab23f",
+      "archiveSha256": "b9dd777ec088f87f609892fcc9cd7776c347da5f3f1d829695f11c5adcf99fa0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  64 passed (64)",
+        "Duration  28.37s (transform 11.81s, setup 153ms, import 17.14s, tests 10.79s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "native-effect-prefix-http-final2",
+      "exitCode": 0,
+      "exitSidecar": "native-effect-prefix-http-final2.exit",
+      "rawSha256": "2449889421998a8f2cd6d9b4e75d0ebd48246aa4285081e368dcd8c9f76bfe2e",
+      "sanitizedSha256": "2449889421998a8f2cd6d9b4e75d0ebd48246aa4285081e368dcd8c9f76bfe2e",
+      "archiveSha256": "362241ad8c7b2f6933403d9f1090b2f28f0912e1dbb2e4d100a14aa18acc7a43",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 39 skipped (40)",
+        "Duration  19.72s (transform 9.81s, setup 79ms, import 13.32s, tests 6.20s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "business-scenario-artifacts-worker-3d3ac21d7",
+      "exitCode": 1,
+      "exitSidecar": "business-scenario-artifacts-worker-3d3ac21d7.exit",
+      "rawSha256": "dd086df30e75bcc694ae5a782f2691609772c86b1ddf29967e742a9194ac4dce",
+      "sanitizedSha256": "b14c48543b22343fe404be161873c3522f41e01eb4b06e90d9caebc339e3b0ed",
+      "archiveSha256": "547e66f59fda708defac92817ab91e644cb7297b3c71848825753e34de8750b5",
+      "redactions": {
+        "ansi": 300,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 15 passed (16)",
+        "Duration  29.09s (transform 10.68s, setup 120ms, import 15.68s, tests 13.17s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "artifact-purge-worker-cycle-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "artifact-purge-worker-cycle-diagnostic.exit",
+      "rawSha256": "ed0ef0a764b923c8785b91792670c2de92b7948a9cd6d9a49c9645c8ac6f3854",
+      "sanitizedSha256": "6d22c93d915e53ec8b3dcfa770de0c7f6f2608856844e1cf633b72dcc39b1c0a",
+      "archiveSha256": "781a362077c62ada16add9954d89db336d7b3bf10dfb3eaa40797e7435d760e3",
+      "redactions": {
+        "ansi": 252,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 15 skipped (16)",
+        "Duration  24.73s (transform 12.41s, setup 85ms, import 17.32s, tests 7.19s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "business-scenario-artifacts-worker-purge-owner-final",
+      "exitCode": 0,
+      "exitSidecar": "business-scenario-artifacts-worker-purge-owner-final.exit",
+      "rawSha256": "a30c556597c6f84b7cef9b46d8c729d74239f9e380712fee59ad7b5647c4f856",
+      "sanitizedSha256": "1a9429114e815c3e50096992c8c2f39279e465c63fe4f7cfc53f2a055dc9ce03",
+      "archiveSha256": "0462509755cf8161528ca51f59bec0c4ef68f24de7ec26a88ce19fc68aea4a8e",
+      "redactions": {
+        "ansi": 126,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  30.47s (transform 10.93s, setup 85ms, import 15.31s, tests 14.95s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "causal-claims-full-canonical",
+      "exitCode": 0,
+      "exitSidecar": "causal-claims-full-canonical.exit",
+      "rawSha256": "220adcad8866e0ad5976d5e2d1eafcdf537cd35e579c81e5ff17c1011a99887e",
+      "sanitizedSha256": "220adcad8866e0ad5976d5e2d1eafcdf537cd35e579c81e5ff17c1011a99887e",
+      "archiveSha256": "a2b931f0fd568d4405fa650230c7dd66feae2db39e70c11ee624124f84059f38",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  15 passed | 1 skipped (16)",
+        "Duration  44.97s (transform 10.84s, setup 79ms, import 15.32s, tests 29.43s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "v6-company-purge-after-artifact-owner",
+      "exitCode": 0,
+      "exitSidecar": "v6-company-purge-after-artifact-owner.exit",
+      "rawSha256": "5ef7636f8aee1a439cfc8ca86606ef5e1cad95dd2d2cd39206dda446486e4000",
+      "sanitizedSha256": "5ef7636f8aee1a439cfc8ca86606ef5e1cad95dd2d2cd39206dda446486e4000",
+      "archiveSha256": "3deeac9b444ff62e83dfe5075c50abb5a9a6d0873d4e3d9246c61c94de308206",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  18.18s (transform 9.66s, setup 78ms, import 13.81s, tests 4.16s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "v8-company-purge-canonical-human-retest",
+      "exitCode": 0,
+      "exitSidecar": "v8-company-purge-canonical-human-retest.exit",
+      "rawSha256": "ff862c661f0707995ebf79d4d14eaba365248fd301c388a0ead06700946d4bd6",
+      "sanitizedSha256": "ff862c661f0707995ebf79d4d14eaba365248fd301c388a0ead06700946d4bd6",
+      "archiveSha256": "d38f8fd3431e9cfd21ecd84da1a223f37f914ab1b6e43ddcda27c99f58872fce",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  24.13s (transform 9.50s, setup 71ms, import 13.28s, tests 10.67s, environment 0ms)"
+      ],
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "native-provider-boundary-deny",
+      "exitCode": 0,
+      "exitSidecar": "native-provider-boundary-deny.exit",
+      "rawSha256": "46246bdb990f52e71f881cf57d74fcb14b04bde0e06901f851c5dfafa394fd98",
+      "sanitizedSha256": "46246bdb990f52e71f881cf57d74fcb14b04bde0e06901f851c5dfafa394fd98",
+      "archiveSha256": "942e6f2c7816e8f661c5facca2d76bfe2e8dd02f3efd013ed25192530d294a1d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  40 passed (40)",
+        "Duration  23.80s (transform 9.93s, setup 73ms, import 13.54s, tests 10.06s, environment 0ms)"
+      ],
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2"
+    },
+    {
+      "name": "v10-server-checkpoint-typecheck",
+      "exitCode": 1,
+      "exitSidecar": "v10-server-checkpoint-typecheck.exit",
+      "rawSha256": "e69c5e119ab597752f3c2084ae845af7dddaa970eecc359d9a060f589a2a6805",
+      "sanitizedSha256": "e69c5e119ab597752f3c2084ae845af7dddaa970eecc359d9a060f589a2a6805",
+      "archiveSha256": "e212fc08fad69a102f1765d061fc0613b9f98512333e6f3db7cb595d470fe82e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2"
+    },
+    {
+      "name": "v7-sandbox-owner-final",
+      "exitCode": 0,
+      "exitSidecar": "v7-sandbox-owner-final.exit",
+      "rawSha256": "2b63aa0f6e4a9a5d673690dd449019ad747e0251a9adf13d22ab7291d9d3a207",
+      "sanitizedSha256": "e36457c8ed9559372e912298c66d65eaeed8ec08f28b9534d1359ea7648da07e",
+      "archiveSha256": "52034fedc1af1387f04951298167fc7684fc018b9857be5d7006eb3bca2e01a7",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  32 passed (32)",
+        "Duration  38.69s (transform 10.19s, setup 130ms, import 18.46s, tests 19.82s, environment 0ms)"
+      ],
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2"
+    },
+    {
+      "name": "worker-model-known-charge-after-revocation",
+      "exitCode": 0,
+      "exitSidecar": "worker-model-known-charge-after-revocation.exit",
+      "rawSha256": "1eb7b9f63dbf406d9f38a75925c33debc7cdb84d93c8a0684901e3bd1eee583f",
+      "sanitizedSha256": "1eb7b9f63dbf406d9f38a75925c33debc7cdb84d93c8a0684901e3bd1eee583f",
+      "archiveSha256": "1766c183b892760e5be67f9b798e421ef616c1eb3b2bea12eca12a4c46c23d06",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed | 56 skipped (65)",
+        "Duration  46.46s (transform 9.69s, setup 83ms, import 13.67s, tests 32.58s, environment 0ms)"
+      ],
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2"
+    },
+    {
+      "name": "worker-model-known-charge-withheld-reason",
+      "exitCode": 0,
+      "exitSidecar": "worker-model-known-charge-withheld-reason.exit",
+      "rawSha256": "77e1feea9596e6995f18ee0d9a4e18c8624cbb573ad12c54e3ce4946cfc241b2",
+      "sanitizedSha256": "77e1feea9596e6995f18ee0d9a4e18c8624cbb573ad12c54e3ce4946cfc241b2",
+      "archiveSha256": "b90b778fe606a00d8083ed1f51b7b3fc3d1145b020c1690ec1127c0af4763622",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed | 56 skipped (65)",
+        "Duration  44.37s (transform 10.67s, setup 75ms, import 14.91s, tests 29.27s, environment 0ms)"
+      ],
+      "sourceCommit": "f67d4b9ddcbdfb593d694a190c5a390a166f11df"
+    },
+    {
+      "name": "v10-sandbox-exec-host-tests",
+      "exitCode": 0,
+      "exitSidecar": "v10-sandbox-exec-host-tests.exit",
+      "rawSha256": "d41cdf715320b8363b6fa1163c3718923ba9513f6647019aeb136ba5a8538624",
+      "sanitizedSha256": "d41cdf715320b8363b6fa1163c3718923ba9513f6647019aeb136ba5a8538624",
+      "archiveSha256": "d22878f92ba7c1ee9d3fcfa7d959ec8825b1c0ea25a7bd6123f11f0673903511",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "f67d4b9ddcbdfb593d694a190c5a390a166f11df"
+    },
+    {
+      "name": "v10-runtime-relay-tests",
+      "exitCode": 0,
+      "exitSidecar": "v10-runtime-relay-tests.exit",
+      "rawSha256": "7ff4a4fdeec876603bfa725d8b6e304a4104d618a4a3392fd922e918c299120a",
+      "sanitizedSha256": "7ff4a4fdeec876603bfa725d8b6e304a4104d618a4a3392fd922e918c299120a",
+      "archiveSha256": "76ef0356adde348d2a9866e276ef53f2ddd148d787f970a32391283a567db271",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  6 passed (6)",
+        "Duration  5.36s (transform 1.94s, setup 102ms, import 3.06s, tests 2.06s, environment 0ms)"
+      ],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "v10-current-token-gates",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-token-gates.exit",
+      "rawSha256": "56e0a50b41173d0ba8e8f4fa615171699416bc772149facee12d2a331f72cdf5",
+      "sanitizedSha256": "56e0a50b41173d0ba8e8f4fa615171699416bc772149facee12d2a331f72cdf5",
+      "archiveSha256": "3e3e1368d204954b1213ea76597557d40173876c412b3de51c5c05931e437aaf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "v10-current-module-gates",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-module-gates.exit",
+      "rawSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "sanitizedSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "archiveSha256": "28ffaeb6deae42b712200366e5abf9e845dcf6f1559cde1626bd85ecb9f3086d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "v10-current-help-gates",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-help-gates.exit",
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "workspace-cleanup-preserve-files",
+      "exitCode": 0,
+      "exitSidecar": "workspace-cleanup-preserve-files.exit",
+      "rawSha256": "077a50f2b1334c4ed8023d0f178d04f56f596a988b9c19d163d0ef8c18033198",
+      "sanitizedSha256": "077a50f2b1334c4ed8023d0f178d04f56f596a988b9c19d163d0ef8c18033198",
+      "archiveSha256": "d5b280eaf7729b4ce99b8d30a3eff43893fc7de8ef2718fa62b663ba18e149be",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed | 153 skipped (164)",
+        "Duration  24.17s (transform 16.27s, setup 116ms, import 21.87s, tests 2.05s, environment 0ms)"
+      ],
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "business-experiment-recording-16-final",
+      "exitCode": 0,
+      "exitSidecar": "business-experiment-recording-16-final.exit",
+      "rawSha256": "527c3fc8b91b1872c6cd5fa46cee8d4b907882e9e2c2bb8f1f2c0e54e0a12ba5",
+      "sanitizedSha256": "527c3fc8b91b1872c6cd5fa46cee8d4b907882e9e2c2bb8f1f2c0e54e0a12ba5",
+      "archiveSha256": "a99b1b6ff3e4938d8da7a1f3d2f0e74d0bd7d1eb67d37373c5378ab65459b1f6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  268.29s (transform 10.40s, setup 82ms, import 14.62s, tests 253.47s, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "business-experiment-volume-exact-lookup-reuse",
+      "exitCode": 0,
+      "exitSidecar": "business-experiment-volume-exact-lookup-reuse.exit",
+      "rawSha256": "d088fe7b5dcdaacdd3e0ecaf24a05cfd586e568581fe129d541bf850c838915f",
+      "sanitizedSha256": "d088fe7b5dcdaacdd3e0ecaf24a05cfd586e568581fe129d541bf850c838915f",
+      "archiveSha256": "5569812c4562aca7f504bb8ea16cf510bb305756d3006a86b86535467e05aebf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 15 skipped (16)",
+        "Duration  142.17s (transform 10.43s, setup 96ms, import 14.66s, tests 127.28s, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "business-experiment-receipt-engine-final",
+      "exitCode": 0,
+      "exitSidecar": "business-experiment-receipt-engine-final.exit",
+      "rawSha256": "108f9c117b8898155c01dba2f5e1b739f96b3717c88df886a57c2640bb5fa428",
+      "sanitizedSha256": "108f9c117b8898155c01dba2f5e1b739f96b3717c88df886a57c2640bb5fa428",
+      "archiveSha256": "8fc5225eaa4dd30c331eab57935b25ed725eca785a73929fcf5a8a7a48b1bb02",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  7 passed (7)",
+        "Duration  20.53s (transform 13.87s, setup 153ms, import 19.80s, tests 29ms, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "v10-workspace-serial-typecheck",
+      "exitCode": 1,
+      "exitSidecar": "v10-workspace-serial-typecheck.exit",
+      "rawSha256": "7b9e0d532889599774c9317c4786d1a5ea4174f3ac4db4e78b881a07c8a2fbf0",
+      "sanitizedSha256": "7b9e0d532889599774c9317c4786d1a5ea4174f3ac4db4e78b881a07c8a2fbf0",
+      "archiveSha256": "a797478aa3d425c5b00f1c1836a63a65524640d45bc4fdcb1d1541dec0cc004a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "v10-server-integrated-typecheck",
+      "exitCode": 1,
+      "exitSidecar": "v10-server-integrated-typecheck.exit",
+      "rawSha256": "28de762bcb27699aad7c50f99cb40dd104dcd69824556cc66d64d5553701a0cc",
+      "sanitizedSha256": "28de762bcb27699aad7c50f99cb40dd104dcd69824556cc66d64d5553701a0cc",
+      "archiveSha256": "554bc5e421c62084a1839ee42e39c6975a3c3526ef782b020d8704345d4ed8b8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "sandbox-broker-policy-focused",
+      "exitCode": 0,
+      "exitSidecar": "sandbox-broker-policy-focused.exit",
+      "rawSha256": "1c2294e82eeea1e6a5d5d6d8e9fced1a08b217f6bb3c5cd0493374027c09ef79",
+      "sanitizedSha256": "1c2294e82eeea1e6a5d5d6d8e9fced1a08b217f6bb3c5cd0493374027c09ef79",
+      "archiveSha256": "3627ea82fa6a04ee13deea06c2d15ccb1d9b725d4a11a3c7a6ad6c9357307ad4",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  35 passed (35)",
+        "Duration  2.77s (transform 1.61s, setup 81ms, import 2.49s, tests 34ms, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "sandbox-broker-resolver-focused",
+      "exitCode": 1,
+      "exitSidecar": "sandbox-broker-resolver-focused.exit",
+      "rawSha256": "f1126e3f49460d43c4c66d7720ba368069bac86f8abe3a225bbbf7ccdf973a1d",
+      "sanitizedSha256": "f1126e3f49460d43c4c66d7720ba368069bac86f8abe3a225bbbf7ccdf973a1d",
+      "archiveSha256": "b7b539969a5af8903847fdc3ae060d9195ef63f8219ac50c6c7dff3d1881a582",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 73 skipped (74)",
+        "Duration  20.68s (transform 10.85s, setup 70ms, import 15.29s, tests 5.18s, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "sandbox-broker-resolver-focused-rerun",
+      "exitCode": 0,
+      "exitSidecar": "sandbox-broker-resolver-focused-rerun.exit",
+      "rawSha256": "c87270dc368cca260e06d576440fa13d4c23a33afa0945fd0e861ea8b2f20b29",
+      "sanitizedSha256": "c87270dc368cca260e06d576440fa13d4c23a33afa0945fd0e861ea8b2f20b29",
+      "archiveSha256": "94867efcad4353bccbf29c764524a084941a25b8b946aa7b6b77d92cc12a4ccb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 73 skipped (74)",
+        "Duration  20.86s (transform 11.47s, setup 75ms, import 16.10s, tests 4.49s, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "v10-backup-identity-roundtrip",
+      "exitCode": 0,
+      "exitSidecar": "v10-backup-identity-roundtrip.exit",
+      "rawSha256": "a0cce08d0bc18d3f7e98884e8aa771e210e8fd7d85c81108f405cd15eeb93448",
+      "sanitizedSha256": "a0cce08d0bc18d3f7e98884e8aa771e210e8fd7d85c81108f405cd15eeb93448",
+      "archiveSha256": "255d14070375d1684a3dd20852480a4244400ec4d42cf43c425101b25f241ea0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  8 passed (8)",
+        "Duration  56.76s (transform 2.16s, setup 0ms, import 3.95s, tests 52.69s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "context-engine-integration-final-nativeactor",
+      "exitCode": 0,
+      "exitSidecar": "context-engine-integration-final-nativeactor.exit",
+      "rawSha256": "f81d4829f51dead7e9a7427478829bb3821669e4392efe0ef1bc864fa0336190",
+      "sanitizedSha256": "84fe06b915d84c548e6e2fdc6459966a99733ead58b3f706a43c99cae922b584",
+      "archiveSha256": "ee300349e166e98d56a91b250461e47be3cb86fb584288cacd78345bf9b66489",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  8 passed (8)",
+        "Duration  44.83s (transform 10.80s, setup 73ms, import 14.95s, tests 29.70s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-plugin-lifecycle-delivery2-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-plugin-lifecycle-delivery2-2026-10-25.exit",
+      "rawSha256": "e179fec182f837f120370193ee772b56153eabde855361828882651c24669e37",
+      "sanitizedSha256": "1742f4b8c9fd06e7e593965db74a7aeb6c762b2901cf590355d2ea77629266bc",
+      "archiveSha256": "9aa62668c688203f2ccd66bc81b9e3f193238503071b39fc0a137b2eda213a59",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  9.06s (transform 2.59s, setup 86ms, import 4.61s, tests 4.24s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-runtime-state-integration10-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-runtime-state-integration10-2026-10-25.exit",
+      "rawSha256": "2cc38caa441c5da03580b75c15a9b6cdf45de9ff986b63bb71f591b08781fb86",
+      "sanitizedSha256": "2cc38caa441c5da03580b75c15a9b6cdf45de9ff986b63bb71f591b08781fb86",
+      "archiveSha256": "a02e63e5c594db03de63e4164a8f4c745bda41d08f4ae0e98e322848205edb06",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed (7)",
+        "Duration  20.28s (transform 9.45s, setup 72ms, import 13.45s, tests 6.65s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-sdk-lifecycle-focused4-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-sdk-lifecycle-focused4-2026-10-25.exit",
+      "rawSha256": "8922d7cbb25c0565c76f4747756fe5607756509c42a40ff64be30d728d967e54",
+      "sanitizedSha256": "8922d7cbb25c0565c76f4747756fe5607756509c42a40ff64be30d728d967e54",
+      "archiveSha256": "f45b8fced111b26cff7184e1591c90ad37dc96e99a79ea8d7216b1e543af9bc2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  39 passed (39)",
+        "Duration  490ms (transform 267ms, setup 0ms, import 330ms, tests 172ms, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-plugin-sdk-build4-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-plugin-sdk-build4-2026-10-25.exit",
+      "rawSha256": "d6505e5a64c75c793a9bd7c06d1813b73722e4cdf8f23290daa21066c51bef91",
+      "sanitizedSha256": "d6505e5a64c75c793a9bd7c06d1813b73722e4cdf8f23290daa21066c51bef91",
+      "archiveSha256": "f12285211b146b29d08171485b1ed6c1576d8af38c13b91e165d5d3df3b69f54",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "up04-runtime-redaction-focused2-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "up04-runtime-redaction-focused2-2026-10-25.exit",
+      "rawSha256": "6d8536b564a213b7f7d6889665a9f83722438322b66d1a527c6c5c32331a2f06",
+      "sanitizedSha256": "6d8536b564a213b7f7d6889665a9f83722438322b66d1a527c6c5c32331a2f06",
+      "archiveSha256": "56f868897fd31bc3ee67d55b9132a782e6c12f5b6609681b369563612c9e6d32",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  13.74s (transform 9.85s, setup 77ms, import 13.55s, tests 6ms, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "v10-sandbox-host-provider-tests",
+      "exitCode": 0,
+      "exitSidecar": "v10-sandbox-host-provider-tests.exit",
+      "rawSha256": "88b7145d89a14af911c130fd387824a37883b3b62ca67fa21aa2857875ac6a75",
+      "sanitizedSha256": "88b7145d89a14af911c130fd387824a37883b3b62ca67fa21aa2857875ac6a75",
+      "archiveSha256": "df5f88e1277a6dbff06ae6714b03111f776dd4c5eb9e4ee394f246a655ef48f2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "sandbox-broker-policy-final",
+      "exitCode": 0,
+      "exitSidecar": "sandbox-broker-policy-final.exit",
+      "rawSha256": "ad76bcf9d8734d5ba0aeb2b0afef34c1c7032b40b8eac5fe0950bf14fbf4c51a",
+      "sanitizedSha256": "ad76bcf9d8734d5ba0aeb2b0afef34c1c7032b40b8eac5fe0950bf14fbf4c51a",
+      "archiveSha256": "f28b798492baa3a21a213862bc6e2ce07de5b32a092fe3175a2fb7751f9f6fce",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  36 passed (36)",
+        "Duration  2.97s (transform 1.76s, setup 95ms, import 2.70s, tests 33ms, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "sandbox-broker-native-http-full",
+      "exitCode": 0,
+      "exitSidecar": "sandbox-broker-native-http-full.exit",
+      "rawSha256": "546ab2a806821c8e09f2924a4414f6de88a4dbdda48fe07e13773e8692450a38",
+      "sanitizedSha256": "546ab2a806821c8e09f2924a4414f6de88a4dbdda48fe07e13773e8692450a38",
+      "archiveSha256": "5cb43a1c68485d4782803ab593bdd50bd25f748072dfdc05105585a817dbb6d1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  13 passed (13)",
+        "Duration  35.24s (transform 9.64s, setup 70ms, import 13.74s, tests 21.32s, environment 0ms)"
+      ],
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad"
+    },
+    {
+      "name": "business-experiment-analysis-20-backup-lib8-rerun",
+      "exitCode": 0,
+      "exitSidecar": "business-experiment-analysis-20-backup-lib8-rerun.exit",
+      "rawSha256": "9c04e8392be3f556b6768ce9b54c7651506c9db991f583c33f575ecfde06cff7",
+      "sanitizedSha256": "9c04e8392be3f556b6768ce9b54c7651506c9db991f583c33f575ecfde06cff7",
+      "archiveSha256": "138fe43631ac99238fe90f0aa5ae013f1fa467bd7848c23d536b83750016f034",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files 1 passed (1)",
+        "Tests 20 passed (20)",
+        "Duration 223.80s (transform 10.27s, setup 75ms, import 14.47s, tests 209.12s, environment 0ms)"
+      ],
+      "sourceCommit": "f6ab0bdd93a5aadfd29664ed8123cb6dd11f3b49"
+    },
+    {
+      "name": "v10-recovery-workspace-typecheck",
+      "exitCode": 1,
+      "exitSidecar": "v10-recovery-workspace-typecheck.exit",
+      "rawSha256": "92ac8a1ba1b74e7a4c99ee1570a515a805f8f72a616a6ea6a8bc66058c1e1deb",
+      "sanitizedSha256": "92ac8a1ba1b74e7a4c99ee1570a515a805f8f72a616a6ea6a8bc66058c1e1deb",
+      "archiveSha256": "0996650e8f948b551d0a94fb2210fddb054009a9c5c3b32084054b589baa81a2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "f6ab0bdd93a5aadfd29664ed8123cb6dd11f3b49"
+    },
+    {
+      "name": "v10-recovery-build",
+      "exitCode": 2,
+      "exitSidecar": "v10-recovery-build.exit",
+      "rawSha256": "e4134022c7b764f4a62dc965f65000110ad2375c3bcc1ac3a5d64521d81f13ae",
+      "sanitizedSha256": "99b9d705baa93a96851d2977dca24199afbc317989de4499e3f859de02bd3b7f",
+      "archiveSha256": "fbedb26b9407a334396707b746838450bddd74e84a8c0fc34e381cced273a412",
+      "redactions": {
+        "ansi": 72,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "0b5223edcce06c03f2242c4ac95993ac75d5a4b3"
+    },
+    {
+      "name": "rt03-model-policy-transport-2026-10-25",
+      "exitCode": 0,
+      "exitSidecar": "rt03-model-policy-transport-2026-10-25.exit",
+      "rawSha256": "aedddfe488d0267bed58f242a29e9ae8e14de351f2ef452e0de3705a00b120a9",
+      "sanitizedSha256": "aedddfe488d0267bed58f242a29e9ae8e14de351f2ef452e0de3705a00b120a9",
+      "archiveSha256": "a0eeccef088dbe71e889ef0774c67a2d73d09c112719c1d42f33a5d8b2b168d9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  52 passed (52)",
+        "Duration  2.67s (transform 1.31s, setup 125ms, import 2.19s, tests 106ms, environment 0ms)"
+      ],
+      "sourceCommit": "e8d714d3053717936ae74fe34cc4df14314b8842"
+    },
+    {
+      "name": "v10-host-model-provider-injection-check",
+      "exitCode": 0,
+      "exitSidecar": "v10-host-model-provider-injection-check.exit",
+      "rawSha256": "215aaf5457eac4f9d8f046610fa305adaac528745dcf8283a65ea52c2f657627",
+      "sanitizedSha256": "215aaf5457eac4f9d8f046610fa305adaac528745dcf8283a65ea52c2f657627",
+      "archiveSha256": "9c37bc70977b125fc4f26023ff26f03c88a2b40b59dd031916c5534383e1d39a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "e8d714d3053717936ae74fe34cc4df14314b8842"
+    },
+    {
+      "name": "jev-http-route-tests5",
+      "exitCode": 0,
+      "exitSidecar": "jev-http-route-tests5.exit",
+      "rawSha256": "cd2b38a5600281fe19908be206486f0c41cdd60b52a7f8e2688bec19c8f3d501",
+      "sanitizedSha256": "cd2b38a5600281fe19908be206486f0c41cdd60b52a7f8e2688bec19c8f3d501",
+      "archiveSha256": "ec09b8275bc635ffd687ffe63e4798ff15bea36b14b7c040366e3206161506c9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed (7)",
+        "Duration  24.78s (transform 10.26s, setup 76ms, import 14.75s, tests 9.84s, environment 0ms)"
+      ],
+      "sourceCommit": "9dd1402e25e0b74654f955ae707cf2bb088799c7"
+    },
+    {
+      "name": "jev-ui-consent-tests2",
+      "exitCode": 0,
+      "exitSidecar": "jev-ui-consent-tests2.exit",
+      "rawSha256": "80f2ecb8c897a4eca7d07e97ed134d08bd44fa0115f54cfb44d7bb844ffd15bf",
+      "sanitizedSha256": "80f2ecb8c897a4eca7d07e97ed134d08bd44fa0115f54cfb44d7bb844ffd15bf",
+      "archiveSha256": "f552689357339f6f1ec54ade30fae1945cfa98c6404941a4bdc3d2c467afecf5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  3.56s (transform 1.54s, setup 19ms, import 2.68s, tests 191ms, environment 556ms)"
+      ],
+      "sourceCommit": "9dd1402e25e0b74654f955ae707cf2bb088799c7"
+    },
+    {
+      "name": "jev-original-reservation-and-ui-typecheck",
+      "exitCode": 0,
+      "exitSidecar": "jev-original-reservation-and-ui-typecheck.exit",
+      "rawSha256": "89267b47fe4786cec8e1b8a8f2d60305e0d093c83b0fd5e5f4a702c5cd196f80",
+      "sanitizedSha256": "89267b47fe4786cec8e1b8a8f2d60305e0d093c83b0fd5e5f4a702c5cd196f80",
+      "archiveSha256": "a3b54a51ca7bccfb4999b5b7ec188041d1f4892ca26a71ccfe393f202f139de6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  25 passed (25)",
+        "Duration  37.71s (transform 9.99s, setup 81ms, import 14.16s, tests 23.35s, environment 0ms)"
+      ],
+      "sourceCommit": "9dd1402e25e0b74654f955ae707cf2bb088799c7"
+    },
+    {
+      "name": "aw-source-closure-final-green",
+      "exitCode": 0,
+      "exitSidecar": "aw-source-closure-final-green.exit",
+      "rawSha256": "bf497cdef9b5fbac41e1897fc8d2938ef0abec7e1220a349f028b978ebad487b",
+      "sanitizedSha256": "bf497cdef9b5fbac41e1897fc8d2938ef0abec7e1220a349f028b978ebad487b",
+      "archiveSha256": "94130b1bd742ff27fba056fa0dc20eed94f5af89b6040ebb883b7e7783bac093",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 64 skipped (65)",
+        "Duration  31.64s (transform 10.18s, setup 69ms, import 14.38s, tests 17.08s, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "aw-reader-closure-tests",
+      "exitCode": 0,
+      "exitSidecar": "aw-reader-closure-tests.exit",
+      "rawSha256": "62c9cbcd49cb2e3c7bd5a037208eccbee62fc26bede17d431c5bb7efdbbe2f87",
+      "sanitizedSha256": "62c9cbcd49cb2e3c7bd5a037208eccbee62fc26bede17d431c5bb7efdbbe2f87",
+      "archiveSha256": "d142c41eb8c2ee79fe9da7d91d778a07775ba75a4b623e3fd6164f8839797a12",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  41 passed (41)",
+        "Duration  50.94s (transform 10.26s, setup 138ms, import 17.44s, tests 33.10s, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "v10-latest-token-gates",
+      "exitCode": 0,
+      "exitSidecar": "v10-latest-token-gates.exit",
+      "rawSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "sanitizedSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "archiveSha256": "54cb5fcb68faef60e731259e2486419a024cbc683cd5dd47dca7b8ba0d18a3a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "v10-latest-help-registry",
+      "exitCode": 0,
+      "exitSidecar": "v10-latest-help-registry.exit",
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "up06-native-runner-handoff-retry-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up06-native-runner-handoff-retry-20261025.exit",
+      "rawSha256": "015bc7c3f5ffb7a722f406399241d86c00e243c63809271968319125b9ffd361",
+      "sanitizedSha256": "015bc7c3f5ffb7a722f406399241d86c00e243c63809271968319125b9ffd361",
+      "archiveSha256": "b812c05c64aa94a98d5fd59e558b5a5cc09b22d308808a840dbd7d58ea138c27",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  19 passed (19)",
+        "Duration  39.13s (transform 10.37s, setup 70ms, import 14.33s, tests 24.62s, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "up06-descriptor-reconstruction-latest-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up06-descriptor-reconstruction-latest-20261025.exit",
+      "rawSha256": "5ba6e07511306d856aefd82e69a43f4912f8e53a5c6c2298df1c0490106e2a24",
+      "sanitizedSha256": "f4f843fa7b793f844672458d12a1d78ab796397ddca8e008d9a14f079759a73d",
+      "archiveSha256": "886b96bf71a3e4ccf05e77370d7a3ef5ecb54cbf8fb0a9be17b2517897a6de55",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 12 skipped (13)",
+        "Duration  33.34s (transform 9.92s, setup 69ms, import 14.05s, tests 19.10s, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "up06-remote-selected-source-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up06-remote-selected-source-20261025.exit",
+      "rawSha256": "e49d0626910e5c66c6a0ddb15985a58abce1d8729d9248efa30dd8aa2f2cee2b",
+      "sanitizedSha256": "e49d0626910e5c66c6a0ddb15985a58abce1d8729d9248efa30dd8aa2f2cee2b",
+      "archiveSha256": "7c3ce730cbc4a739eecaf6154904019c13561e470e00053220e0bd53b4baa4a3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 473 skipped (474)",
+        "Duration  14.03s (transform 10.19s, setup 74ms, import 13.83s, tests 8ms, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "managed-source-closure-package-build",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-package-build.exit",
+      "rawSha256": "f36551bbff2e57d5f8d61f00174bd5ab3faa44fad8f01b938ebb1eef0ef6f552",
+      "sanitizedSha256": "f36551bbff2e57d5f8d61f00174bd5ab3faa44fad8f01b938ebb1eef0ef6f552",
+      "archiveSha256": "fa78e71732e2147aab3d6f981b68eeabc2548aec820a2c573aa9e10fb73721ee",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b56ef80b411cec061de8fe34273a5ad4a1e64c4c"
+    },
+    {
+      "name": "managed-source-closure-server-tsc",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-server-tsc.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b56ef80b411cec061de8fe34273a5ad4a1e64c4c"
+    },
+    {
+      "name": "managed-source-closure-runtime-test2",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-runtime-test2.exit",
+      "rawSha256": "33f60f19360cdc27af5a399969de1badaea0dceabf340acc430270d47fff292f",
+      "sanitizedSha256": "33f60f19360cdc27af5a399969de1badaea0dceabf340acc430270d47fff292f",
+      "archiveSha256": "8f22e39a43bf643442e48a907b629fb1a3541f942502abcf76e556345574c4b7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  12 passed | 130 skipped (142)",
+        "Duration  1.18s (transform 851ms, setup 0ms, import 1.01s, tests 35ms, environment 0ms)"
+      ],
+      "sourceCommit": "b56ef80b411cec061de8fe34273a5ad4a1e64c4c"
+    },
+    {
+      "name": "v10-integrated-typecheck-next",
+      "exitCode": 1,
+      "exitSidecar": "v10-integrated-typecheck-next.exit",
+      "rawSha256": "315e9ce73989e43b1084be3760da7323942815857066a9469eef6413746fa55e",
+      "sanitizedSha256": "315e9ce73989e43b1084be3760da7323942815857066a9469eef6413746fa55e",
+      "archiveSha256": "3fb740ecdd7b28235c4de74628623bec2d3e2d0ca5b0f3efd927c419f1d5380b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-erase-test2",
+      "exitCode": 0,
+      "exitSidecar": "native-erase-test2.exit",
+      "rawSha256": "2eb20ae0f08b9540c8fb640510e83833d766cc8f022b5be038d7d2d20542e6c8",
+      "sanitizedSha256": "2eb20ae0f08b9540c8fb640510e83833d766cc8f022b5be038d7d2d20542e6c8",
+      "archiveSha256": "26d3bbfef28e585bb31618da49d60dba44345fdf5e5ad2e0feba9b6193c5b380",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  31.93s (transform 9.52s, setup 72ms, import 13.02s, tests 18.73s, environment 0ms)"
+      ],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-erasure-final-two-positive",
+      "exitCode": 0,
+      "exitSidecar": "native-erasure-final-two-positive.exit",
+      "rawSha256": "4597a6b1f5db119197c212113f0e484113df4591b555df4e17ced39e9d9bfa5e",
+      "sanitizedSha256": "4597a6b1f5db119197c212113f0e484113df4591b555df4e17ced39e9d9bfa5e",
+      "archiveSha256": "bcd2d47eb582e63d39e36b69b7dc8e9d4c58e5ae12e22d6ecadbf7dee28a4d15",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  29 passed (29)",
+        "Duration  19.48s (transform 10.01s, setup 68ms, import 13.72s, tests 5.58s, environment 0ms)"
+      ],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-v1-output-physical-erasure",
+      "exitCode": 0,
+      "exitSidecar": "native-v1-output-physical-erasure.exit",
+      "rawSha256": "d6b74eb5600ac88d7e74b23b8e05cc53d61e77e548ef9e387df3da146daebe95",
+      "sanitizedSha256": "d6b74eb5600ac88d7e74b23b8e05cc53d61e77e548ef9e387df3da146daebe95",
+      "archiveSha256": "011d07887f66fc16f6506b26773838e72c075429d2ee977d78c86c5cfa180a20",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 skipped (1)",
+        "Tests  65 skipped (65)",
+        "Duration  16.30s (transform 11.28s, setup 79ms, import 16.09s, tests 0ms, environment 0ms)"
+      ],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-context-dispatch-full",
+      "exitCode": 0,
+      "exitSidecar": "native-context-dispatch-full.exit",
+      "rawSha256": "eb92af3ef8abdbe3e7ddff974d558360585ef0118770541210bf098a640488d3",
+      "sanitizedSha256": "eb92af3ef8abdbe3e7ddff974d558360585ef0118770541210bf098a640488d3",
+      "archiveSha256": "c0cf14ebc7433b06417ba269ec1c48983c01487e4e417516013e94f984987c2c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  40 passed (40)",
+        "Duration  26.72s (transform 10.31s, setup 68ms, import 14.00s, tests 12.53s, environment 0ms)"
+      ],
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f"
+    },
+    {
+      "name": "native-v1-output-physical-erasure-selected",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "1e08ca53bfc5e64b7ba5d4735c776f7e88448ffbfb511525c57d2bfe9c387b31",
+      "sanitizedSha256": "1e08ca53bfc5e64b7ba5d4735c776f7e88448ffbfb511525c57d2bfe9c387b31",
+      "archiveSha256": "588f4cd8076a33ab24eb5927ec9d9e2cfddff5ff9a6c902f0cf98cf9ff313da0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 64 skipped (65)",
+        "Duration  34.65s (transform 11.81s, setup 79ms, import 16.53s, tests 17.92s, environment 0ms)"
+      ],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "v10-integrated-build-next",
+      "exitCode": 0,
+      "exitSidecar": "v10-integrated-build-next.exit",
+      "rawSha256": "95e45df085ecc4bc608b10b848abf43e8eca3200dba6d09216b8142d07954d61",
+      "sanitizedSha256": "c818e79768587644ed3a031077a5975bfe14bd2d9126cb7dc94fb59388939efe",
+      "archiveSha256": "03f7fe79a49ae0881b24cce97dd55a68ca86bfa6ce2dbc20e4703a214f3a4f8c",
+      "redactions": {
+        "ansi": 72,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "v10-runtime-bundle-next",
+      "exitCode": 0,
+      "exitSidecar": "v10-runtime-bundle-next.exit",
+      "rawSha256": "fd9071232697260ce2653bde90f6ba2b3fdf66fb36faa961cfdf4cc3add4d83f",
+      "sanitizedSha256": "fd9071232697260ce2653bde90f6ba2b3fdf66fb36faa961cfdf4cc3add4d83f",
+      "archiveSha256": "e3bb198a27a6a3c8c91e48239895f769ed6558fbeb327c056961348d7f0e3b35",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "v10-runtime-boot-next",
+      "exitCode": 0,
+      "exitSidecar": "v10-runtime-boot-next.exit",
+      "rawSha256": "7a925aa0eecfebb277ca1d7ff20b9286ac24d0666e808532f687c24e9aa32ccc",
+      "sanitizedSha256": "7a925aa0eecfebb277ca1d7ff20b9286ac24d0666e808532f687c24e9aa32ccc",
+      "archiveSha256": "3e1e8bf540a2b0ece0ae9ad22ceeecbd9a006b105c03f8c192b68319f89602f3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "up03-typed-routine-owner-export",
+      "exitCode": 0,
+      "exitSidecar": "up03-typed-routine-owner-export.exit",
+      "rawSha256": "c847b3ba7833660961c9b968048e8cb6d209e4833c3996080f2ae71f51d41c3b",
+      "sanitizedSha256": "c847b3ba7833660961c9b968048e8cb6d209e4833c3996080f2ae71f51d41c3b",
+      "archiveSha256": "29135b181a1935fa7a7fc3538f075731c83af200411549d900c7a013da129dbd",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 17 skipped (18)",
+        "Duration  22.47s (transform 10.38s, setup 68ms, import 14.05s, tests 8.24s, environment 0ms)"
+      ],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "import-current-authority-route-rerun-20261025",
+      "exitCode": 0,
+      "exitSidecar": "import-current-authority-route-rerun-20261025.log.exit",
+      "rawSha256": "b18c515e99f584a25a1d7982c303e520d50468b44cf2a22770c4661c5c6c8267",
+      "sanitizedSha256": "6e7bcaf9974a5e10fc4294fc1902985672f4a736efec2242f15870b84dc05edc",
+      "archiveSha256": "2bab226c9c6833411c2c4b22283b68e51fb46affe364256dc7f9000e3a68207f",
+      "redactions": {
+        "ansi": 42,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  48 passed (48)",
+        "Duration  21.36s (transform 13.08s, setup 98ms, import 3.98s, tests 17.14s, environment 0ms)"
+      ],
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720"
+    },
+    {
+      "name": "import-current-authority-full-20261025",
+      "exitCode": null,
+      "exitSidecar": "import-current-authority-full-20261025.exit",
+      "rawSha256": "9aa1c43b2b6561707606930899ab512f279d37e5228f56a95b90aee61193eab1",
+      "sanitizedSha256": "9aa1c43b2b6561707606930899ab512f279d37e5228f56a95b90aee61193eab1",
+      "archiveSha256": "9b1969f975426ced99e498acba462b8bb2814fa4238dc0fbb9135c58e4345c59",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  99 passed (99)",
+        "Duration  93.50s (transform 7.27s, setup 71ms, import 10.79s, tests 82.52s, environment 0ms)"
+      ],
+      "sourceCommit": "205c09d937dca26969f493f66da3c83c8c9d2357"
+    },
+    {
+      "name": "up13-restart-dual-server-routine-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up13-restart-dual-server-routine-20261025.log.exit",
+      "rawSha256": "533754e0c3b92b1162da0e7f74258d0b0d624b2444c0456e34647acf529e42e2",
+      "sanitizedSha256": "533754e0c3b92b1162da0e7f74258d0b0d624b2444c0456e34647acf529e42e2",
+      "archiveSha256": "6d198598eb585650313c01cb619159d867fb7c5a96d00c90b4e028da4735784f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 80 skipped (81)",
+        "Duration  21.21s (transform 10.57s, setup 70ms, import 14.82s, tests 6.20s, environment 0ms)"
+      ],
+      "sourceCommit": "205c09d937dca26969f493f66da3c83c8c9d2357"
+    },
+    {
+      "name": "up13-dual-server-monitor-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up13-dual-server-monitor-20261025.log.exit",
+      "rawSha256": "acafa5bfe6e42817c401e14b476ec6e5a8c739fe2fbbab07a07e363eb9e45657",
+      "sanitizedSha256": "d650857faf5ba44e7508e07fcdc90defc157967c0a78c98421e23f3b68a58d4d",
+      "archiveSha256": "b2de1440e12160a395e4624141cfcf032544e71d9361ead35689492f8dc83205",
+      "redactions": {
+        "ansi": 24,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 9 skipped (10)",
+        "Duration  24.12s (transform 10.83s, setup 82ms, import 15.43s, tests 8.48s, environment 0ms)"
+      ],
+      "sourceCommit": "205c09d937dca26969f493f66da3c83c8c9d2357"
+    },
+    {
+      "name": "up03-typed-routine-project-export-v2",
+      "exitCode": 0,
+      "exitSidecar": "up03-typed-routine-project-export-v2.exit",
+      "rawSha256": "fc7dd05cf17e685fb11c96bc1b0ce505448b5596ba8a0e5849113c2cfadf1065",
+      "sanitizedSha256": "fc7dd05cf17e685fb11c96bc1b0ce505448b5596ba8a0e5849113c2cfadf1065",
+      "archiveSha256": "a379289dc95b3d9c93dbf8be05575f09b6e78bd6ec6a0619b8ea234d1b21abe6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 18 skipped (19)",
+        "Duration  22.33s (transform 10.60s, setup 76ms, import 14.43s, tests 7.71s, environment 0ms)"
+      ],
+      "sourceCommit": "205c09d937dca26969f493f66da3c83c8c9d2357"
+    },
+    {
+      "name": "managed-source-closure-gateway-transport",
+      "exitCode": 1,
+      "exitSidecar": "managed-source-closure-gateway-transport.exit",
+      "rawSha256": "a899b20db723ac17bb2a9decc6df882335e85283deb83835d292095d414c8b8d",
+      "sanitizedSha256": "5a4928e4816d52f8f9adfc235f9b52561a3ae3e538f707b2c5a88e32f521196b",
+      "archiveSha256": "c8cd9b1411ac3900a557602eace56cda5fef048f11d930749b6dfa104e89af77",
+      "redactions": {
+        "ansi": 30,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 1 passed (2)",
+        "Tests  2 failed | 81 passed (83)",
+        "Duration  220.03s (transform 9.81s, setup 138ms, import 13.68s, tests 205.98s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "managed-source-closure-gateway-transport-after-fix",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-gateway-transport-after-fix.exit",
+      "rawSha256": "cb54efbbbd2d691e7e5378bcf6c2a7abc40d2511202f1c50df5d2d64d63749e1",
+      "sanitizedSha256": "216622b6efa106098d89c2f8873e4600cc2fa6998a16a42507da0b337f9f8faf",
+      "archiveSha256": "6fba97ec0d1760a2b9494c0cc76df6273919ca924fd5fee5b15370be9f1cd5d6",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  83 passed (83)",
+        "Duration  233.49s (transform 10.10s, setup 124ms, import 13.98s, tests 219.14s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "managed-source-closure-aw-positive-after-contract-fix",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-aw-positive-after-contract-fix.exit",
+      "rawSha256": "3bae083102d3e1f7374e44597a320451f84959bd6f45b6120a29c27e8b2b4fa0",
+      "sanitizedSha256": "3bae083102d3e1f7374e44597a320451f84959bd6f45b6120a29c27e8b2b4fa0",
+      "archiveSha256": "3da0819ca21308200527cbba5aca5d5629d6d1a93069907557c611b1579047b6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 64 skipped (65)",
+        "Duration  31.65s (transform 10.04s, setup 75ms, import 13.73s, tests 17.73s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "managed-source-closure-aw-pause-after-contract-fix",
+      "exitCode": 0,
+      "exitSidecar": "managed-source-closure-aw-pause-after-contract-fix.exit",
+      "rawSha256": "8a6fcd76ac3e926835b76657120cdc4c22df5194b6019605a67fc37c5bf3707d",
+      "sanitizedSha256": "d51e6857931bbf1b5b84aeafef8be435d4f21a69baa3e71e1fdcaa03612e6b99",
+      "archiveSha256": "308a12142a827335222d14ebc535f8fa9bd1fd00564e145d086182564714ab50",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 64 skipped (65)",
+        "Duration  29.27s (transform 10.50s, setup 73ms, import 14.38s, tests 14.69s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "up13-os-process-restart-routine-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up13-os-process-restart-routine-20261025.log.exit",
+      "rawSha256": "a2acc18d96a7a064c30018ff3f53990d6e2ddc5a419f4cf41101b12cc64684c2",
+      "sanitizedSha256": "a2acc18d96a7a064c30018ff3f53990d6e2ddc5a419f4cf41101b12cc64684c2",
+      "archiveSha256": "f6dcc74cbbe0239cdb6d59735486234a2994daf6adb756b4280fd511b10476e3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 81 skipped (82)",
+        "Duration  34.00s (transform 11.05s, setup 74ms, import 15.03s, tests 18.78s, environment 0ms)"
+      ],
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "v10-worker-ui-cli-a969b7c6c",
+      "exitCode": 1,
+      "exitSidecar": "v10-worker-ui-cli-a969b7c6c.exit",
+      "rawSha256": "f8efcd72b9d8fc12ccae1182c217f9d1d232b5d568074ff3e25396b24eedbf4b",
+      "sanitizedSha256": "96810373fe4e7b5bcd4be202484ac078d614ae9d7b61c0c0a7315fcefa445ae3",
+      "archiveSha256": "e96a6a5f4476ccd10f711e22c7bde67dc6e0ba674c5b49544dcf608dd7e06de6",
+      "redactions": {
+        "ansi": 112317,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 19 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 823 passed (824)",
+        "Tests  19 failed | 8153 passed (8172)",
+        "Duration  1256.07s (transform 36.69s, setup 5.10s, import 563.16s, tests 288.30s, environment 293.13s)"
+      ],
+      "sourceCommit": "1f81be97df99692ce7e2d1beff8718ad000fae96"
+    },
+    {
+      "name": "v10-worker-cli-a969b7c6c",
+      "exitCode": 1,
+      "exitSidecar": "v10-worker-cli-a969b7c6c.exit",
+      "rawSha256": "c26541b787cb5c8e81cce4ed4f6f0efbf5e1c945bc7ff620a0a5a6e537c015af",
+      "sanitizedSha256": "a71389f3e7e230f934fee7b76c86ac4c0008f9071ce2bc968ee7679fa8b4c5f1",
+      "archiveSha256": "cebd36268d86bc315b78b5744eb140a0ae93ccdccdb2edc7f322be80e6a982ad",
+      "redactions": {
+        "ansi": 14039,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 failed | 62 passed (63)",
+        "Tests  521 passed | 1 skipped (522)",
+        "Duration  155.29s (transform 4.06s, setup 0ms, import 28.83s, tests 119.56s, environment 5ms)"
+      ],
+      "sourceCommit": "1f81be97df99692ce7e2d1beff8718ad000fae96"
+    },
+    {
+      "name": "sidebar-focused-after-router-toast-fixtures-20261025",
+      "exitCode": 0,
+      "exitSidecar": "sidebar-focused-after-router-toast-fixtures-20261025.log.exit",
+      "rawSha256": "79652ac60d8394170ca0d43a1da08058601e967751e0143e867afd05c8dc5c57",
+      "sanitizedSha256": "79652ac60d8394170ca0d43a1da08058601e967751e0143e867afd05c8dc5c57",
+      "archiveSha256": "d9ed2b40162102c13f3491cb4c653c50b156eb95d2c291baa79c267678bdc306",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  28 passed (28)",
+        "Duration  4.85s (transform 1.89s, setup 23ms, import 2.90s, tests 1.18s, environment 597ms)"
+      ],
+      "sourceCommit": "1f81be97df99692ce7e2d1beff8718ad000fae96"
+    },
+    {
+      "name": "company-import-export-e2e-host-20261025",
+      "exitCode": 0,
+      "exitSidecar": "company-import-export-e2e-host-20261025.exit",
+      "rawSha256": "53bf91d8fa8a5768d6c52f76ebade171f6ebd5b1dd9d1245d9962b8e040f18fc",
+      "sanitizedSha256": "53bf91d8fa8a5768d6c52f76ebade171f6ebd5b1dd9d1245d9962b8e040f18fc",
+      "archiveSha256": "a14e4512b826e513f3aa48f899f07bd3cb80efad03243f9cc523acfd5432c8ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  55.65s (transform 2.16s, setup 0ms, import 3.77s, tests 51.75s, environment 0ms)"
+      ],
+      "sourceCommit": "ec9e2bd4ca50558597f0848e7fe6ffc22286315b"
+    },
+    {
+      "name": "costs-service-unpriced-final2-20261025",
+      "exitCode": 0,
+      "exitSidecar": "costs-service-unpriced-final2-20261025.log.exit",
+      "rawSha256": "2927b017dfcf2f2f419959119f7a6bab963733be3f5f3fc179d8f1031669fdff",
+      "sanitizedSha256": "2927b017dfcf2f2f419959119f7a6bab963733be3f5f3fc179d8f1031669fdff",
+      "archiveSha256": "b14f91dfad1990a0821bf379ec42c7ca16294e4124c0231b0c14dc32f53ab68c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  17 passed (17)",
+        "Duration  10.31s (transform 3.17s, setup 72ms, import 4.91s, tests 5.20s, environment 0ms)"
+      ],
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539"
+    },
+    {
+      "name": "up05-paused-accepted-resume-final2-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up05-paused-accepted-resume-final2-20261025.exit",
+      "rawSha256": "626d35a7f53e58131ea495ad0c0f40b21db2d9ae1c350938bb918c910c7f0a4a",
+      "sanitizedSha256": "7b4725d471ab1a8d4655f767dc4b0908ce8e86345d74f7a9726e3e201ef908f0",
+      "archiveSha256": "c9704f50b8519090fc3dbd089e73a5c74643c43527a77bbb61ce591cf8719b81",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 307 skipped (308)",
+        "Duration  23.58s (transform 12.22s, setup 74ms, import 16.49s, tests 6.88s, environment 0ms)"
+      ],
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539"
+    },
+    {
+      "name": "managed-opencode-mcp-bridge-test-20261025-rerun",
+      "exitCode": 0,
+      "exitSidecar": "managed-opencode-mcp-bridge-test-20261025-rerun.exit",
+      "rawSha256": "42b0c17a1142d22666a567e87dc04d84eabe44ad354923862063b410066fae1e",
+      "sanitizedSha256": "42b0c17a1142d22666a567e87dc04d84eabe44ad354923862063b410066fae1e",
+      "archiveSha256": "4d971f073cab69e679bf168f26106b7c890b1f2664c3f267226ce79c40c46b18",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  10 passed (10)",
+        "Duration  791ms (transform 71ms, setup 0ms, import 137ms, tests 536ms, environment 0ms)"
+      ],
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539"
+    },
+    {
+      "name": "v10-token-gates-pricing-slack",
+      "exitCode": 0,
+      "exitSidecar": "v10-token-gates-pricing-slack.exit",
+      "rawSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "sanitizedSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "archiveSha256": "54cb5fcb68faef60e731259e2486419a024cbc683cd5dd47dca7b8ba0d18a3a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539"
+    },
+    {
+      "name": "v10-worker-ui-cli-ec9e2bd4c",
+      "exitCode": 0,
+      "exitSidecar": "v10-worker-ui-cli-ec9e2bd4c.exit",
+      "rawSha256": "d4270bf2e2fc5d56df888804c5f261513dce6407967ab62bd55092d60c7dc570",
+      "sanitizedSha256": "8fc27a8e598195ee39d0be25b92442313141ee615221b5941fc8badba55c2132",
+      "archiveSha256": "1645cb7e22462261ba4bdfaef8974c7298d4197908a85746e8ab59f9e51ee3b2",
+      "redactions": {
+        "ansi": 122217,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Duration  1262.34s (transform 35.32s, setup 4.81s, import 562.08s, tests 293.22s, environment 299.49s)",
+        "Test Files  63 passed (63)",
+        "Tests  522 passed (522)",
+        "Duration  180.70s (transform 4.89s, setup 0ms, import 30.86s, tests 142.19s, environment 6ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "v10-integrated-typecheck-pricing-slack",
+      "exitCode": 1,
+      "exitSidecar": "v10-integrated-typecheck-pricing-slack.exit",
+      "rawSha256": "965c9c2206fd8c9671f95c9ed01e5086768f7f2b5b1753aed10ccc7aeb03e14a",
+      "sanitizedSha256": "965c9c2206fd8c9671f95c9ed01e5086768f7f2b5b1753aed10ccc7aeb03e14a",
+      "archiveSha256": "1c21187aaa6d21589fed61c7eeb6cf8051b772ae75691606dc42e02bc9e68b65",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "v10-integrated-typecheck-after-finance-story-fix",
+      "exitCode": 1,
+      "exitSidecar": "v10-integrated-typecheck-after-finance-story-fix.exit",
+      "rawSha256": "109e2f2d6d8b73d3dcb9492bfd6eca6cc307206871bb23c9f1857f4d69c02b92",
+      "sanitizedSha256": "109e2f2d6d8b73d3dcb9492bfd6eca6cc307206871bb23c9f1857f4d69c02b92",
+      "archiveSha256": "e28811afe6818d289699314ce599c1d27eba4bfa5b2a33fb095bff8fa296bfa0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "managed-opencode-source-e2e-20261025-task-version-fix",
+      "exitCode": 0,
+      "exitSidecar": "managed-opencode-source-e2e-20261025-task-version-fix.exit",
+      "rawSha256": "e590954f7c0fbb33505e0b6902631f428ea0c2155028897a18936d963639b3be",
+      "sanitizedSha256": "e590954f7c0fbb33505e0b6902631f428ea0c2155028897a18936d963639b3be",
+      "archiveSha256": "568a89c7acab3157924502f8822ad72c94d5371f2a630f2cfe58a0376d2bcad7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  40.39s (transform 11.06s, setup 69ms, import 14.71s, tests 25.50s, environment 0ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "slack-managed-focused-20261025-final2",
+      "exitCode": 0,
+      "exitSidecar": "slack-managed-focused-20261025-final2.exit",
+      "rawSha256": "3459ca7112d7deea744195a06263173df96487c724d259070201ad7ddf1dd3b1",
+      "sanitizedSha256": "3459ca7112d7deea744195a06263173df96487c724d259070201ad7ddf1dd3b1",
+      "archiveSha256": "62dc63f6076338e2f51a3acfe253137fb6e76df477f579c571bc568077c5f59f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  27 passed | 198 skipped (225)",
+        "Duration  8.90s (transform 5.53s, setup 66ms, import 8.75s, tests 185ms, environment 616ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "slack-managed-route-pg-20261025-final10",
+      "exitCode": 0,
+      "exitSidecar": "slack-managed-route-pg-20261025-final10.exit",
+      "rawSha256": "6e717096e9da26217c095053e5d4bf4d3e9d122192f70542390a1ed142099d08",
+      "sanitizedSha256": "6e717096e9da26217c095053e5d4bf4d3e9d122192f70542390a1ed142099d08",
+      "archiveSha256": "99ed2d3186725a4073f695b8d5fee090b62bc640656a48ec7d7108ea5c8880d5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  3 passed | 348 skipped (351)",
+        "Duration  20.89s (transform 11.73s, setup 79ms, import 15.78s, tests 4.85s, environment 0ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "cli-company-import-export-process-group-final3-20261025",
+      "exitCode": 0,
+      "exitSidecar": "cli-company-import-export-process-group-final3-20261025.log.exit",
+      "rawSha256": "4d64434254c3d854e00263d763cafe2a02d88fa3909bd147c786ed4f70364a14",
+      "sanitizedSha256": "4d64434254c3d854e00263d763cafe2a02d88fa3909bd147c786ed4f70364a14",
+      "archiveSha256": "8eca3cbf6a7034c65d6c3dd28b32767097fe781aaa23023b13a3a51c0d91b57b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  54.78s (transform 2.44s, setup 0ms, import 4.35s, tests 50.31s, environment 0ms)"
+      ],
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0"
+    },
+    {
+      "name": "managed-opencode-fixture-extraction-tsc3",
+      "exitCode": 0,
+      "exitSidecar": "managed-opencode-fixture-extraction-tsc3.exit",
+      "rawSha256": "464cff9f8f6f6066784728727deccb809d43b245fb971c731da1d67edb23d916",
+      "sanitizedSha256": "464cff9f8f6f6066784728727deccb809d43b245fb971c731da1d67edb23d916",
+      "archiveSha256": "f91c7a8af92370d22b1fe0ad8dc456a664c8874535dcce8589576181a0595c65",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "36188589ae67abeccec6148de3c2da70ef0b44e9"
+    },
+    {
+      "name": "v10-worker-workspaces-b-36188589a",
+      "exitCode": 1,
+      "exitSidecar": "v10-worker-workspaces-b-36188589a.exit",
+      "rawSha256": "de1a73848439b5bb24da1d469e32282c3a718d7cdbe4f0beef95b180008e488a",
+      "sanitizedSha256": "a8e586fcd47eaaf20b488a9b06b92ea9e84213b578b9373ee7fa0f899f01b27c",
+      "archiveSha256": "59674991ef644ef81d73da7ec3099f867d8c54da2f3a0d280ddaa54c1d58f4f6",
+      "redactions": {
+        "ansi": 12980,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 49 passed (50)",
+        "Tests  1 failed | 198 passed (199)",
+        "Duration  490.79s (transform 3.44s, setup 0ms, import 74.13s, tests 410.57s, environment 4ms)"
+      ],
+      "sourceCommit": "36188589ae67abeccec6148de3c2da70ef0b44e9"
+    },
+    {
+      "name": "v5-identities-migration-fixture-fk-final-20261025",
+      "exitCode": 0,
+      "exitSidecar": "v5-identities-migration-fixture-fk-final-20261025.log.exit",
+      "rawSha256": "cafeb5ca01615c36aa9e752a92a731ff3aa073ba1271c3e2f574c1d73892e433",
+      "sanitizedSha256": "cafeb5ca01615c36aa9e752a92a731ff3aa073ba1271c3e2f574c1d73892e433",
+      "archiveSha256": "e7e7863f608083083e979764bd5ec42624332e48ff7209d3a6bb4f0eebe2ec3f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  8.83s (transform 2.31s, setup 0ms, import 4.20s, tests 4.51s, environment 0ms)"
+      ],
+      "sourceCommit": "36188589ae67abeccec6148de3c2da70ef0b44e9"
+    },
+    {
+      "name": "v10-token-gates-b76",
+      "exitCode": 0,
+      "exitSidecar": "v10-token-gates-b76.exit",
+      "rawSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "sanitizedSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "archiveSha256": "54cb5fcb68faef60e731259e2486419a024cbc683cd5dd47dca7b8ba0d18a3a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28"
+    },
+    {
+      "name": "v10-coverage-b76",
+      "exitCode": 0,
+      "exitSidecar": "v10-coverage-b76.exit",
+      "rawSha256": "31d6e2a42462dae0e95b3cf6f81493480a03bfb93148934ef8387c3921b70740",
+      "sanitizedSha256": "31d6e2a42462dae0e95b3cf6f81493480a03bfb93148934ef8387c3921b70740",
+      "archiveSha256": "2d67000db0c86fa570319fa11114800db053de8a14bd1a6d9c70f2883b66c591",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28"
+    },
+    {
+      "name": "v10-help-docs-b76",
+      "exitCode": 1,
+      "exitSidecar": "v10-help-docs-b76.exit",
+      "rawSha256": "835d75c61949239a7dc19046cfe6098bb804ba6f120e0b1e99a9268c1038d8d6",
+      "sanitizedSha256": "835d75c61949239a7dc19046cfe6098bb804ba6f120e0b1e99a9268c1038d8d6",
+      "archiveSha256": "3d76a016ca8d37af0b5c1a163d647c144eddc26badc01973cdcf2a6372cb4719",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28"
+    },
+    {
+      "name": "v10-general-workspaces-b-after-v5-retry-20261025",
+      "exitCode": 1,
+      "exitSidecar": "v10-general-workspaces-b-after-v5-retry-20261025.log.exit",
+      "rawSha256": "daca2ceda0581c7e6133960aab6b77cadac389f12e0a73fc5afe06ea10ad038f",
+      "sanitizedSha256": "8d348dafa0c45761bea85dd16789d0e0d905dab345d04558e19b76608bb28d58",
+      "archiveSha256": "ca83a6bf8637f7bc3624489f695b5d8e2fc7649ae79bcc947e46abed87a47183",
+      "redactions": {
+        "ansi": 16156,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 59 passed (60)",
+        "Tests  2 failed | 1299 passed | 5 skipped (1306)",
+        "Duration  172.34s (transform 4.03s, setup 0ms, import 24.37s, tests 140.56s, environment 5ms)"
+      ],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "adapter-utils-t2-t15-worker-29c443dec-20261025",
+      "exitCode": 0,
+      "exitSidecar": "adapter-utils-t2-t15-worker-29c443dec-20261025.log.exit",
+      "rawSha256": "e8c98de840e60cf91ec3d1ac126f137e4d41b732fbc9a564a98713d6bea81c4b",
+      "sanitizedSha256": "f8e9f7e20084a36bb46d495e50490659b609fa876b7fa1263cc5b647e0d92b08",
+      "archiveSha256": "7da6a5b00943f62d08fbedb922d148f4a03f7eb3918c1b9a59c087693e285653",
+      "redactions": {
+        "ansi": 496,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 36 skipped (38)",
+        "Duration  5.91s (transform 1.66s, setup 0ms, import 2.38s, tests 3.40s, environment 0ms)"
+      ],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "adapter-utils-full-worker-29c443dec-20261025",
+      "exitCode": 0,
+      "exitSidecar": "adapter-utils-full-worker-29c443dec-20261025.log.exit",
+      "rawSha256": "22fa8ac7f431823930ec9ee47904146534f7843856caa167acc9061ad6265d68",
+      "sanitizedSha256": "11022951236f5799eeb7e2601d14272a4e66dfbcd85de2c3a0e62390de061817",
+      "archiveSha256": "44a78c281087069b883d30446a1a398f472629d339296ea2ee2a4a432892260f",
+      "redactions": {
+        "ansi": 2564,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  60 passed (60)",
+        "Tests  1301 passed | 5 skipped (1306)",
+        "Duration  157.04s (transform 3.84s, setup 0ms, import 22.89s, tests 126.81s, environment 5ms)"
+      ],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "v10-general-workspaces-b-remaining-valid-env-29c443dec-20261025",
+      "exitCode": 0,
+      "exitSidecar": "v10-general-workspaces-b-remaining-valid-env-29c443dec-20261025.log.exit",
+      "rawSha256": "f764f4879d8afa1fa09a100cbf283bbd5c5d86c6ab061273c20adba4347e1a27",
+      "sanitizedSha256": "0be3034c186e4c0e3fa212525be677d42af4e59e71374c4bfa39c0f6623f5c88",
+      "archiveSha256": "4af9a5c40533436bd8e41b0aba39484edadd3f33e6866092a17deccba602a1c1",
+      "redactions": {
+        "ansi": 2308,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Duration  3.98s (transform 1.95s, setup 0ms, import 2.83s, tests 215ms, environment 1ms)",
+        "Test Files  1 passed (1)",
+        "Tests  2 passed (2)",
+        "Duration  186ms (transform 47ms, setup 0ms, import 34ms, tests 34ms, environment 0ms)"
+      ],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "v10-server-build-stop-context-20261025",
+      "exitCode": 2,
+      "exitSidecar": "v10-server-build-stop-context-20261025.exit",
+      "rawSha256": "95bb38a9de1effc99bb228512718d883d69fe7120cab013fe84554bfb3fe4545",
+      "sanitizedSha256": "95bb38a9de1effc99bb228512718d883d69fe7120cab013fe84554bfb3fe4545",
+      "archiveSha256": "40cc50b7c405875e3b7e45699b01c26bb20d26b2e5eed9bc37853e9b19b555cf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "v10-server-build-stop-context-retry-20261025",
+      "exitCode": 2,
+      "exitSidecar": "v10-server-build-stop-context-retry-20261025.exit",
+      "rawSha256": "4bd467c25b9156f271fdcaa1ea60f0d3d6d45b01f637cc7ca1aebf3fcfd7d9c0",
+      "sanitizedSha256": "4bd467c25b9156f271fdcaa1ea60f0d3d6d45b01f637cc7ca1aebf3fcfd7d9c0",
+      "archiveSha256": "33cb63035cf26b69f1088672d6910f2fb35ba16d767246196649860a9dbaffc3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "v10-module-boundaries-096",
+      "exitCode": 0,
+      "exitSidecar": "v10-module-boundaries-096.exit",
+      "rawSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "sanitizedSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "archiveSha256": "28ffaeb6deae42b712200366e5abf9e845dcf6f1559cde1626bd85ecb9f3086d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861",
+      "meaning": "Measured long native promotion passes219s under300s harness; full42 reaches41pass1workflow_signal120s timeout under concurrent compiler, now isolated for diagnosis",
+      "logs": [
+        "learning-workflow-promoted-300-current",
+        "learning-workflow-source-final42-300"
+      ]
+    },
+    {
+      "sourceCommit": "73b69b90df0f8a2be6f3fd2bfefb1d0b7821f861",
+      "meaning": "Available timeout/phase diagnostics and isolated workflow_signal118.74s measured harness evidence; temporary instrumentation removed, full42 isolated rerun ongoing",
+      "logs": [
+        "learning-workflow-source-artifact-roots-final",
+        "learning-workflow-source-artifact-roots-optimized",
+        "learning-workflow-promoted-timing",
+        "learning-workflow-promoted-phases",
+        "learning-workflow-promoted-180-current",
+        "learning-workflow-promoted-live-phases-run",
+        "learning-workflow-promoted-50pct",
+        "learning-workflow-signal-180"
+      ]
+    },
+    {
+      "sourceCommit": "102ae29e96061744df46c84b3850aacf532f6ab1",
+      "meaning": "Final complete42 Learning suite passes on scoped measured harness limits without compiler contention; productionSource8s unchanged",
+      "logs": [
+        "learning-workflow-source-final42-scoped"
+      ]
+    },
+    {
+      "sourceCommit": "7b6a662f30661ecda31f8cee4c5bf2e407c0035c",
+      "meaning": "Final complete owner and executor reruns after final source error-code and duplicate-review fixes; no complete V10 qualification.",
+      "logs": [
+        "workflow-source-owner-final-optimized",
+        "workflow-source-executor-final-optimized"
+      ]
+    },
+    {
+      "sourceCommit": "8f8733afeeef37b52d5a5854e106e94baa685173",
+      "meaning": "Full workspace exposed two old Workflow connector fixture failures. Native current Human/Agent membership and original run identity repair both, retaining review/cancel/revocation/provider-call assertions. Complete gateway52 nowpasses; no production admission was weakened.",
+      "logs": [
+        "tool-gateway-workflow-source-diagnostic",
+        "tool-gateway-workflow-source-current-principals",
+        "tool-gateway-workflow-principals-full"
+      ]
+    },
+    {
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78",
+      "meaning": "Concurrent scoped diagnostics and full owner reruns; checkout at archive time is not final acceptance provenance.",
+      "logs": [
+        "v9-publication-safe-tests-full-retry2",
+        "native-plan-fixture-suite",
+        "learning-worker-namespace-unconfined-probe",
+        "learning-artifact-isolated-worker-namespaces"
+      ]
+    },
+    {
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f",
+      "meaning": "Scoped owner regressions and explicit failed diagnostics, not final workspace acceptance.",
+      "logs": [
+        "issue-tree-control-diagnostic",
+        "issue-tree-control-current-human",
+        "issue-tree-control-current-human-final",
+        "learning-artifact-isolated-worker-diagnostic",
+        "learning-artifact-isolated-worker-diagnostic2",
+        "learning-worker-native-sandbox-direct"
+      ]
+    },
+    {
+      "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581",
+      "meaning": "Scoped original owner proof and incomplete diagnostic runs; no final whole-workspace acceptance.",
+      "logs": [
+        "routine-cron-human-diagnostic",
+        "routine-cron-human-full",
+        "project-tool-rendition-diagnostic",
+        "learning-worker-native-sandbox-systempaths",
+        "learning-worker-native-sandbox-full",
+        "learning-artifact-isolated-worker-qualified-boundary"
+      ]
+    },
+    {
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce",
+      "meaning": "Canonical Human-created Project fixtures, real credentials and memberships; scoped regression runs only.",
+      "logs": [
+        "native-plan-canonical-project-suite",
+        "workspace-busy-native-project-fixtures",
+        "heartbeat-plugin-native-project-fixtures"
+      ]
+    },
+    {
+      "sourceCommit": "fb2e755f81486f5854d8d228c28964f52b036a0d",
+      "meaning": "Interrupted concurrent diagnostic only: SIGINT deliberately stopped the old mixed-source workspace run; status130 overrides wrapper zero, no global passing gate.",
+      "logs": [
+        "v10-workspace-tests"
+      ]
+    },
+    {
+      "sourceCommit": "9239f756eb11f27e33a8d77611444e2c441d3117",
+      "meaning": "Exact isolated worker source hashes are recorded in learning-worker-provenance.json; scoped software proof only, not latest source or final workspace acceptance.",
+      "logs": [
+        "learning-artifact-isolated-worker-reduced-heap",
+        "v10-typecheck-checkpoint-99b7"
+      ]
+    },
+    {
+      "sourceCommit": "9d5b9c8899382bc0db28d680219e01c8c36c3972",
+      "meaning": "Scoped final owner suites after canonical Human/source repair; not a final stable-source whole-workspace gate.",
+      "logs": [
+        "analytical-retention-batch-typecheck-final4",
+        "analytical-retention-batch-full56-final",
+        "current-human-source-57-final",
+        "pipeline-final34",
+        "pipeline-final-tsc",
+        "native-source-project-fixtures-attempt1",
+        "native-source-project-fixtures-attempt2"
+      ]
+    },
+    {
+      "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533",
+      "meaning": "Current canonical owner fixes and controlled software input receipts; structural receipt never qualifies provider consumption, opaque history or physical profiles.",
+      "logs": [
+        "agent-conversations-owner-gate-full4",
+        "forecast-full-final",
+        "analytical-context-forecast-combined-final",
+        "native-input-dispatch-final2",
+        "native-input-receipt-db-final",
+        "native-input-renderer-final",
+        "native-input-exact-closure-final2",
+        "native-input-actual-document-fields-final"
+      ]
+    },
+    {
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297",
+      "meaning": "Fresh guest-runtime diagnostic remains two real accountable cross-company Context failures; not acceptance.",
+      "logs": [
+        "runtime-fabric-current"
+      ]
+    },
+    {
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6",
+      "meaning": "Actual current-Human membership pin and session gate inside original locked conversation comment transaction; full file passes.",
+      "logs": [
+        "agent-conversations-current-human-pin-full5"
+      ]
+    },
+    {
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9",
+      "meaning": "Current-Human cross-project planning19/import14+1benchmarkskip; exact cd1061d20 isolated artifact2PASS with independent5917sourcehash verification, not production qualification.",
+      "logs": [
+        "adaptive-planning-cross-project-fixtures-rerun",
+        "company-portability-import-batching-final2",
+        "learning-artifact-worker-cd1061d20",
+        "worker-source-cd1061d20-update",
+        "worker-source-cd1061d20-root-update"
+      ]
+    },
+    {
+      "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8",
+      "meaning": "Scoped Shared1205PASS, current server compiler0, delegated Context software5PASS before stricter nonempty provider follow-up. Temporal2RED/1PASS remains open; no final acceptance.",
+      "logs": [
+        "v10-shared-contracts-current",
+        "v10-context-runtime-server-typecheck-current",
+        "delegated-context-v5-runtime-purgefix",
+        "native-payload-temporal-final2"
+      ]
+    },
+    {
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c",
+      "meaning": "Full experiment analysis20PASS, process/experiment pair32PASS, foreign Project404regression1PASS, closed-source Learning replay focused1PASS/sixconcurrentrequests (14notselected); not final workspace acceptance.",
+      "logs": [
+        "current-human-business-experiment-analysis-final-2",
+        "current-human-process-experiments-final",
+        "current-human-business-experiment-recording-foreign-project-focus",
+        "decision-outcome-reviews-learning-closed-bundle-clean1"
+      ]
+    },
+    {
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97",
+      "meaning": "Complete outcome15/decision34, genuine nonempty delegated Foundation5, native carrier64 scoped full files; no whole-workspace or complete18-family acceptance.",
+      "logs": [
+        "decision-outcome-reviews-full-final2",
+        "decisions-service-cyclic-full-final2",
+        "delegated-context-v5-runtime-full-current",
+        "delegated-context-v5-runtime-purge-control",
+        "native-call-carrier-full",
+        "native-effect-prefix-http-final2"
+      ]
+    },
+    {
+      "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224",
+      "meaning": "Isolated full scenario16PASS after actual scoped Artifact root cascade, exact base+owner patch recorded; V6/V8 native purge1+1PASS; earlier host/worker failures retained.",
+      "logs": [
+        "business-scenario-artifacts-worker-3d3ac21d7",
+        "artifact-purge-worker-cycle-diagnostic",
+        "business-scenario-artifacts-worker-purge-owner-final",
+        "causal-claims-full-canonical",
+        "v6-company-purge-after-artifact-owner",
+        "v8-company-purge-canonical-human-retest"
+      ]
+    },
+    {
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2",
+      "meaning": "Structural native dispatch with unavailable provider boundary denied; not complete provider-input qualification",
+      "logs": [
+        "native-provider-boundary-deny"
+      ]
+    },
+    {
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2",
+      "meaning": "Concurrent checkpoint server compiler diagnostic only; failed integration errors assigned to owners; not stable-source acceptance",
+      "logs": [
+        "v10-server-checkpoint-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2",
+      "meaning": "Sandbox lifecycle software suites only; no actual Task transport or physical qualification claim",
+      "logs": [
+        "v7-sandbox-owner-final"
+      ]
+    },
+    {
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2",
+      "meaning": "Known worker provider usage settles before post-response revocation fencing; eight revocation cases plus overflow; no provider qualification",
+      "logs": [
+        "worker-model-known-charge-after-revocation"
+      ]
+    },
+    {
+      "sourceCommit": "f67d4b9ddcbdfb593d694a190c5a390a166f11df",
+      "meaning": "Known usage is settled even after revocation; output withheld and accurate reason retained; selected nine software controls",
+      "logs": [
+        "worker-model-known-charge-withheld-reason"
+      ]
+    },
+    {
+      "sourceCommit": "f67d4b9ddcbdfb593d694a190c5a390a166f11df",
+      "meaning": "Host exec software stream/no-shell/no-journal-output/duplicate/Stop-preflight regression only, not physical host qualification",
+      "logs": [
+        "v10-sandbox-exec-host-tests"
+      ]
+    },
+    {
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006",
+      "meaning": "Bounded host relay software stream, one-use and unknown disconnect controls only",
+      "logs": [
+        "v10-runtime-relay-tests"
+      ]
+    },
+    {
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006",
+      "meaning": "Current scoped design-token, feature-module and Help registry consistency checks; not final unchanged-source workspace gates",
+      "logs": [
+        "v10-current-token-gates",
+        "v10-current-module-gates",
+        "v10-current-help-gates"
+      ]
+    },
+    {
+      "sourceCommit": "923f181297e291cb39aa7088329b090039600006",
+      "meaning": "Shared Git cleanup preserves modified/untracked/ignored files before commands; non-forced default and branch retention controls only",
+      "logs": [
+        "workspace-cleanup-preserve-files"
+      ]
+    },
+    {
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f",
+      "meaning": "Full canonical experiment recording16PASS including68k exact outcomes/replay30sec limits and hidden-source refusal; scoped concurrent-source evidence",
+      "logs": [
+        "business-experiment-recording-16-final",
+        "business-experiment-volume-exact-lookup-reuse",
+        "business-experiment-receipt-engine-final"
+      ]
+    },
+    {
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f",
+      "meaning": "Serial workspace/shared and server compiler diagnostics retained; failed checkpoint, not final acceptance",
+      "logs": [
+        "v10-workspace-serial-typecheck",
+        "v10-server-integrated-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f",
+      "meaning": "Broker policy35 and resolver real secret rotation1 software controls only; actual workload broker acceptance outstanding",
+      "logs": [
+        "sandbox-broker-policy-focused",
+        "sandbox-broker-resolver-focused",
+        "sandbox-broker-resolver-focused-rerun"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "Original JavaScript backup full8PASS; identity modes/ownership/large IDs/sequence state and new trigger inserts survive actual gzip restore",
+      "logs": [
+        "v10-backup-identity-roundtrip"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "Scoped complete Context8PASS with current original actor source/erasure; later cold optional-memory timeout observation remains under optimization",
+      "logs": [
+        "context-engine-integration-final-nativeactor"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "UP04 software lifecycle16/runtime-state7/SDK39 and redaction1; not hosted consumer or final workspace acceptance",
+      "logs": [
+        "up04-plugin-lifecycle-delivery2-2026-10-25",
+        "up04-runtime-state-integration10-2026-10-25",
+        "up04-sdk-lifecycle-focused4-2026-10-25",
+        "up04-plugin-sdk-build4-2026-10-25",
+        "up04-runtime-redaction-focused2-2026-10-25"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "Host native provider20/policy36 software controls; HTTP broker final suite still under validation, no physical host qualification",
+      "logs": [
+        "v10-sandbox-host-provider-tests",
+        "sandbox-broker-policy-final"
+      ]
+    },
+    {
+      "sourceCommit": "bf361bbe1c9bdb25927b21e46dcbe30f66a3cdad",
+      "meaning": "Actual sandbox broker HTTP software integration only; not physical host/provider qualification",
+      "logs": [
+        "sandbox-broker-native-http-full"
+      ]
+    },
+    {
+      "sourceCommit": "f6ab0bdd93a5aadfd29664ed8123cb6dd11f3b49",
+      "meaning": "Full experiment analysis rerun after original backup identity fix; saved completed tool-output summary rather than complete raw stdout; scoped software only",
+      "logs": [
+        "business-experiment-analysis-20-backup-lib8-rerun"
+      ]
+    },
+    {
+      "sourceCommit": "f6ab0bdd93a5aadfd29664ed8123cb6dd11f3b49",
+      "meaning": "Serial whole-workspace diagnostic during active integration; failed server has transport variable and import DTO/OpenAPI errors, not final acceptance",
+      "logs": [
+        "v10-recovery-workspace-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "0b5223edcce06c03f2242c4ac95993ac75d5a4b3",
+      "meaning": "Whole-workspace build diagnostic during new Jev setup and import API integration; expected failed compiler output retained, fixes in progress",
+      "logs": [
+        "v10-recovery-build"
+      ]
+    },
+    {
+      "sourceCommit": "e8d714d3053717936ae74fe34cc4df14314b8842",
+      "meaning": "Managed model request validation and policy projection software checks; actual full native source producer and physical deployment remain unqualified",
+      "logs": [
+        "rt03-model-policy-transport-2026-10-25"
+      ]
+    },
+    {
+      "sourceCommit": "e8d714d3053717936ae74fe34cc4df14314b8842",
+      "meaning": "Full OpenShell host model capability injection software checks, not a physical host/provider qualification",
+      "logs": [
+        "v10-host-model-provider-injection-check"
+      ]
+    },
+    {
+      "sourceCommit": "9dd1402e25e0b74654f955ae707cf2bb088799c7",
+      "meaning": "Jev original mounted HTTP/consent/budget owner software regressions with fake provider fetch; no real provider qualification",
+      "logs": [
+        "jev-http-route-tests5",
+        "jev-ui-consent-tests2",
+        "jev-original-reservation-and-ui-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa",
+      "meaning": "Scoped AW actual heartbeat/source/transport software fixture; full managed OpenCode and final stable-source gates remain pending",
+      "logs": [
+        "aw-source-closure-final-green",
+        "aw-reader-closure-tests",
+        "v10-latest-token-gates",
+        "v10-latest-help-registry",
+        "up06-native-runner-handoff-retry-20261025",
+        "up06-descriptor-reconstruction-latest-20261025",
+        "up06-remote-selected-source-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "b56ef80b411cec061de8fe34273a5ad4a1e64c4c",
+      "meaning": "Observed runner build, server compiler and 12 prepared-turn runtime tests; source still changing, not final whole-workspace proof.",
+      "logs": [
+        "managed-source-closure-package-build",
+        "managed-source-closure-server-tsc",
+        "managed-source-closure-runtime-test2"
+      ]
+    },
+    {
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f",
+      "meaning": "Whole workspace typecheck found three source-dispatch fixture typing errors; fixed afterward, fresh unchanged-source gate pending.",
+      "logs": [
+        "v10-integrated-typecheck-next"
+      ]
+    },
+    {
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f",
+      "meaning": "Current PG erasure/source binding and real AW model output-copy erasure controls; scoped source still moving, not final full-suite identity.",
+      "logs": [
+        "native-erase-test2",
+        "native-erasure-final-two-positive",
+        "native-v1-output-physical-erasure"
+      ]
+    },
+    {
+      "sourceCommit": "a41d639eb585f0c1ec6a8ddd8b4176953ddc494f",
+      "meaning": "Complete native dispatch integration file 40/40, including canonical runtime inputs and two actual Context dispatches; not complete private temporal output coverage.",
+      "logs": [
+        "native-context-dispatch-full"
+      ]
+    },
+    {
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720",
+      "meaning": "Earlier actual AW model-output erasure selected run: raw summary 1 passed/64 filtered, original numeric exit not retained; distinct from later all-skipped selector.",
+      "logs": [
+        "native-v1-output-physical-erasure-selected"
+      ]
+    },
+    {
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720",
+      "meaning": "Whole workspace pnpm build exit0 at changing source checkpoint52f3482de; no final unchanged-source gate claim.",
+      "logs": [
+        "v10-integrated-build-next"
+      ]
+    },
+    {
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720",
+      "meaning": "Fresh actual production runtime bundle builds and boots isolated PostgreSQL migrations/readiness, generates actual avatar-worker PNG, and exits cleanly on SIGTERM. Changing source checkpoint, no final runtime/provider qualification.",
+      "logs": [
+        "v10-runtime-bundle-next",
+        "v10-runtime-boot-next",
+        "up03-typed-routine-owner-export"
+      ]
+    },
+    {
+      "sourceCommit": "52f3482de74f7964c5a19cf43dee70d7fa236720",
+      "meaning": "Complete current import route suite48 passed after canonical UUID actor fixture repair; raw observed exit0.",
+      "logs": [
+        "import-current-authority-route-rerun-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "205c09d937dca26969f493f66da3c83c8c9d2357",
+      "meaning": "Current whole portability99 passed by raw summary; original numeric process exit not retained, not final test gate.",
+      "logs": [
+        "import-current-authority-full-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "205c09d937dca26969f493f66da3c83c8c9d2357",
+      "meaning": "Real PG saved deadline restart/direct-writer/two-coordinator Routine terminal-state and independent-client monitor claim controls, observed exit0.",
+      "logs": [
+        "up13-restart-dual-server-routine-20261025",
+        "up13-dual-server-monitor-20261025",
+        "up03-typed-routine-project-export-v2"
+      ]
+    },
+    {
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2",
+      "meaning": "Full gateway/transport83 passed after exact V7 completion-contract hash compatibility; earlier81/83 failure retained separately. Actual AW positive and known-charge Pause controls remain strict.",
+      "logs": [
+        "managed-source-closure-gateway-transport",
+        "managed-source-closure-gateway-transport-after-fix",
+        "managed-source-closure-aw-positive-after-contract-fix",
+        "managed-source-closure-aw-pause-after-contract-fix"
+      ]
+    },
+    {
+      "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2",
+      "meaning": "Real PostgreSQL Routine scheduling recovery across SIGKILL and two fresh Node processes, parent SQL deadline change and explicit heartbeat wake; one canonical terminal occurrence/effect.",
+      "logs": [
+        "up13-os-process-restart-routine-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "1f81be97df99692ce7e2d1beff8718ad000fae96",
+      "meaning": "Actual isolated UI and CLI failures at a969b7c6c, followed by focused Sidebar fixture pass; these are scoped checkpoint receipts, not final acceptance.",
+      "logs": [
+        "v10-worker-ui-cli-a969b7c6c",
+        "v10-worker-cli-a969b7c6c",
+        "sidebar-focused-after-router-toast-fixtures-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "ec9e2bd4ca50558597f0848e7fe6ffc22286315b",
+      "meaning": "Original CLI positive import/export after conditional publication target binding; actual host scoped exit0, isolated broad rerun remains separate.",
+      "logs": [
+        "company-import-export-e2e-host-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "1b5a19d567f025cbe4377766f0098e20ad2c3539",
+      "meaning": "Current focused costs PostgreSQL pricing coverage17/17, paused accepted-interaction effect1/307skipped, MCP bridge identity10/10 and token gates0; final whole workspace remains pending.",
+      "logs": [
+        "costs-service-unpriced-final2-20261025",
+        "up05-paused-accepted-resume-final2-20261025",
+        "managed-opencode-mcp-bridge-test-20261025-rerun",
+        "v10-token-gates-pricing-slack"
+      ]
+    },
+    {
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0",
+      "meaning": "Exact ec9e2bd4c isolated UI/CLI group passes: UI824 files8172 tests, CLI63files522 tests, actual combined exit0. Later pricing/Slack/Native changes require their focused and final source gates.",
+      "logs": [
+        "v10-worker-ui-cli-ec9e2bd4c"
+      ]
+    },
+    {
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0",
+      "meaning": "Retained integrated compiler failures: initial4Storybook props, then5server wire/Memory/prompt typing diagnostics; UI compiler passed after Storybook fixture repair. No final compiler-green claim.",
+      "logs": [
+        "v10-integrated-typecheck-pricing-slack",
+        "v10-integrated-typecheck-after-finance-story-fix"
+      ]
+    },
+    {
+      "sourceCommit": "b1497ccabb4449c66bea49c69cd9b9bd931a72f0",
+      "meaning": "Actual pinned OpenCode baseline1/1 completes through canonical tool effect, original completion/finalizer and post-terminal HTTP reader; Slack27/3 focused controls and CLI process-group cleanup1 pass. Memory same-Run extension remains open.",
+      "logs": [
+        "managed-opencode-source-e2e-20261025-task-version-fix",
+        "slack-managed-focused-20261025-final2",
+        "slack-managed-route-pg-20261025-final10",
+        "cli-company-import-export-process-group-final3-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "36188589ae67abeccec6148de3c2da70ef0b44e9",
+      "meaning": "Server scoped typecheck green after Context read/fixture extraction; broad nonserverB stopped at one historical V5 fixture FK failure (198 DB tests passed), exact fixture repair focused1/1 pass; no broadB pass claimed.",
+      "logs": [
+        "managed-opencode-fixture-extraction-tsc3",
+        "v10-worker-workspaces-b-36188589a",
+        "v5-identities-migration-fixture-fk-final-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28",
+      "meaning": "Intermediate source/static gates at pushed b76e4884d; Help generated catalog failure follows concurrent article edits and remains unresolved until regeneration. Source coverage checks structure, with 70 pending evidence surfaces, not release acceptance.",
+      "logs": [
+        "v10-token-gates-b76",
+        "v10-coverage-b76",
+        "v10-help-docs-b76"
+      ]
+    },
+    {
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428",
+      "meaning": "Historical composed workspaces-B diagnostic: shared/skills/DB at b76e4884d; adapter-utils and remaining projects at 29c443dec. Source was verified inside isolated worker before each snapshot. Later company-default schema/shared/UI changes require fresh affected gates; this is not final unchanged-source acceptance. Failed initial and malformed-env runs remain diagnostic only.",
+      "logs": [
+        "v10-general-workspaces-b-after-v5-retry-20261025",
+        "adapter-utils-t2-t15-worker-29c443dec-20261025",
+        "adapter-utils-full-worker-29c443dec-20261025",
+        "v10-general-workspaces-b-remaining-valid-env-29c443dec-20261025",
+        "v10-server-build-stop-context-20261025",
+        "v10-server-build-stop-context-retry-20261025",
+        "v10-module-boundaries-096"
+      ]
+    }
+  ],
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity."
+}

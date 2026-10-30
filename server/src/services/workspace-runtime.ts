@@ -1,3 +1,5 @@
+import { sanitizeRuntimeServiceBaseEnv } from "./runtime-service-env.js";
+export { sanitizeRuntimeServiceBaseEnv } from "./runtime-service-env.js";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import fs from "node:fs/promises";
@@ -67,6 +69,7 @@ import { isRuntimeOwnedGitBranch } from "./execution-workspace-branch-ownership.
 import { logActivity } from "./activity-log.js";
 import { readProjectWorkspaceRuntimeConfig } from "./project-workspace-runtime-config.js";
 import { workspaceGitOperationScheduler } from "./workspace-git-operation-scheduler.js";
+import { assertGitWorkspaceCleanupProof, type GitWorkspaceCleanupProof } from "./git-workspace-restoration.js";
 import {
   cleanupWorktreeInstanceArtifacts,
   deriveWorktreeInstanceId,
@@ -672,25 +675,6 @@ export async function ensureServerWorkspaceLinksCurrent(
   throw new Error(
     `Workspace relink did not repair all server package links: ${remainingMismatches.map((item) => item.packageName).join(", ")}`,
   );
-}
-
-export function sanitizeRuntimeServiceBaseEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...baseEnv };
-  for (const key of Object.keys(env)) {
-    if (["PAPERCLIP_", "AW_", "PADDLE_", "MAILGUN_", "RUNTIME_CONTROL_", "AWS_", "UPCLOUD_", "RUN_LOG_"].some(prefix => key.startsWith(prefix))) {
-      delete env[key];
-    }
-  }
-  // These origin settings belong to the parent instance. Letting them leak into a
-  // managed worktree runtime can send auth cookies and OAuth callbacks to the wrong
-  // Paperclip instance. Runtime/service overrides are merged back after sanitizing.
-  delete env.BETTER_AUTH_URL;
-  delete env.BETTER_AUTH_BASE_URL;
-  delete env.BETTER_AUTH_SECRET;
-  delete env.DATABASE_URL;
-  delete env.npm_config_tailscale_auth;
-  delete env.npm_config_authenticated_private;
-  return env;
 }
 
 function stableRuntimeServiceId(input: {
@@ -2979,9 +2963,11 @@ async function recordGitOperation(
     metadata?: Record<string, unknown> | null;
     successMessage?: string | null;
     failureLabel?: string | null;
+    beforeExecute?: (() => Promise<void>) | null;
   },
 ): Promise<string> {
   if (!recorder) {
+    await input.beforeExecute?.();
     return runGit(input.args, input.cwd);
   }
 
@@ -2994,6 +2980,7 @@ async function recordGitOperation(
     cwd: input.cwd,
     metadata: input.metadata ?? null,
     run: async () => {
+      await input.beforeExecute?.();
       const result = await executeProcess({
         command: "git",
         args: input.args,
@@ -3044,9 +3031,11 @@ async function recordWorkspaceCommandOperation(
     metadata?: Record<string, unknown> | null;
     successMessage?: string | null;
     onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
+    beforeExecute?: (() => Promise<void>) | null;
   },
 ) {
   if (!recorder) {
+    await input.beforeExecute?.();
     await runWorkspaceCommand(input);
     return null;
   }
@@ -3060,6 +3049,7 @@ async function recordWorkspaceCommandOperation(
     cwd: input.cwd,
     metadata: input.metadata ?? null,
     run: async () => {
+      await input.beforeExecute?.();
       const shell = resolveShell();
       const result = await executeProcess({
         command: shell,
@@ -3116,6 +3106,7 @@ async function provisionExecutionWorktree(input: {
   agent: ExecutionWorkspaceAgentRef;
   created: boolean;
   recorder?: WorkspaceOperationRecorder | null;
+  beforeWorkspaceMutation?: (() => Promise<void>) | null;
 }) {
   const provisionCommand = resolveWorkspaceProvisionCommand(input.strategy, input.repoRoot);
   if (!provisionCommand) return;
@@ -3135,6 +3126,7 @@ async function provisionExecutionWorktree(input: {
       agent: input.agent,
       created: input.created,
     }),
+    beforeExecute: input.beforeWorkspaceMutation,
     label: `Execution workspace provision command "${provisionCommand}"`,
     metadata: {
       repoRoot: input.repoRoot,
@@ -3658,6 +3650,9 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
   enableWorkspaceDirtyQuarantineRepair?: boolean;
   recorder?: WorkspaceOperationRecorder | null;
   resolveGitAuth?: GitRemoteAuthProvider | null;
+  /** Recheck the caller's original current source authority immediately before
+   * filesystem mutations and executable provision hooks. */
+  beforeWorkspaceMutation?: (() => Promise<void>) | null;
 }): Promise<RealizedExecutionWorkspace | null> {
   const cwd = asString(input.workspace.cwd ?? input.workspace.providerRef, "").trim();
   if (!cwd) return null;
@@ -3710,6 +3705,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
     );
   }
   const repoRoot = await runGit(["rev-parse", "--show-toplevel"], baseCwd);
+  await input.beforeWorkspaceMutation?.();
   const recordedBaseRefSha = readRecordedBaseRefSha(input.workspace.metadata);
   if (await directoryExists(cwd)) {
     const reuseBaseRef = input.workspace.baseRef ?? input.base.repoRef ?? null;
@@ -3787,6 +3783,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
     });
     realized.warnings = [...repairWarnings, ...baseRefreshWarnings, ...baseDrift.warnings];
     realized.baseRefSha = refresh.baseRefSha ?? recordedBaseRefSha ?? baseDrift.branchBaseRefSha ?? baseDrift.currentBaseRefSha;
+    await input.beforeWorkspaceMutation?.();
     await provisionExecutionWorktree({
       strategy: {
         type: "git_worktree",
@@ -3800,7 +3797,9 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
       agent: input.agent,
       created: false,
       recorder: input.recorder ?? null,
+      beforeWorkspaceMutation: input.beforeWorkspaceMutation,
     });
+    await input.beforeWorkspaceMutation?.();
     return realized;
   }
 
@@ -3811,12 +3810,14 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
   }
 
   await fs.mkdir(path.dirname(worktreePath), { recursive: true });
+  await input.beforeWorkspaceMutation?.();
   await runGit(["worktree", "prune"], repoRoot).catch(() => {});
   const restoreBaseRef = input.workspace.baseRef ?? input.base.repoRef ?? null;
   const restoreRefreshWarnings = restoreBaseRef
     ? await refreshRemoteTrackingBaseRef(repoRoot, restoreBaseRef, input.resolveGitAuth)
     : [];
   const restoreCurrentBaseRefSha = restoreBaseRef ? await resolveBaseRefSha(repoRoot, restoreBaseRef) : null;
+  await input.beforeWorkspaceMutation?.();
 
   let created = false;
   try {
@@ -3824,6 +3825,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
       phase: "worktree_prepare",
       args: ["worktree", "add", worktreePath, branchName],
       cwd: repoRoot,
+      beforeExecute: input.beforeWorkspaceMutation,
       metadata: {
         repoRoot,
         worktreePath,
@@ -3855,6 +3857,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
       phase: "worktree_prepare",
       args: ["worktree", "add", "-b", branchName, worktreePath, baseRef],
       cwd: repoRoot,
+      beforeExecute: input.beforeWorkspaceMutation,
       metadata: {
         repoRoot,
         worktreePath,
@@ -3879,6 +3882,7 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
     skipRefresh: true,
   });
 
+  await input.beforeWorkspaceMutation?.();
   await provisionExecutionWorktree({
     strategy: {
       type: "git_worktree",
@@ -3892,7 +3896,9 @@ export async function ensurePersistedExecutionWorkspaceAvailable(input: {
     agent: input.agent,
     created,
     recorder: input.recorder ?? null,
+    beforeWorkspaceMutation: input.beforeWorkspaceMutation,
   });
+  await input.beforeWorkspaceMutation?.();
 
   return {
     ...realized,
@@ -4032,10 +4038,12 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
   assertSafeToCleanup?: (() => Promise<void>) | null;
   beforeBranchDelete?: (() => Promise<void>) | null;
   expectedBranchHeadSha?: string | null;
+  gitRestorationProof?: GitWorkspaceCleanupProof;
   runCleanupCommands?: boolean;
   forceWorktreeRemoval?: boolean;
 }) {
   const warnings: string[] = [];
+  const verifiedBranchHeadSha = input.gitRestorationProof?.branchHeadSha ?? null;
   const workspacePath = input.workspace.providerRef ?? input.workspace.cwd;
   const repoRoot = input.workspace.providerType === "git_worktree" && workspacePath
     ? await resolveGitRepoRootForWorkspaceCleanup(
@@ -4047,9 +4055,42 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
     workspace: input.workspace,
     projectWorkspaceCwd: input.projectWorkspace?.cwd ?? null,
   });
-  // Callers can require the workspace to match an assessed snapshot before
-  // cleanup begins. Destructive paths recheck immediately before removal.
+  // Archive and failed setup must not erase edits or unique ignored files.
+  // An assessed cleanup owner can additionally validate its exact saved recipe.
+  const assertGitContentsSafe = async () => {
+    if (input.workspace.providerType !== "git_worktree" || !workspacePath || !await directoryExists(workspacePath)) return;
+    const status = await runGit(["-c", "core.fsmonitor=false", "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching", "-z"], workspacePath);
+    if (status) throw new Error("Workspace files require preservation before cleanup.");
+  };
+  const assertLocalContentsSafe = async () => {
+    if (input.workspace.providerType !== "local_fs" || input.workspace.metadata?.createdByRuntime !== true || !workspacePath) return;
+    const target = path.resolve(workspacePath);
+    const stat = await fs.lstat(target).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (stat && (!stat.isDirectory() || stat.isSymbolicLink())) throw new Error("unsafe_local_workspace_path");
+    if (stat && (await fs.readdir(target)).length > 0) throw new Error("local_workspace_contains_files");
+  };
   await input.assertSafeToCleanup?.();
+  if (input.workspace.providerType === "git_worktree") {
+    try {
+      await assertGitWorkspaceCleanupProof(input.gitRestorationProof, input.workspace.id);
+    } catch {
+    return { cleanedPath: workspacePath, cleaned: false,
+      warnings: ["Exact workspace restoration was not verified; the Git workspace was kept."] };
+    }
+  }
+  try {
+    if (input.workspace.providerType !== "git_worktree") await assertGitContentsSafe();
+    await assertLocalContentsSafe();
+  } catch {
+    return { cleanedPath: workspacePath, cleaned: false, warnings: [
+      input.workspace.providerType === "local_fs"
+        ? "Workspace files require preservation before cleanup; the workspace was kept."
+        : "Workspace files could not be verified for cleanup; the workspace was kept.",
+    ] };
+  }
   let worktreeInstancePointer: WorktreeInstancePointer | null = null;
   let expectedWorktreeInstanceId: string | null = null;
   if (input.workspace.providerType === "git_worktree" && workspacePath) {
@@ -4130,12 +4171,13 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
       } else {
         try {
           await input.assertSafeToCleanup?.();
+          await assertGitWorkspaceCleanupProof(input.gitRestorationProof, input.workspace.id, "before_worktree_remove");
           await recordGitOperation(input.recorder, {
             phase: "worktree_cleanup",
             args: [
               "worktree",
               "remove",
-              ...(input.forceWorktreeRemoval === false ? [] : ["--force"]),
+              ...(input.forceWorktreeRemoval === true ? ["--force"] : []),
               workspacePath,
             ],
             cwd: repoRoot,
@@ -4153,23 +4195,25 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
         }
       }
     }
-    if (branchCreatedByRuntime && input.workspace.branchName) {
+    if (branchCreatedByRuntime && input.workspace.branchName && !await directoryExists(workspacePath)) {
       if (!repoRoot) {
         warnings.push(`Could not resolve git repo root to delete branch "${input.workspace.branchName}".`);
       } else {
         try {
           await input.beforeBranchDelete?.();
+          await assertGitWorkspaceCleanupProof(input.gitRestorationProof, input.workspace.id, "before_branch_delete");
           const metadata = {
             workspaceId: input.workspace.id,
             workspacePath,
             branchName: input.workspace.branchName,
             cleanupAction: "branch_delete",
           };
-          if (input.expectedBranchHeadSha) {
+          const expectedBranchHeadSha = input.expectedBranchHeadSha ?? verifiedBranchHeadSha;
+          if (expectedBranchHeadSha) {
             await deleteGitBranchAtVerifiedTip({
               repoRoot,
               branchName: input.workspace.branchName,
-              expectedHeadSha: input.expectedBranchHeadSha,
+              expectedHeadSha: expectedBranchHeadSha,
               recorder: input.recorder,
               metadata,
             });
@@ -4201,23 +4245,38 @@ export async function cleanupExecutionWorkspaceArtifacts(input: {
     if (containsProjectWorkspace) {
       warnings.push(`Refusing to remove path "${workspacePath}" because it contains the project workspace.`);
     } else {
-      await input.assertSafeToCleanup?.();
-      await fs.rm(resolvedWorkspacePath, { recursive: true, force: true });
-      if (input.recorder) {
-        await input.recorder.recordOperation({
-          phase: "workspace_teardown",
-          cwd: projectWorkspaceCwd ?? process.cwd(),
-          metadata: {
-            workspaceId: input.workspace.id,
-            workspacePath: resolvedWorkspacePath,
-            cleanupAction: "remove_local_fs",
-          },
-          run: async () => ({
-            status: "succeeded",
-            exitCode: 0,
-            system: `Removed local workspace directory ${resolvedWorkspacePath}\n`,
-          }),
-        });
+      const stat = await fs.lstat(resolvedWorkspacePath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      });
+      if (stat && (!stat.isDirectory() || stat.isSymbolicLink())) {
+        warnings.push("Workspace path could not be verified for cleanup; the workspace was kept.");
+      } else if (stat && (await fs.readdir(resolvedWorkspacePath)).length > 0) {
+        // A runtime-created directory can acquire customer files after setup.
+        // Without an export recipe, any entry is unique work and must survive
+        // archive or failed-setup cleanup for owner review.
+        warnings.push("Workspace files require preservation before cleanup; the workspace was kept.");
+      } else if (stat) {
+        // rmdir is atomic with respect to an entry appearing after readdir: it
+        // fails if a writer added customer data, unlike recursive rm.
+        await input.assertSafeToCleanup?.();
+        await fs.rmdir(resolvedWorkspacePath);
+        if (input.recorder) {
+          await input.recorder.recordOperation({
+            phase: "workspace_teardown",
+            cwd: projectWorkspaceCwd ?? process.cwd(),
+            metadata: {
+              workspaceId: input.workspace.id,
+              workspacePath: resolvedWorkspacePath,
+              cleanupAction: "remove_local_fs",
+            },
+            run: async () => ({
+              status: "succeeded",
+              exitCode: 0,
+              system: `Removed empty local workspace directory ${resolvedWorkspacePath}\n`,
+            }),
+          });
+        }
       }
     }
   }

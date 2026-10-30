@@ -1,0 +1,115 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "4b54b6f363e6589b8a8010783ce2877442a75798",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "First current-dependency browser attempt could not launch: Playwright headless-shell was absent. No browser behavior is qualified by this attempt. A rerun uses the existing system Chromium through the supported executable option.",
+  "logs": [
+    {
+      "name": "v10-browser-current-20261026",
+      "exitCode": 1,
+      "exitSidecar": "v10-browser-current-20261026.exit",
+      "rawSha256": "c77d801942496fa0c2e02996d458bfddae2d2f7edf97baabee6b60549cd5efc7",
+      "sanitizedSha256": "c77d801942496fa0c2e02996d458bfddae2d2f7edf97baabee6b60549cd5efc7",
+      "archiveSha256": "2cc6bd51c986f282d3e27edd38329a8cbe16cf50b2d34790fca3372e634517cd",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "4b54b6f363e6589b8a8010783ce2877442a75798"
+    },
+    {
+      "name": "v10-browser-system-chromium-20261026",
+      "exitCode": 1,
+      "exitSidecar": "v10-browser-system-chromium-20261026.exit",
+      "rawSha256": "bcd37428de933b44f7bfe7cc413e565852690f88c79394d122d4c193c997ddb2",
+      "sanitizedSha256": "bcd37428de933b44f7bfe7cc413e565852690f88c79394d122d4c193c997ddb2",
+      "archiveSha256": "96b62b06fb67fbfa7344c15d26bc56a9a0e0d7e578b1fa4a0b6294fd08cda8c0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "4b54b6f363e6589b8a8010783ce2877442a75798"
+    },
+    {
+      "name": "v10-browser-chromium-clean-socket-20261026",
+      "exitCode": 1,
+      "exitSidecar": "v10-browser-chromium-clean-socket-20261026.exit",
+      "rawSha256": "6fa3eb40ba16dd525138183230ee98cc1bad0263538a99e644d73e79066e19aa",
+      "sanitizedSha256": "6fa3eb40ba16dd525138183230ee98cc1bad0263538a99e644d73e79066e19aa",
+      "archiveSha256": "79bcfba4e517ea68990e51fb77bcbb48ec938c6a2e8c458d9759733c1ea151af",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703"
+    },
+    {
+      "name": "v10-searchable-select-accessible-name-20261026",
+      "exitCode": 0,
+      "exitSidecar": "v10-searchable-select-accessible-name-20261026.exit",
+      "rawSha256": "f2ac64af334f21f87a9695f494d2ed55b9024b35b84d44ec53c3007d8fe10b60",
+      "sanitizedSha256": "f2ac64af334f21f87a9695f494d2ed55b9024b35b84d44ec53c3007d8fe10b60",
+      "archiveSha256": "b02f31dca3a8983fef8d62e6acef319e6a0040558ba40792fd903f2ca4348d1c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed (7)",
+        "Duration  3.82s (transform 1.34s, setup 23ms, import 2.37s, tests 564ms, environment 735ms)"
+      ],
+      "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703"
+    },
+    {
+      "name": "v10-browser-label-scope-locale-20261026",
+      "exitCode": 0,
+      "exitSidecar": "v10-browser-label-scope-locale-20261026.exit",
+      "rawSha256": "b702da5d8959b39022f3c8f626832189073a3e4b4dc2376a6d8bb604203e486d",
+      "sanitizedSha256": "b702da5d8959b39022f3c8f626832189073a3e4b4dc2376a6d8bb604203e486d",
+      "archiveSha256": "b7cffb1544b8d3325f8a6c3c5dd41f8f0234eec7076b1ba770c08c98f8358f72",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "4b54b6f363e6589b8a8010783ce2877442a75798",
+      "meaning": "The system Chromium rerun reached server startup but a stale PostgreSQL socket from the first disposable browser instance prevented startup. The recorded PID is a zombie and no TCP listener remains; only the exact stale socket and socket lock were removed. Its database/source files were preserved. No browser assertion ran.",
+      "logs": [
+        "v10-browser-system-chromium-20261026"
+      ]
+    },
+    {
+      "sourceCommit": "2483b506af51f37ceb5d1ff984033aaf56a6c703",
+      "meaning": "Current dependency/system Chromium runs: first actual browser run passed V4 artifact/Memory, optimizer and workflow-policy journeys (3), plus two consent and runtime recovery cases; four failures identified unlabeled combobox, company-switch readiness and persisted locale isolation. Following exact fixes, SearchableSelect unit suite passes7/7 and all seven targeted AgentMail/consent/runtime/workflow browser cases pass. Composed evidence, not a single unchanged-source whole-browser pass.",
+      "logs": [
+        "v10-browser-chromium-clean-socket-20261026",
+        "v10-searchable-select-accessible-name-20261026",
+        "v10-browser-label-scope-locale-20261026"
+      ]
+    }
+  ]
+}

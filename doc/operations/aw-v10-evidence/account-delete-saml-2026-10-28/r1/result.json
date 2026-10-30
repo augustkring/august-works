@@ -1,0 +1,8 @@
+{
+  "scope": "One executed real signed SAML account-deletion integration; not final workspace or PR acceptance",
+  "passed": 1,
+  "negativeCases": "stale/missing authentication time, wrong recipient, transplanted request, expired bearer confirmation and unsigned assertion; replay does not remint",
+  "positive": "ForceAuthn plus exact signed SAML assertion/current callback session produces one-use proof; actual account deletion service request consumes it",
+  "dependencyPatchHash": "ayxfwplohotay23bo5cq37rkc4",
+  "sourceReconstruction": "sourceHead in source-pins.json plus gunzipped sourceHeadDiffPatch and untracked-source-files.tar.gz. All bytes are SHA pinned; original absolute preparation paths identify origin."
+}

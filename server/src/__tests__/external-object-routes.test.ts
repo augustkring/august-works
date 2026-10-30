@@ -32,8 +32,15 @@ const mockInstanceSettingsService = vi.hoisted(() => ({
   getExperimental: vi.fn(),
 }));
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+const mockCurrentIssuePrivacy = vi.hoisted(() => vi.fn());
 
 function registerRouteMocks() {
+  // This fixture tests external-object route and checkout ownership. Its
+  // in-memory DB has no source graph; keep that admission boundary explicit.
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    canActorReadIssuePrivacy: mockCurrentIssuePrivacy,
+  }));
   vi.doMock("../services/analytical-context-authority.js", () => ({
     assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
   }));
@@ -179,6 +186,7 @@ describe("external object routes", () => {
     registerRouteMocks();
     vi.resetAllMocks();
     mockAnalyticalPayloadAccess.mockResolvedValue(undefined);
+    mockCurrentIssuePrivacy.mockResolvedValue(true);
     mockIssueService.getById.mockResolvedValue(makeIssue());
     mockIssueService.assertCheckoutOwner.mockResolvedValue({ adoptedFromRunId: null });
     mockAccessService.hasPermission.mockResolvedValue(false);
@@ -219,7 +227,7 @@ describe("external object routes", () => {
     mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
     const res = await request(await createApp(boardActor())).get(`/api/issues/${issueId}/external-object-summary`);
     expect(res.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "board", userId: "board-user" }), { issueId });
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(expect.anything(), companyId, expect.objectContaining({ type: "board", userId: "board-user" }), { issueId }, undefined, { privacyLockMode: "read" });
     expect(mockExternalObjectsService.getIssueSummary).not.toHaveBeenCalled();
   });
 
@@ -241,11 +249,11 @@ describe("external object routes", () => {
     const app = await createApp(ownerActor());
 
     const summary = await request(app).get(`/api/issues/${issueId}/external-object-summary`);
-    expect(summary.status).toBe(403);
+    expect(summary.status).toBe(404);
     expect(mockExternalObjectsService.getIssueSummary).not.toHaveBeenCalled();
 
     const list = await request(app).get(`/api/issues/${issueId}/external-objects`);
-    expect(list.status).toBe(403);
+    expect(list.status).toBe(404);
     expect(mockExternalObjectsService.listForIssue).not.toHaveBeenCalled();
   });
 
@@ -286,6 +294,15 @@ describe("external object routes", () => {
 
     expect(res.status).toBe(403);
     expect(mockExternalObjectsService.getIssueSummaries).not.toHaveBeenCalled();
+  });
+
+  it("withholds manual refresh before checkout or external access when current sources are denied", async () => {
+    mockCurrentIssuePrivacy.mockResolvedValue(false);
+    const res = await request(await createApp(ownerActor()))
+      .post(`/api/issues/${issueId}/external-objects/refresh`).send({});
+    expect(res.status).toBe(404);
+    expect(mockIssueService.assertCheckoutOwner).not.toHaveBeenCalled();
+    expect(mockExternalObjectsService.refreshIssueObjects).not.toHaveBeenCalled();
   });
 
   it("requires active checkout ownership for agent manual refresh", async () => {

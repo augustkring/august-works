@@ -186,6 +186,16 @@ export interface NativeSessionGoalControl {
 export interface ExecuteNativeSessionOptions {
   /** Durable launch intent, after cleanup admission and before provider calls. */
   onSessionAdmission?: () => Promise<void>;
+  /** Server-owned per-turn preparation may add current Context and its source closure. */
+  prepareTurn?: (input: Parameters<NativeSession["startTurn"]>[0]) => Promise<{
+    turnInput: Parameters<NativeSession["startTurn"]>[0];
+    sourceClosure?: unknown;
+  }>;
+  /** Observe the exact prepared provider input before turn start. */
+  onTurnInput?: (input: Parameters<NativeSession["startTurn"]>[0], sourceClosure?: unknown) => Promise<string | void>;
+  /** Observe the provider-assigned turn identity after startTurn acknowledges. */
+  onTurnStarted?: (input: Parameters<NativeSession["startTurn"]>[0], turnId: string, dispatchId?: string,
+    sourceClosure?: unknown) => Promise<void>;
   input: NativeExecutionInput;
   backend: NativeSessionBackend;
   controlPlane: ControlPlanePort;
@@ -871,6 +881,53 @@ async function consumeTurn(
   const inputTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const handoffCleanupOperations = new Set<Promise<unknown>>();
   const eventIterator = session.events()[Symbol.asyncIterator]();
+  const concurrentChatDiagnostics =
+    process.env.PAPERCLIP_NATIVE_CONCURRENT_CHAT_DIAGNOSTICS === "1";
+  let diagnosticStage = "not_started";
+  let diagnosticEventType: string | null = null;
+  let diagnosticSourceSeq: number | null = null;
+  let diagnosticLastEventAt: number | null = null;
+  let diagnosticEventCount = 0;
+  let diagnosticReceivedEventCount = 0;
+  let diagnosticLastTerminalEventType: string | null = null;
+  let diagnosticLastSignificantEventType: string | null = null;
+  const diagnosticEventTypeCounts: Record<string, number> = {};
+  let diagnosticOverflowEventTypeCount = 0;
+  let diagnosticReportCount = 0;
+  const diagnosticStartedAt = Date.now();
+  let diagnosticStageStartedAt = Date.now();
+  let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
+  const markDiagnosticStage = (stage: string) => {
+    diagnosticStage = stage;
+    diagnosticStageStartedAt = Date.now();
+  };
+  if (concurrentChatDiagnostics) {
+    diagnosticTimer = setInterval(() => {
+      diagnosticReportCount += 1;
+      if (diagnosticReportCount > 12) {
+        if (diagnosticTimer !== undefined) clearInterval(diagnosticTimer);
+        diagnosticTimer = undefined;
+        return;
+      }
+      process.stderr.write(`${JSON.stringify({
+        diagnostic: "native_concurrent_chat_consume_turn_progress",
+        runId: input.binding.runId,
+        stage: diagnosticStage,
+        eventType: diagnosticEventType,
+        sourceSeq: diagnosticSourceSeq,
+        receivedEventCount: diagnosticReceivedEventCount,
+        committedEventCount: diagnosticEventCount,
+        eventTypeCounts: diagnosticEventTypeCounts,
+        overflowEventTypeCount: diagnosticOverflowEventTypeCount,
+        lastTerminalEventType: diagnosticLastTerminalEventType,
+        lastSignificantEventType: diagnosticLastSignificantEventType,
+        idleMs: diagnosticLastEventAt === null ? null : Date.now() - diagnosticLastEventAt,
+        stageElapsedMs: Date.now() - diagnosticStageStartedAt,
+        elapsedMs: Date.now() - diagnosticStartedAt,
+      })}\n`);
+    }, 5_000);
+    diagnosticTimer.unref?.();
+  }
   let stopConsumer = false;
   let rejectHandoff: ((error: unknown) => void) | null = null;
   const handoffFailure = new Promise<never>((_resolve, reject) => {
@@ -938,6 +995,7 @@ async function consumeTurn(
       };
     };
     while (true) {
+      markDiagnosticStage("event_iterator_next");
       const next = await eventIterator.next().catch((error) => {
         throw providerFailure ?? error;
       });
@@ -949,6 +1007,25 @@ async function consumeTurn(
         );
       }
       const event = next.value;
+      diagnosticEventType = event.eventType;
+      diagnosticSourceSeq = event.sourceSeq;
+      diagnosticLastEventAt = Date.now();
+      diagnosticReceivedEventCount += 1;
+      if (diagnosticEventTypeCounts[event.eventType] !== undefined ||
+        Object.keys(diagnosticEventTypeCounts).length < 32) {
+        diagnosticEventTypeCounts[event.eventType] =
+          (diagnosticEventTypeCounts[event.eventType] ?? 0) + 1;
+      } else {
+        diagnosticOverflowEventTypeCount += 1;
+      }
+      if (isTurnTerminal(event)) diagnosticLastTerminalEventType = event.eventType;
+      if (isTurnTerminal(event) || [
+        "turn.submitted", "turn.started", "turn.accepted", "run.result.proposed",
+        "run.result.accepted", "item.started", "item.completed", "session.failed",
+      ].includes(event.eventType)) {
+        diagnosticLastSignificantEventType = event.eventType;
+      }
+      markDiagnosticStage("append_event");
       const payload = event.payload as Record<string, unknown>;
       const settlingRequestId =
         [
@@ -968,6 +1045,8 @@ async function consumeTurn(
       });
       if (stopConsumer) throw new Error("native event consumer stopped");
       eventCount += receipt.disposition === "committed" ? 1 : 0;
+      diagnosticEventCount = eventCount;
+      markDiagnosticStage("process_event");
       highestContiguousSourceSeq = Math.max(
         highestContiguousSourceSeq,
         receipt.highestContiguousSourceSeq,
@@ -1157,6 +1236,7 @@ async function consumeTurn(
             };
           }
           if (!session.goal) throw new Error("native_session_goal_unavailable");
+          markDiagnosticStage("session_goal_get");
           const authoritativeGoal = await session.goal({ action: "get" });
           // `goal(get)` emits an authoritative goal snapshot. Keep consuming
           // until that snapshot is durably appended so the server projection
@@ -1235,6 +1315,7 @@ async function consumeTurn(
     }
     throw error;
   } finally {
+    if (diagnosticTimer !== undefined) clearInterval(diagnosticTimer);
     stopConsumer = true;
     for (const inputTimer of inputTimers.values()) clearTimeout(inputTimer);
     inputTimers.clear();
@@ -2359,13 +2440,21 @@ export async function executeNativeSession(
               "Use the existing session context to invoke exactly one paperclip_finish or paperclip_block with the accurate current disposition, then stop without additional user-facing prose.",
             ].join("\n");
           }
-          await session.startTurn({
+          const turnInput: Parameters<NativeSession["startTurn"]>[0] = {
             message: { role: "user", text: JSON.stringify(modelEnvelope) },
             ...(recovered && modelEnvelope.schema === "paperclip.native-continuation.v1"
               ? { continuation: true as const } : {}),
             requestedCollaborationMode:
               "executionMode" in input ? input.executionMode : "default",
-          });
+          };
+          const prepared = await options.prepareTurn?.(structuredClone(turnInput));
+          const preparedInput = prepared?.turnInput ?? turnInput;
+          const sourceClosure = prepared?.sourceClosure;
+          const dispatchId = await options.onTurnInput?.(structuredClone(preparedInput), sourceClosure);
+          const acknowledgedInput = structuredClone(preparedInput);
+          const startedTurn = await session.startTurn(preparedInput);
+          await options.onTurnStarted?.(acknowledgedInput, startedTurn.turnId,
+            typeof dispatchId === "string" ? dispatchId : undefined, sourceClosure);
           await checkpoint();
         }
       } catch (error) {

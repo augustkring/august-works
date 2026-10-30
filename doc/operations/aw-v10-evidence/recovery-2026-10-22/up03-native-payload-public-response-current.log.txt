@@ -1,0 +1,13 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[05:50:17] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"095afab0-0c76-4e07-9d66-1f88dc203c75","actorType":"board","actorIdentityHash":"bOqDeEwcRAGPq24v","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"TO3Ch_L70ZSCsLYy","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":476,"statusCode":200,"responseBytes":2538,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  05:49:15
+   Duration  62.42s (transform 31.51s, setup 284ms, import 45.93s, tests 15.56s, environment 0ms)
+

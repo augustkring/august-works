@@ -1,0 +1,37 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts (9 tests | 9 skipped) 15312ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases
+Error: Failed query: insert into "instance_settings" ("id", "singleton_key", "default_environment_id", "general", "experimental", "created_at", "updated_at") values (default, $1, default, $2, $3, default, default)
+params: default,{},{"progressive_shell_v9":true,"admin_support_v6":true}
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/v10-support-cases.integration.test.ts:58:5
+     56|       id: randomUUID(), userId, name: "Native support test credential"…
+     57|     })));
+     58|     await db.insert(instanceSettings).values({ singletonKey: "default"…
+       |     ^
+     59|       progressive_shell_v9: true, admin_support_v6: true,
+     60|     } });
+
+Caused by: PostgresError: duplicate key value violates unique constraint "instance_settings_singleton_key_idx"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23505', detail: 'Key (singleton_key)=(default) already exists.', schema_name: 'public', table_name: 'instance_settings', constraint_name: 'instance_settings_singleton_key_idx', file: 'nbtinsert.c', routine: '_bt_check_unique', query: 'insert into "instance_settings" ("id", "singleton_key", "default_environment_id", "general", "experimental", "created_at", "updated_at") values (default, $1, default, $2, $3, default, default)', parameters: [ 'default', '{}', '{"progressive_shell_v9":true,"admin_support_v6":true}' ], args: [ 'default', '{}', '{"progressive_shell_v9":true,"admin_support_v6":true}' ], types: [ 25, 3802, 3802 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  9 skipped (9)
+   Start at  17:23:45
+   Duration  67.07s (transform 35.03s, setup 255ms, import 51.08s, tests 15.31s, environment 0ms)
+

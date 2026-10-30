@@ -1,0 +1,16 @@
+
+> paperclip@ test:help-docs /workspace/blentera-v10
+> node --test scripts/check-help-docs.test.mjs
+
+✔ accepts restricted metadata and existing local Help Center links (5.104398ms)
+✔ rejects incomplete or invalid Help article metadata (0.906208ms)
+✔ rejects broken local Markdown link targets (0.903485ms)
+✔ rejects duplicate Help article IDs in the Help Center navigation (0.78113ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 68.784185

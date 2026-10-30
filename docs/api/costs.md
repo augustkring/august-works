@@ -27,7 +27,23 @@ Typically reported automatically by adapters after each heartbeat.
 GET /api/companies/{companyId}/costs/summary
 ```
 
-Returns total spend, budget, and utilization for the current month.
+Returns recorded period spend, budget, and utilization, plus recorded provider cost events attached to successful heartbeat runs finished in the selected range. The cohort joins existing cost events by company and heartbeat run, excludes failed runs, reports runs without a linked event and unpriced events, and only returns an average when every successful run has at least one linked price. Estimated provider events produce an explicitly estimated average. `providerCostPerSuccessfulRunCoverage` is `recorded_events_only`: it describes stored events and does not verify that every provider call or charge is represented. This is a recorded-event average, not a complete cost-per-outcome measure. It excludes failed attempts and runtime, storage, network, tools, analytics, and support costs, so it is not total cost to serve.
+
+The `providerCostPerSuccessfulRunStatus` field is `reported_events`, `estimated_events`, `incomplete_events`, or `no_successful_runs`. When it is `incomplete_events` or `no_successful_runs`, `providerCostPerSuccessfulRunCents` is `null` rather than implying zero cost. The cohort numerator is `successfulRunProviderCostCents`; the response includes the successful-run count and missing/unpriced event counts.
+
+```json
+{
+  "successfulRunCount": 3,
+  "successfulRunsWithCostEvents": 2,
+  "successfulRunsWithoutCostEvents": 1,
+  "successfulRunProviderCostCents": 145,
+  "successfulRunEstimatedEventCount": 0,
+  "successfulRunUnpricedEventCount": 0,
+  "providerCostPerSuccessfulRunCoverage": "recorded_events_only",
+  "providerCostPerSuccessfulRunCents": null,
+  "providerCostPerSuccessfulRunStatus": "incomplete_events"
+}
+```
 
 ## Costs by Agent
 

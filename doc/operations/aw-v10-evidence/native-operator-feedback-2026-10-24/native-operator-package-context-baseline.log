@@ -1,0 +1,58 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v7-agent-packages.integration.test.ts (113 tests | 3 failed | 110 skipped) 9845ms
+     × install configures native pins without granting company or connection authority; activation permits a bounded internal draft 550ms
+     × Learning proposes a native update with analytical signal false, requires human review and erases derived prose with rollout disabled 297ms
+     × Learning proposes a native update with analytical signal true, requires human review and erases derived prose with rollout disabled 671ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-agent-packages.integration.test.ts > V7 native internal package installation and activation > install configures native pins without granting company or connection authority; activation permits a bounded internal draft
+Error: Context requires its actual accountable run
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/context/context-manifest.ts:191:17
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ withProviderDeadline src/services/context/context-engine.ts:151:12
+ ❯ withContextStageDeadline src/services/context/context-engine.ts:181:12
+ ❯ Object.assemble src/services/context/context-engine.ts:736:30
+ ❯ Object.assess src/services/readiness/readiness-service.ts:126:25
+ ❯ review src/services/agent-packages/package-service.ts:479:26
+ ❯ src/services/agent-packages/package-service.ts:1631:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-agent-packages.integration.test.ts > V7 native internal package installation and activation > Learning proposes a native update with analytical signal false, requires human review and erases derived prose with rollout disabled
+ FAIL  |@paperclipai/server| src/__tests__/v7-agent-packages.integration.test.ts > V7 native internal package installation and activation > Learning proposes a native update with analytical signal true, requires human review and erases derived prose with rollout disabled
+Error: Derived source access is unavailable
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ derivedRoots src/services/memory/derived-memory.ts:51:75
+ ❯ Object.createInTransaction src/services/learning/learning-service.ts:111:19
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV7ActivityTransaction src/services/v7-mutations.ts:7:17
+ ❯ src/__tests__/v7-agent-packages.integration.test.ts:1589:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 110 skipped (113)
+   Start at  05:21:12
+   Duration  42.40s (transform 22.59s, setup 146ms, import 32.16s, tests 9.85s, environment 0ms)
+

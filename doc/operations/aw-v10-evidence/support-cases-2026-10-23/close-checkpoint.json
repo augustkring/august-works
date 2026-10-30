@@ -1,0 +1,78 @@
+{
+  "checkpoint": "V10 customer close command and support case UI regressions",
+  "recordedAt": "2026-10-23T18:24:56.997468+00:00",
+  "qualificationState": "Scoped tests and package compilers passed; complete V10 remains open",
+  "scope": "Close action through the existing local support-case API and customer UI only. External gateway delivery, hosted operation, and full product release are not qualified.",
+  "sourcePins": {
+    "api": "support-cases-close-final-pins.txt",
+    "ui": "support-cases-close-ui-action-pins.txt",
+    "apiPinsMatchCurrent": true,
+    "uiPinsMatchCurrent": true,
+    "note": "Native API/shared first four source pins remain unchanged from the native 29-test run. Final UI/action pins match all eight current sources. Older mixed pin files predate the later UI-only action/focus refinements; they are historical source receipts."
+  },
+  "validation": {
+    "api": {
+      "result": "15 API tests plus 14 shared tests passed (29 total)",
+      "durationSeconds": 160.01,
+      "log": "support-cases-close-final.log",
+      "exit": "support-cases-close-final.exit"
+    },
+    "apiFirstRun": {
+      "result": "13 API tests passed",
+      "durationSeconds": 113.94,
+      "log": "support-cases-close-first.log",
+      "exit": "support-cases-close-first.exit"
+    },
+    "sharedTypes": {
+      "result": "passed",
+      "log": "support-cases-close-shared-types.log",
+      "exit": "support-cases-close-shared-types.exit"
+    },
+    "ui": {
+      "result": "11 UI tests passed after the fixture constructor correction and visible-limit updates",
+      "durationSeconds": 60.1,
+      "log": "support-cases-close-ui-final.log",
+      "exit": "support-cases-close-ui-final.exit"
+    },
+    "serverCompiler": {
+      "result": "passed",
+      "exitCode": 0,
+      "log": "support-cases-close-server-types.log",
+      "exit": "support-cases-close-server-types.exit"
+    },
+    "finalUiCompiler": {
+      "result": "passed",
+      "exitCode": 0,
+      "log": "support-cases-close-ui-types.log",
+      "exit": "support-cases-close-ui-types.exit"
+    },
+    "uiFinalAction": {
+      "result": "11 passed, including keyboard focus on Cancel/Resume and unchanged closure retry",
+      "durationSeconds": 19.74,
+      "log": "support-cases-close-ui-action.log",
+      "exit": "support-cases-close-ui-action.exit"
+    },
+    "tokenGates": {
+      "result": "passed",
+      "exitCode": 0,
+      "log": "support-cases-close-ui-action-token-gates.log",
+      "exit": "support-cases-close-ui-action-token-gates.exit"
+    }
+  },
+  "implementationNotes": [
+    "Closing an already CLOSED case preserves CLOSED and returns without changing the version, retention horizon, events, or activity effects.",
+    "The close statement uses the stored account locale for fixed EN/DA copy and the existing customer_reply event kind; no migration or invented support-authored status event was added.",
+    "Closing adds only a fixed customer action message under the original stored case policy. It remains possible when new intake is unavailable; it does not change recipient or processing policy.",
+    "Visible description, reply and subject limits use their separate shared values. Sending/reply/closing states expose the active action; Cancel/Resume restores keyboard focus and keeps the mounted draft."
+  ],
+  "interpretation": [
+    "The final API count contains the shared-schema run and is not additive to the first API run.",
+    "The final UI run supersedes the earlier 11-test UI run; the earlier run passed before the fixture-constructor correction and final visible-limit changes.",
+    "The route reconstruction and expiry tests enforce the native database twenty-per-ten-minute budget. They do not prove a real process restart."
+  ],
+  "limits": [
+    "The close event remains local with delivery pending; no external provider or acknowledgement is configured.",
+    "This local regression checkpoint does not establish hosted operation, provider delivery, production retention, operator workflows, or complete V10 acceptance."
+  ],
+  "archivedScratch": "The matching support-cases-close scratch logs, exits, pins, and intermediate source captures are archived alongside this checkpoint. Intermediate captures are chronology evidence, not labels for failed tests."
+}

@@ -1,0 +1,9 @@
+{
+  "server/src/services/agent-packages/package-service.ts": "382cba01b5d84812a6a8dc38533f567cc8d2c5e28f09d0ef4fbd70b1af52a38e",
+  "server/src/services/readiness/readiness-service.ts": "715c54d58b64cce3cfa74b68fde0e7ff6e02ee47f63d70890d2740e192d7fc49",
+  "server/src/__tests__/v7-agent-packages.integration.test.ts": "e7958fe12f81c9a997fb2fbc31f152ec083035719bd820957ef98ae02f90d1a0",
+  "server/src/services/agent-packages/execution-gate.ts": "afd857678c9c43aede2a401f965f38f4bf9ecb53c34ab2119df6dc497004c450",
+  "packages/db/src/migrations/0371_amused_wilson_fisk.sql": "e497a4b1c50ca368ecb5ea8605209d53286f2e231e56c09d9e4a50621599f52d",
+  "packages/db/src/migrations/0374_specialist_release_qualification.sql": "84ee905317ceb9196d6bed8bb5775db58b2d55c327ef6f13e07c556fabd2f827",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

@@ -21,6 +21,9 @@ export function legacyExecutionNeedsReconciliation(
     !["failed", "timed_out", "interrupted", "cancelled"].includes(run.status)
   )
     return false;
+  // A stalled ACP tool may have applied an effect before its updates stopped.
+  // Do not let the conversation-continuation policy bypass the outcome hold.
+  if (run.errorCode === "acpx_tool_stalled") return true;
   // A fresh model turn cannot repair or verify unrestored files.
   if (run.resultJson?.workspaceRestoreFailure === "restore_unsafe_archive") return true;
   // A fresh conversation turn lets the agent decide what remains. The retry

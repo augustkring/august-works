@@ -1,0 +1,60 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (23 tests | 2 failed | 21 skipped) 7377ms
+     × preserves unchanged Project roadmap policy captures and invalidates a changed policy 197ms
+     × invalidates a changed plugin Project reset while preserving an unchanged reset 44ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > preserves unchanged Project roadmap policy captures and invalidates a changed policy
+Error: Failed query: update "projects" set "roadmap_policy" = $1, "updated_at" = $2 where "projects"."id" = $3
+params: {"allowAgentForecast":true,"allowLowRiskAgentScheduleUpdates":false,"scheduleToleranceDays":1,"fieldOwnership":{"title":"internal","status":"internal","assignee":"internal","plannedDates":"internal","forecast":"internal"},"externalSourceRef":null},2026-10-23T22:28:04.547Z,d5800423-32d8-4ae5-8ad7-6c7f87a97099
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/project-control.ts:81:128
+
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV5ActivityTransaction src/services/v5-mutations.ts:8:18
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:382:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "projects" set "roadmap_policy" = $1, "updated_at" = $2 where "projects"."id" = $3', parameters: [ '{"allowAgentForecast":true,"allowLowRiskAgentScheduleUpdates":false,"scheduleToleranceDays":1,"fieldOwnership":{"title":"internal","status":"internal","assignee":"internal","plannedDates":"internal","forecast":"internal"},"externalSourceRef":null}', '2026-10-23T22:28:04.547Z', 'd5800423-32d8-4ae5-8ad7-6c7f87a97099' ], args: [ '{"allowAgentForecast":true,"allowLowRiskAgentScheduleUpdates":false,"scheduleToleranceDays":1,"fieldOwnership":{"title":"internal","status":"internal","assignee":"internal","plannedDates":"internal","forecast":"internal"},"externalSourceRef":null}', '2026-10-23T22:28:04.547Z', 'd5800423-32d8-4ae5-8ad7-6c7f87a97099' ], types: [ 3802, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > invalidates a changed plugin Project reset while preserving an unchanged reset
+Error: Failed query: update "projects" set "name" = $1, "description" = $2, "status" = $3, "color" = $4, "updated_at" = $5 where ("projects"."company_id" = $6 and "projects"."id" = $7)
+params: Changed plugin project,Declared project body,in_progress,,2026-10-23T22:28:04.589Z,f9c3540b-6467-4188-9d37-45b0ba034976,863165d4-43bf-4a8a-a269-799cc301a838
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ Object.resolveManagedProject src/services/projects.ts:775:13
+    773|         if (existingProject) {
+    774|           if (input.reset) {
+    775|             await db
+       |             ^
+    776|               .update(projects)
+    777|               .set({
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:405:19
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "projects" set "name" = $1, "description" = $2, "status" = $3, "color" = $4, "updated_at" = $5 where ("projects"."company_id" = $6 and "projects"."id" = $7)', parameters: [ 'Changed plugin project', 'Declared project body', 'in_progress', null, '2026-10-23T22:28:04.589Z', 'f9c3540b-6467-4188-9d37-45b0ba034976', '863165d4-43bf-4a8a-a269-799cc301a838' ], args: [ 'Changed plugin project', 'Declared project body', 'in_progress', null, '2026-10-23T22:28:04.589Z', 'f9c3540b-6467-4188-9d37-45b0ba034976', '863165d4-43bf-4a8a-a269-799cc301a838' ], types: [ 25, 25, 25, 25, 1184, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 21 skipped (23)
+   Start at  22:27:23
+   Duration  41.62s (transform 22.45s, setup 294ms, import 33.47s, tests 7.38s, environment 0ms)
+

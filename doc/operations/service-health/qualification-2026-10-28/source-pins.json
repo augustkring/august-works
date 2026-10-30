@@ -1,0 +1,57 @@
+{
+  "qualification": "V10-051 truthful unknown customer impact projection",
+  "gitHeadAtCapture": "9d02e97d7c47d3670dc25cf5da72f857aace71f8",
+  "scope": "The public provider DTO states account impact is unknown. No tenant targeting is implemented.",
+  "files": [
+    {
+      "path": "packages/shared/src/service-health.ts",
+      "sha256": "7973fba774410d46126abe2aea133ecb4d91d56c6f87634dd7e233733a3b0e98",
+      "worktreeModified": true
+    },
+    {
+      "path": "packages/shared/src/product-identity.ts",
+      "sha256": "525db6a5605e5b3e8ceb2d19c6206a0612ece2b5c1b09d58a794456b6b8ebdb0",
+      "worktreeModified": false
+    },
+    {
+      "path": "server/src/services/experience/service-health.ts",
+      "sha256": "a7bbe53bb978cb192b1b598bcc34f3afc314a08c26f7cc13438d6c34d4406972",
+      "worktreeModified": true
+    },
+    {
+      "path": "server/src/services/experience/service-health.test.ts",
+      "sha256": "354595f68cb487d49fce62ca79a5a994fcfc35586cb8f589812dda13934f56b9",
+      "worktreeModified": true
+    },
+    {
+      "path": "server/src/__tests__/tool-gateway-service.test.ts",
+      "sha256": "7db32a2d2b3f901b5679b8ec46008b5a986d9657cc51868bc2233d8b9254b69d",
+      "worktreeModified": true
+    },
+    {
+      "path": "ui/src/components/ServiceHealth.tsx",
+      "sha256": "ebbbe90c5078d9d89e3dddd545cd7fb628579baa1768cd44e19739719f5072e9",
+      "worktreeModified": true
+    },
+    {
+      "path": "ui/src/components/ServiceHealth.test.tsx",
+      "sha256": "2030b1f93652f9ad5860ade568a113863980bde212f3d1f49643739b7cfbad7a",
+      "worktreeModified": true
+    },
+    {
+      "path": "ui/src/i18n/experience/en.json",
+      "sha256": "00cf4eed56a64f09612a58c0f77b4ccde2bb65a96126915b4b2c59978bdeb8e0",
+      "worktreeModified": true
+    },
+    {
+      "path": "ui/src/i18n/experience/da.json",
+      "sha256": "70cd7aca135bdacd84ff17b5e47cdc6a0800a57eec2ad3bbfe0f4729fda4e616",
+      "worktreeModified": true
+    },
+    {
+      "path": "doc/operations/service-health/README.md",
+      "sha256": "efd8df238577726d60eaa88f1020ad9934d0eb0615e0135d2fba30d587c4c8d0",
+      "worktreeModified": true
+    }
+  ]
+}

@@ -16,6 +16,7 @@ import {
   seedPaperclipSemanticConformance,
   type PaperclipSemanticConformanceIds,
 } from "./helpers/paperclip-semantic-conformance.js";
+import { enableV5ForTest } from "./helpers/v5-fixtures.js";
 
 vi.hoisted(() => {
   process.env.PAPERCLIP_HOME = "/tmp/paperclip-semantic-conformance-home";
@@ -39,6 +40,7 @@ describeEmbedded("Paperclip semantic mock/production conformance", () => {
   const ids: PaperclipSemanticConformanceIds = {
     companyId: base.companyId,
     actorId: base.actorId,
+    responsibleUserId: "semantic-conformance-human",
     foreignCompanyId: "20000000-0000-4000-8000-000000000002",
     foreignTaskId: base.foreignTaskId,
     blockerTaskId: base.blockerTaskId,
@@ -62,6 +64,7 @@ describeEmbedded("Paperclip semantic mock/production conformance", () => {
   beforeAll(async () => {
     temporary = await startEmbeddedPostgresTestDatabase("paperclip-semantic-conformance-");
     const db = createDb(temporary.connectionString);
+    await enableV5ForTest(db);
     await seedPaperclipSemanticConformance(db, ids);
     mock = await CapabilityMockSemanticConformanceAdapter.create();
   }, 30_000);

@@ -10,6 +10,9 @@ export const companyMemberships = pgTable(
     principalId: text("principal_id").notNull(),
     status: text("status").notNull().default("active"),
     membershipRole: text("membership_role"),
+    // Null permits one-time role defaults; a timestamp freezes an explicit
+    // permission set against compatibility re-seeding.
+    permissionsInitializedAt: timestamp("permissions_initialized_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

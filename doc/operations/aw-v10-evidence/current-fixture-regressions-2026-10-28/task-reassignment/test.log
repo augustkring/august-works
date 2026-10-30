@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > moves existing work once, persists context and audit, and dispatches a guarded wake 3126ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > preserves blocked and does not wake work prematurely 1228ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > preserves backlog and does not wake work prematurely 1034ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > replays across a replacement caller run without a second mutation 1645ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > repairs a dispatch failure by replaying the committed receipt 1639ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > rejects key reuse with different input and stale ownership/version 1505ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > stops active execution before transferring ownership 776ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > does not transfer ownership if stop fails or a new run races the stop 876ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > restores the prior owner after a cancelled handoff loses version 590ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > restores the prior owner after a cancelled handoff loses caller 403ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > restores the prior owner after a cancelled handoff loses stop-error 386ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > does not compensate over a newer owner decision 616ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > does not compensate over a newer closed decision 585ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > does not compensate over a newer new-run decision 609ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > rejects done before interrupting work 365ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > rejects cancelled before interrupting work 408ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > rejects in_review before interrupting work 382ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > rejects conversations and the caller’s own task 422ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > denies reassignment from planning mode 210ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > denies reassignment from ask mode 210ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > denies reassignment from skill_test mode 201ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > denies foreign targets and unavailable assignees 1137ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > rejects an ownership ABA race through the existing issue service 611ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > respects protected assignment policies instead of inheriting board authority 492ms
+ ✓ src/services/native-runtime/task-reassignment.test.ts > runner task reassignment > rejects writes after the caller loses its run binding 178ms
+
+ Test Files  1 passed (1)
+      Tests  25 passed (25)
+   Start at  12:19:25
+   Duration  37.96s (transform 9.73s, setup 85ms, import 13.95s, tests 23.79s, environment 0ms)
+

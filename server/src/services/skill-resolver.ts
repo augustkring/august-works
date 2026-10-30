@@ -2,7 +2,7 @@ import type {NativeReadScope} from "./analytical-reader.js";
 import { assertLearningAssetCurrent } from "./learning/learning-assets.js";
 import { skillDependencyStates } from "./skill-dependencies.js";
 import { and, asc, eq } from "drizzle-orm";
-import { companySkills, companySkillVersions, companySkillDependencies, type Db } from "@paperclipai/db";
+import { companySkills, companySkillVersions, companySkillDependencies, agentExecutionManifests, agentExecutionManifestItems, heartbeatRuns, type Db } from "@paperclipai/db";
 import type { ExecutionManifestSkill, RolePackItem } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -25,14 +25,16 @@ export function skillTaskMatches(query: string, triggers: readonly string[], exc
 }
 
 export function skillResolverService(db: Db) {
-  async function authorizedVersion(actor: AuthorizationActor, companyId: string, skillId: string, versionId: string, test = false,readScope?:NativeReadScope) {
+  async function authorizedVersionInternal(actor: AuthorizationActor, companyId: string, skillId: string, versionId: string, test: boolean, readScope: NativeReadScope | undefined, exactManifestPin: boolean) {
     await assertV5Authorization(db, actor, companyId, "company_scope:read");
     const [row] = await db.select({ skill: companySkills, version: companySkillVersions }).from(companySkills)
       .innerJoin(companySkillVersions, and(eq(companySkillVersions.companyId, companyId), eq(companySkillVersions.companySkillId, companySkills.id), eq(companySkillVersions.id, versionId)))
       .where(and(eq(companySkills.companyId, companyId), eq(companySkills.id, skillId))).limit(1);
     if (!row || !(await companySkillService(db).canReadSkill(companyId, skillId, actor,readScope,versionId))) throw notFound("Skill version not found");
     await assertLearningAssetCurrent(db, companyId, "skill_version", versionId,actor,readScope);
-    if (!test && (row.skill.lifecycleState !== "active" || row.skill.activeVersionId !== versionId || row.version.state !== "active" || row.version.visibility !== "company")) throw conflict("The pinned Skill is no longer active; revalidation is required");
+    const currentActiveVersion = row.skill.lifecycleState === "active" && row.skill.activeVersionId === versionId && row.version.state === "active";
+    const retainedSupersededPin = exactManifestPin && ["active", "needs_revalidation", "degraded"].includes(row.skill.lifecycleState) && row.version.state === "superseded";
+    if (!test && ((!currentActiveVersion && !retainedSupersededPin) || row.version.visibility !== "company")) throw conflict("The pinned Skill is no longer active; revalidation is required");
     if (row.skill.compatibility !== "compatible" || (!test && row.skill.nextReviewAt && row.skill.nextReviewAt <= new Date())) throw conflict("Skill compatibility or review is overdue");
     const policy = companySkillPolicyService(db);
     const principal = actor.type === "agent" ? await policy.resolveAgentPrincipal(companyId, actor.agentId!) : { type: "board" as const, id: actor.userId ?? "local-board", role: null };
@@ -43,8 +45,60 @@ export function skillResolverService(db: Db) {
     if (freshDependencies.some((d) => d.required && d.status !== "current")) throw conflict("A required Skill dependency needs revalidation");
     return row;
   }
+  async function authorizedVersion(actor: AuthorizationActor, companyId: string, skillId: string, versionId: string, test = false, readScope?: NativeReadScope) {
+    return authorizedVersionInternal(actor, companyId, skillId, versionId, test, readScope, false);
+  }
+  async function authorizedCurrentManifestVersion(actor: AuthorizationActor, companyId: string, skillId: string, versionId: string, readScope?: NativeReadScope) {
+    if (actor.type !== "agent" || actor.companyId !== companyId || !actor.agentId || !actor.runId || !actor.onBehalfOfUserId) {
+      throw forbidden("A retained Skill version requires the current native execution");
+    }
+    const [pin] = await db.select({ itemId: agentExecutionManifestItems.id }).from(agentExecutionManifestItems)
+      .innerJoin(agentExecutionManifests, and(
+        eq(agentExecutionManifests.companyId, agentExecutionManifestItems.companyId),
+        eq(agentExecutionManifests.id, agentExecutionManifestItems.manifestId),
+      ))
+      .innerJoin(heartbeatRuns, and(
+        eq(heartbeatRuns.companyId, agentExecutionManifests.companyId),
+        eq(heartbeatRuns.id, agentExecutionManifests.runId),
+        eq(heartbeatRuns.agentId, agentExecutionManifests.agentId),
+        eq(heartbeatRuns.responsibleUserId, actor.onBehalfOfUserId),
+        eq(heartbeatRuns.status, "running"),
+        eq(heartbeatRuns.runtimeMode, "native"),
+      ))
+      .where(and(
+        eq(agentExecutionManifests.companyId, companyId),
+        eq(agentExecutionManifests.runId, actor.runId),
+        eq(agentExecutionManifests.agentId, actor.agentId),
+        eq(agentExecutionManifestItems.type, "skill"),
+        eq(agentExecutionManifestItems.ref, skillId),
+        eq(agentExecutionManifestItems.versionRef, versionId),
+      )).limit(1);
+    if (!pin) throw forbidden("The superseded Skill version is outside the current immutable execution manifest");
+    return authorizedVersionInternal(actor, companyId, skillId, versionId, false, readScope, true);
+  }
   return {
     authorizedVersion,
+    authorizedCurrentManifestVersion,
+    suggestionCandidates: async (actor: AuthorizationActor, companyId: string, requirements: readonly RolePackItem[], readScope?: NativeReadScope) => {
+      await assertV5Enabled(db, "skill_resolver_v5");
+      await assertV5Authorization(db, actor, companyId, "company_scope:read");
+      const columns = { id: companySkills.id, key: companySkills.key, slug: companySkills.slug, name: companySkills.name,
+        activeVersionId: companySkills.activeVersionId };
+      const rows = await db.select(columns).from(companySkills).where(and(eq(companySkills.companyId, companyId), eq(companySkills.lifecycleState, "active")))
+        .orderBy(asc(companySkills.key)).limit(101);
+      if (rows.length > 100) throw conflict("Skill suggestion catalog exceeds its bounded candidate set");
+      const required = new Set(requirements.filter(item => item.type === "required_skill").map(item => item.ref));
+      const result: Array<{ skillId: string; versionId: string; key: string; name: string }> = [];
+      for (const row of rows) {
+        const versionId = row.activeVersionId;
+        if (!versionId || required.has(row.id) || required.has(row.key) || required.has(row.slug)) continue;
+        try { await authorizedVersion(actor, companyId, row.id, versionId, false, readScope); }
+        catch { continue; }
+        result.push({ skillId: row.id, versionId, key: row.key, name: row.name });
+      }
+      if (result.length > 50) throw conflict("Skill decision candidate set exceeds 50 entries; no model request was made");
+      return result;
+    },
     resolve: async (actor: AuthorizationActor, companyId: string, query: string, requirements: readonly RolePackItem[], testSelection?: { skillId: string; versionId: string },readScope?:NativeReadScope) => {
       await assertV5Enabled(db, "skill_resolver_v5");
       await assertV5Authorization(db, actor, companyId, "company_scope:read");

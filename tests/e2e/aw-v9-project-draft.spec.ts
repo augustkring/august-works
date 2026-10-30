@@ -1,5 +1,7 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+registerEnglishAccountLocaleIsolation(test);
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(
@@ -8,7 +10,7 @@ async function json(response: APIResponse) {
   return response.json();
 }
 
-// Original local-board/project APIs and current creator-bound receipt. Only
+// Original authenticated-project APIs and current creator-bound receipt. Only
 // the transport of the single committed POST and first receipt GET is aborted.
 // This is software evidence, not hosted identity or live business acceptance.
 test("an explicit project draft recovers a lost Native acknowledgement after reload through reads without creating another project or running work", async ({
@@ -19,6 +21,8 @@ test("an explicit project draft recovers a lost Native acknowledgement after rel
   const flags = await json(
     await request.get("/api/instance/settings/experimental"),
   );
+  const session = await json(await request.get("/api/auth/get-session"));
+  const expectedActorId = `user:${session.user.id}`;
   await json(
     await request.patch("/api/instance/settings/experimental", {
       data: {
@@ -41,7 +45,7 @@ test("an explicit project draft recovers a lost Native acknowledgement after rel
     if (route.request().method() !== "POST") return route.continue();
     expect(
       new URL(route.request().url()).searchParams.get("expectedActorId"),
-    ).toBe("local-board");
+    ).toBe(expectedActorId);
     attempts.push(route.request().postDataJSON());
     expect(attempts).toHaveLength(1);
     key = attempts[0]!.idempotencyKey as string;
@@ -55,7 +59,7 @@ test("an explicit project draft recovers a lost Native acknowledgement after rel
   });
   await page.route(`**${base}/projects/create-receipts/**`, async (route) => {
     expect(route.request().method()).toBe("GET");
-    expect(new URL(route.request().url()).searchParams.get("expectedActorId")).toBe("local-board");
+    expect(new URL(route.request().url()).searchParams.get("expectedActorId")).toBe(expectedActorId);
     reads++;
     if (reads === 1) return route.abort("failed");
     await route.continue();

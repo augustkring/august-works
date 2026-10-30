@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, asc, desc, eq, getTableColumns, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   agentWakeupRequests,
@@ -14,6 +15,9 @@ import { sanitizeQuarantinedCommentForHigherTrust } from "./source-trust.js";
 import { hasConversationContinuationPolicy } from "./conversation-continuation.js";
 import { queuedCommentIdsFromWakePayload } from "./issue-queued-comment-queue.js";
 import { childReviewOutcomes } from "./native-runtime/child-review-outcomes.js";
+import { canActorReadHeartbeatRunPrivacy, type AuthorizationActor } from "./authorization.js";
+import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
+import type { NativeCommentSourceCapture } from "./agent-conversations.js";
 
 export class StaleExecutionContinuationError extends Error {
   constructor(readonly code: "continuation_task_ownership_changed") {
@@ -123,6 +127,8 @@ export async function buildExecutionContinuation(input: {
   runId?: string;
   summary: string | null;
   exposeLowTrustRaw: boolean;
+  /** Selected message sources only; interactions and prior results are separate. */
+  onCommentSourceCapture?: (capture: NativeCommentSourceCapture) => void;
 }): Promise<ExecutionContinuationEnvelope> {
   const { db, companyId, issueId } = input;
   const [issue] = await db
@@ -135,8 +141,27 @@ export async function buildExecutionContinuation(input: {
     ["done", "cancelled"].includes(issue.status)
   )
     throw new StaleExecutionContinuationError("continuation_task_ownership_changed");
+  // Preflight has no current run and cannot borrow a saved owner's authority.
+  // Dispatch uses only the actual matching running receiver and its current Human.
+  let outcomeReader: AuthorizationActor = { type: "none" };
+  const [receiver] = input.runId ? await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, companyId),
+    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"),
+  )).limit(1) : [];
+  if (receiver) {
+    const refs = [receiver.issueId, receiver.nativeIssueId, object(receiver.contextSnapshot).issueId, object(receiver.contextSnapshot).taskId];
+    const reader: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId, agentId: input.agentId,
+      runId: receiver.id, onBehalfOfUserId: receiver.responsibleUserId };
+    if (refs.some(ref => typeof ref === "string" && ref.toLowerCase() === issueId.toLowerCase()) &&
+      await canActorReadHeartbeatRunPrivacy(db, reader, receiver)) outcomeReader = reader;
+  }
   const rows = await db
-    .select()
+    .select({
+      ...getTableColumns(issueComments),
+      ...(input.onCommentSourceCapture ? {
+        sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+      } : {}),
+    })
     .from(issueComments)
     .where(
       and(
@@ -372,7 +397,9 @@ export async function buildExecutionContinuation(input: {
     (hasConversationContinuationPolicy(lastTerminal.result) ||
       lastTerminal.status === "interrupted" || lastTerminal.errorCode === "process_lost")
     ? lastTerminal.id : undefined);
-  return {
+  // Every consumer, including completion contracts and safe replacement,
+  // receives the same secret-redacted evidence after authority validation.
+  const envelope = await createRunSecretRedactionRegistry(db).redactForIssue<ExecutionContinuationEnvelope>(companyId, issueId, {
     ...(interruptedRunId ? { interruptedRunId } : {}),
     ...(resumeDelta ? { resumeDelta } : {}),
     recoveryOutcomes: reconciliations
@@ -403,7 +430,7 @@ export async function buildExecutionContinuation(input: {
         kind: row.kind,
         status: row.status,
         result: row.result,
-      })), ...await childReviewOutcomes(db, companyId, issueId)],
+      })), ...await childReviewOutcomes(db, companyId, issueId, outcomeReader)],
     // Low-trust evidence only: renderPaperclipWakePrompt removes completedWork
     // from requestContext and encodes it in the fenced, non-authoritative
     // continuation-evidence section. It cannot supply objective or authority.
@@ -419,5 +446,24 @@ export async function buildExecutionContinuation(input: {
       throughCommentId: messages.at(-1)?.id ?? null,
       summaryThroughCommentId: null,
     },
-  };
+  });
+  if (input.onCommentSourceCapture) {
+    // Match final redacted renditions to their own selected rows, never a new
+    // live lookup or the independently selected wake/replay comment version.
+    const selectedById = new Map(rows.map(row => [row.id, row]));
+    for (const message of envelope.messages) {
+      if (message.deleted) continue;
+      const selected = selectedById.get(message.id);
+      if (!selected || typeof selected.sourceVersion !== "string") {
+        throw new Error("Selected continuation comment source is unavailable");
+      }
+      input.onCommentSourceCapture({
+        input: { kind: "comment", issueId, commentId: selected.id,
+          sourceVersion: selected.sourceVersion,
+          contentHash: createHash("sha256").update(JSON.stringify(message), "utf8").digest("hex") },
+        payloadSourceSnapshot: selected.payloadSourceSnapshot,
+      });
+    }
+  }
+  return envelope;
 }

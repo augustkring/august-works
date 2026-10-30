@@ -1,0 +1,56 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts (2 tests | 2 failed) 13900ms
+     × keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory 2158ms
+     × keeps an earlier derived Task readable while a new Task retains a later private input 979ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory
+AssertionError: expected undefined to be 'd50ec861-e90f-4990-871d-9426c136ffe0' // Object.is equality
+
+- Expected:
+"d50ec861-e90f-4990-871d-9426c136ffe0"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:74:85
+     72|     // Current private policy still narrows later copies. A future inp…
+     73|     // become an input to an already committed earlier Memory body.
+     74|     expect((await memory.get(s.companyId, earlier.record.id, bobActor)…
+       |                                                                                     ^
+     75|   });
+     76|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > keeps an earlier derived Task readable while a new Task retains a later private input
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:86:64
+     84|     expect(await canActorReadIssuePrivacy(db, s.alice, later)).toBe(tr…
+     85|     expect(await canActorReadIssuePrivacy(db, s.bob, later)).toBe(fals…
+     86|     expect(await canActorReadIssuePrivacy(db, s.bob, earlier)).toBe(tr…
+       |                                                                ^
+     87|   });
+     88| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  01:15:39
+   Duration  59.07s (transform 31.52s, setup 277ms, import 44.46s, tests 13.90s, environment 0ms)
+

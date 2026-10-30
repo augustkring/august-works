@@ -1,0 +1,56 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/memory-routes.test.ts (3 tests | 2 failed) 15509ms
+     × supports shared binding, candidate review, detail and revocation 146ms
+     × does not expose private agent memory through the board lifecycle API 174ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-routes.test.ts > Memory routes > supports shared binding, candidate review, detail and revocation
+Error: expected 201 "Created", got 403 "Forbidden"
+ ❯ src/__tests__/memory-routes.test.ts:149:8
+    147|         enabled: true,
+    148|       })
+    149|       .expect(201);
+       |        ^
+    150|
+    151|     const content = "Acme procurement requires a security review.";
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-routes.test.ts > Memory routes > does not expose private agent memory through the board lifecycle API
+Error: Memory producer authority is unavailable
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ captureMemorySources src/services/memory/memory-privacy.ts:211:11
+ ❯ insertCandidate src/services/memory/memory-service.ts:588:26
+ ❯ inspect src/services/memory/memory-service.ts:831:25
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ runCandidate src/services/memory/memory-service.ts:666:23
+ ❯ Object.createCandidate src/services/memory/memory-service.ts:1628:21
+ ❯ src/__tests__/memory-routes.test.ts:316:30
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  05:52:00
+   Duration  88.34s (transform 51.73s, setup 325ms, import 71.75s, tests 15.51s, environment 0ms)
+

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { activationWebsiteSchema } from "./activation.js";
+import { LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "./local-password-policy.js";
 export const runtimeBackupPolicySchema = z
   .object({
     enabled: z.boolean(),
@@ -158,11 +159,15 @@ export const companyDeletionRequestSchema = z
 export const accountDeletionRequestSchema = z
   .object({
     confirmation: z.literal("DELETE MY ACCOUNT"),
-    password: z.string().min(1).max(128),
+    password: z.string().min(1).max(LOCAL_PASSWORD_MAX_UTF16_LENGTH).optional(),
+    reauthenticationProofId: z.string().uuid().optional(),
     acknowledgeExport: z.literal(true),
     idempotencyKey: idempotencyKeySchema,
   })
-  .strict();
+  .strict()
+  .refine(input => Boolean(input.password) || Boolean(input.reauthenticationProofId), {
+    message: "Provide a current password or verified sign-in confirmation",
+  });
 
 export const runtimeModelProviderSchema = z
   .object({

@@ -191,6 +191,33 @@ it("coordinates first reveal while keeping the composer and visible history moun
   expect(container.querySelector('[data-testid="mock-editor"]')).toBe(composer);
 });
 
+it("does not mount live header controls in the history loading overlay", () => {
+  render(
+    <TaskChatThread
+      issueId="loading-header-issue"
+      comments={[]}
+      onAdd={async () => {}}
+      threadHeader={
+        <button type="button" aria-label="More task actions">
+          More task actions
+        </button>
+      }
+      initialHistoryPending
+    />,
+  );
+
+  const loading = container.querySelector(
+    '[data-testid="task-chat-history-loading"]',
+  );
+  const trigger = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="More task actions"]',
+  );
+  expect(loading?.getAttribute("aria-label")).toBe("Loading conversation");
+  expect(loading?.querySelector('button[aria-label="More task actions"]')).toBeNull();
+  expect(container.querySelectorAll('button[aria-label="More task actions"]')).toHaveLength(1);
+  expect(trigger?.closest("[inert]")).not.toBeNull();
+});
+
 describe.each(["legacy", "native"] as const)("%s task history readiness", (runtimeMode) => {
   const retryRun = {
     runId: "scheduled-run",

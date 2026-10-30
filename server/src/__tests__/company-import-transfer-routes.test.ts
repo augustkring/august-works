@@ -1,11 +1,12 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { companies, createDb } from "@paperclipai/db";
+import { authSessions, authUsers, companies, companyMemberships, createDb } from "@paperclipai/db";
+import type { CompanyPortabilityImportResult } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -94,17 +95,35 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported
 
 const companyId = "11111111-1111-4111-8111-111111111111";
 const TEST_USER_HEADER = "x-test-user-id";
+const OTHER_USER_ID = "board-user-b";
+let defaultActorUserId = "";
+let defaultActorSessionId = "";
+let otherActorSessionId = "";
 
 function boardActor(userId: string) {
+  const isCompanyOwner = userId === defaultActorUserId;
   return {
     type: "board",
     userId,
     userName: "Board User",
     userEmail: `${userId}@example.com`,
-    companyIds: [companyId],
-    memberships: [{ companyId, membershipRole: "owner", status: "active" }],
-    isInstanceAdmin: true,
+    companyIds: isCompanyOwner ? [companyId] : [],
+    memberships: isCompanyOwner ? [{ companyId, membershipRole: "owner", status: "active" }] : [],
+    isInstanceAdmin: false,
     source: "session",
+    sessionId: isCompanyOwner ? defaultActorSessionId : otherActorSessionId,
+  };
+}
+
+function completedImportResult(): CompanyPortabilityImportResult {
+  return {
+    company: { id: companyId, name: "Chunked Import Target", action: "updated" },
+    agents: [{ slug: "ceo", id: "agent-1", action: "updated", name: "CEO", reason: null }],
+    skills: [],
+    projects: [],
+    routines: [],
+    envInputs: [],
+    warnings: [],
   };
 }
 
@@ -240,7 +259,9 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     built.use(express.json());
     built.use((req, _res, next) => {
       const header = req.headers[TEST_USER_HEADER];
-      const userId = typeof header === "string" && header.length > 0 ? header : "board-user-a";
+      const userId = typeof header === "string" && header.length > 0 ? header : defaultActorUserId;
+      // Structural post-auth carrier only: each actor resolves to a real
+      // native user/session row, and the owner also has an active membership.
       (req as any).actor = boardActor(userId);
       next();
     });
@@ -255,6 +276,12 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     // The mocked import result points at this company; the ledger's
     // company_id foreign key needs the row to exist.
     await db.insert(companies).values({ id: companyId, name: "Chunked Import Target" });
+    const now = new Date();
+    otherActorSessionId = randomUUID();
+    await db.insert(authUsers).values({ id: OTHER_USER_ID, name: "Other board user",
+      email: `${OTHER_USER_ID}@example.com`, createdAt: now, updatedAt: now });
+    await db.insert(authSessions).values({ id: otherActorSessionId, userId: OTHER_USER_ID,
+      token: randomUUID(), createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
     spoolRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-import-transfer-spool-"));
     app = await createApp();
   });
@@ -264,15 +291,20 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     await fs.rm(spoolRoot, { recursive: true, force: true });
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     spoolRemovalFailure.error = null;
     assemblyFailure.error = null;
-    mockCompanyPortabilityService.importBundle.mockResolvedValue({
-      company: { id: companyId, action: "updated" },
-      agents: [{ id: "agent-1" }],
-      warnings: [],
-    });
+    defaultActorUserId = randomUUID();
+    defaultActorSessionId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: defaultActorUserId, name: "Import owner",
+      email: `${defaultActorUserId}@example.com`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: defaultActorUserId,
+      membershipRole: "owner", status: "active" });
+    await db.insert(authSessions).values({ id: defaultActorSessionId, userId: defaultActorUserId,
+      token: randomUUID(), createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    mockCompanyPortabilityService.importBundle.mockResolvedValue(completedImportResult());
   });
 
   function putPart(transferId: string, index: number, bytes: Buffer, userId?: string) {
@@ -312,7 +344,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
       .post(`/api/companies/import/transfers/${transferId}/apply`)
       .send(importMeta);
     expect(applied.status).toBe(200);
-    expect(applied.body.company).toEqual({ id: companyId, action: "updated" });
+    expect(applied.body.company).toEqual({ id: companyId, name: "Chunked Import Target", action: "updated" });
 
     // The assembled zip fed the existing import pipeline unchanged.
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
@@ -523,6 +555,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     let job: Record<string, any> | undefined;
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const polled = await request(app).get(statusUrl);
+      expect(polled.status, JSON.stringify(polled.body)).toBe(200);
       job = polled.body.job;
       if (job?.status === "succeeded" || job?.status === "failed") break;
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -533,6 +566,53 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     const run = (await companyTransferRunService.getRun(db, transferId))!;
     expect(run.status).toBe("completed");
     await expect(fs.stat(path.join(spoolRoot, transferId))).rejects.toThrow();
+  });
+
+  it("reads async import status from durable admission across fresh route instances", async () => {
+    const rawBody = {
+      ...importMeta,
+      source: { type: "inline" as const, rootPath: "durable-job-fixture",
+        files: { "COMPANY.md": "---\nname: Durable Job Fixture\n---\n" } },
+    };
+    let finishImport!: (result: CompanyPortabilityImportResult) => void;
+    mockCompanyPortabilityService.importBundle.mockImplementationOnce(() =>
+      new Promise((resolve) => { finishImport = resolve; }));
+
+    try {
+      const accepted = await request(app).post("/api/companies/import?async=1").send(rawBody);
+      expect(accepted.status).toBe(202);
+      await vi.waitFor(() => expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1));
+
+      // A fresh router has an empty process-local detail cache but shares the
+      // original native database and the same current authenticated owner.
+      const restartedRouteApp = await createApp();
+      const duplicate = await request(restartedRouteApp)
+        .post("/api/companies/import?async=1")
+        .send(rawBody);
+      expect(duplicate.status).toBe(409);
+      expect(duplicate.body.job.id).toBe(accepted.body.job.id);
+      expect(duplicate.body.statusUrl).toBe(accepted.body.statusUrl);
+      expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+
+      finishImport(completedImportResult());
+      let polled: request.Response | null = null;
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        polled = await request(restartedRouteApp).get(accepted.body.statusUrl);
+        if (polled.body.job?.status === "succeeded") break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(polled?.status, JSON.stringify(polled?.body)).toBe(200);
+      expect(polled?.body.job).toMatchObject({ status: "succeeded", result: { companyId } });
+      expect(polled?.body.job).not.toHaveProperty("importResult");
+      expect(polled?.body.operation).toMatchObject({ id: accepted.body.job.id, status: "succeeded" });
+
+      const otherUser = await request(restartedRouteApp)
+        .get(accepted.body.statusUrl)
+        .set(TEST_USER_HEADER, OTHER_USER_ID);
+      expect(otherUser.status).toBe(404);
+    } finally {
+      finishImport?.(completedImportResult());
+    }
   });
 
   it("releases the claim when an async apply is refused by a running import", async () => {
@@ -561,11 +641,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
         await new Promise<void>((resolve) => {
           releaseImport = resolve;
         });
-        return {
-          company: { id: companyId, action: "updated" },
-          agents: [{ id: "agent-1" }],
-          warnings: [],
-        };
+        return completedImportResult();
       },
     );
     const accepted = await request(app)
@@ -774,7 +850,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
         .post(`/api/companies/import/transfers/${transferId}/apply`)
         .send(importMeta);
       expect(applied.status).toBe(200);
-      expect(applied.body.company).toEqual({ id: companyId, action: "updated" });
+      expect(applied.body.company).toEqual({ id: companyId, name: "Chunked Import Target", action: "updated" });
     } finally {
       spoolRemovalFailure.error = null;
     }
@@ -979,7 +1055,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     // claim while the winner is still importing.
     mockCompanyPortabilityService.importBundle.mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
-      return { company: { id: companyId, action: "updated" }, agents: [], warnings: [] };
+      return completedImportResult();
     });
 
     const [first, second] = await Promise.all([
@@ -991,5 +1067,88 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
     expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("completed");
     await expect(fs.stat(path.join(spoolRoot, transferId))).rejects.toThrow();
+  });
+
+  it("keeps an apply with unknown outcome inspectable and blocks every same-content retry", async () => {
+    const zip = buildFixtureZip();
+    const { body, slices } = declareTransfer(zip, Math.ceil(zip.length / 2));
+    const created = await request(app).post("/api/companies/import/transfers").send(body);
+    expect(created.status).toBe(200);
+    const transferId = created.body.transferId as string;
+    for (const [index, slice] of slices.entries()) expect((await putPart(transferId, index, slice)).status).toBe(200);
+
+    expect(await companyTransferRunService.claimApply(db, transferId)).toBe(true);
+    await companyTransferRunService.markApplyOutcomeUnknown(db, transferId);
+
+    const status = await request(app).get(`/api/companies/import/transfers/${transferId}`);
+    expect(status.status).toBe(200);
+    expect(status.body).toMatchObject({ transferId, status: "needs_reconciliation", missingParts: [] });
+    expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("needs_reconciliation");
+
+    const redeclared = await request(app).post("/api/companies/import/transfers").send(body);
+    expect(redeclared.status).toBe(409);
+    expect(redeclared.body.code).toBe("import_outcome_unknown");
+    expect(redeclared.body.details.transferId).toBe(transferId);
+
+    const part = await putPart(transferId, 0, slices[0]!);
+    expect(part.status).toBe(409);
+    expect(part.body.code).toBe("import_outcome_unknown");
+    const preview = await request(app).post(`/api/companies/import/transfers/${transferId}/preview`).send(importMeta);
+    expect(preview.status).toBe(409);
+    expect(preview.body.code).toBe("import_outcome_unknown");
+    const apply = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+    expect(apply.status).toBe(409);
+    expect(apply.body.code).toBe("import_outcome_unknown");
+    expect(mockCompanyPortabilityService.previewImport).not.toHaveBeenCalled();
+    expect(mockCompanyPortabilityService.importBundle).not.toHaveBeenCalled();
+    expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("needs_reconciliation");
+  });
+
+  it("marks an invoked import with a lost response unknown and refuses a second import", async () => {
+    const zip = buildFixtureZip();
+    const { body, slices } = declareTransfer(zip, Math.ceil(zip.length / 2));
+    const created = await request(app).post("/api/companies/import/transfers").send(body);
+    const transferId = created.body.transferId as string;
+    for (const [index, slice] of slices.entries()) expect((await putPart(transferId, index, slice)).status).toBe(200);
+
+    mockCompanyPortabilityService.importBundle.mockRejectedValueOnce(new Error("simulated import response loss"));
+    const attempted = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+    expect(attempted.status).toBe(409);
+    expect(attempted.body.code).toBe("import_outcome_unknown");
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+    expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("needs_reconciliation");
+
+    const retry = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+    expect(retry.status).toBe(409);
+    expect(retry.body.code).toBe("import_outcome_unknown");
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+    expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("needs_reconciliation");
+  });
+
+  it("keeps the apply claim fenced when persisting an unknown outcome also fails", async () => {
+    const zip = buildFixtureZip();
+    const { body, slices } = declareTransfer(zip, Math.ceil(zip.length / 2));
+    const created = await request(app).post("/api/companies/import/transfers").send(body);
+    const transferId = created.body.transferId as string;
+    for (const [index, slice] of slices.entries()) expect((await putPart(transferId, index, slice)).status).toBe(200);
+
+    mockCompanyPortabilityService.importBundle.mockRejectedValueOnce(new Error("domain invocation response lost"));
+    const unknownWrite = vi.spyOn(companyTransferRunService, "markApplyOutcomeUnknown")
+      .mockRejectedValue(new Error("database unavailable while recording uncertain outcome"));
+    try {
+      const attempted = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+      expect(attempted.status).toBe(409);
+      expect(attempted.body.code).toBe("import_outcome_unknown");
+      expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+      expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("applying");
+      expect(await companyTransferRunService.claimApply(db, transferId)).toBe(false);
+
+      const retry = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+      expect(retry.status).toBe(409);
+      expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+      expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("applying");
+    } finally {
+      unknownWrite.mockRestore();
+    }
   });
 });

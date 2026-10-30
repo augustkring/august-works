@@ -235,6 +235,7 @@ export function workflowRoutes(db: Db) {
         },
         runId: req.actor.runId ?? null,
         responsibleUserId: req.actor.onBehalfOfUserId ?? null,
+        authorizationActor: { ...req.actor },
       };
     }
     if (req.actor.type === "board" && req.actor.source === "local_implicit") {
@@ -242,6 +243,7 @@ export function workflowRoutes(db: Db) {
         principal: { type: "system" as const, service: "local-board" },
         runId: req.actor.runId ?? null,
         responsibleUserId: req.actor.userId ?? null,
+        authorizationActor: { ...req.actor },
       };
     }
     const info = getActorInfo(req);
@@ -249,6 +251,7 @@ export function workflowRoutes(db: Db) {
       principal: { type: "user" as const, userId: info.actorId },
       runId: info.runId,
       responsibleUserId: info.actorId,
+      authorizationActor: { ...req.actor },
     };
   }
 
@@ -261,6 +264,14 @@ export function workflowRoutes(db: Db) {
       });
     }
     return value;
+  }
+
+  function humanWorkflowCoverageId(req: Request) {
+    const value = req.header("X-Human-Workflow-Coverage-Id")?.trim();
+    if (!value) return null;
+    const parsed = z.uuid().safeParse(value);
+    if (!parsed.success) throw unprocessable("X-Human-Workflow-Coverage-Id must be a UUID", { code: "workflow_coverage_id_invalid" });
+    return parsed.data;
   }
 
   async function decidePermission(
@@ -481,6 +492,7 @@ export function workflowRoutes(db: Db) {
         req.body,
         runActor(req),
         idempotencyKey(req),
+        humanWorkflowCoverageId(req),
       );
       await audit(req, {
         companyId,
@@ -493,6 +505,7 @@ export function workflowRoutes(db: Db) {
           workflowRevisionId: result.run.workflowRevisionId,
         },
       });
+      res.set("Cache-Control", "private, no-store");
       res.status(201).json(result);
     },
   );
@@ -510,7 +523,9 @@ export function workflowRoutes(db: Db) {
         req.body,
         runActor(req),
         idempotencyKey(req),
+        humanWorkflowCoverageId(req),
       );
+      res.set("Cache-Control", "private, no-store");
       res.status(201).json(result);
     },
   );

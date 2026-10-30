@@ -1,0 +1,83 @@
+Copied and verified source files 120
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+native input protocol gate diagnostics {
+  oldProtocolZero: true,
+  newProtocolOne: true,
+  nativeRuntime: true,
+  running: true,
+  oldExecutionInput: true,
+  executionInputEqual: true,
+  oldDispatchIntentsAbsent: true,
+  oldToolAssociationsAbsent: true,
+  oldToolResultsAbsent: true,
+  stagePresent: true,
+  receiptPresent: true,
+  intentsArray: true,
+  oneIntent: true,
+  triggerNotSynthetic: true,
+  storedBootstrapPredicate: true,
+  receiptInputMatchesClosure: true
+}
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+native input protocol gate diagnostics {
+  oldProtocolZero: true,
+  newProtocolOne: true,
+  nativeRuntime: true,
+  running: true,
+  oldExecutionInput: true,
+  executionInputEqual: true,
+  oldDispatchIntentsAbsent: true,
+  oldToolAssociationsAbsent: true,
+  oldToolResultsAbsent: true,
+  stagePresent: true,
+  receiptPresent: true,
+  intentsArray: true,
+  oneIntent: true,
+  triggerNotSynthetic: true,
+  storedBootstrapPredicate: false,
+  receiptInputMatchesClosure: true
+}
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+native dispatch persistence diagnostic {
+  stage: 'intent_persist',
+  pgCode: '23514',
+  constraint: null,
+  safeMessageIndices: [ 25 ]
+}
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed | 41 skipped) 8082ms
+     × qualifies only the current PG attachment bytes staged by executor admission 4164ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_model_input_attachment_stage_rejected
+ ❯ src/services/native-runtime/native-session-executor.ts:7600:11
+    7598|       safeMessageIndices });
+    7599|     const message = error instanceof Error ? error.message : "";
+    7600|     throw new Error([
+       |           ^
+    7601|       "native_session_lease_lost", "native_session_lease_ttl_invalid",
+    7602|       "native_model_input_run_binding_changed", "native_model_input_la…
+ ❯ recordNativeModelInputDispatchIntent src/services/native-runtime/native-session-executor.ts:7409:3
+ ❯ Object.onTurnInput src/services/native-runtime/native-session-executor.ts:9650:34
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:2382:30
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9565:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9557:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8537:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:349:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  02:58:27
+   Duration  21.91s (transform 9.88s, setup 89ms, import 13.58s, tests 8.08s, environment 0ms)
+

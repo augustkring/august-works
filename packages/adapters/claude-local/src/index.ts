@@ -82,6 +82,7 @@ ACP fields (only when engine="acp"):
 - stateDir (string, optional): ACP session state directory; defaults to Paperclip-managed company/agent scoped storage
 - nonInteractivePermissions (string, optional, default "deny"): fallback when the ACP agent asks for input outside an interactive session
 - warmHandleIdleMs (number, optional, default 0): keep the ACP process warm for this many ms after a successful run
+- stalledToolTimeoutSec (advanced number, optional, default 1800): fail an ACP turn if a pending tool receives no update for this long. The default watchdog applies only to Claude. It grows to stay 15 minutes above MCP_TOOL_TIMEOUT or BASH_MAX_TIMEOUT_MS when those bounds fit within the four-hour ceiling; if a tool bound plus margin would exceed that ceiling or is infinite, the watchdog is disabled for that run. An explicit override is capped at four hours; set 0 to disable. This does not make a permission decision, and an observed permission request does not mean it was answered or approved.
 
 Operational fields:
 - timeoutSec (number, optional): run timeout in seconds

@@ -1,0 +1,687 @@
+Scope: 35 of 36 workspace projects
+
+> @paperclipai/google-sheets-mcp-server@0.1.0 typecheck /workspace/blentera-v10/packages/google-sheets-mcp-server
+> tsc --noEmit
+
+
+> @paperclipai/kv-demo-mcp-server@0.1.0 typecheck /workspace/blentera-v10/packages/kv-demo-mcp-server
+> tsc --noEmit
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 typecheck /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json --noEmit
+
+
+> @paperclipai/shared@0.3.1 typecheck /workspace/blentera-v10/packages/shared
+> tsc --noEmit
+
+
+> @paperclipai/tailscale-https-broker@0.1.0 typecheck /workspace/blentera-v10/packages/tailscale-https-broker
+> tsc --noEmit
+
+
+> @paperclipai/teams-catalog@0.1.0 typecheck /workspace/blentera-v10/packages/teams-catalog
+> tsc -p tsconfig.json --noEmit
+
+
+> @paperclipai/adapter-utils@0.3.1 typecheck /workspace/blentera-v10/packages/adapter-utils
+> tsc --noEmit
+
+
+> @paperclipai/db@0.3.1 typecheck /workspace/blentera-v10/packages/db
+> pnpm run check:migrations && tsc --noEmit
+
+
+> @paperclipai/db@0.3.1 check:migrations /workspace/blentera-v10/packages/db
+> tsx src/check-migration-numbering.ts && tsx src/check-migration-safety.ts
+
+Migration safety check passed: 20 historical finding(s) covered by baseline (1 stale baseline id(s) ignored).
+
+> @paperclipai/mcp-server@0.1.0 typecheck /workspace/blentera-v10/packages/mcp-server
+> tsc --noEmit
+
+
+> @paperclipai/paperclip-runner@0.0.0 typecheck /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run typecheck:typescript && pnpm run typecheck:rust
+
+
+> @paperclipai/paperclip-runner@0.0.0 typecheck:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && node --check scripts/protocol-contract.mjs && node --check scripts/generate-protocol-manifest.mjs && node --check scripts/generate-protocol-schema-module.mjs && node --check scripts/generate-acpx-sidecar-contract.mjs && node --check scripts/generate-replay-goldens.mjs && node --check scripts/generate-semantic-action-catalog.mjs && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json --noEmit && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json --noEmit
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+
+> @paperclipai/paperclip-runner@0.0.0 typecheck:rust /workspace/blentera-v10/packages/paperclip-runner
+> cargo fmt --manifest-path runner/Cargo.toml --all -- --check && cargo check --manifest-path runner/Cargo.toml --locked --workspace
+
+   Compiling libc v0.2.189
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+    Checking cfg-if v1.0.4
+    Checking zeroize v1.9.0
+    Checking typenum v1.20.1
+   Compiling version_check v0.9.5
+    Checking bytes v1.12.1
+   Compiling syn v2.0.119
+    Checking itoa v1.0.18
+    Checking pin-project-lite v0.2.17
+   Compiling generic-array v0.14.7
+    Checking subtle v2.6.1
+    Checking memchr v2.8.3
+    Checking getrandom v0.2.17
+    Checking futures-core v0.3.34
+   Compiling syn v3.0.4
+   Compiling autocfg v1.5.1
+    Checking once_cell v1.21.4
+    Checking rand_core v0.6.4
+    Checking socket2 v0.6.5
+    Checking mio v1.2.2
+   Compiling num-traits v0.2.19
+    Checking futures-sink v0.3.34
+    Checking tokio v1.53.1
+    Checking http v1.5.0
+    Checking num-integer v0.1.47
+    Checking crypto-common v0.1.7
+    Checking slab v0.4.12
+    Checking fnv v1.0.7
+    Checking http-body v1.1.0
+    Checking futures-task v0.3.34
+    Checking futures-io v0.3.34
+    Checking futures-util v0.3.34
+   Compiling jobserver v0.1.35
+   Compiling tracing-attributes v0.1.31
+    Checking tracing-core v0.1.36
+   Compiling find-msvc-tools v0.1.11
+   Compiling shlex v2.0.1
+   Compiling cc v1.4.4
+    Checking const-oid v0.9.6
+    Checking outref v0.5.2
+    Checking vsimd v0.8.0
+    Checking ryu v1.0.23
+   Compiling synstructure v0.13.2
+    Checking tracing v0.1.44
+    Checking http-body-util v0.1.5
+    Checking http v0.2.12
+    Checking either v1.18.0
+    Checking deranged v0.5.8
+    Checking tokio-util v0.7.19
+    Checking num-conv v0.2.2
+    Checking time-core v0.1.9
+    Checking powerfmt v0.2.0
+    Checking http-body v0.4.6
+    Checking bytes-utils v0.1.4
+    Checking base64-simd v0.8.0
+    Checking smallvec v1.15.2
+    Checking pin-utils v0.1.0
+   Compiling zerofrom-derive v0.1.7
+   Compiling cmake v0.1.58
+    Checking block-buffer v0.10.4
+    Checking percent-encoding v2.3.2
+   Compiling dunce v1.0.5
+   Compiling pkg-config v0.3.34
+   Compiling fs_extra v1.3.0
+    Checking digest v0.10.7
+   Compiling aws-lc-sys v0.45.0
+    Checking time v0.3.55
+    Checking aws-smithy-async v1.3.0
+    Checking zerofrom v0.1.8
+   Compiling yoke-derive v0.8.2
+   Compiling aws-smithy-runtime-api-macros v1.1.0
+    Checking equivalent v1.0.2
+    Checking stable_deref_trait v1.2.1
+    Checking foldhash v0.2.0
+    Checking allocator-api2 v0.2.21
+    Checking hashbrown v0.17.1
+    Checking yoke v0.8.3
+   Compiling ring v0.17.14
+   Compiling zerovec-derive v0.11.6
+    Checking rustls-pki-types v1.15.1
+   Compiling aws-lc-rs v1.18.1
+    Checking zerovec v0.11.8
+   Compiling displaydoc v0.2.7
+    Checking base64ct v1.8.3
+    Checking pem-rfc7468 v0.7.0
+    Checking hybrid-array v0.4.14
+    Checking aws-smithy-types v1.6.2
+    Checking untrusted v0.9.0
+    Checking aws-smithy-runtime-api v1.15.0
+   Compiling httparse v1.10.1
+    Checking cpufeatures v0.2.17
+    Checking der v0.7.10
+    Checking indexmap v2.14.1
+   Compiling rustls v0.23.43
+    Checking cmov v0.5.4
+    Checking spki v0.7.3
+    Checking ctutils v0.4.2
+    Checking block-buffer v0.12.1
+    Checking crypto-common v0.2.2
+    Checking tinystr v0.8.4
+    Checking litemap v0.8.3
+    Checking try-lock v0.2.5
+    Checking tower-service v0.3.3
+   Compiling crc32fast v1.5.1
+    Checking atomic-waker v1.1.2
+    Checking const-oid v0.10.2
+    Checking writeable v0.6.4
+   Compiling serde_core v1.0.229
+    Checking h2 v0.4.19
+    Checking digest v0.11.3
+    Checking want v0.3.1
+    Checking pkcs8 v0.10.2
+    Checking zerotrie v0.2.5
+    Checking icu_locale_core v2.3.0
+    Checking potential_utf v0.1.6
+    Checking futures-channel v0.3.34
+    Checking ff v0.13.1
+   Compiling icu_normalizer_data v2.3.0
+    Checking openssl-probe v0.2.1
+    Checking utf8_iter v1.0.4
+    Checking base16ct v0.2.0
+   Compiling icu_properties_data v2.3.0
+    Checking sec1 v0.7.3
+    Checking icu_collections v2.3.0
+    Checking rustls-native-certs v0.8.4
+    Checking icu_provider v2.3.1
+    Checking group v0.13.0
+    Checking aws-smithy-schema v0.2.0
+    Checking form_urlencoded v1.2.2
+    Checking crypto-bigint v0.5.5
+    Checking sync_wrapper v1.0.2
+   Compiling zerocopy v0.8.56
+    Checking tower-layer v0.3.3
+   Compiling serde v1.0.229
+    Checking base64 v0.22.1
+    Checking hyper v1.11.1
+   Compiling getrandom v0.3.4
+    Checking ipnet v2.12.1
+    Checking tower v0.5.3
+    Checking elliptic-curve v0.13.8
+    Checking aws-smithy-eventstream v0.61.2
+    Checking webpki-roots v1.0.9
+    Checking hmac v0.12.1
+   Compiling serde_derive v1.0.229
+    Checking cpufeatures v0.3.1
+   Compiling semver v1.0.28
+   Compiling rustc_version v0.4.1
+    Checking hyper-util v0.1.20
+    Checking rfc6979 v0.4.0
+    Checking aws-smithy-http v0.64.0
+    Checking icu_properties v2.3.0
+    Checking icu_normalizer v2.3.0
+    Checking signature v2.2.0
+   Compiling getrandom v0.4.3
+    Checking ecdsa v0.16.9
+    Checking idna_adapter v1.2.2
+   Compiling aws-types v1.5.0
+    Checking sha2 v0.11.0
+    Checking primeorder v0.13.6
+    Checking aws-credential-types v1.3.0
+    Checking sha2 v0.10.9
+    Checking hex v0.4.3
+   Compiling rustversion v1.0.23
+   Compiling zmij v1.0.23
+    Checking p256 v0.13.2
+    Checking idna v1.1.0
+    Checking hmac v0.13.0
+    Checking aws-smithy-observability v0.3.0
+    Checking fastrand v2.5.0
+   Compiling serde_json v1.0.151
+    Checking aws-sigv4 v1.5.1
+    Checking uuid v1.26.0
+    Checking num-bigint v0.4.8
+   Compiling ahash v0.8.12
+   Compiling parking_lot_core v0.9.12
+    Checking regex-syntax v0.8.11
+    Checking xmlparser v0.13.6
+   Compiling ref-cast v1.0.27
+    Checking aws-smithy-xml v0.62.0
+    Checking num-rational v0.4.2
+    Checking arc-swap v1.9.2
+    Checking url v2.5.8
+    Checking aws-smithy-json v0.63.0
+   Compiling ref-cast-impl v1.0.27
+    Checking num-iter v0.1.46
+    Checking num-complex v0.4.6
+    Checking inout v0.1.4
+    Checking aho-corasick v1.1.5
+    Checking regex-lite v0.1.9
+    Checking scopeguard v1.2.0
+    Checking lock_api v0.4.14
+    Checking cipher v0.4.4
+    Checking num v0.4.3
+    Checking ppv-lite86 v0.2.21
+    Checking rand_core v0.9.5
+    Checking regex-automata v0.4.18
+    Checking universal-hash v0.5.1
+    Checking spin v0.10.1
+    Checking bitflags v2.13.1
+    Checking bit-vec v0.8.0
+   Compiling heck v0.5.0
+    Checking borrow-or-share v0.2.4
+    Checking urlencoding v2.1.3
+    Checking opaque-debug v0.3.1
+   Compiling thiserror v2.0.20
+   Compiling unicode-general-category v1.1.0
+   Compiling strum_macros v0.28.0
+    Checking polyval v0.6.2
+    Checking aws-smithy-query v0.62.0
+    Checking fluent-uri v0.4.1
+    Checking bit-set v0.8.0
+    Checking crc-fast v1.10.0
+    Checking rand_chacha v0.9.0
+    Checking parking_lot v0.12.5
+    Checking fraction v0.16.0
+    Checking sha1 v0.11.0
+    Checking md-5 v0.11.0
+   Compiling thiserror-impl v2.0.20
+   Compiling rustix v1.1.4
+    Checking data-encoding v2.11.1
+    Checking micromap v0.3.0
+    Checking bytecount v0.6.9
+    Checking log v0.4.34
+    Checking num-cmp v0.1.0
+    Checking referencing v0.50.1
+    Checking strum v0.28.0
+    Checking jsonschema-value v0.50.1
+    Checking aws-smithy-checksums v0.65.0
+    Checking rand v0.9.5
+    Checking fancy-regex v0.19.0
+    Checking ghash v0.5.1
+    Checking regex v1.13.1
+    Checking tower-http v0.6.11
+    Checking ctr v0.9.2
+    Checking aes v0.8.4
+    Checking jsonschema-regex v0.50.1
+    Checking serde_urlencoded v0.7.1
+    Checking email_address v0.2.9
+    Checking sha1 v0.10.7
+    Checking lru v0.18.3
+    Checking uuid-simd v0.8.0
+    Checking aead v0.5.2
+    Checking utf-8 v0.7.6
+    Checking linux-raw-sys v0.12.1
+    Checking winnow v0.7.15
+    Checking toml_datetime v0.6.11
+    Checking toml_write v0.1.2
+    Checking aes-gcm v0.10.3
+    Checking jsonschema v0.50.1
+    Checking toml_edit v0.22.27
+    Checking rustls-pemfile v2.2.0
+    Checking rustls-webpki v0.103.15
+    Checking tokio-rustls v0.26.4
+    Checking tungstenite v0.28.0
+    Checking hyper-rustls v0.27.9
+    Checking aws-smithy-http-client v1.4.0
+    Checking reqwest v0.12.28
+    Checking aws-smithy-runtime v1.14.0
+    Checking aws-runtime v1.9.1
+    Checking aws-sdk-sts v1.113.0
+    Checking aws-sdk-bedrockagentcore v1.65.0
+    Checking aws-sdk-s3 v1.144.0
+    Checking aws-config v1.11.0
+    Checking paperclip-runner-core v0.0.0 (/workspace/blentera-v10/packages/paperclip-runner/runner/crates/runner-core)
+warning: unused imports: `OpenOptions` and `self`
+ --> crates/runner-core/src/process_supervisor.rs:3:15
+  |
+3 | use std::fs::{self, File, OpenOptions};
+  |               ^^^^        ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/runner-core/src/process_supervisor.rs:709:17
+    |
+709 |             let mut inherited = launch.inherited_command()?;
+    |                 ----^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/runner-core/src/process_supervisor.rs:710:17
+    |
+710 |             let mut result = Self::spawn_command(
+    |                 ----^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: fields `config` and `system_instructions` are never read
+    --> crates/runner-core/src/claude_managed_provider.rs:1248:5
+     |
+1232 | pub struct ClaudeManagedProvider {
+     |            --------------------- fields in this struct
+...
+1248 |     config: ClaudeManagedProviderConfig,
+     |     ^^^^^^
+1249 |     system_instructions: String,
+     |     ^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `receive_plain` is never used
+    --> crates/runner-core/src/durable/transport.rs:1545:4
+     |
+1545 | fn receive_plain(
+     |    ^^^^^^^^^^^^^
+
+warning: function `validate_tool_result_contract` is never used
+    --> crates/runner-core/src/provider_bridge.rs:1043:4
+     |
+1043 | fn validate_tool_result_contract(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `paperclip-runner-core` (lib) generated 6 warnings (run `cargo fix --lib -p paperclip-runner-core` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3m 08s
+
+> @paperclipai/plugin-sdk@1.0.0 typecheck /workspace/blentera-v10/packages/plugins/sdk
+> pnpm --filter @paperclipai/shared build && tsc --noEmit
+
+
+> @paperclipai/shared@0.3.1 build /workspace/blentera-v10/packages/shared
+> tsc && mkdir -p dist/cliplab && cp src/cliplab/LICENSE src/cliplab/PROVENANCE.md dist/cliplab/
+
+
+> @paperclipai/skills-catalog@0.3.1 typecheck /workspace/blentera-v10/packages/skills-catalog
+> tsc -p tsconfig.json --noEmit
+
+
+> @paperclipai/adapter-claude-local@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/claude-local
+> tsc --noEmit
+
+
+> @paperclipai/adapter-codex-local@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/codex-local
+> tsc --noEmit
+
+
+> @paperclipai/adapter-cursor-cloud@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/cursor-cloud
+> tsc --noEmit
+
+
+> @paperclipai/adapter-cursor-local@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/cursor-local
+> tsc --noEmit
+
+
+> @paperclipai/adapter-gemini-local@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/gemini-local
+> tsc --noEmit
+
+
+> @paperclipai/adapter-grok-local@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/grok-local
+> tsc --noEmit
+
+
+> @paperclipai/hermes-paperclip-adapter@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/hermes
+> tsc --noEmit
+
+
+> @paperclipai/adapter-kimi-local@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/kimi-local
+> tsc --noEmit
+
+
+> @paperclipai/adapter-openclaw-gateway@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/openclaw-gateway
+> tsc --noEmit
+
+
+> @paperclipai/adapter-opencode-local@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/opencode-local
+> tsc --noEmit
+
+
+> @paperclipai/adapter-pi-local@0.3.1 typecheck /workspace/blentera-v10/packages/adapters/pi-local
+> tsc --noEmit
+
+
+> @paperclipai/create-paperclip-plugin@0.1.0 typecheck /workspace/blentera-v10/packages/plugins/create-paperclip-plugin
+> tsc --noEmit
+
+
+> @paperclipai/plugin-authoring-smoke-example@0.1.0 typecheck /workspace/blentera-v10/packages/plugins/examples/plugin-authoring-smoke-example
+> pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+
+
+> @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+> node ../../../scripts/ensure-plugin-build-deps.mjs
+
+
+> @paperclipai/plugin-file-browser-example@0.1.0 typecheck /workspace/blentera-v10/packages/plugins/examples/plugin-file-browser-example
+> pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+
+
+> @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+> node ../../../scripts/ensure-plugin-build-deps.mjs
+
+
+> @paperclipai/plugin-hello-world-example@0.1.0 typecheck /workspace/blentera-v10/packages/plugins/examples/plugin-hello-world-example
+> pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+
+
+> @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+> node ../../../scripts/ensure-plugin-build-deps.mjs
+
+
+> @paperclipai/plugin-kitchen-sink-example@0.1.0 typecheck /workspace/blentera-v10/packages/plugins/examples/plugin-kitchen-sink-example
+> pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+
+
+> @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+> node ../../../scripts/ensure-plugin-build-deps.mjs
+
+
+> @paperclipai/plugin-fake-sandbox@0.1.0 typecheck /workspace/blentera-v10/packages/plugins/paperclip-plugin-fake-sandbox
+> pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+
+
+> @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+> node ../../../scripts/ensure-plugin-build-deps.mjs
+
+
+> @paperclipai/plugin-llm-wiki@0.1.0 typecheck /workspace/blentera-v10/packages/plugins/plugin-llm-wiki
+> pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+
+
+> @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+> node ../../../scripts/ensure-plugin-build-deps.mjs
+
+
+> @paperclipai/plugin-workspace-diff@0.1.0 typecheck /workspace/blentera-v10/packages/plugins/plugin-workspace-diff
+> pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit && tsc --noEmit -p tsconfig.test.json
+
+
+> @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+> node ../../../scripts/ensure-plugin-build-deps.mjs
+
+
+> @paperclipai/adapter-hermes-gateway@0.1.0 typecheck /workspace/blentera-v10/packages/adapters/hermes-gateway
+> tsc --noEmit
+
+
+> @paperclipai/server@0.3.1 typecheck /workspace/blentera-v10/server
+> pnpm run prepare:runner-vendor && pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit --singleThreaded
+
+
+> @paperclipai/server@0.3.1 prepare:runner-vendor /workspace/blentera-v10/server
+> pnpm --filter @paperclipai/paperclip-runner build
+
+
+> @paperclipai/paperclip-runner@0.0.0 build /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run check:protocol-manifest && pnpm run build:typescript && pnpm run check:capability-contract && pnpm run check:capability-inventory && pnpm run check:protocol-coverage && pnpm run check:semantic-contracts && pnpm run check:runner-workflow-traceability && pnpm run build:binary && node scripts/generate-replay-goldens.mjs --check && node scripts/generate-semantic-action-catalog.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-manifest /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-manifest.mjs --check
+
+The generated PRP contract manifest matches its sources.
+
+> @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+
+> @paperclipai/paperclip-runner@0.0.0 check:capability-contract /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-capability-contract.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:capability-inventory /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/check-capability-inventory.mjs
+
+Capability inventory completeness and generated-output checks passed.
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-coverage /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-coverage.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:semantic-contracts /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run build:typescript && node scripts/generate-semantic-contracts.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+
+> @paperclipai/paperclip-runner@0.0.0 check:runner-workflow-traceability /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run build:typescript && node scripts/check-runner-workflow-traceability.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+Runner stress traceability passed: 44 findings, 12 workflows, 1 explicit exclusion.
+
+> @paperclipai/paperclip-runner@0.0.0 build:binary /workspace/blentera-v10/packages/paperclip-runner
+> cargo build --release --manifest-path runner/Cargo.toml --locked -p paperclip-runner-core --bin paperclip-runnerd && node scripts/stage-runner-binary.mjs
+
+warning: unused imports: `OpenOptions` and `self`
+ --> crates/runner-core/src/process_supervisor.rs:3:15
+  |
+3 | use std::fs::{self, File, OpenOptions};
+  |               ^^^^        ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/runner-core/src/process_supervisor.rs:709:17
+    |
+709 |             let mut inherited = launch.inherited_command()?;
+    |                 ----^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/runner-core/src/process_supervisor.rs:710:17
+    |
+710 |             let mut result = Self::spawn_command(
+    |                 ----^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: fields `config` and `system_instructions` are never read
+    --> crates/runner-core/src/claude_managed_provider.rs:1248:5
+     |
+1232 | pub struct ClaudeManagedProvider {
+     |            --------------------- fields in this struct
+...
+1248 |     config: ClaudeManagedProviderConfig,
+     |     ^^^^^^
+1249 |     system_instructions: String,
+     |     ^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `receive_plain` is never used
+    --> crates/runner-core/src/durable/transport.rs:1545:4
+     |
+1545 | fn receive_plain(
+     |    ^^^^^^^^^^^^^
+
+warning: function `validate_tool_result_contract` is never used
+    --> crates/runner-core/src/provider_bridge.rs:1043:4
+     |
+1043 | fn validate_tool_result_contract(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `paperclip-runner-core` (lib) generated 6 warnings (run `cargo fix --lib -p paperclip-runner-core` to apply 3 suggestions)
+    Finished `release` profile [optimized] target(s) in 1.10s
+Replay golden snapshots and parity summaries are current.
+
+> @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+> node ../../../scripts/ensure-plugin-build-deps.mjs
+
+
+> @paperclipai/ui@0.3.1 typecheck /workspace/blentera-v10/ui
+> tsc -b
+
+src/components/ActivityCharts.test.tsx(40,3): error TS2322: Type '{ execution?: import("@paperclipai/shared").ExecutionProjection | null; scopeKind?: "company" | "issue" | undefined; issueId?: string | null | undefined; activeIdentityContextId?: string | null; ... 56 more ...; updatedAt: Date; }' is not assignable to type 'HeartbeatRun'.
+  Types of property 'scopeKind' are incompatible.
+    Type '"company" | "issue" | undefined' is not assignable to type '"company" | "issue"'.
+      Type 'undefined' is not assignable to type '"company" | "issue"'.
+src/lib/inbox.test.ts(134,3): error TS2739: Type '{ id: string; companyId: string; agentId: string; responsibleUserId: null; invocationSource: "assignment"; triggerDetail: null; status: "cancelled" | "failed" | "interrupted" | "queued" | "running" | "scheduled_retry" | "succeeded" | "timed_out"; ... 35 more ...; updatedAt: Date; }' is missing the following properties from type 'HeartbeatRun': scopeKind, issueId
+src/pages/Inbox.test.tsx(293,3): error TS2322: Type '{ execution?: import("@paperclipai/shared").ExecutionProjection | null; scopeKind?: "company" | "issue" | undefined; issueId?: string | null | undefined; activeIdentityContextId?: string | null; ... 56 more ...; updatedAt: Date; }' is not assignable to type 'HeartbeatRun'.
+  Types of property 'scopeKind' are incompatible.
+    Type '"company" | "issue" | undefined' is not assignable to type '"company" | "issue"'.
+      Type 'undefined' is not assignable to type '"company" | "issue"'.
+storybook/stories/data-viz-misc.stories.tsx(95,9): error TS2322: Type '{ execution?: import("@paperclipai/shared").ExecutionProjection | null; scopeKind?: "company" | "issue" | undefined; issueId?: string | null | undefined; activeIdentityContextId?: string | null; ... 56 more ...; updatedAt: Date; }' is not assignable to type 'HeartbeatRun'.
+  Types of property 'scopeKind' are incompatible.
+    Type '"company" | "issue" | undefined' is not assignable to type '"company" | "issue"'.
+      Type 'undefined' is not assignable to type '"company" | "issue"'.
+/workspace/blentera-v10/ui:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @paperclipai/ui@0.3.1 typecheck: `tsc -b`
+Exit status 1

@@ -1,0 +1,5 @@
+Listing tests:
+  [chromium] › aw-v9-agent-publication.spec.ts:11:3 › custom publication in en requires both confirmations and recovers its Original receipt without resending
+  [chromium] › aw-v9-agent-publication.spec.ts:11:3 › hire publication in da requires both confirmations and recovers its Original receipt without resending
+  [chromium] › aw-v9-agent-publication.spec.ts:11:3 › hire publication in en requires both confirmations and recovers its Original receipt without resending
+Total: 3 tests in 1 file

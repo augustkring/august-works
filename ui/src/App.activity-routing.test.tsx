@@ -48,6 +48,12 @@ vi.hoisted(() => {
 // Real Layout renders the full authenticated shell (sidebar, data queries) and
 // owns the "No company matches prefix" NotFound. For routing we only need it to
 // resolve the :companyPrefix segment and render its nested routes.
+// Route assertions do not exercise native account fetching. Production App
+// observes the account to bind its optional support overlay.
+vi.mock("./hooks/useV9CurrentAccount", () => ({
+  useV9CurrentAccount: () => ({ userId: "routing-user", localImplicit: false, settled: true }),
+}));
+
 vi.mock("./components/Layout", async () => {
   const { Outlet } = await import("react-router-dom");
   return { Layout: () => <Outlet /> };

@@ -1,0 +1,69 @@
+{
+  "scope": "Retain original selected interaction versions and final redacted response hashes with first native input",
+  "sources": {
+    "server/src/services/issue-thread-interactions.ts": "f8148495a9a0ff284e76ec27a475bc293b831f9b4c98297c9690f6d6768e0a7c",
+    "server/src/services/native-runtime/native-interaction-bridge.ts": "d2ce49fbe1369258675f45251b626800bba368ab99e4e99bd8ededc612f5eef5",
+    "server/src/services/native-runtime/external-chat-question-response-input.ts": "94c7daed86381c84f056a215426691710524e2b120ad54bc3a88e99d5fd1e0bf",
+    "server/src/services/heartbeat.ts": "133e233a894d70282af3628aca83ee51168f4843daa27c48fe5f335aaac15b87",
+    "server/src/__tests__/heartbeat-process-recovery.test.ts": "6e2331eabd18041788b67f238a0e88403ffb5793b46e4e8de6c2a3ca21fb26bf",
+    "server/src/__tests__/native-interaction-bridge.test.ts": "753919d6825ccf3789206a83c912ca2ee7400564795153dc05b29dcb8be80256",
+    "server/src/services/native-runtime/external-chat-wait.integration.test.ts": "30fe01ad34f2065e1156d0d38fafb0088b0c6c87f89373583b04a0b7d9d36b53"
+  },
+  "sourceBinding": "Original listForIssue SELECT optionally retains PostgreSQL microsecond updatedAt text; its internal alias is stripped before original hydration/public DTO. Bridge keeps versions operation-local, retains only authoritative accepted responses after existing guards/redaction, and hashes each final response using existing nativeSha256 canonical JSON. Missing selected version fails closed.",
+  "current": {
+    "actualNativeBootstrap": {
+      "exit": 0,
+      "passed": 2,
+      "filtered": 305,
+      "durationSeconds": 63.37,
+      "log": "up03-interaction-source-native.log",
+      "assertions": "Actual initial input contains exact SQL-selected question version/hash of persisted redacted answer; entire profile/input unchanged after actual Task/plan/comment/question edits; deleted text and registered secret absent; provider factory uncalled."
+    },
+    "originalBridgeSuite": {
+      "exit": 0,
+      "passed": 6,
+      "durationSeconds": 129.15,
+      "log": "up03-interaction-source-bridge.log",
+      "assertions": "Original projections and governed/self-approval guards retained; new capture callback uncalled on both guarded failures."
+    },
+    "externalChatCoherentChain": {
+      "exit": 0,
+      "passed": 1,
+      "filtered": 141,
+      "durationSeconds": 47.74,
+      "log": "up03-interaction-source-external-prestarted.log",
+      "assertions": "Real chain captured internally inside held transaction; actual concurrent ancestor mutation waits; caller collector stays empty until successful commit, then has exactly one matching version/hash per returned old Cobalt response, no internal alias. Coherent later Amber rewrite makes next read deny with no added capture. No forced no-wait retry qualification claimed."
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "up03-interaction-source-server-types-reviewed.log"
+    },
+    "allFinalPinsMatch": true
+  },
+  "intermediate": {
+    "initialExternalCase": {
+      "exit": 0,
+      "durationSeconds": 74.61,
+      "log": "up03-interaction-source-external.log",
+      "limit": "Commit/selected-version/hash assertions passed, but denied-retry callback was accidentally added to adjacent test. No denied-callback qualification from this initial run."
+    },
+    "firstCompiler": {
+      "exit": 1,
+      "log": "up03-interaction-source-server-types.log",
+      "cause": "Callback referenced sourceCaptures in adjacent test scope. Exact failed source retained compressed; Root moved callback to intended denied retry, with production code unchanged."
+    },
+    "correctedExternalStartup": {
+      "exit": 1,
+      "testsSkipped": 142,
+      "durationSeconds": 70.89,
+      "log": "up03-interaction-source-external-reviewed.log",
+      "cause": "Original 30-second database beforeAll timed out; no behavioral assertions ran. Final exact source uses existing external-URL branch with prestarted migrated local PostgreSQL, no assertion/deadline change."
+    }
+  },
+  "review": "Root inspected original selection/callers, conditional public projection, authority/redaction ordering and first-input recovery fence. External materializer buffers each attempt locally and emits captures only after transaction success. Read-only gpt-6-luna review found no production defect and identified missing external coverage; bounded assistance extended existing actual chain test. Root reviewed/corrected fixture callback placement and observed final process exits. Dedicated PG helper cleanup completed after test. Final source is retained by this Git commit and pinned above; no redundant final source copies required.",
+  "limits": [
+    "Partial immutable bootstrap source handoff only; NULL/missing historical captures remain unknown and recovery does not replace old input/captures.",
+    "No complete native input/dispatch/retained-session/tool-result receipt or writer protocol activated. No current permission/transport/effect qualification implied.",
+    "Original copied private Memory and temporal source regressions, canonical graph/SQL, all broader V10/release gates remain open."
+  ]
+}

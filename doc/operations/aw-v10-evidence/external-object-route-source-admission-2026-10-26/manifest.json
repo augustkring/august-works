@@ -1,0 +1,22 @@
+[
+  {
+    "file": "external-object-route-source-admission-r1-20261026-source-pins.json",
+    "rawSha256": "4d5050d3c63c2051a43540178387f7e36733fa20aa75f314df3a5fb768e9b741",
+    "rawBytes": 36066
+  },
+  {
+    "file": "external-object-route-source-admission-r1-20261026-snapshot.log.gz",
+    "rawSha256": "69db4fb9b9978ba816a3223bf86bdffab6c6eb937058bfa3971cdb187fd68bd3",
+    "rawBytes": 37
+  },
+  {
+    "file": "external-object-route-source-admission-r1-20261026-test.log.gz",
+    "rawSha256": "3c91ffbcabb7e64d297674cca5035ae50d933f7085f7211530d6e2503b43fac4",
+    "rawBytes": 229
+  },
+  {
+    "file": "external-object-route-source-admission-r1-20261026-test.exit",
+    "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "rawBytes": 2
+  }
+]

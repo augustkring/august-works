@@ -1,0 +1,63 @@
+{
+  "scope": "Four known full Run HTTP response boundaries only; internal run reads unaffected",
+  "sources": {
+    "server/src/routes/agents.ts": "303ea8f46432d129f4ee5fdce71787482a1e0b5ca71f2f0060b39a53ab1151d8",
+    "server/src/__tests__/agent-live-run-routes.test.ts": "9fd1b2ffdcd91a1296ac576599c1bcf766a1b4ac7f27ab89b12eda0b25403b07",
+    "server/src/__tests__/native-payload-public-response.integration.test.ts": "2238972dcf6e0c22ea9dd4d78da6af2b1fca8965c04b90a47e209357a5c1671b"
+  },
+  "projection": "Original agents route owner shallow-omits runnerProfileJson and nativeInputSourceProtocolVersion at wakeup,invoke,detail,cancel. No recursive result redaction or fake DB fields.",
+  "focused": {
+    "checkpoint": "up03-run-public-dto-receipt.json",
+    "actualExit": 0,
+    "passed": 4,
+    "filtered": 87,
+    "durationSeconds": 94.85,
+    "log": "up03-run-public-dto-final.log",
+    "sourcePinsUnchanged": true
+  },
+  "serverCompiler": {
+    "actualExit": 0,
+    "log": "up03-run-public-dto-server-types.log",
+    "all3PinsUnchanged": true
+  },
+  "sourceArchives": {
+    "up03-run-public-dto-red-agents.ts": {
+      "artifact": "up03-run-public-dto-red-agents.txt.gz",
+      "uncompressedSha256": "6601f0c98b04fd54829627c606bf28b9caebb0f76a89dc8125a439b0c662ab3b"
+    },
+    "up03-run-public-dto-final-mock.ts": {
+      "artifact": "up03-run-public-dto-final-mock.txt.gz",
+      "uncompressedSha256": "9fd1b2ffdcd91a1296ac576599c1bcf766a1b4ac7f27ab89b12eda0b25403b07"
+    },
+    "up03-run-public-dto-tested-mock.ts": {
+      "artifact": "up03-run-public-dto-tested-mock.txt.gz",
+      "uncompressedSha256": "88f8d19a4812cd7c2fbdcad788b645161616d56bc4dfe05b977809921ff8ed07"
+    },
+    "up03-run-public-dto-final-agents.ts": {
+      "artifact": "up03-run-public-dto-final-agents.txt.gz",
+      "uncompressedSha256": "303ea8f46432d129f4ee5fdce71787482a1e0b5ca71f2f0060b39a53ab1151d8"
+    },
+    "up03-run-public-dto-first-current-agents.ts": {
+      "artifact": "up03-run-public-dto-first-current-agents.txt.gz",
+      "uncompressedSha256": "bf2dd647918d10a55f4afe37d92c4ae849ee82d0853874b3ef56cc1c55bcf4a3"
+    },
+    "up03-run-public-dto-tested-pg.ts": {
+      "artifact": "up03-run-public-dto-tested-pg.txt.gz",
+      "uncompressedSha256": "2238972dcf6e0c22ea9dd4d78da6af2b1fca8965c04b90a47e209357a5c1671b"
+    }
+  },
+  "auditCorrection": "heartbeat.list and other audited live/activity/Skill projections already use explicit columns and omit both fields. Detail/internal getRun retains all original actual columns.",
+  "limits": [
+    "Actual PG detail + mock-backed wakeup/invoke/cancel API serialization, not credential/transport/full source privacy qualification.",
+    "Initial actual exposure failures and existing 30s cold dynamic-import timeouts retained. Fixture transformation warmup moved into bounded existing beforeAll budget, HTTP case deadlines/assertions/guards unchanged.",
+    "Original private Memory copy/temporal regressions, complete Run input closure, current source authorization and all V10 release gates remain open."
+  ],
+  "fullBothFiles": {
+    "actualExit": 0,
+    "passed": 91,
+    "durationSeconds": 232.25,
+    "log": "up03-run-public-dto-full.log",
+    "all3PinsUnchanged": true,
+    "exitObservation": "Original command captured actual exit in durable file, complete verdict/cleanup and process closure observed. Original agent tool session unavailable after model-capacity error; no fabricated tool-closure result."
+  }
+}

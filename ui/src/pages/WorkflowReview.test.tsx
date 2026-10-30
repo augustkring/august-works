@@ -405,13 +405,16 @@ it("keeps exact typed condition fields readable and hides private input material
   step.semantics = { actor: "workflow", input: "condition_data", durationSeconds: null,
     approvalPolicy: "no_checkpoint", access: "no_step_grant", maxAttempts: 1, idempotency: "not_required" };
   step.inputReview = { kind: "condition", source: "trigger", path: ["customer.name", "answer"], operator: "===", value: "PRIVATE false " };
-  vi.spyOn(workflowsApi, "experience").mockResolvedValue(view);
+  const read = vi.spyOn(workflowsApi, "experience")
+    .mockResolvedValueOnce(view)
+    .mockRejectedValue(new Error("Source access withdrawn"));
   await mount();
   await vi.waitFor(() => expect(container.textContent).toContain('"PRIVATE false "'));
   const fields = container.querySelector('ol[aria-label="Field names, from outermost to innermost"]')!;
   expect([...fields.querySelectorAll("li")].map(item => item.textContent)).toEqual(['"customer.name"', '"answer"']);
   expect(container.textContent).toContain('Text: "PRIVATE false "');
   await act(async () => live({ companyId: data.companyId, type: "analytical.context.access_lost", payload: {} }));
+  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
   expect(container.textContent).not.toContain("PRIVATE false");
   expect(container.textContent).not.toContain("customer.name");
 });

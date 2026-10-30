@@ -1,0 +1,212 @@
+-- An integrity barrier on the original run profile, never input completeness,
+-- permission or execution admission. Historical/missing receipts stay unknown.
+CREATE FUNCTION public.aw_native_run_input_source_receipt_binding() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+DECLARE
+  profile jsonb := NEW.runner_profile_json;
+  previous_profile jsonb;
+  receipt jsonb;
+  previous_receipt jsonb;
+  erased boolean := false;
+  binding jsonb;
+  sources jsonb;
+  policy jsonb;
+  item jsonb;
+  vector_name text;
+  family text;
+  allowed text[];
+  captured_references text[] := ARRAY[]::text[];
+  source_count integer;
+  old_count integer;
+  capture_index integer;
+BEGIN
+  IF TG_OP='UPDATE' THEN previous_profile := OLD.runner_profile_json; END IF;
+  receipt := nullif(profile->'nativeInputSourceReceipt','null'::jsonb);
+  previous_receipt := nullif(previous_profile->'nativeInputSourceReceipt','null'::jsonb);
+
+  IF NEW.native_input_source_protocol_version=1 THEN
+    PERFORM 1 FROM public.memory_deletion_markers marker
+      WHERE marker.company_id=NEW.company_id AND marker.kind='source'
+        AND marker.key='memory-run-source-erasure:v1:' || NEW.id::text FOR KEY SHARE;
+    erased := FOUND;
+    IF erased AND (receipt IS NOT NULL OR profile ? 'nativeExecutionInput') THEN
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Erased native run inputs cannot be restored';
+    END IF;
+  END IF;
+
+  IF receipt IS NULL THEN
+    -- Preserve the original workflow/native erasure owner, which can scrub a
+    -- profile for actual erased Context, runtime-version or conversation roots
+    -- before a run-specific marker exists. Only its canonical predicate can
+    -- justify that full clear; retain the existing content-free marker so a
+    -- later loss of the original source row cannot resurrect native input.
+    IF NEW.native_input_source_protocol_version=1 AND NOT erased
+      AND (profile IS NULL OR profile='{}'::jsonb)
+      AND public.aw_workflow_memory_erased(NEW.company_id,NEW.id,
+        CASE WHEN NEW.runtime_mode='native' THEN NEW.native_issue_id ELSE NULL END) THEN
+      IF TG_ARGV[0] IS DISTINCT FROM 'erasure' THEN
+        INSERT INTO public.memory_deletion_markers(company_id,kind,key)
+          VALUES(NEW.company_id,'source','memory-run-source-erasure:v1:' || NEW.id::text)
+          ON CONFLICT(company_id,key) DO NOTHING;
+        PERFORM 1 FROM public.memory_deletion_markers marker
+          WHERE marker.company_id=NEW.company_id AND marker.kind='source'
+            AND marker.key='memory-run-source-erasure:v1:' || NEW.id::text FOR KEY SHARE;
+        IF NOT FOUND THEN
+          RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run erasure marker conflict';
+        END IF;
+      END IF;
+      erased := true;
+    END IF;
+    IF previous_receipt IS NOT NULL AND NOT
+      (erased AND (profile IS NULL OR profile='{}'::jsonb)) THEN
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run input receipt cannot be removed';
+    END IF;
+    RETURN NEW;
+  END IF;
+  -- The early invocation sees attempted resurrection before existing erasure
+  -- owners sanitize NEW. Final binding still runs after source-mutating owners.
+  IF TG_ARGV[0]='erasure' THEN RETURN NEW; END IF;
+
+  IF NEW.native_input_source_protocol_version<>1 OR NEW.runtime_mode<>'native'
+    OR jsonb_typeof(profile->'nativeExecutionInput') IS DISTINCT FROM 'object'
+    OR jsonb_typeof(receipt) IS DISTINCT FROM 'object' THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run input receipt requires a native protocol writer and input';
+  END IF;
+  IF octet_length(convert_to(receipt::text,'UTF8'))>2097152
+    OR receipt->'version' IS DISTINCT FROM '1'::jsonb
+    OR NOT receipt ?& ARRAY['version','binding','bootstrap','dispatches','additionalInputs','digest']
+    OR receipt-ARRAY['version','binding','bootstrap','dispatches','additionalInputs','digest']<>'{}'::jsonb
+    OR jsonb_typeof(receipt->'binding') IS DISTINCT FROM 'object'
+    OR jsonb_typeof(receipt->'bootstrap') IS DISTINCT FROM 'object'
+    OR jsonb_typeof(receipt->'dispatches') IS DISTINCT FROM 'array'
+    OR jsonb_typeof(receipt->'additionalInputs') IS DISTINCT FROM 'array'
+    OR jsonb_typeof(receipt->'digest') IS DISTINCT FROM 'string' THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Malformed native run input receipt';
+  END IF;
+  IF jsonb_array_length(receipt->'dispatches')>64 OR jsonb_array_length(receipt->'additionalInputs')>256
+    OR receipt->>'digest' IS DISTINCT FROM encode(sha256(convert_to((receipt-'digest')::text,'UTF8')),'hex') THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run input receipt bounds or digest mismatch';
+  END IF;
+
+  binding := receipt->'binding';
+  IF NOT binding ?& ARRAY['companyId','runId','agentId','responsibleUserId','issueId']
+    OR binding-ARRAY['companyId','runId','agentId','responsibleUserId','issueId']<>'{}'::jsonb
+    OR binding->'companyId' IS DISTINCT FROM to_jsonb(NEW.company_id::text)
+    OR binding->'runId' IS DISTINCT FROM to_jsonb(NEW.id::text)
+    OR binding->'agentId' IS DISTINCT FROM to_jsonb(NEW.agent_id::text)
+    OR binding->'issueId' IS DISTINCT FROM coalesce(to_jsonb(NEW.issue_id::text),'null'::jsonb)
+    OR jsonb_typeof(binding->'responsibleUserId') IS DISTINCT FROM 'string'
+    OR length(binding->>'responsibleUserId')=0 THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run input receipt owner mismatch';
+  END IF;
+  IF receipt->'bootstrap'->>'executionInputDigest' IS DISTINCT FROM
+      encode(sha256(convert_to((profile->'nativeExecutionInput')::text,'UTF8')),'hex') THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run bootstrap input digest mismatch';
+  END IF;
+
+  IF previous_receipt IS NULL THEN
+    IF previous_profile ? 'nativeExecutionInput'
+      OR binding->>'responsibleUserId' IS DISTINCT FROM NEW.responsible_user_id
+      OR jsonb_array_length(receipt->'dispatches')<>0 OR jsonb_array_length(receipt->'additionalInputs')<>0 THEN
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run receipt must accompany its first input capture';
+    END IF;
+  ELSE
+    IF receipt-ARRAY['dispatches','additionalInputs','digest'] IS DISTINCT FROM
+        previous_receipt-ARRAY['dispatches','additionalInputs','digest']
+      OR profile->'nativeExecutionInput' IS DISTINCT FROM previous_profile->'nativeExecutionInput' THEN
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run bootstrap capture is immutable';
+    END IF;
+  END IF;
+
+  FOREACH family IN ARRAY ARRAY['bootstrap','dispatches','additionalInputs'] LOOP
+    IF family='bootstrap' THEN
+      allowed := ARRAY['executionInputDigest','policy','inputs'];
+    ELSIF family='dispatches' THEN
+      allowed := ARRAY['executionInputDigest','responsibleUserId','policy','inputs'];
+    ELSE
+      allowed := ARRAY['responsibleUserId','policy','inputs'];
+    END IF;
+    old_count := CASE WHEN family='bootstrap' OR previous_receipt IS NULL THEN 0
+      ELSE jsonb_array_length(previous_receipt->family) END;
+    IF family<>'bootstrap' AND jsonb_array_length(receipt->family)<old_count THEN
+      RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run input captures are append-only';
+    END IF;
+    capture_index := 0;
+    FOR sources IN SELECT value FROM jsonb_array_elements(CASE WHEN family='bootstrap'
+      THEN jsonb_build_array(receipt->family) ELSE receipt->family END) LOOP
+      IF jsonb_typeof(sources) IS DISTINCT FROM 'object' OR NOT sources ?& allowed
+        OR sources-allowed<>'{}'::jsonb OR jsonb_typeof(sources->'policy') IS DISTINCT FROM 'object'
+        OR jsonb_typeof(sources->'inputs') IS DISTINCT FROM 'array' THEN
+        RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Malformed native run input capture';
+      END IF;
+      IF family<>'bootstrap' THEN
+        IF capture_index<old_count THEN
+          IF sources IS DISTINCT FROM previous_receipt->family->capture_index THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run input captures are append-only';
+          END IF;
+        ELSIF jsonb_typeof(sources->'responsibleUserId') IS DISTINCT FROM 'string'
+          OR length(sources->>'responsibleUserId')=0
+          OR sources->>'responsibleUserId' IS DISTINCT FROM NEW.responsible_user_id THEN
+          RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run input capture Human mismatch';
+        END IF;
+      END IF;
+      IF family<>'additionalInputs' AND (jsonb_typeof(sources->'executionInputDigest') IS DISTINCT FROM 'string'
+        OR sources->>'executionInputDigest' !~ '^[0-9a-f]{64}$') THEN
+        RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Malformed native input digest';
+      END IF;
+      policy := sources->'policy';
+      allowed := CASE WHEN family='bootstrap' THEN ARRAY['executionInputDigest','policy','inputs']
+        WHEN family='dispatches' THEN ARRAY['executionInputDigest','responsibleUserId','policy','inputs']
+        ELSE ARRAY['responsibleUserId','policy','inputs'] END;
+      IF NOT policy ?& ARRAY['issueIds','projectIds','runIds','memoryIds','foundationRevisionIds']
+        OR policy-ARRAY['issueIds','projectIds','runIds','memoryIds','foundationRevisionIds']<>'{}'::jsonb THEN
+        RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Malformed native input policy vectors';
+      END IF;
+      source_count := jsonb_array_length(sources->'inputs');
+      FOREACH vector_name IN ARRAY ARRAY['issueIds','projectIds','runIds','memoryIds','foundationRevisionIds'] LOOP
+        IF jsonb_typeof(policy->vector_name) IS DISTINCT FROM 'array' THEN
+          RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Malformed native input policy vector';
+        END IF;
+        source_count := source_count + jsonb_array_length(policy->vector_name);
+        IF (SELECT count(*)<>count(DISTINCT value) FROM jsonb_array_elements(policy->vector_name)) THEN
+          RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Duplicate native input policy identity';
+        END IF;
+        FOR item IN SELECT value FROM jsonb_array_elements(policy->vector_name) LOOP
+          IF jsonb_typeof(item) IS DISTINCT FROM 'string' OR item#>>'{}' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+            RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Malformed native input policy identity';
+          END IF;
+          captured_references := array_append(captured_references,vector_name || ':' || (item#>>'{}'));
+        END LOOP;
+      END LOOP;
+      IF source_count>256 THEN
+        RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native input capture exceeds source bounds';
+      END IF;
+      IF (SELECT count(*)<>count(DISTINCT value) FROM jsonb_array_elements(sources->'inputs')) THEN
+        RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Duplicate native captured input';
+      END IF;
+      FOR item IN SELECT value FROM jsonb_array_elements(sources->'inputs') LOOP
+        -- Full finite input-family validation remains the shared parser's job.
+        IF jsonb_typeof(item) IS DISTINCT FROM 'object' OR jsonb_typeof(item->'kind') IS DISTINCT FROM 'string' THEN
+          RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Malformed native captured input';
+        END IF;
+        captured_references := array_append(captured_references,'input:' || item::text);
+      END LOOP;
+      capture_index := capture_index+1;
+    END LOOP;
+  END LOOP;
+  IF (SELECT count(DISTINCT value)>256 FROM unnest(captured_references) value) THEN
+    RAISE EXCEPTION USING ERRCODE='23514', MESSAGE='Native run receipt exceeds distinct source bounds';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER aa_heartbeat_runs_native_input_source_erasure_gate
+BEFORE INSERT OR UPDATE ON public.heartbeat_runs
+FOR EACH ROW EXECUTE FUNCTION public.aw_native_run_input_source_receipt_binding('erasure');
+--> statement-breakpoint
+-- Run after existing source-mutating BEFORE triggers so issue binding reflects
+-- the final native owner. No trigger stamps a receipt or upgrades an old run.
+CREATE TRIGGER zz_heartbeat_runs_native_input_source_receipt_binding
+BEFORE INSERT OR UPDATE ON public.heartbeat_runs
+FOR EACH ROW EXECUTE FUNCTION public.aw_native_run_input_source_receipt_binding();

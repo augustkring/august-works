@@ -1,0 +1,94 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts (33 tests | 4 failed) 115180ms
+     × accepts zip uploads for issue attachments 30014ms
+     × rejects same-company attachment content reads outside the parent issue boundary 2104ms
+     × canonicalizes paperclip artifact metadata before creating a work product 1342ms
+     × rejects paperclip artifact metadata that references another issue's attachment 1964ms
+[12:40:50] [33mWARN[39m: [36missue update rejected with 422[39m [90m{"issueId":"219211be-5e43-4f72-b055-96c1fc522f03","companyId":"60d3a285-ccd2-4ac5-95d6-2fd77773ed25","assigneePatch":{"assigneeAgentId":"77583ce0-0758-4dd9-be95-3e36c2f507be","assigneeUserId":"__omitted__"},"currentAssignee":{"assigneeAgentId":"94299ece-e3ac-47db-86da-4f81ba7fcfe9","assigneeUserId":null}}[39m
+    error: "Comment attachments must belong to the same task and company"
+[12:40:51] [33mWARN[39m: [36missue update rejected with 422[39m [90m{"issueId":"484e33be-f47a-40ba-80e6-f140323278f9","companyId":"14c05781-d3d4-4532-bd35-24fcbd07c82d","assigneePatch":{"assigneeAgentId":"eaac087e-2589-4d4a-8f02-e7be4e79b54f","assigneeUserId":"__omitted__"},"currentAssignee":{"assigneeAgentId":"6706f443-04f2-425d-8e71-d2c5d94aadd4","assigneeUserId":null}}[39m
+    error: "Comment attachments must belong to the same task and company"
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > accepts zip uploads for issue attachments
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/issue-attachment-routes.test.ts:267:3
+    265|   });
+    266|
+    267|   it("accepts zip uploads for issue attachments", async () => {
+       |   ^
+    268|     const storage = createStorageService();
+    269|     mockIssueService.getById.mockResolvedValue({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > rejects same-company attachment content reads outside the parent issue boundary
+AssertionError: expected 404 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 404
+
+ ❯ src/__tests__/issue-attachment-routes.test.ts:744:24
+    742|     const res = await request(app).get("/api/attachments/attachment-1/…
+    743|
+    744|     expect(res.status).toBe(403);
+       |                        ^
+    745|     expect(storage.getObject).not.toHaveBeenCalled();
+    746|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > canonicalizes paperclip artifact metadata before creating a work product
+AssertionError: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-attachment-routes.test.ts:791:24
+    789|       });
+    790|
+    791|     expect(res.status).toBe(201);
+       |                        ^
+    792|     expect(mockWorkProductService.createForIssue).toHaveBeenCalledWith(
+    793|       issue.id,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > rejects paperclip artifact metadata that references another issue's attachment
+AssertionError: expected 500 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 500
+
+ ❯ src/__tests__/issue-attachment-routes.test.ts:838:24
+    836|       });
+    837|
+    838|     expect(res.status).toBe(422);
+       |                        ^
+    839|     expect(res.body.error).toBe("Attachment artifact must reference an…
+    840|     expect(mockWorkProductService.createForIssue).not.toHaveBeenCalled…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  4 failed | 76 passed (80)
+   Start at  12:38:12
+   Duration  190.20s (transform 42.82s, setup 576ms, import 30.21s, tests 157.11s, environment 1ms)
+

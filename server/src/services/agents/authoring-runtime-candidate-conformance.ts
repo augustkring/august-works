@@ -74,7 +74,8 @@ export function agentRuntimeCandidateConformanceService(db: Db, options: Options
         const selected = resolvePaperclipRunnerProviderProfile(presence.agent.adapterConfig);
         if (selected.provider !== "aw_text_only") throw forbidden("The explicit peer needs its own installed text-only profile");
         const p = selectWorkerModelProfile(options.profiles, { companyId: peer.companyId, agentId: peer.agentId,
-          profileId: selected.workerModelProfileId, sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin });
+          profileId: selected.workerModelProfileId, sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin,
+          purpose: "candidate_evaluation" });
         const binding = await agentProviderBindingService(tx).getForPresence(current, peer.companyId, peer.agentId);
         if (!binding || binding.runtime.status === "revoked" || binding.provider.status === "revoked" ||
           binding.provider.providerAgentRef !== peer.agentId || binding.provider.isolationMode !== "isolated_per_presence" ||

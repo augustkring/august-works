@@ -1,0 +1,112 @@
+
+> @paperclipai/server@0.3.1 typecheck /workspace/blentera-v10/server
+> pnpm run prepare:runner-vendor && pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit --singleThreaded
+
+
+> @paperclipai/server@0.3.1 prepare:runner-vendor /workspace/blentera-v10/server
+> pnpm --filter @paperclipai/paperclip-runner build
+
+
+> @paperclipai/paperclip-runner@0.0.0 build /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run check:protocol-manifest && pnpm run build:typescript && pnpm run check:capability-contract && pnpm run check:capability-inventory && pnpm run check:protocol-coverage && pnpm run check:semantic-contracts && pnpm run check:runner-workflow-traceability && pnpm run build:binary && node scripts/generate-replay-goldens.mjs --check && node scripts/generate-semantic-action-catalog.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-manifest /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-manifest.mjs --check
+
+The generated PRP contract manifest matches its sources.
+
+> @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+
+> @paperclipai/paperclip-runner@0.0.0 check:capability-contract /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-capability-contract.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:capability-inventory /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/check-capability-inventory.mjs
+
+Capability inventory completeness and generated-output checks passed.
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-coverage /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-coverage.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:semantic-contracts /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run build:typescript && node scripts/generate-semantic-contracts.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+
+> @paperclipai/paperclip-runner@0.0.0 check:runner-workflow-traceability /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run build:typescript && node scripts/check-runner-workflow-traceability.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+Runner stress traceability passed: 44 findings, 12 workflows, 1 explicit exclusion.
+
+> @paperclipai/paperclip-runner@0.0.0 build:binary /workspace/blentera-v10/packages/paperclip-runner
+> cargo build --release --manifest-path runner/Cargo.toml --locked -p paperclip-runner-core --bin paperclip-runnerd && node scripts/stage-runner-binary.mjs
+
+error: failed to create directory `/workspace/blentera-v10/packages/paperclip-runner/runner/target`
+
+Caused by:
+  Not a directory (os error 20)
+ ELIFECYCLE  Command failed with exit code 101.
+/workspace/blentera-v10/packages/paperclip-runner:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @paperclipai/paperclip-runner@0.0.0 build: `pnpm run check:protocol-manifest && pnpm run build:typescript && pnpm run check:capability-contract && pnpm run check:capability-inventory && pnpm run check:protocol-coverage && pnpm run check:semantic-contracts && pnpm run check:runner-workflow-traceability && pnpm run build:binary && node scripts/generate-replay-goldens.mjs --check && node scripts/generate-semantic-action-catalog.mjs --check`
+Exit status 101
+ ELIFECYCLE  Command failed with exit code 101.
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @paperclipai/server@0.3.1 typecheck: `pnpm run prepare:runner-vendor && pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit --singleThreaded`
+Exit status 101

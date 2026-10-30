@@ -1,3 +1,4 @@
+import { instanceSettingsService } from "../services/instance-settings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
 import express from "express";
@@ -581,6 +582,69 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
 
   afterAll(async () => {
     await tempDb?.cleanup();
+  });
+
+  it("resolves broker bindings from the current run grant and assigned gateway without returning secrets", async () => {
+    const company = await createCompany(db);
+    const agent = await createAgent(db, company.id);
+    const providerSecret = await secretService(db).create(company.id, {
+      name: `Broker connector secret ${randomUUID()}`,
+      key: `broker_connector_secret_${randomUUID().replace(/-/g, "")}`,
+      provider: "local_encrypted",
+      value: `provider-secret-${randomUUID()}`,
+    });
+    const { application, connection, catalogEntry } = await createRemoteMcpTool(db, company.id, {
+      url: "https://mcp.example.test/mcp", toolName: "read_record", riskLevel: "read",
+      credentialRefs: [{ name: "credentials.authorization", secretId: providerSecret.id, version: "latest", placement: "header", key: "Authorization", prefix: "Bearer " }],
+      credentialSecretRefs: [{ secretId: providerSecret.id, versionSelector: "latest", configPath: "credentials.authorization", required: true, label: "Broker provider token" }],
+    });
+    const toolName = expectedConnectedToolName({ applicationKey: application.applicationKey, connectionId: connection.id, toolName: catalogEntry.toolName });
+    await allowToolsForAgent(db, company.id, agent.id, [toolName]);
+    const { project, issue, run } = await createIssueAndRun(db, company.id, agent.id);
+    const responsibleUserId = `user-${randomUUID()}`;
+    const presenceId = randomUUID();
+    await createActiveMember(db, company.id, responsibleUserId);
+    await db.update(heartbeatRuns).set({ nativeIssueId: issue.id, responsibleUserId }).where(eq(heartbeatRuns.id, run.id));
+    const [gatewayProfile] = await db.insert(toolProfiles).values({
+      companyId: company.id, profileKey: `broker-${randomUUID()}`, name: `Broker ${randomUUID()}`, defaultAction: "deny",
+    }).returning();
+    await db.insert(toolProfileEntries).values({
+      companyId: company.id, profileId: gatewayProfile!.id, selectorType: "connection", effect: "include", connectionId: connection.id,
+    });
+    const gateway = createTestToolGatewayService(db);
+    const named = await gateway.createNamedGateway({ companyId: company.id, body: { name: "Broker", profileId: gatewayProfile!.id } });
+    const policyBinding = {
+      connectionId: connection.id, grantVersionHash: "0".repeat(64), hostname: "mcp.example.test", port: 443,
+      methods: ["POST"] as const, pathPrefixes: ["/mcp"], binary: null, ttlSeconds: 60,
+    };
+    const resolved = await gateway.resolveSandboxCredentialBrokerBindings({
+      companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId,
+      presenceId, bindings: [policyBinding],
+    });
+    expect(resolved.bindings).toEqual([expect.objectContaining({
+      connectionId: connection.id, gatewayPublicId: named.gatewayPublicId,
+      endpointPath: `/mcp/gateways/${named.gatewayPublicId}`, allowedTools: [toolName],
+      destination: { hostname: "mcp.example.test", port: 443, method: "POST", path: "/mcp" },
+    })]);
+    const firstHash = resolved.authorizedConnectionGrantHashes[connection.id];
+    expect(firstHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(resolved)).not.toContain("token");
+    await secretService(db).rotate(providerSecret.id, { value: `rotated-provider-secret-${randomUUID()}`, expectedLatestVersion: 1 });
+    const rotated = await gateway.resolveSandboxCredentialBrokerBindings({
+      companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId,
+      presenceId, bindings: [policyBinding],
+    });
+    expect(rotated.authorizedConnectionGrantHashes[connection.id]).not.toBe(firstHash);
+    await expect(gateway.resolveSandboxCredentialBrokerBindings({
+      companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId, presenceId,
+      bindings: [{ ...policyBinding, hostname: "evil.example.test" }],
+    })).rejects.toMatchObject({ reasonCode: "sandbox_broker_destination_changed" });
+    const executableResolved = await gateway.resolveSandboxCredentialBrokerBindings({
+      companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId, presenceId,
+      bindings: [{ ...policyBinding, binary: "/usr/bin/node" }],
+    });
+    expect(executableResolved.bindings[0]?.binary).toBe("/usr/bin/node");
+    expect(project.id).toBe(issue.projectId);
   });
 
   it("preserves provider tool errors in MCP responses and failed invocation audits", async () => {
@@ -1191,6 +1255,46 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     expect(JSON.stringify(audits)).not.toContain("authorization");
   });
 
+  it("shares configured company request and burst counters across gateway instances without consuming another tenant", async () => {
+    const a = await createCompany(db), b = await createCompany(db);
+    let now = Date.now();
+    const first = createTestToolGatewayService(db, { now: () => now });
+    const second = createTestToolGatewayService(db, { now: () => now });
+    const clients = [];
+    for (const company of [a, b]) {
+      const [profile] = await db.insert(toolProfiles).values({ companyId: company.id, profileKey: randomUUID(),
+        name: "Configured request scope", defaultAction: "deny" }).returning();
+      const named = await first.createNamedGateway({ companyId: company.id, body: { name: "Configured request scope", profileId: profile.id } });
+      const token = await first.createNamedGatewayToken({ companyId: company.id, gatewayId: named.id,
+        body: { name: "Scoped client", clientLabel: "Scoped client" } });
+      clients.push({ endpoint: `/mcp/gateways/${named.gatewayPublicId}`, token: token.token });
+    }
+    const settings = instanceSettingsService(db), previous = (await settings.getGeneral()).resourceGovernance;
+    await settings.updateGeneral({ resourceGovernance: { version: 1, pools: [], rates: [a,b].map(company => ({
+      resource: "gateway_request", scope: "company", companyId: company.id, hardLimit: 1,
+      burst: company.id === a.id ? 1 : 0, windowMs: 60_000, onHardLimit: "reject", exceptionOwner: "Fixture operator" })) } });
+    const call = (service: ReturnType<typeof createTestToolGatewayService>, index: number) => request(createGatewayRouteApp(db, service))
+      .post(clients[index]!.endpoint).set("authorization", `Bearer ${clients[index]!.token}`)
+      .send({ jsonrpc: "2.0", id: 1, method: "initialize" });
+    try {
+      await call(first, 0).expect(200);
+      await call(second, 0).expect(200); // Explicit configured burst, same durable counter.
+      const denied = await call(first, 0).expect(429);
+      expect(denied.body.error.data).toMatchObject({ reasonCode: "resource_gateway_request_limited", resource: "gateway_request" });
+      expect(Number(denied.headers["retry-after"])).toBeGreaterThan(0);
+      await call(second, 1).expect(200);
+      await call(first, 1).expect(429);
+      const rows = await db.select().from(toolGatewayRateLimitCounters).where(eq(toolGatewayRateLimitCounters.counterKey, "resource:gateway_request:company:v1"));
+      expect(new Set(rows.map(row => row.companyId))).toEqual(new Set([a.id, b.id]));
+      expect(JSON.stringify(rows)).not.toContain(clients[0]!.token);
+      expect(JSON.stringify(rows)).not.toContain(clients[1]!.token);
+      now += 60_001;
+      await call(second, 0).expect(200);
+    } finally {
+      await settings.updateGeneral({ resourceGovernance: previous ?? { version: 1, pools: [], rates: [] } });
+    }
+  });
+
   it("rate limits public named gateway session setup, discovery, and calls with redacted audits", async () => {
     const company = await createCompany(db);
     const remote = await startFakeRemoteMcpServer(async ({ body }) => ({
@@ -1628,6 +1732,18 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
       commandTemplateKey: localTool.templateKey,
       healthStatus: "ok",
     });
+
+    const secondSession = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+    await gateway.executeTool({
+      sessionToken: secondSession.token,
+      tool: expectedName,
+      parameters: { message: "second session" },
+    });
+    const sessionSlots = await db.select().from(toolRuntimeSlots)
+      .where(eq(toolRuntimeSlots.connectionId, localTool.connection.id));
+    expect(sessionSlots).toHaveLength(2);
+    expect(new Set(sessionSlots.map((row) => row.slotKey)).size).toBe(2);
+    expect(sessionSlots.every((row) => row.slotKey.includes(localTool.connection.id))).toBe(true);
   });
 
   it("passes only approved env values to local stdio MCP processes", async () => {

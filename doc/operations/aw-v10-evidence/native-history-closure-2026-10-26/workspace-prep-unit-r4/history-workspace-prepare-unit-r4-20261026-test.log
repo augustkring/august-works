@@ -1,0 +1,42 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification
+
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > reports a missing sandbox file as ENOENT without masking command failures
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > keeps the runtime overlay out of sandbox workspace sync by default
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > stages runtime assets without replacing or restoring an in-place workspace
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > stages each additional project into an isolated dir on the base64/tar transport, one failure skipped
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > keeps adapter detection on the profile-backed shell path
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > runs setup commands from a stable root cwd when staging into a nested remote workspace dir
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > keeps verified projectless task staging commands inside the exact workspace root
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > uploads a multi-MB payload in a single process and preserves exact bytes
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > stages a single-file write to <path>.paperclip-upload then atomically renames it (single-stream path)
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > cleans up a staged upload when rename fails
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > stages a single-file write to a temp then renames it on the chunked fallback path too
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > test_client_syncIn_present_even_without_native_runner_syncIn
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > base64 fallback client reports allowConcurrentSyncOperations true
+ ✓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > marks only verified no-repository workspace staging commands and clears the marker before restore 64ms
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > undeclared native runner reports allowConcurrentSyncOperations false
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > declared native runner reports allowConcurrentSyncOperations true
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > base64 fallback ignores a runner opt-in without both sync verbs
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > test_client_syncIn_delegates_to_native_runner_with_zero_execute_calls
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > fallback syncIn tarballs+uploads a directory then runs post-upload commands in order
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > fallback syncIn runs a post-upload command under its own timeout, not the sync-client default
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > fallback syncIn writes a mode-constrained file directly to its target and then applies the mode
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > post-upload commands execute verbatim and are never rewritten
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > post-upload command cwd that escapes the target root is rejected
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > fallback syncIn aborts on the first non-zero exit
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > test_single_stream_writeFile_collapses_roundtrips_under_96MiB
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > falls back to chunked upload progress when the runner cannot report mid-stream stdin progress
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > falls back to bounded chunks when the runner does not explicitly opt in
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > downloads in bounded stdout chunks and reports monotonic byte progress to the total
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > includes stdout diagnostics when a managed runtime command fails
+ ↓ |@paperclipai/adapter-utils| src/command-managed-runtime.test.ts > command managed runtime > test_channel_round_trips_all_byte_values
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 29 skipped (30)
+   Start at  22:35:40
+   Duration  2.32s (transform 1.44s, setup 0ms, import 2.13s, tests 66ms, environment 0ms)
+

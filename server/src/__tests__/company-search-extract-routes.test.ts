@@ -1,5 +1,6 @@
 import express from "express";
 import request from "supertest";
+import type { SQL } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import type {
   CompanySearchExtractQuery,
@@ -28,7 +29,8 @@ function unusedSearch(_companyId: string, _query: CompanySearchQuery): Promise<C
   throw new Error("interactive search should not be called");
 }
 
-function createApp(companyIds: string[], extract: (companyId: string, query: CompanySearchExtractQuery) => Promise<CompanySearchExtractResponse>) {
+function createApp(companyIds: string[], extract: (companyId: string, query: CompanySearchExtractQuery,
+  options?: { issueReadCondition?: SQL<boolean> }) => Promise<CompanySearchExtractResponse>) {
   const app = express();
   app.use((req, _res, next) => {
     req.actor = {
@@ -53,7 +55,8 @@ function createApp(companyIds: string[], extract: (companyId: string, query: Com
 
 describe("company extract-search route", () => {
   it("parses the extraction query and invokes the service", async () => {
-    const extract = vi.fn(async (_companyId: string, query: CompanySearchExtractQuery) => extractResponse(query));
+    const extract = vi.fn(async (_companyId: string, query: CompanySearchExtractQuery,
+      _options?: { issueReadCondition?: SQL<boolean> }) => extractResponse(query));
     const app = createApp(["company-1"], extract);
 
     const response = await request(app)
@@ -73,7 +76,7 @@ describe("company extract-search route", () => {
       scope: "comments",
       limit: 200,
       matchesPerIssue: 200,
-    }));
+    }), expect.objectContaining({ issueReadCondition: expect.anything() }));
     expect(response.body).toMatchObject({ kind: "url", scope: "comments", truncated: false });
   });
 

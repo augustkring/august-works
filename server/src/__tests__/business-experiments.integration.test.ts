@@ -19,8 +19,9 @@ import { purgeCompanyContent } from "../services/saas/company-purge.js";
 import { metricDefinition, analyticalPurpose } from "./helpers/business-metric-fixture.js";
 import { experimentDefinition } from "./helpers/business-experiment-fixture.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 const support = await getEmbeddedPostgresTestSupport(), suite = support.supported ? describe : describe.skip;
-const actor = { type: "board" as const, source: "local_implicit" as const };
+let actor: Awaited<ReturnType<typeof seedCurrentHumanSourceActor>>;
 const flags = { analytical_lineage_v8: true, business_metrics_v8: true, business_experiments_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true };
 const rationale = "Explicit human review of the exact native protocol and source authority";
 suite("Native governed experiment preregistration on migrated PostgreSQL", () => {
@@ -31,6 +32,7 @@ suite("Native governed experiment preregistration on migrated PostgreSQL", () =>
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental(flags);
     companyId = randomUUID(); otherId = randomUUID();
     await db.insert(companies).values([{ id: companyId, name: "Experiment tenant", issuePrefix: randomUUID() }, { id: otherId, name: "Foreign tenant", issuePrefix: randomUUID() }]);
+    actor = await seedCurrentHumanSourceActor(db, [companyId, otherId]);
     const policy = analyticalPurpose(); policy.analyticalPurpose!.capabilities = ["metrics", "experiment"]; policy.analyticalPurpose!.permittedSensitivity = ["internal", "confidential"];
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id;
   });
@@ -173,7 +175,7 @@ suite("Native governed experiment preregistration on migrated PostgreSQL", () =>
     await expect(service().amend(companyId, actor, d.experiment.id, { expectedRevision: 4, definition: d.definition, reason: rationale })).rejects.toMatchObject({ status: 409 });
   });
   it("erases full protocol prose/history on native source erasure with flags off and company paused", async () => {
-    const [project] = await db.insert(projects).values({ companyId, name: "Admitted experimental source scope" }).returning();
+    const project = await createCanonicalHumanProject(db, companyId, actor, "Admitted experimental source scope");
     const d = await draft({ projectId: project.id }); await service().transition(companyId, actor, d.experiment.id, { expectedRevision: 1, versionId: d.version.id, state: "in_review", rationale });
     await db.update(companies).set({ status: "paused" }).where(eq(companies.id, companyId)); await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ business_experiments_v8: false });
     await db.transaction(async raw => { const tx = raw as unknown as typeof db; await lockMemoryPrivacy(tx, companyId); await eraseAnalyticalSourcesUnderMemory(tx, companyId, "project", [project.id]); });

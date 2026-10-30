@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+[11:13:53] [33mWARN[39m: [36mFailed to resolve auth session from request headers[39m [90m{"method":"GET","url":"/actor"}[39m
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  11:13:37
+   Duration  15.76s (transform 10.91s, setup 89ms, import 15.41s, tests 98ms, environment 0ms)
+

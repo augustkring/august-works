@@ -1,0 +1,115 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/components/MandatoryProductNotices.test.tsx (2 tests | 1 failed) 59ms
+     × shows the exact canonical text, requires an explicit accept action, then re-reads owner state 50ms
+[08:54:39] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[08:54:39] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[08:54:39] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[08:54:39] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+[08:54:39] [33mWARN[39m: [36mAnnouncement feed unavailable; retrying on demand after cooldown[39m
+ ❯ |@paperclipai/server| src/__tests__/announcement-feed.test.ts (28 tests | 1 failed) 184ms
+     × keeps scoped or action-required feed entries out of the generic dismissible/search projection 7ms
+ ❯ |@paperclipai/server| src/__tests__/announcements-routes.test.ts (12 tests | 1 failed) 4239ms
+     × fails closed on required-notice projection without a current Human session 11ms
+ ❯ |@paperclipai/server| src/services/experience/product-notices.test.ts (3 tests | 2 failed) 9ms
+     × projects mandatory visibility only from an exact current canonical acceptance requirement 5ms
+     × omits a canonically accepted version and ignores non-required rows 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/announcement-feed.test.ts > announcement feed > keeps scoped or action-required feed entries out of the generic dismissible/search projection
+AssertionError: expected { state: 'unavailable', items: [] } to match object { state: 'available', items: [] }
+
+- Expected
++ Received
+
+  {
+    "items": [],
+-   "state": "available",
++   "state": "unavailable",
+  }
+
+ ❯ src/__tests__/announcement-feed.test.ts:161:39
+    159|     const service = announcementFeedService({ ...ownedFeed, version: "…
+    160|     expect(await service.current()).toBeNull();
+    161|     await expect(service.searchable()).resolves.toMatchObject({ state:…
+       |                                       ^
+    162|   });
+    163|   it("distinguishes an unconfigured feed from a configured but unavail…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/announcements-routes.test.ts > announcement routes and durable dismissals > fails closed on required-notice projection without a current Human session
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/announcements-routes.test.ts:43:29
+     41|   it("fails closed on required-notice projection without a current Hum…
+     42|     const response = await request(app()).get(`/api/companies/${compan…
+     43|     expect(response.status).toBe(403);
+       |                             ^
+     44|     expect(response.headers["cache-control"]).toBe("private, no-store"…
+     45|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |@paperclipai/server| src/services/experience/product-notices.test.ts > product notice projection > projects mandatory visibility only from an exact current canonical acceptance requirement
+ReferenceError: trustAcceptanceNoticeListSchema is not defined
+ ❯ projectTrustAcceptanceNotices src/services/experience/product-notices.ts:38:3
+     36|     })];
+     37|   });
+     38|   return trustAcceptanceNoticeListSchema.parse({ configured: requireme…
+       |   ^
+     39| }
+     40|
+ ❯ src/services/experience/product-notices.test.ts:15:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |@paperclipai/server| src/services/experience/product-notices.test.ts > product notice projection > omits a canonically accepted version and ignores non-required rows
+ReferenceError: trustAcceptanceNoticeListSchema is not defined
+ ❯ projectTrustAcceptanceNotices src/services/experience/product-notices.ts:38:3
+     36|     })];
+     37|   });
+     38|   return trustAcceptanceNoticeListSchema.parse({ configured: requireme…
+       |   ^
+     39| }
+     40|
+ ❯ src/services/experience/product-notices.test.ts:31:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  |@paperclipai/ui| src/components/MandatoryProductNotices.test.tsx > mandatory product notices > shows the exact canonical text, requires an explicit accept action, then re-reads owner state
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/components/MandatoryProductNotices.test.tsx:53:29
+     51|     expect(container.querySelector('[data-testid="document-body"]')).t…
+     52|     const button = container.querySelector("button")!;
+     53|     expect(button.disabled).toBe(false);
+       |                             ^
+     54|     await act(async () => button.click());
+     55|     expect(api.accept).toHaveBeenCalledWith(notice, "alice");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  4 failed | 2 passed (6)
+      Tests  5 failed | 66 passed (71)
+   Start at  08:54:33
+   Duration  23.48s (transform 11.25s, setup 195ms, import 18.40s, tests 4.61s, environment 1.24s)
+

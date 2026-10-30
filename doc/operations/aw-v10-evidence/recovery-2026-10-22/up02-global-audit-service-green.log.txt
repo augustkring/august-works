@@ -1,0 +1,41 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[19:46:41] [33mWARN[39m: [36mFailed to publish committed CLI approval activity[39m 
+    err: {
+      "type": "Error",
+      "message": "Injected publication failure",
+      "stack":
+          Error: Injected publication failure
+              at EventEmitter.<anonymous> (/workspace/blentera-v10/server/src/services/board-auth.test.ts:263:67)
+              at EventEmitter.emit (node:events:514:28)
+              at publishLiveEvent (/workspace/blentera-v10/server/src/services/live-events.ts:34:11)
+              at publishActivity (/workspace/blentera-v10/server/src/services/activity-log.ts:152:3)
+              at Object.approveCliAuthChallenge (/workspace/blentera-v10/server/src/services/board-auth.ts:505:13)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/services/board-auth.test.ts:266:24
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:46:41] [33mWARN[39m: [36mFailed to publish committed CLI approval activity[39m 
+    err: {
+      "type": "Error",
+      "message": "Synthetic publication failure",
+      "stack":
+          Error: Synthetic publication failure
+              at EventEmitter.<anonymous> (/workspace/blentera-v10/server/src/services/board-auth.test.ts:335:67)
+              at EventEmitter.emit (node:events:514:28)
+              at publishLiveEvent (/workspace/blentera-v10/server/src/services/live-events.ts:34:11)
+              at publishActivity (/workspace/blentera-v10/server/src/services/activity-log.ts:152:3)
+              at Object.approveCliAuthChallenge (/workspace/blentera-v10/server/src/services/board-auth.ts:505:13)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/routes/access.ts:2862:24
+    }
+
+ Test Files  1 passed (1)
+      Tests  21 passed (21)
+   Start at  19:45:41
+   Duration  60.59s (transform 33.30s, setup 288ms, import 12.99s, tests 46.79s, environment 0ms)
+

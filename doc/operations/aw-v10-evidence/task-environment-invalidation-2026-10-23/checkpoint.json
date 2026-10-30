@@ -1,0 +1,29 @@
+{
+  "baseCommit": "c8d0b0088",
+  "sources": {
+    "server/src/services/issues.ts": "20be1f37d07ec8946b3f0463be383fb866f2d9b33eb365f3e722fe6f2ddec0c0",
+    "server/src/__tests__/native-payload-source-binding.integration.test.ts": "dfef1f7ca252ba1af1ceacae80a3a91298d4af071ef161f9a80700c2343b95ff",
+    "server/src/__tests__/company-portability.test.ts": "11a1b2b7851514bddada6786abed4fa756283221690ebfe4189e17838120d32d"
+  },
+  "baseline": {
+    "result": "1 failed,8 filtered;50.84s;actual exit1. Native environment clearing rejects an unchanged old snapshot after its hashed settings change.",
+    "log": "baseline.log"
+  },
+  "combined": {
+    "result": "Binding9PASS; portability64PASS/32FAIL; combined73PASS/32FAIL137.02s;actual exit1. Both migrated export fixtures pass. Original concurrency500ms assertion fails at1674ms while compiler overlaps;31 other original portability failures remain.",
+    "log": "final.log"
+  },
+  "targeted": {
+    "result": "3PASS/93filtered30.34s;actual exit0. Both migrated fixtures and original unchanged concurrency assertion pass after compiler closes.",
+    "log": "portability-targeted.log"
+  },
+  "serverCompiler": {
+    "result": "actual exit0;current product source;native server tsconfig excludes test files",
+    "log": "server-types.log"
+  },
+  "limits": [
+    "No full portability pass:31 original source-bearing/import/publication failures remain plus timing failure in the overlapping combined run.",
+    "Structural snapshot fixtures prove environment-mutation handling and company/unrelated-environment isolation, not authenticated producer/input qualification.",
+    "Other native body writers and original privacy/temporal failures remain open. No constructor activation, full V10/PR or release qualification."
+  ]
+}

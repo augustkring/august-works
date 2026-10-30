@@ -1,0 +1,133 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T00:38:10.779095+00:00",
+  "baseCommit": "4a28d7906968c8a20af1a311998148aa98ca97af",
+  "patchBytes": 1863477,
+  "patchSha256": "889355ee87a166821f64f3632ec0ef5541d1097406117cc95fef8d225c6da40d",
+  "archiveSha256": "0f033acb1cd3c1d0c263d0cab3f06a6eb0f5bd6a7c30625dd788d4bdf8928b0f",
+  "untrackedSourceFiles": [
+    {
+      "path": "evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "path": "evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "path": "evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "path": "scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 18960,
+      "sha256": "c7f2e4f93cec6d39fed18bdfd26cc9748d7ee744739a434c76162f599689131c"
+    },
+    {
+      "path": "scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3019,
+      "sha256": "f806a750184e36b666bf82b796be11cbf23255e32771eb69d94561b30acf769e"
+    },
+    {
+      "path": "scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15679,
+      "sha256": "0bd76c715fb89647d06b1d522bf1ada3e236a85b9cee91e760a7bbc37d201ec2"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    }
+  ],
+  "privateRecoveryFiles": [
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/schema-responsibility-scan.ts",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/schema-responsibility-scan.ts",
+      "bytes": 3908,
+      "sha256": "2539c3405894ba81a943dafa7d18af77d8b1f4c8414a9242c70bb7a5de701ad0"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/0565_responsibility_scan.sql",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/0565_responsibility_scan.sql",
+      "bytes": 3132,
+      "sha256": "b21416d3d4e36d2ddfd64ec8b70416a03ae85f77fcca8eeb275fe66e22130f55"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0565-responsibility-scan-proposal-20261030/README.md",
+      "archivePath": "b-resource-0565-responsibility-scan-proposal-20261030/README.md",
+      "bytes": 12211,
+      "sha256": "9029156d82106a05719749f616de4193f7e828c073931f492e9e46c236b017cc"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/record-static-ui-build-inputs.py",
+      "archivePath": "record-static-ui-build-inputs.py",
+      "bytes": 1315,
+      "sha256": "6a15c4e06816af2c98a8e4208dd494d0f4476c2387a0acab0c7dcd5a7f5585f4"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-root-ui-heartbeat-fixtures-r2-20261030.sh",
+      "archivePath": "run-root-ui-heartbeat-fixtures-r2-20261030.sh",
+      "bytes": 1288,
+      "sha256": "8c83591275163784db078154b8cca93332b98e5223a6203674fe5408f6709418"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/native-graph-ledger-handoff-20261030.md",
+      "archivePath": "native-graph-ledger-handoff-20261030.md",
+      "bytes": 7959,
+      "sha256": "3d59dc4d70e4a1a886fe85c12a7aa02d0aadf3bc539b914a96d29943114dd1af"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/v10-025-native-visibility-map-20261030.md",
+      "archivePath": "v10-025-native-visibility-map-20261030.md",
+      "bytes": 8231,
+      "sha256": "ec483ec3fbe733af5540a8440e5dd9d0486c52bea297e17ce302eaeac8a7b0b4"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/connector-main-alias-restoration-20261030.json",
+      "archivePath": "connector-main-alias-restoration-20261030.json",
+      "bytes": 469,
+      "sha256": "e32e65488602b0f3b3b40d26f28a53bc3c52e0488221566f13896e62d53beba6"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/ci-e1-failure-triage-20261030.json",
+      "archivePath": "ci-e1-failure-triage-20261030.json",
+      "bytes": 20090,
+      "sha256": "5f786299505391fd8b8dba87643b9ff211a4f02251e1d5b7a7ab9ccdc673b258"
+    }
+  ],
+  "privateArchiveSha256": "28411fb75c84f35a6295c4178166e6993729e90e451e6258235ce30c8cef81f9",
+  "note": "Moving integration snapshot with atomic per-file captures, not a cross-file acceptance freeze. Resource0564 staging remains preserved in r31; 0565 stays a private unqualified candidate."
+}

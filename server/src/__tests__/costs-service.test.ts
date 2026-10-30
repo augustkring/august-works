@@ -78,6 +78,7 @@ const mockCostService = vi.hoisted(() => ({
     issueCount: 1,
     includeDescendants: true,
     costCents: 0,
+    unpricedEventCount: 0,
     inputTokens: 0,
     cachedInputTokens: 0,
     outputTokens: 0,
@@ -212,6 +213,29 @@ describe("cost routes", () => {
     mockBudgetService.upsertPolicy.mockResolvedValue(undefined);
   });
 
+  it("rejects forged Native conversation receipts at the public cost route", async () => {
+    const response = await request(createApp())
+      .post("/api/companies/company-1/cost-events")
+      .send({
+        agentId: randomUUID(), provider: "anthropic", model: "test-model", costCents: 0,
+        occurredAt: new Date().toISOString(), billingCode: `native-conversation-model:${randomUUID()}`,
+      });
+    expect(response.status).toBe(400);
+    expect(mockCostService.createEvent).not.toHaveBeenCalled();
+  });
+
+  it("continues accepting ordinary adapter cost reports", async () => {
+    mockCostService.createEvent.mockResolvedValueOnce({ id: "cost-1", costCents: 10, model: "test-model" });
+    const response = await request(createApp())
+      .post("/api/companies/company-1/cost-events")
+      .send({
+        agentId: randomUUID(), provider: "anthropic", model: "test-model", costCents: 10,
+        occurredAt: new Date().toISOString(), billingCode: "adapter:normal-report",
+      });
+    expect(response.status).toBe(201);
+    expect(mockCostService.createEvent).toHaveBeenCalledOnce();
+  });
+
   it("accepts valid ISO date strings", async () => {
     const { parseCostDateRange } = loadCostParsers();
     expect(parseCostDateRange({
@@ -262,6 +286,7 @@ describe("cost routes", () => {
       issueCount: 1,
       includeDescendants: true,
       costCents: 0,
+      unpricedEventCount: 0,
       inputTokens: 0,
       cachedInputTokens: 0,
       outputTokens: 0,
@@ -403,6 +428,18 @@ describe("cost routes", () => {
 });
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
+describe("cost receipt ownership", () => {
+  it("rejects reserved ledger codes before any service database access", async () => {
+    const database = makeDb();
+    await expect(costService(database as any).createEvent("company-1", {
+      agentId: randomUUID(), provider: "anthropic", model: "test-model", costCents: 0,
+      occurredAt: new Date(), billingCode: `native-conversation-model:${randomUUID()}`,
+    })).rejects.toThrow("reserved for the model ledger");
+    expect(database.select).not.toHaveBeenCalled();
+    expect(database.insert).not.toHaveBeenCalled();
+  });
+});
+
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 
 describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
@@ -433,9 +470,95 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
     await tempDb?.cleanup();
   });
 
+  it("projects provider cost only for successful runs and marks incomplete cohorts", async () => {
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const reportedRunId = randomUUID();
+    const unmeteredRunId = randomUUID();
+    const failedRunId = randomUUID();
+    const finishedAt = new Date();
+
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Cost cohort",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(agents).values({
+      id: agentId,
+      companyId,
+      name: "Cost cohort agent",
+      role: "engineer",
+      status: "active",
+      adapterType: "codex_local",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    });
+    await db.insert(heartbeatRuns).values([
+      { id: reportedRunId, companyId, agentId, status: "succeeded", startedAt: finishedAt, finishedAt },
+      { id: unmeteredRunId, companyId, agentId, status: "succeeded", startedAt: finishedAt, finishedAt },
+      { id: failedRunId, companyId, agentId, status: "failed", startedAt: finishedAt, finishedAt },
+    ]);
+    await db.insert(costEvents).values([
+      {
+        companyId, agentId, heartbeatRunId: reportedRunId, provider: "openai", biller: "openai",
+        billingType: "metered_api", costStatus: "reported", model: "test", costCents: 100, occurredAt: finishedAt,
+      },
+      {
+        companyId, agentId, heartbeatRunId: reportedRunId, provider: "openai", biller: "openai",
+        billingType: "metered_api", costStatus: "estimated", model: "test", costCents: 50, occurredAt: finishedAt,
+      },
+      {
+        companyId, agentId, heartbeatRunId: failedRunId, provider: "openai", biller: "openai",
+        billingType: "metered_api", costStatus: "reported", model: "test", costCents: 900, occurredAt: finishedAt,
+      },
+    ]);
+
+    const range = { from: new Date(finishedAt.getTime() - 1_000), to: new Date(finishedAt.getTime() + 1_000) };
+    expect(await costs.summary(companyId, range)).toMatchObject({
+      successfulRunCount: 2,
+      successfulRunsWithCostEvents: 1,
+      successfulRunsWithoutCostEvents: 1,
+      successfulRunProviderCostCents: 150,
+      successfulRunEstimatedEventCount: 1,
+      providerCostPerSuccessfulRunCents: null,
+      providerCostPerSuccessfulRunCoverage: "recorded_events_only",
+      providerCostPerSuccessfulRunStatus: "incomplete_events",
+    });
+
+    await db.insert(costEvents).values({
+      companyId, agentId, heartbeatRunId: unmeteredRunId, provider: "openai", biller: "openai",
+      billingType: "metered_api", costStatus: "reported", model: "test", costCents: 250, occurredAt: finishedAt,
+    });
+    expect(await costs.summary(companyId, range)).toMatchObject({
+      successfulRunCount: 2,
+      successfulRunsWithCostEvents: 2,
+      successfulRunsWithoutCostEvents: 0,
+      successfulRunProviderCostCents: 400,
+      successfulRunEstimatedEventCount: 1,
+      providerCostPerSuccessfulRunCents: 200,
+      providerCostPerSuccessfulRunStatus: "estimated_events",
+    });
+
+    await db.insert(costEvents).values({
+      companyId, agentId, heartbeatRunId: reportedRunId, provider: "openai", biller: "openai",
+      billingType: "metered_api", costStatus: "unpriced", model: "test", costCents: 0, occurredAt: finishedAt,
+    });
+    expect(await costs.summary(companyId, range)).toMatchObject({
+      successfulRunUnpricedEventCount: 1,
+      providerCostPerSuccessfulRunCents: null,
+      providerCostPerSuccessfulRunStatus: "incomplete_events",
+    });
+  });
+
   it("persists unpriced token usage without inflating monthly spend", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();
+    const issueId = randomUUID();
+    const projectId = randomUUID();
+    const now = new Date();
+    const reportedAt = new Date(now.getTime() + 1_000);
 
     await db.insert(companies).values({
       id: companyId,
@@ -454,9 +577,22 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
       runtimeConfig: {},
       permissions: {},
     });
+    await db.insert(projects).values({ id: projectId, companyId, name: "Unpriced usage", status: "active" });
+    await db.insert(issues).values({
+      id: issueId,
+      companyId,
+      projectId,
+      title: "Unpriced usage",
+      status: "in_progress",
+      priority: "medium",
+      issueNumber: 1,
+      identifier: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}-1`,
+    });
 
     const event = await costs.createEvent(companyId, {
       agentId,
+      issueId,
+      projectId,
       provider: "openai",
       biller: "chatgpt",
       billingType: "subscription_included",
@@ -466,13 +602,40 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
       cachedInputTokens: 2_632_998,
       outputTokens: 32_644,
       costCents: 0,
-      occurredAt: new Date("2026-07-13T14:22:54.000Z"),
+      occurredAt: now,
     });
 
+    const range = { from: new Date(now.getTime() - 1_000), to: new Date(now.getTime() + 2_000) };
+    expect(await costs.summary(companyId, range)).toMatchObject({
+      spendCents: 0,
+      unpricedEventCount: 1,
+      successfulRunCount: 0,
+      providerCostPerSuccessfulRunCents: null,
+      providerCostPerSuccessfulRunCoverage: "recorded_events_only",
+      providerCostPerSuccessfulRunStatus: "no_successful_runs",
+    });
+    for (const read of [costs.byAgent, costs.byProvider, costs.byBiller, costs.byAgentModel, costs.byProject]) {
+      expect(await read(companyId, range)).toEqual([expect.objectContaining({ costCents: 0, unpricedEventCount: 1 })]);
+    }
+    expect(await costs.issueTreeSummary(companyId, issueId)).toMatchObject({ costCents: 0, unpricedEventCount: 1 });
+    const initialWindow = (await costs.windowSpend(companyId)).find((row) => row.window === "7d");
+    expect(initialWindow).toMatchObject({ costCents: 0, unpricedEventCount: 1 });
+    const [agentBeforeReported] = await db.select().from(agents).where(eq(agents.id, agentId));
+    expect(agentBeforeReported?.spentMonthlyCents).toBe(0);
+
+    await costs.createEvent(companyId, { agentId, issueId, projectId, provider: "openai", biller: "chatgpt", billingType: "subscription_included",
+      costStatus: "reported", model: "gpt-5.6-terra", costCents: 125, occurredAt: reportedAt });
+    expect(await costs.summary(companyId, range)).toMatchObject({ spendCents: 125, unpricedEventCount: 1 });
+    for (const read of [costs.byAgent, costs.byProvider, costs.byBiller, costs.byAgentModel, costs.byProject]) {
+      expect(await read(companyId, range)).toEqual([expect.objectContaining({ costCents: 125, unpricedEventCount: 1 })]);
+    }
+    expect(await costs.issueTreeSummary(companyId, issueId)).toMatchObject({ costCents: 125, unpricedEventCount: 1 });
+    const mixedWindow = (await costs.windowSpend(companyId)).find((row) => row.window === "7d");
+    expect(mixedWindow).toMatchObject({ costCents: 125, unpricedEventCount: 1 });
     expect(event.costStatus).toBe("unpriced");
     expect(event.inputTokens).toBe(2_732_577);
     const [agent] = await db.select().from(agents).where(eq(agents.id, agentId));
-    expect(agent?.spentMonthlyCents).toBe(0);
+    expect(agent?.spentMonthlyCents).toBe(125);
   });
 
   it("aggregates cost event sums above int32 without raising Postgres integer overflow", async () => {
@@ -694,6 +857,7 @@ describeEmbeddedPostgres("cost and finance aggregate overflow handling", () => {
       issueCount: 3,
       includeDescendants: true,
       costCents: 600,
+      unpricedEventCount: 0,
       inputTokens: 60,
       cachedInputTokens: 6,
       outputTokens: 12,

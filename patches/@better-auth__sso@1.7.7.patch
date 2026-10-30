@@ -1,0 +1,305 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 8b177bb8f..e7c2bee7e 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -30,6 +30,8 @@ import { additionalAuthorizationParamsSchema, handleOAuthUserInfo } from "better
+ */
+ /** Prefix for AuthnRequest IDs used in InResponseTo validation */
+ const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
++/** Request-context field stamped only by the host's validated deletion hook. */
++const ACCOUNT_DELETION_SAML_CHALLENGE_CONTEXT_KEY = "accountDeletionSamlChallenge";
+ /** Prefix for SAML session data (NameID + SessionIndex) for SLO */
+ const SAML_SESSION_KEY_PREFIX = "saml-session:";
+ /** Prefix for reverse lookup of SAML session by Better Auth session ID */
+@@ -577,11 +579,13 @@ function assertOIDCAuthorizedParty(payload, clientId) {
+ * the SSO OIDC flow.
+ */
+ async function validateOIDCIdToken(token, jwksEndpoint, options, isTrustedOrigin) {
++	if (typeof options.nonce !== "string" || options.nonce.length < 16) throw new Error("OIDC ID token nonce is required");
+ 	const verified = await jwtVerify(token, createRemoteJWKSet(new URL(jwksEndpoint), { [customFetch]: (url, init) => fetchOIDCEndpointResponse("jwksEndpoint", url, init, isTrustedOrigin) }), {
+ 		audience: options.audience,
+ 		issuer: options.issuer
+ 	});
+ 	if (typeof options.audience === "string") assertOIDCAuthorizedParty(verified.payload, options.audience);
++	if (verified.payload.nonce !== options.nonce) throw new Error("OIDC ID token nonce does not match the authorization request");
+ 	return verified;
+ }
+ /**
+@@ -1227,6 +1231,59 @@ function assertionSignatureFailure() {
+ 		message: "SAML assertion signature is required"
+ 	});
+ }
++function directSAMLChildren(parent, localName) {
++	return Array.from(parent?.childNodes || []).filter((node) => node.nodeType === 1 && node.localName === localName && node.namespaceURI === SAML_ASSERTION_NAMESPACE);
++}
++function parseStrictSAMLTimestamp(value) {
++	if (typeof value !== "string" || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)$/.test(value)) return NaN;
++	const time = Date.parse(value);
++	return Number.isFinite(time) ? time : NaN;
++}
++function verifiedSAMLAuthentication(authenticatedAssertion, assertionId) {
++	const document = new DOMParser({ onError: (_level, message) => {
++		throw new Error(message);
++	} }).parseFromString(authenticatedAssertion, "text/xml");
++	const assertion = document.documentElement;
++	if (!assertion || assertion.localName !== "Assertion" || assertion.namespaceURI !== SAML_ASSERTION_NAMESPACE || assertion.getAttribute("ID") !== assertionId) throw assertionSignatureFailure();
++	const issuerNodes = directSAMLChildren(assertion, "Issuer");
++	const subjectNodes = directSAMLChildren(assertion, "Subject");
++	const authnStatements = directSAMLChildren(assertion, "AuthnStatement");
++	const issuer = issuerNodes.length === 1 ? issuerNodes[0].textContent?.trim() || null : null;
++	const nameIdNodes = subjectNodes.length === 1 ? directSAMLChildren(subjectNodes[0], "NameID") : [];
++	const subject = nameIdNodes.length === 1 ? nameIdNodes[0].textContent?.trim() || null : null;
++	const authnInstant = authnStatements.length === 1 ? authnStatements[0].getAttribute("AuthnInstant") || null : null;
++	const bearerConfirmations = subjectNodes.length === 1 ? directSAMLChildren(subjectNodes[0], "SubjectConfirmation")
++		.filter((node) => node.getAttribute("Method") === "urn:oasis:names:tc:SAML:2.0:cm:bearer")
++		.flatMap((node) => {
++			const dataNodes = directSAMLChildren(node, "SubjectConfirmationData");
++			const data = dataNodes.length === 1 ? dataNodes[0] : null;
++			return [{
++				inResponseTo: data?.getAttribute("InResponseTo") || null,
++				recipient: data?.getAttribute("Recipient") || null,
++				notOnOrAfter: data?.getAttribute("NotOnOrAfter") || null
++			}];
++		}) : [];
++	return { assertionId, issuer, subject, authnInstant, bearerConfirmations };
++}
++function getAuthorizedSAMLDeletionChallenge(ctx, providerId) {
++	const marker = ctx.context?.[ACCOUNT_DELETION_SAML_CHALLENGE_CONTEXT_KEY];
++	if (marker === void 0) return null;
++	if (!marker || typeof marker !== "object" || Array.isArray(marker) || marker.purpose !== "account-deletion" ||
++		typeof marker.challengeId !== "string" || !marker.challengeId || typeof marker.userId !== "string" || !marker.userId ||
++		typeof marker.sourceSessionId !== "string" || !marker.sourceSessionId || marker.providerId !== providerId ||
++		!Number.isFinite(parseStrictSAMLTimestamp(marker.createdAt)) ||
++		!Number.isFinite(parseStrictSAMLTimestamp(marker.expiresAt)) || parseStrictSAMLTimestamp(marker.expiresAt) <= Date.now())
++		throw new APIError("FORBIDDEN", { code: "SAML_ACCOUNT_DELETION_REAUTH_INVALID", message: "The sign-in confirmation expired; start again" });
++	return {
++		purpose: "account-deletion",
++		challengeId: marker.challengeId,
++		userId: marker.userId,
++		sourceSessionId: marker.sourceSessionId,
++		providerId: marker.providerId,
++		createdAt: marker.createdAt,
++		expiresAt: marker.expiresAt
++	};
++}
+ /**
+ * Verifies that the sole plaintext SAML Assertion, rather than only its
+ * enclosing Response, is authenticated by an XML signature from the IdP.
+@@ -1249,6 +1306,7 @@ function verifySAMLAssertionSignature(samlContent, verificationOptions) {
+ 		if (!verified || !authenticatedAssertion) throw assertionSignatureFailure();
+ 		const authenticatedRoot = new DOMParser().parseFromString(authenticatedAssertion, "text/xml").documentElement;
+ 		if (!authenticatedRoot || authenticatedRoot.localName !== "Assertion" || authenticatedRoot.namespaceURI !== SAML_ASSERTION_NAMESPACE || authenticatedRoot.getAttribute("ID") !== assertionId) throw assertionSignatureFailure();
++		return verifiedSAMLAuthentication(authenticatedAssertion, assertionId);
+ 	} catch (error) {
+ 		if (error instanceof APIError && error.body?.code === "SAML_ASSERTION_SIGNATURE_REQUIRED") throw error;
+ 		throw assertionSignatureFailure();
+@@ -1517,6 +1575,10 @@ async function validateInResponseTo(c, ctx) {
+ 			});
+ 			throw c.redirect(errorRedirectUrl(ctx.redirectUrl, "invalid_saml_response", "Unknown or expired request ID"));
+ 		}
++		if (storedRequest.id !== inResponseTo) {
++			c.context.logger.error("SAML InResponseTo validation failed: request record ID mismatch", { providerId: ctx.providerId });
++			throw c.redirect(errorRedirectUrl(ctx.redirectUrl, "invalid_saml_response", "Unknown or expired request ID"));
++		}
+ 		if (storedRequest.providerId !== ctx.providerId) {
+ 			c.context.logger.error("SAML InResponseTo validation failed: provider mismatch", {
+ 				inResponseTo,
+@@ -2881,9 +2943,10 @@ async function processSAMLResponse(ctx, params, options) {
+ 	const expectedRecipients = getExpectedSAMLRecipients(parsedSamlConfig, ctx.context.baseURL, providerId, currentCallbackPath, assertionConsumerServiceUrl);
+ 	const serviceProviderPolicy = deriveSAMLServiceProviderPolicy(parsedSamlConfig);
+ 	let samlBindingContent;
++	let verifiedAuthentication = null;
+ 	try {
+ 		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+-		if (serviceProviderPolicy.wantAssertionsSigned) verifySAMLAssertionSignature(samlBindingContent, {
++		if (serviceProviderPolicy.wantAssertionsSigned) verifiedAuthentication = verifySAMLAssertionSignature(samlBindingContent, {
+ 			metadata: idp.entityMeta,
+ 			signatureAlgorithm: idp.entitySetting.requestSignatureAlgorithm
+ 		});
+@@ -2908,7 +2971,7 @@ async function processSAMLResponse(ctx, params, options) {
+ 			error_description: "SAML response binding could not be validated"
+ 		}));
+ 	}
+-	const requestProviderReference = (await validateInResponseTo(ctx, {
++	const validatedRequest = await validateInResponseTo(ctx, {
+ 		extract,
+ 		providerId,
+ 		options: {
+@@ -2916,7 +2979,8 @@ async function processSAMLResponse(ctx, params, options) {
+ 			allowIdpInitiated: options?.saml?.allowIdpInitiated
+ 		},
+ 		redirectUrl: samlErrorRedirectUrl
+-	}))?.providerReference;
++	});
++	const requestProviderReference = validatedRequest?.providerReference;
+ 	if (relayStateValidationFailed) throw ctx.redirect(buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+ 		error: "invalid_state",
+ 		error_description: "invalid_or_expired_relay_state"
+@@ -2942,6 +3006,53 @@ async function processSAMLResponse(ctx, params, options) {
+ 	});
+ 	const issuer = idp.entityMeta.getEntityID();
+ 	const assertionId = extractAssertionId(samlBindingContent);
++	let samlAuthentication;
++	const deletionChallenge = validatedRequest?.accountDeletionChallenge;
++	if (deletionChallenge) {
++		const failChallenge = () => {
++			ctx.context.logger.error("SAML account-deletion authentication proof validation failed", { providerId });
++			throw ctx.redirect(buildSAMLRedirectUrl(samlErrorRedirectUrl, {
++				error: "invalid_saml_response",
++				error_description: "The sign-in confirmation could not be verified"
++			}));
++		};
++		if (!serviceProviderPolicy.wantAssertionsSigned || !verifiedAuthentication ||
++			deletionChallenge.purpose !== "account-deletion" || deletionChallenge.providerId !== providerId ||
++			typeof deletionChallenge.challengeId !== "string" || !deletionChallenge.challengeId ||
++			typeof deletionChallenge.userId !== "string" || !deletionChallenge.userId ||
++			typeof deletionChallenge.sourceSessionId !== "string" || !deletionChallenge.sourceSessionId ||
++			!Number.isFinite(parseStrictSAMLTimestamp(deletionChallenge.createdAt)) || !Number.isFinite(parseStrictSAMLTimestamp(deletionChallenge.expiresAt)) ||
++			parseStrictSAMLTimestamp(deletionChallenge.expiresAt) <= Date.now() || !validatedRequest?.id ||
++			extract.response?.inResponseTo !== validatedRequest.id || assertionId !== verifiedAuthentication.assertionId ||
++			verifiedAuthentication.issuer !== issuer || verifiedAuthentication.subject !== extract.nameID ||
++			!Number.isFinite(parseStrictSAMLTimestamp(verifiedAuthentication.authnInstant))) failChallenge();
++		const authnTime = parseStrictSAMLTimestamp(verifiedAuthentication.authnInstant);
++		const now = Date.now();
++		if (authnTime < Date.parse(deletionChallenge.createdAt) - 1e3 || authnTime > now + 5e3 || now - authnTime > 300e3) failChallenge();
++		const matchingConfirmations = verifiedAuthentication.bearerConfirmations.filter((confirmation) => {
++			const notOnOrAfter = parseStrictSAMLTimestamp(confirmation.notOnOrAfter);
++			return confirmation.inResponseTo === validatedRequest.id &&
++				typeof confirmation.recipient === "string" && expectedRecipients.includes(confirmation.recipient) &&
++				Number.isFinite(notOnOrAfter) && notOnOrAfter > now;
++		});
++		if (verifiedAuthentication.bearerConfirmations.length !== 1 || matchingConfirmations.length !== 1) failChallenge();
++		const confirmation = matchingConfirmations[0];
++		samlAuthentication = {
++			purpose: "account-deletion",
++			challengeId: deletionChallenge.challengeId,
++			userId: deletionChallenge.userId,
++			sourceSessionId: deletionChallenge.sourceSessionId,
++			providerId: deletionChallenge.providerId,
++			requestId: validatedRequest.id,
++			assertionId: verifiedAuthentication.assertionId,
++			issuer: verifiedAuthentication.issuer,
++			subject: verifiedAuthentication.subject,
++			authnInstant: verifiedAuthentication.authnInstant,
++			recipient: confirmation.recipient,
++			notOnOrAfter: confirmation.notOnOrAfter,
++			binding: "post"
++		};
++	}
+ 	if (assertionId) {
+ 		const conditions = extract.conditions;
+ 		const clockSkew = options?.saml?.clockSkew ?? 3e5;
+@@ -3022,13 +3133,15 @@ async function processSAMLResponse(ctx, params, options) {
+ 				code: "SSO_PROVIDER_CHANGED",
+ 				message: "SSO provider changed while account linking was in progress"
+ 			});
++			if (samlAuthentication) ctx.context.accountDeletionSamlAuthentication = samlAuthentication;
+ 			const resolution = options?.resolveUser ? await resolveSSOUser(options.resolveUser, {
+ 				protocol: "saml",
+ 				providerId: provider.providerId,
+ 				accountKey,
+ 				providerUser,
+ 				providerAttributes,
+-				providerReference
++				providerReference,
++				...(samlAuthentication ? { samlAuthentication } : {})
+ 			}, await getCurrentAdapter(ctx.context.adapter), ctx.context.logger) : void 0;
+ 			if (resolution?.action === "reject") throw new APIError("FORBIDDEN", {
+ 				code: resolution.code,
+@@ -3097,6 +3210,7 @@ async function processSAMLResponse(ctx, params, options) {
+ 		provisioningOptions: options?.organizationProvisioning
+ 	});
+ 	if ("accountCookie" in result && result.accountCookie) await setAccountCookie(ctx, result.accountCookie);
++	ctx.context.setNewSession({ session, user });
+ 	await setSessionCookie(ctx, {
+ 		session,
+ 		user
+@@ -3702,7 +3816,8 @@ const signInSSO = (options) => {
+ 			}
+ 			if (!config.authorizationEndpoint) throw new APIError("BAD_REQUEST", { message: "Invalid OIDC configuration. Authorization URL not found." });
+ 			await addOAuthServerContext({ [SSO_PROVIDER_STATE_KEY]: await computeSSOProviderReference(provider) });
+-			const state = await generateState(ctx);
++			const idTokenNonce = generateRandomString(32);
++			const state = await generateState(ctx, { idTokenNonce });
+ 			const redirectURI = getOIDCRedirectURI(ctx.context.baseURL, provider.providerId, options);
+ 			const authorizationURL = await createAuthorizationURL({
+ 				id: provider.issuer,
+@@ -3712,6 +3827,7 @@ const signInSSO = (options) => {
+ 				},
+ 				redirectURI,
+ 				state: state.state,
++				nonce: idTokenNonce,
+ 				codeVerifier: config.pkce ? state.codeVerifier : void 0,
+ 				scopes: ctx.body.scopes || config.scopes || [
+ 					"openid",
+@@ -3734,11 +3850,14 @@ const signInSSO = (options) => {
+ 			if (!parsedSamlConfig) throw new APIError("BAD_REQUEST", { message: "Invalid SAML configuration" });
+ 			if (parsedSamlConfig.authnRequestsSigned && !parsedSamlConfig.spMetadata?.privateKey && !parsedSamlConfig.privateKey) throw new APIError("BAD_REQUEST", { message: "authnRequestsSigned is enabled but no privateKey provided in spMetadata or samlConfig" });
+ 			const providerReference = await computeSSOProviderReference(provider);
++			const deletionChallenge = getAuthorizedSAMLDeletionChallenge(ctx, provider.providerId);
++			if (deletionChallenge && (options?.saml?.enableInResponseToValidation === false || !deriveSAMLServiceProviderPolicy(parsedSamlConfig).wantAssertionsSigned))
++				throw new APIError("FORBIDDEN", { code: "SAML_ACCOUNT_DELETION_REAUTH_UNAVAILABLE", message: "A signed, fresh sign-in is unavailable" });
+ 			const { state: relayState } = await generateRelayState(ctx, void 0, providerReference);
+ 			const sp = createSP(parsedSamlConfig, ctx.context.baseURL, provider.providerId, { relayState });
+ 			const idp = createIdP(parsedSamlConfig);
+-			const loginRequest = sp.createLoginRequest(idp, "redirect");
+-			if (!loginRequest) throw new APIError("BAD_REQUEST", { message: "Invalid SAML request" });
++			const loginRequest = sp.createLoginRequest(idp, "redirect", deletionChallenge ? { forceAuthn: true } : void 0);
++			if (!loginRequest || deletionChallenge && !loginRequest.id) throw new APIError("BAD_REQUEST", { message: "Invalid SAML request" });
+ 			if (loginRequest.id && options?.saml?.enableInResponseToValidation !== false) {
+ 				const ttl = options?.saml?.requestTTL ?? 3e5;
+ 				const record = {
+@@ -3746,7 +3865,8 @@ const signInSSO = (options) => {
+ 					providerId: provider.providerId,
+ 					providerReference,
+ 					createdAt: Date.now(),
+-					expiresAt: Date.now() + ttl
++					expiresAt: Date.now() + ttl,
++					...(deletionChallenge ? { accountDeletionChallenge: deletionChallenge } : {})
+ 				};
+ 				await ctx.context.internalAdapter.createVerificationValue({
+ 					identifier: `${AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
+@@ -3895,7 +4015,8 @@ async function handleOIDCCallback(ctx, options, providerId, stateData, parsedPro
+ 		if (!jwksEndpoint) return redirectOIDCError("invalid_provider", "jwks_endpoint_not_found");
+ 		const verified = await validateOIDCIdToken(tokenResponse.idToken, jwksEndpoint, {
+ 			audience: config.clientId,
+-			issuer: provider.issuer
++			issuer: provider.issuer,
++			nonce: stateData.idTokenNonce
+ 		}, (url) => ctx.context.isTrustedOrigin(url)).catch((error) => {
+ 			if (error instanceof DiscoveryError) return redirectOIDCError("invalid_provider", error.message);
+ 			ctx.context.logger.error(error);
+diff --git a/dist/index-sM6JWXeV.d.mts b/dist/index-sM6JWXeV.d.mts
+index 2fe04042d..9746f5191 100644
+--- a/dist/index-sM6JWXeV.d.mts
++++ b/dist/index-sM6JWXeV.d.mts
+@@ -282,6 +282,22 @@ interface SSOSAMLUserResolutionInput extends BaseSSOUserResolutionInput {
+    * arrays and all scalar values remain strings.
+    */
+   providerAttributes: Record<string, string | readonly string[]>;
++  /** Verified assertion and one-use SP request details for an authorized account-deletion challenge. */
++  samlAuthentication?: {
++    purpose: "account-deletion";
++    challengeId: string;
++    userId: string;
++    sourceSessionId: string;
++    providerId: string;
++    requestId: string;
++    assertionId: string;
++    issuer: string;
++    subject: string;
++    authnInstant: string;
++    recipient: string;
++    notOnOrAfter: string;
++    binding: "post";
++  };
+ }
+ /** Verified SSO identity and provider data available to an application resolver. */
+ type SSOUserResolutionInput = SSOOIDCUserResolutionInput | SSOSAMLUserResolutionInput;
+@@ -1997,4 +2013,4 @@ declare function sso<O extends SSOOptions>(options?: O | undefined): {
+   options: NoInfer<O>;
+ };
+ //#endregion
+-export { SAMLIdentityProviderMetadata as A, SSOUserResolutionContext as B, deriveSAMLIdentityProviderEntityID as C, DEFAULT_MAX_SAML_RESPONSE_SIZE as D, DEFAULT_MAX_SAML_METADATA_SIZE as E, SSOProviderMutationGuardInput as F, DigestAlgorithm as G, AlgorithmValidationOptions as H, SSOProviderReference as I, KeyEncryptionAlgorithm as K, SSOProviderUserProfile as L, SSOOptions as M, SSOProvider as N, OIDCConfig as O, SSOProviderMutationGuardContext as P, SSOSAMLUserResolutionInput as R, SAMLServiceProviderPolicy as S, DEFAULT_CLOCK_SKEW_MS as T, DataEncryptionAlgorithm as U, SSOUserResolutionInput as V, DeprecatedAlgorithmBehavior as W, REQUIRED_DISCOVERY_FIELDS as _, fetchDiscoveryDocument as a, TimestampValidationOptions as b, normalizeUrl as c, validateDiscoveryUrl as d, DiscoverOIDCConfigParams as f, OIDCDiscoveryDocument as g, HydratedOIDCConfig as h, discoverOIDCConfig as i, SSOOIDCUserResolutionInput as j, SAMLConfig as k, selectTokenEndpointAuthMethod as l, DiscoveryErrorCode as m, sso as n, needsRuntimeDiscovery as o, DiscoveryError as p, SignatureAlgorithm as q, computeDiscoveryUrl as r, normalizeDiscoveryUrls as s, SSOPlugin as t, validateDiscoveryDocument as u, RequiredDiscoveryField as v, deriveSAMLServiceProviderPolicy as w, validateSAMLTimestamp as x, SAMLConditions as y, SSOUserResolution as z };
+\ No newline at end of file
++export { SAMLIdentityProviderMetadata as A, SSOUserResolutionContext as B, deriveSAMLIdentityProviderEntityID as C, DEFAULT_MAX_SAML_RESPONSE_SIZE as D, DEFAULT_MAX_SAML_METADATA_SIZE as E, SSOProviderMutationGuardInput as F, DigestAlgorithm as G, AlgorithmValidationOptions as H, SSOProviderReference as I, KeyEncryptionAlgorithm as K, SSOProviderUserProfile as L, SSOOptions as M, SSOProvider as N, OIDCConfig as O, SSOProviderMutationGuardContext as P, SSOSAMLUserResolutionInput as R, SAMLServiceProviderPolicy as S, DEFAULT_CLOCK_SKEW_MS as T, DataEncryptionAlgorithm as U, SSOUserResolutionInput as V, DeprecatedAlgorithmBehavior as W, REQUIRED_DISCOVERY_FIELDS as _, fetchDiscoveryDocument as a, TimestampValidationOptions as b, normalizeUrl as c, validateDiscoveryUrl as d, DiscoverOIDCConfigParams as f, OIDCDiscoveryDocument as g, HydratedOIDCConfig as h, discoverOIDCConfig as i, SSOOIDCUserResolutionInput as j, SAMLConfig as k, selectTokenEndpointAuthMethod as l, DiscoveryErrorCode as m, sso as n, needsRuntimeDiscovery as o, DiscoveryError as p, SignatureAlgorithm as q, computeDiscoveryUrl as r, normalizeDiscoveryUrls as s, SSOPlugin as t, validateDiscoveryDocument as u, RequiredDiscoveryField as v, deriveSAMLServiceProviderPolicy as w, validateSAMLTimestamp as x, SAMLConditions as y, SSOUserResolution as z };

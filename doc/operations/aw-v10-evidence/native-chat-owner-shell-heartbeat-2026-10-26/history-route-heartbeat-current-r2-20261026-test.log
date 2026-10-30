@@ -1,0 +1,63 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/agent-conversations.test.ts (38 tests | 1 failed | 37 skipped) 4752ms
+     × routes the first authenticated Human comment through the configured heartbeat owner 912ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/agent-conversations.test.ts > persistent agent conversations > routes the first authenticated Human comment through the configured heartbeat owner
+AssertionError: expected "vi.fn()" to be called with arguments: [ …(2) ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+    "f0524c50-f85b-4b17-8a17-07419bd194fb",
+-   ObjectContaining {
+-     "contextSnapshot": ObjectContaining {
++   {
++     "contextSnapshot": {
++       "commentId": "0338bce8-86b8-48a4-b609-50b0bccb9451",
++       "issueId": "0469e0d6-a809-4565-a135-c24a7fcbba26",
++       "source": "issue.comment",
++       "taskKey": "0469e0d6-a809-4565-a135-c24a7fcbba26",
++       "wakeCommentId": "0338bce8-86b8-48a4-b609-50b0bccb9451",
++       "wakeCommentIds": [
++         "0338bce8-86b8-48a4-b609-50b0bccb9451",
++       ],
++     },
++     "idempotencyKey": "conversation-comment:0338bce8-86b8-48a4-b609-50b0bccb9451",
++     "payload": {
++       "commentId": "0338bce8-86b8-48a4-b609-50b0bccb9451",
+        "issueId": "0469e0d6-a809-4565-a135-c24a7fcbba26",
+-       "wakeReason": "issue_commented",
+      },
+      "reason": "issue_commented",
+      "requestedByActorId": "5d4f2579-2039-4eba-96e7-6c2752bb5b0e",
+      "requestedByActorType": "user",
++     "source": "on_demand",
++     "triggerDetail": "manual",
+    },
+  ]
+
+
+Number of calls: 1
+
+ ❯ src/__tests__/agent-conversations.test.ts:222:32
+    220|       expect(firstComment.status, JSON.stringify(firstComment.body)).t…
+    221|       expect(heartbeat.wakeup).toHaveBeenCalledTimes(1);
+    222|       expect(heartbeat.wakeup).toHaveBeenCalledWith(agentId, expect.ob…
+       |                                ^
+    223|         reason: "issue_commented", requestedByActorType: "user", reque…
+    224|         contextSnapshot: expect.objectContaining({ issueId: shell.body…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 37 skipped (38)
+   Start at  11:20:17
+   Duration  19.60s (transform 10.37s, setup 76ms, import 14.65s, tests 4.75s, environment 0ms)
+

@@ -1,0 +1,5 @@
+paperclipai	/workspace/v10-dep-qualification/cli	tsc --noEmit --singleThreaded
+@paperclipai/paperclip-runner	/workspace/v10-dep-qualification/packages/paperclip-runner	pnpm run typecheck:typescript && pnpm run typecheck:rust
+@paperclipai/plugin-authoring-smoke-example	/workspace/v10-dep-qualification/packages/plugins/examples/plugin-authoring-smoke-example	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+@paperclipai/plugin-llm-wiki	/workspace/v10-dep-qualification/packages/plugins/plugin-llm-wiki	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit
+@paperclipai/ui	/workspace/v10-dep-qualification/ui	tsc -b

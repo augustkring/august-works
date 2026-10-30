@@ -1,0 +1,61 @@
+{
+  "status": "bounded software checkpoint; full UP03/V10 not qualified",
+  "production_change": "Revalidate the existing native analytical payload source owner after staging/warm-session/claim/comment waits before backend preparation, and after launch-intent persistence in the existing package admission callback.",
+  "red": {
+    "session": 14317,
+    "exit_code": 1,
+    "passed": 0,
+    "failed": 2,
+    "duration_seconds": 43.0,
+    "source_sha256": {
+      "server/src/services/native-runtime/native-session-executor.ts": "b8d7ae5a0360d6d3dd9fada6fe45edbae0c435169fef84e48a978c1cac8f205d",
+      "server/src/services/native-runtime/native-session-executor.test.ts": "4305ac17cac3e2a5dab47939aad5ce71433fc04e1424bfb01c1eeb86b844ebea",
+      "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502",
+      "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+      "packages/paperclip-runner/src/native-session-runtime.ts": "ea5088170d0b2435afaf18aabf7eeba113aa580845a312026af5b380bd30058d",
+      "server/src/services/native-runtime/native-runner-file-handoff.ts": "c1ee6469079ae4db32cddad9c7f2760a42919a911d44d5f75399aa75612ccb08"
+    },
+    "all_source_pins_unchanged": true,
+    "kind": "Actual executor software boundary tests with simulated authority withdrawal; PostgreSQL authority is mocked, no real external provider."
+  },
+  "current": {
+    "session": 68057,
+    "exit_code": 0,
+    "passed": 7,
+    "skipped": 461,
+    "duration_seconds": 39.81,
+    "source_sha256": {
+      "server/src/services/native-runtime/native-session-executor.ts": "38f17cac3ae18b94ca70d484c2e113aa6d4dc0e689b86666c11e769921c56357",
+      "server/src/services/native-runtime/native-session-executor.test.ts": "4305ac17cac3e2a5dab47939aad5ce71433fc04e1424bfb01c1eeb86b844ebea",
+      "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502",
+      "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+      "packages/paperclip-runner/src/native-session-runtime.ts": "ea5088170d0b2435afaf18aabf7eeba113aa580845a312026af5b380bd30058d",
+      "server/src/services/native-runtime/native-runner-file-handoff.ts": "c1ee6469079ae4db32cddad9c7f2760a42919a911d44d5f75399aa75612ccb08",
+      "packages/paperclip-runner/src/native-session-runtime.test.ts": "30f5989d185ebc79b0673f4486cd8615998a8a8404a7b2482fba78a8e00e412a"
+    },
+    "unchanged_original_pins_except_expected_executor_fix": true
+  },
+  "package_contract": {
+    "session": 11389,
+    "exit_code": 0,
+    "passed": 3,
+    "skipped": 138,
+    "duration_seconds": 4.44,
+    "behavior": "Actual package runtime invokes rejection callback before fresh open, checkpoint recovery or warm attach; no provider call, control-plane run or retained idle session close.",
+    "production_package_unchanged": true
+  },
+  "unqualified_attempt": {
+    "session": 72008,
+    "exit_code": 0,
+    "passed": 0,
+    "skipped": 138,
+    "reason": "Root test insertion used wrong cwd and failed before execution; subsequent filtered run selected no test. Not qualification."
+  },
+  "limits": [
+    "Canonical analytical source owner still has known ordinary Memory/Task copied-payload gap; this fix cannot establish full source closure.",
+    "No physical provider/host admission or atomic permission lifetime across subsequent provider awaits proven.",
+    "Full current normal server typecheck pending coordinated source freeze; earlier server typecheck does not qualify new source.",
+    "No immutable complete native input receipt, final byte digest, later tool input or warm-history source snapshot implemented by this checkpoint.",
+    "No full UP03/V10, full test/build release or PR-ready assertion."
+  ]
+}

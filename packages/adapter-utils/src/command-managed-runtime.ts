@@ -104,6 +104,10 @@ export interface CommandManagedRuntimeRunner {
      * `useSession`. The default keeps the context-based session selection.
      */
     bypassSession?: boolean;
+    /** Server-owned Native setup phase: pinned artifacts, verified task-root
+     * workspace staging, immutable runtime-context staging, run-scoped
+     * harness-state access, or the one conversation Runnerd launch. Never model supplied. */
+    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
   }): Promise<RunProcessResult>;
   /**
    * Optional native inbound file transfer. Present only when the sandbox
@@ -256,8 +260,11 @@ export function createCommandManagedRuntimeClient(input: {
   commandCwd: string;
   timeoutMs: number;
   shellCommand?: "bash" | "sh" | null;
-}): SandboxManagedRuntimeClient {
+  /** Set only by the verified projectless Native workspace-sync owner. */
+  nativeWorkspacePreparation?: boolean;
+}): SandboxManagedRuntimeClient & { finishNativeWorkspacePreparation(): void } {
   const shellCommand = preferredShellForSandbox(input.shellCommand);
+  let nativeWorkspacePreparationActive = input.nativeWorkspacePreparation === true;
   const runShell = async (
     script: string,
     opts: {
@@ -273,6 +280,7 @@ export function createCommandManagedRuntimeClient(input: {
       stdin: opts.stdin,
       timeoutMs: opts.timeoutMs ?? input.timeoutMs,
       onLog: opts.onLog,
+      ...(nativeWorkspacePreparationActive ? { nativePreparationPurpose: "native_workspace_prepare" as const } : {}),
     });
     requireSuccessfulResult(result, script);
     return result;
@@ -297,6 +305,7 @@ export function createCommandManagedRuntimeClient(input: {
         // one `printf >> tmpfile` shell round-trip per 32 KB — thousands of serial
         // processes for a large workspace — with exactly one process.
         if (
+          !input.nativeWorkspacePreparation &&
           encodedLength <= REMOTE_WRITE_SINGLE_STREAM_MAX_BASE64_BYTES &&
           canUseSingleStreamProgressPath
         ) {
@@ -411,6 +420,7 @@ export function createCommandManagedRuntimeClient(input: {
         args: shellCommandArgs(`rm -rf ${shellQuote(remotePath)}`),
         cwd: input.commandCwd,
         timeoutMs: input.timeoutMs,
+        ...(nativeWorkspacePreparationActive ? { nativePreparationPurpose: "native_workspace_prepare" as const } : {}),
       });
       requireSuccessfulResult(result, `remove ${remotePath}`);
     },
@@ -420,6 +430,7 @@ export function createCommandManagedRuntimeClient(input: {
         args: shellCommandArgs(command),
         cwd: input.commandCwd,
         timeoutMs: options.timeoutMs,
+        ...(nativeWorkspacePreparationActive ? { nativePreparationPurpose: "native_workspace_prepare" as const } : {}),
       });
       requireSuccessfulResult(result, command);
     },
@@ -488,6 +499,7 @@ export function createCommandManagedRuntimeClient(input: {
             args: shellCommandArgs(command.command),
             cwd: command.cwd ?? input.commandCwd,
             timeoutMs: command.timeoutMs ?? input.timeoutMs,
+            ...(nativeWorkspacePreparationActive ? { nativePreparationPurpose: "native_workspace_prepare" as const } : {}),
           });
           requireSuccessfulResult(result, command.command);
         }
@@ -510,7 +522,10 @@ export function createCommandManagedRuntimeClient(input: {
   // there is no generic outbound fallback in this seam.
   const nativeSyncIn = input.runner.syncIn;
   const nativeSyncOut = input.runner.syncOut;
-  const hasNativeBoth = Boolean(nativeSyncIn && nativeSyncOut);
+  // The trusted projectless Native prep lane must carry staging shell commands
+  // through the signed command relay, where RuntimeControl checks its exact
+  // private-root purpose. Keep provider-native sync for ordinary runtime users.
+  const hasNativeBoth = Boolean(nativeSyncIn && nativeSyncOut && !input.nativeWorkspacePreparation);
   // The base64 fallback always permits concurrent sync operations. A native
   // runner permits them only when the provider verified the opt-in; an
   // undeclared native provider keeps concurrency off. One flag serves both sync
@@ -529,7 +544,11 @@ export function createCommandManagedRuntimeClient(input: {
     client.syncOut = (operations) => nativeSyncOut!(operations);
   }
 
-  return client;
+  return Object.assign(client, {
+    finishNativeWorkspacePreparation() {
+      nativeWorkspacePreparationActive = false;
+    },
+  });
 }
 
 export async function prepareCommandManagedRuntime(input: {
@@ -543,6 +562,9 @@ export async function prepareCommandManagedRuntime(input: {
   workspaceDurableSeed?: WorkspaceDurableSeedPaths;
   workspaceBaseline?: DirectorySnapshot;
   workspaceGitSnapshot?: GitWorkspaceSnapshot | null;
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
+  /** Internal capability set only by the verified Native workspace-sync owner. */
+  nativeWorkspacePreparation?: boolean;
   workspaceExclude?: string[];
   preserveAbsentOnRestore?: string[];
   assets?: CommandManagedRuntimeAsset[];
@@ -562,10 +584,24 @@ export async function prepareCommandManagedRuntime(input: {
 }): Promise<PreparedSandboxManagedRuntime> {
   const timeoutMs = input.spec.timeoutMs && input.spec.timeoutMs > 0 ? input.spec.timeoutMs : 300_000;
   const workspaceRemoteDir = input.workspaceRemoteDir ?? input.spec.remoteCwd;
-  // Managed-runtime sync/restore scripts use absolute paths throughout, so
-  // run them from a stable cwd. The target workspace itself may be removed or
-  // recreated during a run, which breaks shell startup if we chdir into it.
-  const commandCwd = "/";
+  // Managed-runtime sync/restore scripts use absolute paths throughout. Keep
+  // the usual stable cwd because a target workspace may be recreated during
+  // preparation. A server-verified projectless conversation is different:
+  // RuntimeControl binds every command to that exact private Task root, so its
+  // staging commands must execute with that same cwd instead of `/`.
+  const commandCwd = input.workspaceRepositoryMode === "server_verified_none"
+    ? workspaceRemoteDir
+    : "/";
+  if (input.nativeWorkspacePreparation === true && (
+    input.workspaceRepositoryMode !== "server_verified_none" ||
+    input.syncWorkspace === false ||
+    (input.assets?.length ?? 0) > 0 ||
+    (input.additionalSources?.length ?? 0) > 0 ||
+    Boolean(input.installCommand?.trim()) ||
+    Boolean(input.detectCommand?.trim())
+  )) {
+    throw new Error("native_workspace_prepare_scope_invalid");
+  }
   const runtimeSpec: SandboxRemoteExecutionSpec = {
     transport: "sandbox",
     provider: input.spec.providerKey ?? "sandbox",
@@ -579,6 +615,7 @@ export async function prepareCommandManagedRuntime(input: {
     commandCwd,
     timeoutMs,
     shellCommand: input.spec.shellCommand,
+    nativeWorkspacePreparation: input.nativeWorkspacePreparation,
   });
   const shellCommand = preferredShellForSandbox(input.spec.shellCommand);
 
@@ -597,7 +634,7 @@ export async function prepareCommandManagedRuntime(input: {
         timeoutMs,
       });
       if (!probe.timedOut && (probe.exitCode ?? 1) === 0) {
-        return await prepareSandboxManagedRuntime({
+        const prepared = await prepareSandboxManagedRuntime({
           spec: runtimeSpec,
           client,
           adapterKey: input.adapterKey,
@@ -608,6 +645,7 @@ export async function prepareCommandManagedRuntime(input: {
           workspaceDurableSeed: input.workspaceDurableSeed,
           workspaceBaseline: input.workspaceBaseline,
           workspaceGitSnapshot: input.workspaceGitSnapshot,
+          workspaceRepositoryMode: input.workspaceRepositoryMode,
           workspaceExclude: mergeRuntimeExcludes(input.workspaceExclude),
           preserveAbsentOnRestore: input.preserveAbsentOnRestore,
           assets: input.assets,
@@ -616,6 +654,8 @@ export async function prepareCommandManagedRuntime(input: {
           onRuntimeProgress: input.onRuntimeProgress,
           runtimeSpan: input.runtimeSpan,
         });
+        client.finishNativeWorkspacePreparation();
+        return prepared;
       }
     }
     const result = await input.runner.execute({
@@ -640,7 +680,7 @@ export async function prepareCommandManagedRuntime(input: {
     }
   }
 
-  return await prepareSandboxManagedRuntime({
+  const prepared = await prepareSandboxManagedRuntime({
     spec: runtimeSpec,
     client,
     adapterKey: input.adapterKey,
@@ -651,6 +691,7 @@ export async function prepareCommandManagedRuntime(input: {
     workspaceDurableSeed: input.workspaceDurableSeed,
     workspaceBaseline: input.workspaceBaseline,
     workspaceGitSnapshot: input.workspaceGitSnapshot,
+    workspaceRepositoryMode: input.workspaceRepositoryMode,
     workspaceExclude: mergeRuntimeExcludes(input.workspaceExclude),
     preserveAbsentOnRestore: input.preserveAbsentOnRestore,
     assets: input.assets,
@@ -659,4 +700,6 @@ export async function prepareCommandManagedRuntime(input: {
     onRuntimeProgress: input.onRuntimeProgress,
     runtimeSpan: input.runtimeSpan,
   });
+  client.finishNativeWorkspacePreparation();
+  return prepared;
 }

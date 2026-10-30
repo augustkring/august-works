@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { announcementManifestSchema, announcementSchema, isAnnouncementEligible } from "./announcements.js";
+import { announcementManifestSchema, announcementSchema, isAnnouncementEligible, isAnnouncementTargetedTo } from "./announcements.js";
 
 const announcement = { id: "new-projects", eyebrow: "New", title: "Projects", description: "Organize your work.", primaryAction: { kind: "route", label: "Open", path: "/projects" } };
 describe("announcement contract", () => {
@@ -8,10 +8,16 @@ describe("announcement contract", () => {
     expect(announcementSchema.parse(announcement).id).toBe("new-projects");
     expect(announcementSchema.parse({ ...announcement, title: "<script>alert(1)</script>" }).title).toContain("<script>");
   });
+  it("accepts bounded classified notice history while preserving current-only manifests", () => {
+    const release = { ...announcement, id: "release-2026-10", kind: "release", publishedAt: "2026-10-27T00:00:00Z" };
+    expect(announcementManifestSchema.parse({ schemaVersion: 1, announcement, history: [release] }).history).toEqual([release]);
+    expect(announcementManifestSchema.safeParse({ schemaVersion: 1, announcement, history: [announcement] }).success).toBe(false);
+    expect(announcementManifestSchema.safeParse({ schemaVersion: 1, announcement: null, history: Array.from({ length: 33 }, (_, index) => ({ ...announcement, id: `notice-${index}` })) }).success).toBe(false);
+  });
   it.each(["/api/companies", "//evil.test", "/projects/../auth", "/company/settings?danger=yes", "/unknown", "javascript:alert(1)"])("rejects unsupported route %s", (path) => {
     expect(announcementSchema.safeParse({ ...announcement, primaryAction: { kind: "route", label: "Open", path } }).success).toBe(false);
   });
-  it.each(["not a URL", "http://example.com", "javascript:alert(1)", "https://user:password@example.com"])("rejects unsafe external URL %s", (url) => {
+  it.each(["not a URL", "http://example.com", "javascript:alert(1)", "https://user:password@example.com", "https://example.com/release?token=secret", "https://example.com/release#fragment"])("rejects unsafe external URL %s", (url) => {
     expect(announcementSchema.safeParse({ ...announcement, primaryAction: { kind: "external", label: "Open", url } }).success).toBe(false);
   });
   it.each(["../secret.png", "https://example.com/a.png", "/assets/a.png", `assets/${"0".repeat(64)}.svg`])("rejects unsafe image path %s", (path) => {
@@ -46,5 +52,22 @@ describe("announcement contract", () => {
     for (const version of ["2026.912.0", "2026.913.0-canary.1", "unknown"]) expect(isAnnouncementEligible(item, version, 0)).toBe(false);
     for (const version of ["2026.913.0", "2026.913.0+1.git.abc", "2026.1001.0"]) expect(isAnnouncementEligible(item, version, 0)).toBe(true);
     expect(isAnnouncementEligible(item, "2026.913.0", Date.parse(item.expiresAt!))).toBe(false);
+  });
+  it("requires canonical owner and explicit company targeting for action-required notices", () => {
+    const notice = { noticeCategory: "action_required", notice: {
+      affectedCapabilities: ["trust-center"], affectedCompanyIds: ["00000000-0000-4000-8000-000000000001"],
+      effectiveAt: "2026-10-28T00:00:00Z", customerImpact: "Review the current policy.", actionRequired: true,
+      resolution: { owner: "trust_document_acceptance", registryEntryId: "00000000-0000-4000-8000-000000000002",
+        documentRevisionId: "00000000-0000-4000-8000-000000000003", version: "7" },
+    } };
+    const parsed = announcementSchema.parse({ ...announcement, ...notice });
+    expect(isAnnouncementTargetedTo(parsed, "00000000-0000-4000-8000-000000000001", "local")).toBe(true);
+    expect(isAnnouncementTargetedTo(parsed, "00000000-0000-4000-8000-000000000003", "local")).toBe(false);
+    expect(announcementSchema.safeParse({ ...announcement, noticeCategory: "action_required", notice: {
+      effectiveAt: "2026-10-28T00:00:00Z", customerImpact: "Review the current policy.", actionRequired: true,
+    } }).success).toBe(false);
+    expect(announcementSchema.safeParse({ ...announcement, noticeCategory: "deprecation", notice: {
+      effectiveAt: "2026-10-28T00:00:00Z", customerImpact: "Move to the new route.", actionRequired: false,
+    } }).success).toBe(false);
   });
 });

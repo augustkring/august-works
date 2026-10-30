@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ExportFidelityReport } from "@paperclipai/shared/portability-fidelity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CompanyExport, resolveExportPreviewImageSrc } from "./CompanyExport";
+import { i18n } from "../i18n";
 
 const mockCompaniesApi = vi.hoisted(() => ({
   exportPreview: vi.fn(),
@@ -250,6 +251,25 @@ describe("CompanyExport", () => {
       include: { company: true, agents: true, projects: true, issues: false, skills: true },
     });
     expect(mockCompaniesApi.exportFidelity).toHaveBeenCalledWith("company-1");
+  });
+
+  it("keeps support history opt-in and adds its separate informational archive only on download", async () => {
+    await i18n.changeLanguage("en");
+    mockAuthApi.getSession.mockResolvedValue({ user: { id: "user-1", name: null, email: null, image: null }, session: { id: "session-1", userId: "user-1" }, sentryDsn: null });
+    await renderPage();
+    const input = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+      .find(entry => entry.parentElement?.textContent?.includes("Include support cases"));
+    expect(input).toBeTruthy();
+    expect(input!.checked).toBe(false);
+    expect(input!.disabled).toBe(false);
+    expect(mockCompaniesApi.exportPreview.mock.calls[0]?.[1].include.supportCases).not.toBe(true);
+    await clickElement(input!);
+    expect(mockCompaniesApi.exportPreview).toHaveBeenCalledTimes(1);
+    await clickElement(exportButton());
+    const request = mockCompaniesApi.exportBundle.mock.calls[0]![1];
+    expect(request.include.supportCases).toBe(true);
+    expect(request.expectedUserId).toBe("user-1");
+    expect(request.selectedFiles).toContain("blentera-support-cases-v1.json");
   });
 
   it("shows a retryable error instead of a false loading state", async () => {

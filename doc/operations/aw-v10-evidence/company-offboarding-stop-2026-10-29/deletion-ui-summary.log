@@ -1,0 +1,6 @@
+ ✓ src/pages/SaasDeletion.test.tsx > Organization deletion consent scope > requires fresh consent after switching company and preserves retries within a scope 179ms
+ ✓ src/pages/SaasDeletion.test.tsx > Organization deletion consent scope > requires fresh consent after switching user and preserves retries within a scope 125ms
+ ✓ src/pages/SaasDeletion.test.tsx > Organization deletion consent scope > shows a customer-facing label while the deletion worker stops active runs 27ms
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Duration  3.46s (transform 1.44s, setup 22ms, import 2.37s, tests 332ms, environment 612ms)

@@ -33,6 +33,12 @@ const WARM_ATTACHMENT_QUIET_WINDOW: Duration = Duration::from_millis(10);
 const WARM_ATTACHMENT_DRAIN_DEADLINE: Duration = Duration::from_millis(100);
 const OPENCODE_PROVIDER_ENVIRONMENT_KEYS: &[&str] = &[
     "OPENROUTER_API_KEY",
+    // Server-minted, non-secret managed-model routing/profile bounds. The
+    // fixed Anthropic placeholder key is set inside the qualified OpenCode
+    // driver and is deliberately not forwarded through this boundary.
+    "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
     "PAPERCLIP_NATIVE_MCP_NAME",
     "PAPERCLIP_NATIVE_MCP_URL",
     "PAPERCLIP_NATIVE_MCP_TOKEN",

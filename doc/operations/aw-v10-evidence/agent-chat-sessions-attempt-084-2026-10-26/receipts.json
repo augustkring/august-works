@@ -1,0 +1,24 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "94c3663541b14c6ee6e1cb19d748ac57ab54beab",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Authenticated chat recovery with exact replay-byte references; one test executed and failed at second idle due native_session_cleanup_quarantined after the second metric query/final/turn_completed. Source receipt assertion was not reached.",
+  "logs": [
+    {
+      "name": "agent-chat-sessions-084-20261026-test",
+      "exitCode": 1,
+      "exitSidecar": "agent-chat-sessions-084-20261026-test.exit",
+      "rawSha256": "dfffb7500b69d9245a5506a993d0d76eba2b6dc051f04517625ee441e6519532",
+      "sanitizedSha256": "dfffb7500b69d9245a5506a993d0d76eba2b6dc051f04517625ee441e6519532",
+      "archiveSha256": "0e79c110b2b87e74eb39501645f304bf96c130d39e46acd69df2b8bcecf33d1b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+xxxxxxxx
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > recalls only company, current-project and owner-private memory
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > creates shared remember requests as pending low-trust task-backed candidates
+Error: Memory producer authority is unavailable
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ captureMemorySources src/services/memory/memory-privacy.ts:369:11
+ ❯ insertCandidate src/services/memory/memory-service.ts:752:48
+ ❯ inspect src/services/memory/memory-service.ts:1118:25
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ runCandidate src/services/memory/memory-service.ts:935:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > makes private remember retry-safe and returns duplicate on semantic replay
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > corrects owner-private memory atomically and shares it only through pending review
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > denies sharing restricted owner-private memory
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > requires a task-bound run before sharing private memory
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > rejects correction idempotency replay from a different agent run
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > rejects share idempotency replay from a different agent run
+Error: Memory producer authority is unavailable
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ captureMemorySources src/services/memory/memory-privacy.ts:369:11
+ ❯ insertCandidate src/services/memory/memory-service.ts:752:48
+ ❯ src/services/memory/memory-service.ts:1558:25
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ Object.createPrivateMemory src/services/memory/memory-service.ts:1531:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed (8)
+   Start at  01:39:56
+   Duration  16.91s (transform 8.58s, setup 79ms, import 12.26s, tests 4.45s, environment 0ms)
+

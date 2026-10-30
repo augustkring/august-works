@@ -1,0 +1,8 @@
+{
+  "kind": "custom-sql-guard-review",
+  "source": "packages/db/src/migrations/0547_native_conversation_model_reservations.sql",
+  "sha256": "99b793c82c2a37d409e2955218d395974ae247c0fbb9c844a6f6e249d21e40f2",
+  "schemaSnapshotUnchanged": true,
+  "correction": "BEFORE INSERT includes NEW ceiling and rejects 65th call; UPDATE dispatch counts the existing reserved row once and permits the 64th.",
+  "validation": "Static source review; fresh actual PostgreSQL boundary tests pending. Earlier 547 publication receipt retains its original pre-correction SQL digest."
+}

@@ -1,0 +1,104 @@
+{
+  "requirement": "V10-148 partial: explicit first-party Telemetry admission and selected destination",
+  "runs": [
+    {
+      "log": "telemetry-admission-green.log",
+      "exitCode": 0,
+      "testFilesPassed": 10,
+      "testsPassed": 69,
+      "durationSeconds": 15.45,
+      "command": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run packages/shared/src/telemetry server/src/__tests__/telemetry-admission.test.ts server/src/__tests__/telemetry-client-flush.test.ts cli/src/__tests__/telemetry.test.ts --maxWorkers=1",
+      "pinning": "18 source hashes captured upfront in log; no whole-graph immutable pin claim"
+    },
+    {
+      "log": "telemetry-admission-old-source-red.log",
+      "exitCode": 1,
+      "testFilesFailed": 1,
+      "testsFailed": 9,
+      "testsPassed": 4,
+      "durationSeconds": 1.24,
+      "command": "bash /workspace/v10-preparation/telemetry-admission-old-source-capture.sh",
+      "source": "Only config-schema.ts + telemetry/config.ts/client.ts replaced by HEAD originals. New admission.test.ts retained; all three current owner hashes restored exactly by EXIT trap."
+    },
+    {
+      "log": "telemetry-admission-final-targeted-green.log",
+      "exitCode": 0,
+      "testFilesPassed": 1,
+      "testsPassed": 13,
+      "durationSeconds": 0.783,
+      "command": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run packages/shared/src/telemetry/admission.test.ts --maxWorkers=1",
+      "source": "Fresh current owner hashes captured before final targeted restored-source check"
+    },
+    {
+      "command": "pnpm --filter @paperclipai/shared typecheck",
+      "exitCode": 0,
+      "log": "telemetry-shared-typecheck.log.txt"
+    }
+  ],
+  "logs": [
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/telemetry-admission-green.log.txt",
+      "sha256": "b7568e9390c3520d09370651fa09484d3343858b067146fb465057dee1086d91",
+      "sizeBytes": 2385
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/telemetry-admission-old-source-red.log.txt",
+      "sha256": "e10387676abcacf783399c55f1618820c7f09b09317d96f1f08189669ef97854",
+      "sizeBytes": 6714
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/telemetry-admission-source-restoration.log.txt",
+      "sha256": "1c1e9d01fd70e4b5126e550eca617a16b27fa0958af9efff613f1c59b125f777",
+      "sizeBytes": 537
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/telemetry-admission-final-targeted-green.log.txt",
+      "sha256": "458a3e2d597bf7427a00fe6208f19b5d62dbdd71d86724c336e341af7e1e8ce2",
+      "sizeBytes": 978
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/telemetry-shared-typecheck.log.txt",
+      "sha256": "c47f06f0d0dffb55e4f3dadec85e6a00b3fff0ab7f926f19030fef28062d9fd5",
+      "sizeBytes": 95
+    }
+  ],
+  "review": "Root independent bounded privacy/source review found no concrete blocker; explicit restart limitation documented after first GREEN. No production source changed after GREEN.",
+  "currentSourceObservation": {
+    "observedAt": "2026-10-22T19:40:42.240778+00:00",
+    "hashes": {
+      "AGENTS.md": "647b3ee53b4cba845628abf281b7ddbb51028e04acb5a4f73934ece8a0fcd8c4",
+      "packages/shared/src/telemetry/generated/paperclip-telemetry.ts": "23b24565be7a7d57d2e9c6082aca145355cf971b7b9a3b04453962736f02153f",
+      "packages/shared/src/telemetry/README.md": "fdff412179b988d7f139814fc9248ab98fb6f21bba7dee2db18c8b3cc7d04c1a",
+      "packages/shared/src/telemetry/config.ts": "ca845f532863908408f6a665ed6261e76c6edb3238b3ad85ea670b1d0c1814ee",
+      "packages/shared/src/telemetry/client.ts": "9d98a2d42200b2f4fde7d561c4abab256b62b9b5f73eb6b27ea0fc4ea80a92b5",
+      "packages/shared/src/telemetry/types.ts": "9994a3a23587b428aa94fa628e3277668bf48f4e3ba73818a9f73a1488734dc3",
+      "packages/shared/src/config-schema.ts": "0af3e98afd2e0f1aee172c4b09ad27607e2f4ad418d3e2c2ba0dff13923bf826",
+      "packages/shared/src/telemetry/admission.test.ts": "e790eb0719b9f5692c765fa2c490d861715c0db6df38b13e5faebfde6d17ade3",
+      "packages/shared/src/telemetry/client.test.ts": "57078887f59e544a49af44d42f0120724ef20726f758563122c4f2488a6ed520",
+      "server/src/config.ts": "f9f81f20ea69a6b688ea86d7f016c2af1722512f544caa54376c1705efb0859c",
+      "server/src/telemetry.ts": "2702c99312c99c08c676f1f651adac777b752c2d09592fde01f63ae1aaa26df3",
+      "server/src/__tests__/telemetry-admission.test.ts": "20453f2f8189bd33d8390888ad3db0ba2270185b235add3c19d1d6a77b8de5d7",
+      "server/src/__tests__/telemetry-client-flush.test.ts": "7bbf7b58f9f792fd12a9fc33eb84b0a1c64490391d66bb5959170ec6e9f84964",
+      "cli/src/telemetry.ts": "cdceb677a7d067f3bf64d5ab814ac85bef5f40a7ca54ac866b65989a760217ca",
+      "cli/src/__tests__/telemetry.test.ts": "1e9b9fdf637709311b790e8420db389a72269dd4332b83b5147652d50cce7a08",
+      "cli/src/commands/configure.ts": "86d257b3b35ac8a59b9d77bfda645c06d14bd9214efbb494c0d977ff68304cbc",
+      "cli/src/commands/onboard.ts": "7fc849383233cc58bb475a7d474bb231dbb711537163e2c087b5de3ecab21893",
+      "cli/src/commands/worktree-lib.ts": "cab80305b621e187f93389a264ce23383aacbb407dcf4e50c053696d2f9a0ace",
+      "doc/operations/blentera-outbound-processors.md": "0bd0c7679c175e1c8e56567a06f7a386907656e5cc9592d203b8cbcea374ee89"
+    },
+    "note": "Current source observation after 69-test GREEN; README and outbound processor documentation changed afterward only to document restart/live-withdrawal and qualification limits. Initial up-front 18 hashes remain in original GREEN log. This is not a whole-graph pin."
+  },
+  "limitations": [
+    "No complete outbound inventory or processor/region/retention/legal qualification",
+    "Configuration changes require restart; no live consent withdrawal or live queue clearing guarantee",
+    "Normal server/CLI typechecks remain root-owned pending checks",
+    "Other enabled runtime provider egress and deployment qualification not established",
+    "Existing event shape/version remains unchanged; no claim that this capture re-audited every emitter dimension",
+    "Not whole V10 or PR readiness evidence",
+    "Shared typecheck passes; normal server/CLI typechecks remain pending coherent global audit work."
+  ],
+  "sourceComplete": false,
+  "prReady": false,
+  "originalSourceCommit": "c83b40dc1",
+  "oldSourceCaptureScript": "telemetry-admission-old-source-capture.sh.txt (original capture script; its HEAD meant c83b40dc1 at execution; pin that revision explicitly when reproducing)"
+}

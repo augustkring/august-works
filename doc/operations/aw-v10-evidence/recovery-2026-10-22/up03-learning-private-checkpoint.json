@@ -1,0 +1,55 @@
+{
+  "scope": "UP03 ordinary Learning Memory source admission; bounded software fixtures using actual PostgreSQL and canonical full migrator",
+  "production_owner": "server/src/services/learning/learning-analytical-sources.ts",
+  "test_owner": "server/src/__tests__/learning-private-sources.integration.test.ts",
+  "command": "source /workspace/v10-preparation/env.sh; NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/learning-private-sources.integration.test.ts --maxWorkers=1",
+  "source_pins_before_and_verified_after_final_capture": {
+    "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+    "server/src/services/learning/learning-analytical-sources.ts": "d866a84b51773948e0c52094a95b9b41085f7d9d319343647e21a8a377cc41c4",
+    "server/src/services/memory/memory-privacy.ts": "fed411e5c8715992c4a487d7487675cfdd0d96e64c140041680c2ea89b8565b0",
+    "server/src/__tests__/learning-private-sources.integration.test.ts": "d3fdf551a431c6c4daf9534c863fba28bae86be5b19c2da61b3141b63e89dfdd",
+    "packages/db/src/migrations/0506_wild_thanos.sql": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+  },
+  "captures": [
+    {
+      "log": "up03-learning-private-red.log",
+      "exit": 1,
+      "failed": 5,
+      "passed": 1,
+      "seconds": 23.97,
+      "qualification": "Initial run: four authority failures genuine; cycle/diamond pair not qualified because fixture lacked canonical Foundation permission. Fixture mistakenly used max instead of maxConnections; driver default pool ceiling applied. No product change."
+    },
+    {
+      "log": "up03-learning-private-red-2.log",
+      "exit": 1,
+      "failed": 5,
+      "passed": 1,
+      "seconds": 24.76,
+      "qualification": "Corrected fixture with explicit native Foundation read grants and actual maxConnections=3. Four authority failures and actual Memory→Foundation→Learning→Memory cycle incorrectly allowed; valid completed diamond passed. Five upfront pins unchanged. Tests stop at first failing assertion, so later assertions in each case are not separately claimed RED."
+    },
+    {
+      "log": "up03-learning-private-green.log",
+      "exit": 0,
+      "failed": 0,
+      "passed": 6,
+      "seconds": 25.53,
+      "qualification": "Current Learning guard and Root intrinsic Agent-source Memory guard. All six cases pass, five upfront pins unchanged, owned embedded PostgreSQL cleanup closed. Pool maxConnections=3, one worker, Node heap limit 2GiB."
+    }
+  ],
+  "behavior": [
+    "Complete nonempty native learning_evidence roots bounded to256; exact current Memory versions and Memory source admission before the zero-analytical return.",
+    "All retained asset cycles discovered and checked; existing return list includes only analytical cycles for expiry/retention consumers.",
+    "Original Foundation/workflow/artifact checks retained. No new permission engine, cache, locks, schema or dependency."
+  ],
+  "limits": [
+    "Actual software fixtures do not certify provider execution, native Learning promotion lifecycle or transport acknowledgement.",
+    "Canonical Task/Project SQL graph still omits Memory/Foundation dependencies; list/count/search and other derivative closure remain open.",
+    "Native heartbeat Context qualification producer/reader gate, historical-erasure completeness and mixed-writer/rollback admission remain open.",
+    "Concurrent Root50-case capture and normal server typecheck not included in this receipt."
+  ],
+  "log_sha256": {
+    "up03-learning-private-red.log": "8dd4cb5d0ac00ba9c2b4baaad85a41dbb958dd695d032a1ac1362b5dfc2478f8",
+    "up03-learning-private-red-2.log": "9f8061704c83122c6202f584efc0c4ac7578832f3472dff72f79e26ca1fbbc96",
+    "up03-learning-private-green.log": "b14548e5021df670304cc498ae52d917def8624dff31a0b69c11dddb94fce05d"
+  }
+}

@@ -4,6 +4,12 @@ import { z } from "zod";
 import { heartbeatRuns, issueComments, issues, issueRecoveryActions, type Db } from "@paperclipai/db";
 import { EXECUTION_RECONCILIATION_CAUSES, type ExecutionBlocker } from "@paperclipai/shared";
 
+export async function hasPendingRunCleanup(db: Db, companyId: string, runId: string): Promise<boolean> {
+  const [state] = await db.execute<{ pending: boolean }>(sql`SELECT
+    public.aw_v10_has_pending_run_cleanup(${companyId}::uuid,${runId}::uuid) AS pending`);
+  return state?.pending !== false;
+}
+
 /** Resolved recovery bookkeeping can still carry an effective no-replay hold. */
 export function executionBlockerPredicate() {
   return and(

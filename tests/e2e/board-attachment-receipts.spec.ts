@@ -26,6 +26,11 @@ async function body<T>(
 }
 
 async function setup(page: Page, request: APIRequestContext, classic: boolean) {
+  const session = await body<{
+    user: { id: string };
+    session: { localImplicit: boolean };
+  }>(await request.get("/api/auth/get-session"));
+  expect(session.session.localImplicit).toBe(false);
   const company = await body<{ id: string; issuePrefix: string }>(
     await request.post("/api/companies", {
       data: { name: `Board receipt browser ${randomUUID()}` },
@@ -36,7 +41,7 @@ async function setup(page: Page, request: APIRequestContext, classic: boolean) {
       data: {
         title: "Inspect the newly uploaded Board files",
         status: "todo",
-        assigneeUserId: "local-board",
+        assigneeUserId: session.user.id,
       },
     }),
   );

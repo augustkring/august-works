@@ -3,6 +3,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { errorHandler } from "../middleware/index.js";
 import { executionWorkspaceRoutes } from "../routes/execution-workspaces.js";
+import { conflict } from "../errors.js";
 
 const mockExecutionWorkspaceService = vi.hoisted(() => ({
   list: vi.fn(),
@@ -12,8 +13,10 @@ const mockExecutionWorkspaceService = vi.hoisted(() => ({
   getCloseReadiness: vi.fn(),
   archiveWorkspaceUnderLifecycleLock: vi.fn(),
   fenceClosedWorkspaceDestruction: vi.fn(),
+  prepareGitWorkspaceCleanupProof: vi.fn(),
   reconcileExecutionWorkspaceBranch: vi.fn(),
   update: vi.fn(),
+  updateFromApi: vi.fn(),
 }));
 
 const mockWorkspaceOperationService = vi.hoisted(() => ({
@@ -115,7 +118,9 @@ describe.sequential("execution workspace routes", () => {
       },
     ]);
     mockExecutionWorkspaceService.getById.mockResolvedValue(null);
+    mockExecutionWorkspaceService.updateFromApi.mockResolvedValue(null);
     mockExecutionWorkspaceService.reconcileExecutionWorkspaceBranch.mockResolvedValue(null);
+    mockExecutionWorkspaceService.prepareGitWorkspaceCleanupProof.mockResolvedValue(null);
     mockHeartbeatService.wakeup.mockResolvedValue(null);
   });
 
@@ -140,6 +145,96 @@ describe.sequential("execution workspace routes", () => {
       reuseEligible: true,
     });
     expect(mockExecutionWorkspaceService.list).not.toHaveBeenCalled();
+  });
+
+  it("routes public metadata replacement through the lifecycle-locked update owner", async () => {
+    mockExecutionWorkspaceService.getById.mockResolvedValue({
+      id: "workspace-1",
+      companyId: "company-1",
+      status: "active",
+      metadata: {
+        lifecycleGeneration: 3,
+        createdByRuntime: false,
+        gitBranchOwnershipVersion: 1,
+      },
+    });
+    mockExecutionWorkspaceService.updateFromApi.mockResolvedValue({
+      id: "workspace-1",
+      companyId: "company-1",
+      status: "active",
+      metadata: { lifecycleGeneration: 3, createdByRuntime: false, gitBranchOwnershipVersion: 1 },
+    });
+
+    const res = await request(createApp())
+      .patch("/api/execution-workspaces/workspace-1")
+      .send({
+        metadata: {
+          lifecycleGeneration: 900,
+          createdByRuntime: true,
+          gitBranchOwnershipVersion: 99,
+          reopenPendingConsumption: true,
+          operatorNote: "allowed replacement content",
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(mockExecutionWorkspaceService.updateFromApi).toHaveBeenCalledWith("workspace-1", "company-1", {
+      metadata: {
+        lifecycleGeneration: 900,
+        createdByRuntime: true,
+        gitBranchOwnershipVersion: 99,
+        reopenPendingConsumption: true,
+        operatorNote: "allowed replacement content",
+      },
+    });
+    expect(mockExecutionWorkspaceService.update).not.toHaveBeenCalled();
+  });
+
+  it("requires the original issue reopen owner for raw activation of an archived workspace", async () => {
+    mockExecutionWorkspaceService.getById.mockResolvedValue({
+      id: "workspace-1",
+      companyId: "company-1",
+      status: "archived",
+      metadata: { lifecycleGeneration: 4 },
+    });
+    mockExecutionWorkspaceService.updateFromApi.mockRejectedValue(conflict(
+      "Archived execution workspaces must be reopened through their issue.",
+      { code: "execution_workspace_reopen_required" },
+    ));
+
+    const res = await request(createApp())
+      .patch("/api/execution-workspaces/workspace-1")
+      .send({ status: "active" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.details).toMatchObject({ code: "execution_workspace_reopen_required" });
+    expect(mockExecutionWorkspaceService.updateFromApi).toHaveBeenCalledWith("workspace-1", "company-1", { status: "active" });
+  });
+
+  it("returns 409 when PATCH tries to retarget a Git workspace cleanup identity", async () => {
+    mockExecutionWorkspaceService.getById.mockResolvedValue({
+      id: "workspace-1",
+      companyId: "company-1",
+      status: "active",
+      providerType: "git_worktree",
+      providerRef: "/tmp/original-worktree",
+    });
+    mockExecutionWorkspaceService.updateFromApi.mockRejectedValue(conflict(
+      "Execution workspace source and path identity cannot be changed through PATCH.",
+      { code: "execution_workspace_identity_immutable" },
+    ));
+
+    const res = await request(createApp())
+      .patch("/api/execution-workspaces/workspace-1")
+      .send({ providerRef: "/tmp/other-customer-worktree" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.details).toMatchObject({ code: "execution_workspace_identity_immutable" });
+    expect(mockExecutionWorkspaceService.updateFromApi).toHaveBeenCalledWith(
+      "workspace-1",
+      "company-1",
+      { providerRef: "/tmp/other-customer-worktree" },
+    );
   });
 
   it("delegates bounded workspace overview queries", async () => {
@@ -236,6 +331,7 @@ describe.sequential("execution workspace routes", () => {
     expect(mockExecutionWorkspaceService.reconcileExecutionWorkspaceBranch).toHaveBeenCalledWith("workspace-1", {
       mode: "forward",
       reason: null,
+      privacyActor: { type: "board", userId: "local-board", companyIds: ["company-1"], source: "session", isInstanceAdmin: false },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -316,6 +412,7 @@ describe.sequential("execution workspace routes", () => {
     expect(mockExecutionWorkspaceService.reconcileExecutionWorkspaceBranch).toHaveBeenCalledWith("workspace-1", {
       mode: "quarantine_restore",
       reason: null,
+      privacyActor: { type: "board", userId: "local-board", companyIds: ["company-1"], source: "session", isInstanceAdmin: false },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -501,6 +598,33 @@ describe.sequential("execution workspace routes", () => {
         failureReason: "execution_workspace_closed",
       }),
     );
+  });
+
+  it("still quiesces runtime owners when Git restoration proof is unavailable", async () => {
+    const archivedWorkspace = {
+      id: "workspace-1", companyId: "company-1", sourceIssueId: "issue-1", status: "archived",
+      mode: "isolated_workspace", providerType: "git_worktree", projectWorkspaceId: null,
+      projectId: null, cwd: "/tmp/worktree",
+    };
+    mockExecutionWorkspaceService.getById.mockResolvedValue({ ...archivedWorkspace, status: "active" });
+    mockExecutionWorkspaceService.getCloseReadiness.mockResolvedValue({ state: "ready", blockingReasons: [] });
+    mockExecutionWorkspaceService.archiveWorkspaceUnderLifecycleLock.mockResolvedValue({
+      outcome: "archived", workspace: archivedWorkspace, capturedGeneration: 3,
+    });
+    mockExecutionWorkspaceService.prepareGitWorkspaceCleanupProof.mockRejectedValue(new Error("source access revoked"));
+    mockExecutionWorkspaceService.fenceClosedWorkspaceDestruction.mockImplementation(
+      async ({ destroy }: { destroy: () => Promise<unknown> }) => ({ skippedReopened: false, result: await destroy() }),
+    );
+
+    const res = await request(createApp()).patch("/api/execution-workspaces/workspace-1").send({ status: "archived" });
+
+    expect(res.status).toBe(200);
+    expect(mockEnvironmentRuntimeService.destroyReusableSandboxLeases).toHaveBeenCalledTimes(1);
+    expect(mockWorkspaceRuntimeTeardown.stopRuntimeServicesForExecutionWorkspace).toHaveBeenCalledTimes(1);
+    expect(mockWorkspaceRuntimeTeardown.cleanupExecutionWorkspaceArtifacts).toHaveBeenCalledWith(
+      expect.objectContaining({ workspace: expect.objectContaining({ id: "workspace-1", providerType: "git_worktree" }) }),
+    );
+    expect(mockWorkspaceRuntimeTeardown.cleanupExecutionWorkspaceArtifacts.mock.calls[0]?.[0]?.gitRestorationProof).toBeUndefined();
   });
 
   it("keeps the reusable sandbox leases when a reopen makes the fence skip the archive teardown", async () => {

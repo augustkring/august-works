@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -u
+cd /workspace/blentera-v10
+source /workspace/v10-preparation/env.sh
+owners=(packages/shared/src/config-schema.ts packages/shared/src/telemetry/config.ts packages/shared/src/telemetry/client.ts)
+capture_dir=$(mktemp -d /workspace/v10-preparation/telemetry-old-source.XXXXXX)
+log=/workspace/v10-preparation/telemetry-admission-old-source-red.log
+restore_log=/workspace/v10-preparation/telemetry-admission-source-restoration.log
+sha256sum "${owners[@]}" > "$capture_dir/current.sha256"
+for owner in "${owners[@]}"; do
+  mkdir -p "$capture_dir/$(dirname "$owner")"
+  cp -p "$owner" "$capture_dir/$owner"
+done
+restore_sources() {
+  for owner in "${owners[@]}"; do cp -p "$capture_dir/$owner" "$owner"; done
+  {
+    date -u +%FT%TZ
+    echo "BACKUP_DIRECTORY=$capture_dir"
+    sha256sum -c "$capture_dir/current.sha256"
+    sha256sum "${owners[@]}"
+  } > "$restore_log" 2>&1
+}
+trap restore_sources EXIT
+for owner in "${owners[@]}"; do git show "HEAD:$owner" > "$owner" || exit 2; done
+{
+  date -u +%FT%TZ
+  git rev-parse HEAD
+  sha256sum "${owners[@]}" packages/shared/src/telemetry/admission.test.ts
+  NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run packages/shared/src/telemetry/admission.test.ts --maxWorkers=1
+  result=$?
+  echo "VITEST_EXIT=$result"
+} > "$log" 2>&1
+exit "$result"

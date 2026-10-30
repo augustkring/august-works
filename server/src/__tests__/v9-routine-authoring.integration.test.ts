@@ -15,6 +15,8 @@ import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.j
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { assertRoutineSourceAccess } from "../services/routine-source-authority.js";
+import { companyPortabilityService } from "../services/company-portability.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 describe("Conversation routine drafts use the Original owner without execution authority", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -30,6 +32,7 @@ describe("Conversation routine drafts use the Original owner without execution a
   beforeEach(async () => {
     await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, ambient_commands_v9: true });
     f = await seedV5Presences(db);
+    f = { ...f, actor: await seedCurrentHumanSourceActor(db, [f.home], f.userId) };
     await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
       permissionKey: "tasks:assign" }).onConflictDoNothing();
     const conversation = await issueService(db).create(f.home, { title: "Owned routine authoring conversation", assigneeAgentId: f.presence.id,
@@ -70,6 +73,52 @@ describe("Conversation routine drafts use the Original owner without execution a
     await expect(create()).rejects.toMatchObject({ status: 403 });
     expect(await db.select().from(routines).where(eq(routines.companyId, f.home))).toEqual([]);
   });
+  it("exports ordinary routines and only releases a private draft to its current source owner", async () => {
+    await create();
+    await routineService(db, { sourceActor: f.actor }).create(f.home,
+      createRoutineSchema.parse({ title: "Ordinary paused schedule", status: "paused" }), { userId: f.userId });
+
+    const ownerExport = await companyPortabilityService(db).exportBundle(f.home,
+      { include: { company: true, agents: false, projects: false, issues: true } }, { actor: f.actor });
+    expect(ownerExport.manifest.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ recurring: true, title: input().title, description: input().description }),
+      expect.objectContaining({ recurring: true, title: "Ordinary paused schedule" }),
+    ]));
+    expect(ownerExport.files["tasks/weekly-reviewed-research/TASK.md"]).toContain(input().description);
+    expect(ownerExport.files["tasks/ordinary-paused-schedule/TASK.md"]).toContain("Ordinary paused schedule");
+
+    const otherId = `routine-export-${randomUUID()}`;
+    const now = new Date();
+    await db.insert(authUsers).values({ id: otherId, name: "Other Human", email: `${otherId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: otherId,
+      membershipRole: "viewer", status: "active" });
+    const otherActor = { type: "board" as const, source: "session" as const, userId: otherId, isInstanceAdmin: true };
+    const otherExport = await companyPortabilityService(db).exportBundle(f.home,
+      { include: { company: true, agents: false, projects: false, issues: true } }, { actor: otherActor });
+    expect(otherExport.manifest.issues.some(issue => issue.title === input().title)).toBe(false);
+    expect(otherExport.manifest.issues.some(issue => issue.title === "Ordinary paused schedule")).toBe(true);
+
+    const retiredAt = new Date();
+    await db.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
+      conversationRetiredAt: retiredAt, status: "cancelled", cancelledAt: retiredAt, hiddenAt: retiredAt,
+      assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null })
+      .where(eq(issues.id, conversationId));
+    const afterWithdrawal = await companyPortabilityService(db).exportBundle(f.home,
+      { include: { company: true, agents: false, projects: false, issues: true } }, { actor: f.actor });
+    expect(afterWithdrawal.manifest.issues.some(issue => issue.title === input().title)).toBe(false);
+    expect(afterWithdrawal.manifest.issues.some(issue => issue.title === "Ordinary paused schedule")).toBe(true);
+  });
+  it("rejects reclassifying the actual private conversation source as manual or another origin", async () => {
+    const saved = await create();
+    for (const patch of [{ originKind: "manual" }, { originId: randomUUID() },
+      { originKind: "manual", originId: null }]) {
+      await expect(db.update(routines).set(patch).where(eq(routines.id, saved.routineId)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+    }
+    expect(await db.select().from(routines).where(eq(routines.id, saved.routineId))).toEqual([
+      expect.objectContaining({ originKind: "conversation_draft", originId: runId, description: input().description }),
+    ]);
+  });
   it("withdraws ordinary reads, list entries and execution after erasing the actual authoring source", async () => {
     const saved = await create(), owner = routineService(db, { sourceActor: f.actor });
     expect(await owner.get(saved.routineId)).toMatchObject({ id: saved.routineId, title: input().title });
@@ -98,15 +147,16 @@ describe("Conversation routine drafts use the Original owner without execution a
   });
   it("discovers and invokes the actual SDK tool while preserving its current feature and policy gates", async () => {
     const name = "paperclip-self:create_routine_draft";
+    const canonicalName = "blentera.routine.draft.create";
     await db.insert(toolPolicies).values({ companyId: f.home, name: "Explicit routine draft software fixture", policyType: "allow", selectors: { toolName: name } });
     const gateway = createToolGatewayService(db, { toolActionSigningSecret: "routine-draft-test-only-signing-secret" });
     const session = await gateway.createSession({ companyId: f.home, agentId: f.presence.id, runId, issueId: conversationId });
-    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toContain(name);
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toContain(canonicalName);
     const result = await gateway.executeTool({ sessionToken: session.token, tool: name, parameters: input() });
     expect(result).toMatchObject({ status: "completed", result: { data: { status: "created", enabled: false, executionConfigured: false } } });
     expect(await db.select().from(routines).where(eq(routines.companyId, f.home))).toHaveLength(1);
     await instanceSettingsService(db).updateExperimental({ ambient_commands_v9: false });
-    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).not.toContain(name);
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).not.toContain(canonicalName);
   });
   it("previews only the actual saved routine and distinguishes a later Human revision", async () => {
     const saved = await create();
@@ -228,8 +278,12 @@ describe("Conversation routine drafts use the Original owner without execution a
   });
   it.each(["native", "legacy"] as const)("inherits source erasure in actual %s routine execution tasks and runs", async mode => {
     const saved = await create();
+    const [routineExecution] = await db.insert(routineRuns).values({ companyId: f.home, routineId: saved.routineId,
+      routineRevisionId: saved.currentRevisionId, source: "api", status: "received", responsibleUserId: f.userId }).returning();
     const task = await issueService(db).create(f.home, { title: "PRIVATE execution title", description: "PRIVATE execution body",
-      originKind: "routine_execution", originId: saved.routineId, assigneeAgentId: f.presence.id });
+      originKind: "routine_execution", originId: saved.routineId, originRunId: routineExecution!.id,
+      assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId,
+      actorResponsibleUserId: f.userId, trustExplicitResponsibleUserId: true }, db, undefined, { privacyActor: f.actor });
     const [execution] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id,
       responsibleUserId: f.userId, status: "queued", runtimeMode: mode, nativeIssueId: mode === "native" ? task.id : null,
       contextSnapshot: { issueId: task.id, prompt: "PRIVATE execution context" }, resultJson: { body: "PRIVATE execution result" } }).returning();
@@ -246,8 +300,12 @@ describe("Conversation routine drafts use the Original owner without execution a
   });
   it("scrubs the routine execution task before any heartbeat has been created", async () => {
     const saved = await create();
+    const [routineExecution] = await db.insert(routineRuns).values({ companyId: f.home, routineId: saved.routineId,
+      routineRevisionId: saved.currentRevisionId, source: "api", status: "received", responsibleUserId: f.userId }).returning();
     const task = await issueService(db).create(f.home, { title: "PRIVATE no-run execution", description: "PRIVATE copied routine",
-      originKind: "routine_execution", originId: saved.routineId });
+      originKind: "routine_execution", originId: saved.routineId, originRunId: routineExecution!.id,
+      createdByUserId: f.userId, responsibleUserId: f.userId, actorResponsibleUserId: f.userId,
+      trustExplicitResponsibleUserId: true }, db, undefined, { privacyActor: f.actor });
     await db.transaction(async rawTx => {
       const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, f.home);
       await tx.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source", key: `memory-run-source-erasure:v1:${runId}` });

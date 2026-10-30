@@ -1,0 +1,81 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "f06fa2f999da4ea3d9ad96a474069a5ff065527c",
+  "meaning": "Native regression reproduced private Memory copied by a real native run into its original public Task body, bypassing the self-Run closure. Original Task update now reuses the canonical native body hash and refuses Agent body changes whose restricted run sources cannot yet be retained; old content remains. Public run body update and private-run priority-only update succeed. Three focused suites23PASS; servercompiler0. BroaderTaskservice138cases retains18 source-admission/auth fixture failures before this guard, under repair; no full pass claimed. This is a conservative refusal, not implemented exact private Agent body snapshots or complete source provenance; those owner-positive flows remain open.",
+  "logs": [
+    {
+      "name": "private-memory-own-task-before",
+      "exitCode": 1,
+      "rawSha256": "a8a6805e8403e61aadc7dd286bf60b5f1bd1aea6b248aaf176c1c8b6357c285f",
+      "sanitizedSha256": "a8a6805e8403e61aadc7dd286bf60b5f1bd1aea6b248aaf176c1c8b6357c285f",
+      "archiveSha256": "ae5f148652db8cddf5b552f620d12311e9319d812129793a9012ea875d6ec2c4",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed (1)",
+        "Duration  16.49s (transform 8.61s, setup 65ms, import 11.86s, tests 4.46s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "private-memory-own-task-after",
+      "exitCode": 0,
+      "rawSha256": "c477d941eaa3b5a03f385577807d86aa79b58dcee88f33de893ec17178bb152f",
+      "sanitizedSha256": "c477d941eaa3b5a03f385577807d86aa79b58dcee88f33de893ec17178bb152f",
+      "archiveSha256": "dd0f4a23d08dc8519bfea53ca1ac569df20ff4db1cb57c33fa42d4f64976c1bc",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  23 passed (23)",
+        "Duration  46.65s (transform 10.66s, setup 187ms, import 21.21s, tests 24.90s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "private-memory-own-task-service-controls",
+      "exitCode": 1,
+      "rawSha256": "a34e2fd8ff3f2b51957b062a5d6e95ff40b3e79f48ff1c98317bf51daad40806",
+      "sanitizedSha256": "9313e576ac732e3869820f6f70bb34bf91403f1630f38c41777953fda42e04bb",
+      "archiveSha256": "fdc0d675ecffddb2111c30438167f9bfc586288b7ca284daddca08ca3cab0e00",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 18 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  18 failed | 120 passed (138)",
+        "Duration  69.68s (transform 9.79s, setup 69ms, import 13.72s, tests 55.78s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "private-memory-own-task-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

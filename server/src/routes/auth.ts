@@ -48,10 +48,13 @@ export function authRoutes(db: Db) {
       throw unauthorized("Board authentication required");
     }
 
+    if (req.actor.source === "session" && !req.actor.sessionId) {
+      throw unauthorized("Native session identity required");
+    }
     const user = await loadCurrentUserProfile(db, req.actor.userId);
     res.json(authSessionSchema.parse({
       session: {
-        id: `paperclip:${req.actor.source ?? "none"}:${req.actor.userId}`,
+        id: req.actor.source === "session" ? req.actor.sessionId! : `paperclip:${req.actor.source ?? "none"}:${req.actor.userId}`,
         userId: req.actor.userId,
         localImplicit: req.actor.source === "local_implicit",
       },
@@ -115,7 +118,10 @@ export function authRoutes(db: Db) {
       throw unauthorized("Board authentication required");
     }
     if (req.query.expectedUserId !== req.actor.userId) throw unauthorized("Account changed. Refresh and try again.");
-    const [user] = await db.select({ keyboardShortcuts: authUsers.keyboardShortcuts })
+    const [user] = await db.select({
+      keyboardShortcuts: authUsers.keyboardShortcuts,
+      locale: authUsers.locale,
+    })
       .from(authUsers).where(eq(authUsers.id, req.actor.userId));
     if (!user) throw unauthorized("Signed-in user not found");
     res.json(currentUserPreferencesSchema.parse(user));
@@ -125,17 +131,34 @@ export function authRoutes(db: Db) {
     if (req.actor.type !== "board" || !req.actor.userId) {
       throw unauthorized("Board authentication required");
     }
-    const { companyId, keyboardShortcuts, expectedUserId } = updateCurrentUserPreferencesSchema.parse(req.body);
+    const { companyId, keyboardShortcuts, locale, expectedUserId } = updateCurrentUserPreferencesSchema.parse(req.body);
     const userId = req.actor.userId;
     if (expectedUserId !== userId) throw unauthorized("Account changed. Refresh and try again.");
-    // This is a personal write; company membership supplies audit context only.
-    if (!hasCompanyAccess(req, companyId)) throw forbidden("User does not have access to this company");
+    // A company is only needed for keyboard-shortcut audit context. Locale is
+    // a personal preference and may be saved before the user joins a company.
+    if (companyId && !hasCompanyAccess(req, companyId)) throw forbidden("User does not have access to this company");
+    const fields: Partial<typeof authUsers.$inferInsert> = { updatedAt: new Date() };
+    if (keyboardShortcuts !== undefined) fields.keyboardShortcuts = keyboardShortcuts;
+    if (locale !== undefined) fields.locale = locale;
+    const returning = {
+      keyboardShortcuts: authUsers.keyboardShortcuts,
+      locale: authUsers.locale,
+    };
+    if (!companyId) {
+      const [updated] = await db.update(authUsers)
+        .set(fields)
+        .where(eq(authUsers.id, userId))
+        .returning(returning);
+      if (!updated) throw unauthorized("Signed-in user not found");
+      res.json(currentUserPreferencesSchema.parse(updated));
+      return;
+    }
     const publications: ActivityPublication[] = [];
     const user = await db.transaction(async (tx) => {
       const [updated] = await tx.update(authUsers)
-        .set({ keyboardShortcuts, updatedAt: new Date() })
+        .set(fields)
         .where(eq(authUsers.id, userId))
-        .returning({ keyboardShortcuts: authUsers.keyboardShortcuts });
+        .returning(returning);
       if (!updated) throw unauthorized("Signed-in user not found");
       await logActivity(tx as unknown as Db, {
         companyId,
@@ -144,7 +167,10 @@ export function authRoutes(db: Db) {
         action: "user.preferences_updated",
         entityType: "user",
         entityId: userId,
-        details: { keyboardShortcuts },
+        details: {
+          ...(keyboardShortcuts !== undefined ? { keyboardShortcuts } : {}),
+          ...(locale !== undefined ? { locale } : {}),
+        },
       }, publications);
       return updated;
     });

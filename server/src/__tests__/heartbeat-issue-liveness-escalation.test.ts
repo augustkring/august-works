@@ -24,6 +24,7 @@ import {
   issues,
   projects,
   projectWorkspaces,
+  principalPermissionGrants,
   workspaceOperations,
 } from "@paperclipai/db";
 import {
@@ -76,6 +77,7 @@ import {
   buildIssueBlockersResolvedWakeStateKey,
   buildIssueBlockersResolvedWakeStateKeyWithoutCycle,
 } from "../services/issue-dependency-wakeups.ts";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -89,8 +91,10 @@ if (!embeddedPostgresSupport.supported) {
 describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", () => {
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   let db: ReturnType<typeof createDb>;
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-issue-liveness-");
     db = createDb(tempDb.connectionString);
   }, 30_000);
@@ -126,11 +130,13 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
     await db.delete(budgetPolicies);
     await db.delete(agents);
     await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companySkills);
     await db.delete(companies);
   });
 
   afterAll(async () => {
+    restoreApiUrl?.();
     await tempDb?.cleanup();
   }, 30_000);
 
@@ -144,14 +150,17 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
     const coderId = randomUUID();
     const blockedIssueId = randomUUID();
     const blockerIssueId = randomUUID();
+    const ownerUserId = randomUUID();
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
     await db.insert(companies).values({
       id: companyId,
       name: "Paperclip",
       issuePrefix,
+      defaultResponsibleUserId: ownerUserId,
       requireBoardApprovalForNewAgents: false,
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, ownerUserId, "owner");
 
     await db.insert(agents).values([
       {
@@ -242,15 +251,10 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
       id: companyId,
       name: "Paperclip",
       issuePrefix,
+      defaultResponsibleUserId: ownerUserId,
       requireBoardApprovalForNewAgents: false,
     });
-    await db.insert(companyMemberships).values({
-      companyId,
-      principalType: "user",
-      principalId: ownerUserId,
-      membershipRole: "owner",
-      status: "active",
-    });
+    await seedHeartbeatResponsibleHuman(db, companyId, ownerUserId, "owner");
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -355,6 +359,7 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
       defaultResponsibleUserId: "responsible-user",
       requireBoardApprovalForNewAgents: false,
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
     await db.insert(agents).values({
       id: agentId,
       companyId,

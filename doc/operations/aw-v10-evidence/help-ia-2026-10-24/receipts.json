@@ -1,0 +1,171 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "a6083a8189885989a3e7cd457e6e42d4eca63777",
+  "meaning": "Fourteen source-linked V10 preview Help articles across ten IA groups, reused Mintlify documentation, native checked search projection, explicit source/article review and full local link checks. Actual cookie-authenticated production UI/native PostgreSQL/Chromium Help/support journey1PASS37.7sec includes in-place search and retained Work/draft/recovery. Node12PASS and focusedsearch41PASS. Earlier Help count/ordering failures and stale article-hash failures retained, then corrected; they were article metadata hash changes, not concurrent source changes. No hosted docs, complete Danish article corpus, assistant, release history, live support delivery, manual accessibility or full V10 claim.",
+  "logs": [
+    {
+      "name": "help-ia-node-tests",
+      "exitCode": 0,
+      "rawSha256": "338c5f56a7773e6d4dafc7511f2b53dda23b7b8272ef3ccae7fed08f59309cf7",
+      "sanitizedSha256": "338c5f56a7773e6d4dafc7511f2b53dda23b7b8272ef3ccae7fed08f59309cf7",
+      "archiveSha256": "0c8bb3449a55b451032287be58b6852de8521431e0da168f4368cba5a6d355d2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-ia-search-tests",
+      "exitCode": 1,
+      "rawSha256": "4c16af9684d0aa1e70987c366df46cf17166fc787f3e81f74a16e2653a8c6e05",
+      "sanitizedSha256": "4c16af9684d0aa1e70987c366df46cf17166fc787f3e81f74a16e2653a8c6e05",
+      "archiveSha256": "5fbd9f0a62cba5520102dce71af70c49a28d9e0351cb6f73c51f63911a0a167e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 1 passed (2)",
+        "Tests  1 failed | 40 passed (41)",
+        "Duration  22.41s (transform 2.97s, setup 136ms, import 7.06s, tests 14.98s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "help-ia-search-tests-pass",
+      "exitCode": 1,
+      "rawSha256": "d5bfb13c9203a977de0a30c4deb71e886069906e26a32bab733bcef721c18089",
+      "sanitizedSha256": "d5bfb13c9203a977de0a30c4deb71e886069906e26a32bab733bcef721c18089",
+      "archiveSha256": "2b898517b078005d46cc4106366d6a124372304d96d802a59e14515f72cd0cc2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 1 passed (2)",
+        "Tests  1 failed | 40 passed (41)",
+        "Duration  29.01s (transform 5.15s, setup 336ms, import 10.65s, tests 17.69s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "help-ia-search-tests-final",
+      "exitCode": 0,
+      "rawSha256": "99aec0dcac19244ffe1054e94e4d463140dd99816251fd47a3504a8400fad20d",
+      "sanitizedSha256": "99aec0dcac19244ffe1054e94e4d463140dd99816251fd47a3504a8400fad20d",
+      "archiveSha256": "0ce73b9463e99a3820d909707d76dd2b0afced49b3afed75a68f30a956617cc5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  41 passed (41)",
+        "Duration  19.83s (transform 2.72s, setup 126ms, import 6.43s, tests 13.04s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "help-ia-review-final",
+      "exitCode": 1,
+      "rawSha256": "133451827a14bde47d132e000d10bac6011db4fd1ef439bd79b4f1e73c00a3c0",
+      "sanitizedSha256": "133451827a14bde47d132e000d10bac6011db4fd1ef439bd79b4f1e73c00a3c0",
+      "archiveSha256": "277b984d8f89c6c142942ec15713b65341b548bb1beba0e46689ec543f1ff0c7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-ia-root-review",
+      "exitCode": 0,
+      "rawSha256": "3f4b22c7c7e8c0ed8d9089a0e20497d37b54b741cc3b5b577811dba01d8fa630",
+      "sanitizedSha256": "3f4b22c7c7e8c0ed8d9089a0e20497d37b54b741cc3b5b577811dba01d8fa630",
+      "archiveSha256": "dfa8296acd9b54f7a5081f71897db913181f347b5d1c57985bee707530da457c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-ia-root-review-head",
+      "exitCode": 0,
+      "rawSha256": "9e2a5b3acb9ea97d595cf467848ad0d5c7345c07b40a47d393472ad1e28e3507",
+      "sanitizedSha256": "9e2a5b3acb9ea97d595cf467848ad0d5c7345c07b40a47d393472ad1e28e3507",
+      "archiveSha256": "befd160db26328bcc733758f808faeb8b826d40ffd2dc4012659cc1ef2138d24",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-ia-root-unit",
+      "exitCode": 0,
+      "rawSha256": "329467a07b463b1cfd85f154d773cc2acdf65dfa6c17f33786ec6f3c1a20b9ee",
+      "sanitizedSha256": "329467a07b463b1cfd85f154d773cc2acdf65dfa6c17f33786ec6f3c1a20b9ee",
+      "archiveSha256": "0b633fb912c9136f9d18e81b56f04f85ecff7cff712d3a22d5a535187c6626f1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-ia-root-check",
+      "exitCode": 0,
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "help-ia-native-browser",
+      "exitCode": 0,
+      "rawSha256": "9f19ce01dc7c7a8c3a0b14aa62546c2f3212972b898a0e5c51a61fd3eb87104e",
+      "sanitizedSha256": "9f19ce01dc7c7a8c3a0b14aa62546c2f3212972b898a0e5c51a61fd3eb87104e",
+      "archiveSha256": "57bd50b3b55e4116b5d51c6800922392f4b29030be3f767542a5dce0c3c17f9d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

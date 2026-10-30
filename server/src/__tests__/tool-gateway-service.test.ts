@@ -1,16 +1,20 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared";
 import {
   activityLog,
+  authUsers,
   agentWakeupRequests,
   toolActionDeliveries,
   agents,
   approvals,
   companies,
+  companySkills,
   companySecretBindings,
   companySecrets,
   companyMemberships,
@@ -39,22 +43,30 @@ import {
   workflowRuns,
   workflowStepRuns,
   workflowWaits,
+  supportCases,
+  supportCaseEvents,
 } from "@paperclipai/db";
 import type { PluginToolDispatcher } from "../services/plugin-tool-dispatcher.js";
 import type { VercelConnectClient } from "../services/vercel-connect.js";
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../services/run-identity.js";
 import { issueService } from "../services/issues.js";
+import { projectService } from "../services/projects.js";
+import type { AuthorizationActor } from "../services/authorization.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { commitToolActionReview } from "../services/tool-action-review.js";
 import { materializeNativeInteractionResponses } from "../services/native-runtime/native-interaction-bridge.js";
 import { toolActionDeliveryService } from "../services/tool-action-delivery.js";
 import { secretService } from "../services/secrets.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
 import { toolAccessService } from "../services/tool-access.js";
 import {
   createToolGatewayService,
+  blenteraPlatformContractHashes,
   ToolGatewayHttpError,
   type ScopedToolGatewayContext,
 } from "../services/tool-gateway.js";
+import { AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST, AGENT_NATIVE_OPERATION_MANIFEST, agentNativeOperationForToolName, blenteraToolCatalogContractHash } from "../services/agent-native-operation-manifest.js";
 import { canonicalToolArguments, signToolArguments } from "../services/tool-content-guards.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -65,6 +77,90 @@ const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 const testToolActionSigningSecret = "test-tool-action-signing-secret";
 type ToolGatewayServiceOptions = NonNullable<Parameters<typeof createToolGatewayService>[1]>;
+
+describe("Blentera platform contract hashes", () => {
+  it("records existing Agent APIs without registering tools or MCP exposure", () => {
+    expect(AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST.length).toBeGreaterThan(0);
+    for (const operation of AGENT_NATIVE_EXISTING_API_OPERATION_MANIFEST) {
+      expect(operation).toMatchObject({ toolId: null, legacyAliases: [], mcpExposed: false, apiOnly: true });
+      expect(operation.apiOperation).toMatch(/^(GET|POST|PUT|PATCH|DELETE)\s+\S/);
+      expect(operation.principalTypes).toContain("agent");
+      expect(operation.authorityEvidence.length).toBeGreaterThan(0);
+      expect(operation.materialityEvidence.length).toBeGreaterThan(0);
+      expect(agentNativeOperationForToolName(operation.operationId)).toBeUndefined();
+    }
+  });
+
+  it("exports stable operation and first-party tool catalog hashes", () => {
+    const first = blenteraPlatformContractHashes();
+    const second = blenteraPlatformContractHashes();
+    expect(first).toEqual(second);
+    expect(first.operationManifestHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.toolCatalogContractHash).toMatch(/^[a-f0-9]{64}$/);
+    const releaseRegistry = JSON.parse(readFileSync(new URL("../../../skills-releases/blentera-platform/releases.json", import.meta.url), "utf8")) as Array<Record<string, unknown>>;
+    expect(releaseRegistry.at(-1)).toMatchObject(first);
+    const contract = {
+      toolId: "blentera.task.list_assigned",
+      operationId: "blentera.task.list_assigned",
+      legacyAliases: ["paperclip-self:list_my_issues"],
+      displayName: "List assigned Tasks",
+      description: "List the current Co-worker's assigned Tasks.",
+      inputSchema: { type: "object", additionalProperties: false },
+      risk: "read",
+    };
+    expect(blenteraToolCatalogContractHash([contract])).not.toBe(
+      blenteraToolCatalogContractHash([{ ...contract, displayName: "Changed display contract" }]),
+    );
+  });
+
+  it("pins V1, V2, and V3 procedure-contract releases without repinning old Runs", () => {
+    const releaseRegistry = JSON.parse(readFileSync(new URL("../../../skills-releases/blentera-platform/releases.json", import.meta.url), "utf8")) as Array<Record<string, unknown>>;
+    expect(releaseRegistry.map(release => release.id)).toEqual(["v1", "v2", "v3"]);
+    expect(releaseRegistry[0]).toMatchObject({
+      operationManifestHash: "22c7ebc0014d5df6b5716751b41838d8a5c786515b35e86f019bae7023df3a69",
+      toolCatalogContractHash: "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+    });
+    expect(releaseRegistry[1]).toMatchObject({
+      operationManifestHash: "24b568c81d493c84218a55e8efdea6c9cce5b77b5107b5a1c62e7322fce198b8",
+      toolCatalogContractHash: "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+    });
+    expect(releaseRegistry[2]).toMatchObject({
+      id: "v3",
+      supersedes: "v2",
+      operationManifestHash: "52fe608c583066221d3cee9562cd2216e17abdb9d0860ba74d9b9adf33e50e20",
+      toolCatalogContractHash: "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825",
+      sourceSha: releaseRegistry[1].sourceSha,
+      contentDigest: releaseRegistry[1].contentDigest,
+      files: releaseRegistry[1].files,
+    });
+    expect(blenteraPlatformContractHashes()).toMatchObject({
+      operationManifestHash: releaseRegistry[2].operationManifestHash,
+      toolCatalogContractHash: releaseRegistry[2].toolCatalogContractHash,
+    });
+  });
+
+  it("keeps Task progress replay routed by its canonical manifest alias and owner", () => {
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.task.comment.add"))
+      .toMatchObject({ domain: "Work", canonicalService: "PaperclipRunnerToolAuthority.report_progress",
+        legacyAliases: ["paperclip-self:report_progress"], mcpExposed: true });
+  });
+
+  it("classifies the required least-authority domain projections without claiming unqualified channels", () => {
+    const domains = new Set(AGENT_NATIVE_OPERATION_MANIFEST.map(operation => operation.domain));
+    for (const domain of ["Tasks", "Projects", "Work", "Agents", "Apps", "Insights", "Decisions", "Support"])
+      expect([...domains]).toContain(domain);
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.apps.list_authorized_tools"))
+      .toMatchObject({ apiOperation: "MCP tools/list", openclawQualified: false, mcpExposed: true });
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.support.case.request"))
+      .toMatchObject({ mode: "PROPOSAL_ONLY", openclawQualified: false });
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.support.case.manage"))
+      .toMatchObject({ mode: "HUMAN_ONLY", mcpExposed: false });
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.support.intake.status"))
+      .toMatchObject({ toolId: "blentera.support.intake.status", canonicalService: "customerSupportCaseService.intakePolicyFromNative" });
+    expect(AGENT_NATIVE_OPERATION_MANIFEST.find(operation => operation.operationId === "blentera.support.service.status"))
+      .toMatchObject({ toolId: "blentera.support.service.status", canonicalService: "managedServiceHealth.read", mcpExposed: true });
+  });
+});
 
 function createTestToolGatewayService(db: ReturnType<typeof createDb>, options: ToolGatewayServiceOptions = {}) {
   return createToolGatewayService(db, {
@@ -214,7 +310,10 @@ describeEmbeddedPostgres("tool gateway service", () => {
     await db.delete(issues);
     await db.delete(projects);
     await db.delete(companyMemberships);
+    await db.delete(companySkills);
     await db.delete(agents);
+    await db.delete(supportCaseEvents);
+    await db.delete(supportCases);
     await db.delete(companies);
   });
 
@@ -223,7 +322,17 @@ describeEmbeddedPostgres("tool gateway service", () => {
   });
 
   it("executes a pinned connector through a workflow and denies catalogue drift before another provider call", async () => {
-    const { company, agent, run } = await createRunFixture(db);
+    const { company, agent, run, issue } = await createRunFixture(db);
+    const userId = randomUUID();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow connector owner", email: `${userId}@example.test`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values([
+      { companyId: company.id, principalType: "user", principalId: userId, membershipRole: "member", status: "active" },
+      { companyId: company.id, principalType: "agent", principalId: agent.id, membershipRole: "member", status: "active" },
+    ]);
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId }).where(eq(heartbeatRuns.id, run.id));
+    await initializeRunIdentity(db, { companyId: company.id, runId: run.id, issueId: issue.id,
+      responsibleUserId: userId, cause: "instruction" });
     const { connection, catalogEntry } = await createRemoteMcpToolFixture(db, company.id);
     await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow workflow connector",
       policyType: "allow", selectors: { connectionId: connection.id } });
@@ -236,7 +345,8 @@ describeEmbeddedPostgres("tool gateway service", () => {
         { headers: { "content-type": "application/json" } });
     };
     const gateway = createTestToolGatewayService(db, { remoteHttpRequest: provider });
-    const actor = { principal: { type: "agent" as const, agentId: agent.id }, runId: run.id };
+    const actor = { principal: { type: "agent" as const, agentId: agent.id, responsibleUserId: userId },
+      runId: run.id, responsibleUserId: userId };
     const svc = workflowService(db);
     const workflow = await svc.create(company.id, { name: "Pinned connector" }, actor);
     const draft = await svc.updateDraft(company.id, workflow.id, {
@@ -273,8 +383,12 @@ describeEmbeddedPostgres("tool gateway service", () => {
   it("parks a user workflow for signed tool review, recovers its receipt, and blocks late approval after cancellation", async () => {
     const { company } = await createRunFixture(db);
     const { connection, catalogEntry } = await createRemoteMcpToolFixture(db, company.id);
-    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user",
-      principalId: "workflow-owner", membershipRole: "owner", status: "active" });
+    await db.insert(authUsers).values(["workflow-owner", "reviewer"].map(id => ({ id, name: id,
+      email: `${id}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() }))).onConflictDoNothing();
+    await db.insert(companyMemberships).values([
+      { companyId: company.id, principalType: "user", principalId: "workflow-owner", membershipRole: "owner", status: "active" },
+      { companyId: company.id, principalType: "user", principalId: "reviewer", membershipRole: "admin", status: "active" },
+    ]);
     await db.insert(toolPolicies).values({ companyId: company.id, name: "Review workflow connector",
       policyType: "require_approval", selectors: { connectionId: connection.id } });
     let calls = 0;
@@ -384,10 +498,11 @@ describeEmbeddedPostgres("tool gateway service", () => {
 
     const disabledNames = (await gateway.listToolsForSession(session.token))
       .map((tool) => tool.name);
+    expect(disabledNames).not.toContain("blentera.memory.recall");
+    expect(disabledNames).not.toContain("blentera.memory.remember");
+    expect(disabledNames).not.toContain("blentera.memory.correct");
+    expect(disabledNames).not.toContain("blentera.memory.share");
     expect(disabledNames).not.toContain("paperclip-self:recall");
-    expect(disabledNames).not.toContain("paperclip-self:remember");
-    expect(disabledNames).not.toContain("paperclip-self:correct_memory");
-    expect(disabledNames).not.toContain("paperclip-self:share_memory");
 
     const enabledMemoryExperimental = {
       enableCollectiveMemoryV1: true,
@@ -409,12 +524,22 @@ describeEmbeddedPostgres("tool gateway service", () => {
       .map((tool) => tool.name);
     expect(enabledNames).toEqual(
       expect.arrayContaining([
-        "paperclip-self:recall",
-        "paperclip-self:remember",
-        "paperclip-self:correct_memory",
-        "paperclip-self:share_memory",
+        "blentera.memory.recall",
+        "blentera.memory.remember",
+        "blentera.memory.correct",
+        "blentera.memory.share",
       ]),
     );
+    const remember = (await gateway.listToolsForSession(session.token))
+      .find((tool) => tool.name === "blentera.memory.remember");
+    expect(remember).toMatchObject({
+      displayName: "Submit a Memory candidate from the current work",
+      description: "Submit a Memory candidate from the current work.",
+      providerType: "paperclip_self",
+      risk: "write",
+    });
+    expect(remember?.parametersSchema).toMatchObject({ type: "object" });
+    expect(remember?.description).not.toMatch(/Paperclip/i);
   });
 
   it("exposes AI workflow authoring tools only behind the full authoring feature gate", async () => {
@@ -459,11 +584,361 @@ describeEmbeddedPostgres("tool gateway service", () => {
 
     const enabledNames = (await gateway.listToolsForSession(session.token))
       .map((tool) => tool.name);
-    expect(enabledNames).toEqual(expect.arrayContaining(authoringToolNames));
+    expect(enabledNames).toEqual(expect.arrayContaining([
+      "blentera.workflow.draft.create",
+      "blentera.workflow.trigger.add",
+      "blentera.workflow.step.add",
+      "blentera.workflow.step.update",
+      "blentera.workflow.steps.connect",
+      "blentera.workflow.step.remove",
+      "blentera.workflow.step.test",
+      "blentera.workflow.publish.prepare",
+    ]));
+  });
+
+  it("does not let a plugin shadow a reserved first-party name while its feature gate is closed", async () => {
+    const { company, agent, run } = await createRunFixture(db);
+    let pluginCalls = 0;
+    const pluginDispatcher = fakePluginDispatcher();
+    pluginDispatcher.listToolsForAgent = () => [{
+      name: "blentera.workflow.draft.create",
+      displayName: "Plugin replacement",
+      description: "Conflicting plugin fixture.",
+      parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+      pluginId: "fixture-plugin",
+    }];
+    pluginDispatcher.executeTool = async () => {
+      pluginCalls += 1;
+      return { pluginId: "fixture-plugin", toolName: "workflow.draft.create", result: { created: true } };
+    };
+    const gateway = createTestToolGatewayService(db, { pluginToolDispatcher: pluginDispatcher });
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
+
+    await expect(gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.workflow.draft.create",
+      parameters: { name: "Plugin shadow attempt", idempotencyKey: "shadow" },
+    })).rejects.toMatchObject({ status: 404, reasonCode: "tool_not_found" });
+    expect(pluginCalls).toBe(0);
+  });
+
+  it("routes an MCP Task comment through the current Native owner and binds its honest transport identity", async () => {
+    const { company, agent, issue, run } = await createRunFixture(db);
+    const userId = `gateway-task-human-${randomUUID()}`;
+    await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "agent", principalId: agent.id,
+      status: "active", membershipRole: "member" });
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
+      .where(eq(heartbeatRuns.id, run.id));
+    await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, issue.id));
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id,
+      runId: run.id, onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      keyScope: { kind: "standard" }, companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId, membershipRole: humanMembership.membershipRole,
+        status: humanMembership.status }] };
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow internal Task comment",
+      policyType: "allow", selectors: { toolName: "paperclip-self:report_progress" } });
+    const gateway = createTestToolGatewayService(db);
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id,
+      issueId: issue.id, authorizationActor: actor });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name))
+      .toContain("blentera.task.comment.add");
+
+    const parameters = { idempotencyKey: randomUUID(), body: "Internal progress update." };
+    const result = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters });
+    expect(result.status).toBe("completed");
+    const replay = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters });
+    expect(replay.status).toBe("replayed");
+    const [comment] = await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id));
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id))).toHaveLength(1);
+    expect(comment).toMatchObject({ authorAgentId: agent.id, createdByRunId: run.id,
+      metadata: expect.objectContaining({ authorizationReason: "tool_gateway_mcp" }) });
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Block this Task comment on replay",
+      policyType: "block", priority: 1, selectors: { toolName: "paperclip-self:report_progress" },
+      conditions: { arguments: { fieldEquals: { body: parameters.body } } } });
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id))).toHaveLength(1);
+    const [currentRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
+    const receipts = currentRun.resultJson?.semanticToolReceipts as Record<string, { transport?: { channel: string; callId: string } }>;
+    expect(Object.values(receipts)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ transport: { channel: "tool_gateway_mcp", callId: result.invocationId } }),
+    ]));
+
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow exact-version Task field updates",
+      policyType: "allow", selectors: { toolName: "paperclip-self:update_task" } });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name))
+      .toContain("blentera.task.update");
+    const [taskBeforeUpdate] = await db.select().from(issues).where(eq(issues.id, issue.id));
+    const updateParameters = { idempotencyKey: randomUUID(), expectedUpdatedAt: taskBeforeUpdate.updatedAt.toISOString(),
+      title: "Updated through current Task owner" };
+    const updated = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.update",
+      parameters: updateParameters });
+    expect(updated.status).toBe("completed");
+    const updateReplay = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.update",
+      parameters: updateParameters });
+    expect(updateReplay.status).toBe("replayed");
+    const [taskAfterUpdate] = await db.select().from(issues).where(eq(issues.id, issue.id));
+    expect(taskAfterUpdate).toMatchObject({ title: updateParameters.title, status: taskBeforeUpdate.status,
+      assigneeAgentId: taskBeforeUpdate.assigneeAgentId, assigneeUserId: taskBeforeUpdate.assigneeUserId });
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.update", parameters: {
+      ...updateParameters, idempotencyKey: randomUUID(), title: "Stale update must not apply",
+    } })).rejects.toMatchObject({ status: 409 });
+
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow Task completion proposals",
+      policyType: "allow", selectors: { toolName: "paperclip-self:propose_completion" } });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name))
+      .toContain("blentera.task.completion.propose");
+    const proposalParameters = { idempotencyKey: randomUUID(), expectedUpdatedAt: taskAfterUpdate.updatedAt.toISOString(),
+      summary: "The requested work and current Task evidence are ready for Human review." };
+    const proposal = await gateway.executeTool({ sessionToken: session.token,
+      tool: "blentera.task.completion.propose", parameters: proposalParameters });
+    expect(proposal.status).toBe("completed");
+    expect(proposal.result).toMatchObject({ data: { proposalStatus: "pending_human_review", currentTaskStatus: "in_progress",
+      taskStatusCommitted: false, evidenceRequirement: expect.stringContaining("finalizer") } });
+    const proposalReplay = await gateway.executeTool({ sessionToken: session.token,
+      tool: "blentera.task.completion.propose", parameters: proposalParameters });
+    expect(proposalReplay.status).toBe("replayed");
+    const [reviewRequest] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, issue.id));
+    expect(reviewRequest).toMatchObject({ status: "pending", requestedResolverPolicy: "human_only",
+      effectiveResolverPolicy: "human_only", resolverPolicyProvenance: "explicit", sourceRunId: run.id,
+      kind: "request_confirmation" });
+    expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, issue.id))).toHaveLength(1);
+    const [taskAfterProposal] = await db.select().from(issues).where(eq(issues.id, issue.id));
+    expect(taskAfterProposal).toMatchObject({ status: taskAfterUpdate.status,
+      statusVersion: taskAfterUpdate.statusVersion, assigneeAgentId: taskAfterUpdate.assigneeAgentId });
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.completion.propose", parameters: {
+      ...proposalParameters, idempotencyKey: randomUUID(), expectedUpdatedAt: taskBeforeUpdate.updatedAt.toISOString(),
+    } })).rejects.toMatchObject({ status: 409 });
+
+    await db.update(heartbeatRuns).set({ runnerProfileJson: sql`${heartbeatRuns.runnerProfileJson} - 'platformSkillAdmission'` })
+      .where(eq(heartbeatRuns.id, run.id));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.update", parameters: {
+      idempotencyKey: randomUUID(), expectedUpdatedAt: taskAfterUpdate.updatedAt.toISOString(), title: "Unpinned write must not apply",
+    } })).rejects.toMatchObject({ status: 409, details: { code: "platform_skill_readmission_required" } });
+
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    ));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.task.comment.add", parameters }))
+      .rejects.toMatchObject({ status: 403 });
+  });
+
+  it("projects only current readable Projects through the canonical service and Human intersection", async () => {
+    const { company, agent, run } = await createRunFixture(db);
+    const userId = `gateway-project-human-${randomUUID()}`;
+    const humanActor = await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId }).where(eq(heartbeatRuns.id, run.id));
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      status: "active",
+      membershipRole: "member",
+    });
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const verifiedAgentActor: AuthorizationActor = {
+      type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, runId: run.id,
+      onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      keyScope: { kind: "standard" }, companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId,
+        membershipRole: humanMembership.membershipRole, status: humanMembership.status }],
+    };
+    const visible = await createCanonicalHumanProject(db, company.id, humanActor, "Gateway-visible project", {
+      description: "Current company project summary.",
+    });
+    await createRemoteMcpToolFixture(db, company.id);
+    const otherCompany = await db.insert(companies).values({
+      name: `Gateway other ${randomUUID()}`,
+      issuePrefix: `GO${randomUUID().slice(0, 6).toUpperCase()}`,
+    }).returning().then(rows => rows[0]!);
+    const otherOwner = await seedCurrentHumanSourceActor(db, [otherCompany.id], `gateway-project-other-${randomUUID()}`);
+    const outsideTenant = await createCanonicalHumanProject(db, otherCompany.id, otherOwner, "Other company project");
+    await db.insert(toolPolicies).values([
+      { companyId: company.id, name: "Allow Project list for fixture", policyType: "allow",
+        selectors: { toolName: "paperclip-self:list_projects" } },
+      { companyId: company.id, name: "Allow Project context for fixture", policyType: "allow",
+        selectors: { toolName: "paperclip-self:get_project_context" } },
+      { companyId: company.id, name: "Allow Agent context for fixture", policyType: "allow",
+        selectors: { toolName: "paperclip-self:get_my_agent_context" } },
+      { companyId: company.id, name: "Allow current Work for fixture", policyType: "allow",
+        selectors: { toolName: "paperclip-self:get_my_current_work" } },
+      { companyId: company.id, name: "Allow available App tools for fixture", policyType: "allow",
+        selectors: { riskLevel: "read" } },
+    ]);
+    const gateway = createTestToolGatewayService(db);
+    const session = await gateway.createSession({
+      companyId: company.id,
+      agentId: agent.id,
+      runId: run.id,
+      authorizationActor: verifiedAgentActor,
+    });
+
+    const listed = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.project.list",
+      parameters: { limit: 10 },
+    });
+    expect(listed.status).toBe("completed");
+    expect(listed.result).toMatchObject({ data: { projects: [expect.objectContaining({ id: visible.id, name: "Gateway-visible project" })] } });
+    expect(JSON.stringify(listed.result)).not.toContain(outsideTenant.id);
+
+    const detail = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.project.get_context",
+      parameters: { projectId: visible.id },
+    });
+    expect(detail.result).toMatchObject({ data: { id: visible.id, name: "Gateway-visible project" } });
+    await expect(gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.project.get_context",
+      parameters: { projectId: outsideTenant.id },
+    })).rejects.toMatchObject({ status: 404, reasonCode: "project_not_found" });
+
+    const self = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.agent.get_self_context",
+      parameters: {},
+    });
+    expect(self.result).toMatchObject({ data: { agent: { id: agent.id }, run: { id: run.id, status: "running" } } });
+    expect(JSON.stringify(self.result)).not.toContain("adapterConfig");
+    const work = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "blentera.work.get_current_task",
+      parameters: {},
+    });
+    expect(work.result).toMatchObject({ data: { issue: { id: session.issueId }, run: { id: run.id, status: "running" } } });
+    const apps = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.apps.list_authorized_tools", parameters: {} });
+    expect(apps.result).toMatchObject({ data: { applications: [expect.objectContaining({
+      application: "Remote MCP", connection: "Remote connection", status: "active", enabled: true,
+      availableOperations: [expect.any(String)],
+    })] } });
+    expect(JSON.stringify(apps.result)).not.toMatch(/credentialSecretRefs|transportConfig|authToken|password/i);
+  });
+
+  it("creates an idempotent local Support request under the current Native Human and approved safe context", async () => {
+    const { company, agent, issue, run } = await createRunFixture(db);
+    const userId = `gateway-support-human-${randomUUID()}`;
+    await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "agent", principalId: agent.id,
+      status: "active", membershipRole: "member" });
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
+      .where(eq(heartbeatRuns.id, run.id));
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id,
+      runId: run.id, onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId, membershipRole: humanMembership.membershipRole, status: humanMembership.status }] };
+    const supportCaseDataPolicy = { schemaVersion: 1 as const, policyVersion: "gateway.support.v1", recipientName: "Blentera Support",
+      privacyNoticeUrl: "https://support.example.test/privacy", processingRegion: "test", retentionTrigger: "after_last_customer_or_support_message" as const,
+      retentionDays: 30, backupMaxDays: 7, restoreLagDays: 2, deletionMarkerDays: 10, legalHoldPolicyId: "gateway.support.hold.v1" };
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow Support request fixture", policyType: "allow",
+      selectors: { toolName: "paperclip-self:create_support_request" } });
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow Support intake status fixture", policyType: "allow",
+      selectors: { toolName: "paperclip-self:get_support_intake_status" } });
+    const gateway = createTestToolGatewayService(db, { supportCaseDataPolicy });
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id, authorizationActor: actor });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toEqual(expect.arrayContaining([
+      "blentera.support.intake.status", "blentera.support.case.request",
+    ]));
+    const intake = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.intake.status", parameters: {} });
+    expect(intake.result).toMatchObject({ data: { available: true, recipientName: "Blentera Support", retentionDays: 30 } });
+    const requestKey = randomUUID();
+    const parameters = { idempotencyKey: requestKey, expectedPolicyRevision: (intake.result as { data: { revision: string } }).data.revision,
+      description: "I could not open the current Task.", category: "access", safeContext: { surface: "work", errorCode: "ACCESS_CHANGED" } };
+    const first = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.case.request", parameters });
+    expect(first.status).toBe("completed");
+    expect(first.result).toMatchObject({ data: { openedByUserId: userId, status: "RECEIVED", delivery: "pending" } });
+    const replay = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.case.request", parameters });
+    expect(replay.status).toBe("replayed");
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.case.request",
+      parameters: { ...parameters, description: "Different text under the same request key." } })).rejects.toMatchObject({ status: 409 });
+    expect(await db.select().from(supportCases)).toHaveLength(1);
+    expect(await db.select().from(supportCaseEvents)).toHaveLength(1);
+    const [activity] = await db.select().from(activityLog).where(eq(activityLog.action, "support.case_requested"));
+    expect(activity).toMatchObject({ actorType: "agent", actorId: agent.id, agentId: agent.id, runId: run.id });
+  });
+
+  it("reads public service status separately from Support intake under current run, Human, policy, and Skill pins", async () => {
+    const { company, agent, issue, run } = await createRunFixture(db);
+    const userId = `gateway-service-status-human-${randomUUID()}`;
+    await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "agent", principalId: agent.id,
+      status: "active", membershipRole: "member" });
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
+      .where(eq(heartbeatRuns.id, run.id));
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id,
+      runId: run.id, onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      keyScope: { kind: "standard" }, companyIds: [company.id],
+      memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId, membershipRole: humanMembership.membershipRole,
+        status: humanMembership.status }] };
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
+    await db.insert(toolPolicies).values({ companyId: company.id, name: "Allow public service status",
+      policyType: "allow", selectors: { toolName: "paperclip-self:get_service_status" } });
+    const projection = { state: "current" as const, statusUrl: PRODUCT_IDENTITY.statusOrigin, source: "statuspage_public_v2" as const,
+      customerImpact: "unknown" as const,
+      observedAt: new Date().toISOString(), providerUpdatedAt: new Date().toISOString(), indicator: "minor" as const,
+      components: [{ id: "app", name: "Blentera app" as const, status: "degraded_performance" as const }],
+      incidents: [], scheduledMaintenance: [] };
+    const read = vi.fn(async () => projection);
+    const gateway = createTestToolGatewayService(db, { serviceHealthReader: { read } });
+    const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id,
+      issueId: issue.id, authorizationActor: actor });
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name))
+      .toContain("blentera.support.service.status");
+    const result = await gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.service.status", parameters: {} });
+    expect(result.result).toMatchObject({ data: projection });
+    expect(JSON.stringify(result.result)).not.toMatch(/credential|password|supportCase|caseId/i);
+    expect(read).toHaveBeenCalledOnce();
+
+    await db.update(heartbeatRuns).set({ runnerProfileJson: sql`${heartbeatRuns.runnerProfileJson} - 'platformSkillAdmission'` })
+      .where(eq(heartbeatRuns.id, run.id));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.service.status", parameters: {} }))
+      .rejects.toMatchObject({ status: 409, details: { code: "platform_skill_readmission_required" } });
+    expect(read).toHaveBeenCalledOnce();
+    await db.update(companyMemberships).set({ status: "suspended" }).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    ));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "blentera.support.service.status", parameters: {} }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(read).toHaveBeenCalledOnce();
   });
 
   it("executes create_workflow through the governed gateway without publishing", async () => {
     const { company, agent, run } = await createRunFixture(db);
+    const issue = await db.select().from(issues).where(eq(issues.companyId, company.id)).then(rows => rows[0]!);
+    const userId = `gateway-workflow-human-${randomUUID()}`;
+    await seedCurrentHumanSourceActor(db, [company.id], userId);
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, runtimeMode: "native", nativeIssueId: issue.id })
+      .where(eq(heartbeatRuns.id, run.id));
+    await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, issue.id));
     await db.insert(companyMemberships).values({
       companyId: company.id,
       principalType: "agent",
@@ -478,6 +953,19 @@ describeEmbeddedPostgres("tool gateway service", () => {
       permissionKey: "workflows:edit",
       scope: null,
     });
+    const humanMembership = await db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+    )).then(rows => rows[0]!);
+    const actor: AuthorizationActor = {
+      type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, runId: run.id,
+      onBehalfOfUserId: userId, authenticatedCredentialExpiresAt: Date.now() + 60_000,
+      companyIds: [company.id], memberships: [{ companyId: company.id, membershipRole: "member", status: "active" }],
+      onBehalfOfMemberships: [{ companyId: humanMembership.companyId,
+        membershipRole: humanMembership.membershipRole, status: humanMembership.status }],
+    };
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
     await db.insert(toolPolicies).values({
       companyId: company.id,
       name: "Allow workflow draft creation",
@@ -495,15 +983,18 @@ describeEmbeddedPostgres("tool gateway service", () => {
       companyId: company.id,
       agentId: agent.id,
       runId: run.id,
+      issueId: issue.id,
+      authorizationActor: actor,
     });
+    const parameters = {
+      name: "Gateway-authored workflow",
+      description: "Created through the governed self-tool",
+      idempotencyKey: "gateway-create-v1",
+    };
     const result = await gateway.executeTool({
       sessionToken: session.token,
-      tool: "paperclip-self:create_workflow",
-      parameters: {
-        name: "Gateway-authored workflow",
-        description: "Created through the governed self-tool",
-        idempotencyKey: "gateway-create-v1",
-      },
+      tool: "blentera.workflow.draft.create",
+      parameters,
     });
 
     expect(result.status).toBe("completed");
@@ -517,6 +1008,58 @@ describeEmbeddedPostgres("tool gateway service", () => {
         },
       },
     });
+
+    const replay = await gateway.executeTool({
+      sessionToken: session.token,
+      tool: "paperclip-self:create_workflow",
+      parameters,
+    });
+    expect(replay.status).toBe("replayed");
+    const workflowId = (value: unknown) => {
+      expect(value).toMatchObject({ data: { workflow: { id: expect.any(String) } } });
+      return (value as { data: { workflow: { id: string } } }).data.workflow.id;
+    };
+    expect(workflowId(replay.result)).toBe(workflowId(result.result));
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters: {
+      ...parameters, description: "Changed content under the original request key",
+    } })).rejects.toMatchObject({ status: 409, details: { code: "workflow_authoring_idempotency_conflict" } });
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    const [blockReplay] = await db.insert(toolPolicies).values({ companyId: company.id,
+      name: "Block current workflow draft replay", policyType: "block", priority: 1,
+      selectors: { toolName: "paperclip-self:create_workflow" },
+    }).returning();
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters }))
+      .rejects.toMatchObject({ status: 403 });
+    await db.delete(toolPolicies).where(eq(toolPolicies.id, blockReplay!.id));
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    await db.update(heartbeatRuns).set({ runnerProfileJson: sql`${heartbeatRuns.runnerProfileJson} - 'platformSkillAdmission'` })
+      .where(eq(heartbeatRuns.id, run.id));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters }))
+      .rejects.toMatchObject({ status: 409, details: { code: "platform_skill_readmission_required" } });
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    await preparePlatformSkillAdmission(db, { companyId: company.id, agentId: agent.id, runId: run.id,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
+    await db.update(companyMemberships).set({ status: "suspended" }).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    ));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
+
+    await db.update(companyMemberships).set({ status: "active" }).where(and(
+      eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, userId),
+    ));
+    await db.update(heartbeatRuns).set({ status: "failed" }).where(eq(heartbeatRuns.id, run.id));
+    await expect(gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:create_workflow", parameters }))
+      .rejects.toMatchObject({ status: 401 });
+    expect(await db.select().from(workflows).where(eq(workflows.companyId, company.id))).toHaveLength(1);
   });
 
   it("gates write tools with an action request and executes only stored reviewed arguments once", async () => {

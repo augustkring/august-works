@@ -7,6 +7,7 @@ import {
   agents,
   agentRuntimeState,
   authUsers,
+  companyMemberships,
   agentWakeupRequests,
   activityLog,
   companies,
@@ -20,6 +21,7 @@ import {
   issueRelations,
   issueThreadInteractions,
   issues,
+  subscribeDatabaseWork,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -29,9 +31,13 @@ import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
 import { buildPaperclipWakePayload, heartbeatService } from "../services/heartbeat.js";
 import { deliverReconciledExecutions } from "../services/execution-recovery-resolution.js";
-import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
+import { issueRecoveryActionReadModel, issueRecoveryActionService } from "../services/issue-recovery-actions.js";
 import { recoveryService } from "../services/recovery/service.js";
 import { noticeMetadataReferencesRecoveryAction } from "../services/recovery/successful-run-handoff.js";
+import { createDeliveryWorkCoordinator } from "../services/delivery-work-coordinator.js";
+import { DELIVERY_QUEUES } from "../services/delivery-work-notifications.js";
+import { registerScheduledWork } from "../services/scheduled-work.js";
+import { issueService } from "../services/issues.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -68,6 +74,16 @@ function makeRecoveryActionRow(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe("recovery action projection privacy", () => {
+  it("keeps deferred reader session metadata out of Task/API projections", () => {
+    const projected = issueRecoveryActionReadModel(makeRecoveryActionRow({ evidence: {
+      sourceRunId: "run-1",
+      workspaceReconstructionReader: { source: "session", userId: "user-1", sessionId: "secret-session-id", credentialExpiresAt: 123 },
+    } }) as never);
+    expect(projected.evidence).toEqual({ sourceRunId: "run-1" });
+  });
+});
 
 describe("issueRecoveryActionService", () => {
   it("does not reactivate an action resolved between the active read and update", async () => {
@@ -151,6 +167,7 @@ describeEmbeddedPostgres("issue recovery actions", () => {
     await db.delete(issues);
     await db.delete(agentRuntimeState);
     await db.delete(agents);
+    await db.delete(companyMemberships);
     await db.delete(companies);
     await db.delete(authUsers);
   });
@@ -791,6 +808,100 @@ describeEmbeddedPostgres("issue recovery actions", () => {
     const secondResult = await recovery.reconcileStrandedAssignedIssues();
     expect(secondResult).toMatchObject({ providerQuotaMonitored: 0, skipped: 1 });
     expect(await db.select().from(issueRecoveryActions)).toHaveLength(0);
+  });
+
+  it("publishes monitor mutations only at the outer transaction boundary and workers read committed eligibility", async () => {
+    const { companyId, coderId, sourceIssueId, prefix } = await seedCompany();
+    const userId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: userId, name: "Monitor assignee", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now,
+    });
+    await db.insert(companyMemberships).values({
+      companyId, principalType: "user", principalId: userId, membershipRole: "member", status: "active",
+    });
+
+    const coordinator = createDeliveryWorkCoordinator({
+      owner: db,
+      canRun: () => true,
+      onError: error => { throw error; },
+    });
+    const workers = registerScheduledWork(coordinator, db, {
+      retryMs: 60_000,
+      tickTimers: async () => {},
+      tickRoutines: async () => {},
+    });
+    const events: string[] = [];
+    const unsubscribe = subscribeDatabaseWork(db, DELIVERY_QUEUES.issueMonitors, event => events.push(event));
+    const svc = issueService(db);
+    try {
+      await Promise.all([workers.routines.ready, workers.timers.ready]);
+      expect(coordinator.nextWakeAt()).toBeNull();
+
+      const ordinaryTaskId = randomUUID();
+      await db.insert(issues).values({
+        id: ordinaryTaskId, companyId, title: "Unmonitored ordinary task", status: "in_progress",
+        priority: "medium", assigneeAgentId: coderId, issueNumber: 2, identifier: `${prefix}-2`,
+      });
+      await svc.update(ordinaryTaskId, { status: "todo", assigneeAgentId: null });
+      expect(events).toEqual([]);
+
+      const firstDeadline = new Date(Date.now() + 30 * 60_000);
+
+      await db.transaction(async outer => {
+        await outer.transaction(async nested => {
+          await svc.update(sourceIssueId, {
+            monitorNextCheckAt: firstDeadline,
+            monitorScheduledBy: "assignee",
+            monitorNotes: "retry after provider reset",
+          }, nested);
+        });
+        expect(events).toEqual(["intent"]);
+        expect(coordinator.nextWakeAt()).not.toBe(firstDeadline.getTime());
+        const [notCommitted] = await db.select({ monitorNextCheckAt: issues.monitorNextCheckAt })
+          .from(issues).where(eq(issues.id, sourceIssueId));
+        expect(notCommitted?.monitorNextCheckAt).toBeNull();
+      });
+      expect(events).toEqual(["intent", "settled"]);
+      await vi.waitFor(() => expect(coordinator.nextWakeAt()).toBe(firstDeadline.getTime()));
+
+      const rolledBackDeadline = new Date(Date.now() + 10 * 60_000);
+      await expect(db.transaction(async outer => {
+        await outer.transaction(async nested => {
+          await svc.update(sourceIssueId, { monitorNextCheckAt: rolledBackDeadline }, nested);
+        });
+        expect(events).toEqual(["intent", "settled", "intent"]);
+        expect(coordinator.nextWakeAt()).not.toBe(rolledBackDeadline.getTime());
+        throw new Error("rollback monitor edit");
+      })).rejects.toThrow("rollback monitor edit");
+      expect(events).toEqual(["intent", "settled", "intent", "settled"]);
+      await vi.waitFor(() => expect(coordinator.nextWakeAt()).toBe(firstDeadline.getTime()));
+      const [afterRollback] = await db.select({ monitorNextCheckAt: issues.monitorNextCheckAt })
+        .from(issues).where(eq(issues.id, sourceIssueId));
+      expect(afterRollback?.monitorNextCheckAt?.getTime()).toBe(firstDeadline.getTime());
+
+      // Status is part of the worker's eligibility predicate; a committed
+      // terminal transition removes the deadline even while the monitor row remains.
+      await svc.update(sourceIssueId, { status: "done" });
+      await vi.waitFor(() => expect(coordinator.nextWakeAt()).toBeNull());
+
+      // Assignment is another eligibility input. Keep a second monitored Task
+      // active, then move it from an Agent to an actual member through the same
+      // original issue service writer.
+      const secondIssueId = randomUUID();
+      await db.insert(issues).values({
+        id: secondIssueId, companyId, title: "Human-owned monitor", status: "in_progress",
+        priority: "medium", assigneeAgentId: coderId, issueNumber: 3, identifier: `${prefix}-3`,
+        monitorNextCheckAt: firstDeadline, monitorScheduledBy: "assignee",
+      });
+      workers.timers.wake();
+      await vi.waitFor(() => expect(coordinator.nextWakeAt()).toBe(firstDeadline.getTime()));
+      await svc.update(secondIssueId, { assigneeAgentId: null, assigneeUserId: userId });
+      await vi.waitFor(() => expect(coordinator.nextWakeAt()).toBeNull());
+    } finally {
+      unsubscribe();
+      await coordinator.stop();
+    }
   });
 
   it("schedules another provider-quota monitor after a prior quota monitor fired", async () => {
@@ -1674,6 +1785,16 @@ describeEmbeddedPostgres("issue recovery actions", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    // A configured default is current only while its Human has active company
+    // membership. Recovery wake admission intentionally fails closed on a
+    // stale or unqualified default owner.
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: responsibleUserId,
+      membershipRole: "member",
+      status: "active",
+    });
     await db
       .update(companies)
       .set({ defaultResponsibleUserId: responsibleUserId })
@@ -1996,6 +2117,58 @@ describeEmbeddedPostgres("issue recovery actions", () => {
     expect(activityRows.map((row) => row.action)).toEqual(
       expect.arrayContaining(["issue.updated", "issue.recovery_action_resolved"]),
     );
+  });
+
+  it("preserves the authenticated board member when resolving a recovery action", async () => {
+    const { companyId, managerId, sourceIssueId } = await seedCompany();
+    const userId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Recovery Operator",
+      email: `${userId}@example.test`,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "member",
+    });
+    const action = await issueRecoveryActionService(db).upsertSourceScoped({
+      companyId,
+      sourceIssueId,
+      kind: "issue_graph_liveness",
+      ownerType: "agent",
+      ownerAgentId: managerId,
+      cause: "issue_graph_liveness",
+      fingerprint: "graph-liveness:session-board-resolution",
+      nextAction: "Restore a live execution path.",
+      wakePolicy: { type: "manual" },
+    });
+    const app = createApp({
+      type: "board",
+      source: "session",
+      userId,
+      companyIds: [companyId],
+    });
+
+    const resolved = await request(app)
+      .post(`/api/issues/${sourceIssueId}/recovery-actions/resolve`)
+      .send({ actionId: action.id, outcome: "restored", sourceIssueStatus: "done" })
+      .expect(200);
+
+    expect(resolved.body.issue.status).toBe("done");
+    const [resolutionActivity] = await db
+      .select()
+      .from(activityLog)
+      .where(and(
+        eq(activityLog.entityId, sourceIssueId),
+        eq(activityLog.action, "issue.recovery_action_resolved"),
+      ));
+    expect(resolutionActivity?.actorId).toBe(userId);
   });
 
   it.each(["ask_user_questions", "request_confirmation"] as const)("does not retry past a new pending %s", async (kind) => {

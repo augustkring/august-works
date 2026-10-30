@@ -22,6 +22,17 @@ const mockIssueService = vi.hoisted(() => ({
   listReviewAttention: vi.fn(),
 }));
 
+// These route units use public Task fixtures and mocked domain effects.
+// Current native source ownership is exercised by the PostgreSQL suites;
+// keep the route's action-grant checks below independently controllable.
+vi.mock("../services/authorization.js", async () => ({
+  ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+  canActorReadIssuePrivacy: vi.fn(async () => true),
+}));
+vi.mock("../services/analytical-context-authority.js", () => ({
+  assertAnalyticalContextPayloadAccess: vi.fn(async () => undefined),
+}));
+
 const mockPauseGate = vi.hoisted(() => vi.fn(async (): Promise<Record<string, unknown> | null> => null));
 const mockAccessDecide = vi.hoisted(() => vi.fn(async (input: { action?: string; resource?: { issueId?: string } }) => ({
   allowed: true,

@@ -2,7 +2,6 @@ import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, timestamp, integer, jsonb, unique, foreignKey, check, index } from "drizzle-orm/pg-core";
 import type { LearningHypothesisInput, LearningEvaluationInput, LearningPolicyPayload, AnalyticalContextAuthorityPin } from "@paperclipai/shared";
 import { companies } from "./companies.js";
-import { memoryRecords } from "./memory.js";
 import { analyticalLineageManifests } from "./analytical_lineage.js";
 const times = () => ({ createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow() });
 export const learningCycles = pgTable("learning_cycles", {
@@ -24,9 +23,10 @@ export const learningAnalyticalDependencies=pgTable("learning_analytical_depende
  sourceFk:foreignKey({name:"learning_analytical_dependencies_source_fk",columns:[t.companyId,t.sourceManifestId],foreignColumns:[analyticalLineageManifests.companyId,analyticalLineageManifests.id]}).onDelete("cascade"),
  sourceIdx:index("learning_analytical_dependencies_source_idx").on(t.companyId,t.sourceManifestId),
 }));
+// Retain source UUID/version after erasure; native migration validates source insertion.
 export const learningEvidence = pgTable("learning_evidence", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), cycleId: uuid("cycle_id").notNull(), memoryRecordId: uuid("memory_record_id").notNull(), sourceVersion: text("source_version").notNull(),
-}, (t) => ({ cycleFk: foreignKey({ name: "learning_evidence_cycle_fk", columns: [t.companyId, t.cycleId], foreignColumns: [learningCycles.companyId, learningCycles.id] }).onDelete("cascade"), memoryFk: foreignKey({ name: "learning_evidence_memory_fk", columns: [t.companyId, t.memoryRecordId], foreignColumns: [memoryRecords.companyId, memoryRecords.id] }).onDelete("cascade"), rootUq: unique("learning_evidence_root_uq").on(t.cycleId, t.memoryRecordId) }));
+}, (t) => ({ cycleFk: foreignKey({ name: "learning_evidence_cycle_fk", columns: [t.companyId, t.cycleId], foreignColumns: [learningCycles.companyId, learningCycles.id] }).onDelete("cascade"), rootUq: unique("learning_evidence_root_uq").on(t.cycleId, t.memoryRecordId) }));
 export const learningHypotheses = pgTable("learning_hypotheses", {
   id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), cycleId: uuid("cycle_id").notNull(), claim: text("claim").notNull(), predictedEffect: text("predicted_effect").notNull(), targetDomain: text("target_domain").notNull(), targetId: uuid("target_id").notNull(), riskClass: text("risk_class").notNull(), status: text("status").notNull().default("candidate"), version: integer("version").notNull().default(1),
   evaluationContract: jsonb("evaluation_contract").$type<LearningHypothesisInput["evaluationContract"] | null>(), erasedAt: timestamp("erased_at", { withTimezone: true }), ...times(),

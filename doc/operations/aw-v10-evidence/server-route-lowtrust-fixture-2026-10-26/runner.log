@@ -1,0 +1,150 @@
+Copied and verified source files 135
+    272|     expect(res.status, JSON.stringify(res.body)).toBe(200);
+       |                                                  ^
+    273|     expect(mockIssueService.update).toHaveBeenCalled();
+    274|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > refuses an agent child assigned to the creator of an open ancestor
+AssertionError: {"error":"Internal server error"}: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:305:50
+    303|       });
+    304|
+    305|     expect(res.status, JSON.stringify(res.body)).toBe(409);
+       |                                                  ^
+    306|     expect(res.body.error).toContain("Delegation cycle");
+    307|     expect(res.body.details).toMatchObject({ code: "delegation_cycle" …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > allows the same child when no open ancestor was created by the assignee
+AssertionError: {"error":"Internal server error"}: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:328:50
+    326|       });
+    327|
+    328|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+       |                                                  ^
+    329|     expect(mockIssueService.createChild).toHaveBeenCalled();
+    330|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > does not consult the guard for board actors
+AssertionError: {"error":"Issue not found"}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:348:50
+    346|       });
+    347|
+    348|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+       |                                                  ^
+    349|     expect(mockIssueService.findOpenAncestorCreatedByAgent).not.toHave…
+    350|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed (7)
+   Start at  03:42:49
+   Duration  12.09s (transform 8.57s, setup 78ms, import 11.78s, tests 105ms, environment 0ms)
+
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  03:43:02
+   Duration  18.60s (transform 9.09s, setup 67ms, import 12.89s, tests 5.54s, environment 0ms)
+
+       |                                     ^
+     58|   return (await db.select().from(projects).where(eq(projects.id, proje…
+     59| }
+ ❯ seedLowTrustFixture src/__tests__/low-trust-red-team-routes.test.ts:461:3
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:1468:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  src/__tests__/low-trust-red-team-routes.test.ts > low-trust red-team HTTP route regression suite > denies skill-test scoped tokens on foreign issue-adjacent reads
+Error: Canonical Human Project fixture update failed: 400
+ ❯ updateCanonicalHumanProject src/__tests__/helpers/current-human-source-fixture.ts:57:37
+     55|   app.use(errorHandler);
+     56|   const updated = await request(app).patch(`/api/projects/${projectId}…
+     57|   if (updated.status !== 200) throw new Error(`Canonical Human Project…
+       |                                     ^
+     58|   return (await db.select().from(projects).where(eq(projects.id, proje…
+     59| }
+ ❯ seedLowTrustFixture src/__tests__/low-trust-red-team-routes.test.ts:461:3
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:1704:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  src/__tests__/low-trust-red-team-routes.test.ts > low-trust red-team HTTP route regression suite > counts blocked inbox issues with the low-trust boundary applied in the database
+Error: Canonical Human Project fixture update failed: 400
+ ❯ updateCanonicalHumanProject src/__tests__/helpers/current-human-source-fixture.ts:57:37
+     55|   app.use(errorHandler);
+     56|   const updated = await request(app).patch(`/api/projects/${projectId}…
+     57|   if (updated.status !== 200) throw new Error(`Canonical Human Project…
+       |                                     ^
+     58|   return (await db.select().from(projects).where(eq(projects.id, proje…
+     59| }
+ ❯ seedLowTrustFixture src/__tests__/low-trust-red-team-routes.test.ts:461:3
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:1800:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  src/__tests__/low-trust-red-team-routes.test.ts > low-trust red-team HTTP route regression suite > redacts quarantined low-trust output from higher-trust wake and continuation contexts
+Error: Canonical Human Project fixture update failed: 400
+ ❯ updateCanonicalHumanProject src/__tests__/helpers/current-human-source-fixture.ts:57:37
+     55|   app.use(errorHandler);
+     56|   const updated = await request(app).patch(`/api/projects/${projectId}…
+     57|   if (updated.status !== 200) throw new Error(`Canonical Human Project…
+       |                                     ^
+     58|   return (await db.select().from(projects).where(eq(projects.id, proje…
+     59| }
+ ❯ seedLowTrustFixture src/__tests__/low-trust-red-team-routes.test.ts:461:3
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:1839:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  src/__tests__/low-trust-red-team-routes.test.ts > low-trust red-team HTTP route regression suite > keeps board positive controls for issue-linked approvals and sanitized promotion
+Error: Canonical Human Project fixture update failed: 400
+ ❯ updateCanonicalHumanProject src/__tests__/helpers/current-human-source-fixture.ts:57:37
+     55|   app.use(errorHandler);
+     56|   const updated = await request(app).patch(`/api/projects/${projectId}…
+     57|   if (updated.status !== 200) throw new Error(`Canonical Human Project…
+       |                                     ^
+     58|   return (await db.select().from(projects).where(eq(projects.id, proje…
+     59| }
+ ❯ seedLowTrustFixture src/__tests__/low-trust-red-team-routes.test.ts:461:3
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:2076:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  11 failed (11)
+   Start at  03:43:20
+   Duration  20.76s (transform 9.69s, setup 69ms, import 13.55s, tests 7.02s, environment 0ms)
+

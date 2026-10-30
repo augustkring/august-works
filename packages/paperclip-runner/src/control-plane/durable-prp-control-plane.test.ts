@@ -426,6 +426,48 @@ it("preserves an explicit OpenCode permission mode at the runner spawn boundary"
   expect(launches[0]!.environment.PAPERCLIP_OPENCODE_COMMAND).toBeUndefined();
 });
 
+it("forwards only a complete bounded managed profile and withholds ambient Anthropic keys", () => {
+  const launches: RunnerProcessLaunchSpec[] = [];
+  const base = {
+    PATH: "/bin",
+    PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+    PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+    PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+    ANTHROPIC_API_KEY: "must-not-reach-managed-runner",
+    UNRELATED_SECRET: "must-not-reach-runner",
+  };
+  const launcher = (spec: RunnerProcessLaunchSpec) => {
+    launches.push(spec);
+    return {
+      child: { pid: 42, exitCode: null, signalCode: null, kill: () => true },
+      completion: Promise.resolve({ code: 0, signal: null, stdout: "", stderr: "" }),
+    };
+  };
+  spawnRunner({
+    connection: { mode: "connect", connectUrl: "ws://127.0.0.1:43127" },
+    stateDirectory: "/tmp/paperclip-runner-test", identity, ticket: "bootstrap-ticket",
+    maxOutboxBytes: 256 * 1024, p0ReserveBytes: 64 * 1024,
+    runnerVersion: expectedRunnerVersion, runnerDigest: expectedRunnerDigest,
+    environment: base, processLauncher: launcher,
+  });
+  expect(launches).toHaveLength(1);
+  expect(launches[0]!.environment).toMatchObject({
+    PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+    PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+    PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+  });
+  expect(launches[0]!.environment.ANTHROPIC_API_KEY).toBeUndefined();
+  expect(launches[0]!.environment.UNRELATED_SECRET).toBeUndefined();
+  expect(() => spawnRunner({
+    connection: { mode: "connect", connectUrl: "ws://127.0.0.1:43127" },
+    stateDirectory: "/tmp/paperclip-runner-test", identity, ticket: "bootstrap-ticket",
+    maxOutboxBytes: 256 * 1024, p0ReserveBytes: 64 * 1024,
+    runnerVersion: expectedRunnerVersion, runnerDigest: expectedRunnerDigest,
+    environment: { ...base, PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "32000" },
+    processLauncher: launcher,
+  })).toThrow("managed_model_profile_environment_invalid");
+});
+
 it("preserves only bounded GitHub credential projection at the runner spawn boundary", () => {
   const launches: RunnerProcessLaunchSpec[] = [];
   spawnRunner({

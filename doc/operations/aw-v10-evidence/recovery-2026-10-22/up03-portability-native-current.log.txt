@@ -1,0 +1,60 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/company-portability-import-batching.test.ts (13 tests | 2 failed | 1 skipped) 41553ms
+     × imports many issues with a bounded number of issue-insert statements 16718ms
+     × preserves bundle timestamps and parent hierarchy through a real import 1363ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-import-batching.test.ts > company import batches inserts > imports many issues with a bounded number of issue-insert statements
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "This package declares schemaVersion 7 and predates task timestamp and parent link transfer; that task data imports only if the bundle carries it.",
++ ]
+
+ ❯ src/__tests__/company-portability-import-batching.test.ts:338:29
+    336|     expect(commentRows).toBe(issueCount * commentsPerIssue);
+    337|     expect(documentLinkRows).toBe(issueCount * documentsPerIssue);
+    338|     expect(result.warnings).toEqual([]);
+       |                             ^
+    339|
+    340|     // Identifiers are a contiguous range allocated from the company c…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-import-batching.test.ts > company import batches inserts > preserves bundle timestamps and parent hierarchy through a real import
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "This package declares schemaVersion 7 and predates task timestamp and parent link transfer; that task data imports only if the bundle carries it.",
++ ]
+
+ ❯ src/__tests__/company-portability-import-batching.test.ts:530:29
+    528|       "user-timestamp-fidelity",
+    529|     );
+    530|     expect(result.warnings).toEqual([]);
+       |                             ^
+    531|
+    532|     const rows = await db
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 10 passed | 1 skipped (13)
+   Start at  22:04:27
+   Duration  117.13s (transform 51.43s, setup 895ms, import 73.10s, tests 41.55s, environment 0ms)
+

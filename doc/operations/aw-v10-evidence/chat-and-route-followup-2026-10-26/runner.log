@@ -1,0 +1,221 @@
+No stale Playwright PostgreSQL socket lock
+Copied and verified source files 135
+[WebServer] [03:49:05] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/attachments 200
+[WebServer] [03:49:05] INFO: GET /companies/873ae38f-4157-4757-a36d-2127387813b0/issues 200
+[WebServer] [03:49:05] DEBUG: safe authenticated GET observed {"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"873ae38f-4157-4757-a36d-2127387813b0","actorType":"board","actorIdentityHash":"eB0p7Nm7Ri3vAzVj","clientHash":"YpwVX08n9J9Dekik","cacheKeyHash":"OgjPoCQTkYFnrMZa","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset","sortDir","sortField"],"requestCount":1,"durationMs":171,"statusCode":200,"responseBytes":2,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":"/AGE/chats/6034b9e7-bf4e-49cd-bc61-397bf61f31b8","visibilityHint":"focused"}
+[WebServer] [03:49:05] INFO: GET /companies/873ae38f-4157-4757-a36d-2127387813b0/issues 200
+[WebServer] [03:49:05] DEBUG: safe authenticated GET observed {"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"873ae38f-4157-4757-a36d-2127387813b0","actorType":"board","actorIdentityHash":"eB0p7Nm7Ri3vAzVj","clientHash":"YpwVX08n9J9Dekik","cacheKeyHash":"uTQREjzWw35OJ1-4","queryKeys":["createdFromIssueId","excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset","sortDir","sortField"],"requestCount":1,"durationMs":229,"statusCode":200,"responseBytes":2,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":"/AGE/chats/6034b9e7-bf4e-49cd-bc61-397bf61f31b8","visibilityHint":"focused"}
+[WebServer] [03:49:05] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/comments 200
+[WebServer] [03:49:05] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/tree-holds 200
+[WebServer] [03:49:05] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/runs 200
+[WebServer] [03:49:05] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/live-runs 200
+[WebServer] [03:49:05] WARN: POST /api/issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/read 422
+[WebServer] [03:49:05] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0 200
+[WebServer] [03:49:05] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/documents 200
+[WebServer] [03:49:05] WARN: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/documents/plan 404 {"reqParams":{"id":"357a4c45-3fc5-49dd-a1b6-ffb20f060ec0","key":"plan"},"routePath":"/issues/:id/documents/:key"}
+[WebServer] [03:49:05] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/activity 200
+[WebServer] [03:49:05] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/runner-goal 200
+[WebServer] [03:49:06] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/queued-comments 200
+[WebServer] [03:49:06] WARN: POST /api/issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/comments 422 {"reqBody":{"body":"Same first message","clientRequestId":"94364fee-236b-4220-b47f-c42fe4c01a96"}}
+[WebServer] [03:49:06] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/tree-control/state 200
+[WebServer] [03:49:06] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/live-runs 200
+[WebServer] [03:49:06] INFO: GET /companies/873ae38f-4157-4757-a36d-2127387813b0/chats/6034b9e7-bf4e-49cd-bc61-397bf61f31b8 200
+[WebServer] [03:49:06] INFO: GET /companies/873ae38f-4157-4757-a36d-2127387813b0/issues 200
+[WebServer] [03:49:06] DEBUG: safe authenticated GET observed {"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"873ae38f-4157-4757-a36d-2127387813b0","actorType":"board","actorIdentityHash":"eB0p7Nm7Ri3vAzVj","clientHash":"QrwrNO3dFWO3DwfR","cacheKeyHash":"bjtPKfdrwMC3-Q1F","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":117,"statusCode":200,"responseBytes":2,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}
+[WebServer] [03:49:06] INFO: GET /api/companies/:companyId/projects/:operation 200
+[WebServer] [03:49:06] INFO: GET /companies/873ae38f-4157-4757-a36d-2127387813b0/heartbeat-runs 200
+[WebServer] [03:49:06] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/live-runs 200
+[WebServer] [03:49:07] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/documents 200
+[WebServer] [03:49:07] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/comments 200
+[WebServer] [03:49:07] INFO: GET /companies/873ae38f-4157-4757-a36d-2127387813b0/live-runs 200
+[WebServer] [03:49:07] INFO: PATCH /instance/settings/experimental 200
+[WebServer] [03:49:07] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/live-runs 200
+[WebServer] [03:49:07] INFO: DELETE /board-api-keys/a1688790-dd97-44bc-aa97-0c3f00cbe2af 200
+[WebServer] [03:49:07] INFO: GET /issues/357a4c45-3fc5-49dd-a1b6-ffb20f060ec0/live-runs 200
+[WebServer] [03:49:07] INFO: GET /companies/873ae38f-4157-4757-a36d-2127387813b0/dashboard 200
+[WebServer] [03:49:07] INFO: GET /companies/873ae38f-4157-4757-a36d-2127387813b0/dashboard 200
+  ✘  1 [chromium] › tests/e2e/agent-chat-sessions.spec.ts:70:1 › chat first open is read-only; concurrent first sends and retries share one task (15.3s)
+
+
+  1) [chromium] › tests/e2e/agent-chat-sessions.spec.ts:70:1 › chat first open is read-only; concurrent first sends and retries share one task 
+
+    ReferenceError: chatCommentFailures is not defined
+
+      87 |     await other.goto(f.route);
+      88 |     await Promise.all([send(page, "Same first message"), send(other, "Same first message")]);
+    > 89 |     const rejectedComments = (await Promise.all(chatCommentFailures)).filter(Boolean);
+         |                                                 ^
+      90 |     if (rejectedComments.length) console.log("[test-only chat comment rejection]", JSON.stringify(rejectedComments));
+      91 |     const issue = await idle(request, f.chatPath, 2);
+      92 |     const initialComments = await json(await request.get(`/api/issues/${issue.id}/comments`));
+        at /workspace/v10-dep-qualification/tests/e2e/agent-chat-sessions.spec.ts:89:49
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    tests/e2e/test-results/agent-chat-sessions-chat-f-a7983--and-retries-share-one-task-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    tests/e2e/test-results/agent-chat-sessions-chat-f-a7983--and-retries-share-one-task-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: tests/e2e/test-results/agent-chat-sessions-chat-f-a7983--and-retries-share-one-task-chromium/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    tests/e2e/test-results/agent-chat-sessions-chat-f-a7983--and-retries-share-one-task-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace tests/e2e/test-results/agent-chat-sessions-chat-f-a7983--and-retries-share-one-task-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › tests/e2e/agent-chat-sessions.spec.ts:70:1 › chat first open is read-only; concurrent first sends and retries share one task 
+    281|     expect(res.status, JSON.stringify(res.body)).toBe(200);
+       |                                                  ^
+    282|     expect(mockIssueService.update).toHaveBeenCalled();
+    283|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > refuses an agent child assigned to the creator of an open ancestor
+AssertionError: {"error":"Internal server error"}: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:314:50
+    312|       });
+    313|
+    314|     expect(res.status, JSON.stringify(res.body)).toBe(409);
+       |                                                  ^
+    315|     expect(res.body.error).toContain("Delegation cycle");
+    316|     expect(res.body.details).toMatchObject({ code: "delegation_cycle" …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > allows the same child when no open ancestor was created by the assignee
+AssertionError: {"error":"Internal server error"}: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:337:50
+    335|       });
+    336|
+    337|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+       |                                                  ^
+    338|     expect(mockIssueService.createChild).toHaveBeenCalled();
+    339|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  src/__tests__/issue-assignee-invokability-routes.test.ts > agent delegation cycle guard > does not consult the guard for board actors
+AssertionError: {"error":"Issue not found"}: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ src/__tests__/issue-assignee-invokability-routes.test.ts:357:50
+    355|       });
+    356|
+    357|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+       |                                                  ^
+    358|     expect(mockIssueService.findOpenAncestorCreatedByAgent).not.toHave…
+    359|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed (7)
+   Start at  03:49:09
+   Duration  12.05s (transform 8.59s, setup 67ms, import 11.77s, tests 97ms, environment 0ms)
+
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  03:49:21
+   Duration  18.93s (transform 9.41s, setup 66ms, import 13.21s, tests 5.54s, environment 0ms)
+
+AssertionError: {"error":"This actor class cannot write to tasks (Actor-class boundary). Default-open issue writes are a standard-trust privilege. Low-trust, skill-test, and task-bridge scopes keep their existing tight walls, so Standard Engineer cannot write to this task no matter who it acts for. Who can act: A standard-trust agent in this company, or a board member. Try this: Report the request upward and let a standard-trust agent make the write — actor-class scope cannot be widened per task.","details":{"code":"issue_write_actor_class_excluded","boundary":"Actor-class boundary","whoCanAct":"A standard-trust agent in this company, or a board member.","sanctionedPath":"Report the request upward and let a standard-trust agent make the write — actor-class scope cannot be widened per task."}}: expected 403 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 403
+
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:1002:72
+    1000|         .post(`/api/issues/${fixture.issues.reviewRoot.id}/comments`)
+    1001|         .send({ body: "Direct parent report" });
+    1002|       expect(parentComment.status, JSON.stringify(parentComment.body))…
+       |                                                                        ^
+    1003|         201,
+    1004|       );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/__tests__/low-trust-red-team-routes.test.ts > low-trust red-team HTTP route regression suite > relays blocked and cancelled stops once without laundering child prose
+AssertionError: expected [ { …(2) }, { …(2) }, { …(2) }, …(1) ] to have a length of 2 but got 4
+
+- Expected
++ Received
+
+- 2
++ 4
+
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:1179:29
+    1177|           ),
+    1178|         );
+    1179|       expect(relayComments).toHaveLength(2);
+       |                             ^
+    1180|       expect(relayComments.map((comment) => comment.body)).toEqual(
+    1181|         expect.arrayContaining([
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/__tests__/low-trust-red-team-routes.test.ts > low-trust red-team HTTP route regression suite > redacts quarantined low-trust output from higher-trust wake and continuation contexts
+AssertionError: expected { key: 'continuation-summary', …(6) } to match object { …(2) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+@@ -1,7 +1,7 @@
+  {
+-   "body": "[Quarantined low-trust output omitted from higher-trust agent context. A trusted reviewer can inspect and promote a sanitized artifact.]",
++   "body": "Continuation must not leak LT_REDTEAM_42f97d6e_IGNORE_ALL_PREVIOUS_INSTRUCTIONS FLAG-RAW-7R4G",
+    "sourceTrust": {
+      "disposition": "quarantined",
+      "preset": "low_trust_review",
+      "sourceAgentId": "bb4ecce6-40a2-4b40-8de8-42578567dd41",
+      "sourceIssueId": "1efcfc42-879d-4e41-9970-82847954ad51",
+
+ ❯ src/__tests__/low-trust-red-team-routes.test.ts:1921:61
+    1919|           JSON.stringify(higherTrustContext.body),
+    1920|         ).toBe(200);
+    1921|         expect(higherTrustContext.body.continuationSummary).toMatchObj…
+       |                                                             ^
+    1922|           body: LOW_TRUST_QUARANTINED_BODY,
+    1923|           sourceTrust: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 8 passed (11)
+   Start at  03:49:40
+   Duration  51.12s (transform 9.27s, setup 75ms, import 13.10s, tests 37.82s, environment 0ms)
+

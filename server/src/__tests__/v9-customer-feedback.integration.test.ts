@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   authUsers,
@@ -16,16 +16,22 @@ import {
   customerFeedback,
   customerFeedbackAccess,
   customerFeedbackEvents,
+  customerFeedbackExperienceMeasures,
+  customerFeedbackRetention,
+  accountDeletionOperations,
+  instanceSettings,
   saasNotifications,
 } from "@paperclipai/db";
 import { customerFeedbackRoutes } from "../routes/customer-feedback.js";
 import { feedbackService } from "../services/feedback.js";
 import { companyService } from "../services/companies.js";
+import { companyPortabilityService } from "../services/company-portability.js";
 import { customerFeedbackService } from "../services/customer-feedback.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { eraseAccountAccess } from "../services/saas/account-deletion.js";
 import { assertDatabaseRestoreAdmission } from "../services/saas/database-admission.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -41,6 +47,7 @@ const support = await getEmbeddedPostgresTestSupport();
       userId: string,
       otherUser: string,
       operatorId: string;
+    let operatorSessionId: string;
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v9-feedback-");
       db = createDb(database.connectionString);
@@ -68,6 +75,7 @@ const support = await getEmbeddedPostgresTestSupport();
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+      operatorSessionId = await seedNativePasskeySession(db, operatorId);
       for (const principalId of [userId, otherUser])
         await db.insert(companyMemberships).values({
           companyId,
@@ -83,18 +91,19 @@ const support = await getEmbeddedPostgresTestSupport();
         home_v9: false,
       });
     });
-    const actor = (principal = userId) => ({
+    const actor = (principal = userId, includeOperatorSession = true) => ({
       type: "board" as const,
       source: "session" as const,
       userId: principal,
+      ...(principal === operatorId && includeOperatorSession ? { sessionId: operatorSessionId } : {}),
       companyIds: [companyId],
       memberships: [{ companyId, membershipRole: "viewer", status: "active" }],
     });
-    function app(principal = userId) {
+    function app(principal = userId, includeOperatorSession = true) {
       const application = express();
       application.use(express.json());
       application.use((req, _res, next) => {
-        req.actor = actor(principal);
+        req.actor = actor(principal, includeOperatorSession);
         next();
       });
       application.use(
@@ -143,21 +152,128 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(retained!.context).toEqual(row!.context);
       expect((await request(app(otherUser)).get(url + `/${response.body.id}`)).status).toBe(404);
     });
+    it("keeps optional satisfaction and effort consent in a private sidecar, reports bounded denominators, and erases ratings on withdrawal", async () => {
+      const url = `/api/companies/${companyId}/customer-feedback`;
+      const payload = { ...input(), blocksWork: true, experienceMeasure: { offered: true, consent: "granted", satisfaction: "satisfied", effort: "difficult" } };
+      const submitted = await request(app()).post(url).send(payload).expect(201);
+      await request(app()).post(url).send({ ...input(), experienceMeasure: { offered: true } }).expect(201);
+      expect(submitted.body.experienceMeasureStatus).toBe("granted");
+      expect(submitted.body).not.toHaveProperty("satisfaction");
+      const [original] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, submitted.body.id));
+      expect(original!.context.experienceMeasure).toEqual({ offered: true, consent: "granted" });
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, submitted.body.id))).toMatchObject([
+        { satisfaction: "satisfied", effort: "difficult" },
+      ]);
+      const [firstReceipt] = await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.requestKey, payload.idempotencyKey));
+      const changedRatingsReplay = { ...payload, experienceMeasure: { offered: true, consent: "granted", satisfaction: "very_satisfied", effort: "easy" } };
+      await request(app()).post(url).send(changedRatingsReplay).expect(409);
+      const [replayedReceipt] = await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.requestKey, payload.idempotencyKey));
+      expect(replayedReceipt).toMatchObject({ feedbackId: submitted.body.id, requestHash: firstReceipt!.requestHash });
+      expect(firstReceipt!.requestHash).not.toMatch(/satisfied|difficult|easy/);
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, submitted.body.id))).toMatchObject([
+        { satisfaction: "satisfied", effort: "difficult" },
+      ]);
+      const preWithdrawalEvents = await db.select().from(customerFeedbackEvents).where(eq(customerFeedbackEvents.feedbackId, submitted.body.id));
+      expect(JSON.stringify(preWithdrawalEvents)).not.toMatch(/satisfied|difficult/);
+      const preWithdrawalAudit = await db.select().from(activityLog).where(eq(activityLog.companyId, companyId));
+      expect(JSON.stringify(preWithdrawalAudit)).not.toContain(firstReceipt!.requestHash);
+      expect(JSON.stringify(preWithdrawalAudit)).not.toMatch(/satisfied|difficult/);
+      await expect(db.update(customerFeedbackExperienceMeasures).set({ satisfaction: "very_satisfied" })
+        .where(eq(customerFeedbackExperienceMeasures.feedbackId, submitted.body.id))).rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+      const companyArchive = await companyPortabilityService(db).exportBundle(companyId, {
+        include: { company: true, agents: false, projects: false, issues: false, skills: false, supportCases: false },
+      }, { actor: actor() });
+      expect(JSON.stringify(companyArchive)).not.toMatch(/AWF-|satisfied|difficult|customer_feedback_experience_measures/i);
+      const internalUrl = `/api/internal/customer-feedback/${companyId}/${submitted.body.id}`;
+      const ownerDetail = await request(app()).get(`${url}/${submitted.body.id}`).expect(200);
+      expect(ownerDetail.body.experienceMeasure).toEqual({ satisfaction: "satisfied", effort: "difficult" });
+      const ownerList = await request(app()).get(url).expect(200);
+      const listed = ownerList.body.find((item: { id: string }) => item.id === submitted.body.id);
+      expect(listed).not.toHaveProperty("experienceMeasure");
+      expect(listed.experienceMeasureStatus).toBe("granted");
+      const before = await request(app(operatorId)).get(internalUrl).expect(200);
+      expect(before.body.context.experienceMeasure).toEqual({ offered: true, consent: "granted", satisfaction: "satisfied", effort: "difficult" });
+      const from = new Date(Date.now() - 60_000).toISOString(), to = new Date(Date.now() + 60_000).toISOString();
+      const summary = await request(app(operatorId)).get(`/api/internal/customer-feedback/${companyId}/quality?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).expect(200);
+      expect(summary.body.denominator).toEqual({ offeredFeedbackSubmissions: 2, consentedResponses: 1, withdrawnResponses: 0, unconsentedSubmissions: 1, unavailableResponses: 0 });
+      expect(summary.body.satisfaction).toMatchObject({ count: 1, distribution: { satisfied: 1 } });
+      expect(summary.body.effort).toMatchObject({ count: 1, distribution: { difficult: 1 } });
+      const idempotencyKey = randomUUID();
+      const withdrawalUrl = `${url}/${submitted.body.id}/experience-measure/withdraw`;
+      const withdrawn = await request(app()).post(withdrawalUrl).send({ idempotencyKey });
+      expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200);
+      expect(withdrawn.body.experienceMeasureStatus).toBe("withdrawn");
+      await request(app()).post(withdrawalUrl).send({ idempotencyKey }).expect(200);
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, submitted.body.id))).toEqual([]);
+      await expect(db.insert(customerFeedbackExperienceMeasures).values({ companyId, feedbackId: submitted.body.id, satisfaction: "satisfied", effort: "difficult" }))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+      const [retained] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, submitted.body.id));
+      expect(retained!.context).toEqual(original!.context);
+      const afterWithdrawal = await request(app(operatorId)).get(internalUrl).expect(200);
+      expect(afterWithdrawal.body.context.experienceMeasure).toEqual({ offered: true, availability: "withdrawn" });
+      const ownerAfterWithdrawal = await request(app()).get(`${url}/${submitted.body.id}`).expect(200);
+      expect(ownerAfterWithdrawal.body.experienceMeasureStatus).toBe("withdrawn");
+      expect(ownerAfterWithdrawal.body).not.toHaveProperty("experienceMeasure");
+      const afterSummary = await request(app(operatorId)).get(`/api/internal/customer-feedback/${companyId}/quality?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).expect(200);
+      expect(afterSummary.body.denominator).toEqual({ offeredFeedbackSubmissions: 2, consentedResponses: 0, withdrawnResponses: 1, unconsentedSubmissions: 1, unavailableResponses: 0 });
+      expect(afterSummary.body.satisfaction).toMatchObject({ count: 0, distribution: { satisfied: 0 } });
+      expect(afterSummary.body.effort).toMatchObject({ count: 0, distribution: { difficult: 0 } });
+      const withdrawalEvent = await db.select().from(customerFeedbackEvents).where(eq(customerFeedbackEvents.feedbackId, submitted.body.id));
+      expect(withdrawalEvent).toHaveLength(1);
+      expect(withdrawalEvent[0]).toMatchObject({ body: "", customerVisible: false, linkType: "aw_feedback_measure_withdrawal_v1" });
+      expect(JSON.stringify(withdrawalEvent)).not.toContain('"satisfied"');
+      expect(JSON.stringify(withdrawalEvent)).not.toContain('"difficult"');
+      await expect(db.delete(customerFeedbackEvents).where(eq(customerFeedbackEvents.id, withdrawalEvent[0]!.id)))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+      await expect(db.insert(customerFeedbackEvents).values({ companyId, feedbackId: submitted.body.id, kind: "product_message", body: "",
+        internalNote: "Optional experience ratings withdrawn by the submitter.", linkType: "aw_feedback_measure_withdrawal_v1", customerVisible: false,
+        requestKey: randomUUID(), requestHash: "marker-replay" }))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23505" }) });
+      await expect(db.insert(customerFeedbackEvents).values({ companyId, feedbackId: submitted.body.id, kind: "product_message", body: "satisfied",
+        internalNote: "satisfied", linkType: "aw_feedback_measure_withdrawal_v1", customerVisible: false,
+        requestKey: randomUUID(), requestHash: "raw-rating-event" }))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+      const auditRows = await db.select().from(activityLog).where(eq(activityLog.companyId, companyId));
+      expect(JSON.stringify(auditRows)).not.toContain('"satisfied"');
+      expect(JSON.stringify(auditRows)).not.toContain('"difficult"');
+      // Replaying the original request key after withdrawal must never restore or replace the deleted values.
+      const changedReplay = { ...payload, experienceMeasure: { offered: true, consent: "granted", satisfaction: "very_satisfied", effort: "easy" } };
+      const replay = await request(app()).post(url).send(changedReplay).expect(201);
+      expect(replay.body.id).toBe(submitted.body.id);
+      expect(replay.body.experienceMeasureStatus).toBe("withdrawn");
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, submitted.body.id))).toEqual([]);
+      await request(app()).post(withdrawalUrl).send({ idempotencyKey: randomUUID() }).expect(409);
+      expect((await request(app(otherUser)).post(withdrawalUrl).send({ idempotencyKey })).status).toBe(404);
+      const refreshed = await request(app(operatorId)).post(`/api/internal/customer-feedback/${companyId}/${submitted.body.id}/triage`).send({
+        idempotencyKey: randomUUID(), expectedVersion: 0, internalState: "CLASSIFIED", problemClassification: { area: "task_completion", impact: "limited" },
+      }).expect(200);
+      expect(refreshed.body.version).toBe(1);
+      expect((await request(app(operatorId)).get(internalUrl).expect(200)).body.customerProblemEvidence).toMatchObject({ classification: "task_completion", reportedImpact: "blocked", triageImpact: "limited", source: "product_feedback" });
+    });
     it("original local company removal erases its feedback root and private descendants after rollout rollback while preserving another company", async () => {
-      const result = await request(app()).post(`/api/companies/${companyId}/customer-feedback`).send(input()).expect(201);
+      const result = await request(app()).post(`/api/companies/${companyId}/customer-feedback`).send({
+        ...input(), experienceMeasure: { offered: true, consent: "granted", satisfaction: "satisfied", effort: "easy" },
+      }).expect(201);
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, result.body.id))).toHaveLength(1);
+      const withdrawn = await request(app()).post(`/api/companies/${companyId}/customer-feedback`).send({
+        ...input(), experienceMeasure: { offered: true, consent: "granted", satisfaction: "very_satisfied", effort: "easy" },
+      }).expect(201);
+      await request(app()).post(`/api/companies/${companyId}/customer-feedback/${withdrawn.body.id}/experience-measure/withdraw`)
+        .send({ idempotencyKey: randomUUID() }).expect(200);
       const foreignFeedbackId = randomUUID();
       await db.insert(customerFeedback).values({ id: foreignFeedbackId, companyId: foreignId, category: "OTHER", body: "Foreign private feedback", context: {} });
       await request(app(operatorId)).post(`/api/internal/customer-feedback/${companyId}/${result.body.id}/triage`).send({ idempotencyKey: randomUUID(), expectedVersion: 0, internalState: "NEEDS_INFO", customerMessage: "Private reply" }).expect(200);
       expect(await db.select().from(saasNotifications).where(eq(saasNotifications.companyId, companyId))).toHaveLength(1);
       await request(app()).post(`/api/companies/${companyId}/customer-feedback/${result.body.id}/follow-up`).send({ idempotencyKey: randomUUID(), expectedVersion: 1, body: "Private follow-up" }).expect(200);
-      expect(await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.companyId, companyId))).toHaveLength(1);
-      expect(await db.select().from(customerFeedbackEvents).where(eq(customerFeedbackEvents.companyId, companyId))).toHaveLength(2);
+      expect(await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.companyId, companyId))).toHaveLength(2);
+      expect(await db.select().from(customerFeedbackEvents).where(eq(customerFeedbackEvents.companyId, companyId))).toHaveLength(3);
       await instanceSettingsService(db).updateExperimental({ customer_feedback_v9: false });
       expect((await companyService(db).remove(companyId))?.id).toBe(companyId);
       expect(await db.select().from(companies).where(eq(companies.id, companyId))).toEqual([]);
       expect(await db.select().from(customerFeedback).where(eq(customerFeedback.companyId, companyId))).toEqual([]);
       expect(await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.companyId, companyId))).toEqual([]);
       expect(await db.select().from(customerFeedbackEvents).where(eq(customerFeedbackEvents.companyId, companyId))).toEqual([]);
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.companyId, companyId))).toEqual([]);
       expect(await db.select().from(saasNotifications).where(eq(saasNotifications.companyId, companyId))).toEqual([]);
       expect(await db.select().from(customerFeedback).where(eq(customerFeedback.id, foreignFeedbackId))).toHaveLength(1);
       expect(await db.select().from(companies).where(eq(companies.id, foreignId))).toHaveLength(1);
@@ -450,6 +566,16 @@ const support = await getEmbeddedPostgresTestSupport();
         .where(eq(authUsers.id, operatorId));
       await request(app(operatorId)).get(url).expect(403);
     });
+    it("requires a native operator session before exposing internal feedback or accepting triage", async () => {
+      const submitted = await request(app()).post(`/api/companies/${companyId}/customer-feedback`).send(input()).expect(201);
+      const queue = `/api/internal/customer-feedback/${companyId}`;
+      const triage = `${queue}/${submitted.body.id}/triage`;
+      await request(app(operatorId, false)).get(queue).expect(403);
+      await request(app(operatorId, false)).post(triage).send({ idempotencyKey: randomUUID(), expectedVersion: 0, internalState: "NEEDS_INFO", customerMessage: "Which browser?" }).expect(403);
+      const [unchanged] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, submitted.body.id));
+      expect(unchanged!.status).toBe("RECEIVED");
+      expect(unchanged!.version).toBe(0);
+    });
     it("separates verified platform triage and customer messages, uses version fences and appends follow-ups", async () => {
       const response = await request(app())
           .post(`/api/companies/${companyId}/customer-feedback`)
@@ -520,9 +646,64 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(customerFeedbackEvents.feedbackId, id)),
       ).rejects.toThrow();
     });
+    it("keeps the original feedback evidence intact when Human triage links an Issue", async () => {
+      const sourceBody = "The approval is blocked and the support team should investigate";
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
+        status: "active", membershipRole: "viewer" });
+      const submitted = await request(app())
+        .post(`/api/companies/${companyId}/customer-feedback`)
+        .send({ ...input(), body: sourceBody, blocksWork: true })
+        .expect(201);
+      const [issue] = await db.insert(issues).values({ companyId, title: "Investigate blocked approval",
+        createdByUserId: userId, responsibleUserId: userId }).returning();
+      const triage = await request(app(operatorId))
+        .post(`/api/internal/customer-feedback/${companyId}/${submitted.body.id}/triage`)
+        .send({
+          idempotencyKey: randomUUID(),
+          expectedVersion: 0,
+          internalState: "ACTIONABLE",
+          internalNote: "Human triage keeps the original source and context authoritative",
+          link: { type: "issue", id: issue!.id },
+        })
+        .expect(200);
+      expect(triage.body.status).toBe("REVIEWING");
+      const [source] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, submitted.body.id));
+      expect(source).toMatchObject({ category: "BUG", body: sourceBody, blocksWork: true, internalState: "ACTIONABLE" });
+      const [event] = await db.select().from(customerFeedbackEvents).where(eq(customerFeedbackEvents.feedbackId, source!.id));
+      expect(event).toMatchObject({ kind: "product_message", linkType: "issue", linkId: issue!.id });
+      const [linkedIssue] = await db.select().from(issues).where(eq(issues.id, issue!.id));
+      expect(linkedIssue!.description ?? "").not.toContain(sourceBody);
+      const internalDetail = await request(app(operatorId))
+        .get(`/api/internal/customer-feedback/${companyId}/${submitted.body.id}`)
+        .expect(200);
+      expect(internalDetail.body.customerProblemEvidence).toMatchObject({
+        source: "product_feedback", sourceId: submitted.body.id, nativeCategory: "BUG",
+        nativeLifecycle: "ACTIONABLE", reportedImpact: "blocked", classification: "unknown",
+        linkedIssueIds: [issue!.id], linkCoverage: "complete",
+      });
+      await db.update(issues).set({ visibility: "private", privacyRootIssueId: issue!.id })
+        .where(eq(issues.id, issue!.id));
+      const restrictedDetail = await request(app(operatorId))
+        .get(`/api/internal/customer-feedback/${companyId}/${submitted.body.id}`)
+        .expect(200);
+      expect(restrictedDetail.body.customerProblemEvidence).toMatchObject({
+        classification: "unknown", linkedIssueIds: [], linkCoverage: "unavailable",
+      });
+      expect(restrictedDetail.body.events.at(-1)).toMatchObject({ linkType: null, linkId: null });
+      expect(JSON.stringify(restrictedDetail.body)).not.toContain(issue!.id);
+      const deniedLink = await request(app(operatorId))
+        .post(`/api/internal/customer-feedback/${companyId}/${submitted.body.id}/triage`)
+        .send({ idempotencyKey: randomUUID(), expectedVersion: 1, internalState: "ACTIONABLE",
+          link: { type: "issue", id: issue!.id } })
+        .expect(404);
+      expect(JSON.stringify(deniedLink.body)).not.toContain(issue!.id);
+      const [unchanged] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, submitted.body.id));
+      expect(unchanged!.version).toBe(1);
+    });
     it("enforces compound tenant references and erases no-name feedback through native account deletion", async () => {
       const service = customerFeedbackService(db),
-        result = await service.create(actor(), companyId, input());
+        result = await service.create(actor(), companyId, { ...input(), experienceMeasure: { offered: true, consent: "granted", satisfaction: "satisfied", effort: "easy" } });
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, result.id))).toHaveLength(1);
       await expect(
         db.insert(customerFeedbackAccess).values({
           companyId: foreignId,
@@ -532,6 +713,9 @@ const support = await getEmbeddedPostgresTestSupport();
           requestHash: "invalid",
         }),
       ).rejects.toThrow();
+      await expect(db.insert(customerFeedbackExperienceMeasures).values({
+        companyId: foreignId, feedbackId: result.id, satisfaction: "satisfied", effort: "easy",
+      })).rejects.toThrow();
       await db.transaction((tx) => eraseAccountAccess(tx, userId));
       expect(
         await db
@@ -539,6 +723,7 @@ const support = await getEmbeddedPostgresTestSupport();
           .from(customerFeedback)
           .where(eq(customerFeedback.id, result.id)),
       ).toHaveLength(0);
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, result.id))).toEqual([]);
       expect(
         await db
           .select()
@@ -546,6 +731,18 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(customerFeedbackAccess.feedbackId, result.id)),
       ).toHaveLength(0);
       await db.execute(sql`select 1`);
+    });
+    it("erases optional rating bytes during account deletion even when the parent complaint remains under hold", async () => {
+      const service = customerFeedbackService(db), result = await service.create(actor(), companyId, {
+        ...input(), experienceMeasure: { offered: true, consent: "granted", satisfaction: "satisfied", effort: "easy" },
+      });
+      await db.insert(customerFeedbackRetention).values({ companyId, feedbackId: result.id, version: 1, legalHold: true, holdReason: "Active incident hold" });
+      await db.insert(accountDeletionOperations).values({ userId, idempotencyKey: randomUUID(), status: "requested" });
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, result.id))).toHaveLength(1);
+      await db.transaction((tx) => eraseAccountAccess(tx, userId));
+      expect(await db.select().from(customerFeedback).where(eq(customerFeedback.id, result.id))).toHaveLength(1);
+      expect(await db.select().from(customerFeedbackExperienceMeasures).where(eq(customerFeedbackExperienceMeasures.feedbackId, result.id))).toEqual([]);
+      expect(await db.select().from(customerFeedbackRetention).where(eq(customerFeedbackRetention.feedbackId, result.id))).toHaveLength(1);
     });
     it("does not reuse legacy output-sharing consent or capture trace bundles, even after flag rollback", async () => {
       const [agent] = await db
@@ -620,6 +817,121 @@ const support = await getEmbeddedPostgresTestSupport();
         failed: 0,
       });
       expect(uploads).toBe(0);
+    });
+    it("latches feedback local at SaaS settings admission when the feedback flag is disabled", async () => {
+      const localSettings = instanceSettingsService(db, {
+        runtimeEnv: { AW_DEPLOYMENT_PROFILE: "local" },
+      });
+      try {
+        await localSettings.updateExperimental({ customer_feedback_v9: false });
+        await db.execute(sql`update instance_settings set general = general - 'outputFeedbackPolicyVersion' where singleton_key = 'default'`);
+        await localSettings.updateGeneral({ feedbackDataSharingPreference: "allowed" });
+        expect((await localSettings.getGeneral()).outputFeedbackPolicyVersion).toBeUndefined();
+
+        const deploymentEnv = { AW_DEPLOYMENT_PROFILE: "saas" };
+        const saasSettings = instanceSettingsService(db, { runtimeEnv: deploymentEnv });
+        const admittedGeneral = await saasSettings.getGeneral();
+        expect(admittedGeneral.outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
+        expect(admittedGeneral.feedbackDataSharingPreference).toBe("allowed");
+        expect((await saasSettings.getExperimental()).customer_feedback_v9).toBe(false);
+
+        deploymentEnv.AW_DEPLOYMENT_PROFILE = "local";
+        expect((await saasSettings.getGeneral()).outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
+
+        const [agent] = await db
+          .insert(agents)
+          .values({ companyId, name: "Helper", role: "engineer", status: "active", adapterType: "codex_local" })
+          .returning();
+        const [issue] = await db.insert(issues).values({ companyId, title: "Review report" }).returning();
+        const [comment] = await db
+          .insert(issueComments)
+          .values({ companyId, issueId: issue!.id, authorAgentId: agent!.id, body: "Confidential generated report" })
+          .returning();
+        const vote = await feedbackService(db).saveIssueVote({
+          issueId: issue!.id,
+          targetType: "issue_comment",
+          targetId: comment!.id,
+          vote: "up",
+          authorUserId: userId,
+          allowSharing: true,
+        });
+        expect(vote.sharingEnabled).toBe(false);
+        expect(vote.traceId).toBeNull();
+        expect(await db.select().from(feedbackExports).where(eq(feedbackExports.feedbackVoteId, vote.vote.id))).toHaveLength(0);
+
+        let uploads = 0;
+        const exporter = feedbackService(db, {
+          shareClient: {
+            uploadTraceBundle: async () => {
+              uploads++;
+              return { objectKey: "unexpected" };
+            },
+          },
+        });
+        expect(await exporter.flushPendingFeedbackTraces()).toEqual({ attempted: 0, sent: 0, failed: 0 });
+        expect(uploads).toBe(0);
+
+        deploymentEnv.AW_DEPLOYMENT_PROFILE = "saas";
+        await db.execute(sql`delete from instance_settings where singleton_key = 'default'`);
+        expect((await saasSettings.getGeneral()).outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
+      } finally {
+        await localSettings.updateExperimental({ customer_feedback_v9: true });
+      }
+    });
+    it("preserves the feedback privacy latch when a general settings write overlaps flag enablement", async () => {
+      const settings = instanceSettingsService(db, { runtimeEnv: {} });
+      await settings.updateExperimental({ customer_feedback_v9: false });
+      await db.execute(sql`update instance_settings set general = general - 'outputFeedbackPolicyVersion' where singleton_key = 'default'`);
+
+      let unlock!: () => void;
+      const holdLock = new Promise<void>((resolve) => { unlock = resolve; });
+      let locked!: () => void;
+      let lockFailed!: (error: unknown) => void;
+      const holderReady = new Promise<void>((resolve, reject) => { locked = resolve; lockFailed = reject; });
+      const holder = db.transaction(async (tx) => {
+        try {
+          await tx.select({ id: instanceSettings.id }).from(instanceSettings)
+            .where(eq(instanceSettings.singletonKey, "default")).for("update");
+          locked();
+          await holdLock;
+        } catch (error) {
+          lockFailed(error);
+          throw error;
+        }
+      });
+
+      let enableFeedback: Promise<unknown> | undefined;
+      let updateGeneral: Promise<unknown> | undefined;
+      try {
+        await holderReady;
+        enableFeedback = settings.updateExperimental({ customer_feedback_v9: true });
+
+        const waitForSettingsBlockers = async (minimum: number) => {
+          await vi.waitFor(async () => {
+            const [row] = await db.execute<{ count: number }>(sql`
+              select count(*)::int as count from pg_stat_activity
+              where datname = current_database()
+                and pid <> pg_backend_pid()
+                and wait_event_type = 'Lock'
+                and query ilike '%instance_settings%'`);
+            expect(row!.count).toBeGreaterThanOrEqual(minimum);
+          }, { timeout: 10_000, interval: 25 });
+        };
+
+        await waitForSettingsBlockers(1);
+        updateGeneral = settings.updateGeneral({ censorUsernameInLogs: true });
+        await waitForSettingsBlockers(2);
+
+        unlock();
+        await holder;
+        await Promise.all([enableFeedback, updateGeneral]);
+        expect((await settings.getGeneral()).outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
+        expect((await settings.getGeneral()).censorUsernameInLogs).toBe(true);
+      } finally {
+        unlock();
+        await Promise.allSettled([holder, ...(enableFeedback ? [enableFeedback] : []), ...(updateGeneral ? [updateGeneral] : [])]);
+        await settings.updateExperimental({ customer_feedback_v9: true });
+      }
     });
     it("fails closed when the rollout flag is disabled", async () => {
       await instanceSettingsService(db).updateExperimental({

@@ -15,7 +15,7 @@ export const companyTransferRuns = pgTable(
     // set as soon as the destination company exists.
     companyId: uuid("company_id").references(() => companies.id, { onDelete: "set null" }),
     direction: text("direction").notNull(), // "export" | "import"
-    status: text("status").notNull().default("pending"), // pending | running | applying | completed | failed | cancelled
+    status: text("status").notNull().default("pending"), // pending | running | applying | needs_reconciliation | completed | failed | cancelled
     // The actor the run belongs to (board session / API key identity); run
     // visibility and resume are scoped to the same actor.
     actorKey: text("actor_key").notNull(),

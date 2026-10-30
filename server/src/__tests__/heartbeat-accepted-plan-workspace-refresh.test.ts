@@ -5,15 +5,20 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { eq, ne } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
+  authUsers,
+  principalPermissionGrants,
   agentRuntimeState,
   agentTaskSessions,
   agentWakeupRequests,
   agents,
   companies,
+  companyMemberships,
   companySkills,
   createDb,
   documentRevisions,
@@ -35,9 +40,14 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 import { heartbeatService } from "../services/heartbeat.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
 import { issueService } from "../services/issues.ts";
+import { projectRoutes } from "../routes/projects.js";
+import { errorHandler } from "../middleware/index.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -106,8 +116,10 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const tempRoots: string[] = [];
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-accepted-plan-workspace-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
@@ -153,12 +165,16 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
     await db.delete(agents);
     await db.delete(workspaceOperations);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
     await db.$client.end();
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   });
 
   async function seedAcceptedPlanClaim(args: {
@@ -210,6 +226,52 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       updatedAt: new Date(),
       ...(args.status === "completed" ? { completedAt: new Date() } : {}),
     });
+  }
+
+  async function seedNativeHuman(companyId: string, userId: string) {
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Workspace refresh human",
+      email: `${userId}@example.test`,
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      membershipRole: "owner",
+      status: "active",
+    });
+    await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map((grant) => ({
+      companyId,
+      principalType: "user" as const,
+      principalId: userId,
+      ...grant,
+    })));
+    return seedNativePasskeySession(db, userId);
+  }
+
+  async function createNativeProject(companyId: string, userId: string, sessionId: string, name: string) {
+    const app = express();
+    app.use(express.json());
+    app.use(((req, _res, next) => {
+      req.actor = {
+        type: "board",
+        source: "session",
+        userId,
+        sessionId,
+        companyIds: [companyId],
+        memberships: [{ companyId, membershipRole: "owner", status: "active" }],
+      };
+      next();
+    }) as RequestHandler);
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const response = await request(app).post(`/api/companies/${companyId}/projects`).send({ name });
+    if (response.status !== 201) throw new Error(`Canonical Human Project creation failed: ${response.status}`);
+    return response.body.id as string;
   }
 
   async function seedAcceptedPlanAcceptance(args: {
@@ -281,11 +343,12 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
 
   it("realizes an isolated workspace and drops stale shared task-session params before executing", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const sharedExecutionWorkspaceId = randomUUID();
     const issueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const repoRoot = await createGitRepo();
     tempRoots.push(repoRoot);
 
@@ -297,18 +360,12 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Accepted Plan Workspace Refresh",
-      status: "active",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const humanSessionId = await seedNativeHuman(companyId, responsibleUserId);
+    projectId = await createNativeProject(companyId, responsibleUserId, humanSessionId, "Accepted Plan Workspace Refresh");
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId,
@@ -356,7 +413,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       status: "in_progress",
       workMode: "planning",
       priority: "medium",
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       assigneeAgentId: agentId,
       identifier: "PAP-9122",
       executionWorkspaceId: sharedExecutionWorkspaceId,
@@ -456,10 +513,11 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
 
   it("keeps accepted-plan children strategy-only until first realization after the base ref moves", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const sourceIssueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const { repoRoot, originRoot } = await createGitRepoWithOrigin();
     tempRoots.push(repoRoot, originRoot);
 
@@ -471,18 +529,12 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Accepted Plan Branch Freshness",
-      status: "active",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const humanSessionId = await seedNativeHuman(companyId, responsibleUserId);
+    projectId = await createNativeProject(companyId, responsibleUserId, humanSessionId, "Accepted Plan Branch Freshness");
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId,
@@ -520,7 +572,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       status: "in_progress",
       workMode: "planning",
       priority: "medium",
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       assigneeAgentId: agentId,
       identifier: "PAP-1584",
       executionWorkspaceSettings: {
@@ -691,11 +743,12 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
 
   it("forces a fresh session and suppresses accepted-plan continuation when another issue owns the in-flight claim", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const issueId = randomUUID();
     const otherPlanningIssueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const repoRoot = await createGitRepo();
     tempRoots.push(repoRoot);
 
@@ -707,18 +760,12 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Accepted Plan Routing",
-      status: "active",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const humanSessionId = await seedNativeHuman(companyId, responsibleUserId);
+    projectId = await createNativeProject(companyId, responsibleUserId, humanSessionId, "Accepted Plan Routing");
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId,
@@ -752,7 +799,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
         status: "in_progress",
         workMode: "planning",
         priority: "medium",
-        responsibleUserId: "responsible-user",
+        responsibleUserId,
         assigneeAgentId: agentId,
         identifier: "PAP-9301",
         createdAt: new Date(),
@@ -767,7 +814,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
         status: "in_progress",
         workMode: "planning",
         priority: "medium",
-        responsibleUserId: "responsible-user",
+        responsibleUserId,
         assigneeAgentId: agentId,
         identifier: "PAP-9302",
         createdAt: new Date(),
@@ -850,11 +897,12 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
 
   it("guards cross-issue accepted-plan retries even when the waking issue is standard work mode", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const issueId = randomUUID();
     const otherPlanningIssueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const repoRoot = await createGitRepo();
     tempRoots.push(repoRoot);
 
@@ -866,18 +914,12 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Accepted Plan Routing",
-      status: "active",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const humanSessionId = await seedNativeHuman(companyId, responsibleUserId);
+    projectId = await createNativeProject(companyId, responsibleUserId, humanSessionId, "Accepted Plan Routing");
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId,
@@ -911,7 +953,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
         status: "in_progress",
         workMode: "standard",
         priority: "medium",
-        responsibleUserId: "responsible-user",
+        responsibleUserId,
         assigneeAgentId: agentId,
         identifier: "PAP-9401",
         createdAt: new Date(),
@@ -926,7 +968,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
         status: "in_progress",
         workMode: "planning",
         priority: "medium",
-        responsibleUserId: "responsible-user",
+        responsibleUserId,
         assigneeAgentId: agentId,
         identifier: "PAP-9402",
         createdAt: new Date(),
@@ -1011,10 +1053,11 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
 
   it("preserves accepted-plan continuation resume state when the wake issue owns the in-flight claim", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const issueId = randomUUID();
     const agentId = randomUUID();
+    const responsibleUserId = randomUUID();
     const repoRoot = await createGitRepo();
     tempRoots.push(repoRoot);
 
@@ -1026,18 +1069,12 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       name: "Acme",
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       status: "active",
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Accepted Plan Retry",
-      status: "active",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    const humanSessionId = await seedNativeHuman(companyId, responsibleUserId);
+    projectId = await createNativeProject(companyId, responsibleUserId, humanSessionId, "Accepted Plan Retry");
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId,
@@ -1070,7 +1107,7 @@ describeEmbeddedPostgres("accepted plan workspace refresh", () => {
       status: "in_progress",
       workMode: "planning",
       priority: "medium",
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       assigneeAgentId: agentId,
       identifier: "PAP-9303",
       createdAt: new Date(),

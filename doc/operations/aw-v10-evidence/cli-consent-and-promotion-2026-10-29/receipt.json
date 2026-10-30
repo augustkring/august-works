@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-29",
+  "scope": "current native CLI consent focus repair and evaluated Skill promotion fixture alignment",
+  "nativeAuth": {
+    "sourceHead": "f93f8bf4466b2ca66c70225004a6cf98ab52333b",
+    "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+    "mirror": "/workspace/v10-dep-qualification",
+    "sourceSha256": {
+      "ui/src/pages/CliAuth.tsx": "7b62e07376bb19e3de7b1add42df0a47b267bb433a743b7741d5b62ae155f008",
+      "ui/src/pages/Auth.test.tsx": "0e10bf76cdca2497a579dbca11bf445bddcc0e9c45de03363d138dffbe1624b2"
+    },
+    "selectedBrowserCase": {
+      "test": "tests/e2e/aw-v10-native-auth.spec.ts:23 \u2014 native CLI consent and account settings use real session and authenticator lifecycles",
+      "result": "passed 1/1 in 55.4s",
+      "focusAssertion": "Approve CLI access was focused after fresh identity confirmation; explicit approval completed with HTTP 200.",
+      "browser": "Chromium 151 at /usr/bin/chromium via PAPERCLIP_PLAYWRIGHT_EXECUTABLE",
+      "receiptDir": "/workspace/v10-preparation/native-auth-focus-e2e-r3-20261029",
+      "snapshot": "/workspace/v10-preparation/native-auth-focus-e2e-r3-20261029/source-pins.json",
+      "log": "/workspace/v10-preparation/native-auth-focus-e2e-r3-20261029/e2e.log",
+      "exit": "/workspace/v10-preparation/native-auth-focus-e2e-r3-20261029/e2e.exit",
+      "rawLogSha256": "b4d449b65defdf4c3895fd50d108bc268255d3c0b279500a0cfb2688b5565b78"
+    },
+    "fullAuthUnit": {
+      "test": "ui/src/pages/Auth.test.tsx",
+      "result": "passed 33/33",
+      "receiptDir": "/workspace/v10-preparation/native-auth-full-auth-and-token-gates-r1-20261029",
+      "snapshot": "/workspace/v10-preparation/native-auth-full-auth-and-token-gates-r1-20261029/source-pins.json",
+      "log": "/workspace/v10-preparation/native-auth-full-auth-and-token-gates-r1-20261029/auth.log",
+      "exit": "/workspace/v10-preparation/native-auth-full-auth-and-token-gates-r1-20261029/auth.exit"
+    },
+    "tokenGates": {
+      "command": "pnpm check:token-gates",
+      "result": "passed; all four style checks clean and agent-palette/ClipLab sync checks clean",
+      "log": "/workspace/v10-preparation/native-auth-full-auth-and-token-gates-r1-20261029/token-gates.log",
+      "exit": "/workspace/v10-preparation/native-auth-full-auth-and-token-gates-r1-20261029/token-gates.exit"
+    },
+    "helpReview": "No source-to-Help review mapping exists for ui/src/pages/CliAuth.tsx or CLI-consent Help content; no article or review hash changed."
+  },
+  "skillPromotion": {
+    "sourceHead": "48a2ab6ddbbb91cbd7071c0e40b6b3855fff4710",
+    "qualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+    "test": "server/src/__tests__/skill-evaluation-promotion-runtime.integration.test.ts \u2014 earns both promotions from pinned evaluations and preserves only currently authorized immutable assignments",
+    "result": "passed 1/1",
+    "rationale": "Fixture admits the mandatory server-owned platform Skill for each manually-created run; assertions exclude only the verified blentera-platform pin and remain exact for every other assignment.",
+    "receiptDir": "/workspace/v10-preparation/skill-eval-promotion-current-r3-20261029",
+    "snapshot": "/workspace/v10-preparation/skill-eval-promotion-current-r3-20261029-source-pins.json",
+    "log": "/workspace/v10-preparation/skill-eval-promotion-current-r3-20261029-test.log",
+    "exit": "/workspace/v10-preparation/skill-eval-promotion-current-r3-20261029.exit"
+  },
+  "nonQualifyingAttempts": [
+    {
+      "attempt": "native-auth-focus-unit direct workspace invocation",
+      "reason": "stale UI dependency aliases resolved to the partial dependency mirror; replaced with the locked v10-dep-qualification mirror harness."
+    },
+    {
+      "attempt": "native-auth-focus-e2e-r1",
+      "reason": "preexisting stale Postgres socket/lock; no product assertion executed."
+    },
+    {
+      "attempt": "native-auth-focus-e2e-r2",
+      "reason": "Playwright headless-shell absent; switched to existing system Chromium without installing dependencies."
+    }
+  ],
+  "retainedLogHashes": {
+    "auth-unit.log": "d1f3814d449d6176da612bb17e83bced8b2132d81aab4a368e2846afbe647177",
+    "token-gates.log": "b4a5aefc78028f32ead6b3a4d93eb553e7a17be34aed526043dddafbe4675e64",
+    "promotion.log": "f4b5335a8a076f889e31792422b4a6c344337c4c5b248cbd60b505424cbac08b"
+  },
+  "archivePolicy": "Full browser log remains private because it contains disposable bootstrap URLs. Exact source pins and raw-log hashes retained; summary logs only are archived."
+}

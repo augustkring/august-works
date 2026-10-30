@@ -53,6 +53,7 @@ const apiPrefixes: Record<string, string> = {
   "agent-runtime-fabric.ts": "/api",
   "cross-company-context.ts": "/api",
   "organization.ts": "/api",
+  "jev-decisions.ts": "/api",
   "playbooks.ts": "/api",
   "portfolio.ts": "/api",
   "project-control.ts": "/api",
@@ -96,6 +97,9 @@ const apiPrefixes: Record<string, string> = {
   "foundation.ts": "/api",
   "goals.ts": "/api",
   "health.ts": "/api/health",
+  "service-health.ts": "",
+  "product-identity.ts": "",
+  "trust-documents.ts": "/api",
   "inbox-agent-policy.ts": "/api",
   "inbox-dismissals.ts": "/api",
   "instance-database-backups.ts": "/api",
@@ -125,6 +129,15 @@ const apiPrefixes: Record<string, string> = {
   "user-profiles.ts": "/api",
   "workflows.ts": "/api",
 };
+
+it("documents the operator model dependency projection as private noncacheable metadata", () => {
+  const operation = buildOpenApiSpec().paths["/api/saas/internal/operations"]?.get as {
+    responses: Record<string, { headers?: Record<string, { schema?: { enum?: string[] } }>; content?: Record<string, { schema?: { properties?: Record<string, unknown> } }> }>;
+  };
+  const response = operation.responses["200"];
+  expect(response.headers?.["Cache-Control"].schema?.enum).toEqual(["private, no-store"]);
+  expect(response.content?.["application/json"].schema?.properties).toHaveProperty("modelDependencies");
+});
 
 const ROUTE_LITERAL_PATTERN =
   /router\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/g;
@@ -222,7 +235,7 @@ function loadActualRoutes() {
     const prefix = apiPrefixes[file];
     const source = fs.readFileSync(path.join(ROUTES_DIR, file), "utf8");
     const localConstants = Object.fromEntries([...source.matchAll(/\b([A-Za-z_$][\w$]*)\s*=\s*(["'`])([^"'`]+)\2/g)].map((match) => [match[1], match[3]]));
-    if (!prefix) {
+    if (prefix === undefined) {
       if (ROUTER_METHOD_PATTERN.test(source)) {
         unknownRouteFiles.push(file);
       }
@@ -293,6 +306,117 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("publishes source-owned surface classification and the bounded stable agent identity contract", () => {
+    const spec = buildOpenApiSpec() as any;
+    const manifest = spec["x-blentera-api-surface-manifest"];
+    expect(manifest.scope).toContain("exact-route OpenAPI coverage check");
+    expect(manifest.counts.openApiDocumentedOperations).toBeGreaterThan(0);
+    expect(manifest.counts.publicStable).toBe(1);
+    expect(manifest.operations).toContainEqual(expect.objectContaining({
+      method: "GET", path: "/api/agents/me", surface: "PUBLIC STABLE",
+      contract: expect.objectContaining({ version: "v1", idempotency: expect.stringContaining("Read-only") }),
+    }));
+    expect(manifest.operations).toContainEqual(expect.objectContaining({
+      method: "POST", path: "/api/routine-triggers/public/{publicId}/fire", surface: "PARTNER / PREVIEW",
+    }));
+    for (const path of ["/api/webhooks/paddle", "/api/webhooks/mailgun", "/api/chat-webhooks/agentmail/{publicId}", "/api/chat-webhooks/{publicId}/{provider}"]) {
+      expect(manifest.operations.some((operation: any) => operation.path === path && operation.surface === "PARTNER / PREVIEW")).toBe(true);
+    }
+    expect(manifest.operations.filter((operation: any) => operation.path.includes("/mcp/gateways/")).every(
+      (operation: any) => operation.surface === "PARTNER / PREVIEW",
+    )).toBe(true);
+
+    const identity = spec.paths["/api/agents/me"].get;
+    expect(identity.security).toEqual([{ AgentBearerAuth: [] }]);
+    expect(identity["x-paperclip-authorization"]).toEqual({ actor: "agent", selfOnly: true, companyBoundToCurrentAgent: true });
+    expect(identity["x-blentera-api-surface"]).toBe("PUBLIC STABLE");
+    expect(identity.responses[200].content["application/json"].schema.required).toEqual(
+      expect.arrayContaining(["id", "companyId", "name", "role", "title", "status"]),
+    );
+    expect(identity.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(identity.responses[429].headers["Retry-After"].schema.minimum).toBe(1);
+    expect(identity.responses[429].content["application/json"].schema.properties).toMatchObject({
+      code: { type: "string", enum: ["agent_self_read_rate_limited"] },
+      details: expect.any(Object),
+    });
+    expect(identity.apiContract).toBeUndefined();
+    expect(identity["x-blentera-api-contract"]).toMatchObject({ version: "v1", deprecation: { state: "none_scheduled" } });
+    expect(identity["x-blentera-api-contract"].rateResourcePolicy).toContain("database statement clock");
+    expect(identity.responses[200].content["application/json"].schema.additionalProperties).not.toBe(false);
+  });
+
+  it("documents the bounded successful-run provider cost cohort", () => {
+    const response = buildOpenApiSpec().paths["/api/companies/{companyId}/costs/summary"].get.responses[200];
+    const schema = response.content["application/json"].schema;
+    expect(schema.required).toEqual(expect.arrayContaining([
+      "successfulRunCount",
+      "successfulRunsWithCostEvents",
+      "successfulRunsWithoutCostEvents",
+      "successfulRunProviderCostCents",
+      "successfulRunEstimatedEventCount",
+      "successfulRunUnpricedEventCount",
+      "providerCostPerSuccessfulRunCents",
+      "providerCostPerSuccessfulRunStatus",
+    ]));
+    expect(schema.properties.providerCostPerSuccessfulRunStatus.enum).toEqual(["reported_events", "estimated_events", "incomplete_events", "no_successful_runs"]);
+    expect(schema.properties.providerCostPerSuccessfulRunCoverage.enum).toEqual(["recorded_events_only"]);
+    expect(schema.properties.providerCostPerSuccessfulRunCents).toMatchObject({ type: "number", nullable: true });
+  });
+
+  it("documents partial per-tenant cost coverage without implying complete unit economics", () => {
+    const operation = buildOpenApiSpec().paths["/api/saas/internal/costs"].get;
+    const schema = operation.responses[200].content["application/json"].schema;
+    expect(schema.properties.unitEconomics.required).toEqual(expect.arrayContaining([
+      "coverage", "platformCost", "managedRuntimeHostCost", "providerModelCost", "runtimeAndStorageUsage", "unavailable", "tenants",
+    ]));
+    expect(schema.properties.unitEconomics.properties.coverage.enum).toEqual(["partial_sources_only"]);
+    expect(schema.properties.unitEconomics.properties.providerModelCost.properties.currency.enum).toEqual(["unspecified"]);
+    expect(schema.properties.unitEconomics.properties.unavailable.properties.acceptedOutcomeCost.enum).toEqual(["no_canonical_cost_attribution"]);
+    expect(operation.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+  });
+
+  it("documents Native support/access availability and the optional grant-revocation body", () => {
+    const paths = buildOpenApiSpec().paths;
+    const policy = paths["/api/companies/{companyId}/support/policy"]?.get;
+    expect(policy?.tags).toEqual(["Native"]);
+    expect(policy?.description).toContain("do not require a SaaS deployment profile");
+    expect(paths["/api/issues/{id}/access-grants/{grantId}/revoke"]?.post?.requestBody)
+      .toMatchObject({ required: false });
+    const grant = paths["/api/issues/{id}/access-grants"]?.post;
+    expect(grant?.responses).toHaveProperty("200");
+    expect(grant?.responses).toHaveProperty("201");
+  });
+  it("documents linking a support case to an accessible Task as a private native write", () => {
+    const operation = buildOpenApiSpec().paths[
+      "/api/companies/{companyId}/support/cases/{caseId}/issue-links"
+    ]?.post;
+    expect(operation?.tags).toEqual(["Native"]);
+    expect(operation?.description).toContain("do not require a SaaS deployment profile");
+    expect(operation?.requestBody.required).toBe(true);
+    const body = operation?.requestBody.content["application/json"].schema;
+    expect(body.required).toEqual(expect.arrayContaining(["expectedUserId", "issueRef"]));
+    expect(body.properties).toHaveProperty("expectedUserId");
+    expect(body.properties).toHaveProperty("issueRef");
+    expect(body.additionalProperties).toBe(false);
+    expect(operation?.responses["201"]).toBeDefined();
+    expect(operation?.responses["201"].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+  });
+  it("documents the native operator case response with path-owned case ID and exact receipt", () => {
+    const operation = buildOpenApiSpec().paths["/api/saas/internal/support-cases/{caseId}/respond"]?.post as any;
+    expect(operation).toBeDefined();
+    const body = operation.requestBody.content["application/json"].schema;
+    expect(body.properties).toHaveProperty("companyId");
+    expect(body.properties).not.toHaveProperty("caseId");
+    expect(body.additionalProperties).toBe(false);
+    expect(operation.parameters.filter((parameter: { in: string }) => parameter.in === "query")).toEqual([]);
+    expect(operation.responses["200"].content["application/json"].schema.properties).toEqual({
+      caseId: { type: "string" },
+      eventId: { type: "string" },
+      version: { type: "integer", minimum: 0 },
+      status: { type: "string", enum: ["RECEIVED", "INVESTIGATING", "WORKING_ON_IT", "WAITING_FOR_YOU", "RESOLVED", "CLOSED"] },
+    });
+    expect(operation.responses["200"].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+  });
   it("documents owned notification proposal review and exact Human baseline confirmation", () => {
     const spec = buildOpenApiSpec() as any;
     const base = "/api/companies/{companyId}/notifications/preference-proposals/{proposalId}";
@@ -424,7 +548,7 @@ describe("openapi routes", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.openapi).toBe("3.0.0");
-    expect(res.body.info.title).toBe("Paperclip API");
+    expect(res.body.info.title).toBe("Blentera API");
     expect(res.body.paths["/api/openapi.json"].get.summary).toBe(
       "Get the generated OpenAPI document",
     );
@@ -434,6 +558,8 @@ describe("openapi routes", () => {
     expect(res.body.paths["/api/agents/{id}/keys"].post.summary).toBe(
       "Create an agent API key",
     );
+    expect(res.body.paths["/api/companies/{companyId}/support/assistant"].get).toBeDefined();
+    expect(res.body.paths["/api/companies/{companyId}/support/assistant/answers"].post).toBeDefined();
     expect(res.body.components.securitySchemes).toMatchObject({
       BoardSessionAuth: { type: "apiKey", in: "cookie" },
       BoardApiKeyAuth: { type: "http", scheme: "bearer" },
@@ -960,6 +1086,8 @@ describe("openapi routes", () => {
       unknownRouteFiles,
     } = loadActualRoutes();
     const { routes: specRoutes } = loadSpecRoutes();
+    const classifiedRoutes = new Set((buildOpenApiSpec() as any)["x-blentera-api-surface-manifest"].operations
+      .map((operation: any) => `${operation.method} ${operation.path}`));
 
     const missingInSpec = [...actualRoutes]
       .filter((route) => !specRoutes.has(route))
@@ -982,6 +1110,7 @@ describe("openapi routes", () => {
       extraInSpec: [],
       excludedRoutes: [...explicitOpenApiOperationCoverageExclusions].sort(),
     });
+    expect([...actualRoutes, ...excludedRoutes].every(route => classifiedRoutes.has(route))).toBe(true);
   });
 
   it("documents V9 private human/operator admission and blocked publication without an invented success", () => {
@@ -1053,6 +1182,105 @@ describe("openapi routes", () => {
     }
     expect(replacement.requestBody.content["application/json"].schema.required).toContain("repositoryIds");
     expect(replacement.responses["422"]).toBeDefined();
+  });
+
+  it("documents mandatory Trust notices and Trust routes as native-session-only", () => {
+    const { spec } = loadSpecRoutes();
+    const paths = [
+      ["/api/companies/{companyId}/notices/action-required", "get"],
+      ["/api/companies/{companyId}/trust/documents", "get"],
+      ["/api/companies/{companyId}/trust/documents/{registryEntryId}/content", "get"],
+      ["/api/companies/{companyId}/trust/gated/documents", "get"],
+      ["/api/companies/{companyId}/trust/gated/documents/{registryEntryId}/content", "get"],
+      ["/api/companies/{companyId}/trust/documents", "post"],
+      ["/api/companies/{companyId}/trust/gated/grants", "post"],
+      ["/api/companies/{companyId}/trust/gated/grants/{grantReceiptId}/revoke", "post"],
+      ["/api/companies/{companyId}/trust/acceptances", "post"],
+    ] as const;
+    for (const [path, method] of paths) {
+      const operation = spec.paths[path][method];
+      expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+      expect(operation.security).not.toContainEqual({ BoardApiKeyAuth: [] });
+      expect(operation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+      const successStatus = method === "get" ? 200 : 201;
+      const expectedCacheControl = path.endsWith("/notices/action-required") ? ["no-store"] : ["private, no-store"];
+      expect(operation.responses[successStatus]?.headers?.["Cache-Control"]?.schema.enum).toEqual(expectedCacheControl);
+    }
+    const notices = spec.paths["/api/companies/{companyId}/notices/action-required"].get;
+    expect(notices.parameters.some((parameter: { name: string; required?: boolean }) =>
+      parameter.name === "expectedUserId" && parameter.required)).toBe(true);
+    const gatedList = spec.paths["/api/companies/{companyId}/trust/gated/documents"].get;
+    expect(gatedList.responses[200].content["application/json"].schema.properties).toMatchObject({
+      configured: { type: "boolean" }, canGrant: { type: "boolean" }, documents: { type: "array" },
+    });
+    const gatedContent = spec.paths["/api/companies/{companyId}/trust/gated/documents/{registryEntryId}/content"].get;
+    expect(gatedContent.parameters.some((parameter: { name: string; required?: boolean }) =>
+      parameter.name === "grantReceiptId" && parameter.required)).toBe(true);
+    const grant = spec.paths["/api/companies/{companyId}/trust/gated/grants"].post;
+    const grantCommand = grant.requestBody.content["application/json"].schema;
+    expect(grantCommand.additionalProperties).toBe(false);
+    expect(grantCommand.required).toEqual(expect.arrayContaining(["registryEntryId", "version", "granteeUserId", "expiresAt"]));
+    expect(notices.responses[200].content["application/json"].schema.properties).toMatchObject({
+      configured: { type: "boolean" },
+      notices: { type: "array" },
+    });
+  });
+
+  it("documents AgentAuthoring model migration monitoring as Human-session-only", () => {
+    const { spec } = loadSpecRoutes();
+    const publicationReview = spec.paths["/api/companies/{companyId}/agent-configuration-drafts/{id}/publication-review"].get;
+    expect(publicationReview.security).toEqual([{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }]);
+    expect(publicationReview["x-paperclip-authorization"]).toMatchObject({ actor: "board" });
+    expect(publicationReview["x-paperclip-authorization"].humanSession).toBeUndefined();
+    const root = "/api/companies/{companyId}/agent-configuration-drafts/{id}/model-migrations/{revisionId}";
+    const current = "/api/companies/{companyId}/agent-configuration-drafts/{id}/model-migrations/current/monitor-review";
+    const currentOperation = spec.paths[current].get;
+    expect(currentOperation.security).toEqual([{ BoardSessionAuth: [] }]);
+    expect(currentOperation.security).not.toContainEqual({ BoardApiKeyAuth: [] });
+    expect(currentOperation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+    for (const [path, method] of [
+      [`${root}/monitor-review`, "get"],
+      [`${root}/monitor-receipt`, "get"],
+      [`${root}/monitor`, "post"],
+    ] as const) {
+      const operation = spec.paths[path][method];
+      expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+      expect(operation.security).not.toContainEqual({ BoardApiKeyAuth: [] });
+      expect(operation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+    }
+  });
+
+  it("documents temporary Human workflow coverage as session-only and binds the covered-run header", () => {
+    const { spec } = loadSpecRoutes();
+    const coveragePaths = [
+      ["/api/companies/{companyId}/workflow-coverages", "get"],
+      ["/api/companies/{companyId}/workflow-coverages", "post"],
+      ["/api/companies/{companyId}/workflow-coverages/{coverageId}", "delete"],
+    ] as const;
+    for (const [path, method] of coveragePaths) {
+      const operation = spec.paths[path][method];
+      expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+      expect(operation.security).not.toContainEqual({ BoardApiKeyAuth: [] });
+      expect(operation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+    }
+    const list = spec.paths["/api/companies/{companyId}/workflow-coverages"].get;
+    expect(list.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    for (const operation of [list, spec.paths["/api/companies/{companyId}/workflow-coverages"].post,
+      spec.paths["/api/companies/{companyId}/workflow-coverages/{coverageId}"].delete]) {
+      expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "X-Blentera-Expected-User", in: "header", required: false }));
+      expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "X-Blentera-Expected-Session", in: "header", required: false }));
+    }
+    const create = spec.paths["/api/companies/{companyId}/workflow-coverages"].post;
+    expect(create.responses[200]).toBeDefined();
+    expect(create.responses[201]).toBeDefined();
+    expect(create.requestBody.content["application/json"].schema.additionalProperties).toBe(false);
+
+    const run = spec.paths["/api/companies/{companyId}/workflows/{workflowId}/run"].post;
+    expect(run.parameters).toContainEqual(expect.objectContaining({ name: "X-Human-Workflow-Coverage-Id", in: "header", required: false }));
+    expect(run.description).toContain("a Board API key cannot use Human coverage");
+    expect(run.responses[201].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const taskRun = spec.paths["/api/companies/{companyId}/issues/{issueId}/workflows/{workflowId}/run"].post;
+    expect(taskRun.description).toContain("exact Task-scoped coverage receipt");
   });
 
   it("documents auth and reviewed response-code invariants", () => {
@@ -1313,4 +1541,24 @@ it("documents private local observations, mandatory current-person binding and s
   expect(choice.additionalProperties).toBe(false);
   expect(choice.required).toEqual(expect.arrayContaining(["requestId", "enabled", "expectedVersion"]));
   expect(spec.paths[base]!.post.responses[429]).toBeTruthy();
+});
+
+it("documents the scoped Human literal Task, conversation upload and interaction contracts", () => {
+  const paths = buildOpenApiSpec().paths;
+  const task = paths["/api/companies/{companyId}/issues"]?.post;
+  expect(task?.description).toContain("without treating parent or Project contents as copied Human input");
+  expect(task?.responses).toHaveProperty("201");
+  expect(task?.responses).toHaveProperty("200");
+  expect(JSON.stringify(task?.requestBody)).not.toContain("payloadSourceSnapshot");
+  const upload = paths["/api/companies/{companyId}/issues/{issueId}/attachments"]?.post;
+  expect(upload?.description).toContain("before its first message");
+  expect(upload?.responses).toHaveProperty("201");
+  expect(paths["/api/issues/{id}/attachments"]?.get?.description).toContain("current conversation and file-source access");
+  for (const action of ["respond", "accept", "reject"]) {
+    const operation = paths[`/api/issues/{id}/interactions/{interactionId}/${action}`]?.post;
+    expect(operation?.description).toContain("plan confirmations must target the current document revision");
+    expect(operation?.description).toContain("no general private-Task write access");
+    expect(operation?.responses).toHaveProperty("403");
+    expect(operation?.responses).toHaveProperty("409");
+  }
 });

@@ -175,6 +175,7 @@ vi.mock("./Identity", () => ({
 
 vi.mock("./OutputFeedbackButtons", () => ({
   OutputFeedbackButtons: () => null,
+  useFeedbackPolicy: () => ({ localOnly: true, productFeedbackEnabled: false }),
 }));
 
 vi.mock("@/components/ui/tooltip", () => ({

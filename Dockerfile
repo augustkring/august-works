@@ -40,6 +40,7 @@ COPY packages/adapters/kimi-local/package.json packages/adapters/kimi-local/
 COPY packages/adapters/hermes/package.json packages/adapters/hermes/
 COPY packages/adapters/hermes-gateway/package.json packages/adapters/hermes-gateway/
 COPY packages/adapters/openclaw-gateway/package.json packages/adapters/openclaw-gateway/
+COPY packages/adapters/openclaw-gateway/openclaw-extension/package.json packages/adapters/openclaw-gateway/openclaw-extension/
 COPY packages/adapters/opencode-local/package.json packages/adapters/opencode-local/
 COPY packages/adapters/pi-local/package.json packages/adapters/pi-local/
 COPY packages/plugins/sdk/package.json packages/plugins/sdk/
@@ -143,6 +144,8 @@ RUN pnpm --filter @paperclipai/plugin-sdk build
 ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN pnpm --filter @paperclipai/server build
 RUN test -f server/dist/index.js || (echo "ERROR: server build output missing" && exit 1)
+RUN pnpm --filter @paperclipai/server build:runtime \
+  && test -f server/dist-runtime/index.mjs
 RUN rm -rf packages/paperclip-runner/runner/target
 
 FROM base AS production
@@ -203,8 +206,8 @@ EXPOSE 3100
 # cgroup pid limit is exhausted and *every* fork() in the container fails.
 # tini reaps adopted orphans and forwards signals, so the exec chain below and
 # graceful shutdown are unchanged. Mirrors docker/agent-runtime/Dockerfile.base.
-ENTRYPOINT ["/usr/bin/tini", "--", "docker-entrypoint.sh"]
-CMD ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/dist/index.js"]
+ENTRYPOINT ["/usr/bin/tini", "-s", "--", "docker-entrypoint.sh"]
+CMD ["node", "server/dist-runtime/index.mjs"]
 
 # Cloud image variant (build with `--target cloud`): the production image
 # plus built bundled sandbox-provider plugins. Managed instances receive a
@@ -312,8 +315,8 @@ ENV NODE_ENV=production HOME=/tmp/aw-home HOST=127.0.0.1 PORT=3100 SERVE_UI=true
     PAPERCLIP_HOME=/tmp/aw-home PAPERCLIP_INSTANCE_ID=default \
     AW_DEPLOYMENT_PROFILE=saas PAPERCLIP_DEPLOYMENT_MODE=authenticated PAPERCLIP_DEPLOYMENT_EXPOSURE=public
 USER node
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/dist/index.js"]
+ENTRYPOINT ["/usr/bin/tini", "-s", "--"]
+CMD ["node", "server/dist-runtime/index.mjs"]
 
 # Separate operator image. PostgreSQL 17 is the managed database major version.
 FROM saas AS saas-backup

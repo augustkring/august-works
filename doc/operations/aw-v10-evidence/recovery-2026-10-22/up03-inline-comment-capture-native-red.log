@@ -1,0 +1,75 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stdout | src/__tests__/issue-comment-redaction.test.ts > deleted issue comment redaction
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42710',
+  message: 'extension "pg_trgm" already exists, skipping',
+  file: 'extension.c',
+  line: '1991',
+  routine: 'CreateExtension'
+}
+
+ ❯ |@paperclipai/server| src/__tests__/issue-comment-redaction.test.ts (8 tests | 2 failed | 6 skipped) 14959ms
+     × captures only selected inline comment renditions with their frozen sources, preserving unknown and deleted history 778ms
+     × captures only the body-budgeted inline comment prefix and preserves the explicit fallback state 135ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-comment-redaction.test.ts > deleted issue comment redaction > captures only selected inline comment renditions with their frozen sources, preserving unknown and deleted history
+AssertionError: expected [] to deeply equal [ …(3) ]
+
+- Expected
++ Received
+
+- [
+-   "3d34a6a8-4071-4160-a054-2043d29e18c4",
+-   "35b5ce2c-9099-463d-8f33-354b90b51693",
+-   "a838f74f-ae75-4eeb-a9ac-676350d64157",
+- ]
++ []
+
+ ❯ src/__tests__/issue-comment-redaction.test.ts:178:62
+    176|     const payload = (await buildPaperclipWakePayload({ ...input, onInl…
+    177|     expect(payload).toEqual(normal);
+    178|     expect(captures.map(capture => capture.input.commentId)).toEqual([…
+       |                                                              ^
+    179|     const versions = await db.execute<{ id: string; version: string }>…
+    180|     const byId = new Map(versions.map(row => [row.id, row.version]));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-comment-redaction.test.ts > deleted issue comment redaction > captures only the body-budgeted inline comment prefix and preserves the explicit fallback state
+AssertionError: expected [] to deeply equal [ …(3) ]
+
+- Expected
++ Received
+
+- [
+-   "3ef45525-ab6e-437d-adb8-b4ed6a4749de",
+-   "1ef5f52b-72a7-4519-81d7-7fe725dc8ba6",
+-   "c16991cd-a538-4318-ac75-a58aa5f43219",
+- ]
++ []
+
+ ❯ src/__tests__/issue-comment-redaction.test.ts:212:62
+    210|       wakeCommentIds: comments.map(comment => comment.id) }, onInlineC…
+    211|     expect(payload.comments).toHaveLength(3);
+    212|     expect(captures.map(capture => capture.input.commentId)).toEqual(c…
+       |                                                              ^
+    213|     expect(payload.truncated).toBe(true);
+    214|     expect(payload.fallbackFetchNeeded).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 skipped (8)
+   Start at  08:35:10
+   Duration  117.71s (transform 72.87s, setup 249ms, import 101.91s, tests 14.96s, environment 0ms)
+

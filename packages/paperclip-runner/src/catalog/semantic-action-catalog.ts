@@ -173,6 +173,43 @@ const descriptors: readonly PaperclipSemanticActionDescriptor[] = [
     outputSchema: operationReceipt,
   }),
   descriptor({
+    operationId: "update_task",
+    title: "Update task fields",
+    description: "Update editable fields on the active task without changing status, ownership, execution, policy, or approval state.",
+    effect: "write",
+    inputSchema: object({
+      ...idempotency,
+      expectedUpdatedAt: text("Exact current Task updatedAt timestamp in UTC ISO-8601 form.", 40),
+      title: text("Replacement task title.", 500),
+      description: nullableText("Replacement task description.", 50_000),
+      priority: { enum: ["critical", "high", "medium", "low"] },
+    }, ["idempotencyKey", "expectedUpdatedAt"]),
+    outputSchema: operationReceipt,
+  }),
+  descriptor({
+    operationId: "propose_completion",
+    title: "Propose Task completion review",
+    description: "Request human review of completion readiness without changing Task status; the Native finalizer still requires current evidence and policy acceptance.",
+    effect: "governance",
+    allowedModes: STANDARD_MODE,
+    inputSchema: object({
+      ...idempotency,
+      expectedUpdatedAt: text("Exact current Task updatedAt timestamp in UTC ISO-8601 form.", 40),
+      summary: text("Concise summary for the Human completion review.", 900),
+    }, ["idempotencyKey", "expectedUpdatedAt", "summary"]),
+    outputSchema: object({
+      commandId: text("Stable completion proposal identifier.", 200),
+      disposition: { enum: ["applied", "duplicate"] },
+      stateRevision: { type: "integer", minimum: 0 },
+      entityRefs: stringArray("Task and review interaction identifiers."),
+      scheduledWakeIds: stringArray("Wake identifiers scheduled by the operation."),
+      proposalStatus: { enum: ["pending_human_review"] },
+      currentTaskStatus: { enum: ["backlog", "todo", "in_progress", "in_review", "blocked"] },
+      taskStatusCommitted: { enum: [false] },
+      evidenceRequirement: text("The current Native finalizer must independently assess evidence and current policy before changing disposition."),
+    }, ["commandId", "disposition", "stateRevision", "entityRefs", "scheduledWakeIds", "proposalStatus", "currentTaskStatus", "taskStatusCommitted", "evidenceRequirement"]),
+  }),
+  descriptor({
     operationId: "answer_status_question",
     title: "Answer status question",
     description:

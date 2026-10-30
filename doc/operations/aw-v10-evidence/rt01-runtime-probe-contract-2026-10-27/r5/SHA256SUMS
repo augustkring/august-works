@@ -1,0 +1,16 @@
+f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/binary.path
+dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/binary.sha256
+95260554ecde0c2df1535cb011c84ab1e0efcb9c4cb39f18b88a091c71eb1c90  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/source-pins.json
+3a1db3ffb1e5b9712115806cd8695eb8896598c2dcfdffdfd4a5b216d889399f  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/snapshot.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/snapshot.exit
+f8d6acc4e3e36701d52843517630aaf5fafb8688690107ed3f7f0d844a0a7a5f  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/syntax.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/syntax.exit
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/runner-emit.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/runner-emit.exit
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/runner-catalog.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/runner-catalog.exit
+3879647bed377b10b973832d20d6b68070ba2dc254a1147874375de980e2ba1a  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/c0-full5-test.log
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/c0-full5-test.exit
+f17ab8f33963f175f1d29dc63e7b26ac0da4eb3ae904672ca9d08e694974a0ff  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/openshell-test.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/openshell-test.exit
+4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  doc/operations/aw-v10-evidence/rt01-runtime-probe-contract-2026-10-27/r5/exit

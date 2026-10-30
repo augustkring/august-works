@@ -30,6 +30,8 @@ export const DEFAULT_BACKUP_RETENTION: BackupRetentionPolicy = {
 export type InstanceExecutionMode = "kubernetes" | "any";
 
 export interface InstanceGeneralSettings {
+  /** Explicit measured operator policy; absent means no new resource quota. */
+  resourceGovernance?: import("../resource-governance.js").ResourceGovernancePolicy;
   censorUsernameInLogs: boolean;
   /** @deprecated Legacy instance value. Use /auth/preferences for personal shortcuts. */
   keyboardShortcuts: boolean;

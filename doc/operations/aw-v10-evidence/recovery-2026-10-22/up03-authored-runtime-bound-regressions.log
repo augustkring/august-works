@@ -1,0 +1,26 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses missing required procedures without installing a catalog or disabling the Role Pack 274ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > uses all default required procedures in a pinned Task-only runtime without executable capabilities 2200ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a resumed run after an approved procedure is revoked 1449ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a missing or superseded worker definition pin even when required procedures stay identical 1177ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > rejects a cached definition before writing retained runtime copies and accepts the actual current version 1163ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > does not load unrelated optional catalog procedures 603ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > pins procedure bodies and refuses an actual active version replacement 812ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > consumes the exact approved Playbook even when its ordinary trigger does not match 2711ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > captures exact authored sources and retained Memory roots for the combined runtime input 2797ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > keeps draft Playbook edits outside the pin and refuses replacement of the approved revision 3379ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > erases only actual consuming Playbook runtime copies and refuses restoration of the erased identity 4716ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > retains exact approved preference roots before copying their body and physically erases only their consumer 3688ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > loads only pinned approved knowledge into the actual read-only runtime envelope 2750ms
+ ✓ |@paperclipai/server| src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > closes and deletes actual knowledge runtime copies while preserving an unrelated consumer 3442ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  10:43:20
+   Duration  93.11s (transform 37.30s, setup 131ms, import 52.04s, tests 40.33s, environment 0ms)
+

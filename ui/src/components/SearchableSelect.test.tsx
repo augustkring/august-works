@@ -122,6 +122,7 @@ describe("SearchableSelect", () => {
 
     const trigger = container.querySelector("button[role='combobox']") as HTMLButtonElement | null;
     expect(trigger?.textContent).toContain("Alpha");
+    expect(trigger?.getAttribute("aria-label")).toBe("Pick one");
 
     act(() => {
       trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));

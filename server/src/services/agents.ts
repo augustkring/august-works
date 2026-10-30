@@ -28,6 +28,7 @@ import {
   getAgentWorkEligibility,
   isUuidLike,
   normalizeAgentApiKeyScope,
+  agentApiKeyScopeSchema,
   normalizeAgentUrlKey,
   type AgentEligibilityAgent,
   type AgentApiKeyScope,
@@ -42,6 +43,8 @@ import {
   syncAgentAdapterEnvBindings,
 } from "./agent-secret-bindings.js";
 import { logActivity } from "./activity-log.js";
+import { DELIVERY_QUEUES, notifyDeliveryWork } from "./delivery-work-notifications.js";
+import { synchronizeCompanyAgentRuntimeOwners } from "./agent-runtime-owner-assignments.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { REDACTED_EVENT_VALUE, sanitizeRecord } from "../redaction.js";
 import {
@@ -61,6 +64,7 @@ import {
 import { hasAuthoredAgentDefinition, compileAuthoredAgentDefinition } from "./agents/authored-definition.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
+import { modelRoutingRollbackWouldChange } from "./agents/model-routing-snapshots.js";
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -131,13 +135,17 @@ interface UpdateAgentOptions {
   allowBuiltInAgentMetadata?: boolean;
   allowPendingApprovalConfigUpdate?: boolean;
   claudeLogin?: ClaudeLoginContext;
+  transaction?: AgentTransaction;
 }
 
 interface CreateAgentOptions {
   aiConnectionInstall?: { connectionId: string; createdByUserId: string | null };
   allowBuiltInAgentMetadata?: boolean;
   claudeLogin?: ClaudeLoginContext;
+  transaction?: AgentTransaction;
 }
+
+type AgentTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 interface AgentShortnameRow {
   id: string;
@@ -711,15 +719,27 @@ export function agentService(db: Db) {
   ) {
     const existing = await getById(id);
     if (!existing) return null;
+    const nextModelRouting = { ...existing, adapterType: data.adapterType ?? existing.adapterType,
+      adapterConfig: data.adapterConfig ?? existing.adapterConfig, runtimeConfig: data.runtimeConfig ?? existing.runtimeConfig };
     const installsAuthoredDefinition = isPlainRecord(data.runtimeConfig) &&
       Object.prototype.hasOwnProperty.call(data.runtimeConfig, AUTHORED_AGENT_DEFINITION_KEY);
-    if (installsAuthoredDefinition || (hasAuthoredAgentDefinition(existing) && (hasConfigPatchFields(data) || data.permissions !== undefined))) {
+    const canonicalAuthoredPublication = (() => {
       const definition = options?.authoredPublication;
-      if (!definition || options?.recordRevision?.source !== "agent_authoring_publish" ||
-          options.recordRevision.id !== definition.revisionId || !installsAuthoredDefinition ||
-          nativeSha256(data.runtimeConfig?.[AUTHORED_AGENT_DEFINITION_KEY]) !== nativeSha256(definition) ||
-          nativeSha256(compileAuthoredAgentDefinition(definition.content, definition.revisionId, definition.candidateHash, definition.procedureSnapshotHash,
-            definition.publication ? { version: definition.version!, provenance: definition.publication } : undefined)) !== nativeSha256(definition))
+      if (!definition || !installsAuthoredDefinition || options?.recordRevision?.source !== "agent_authoring_publish" ||
+        options.recordRevision.id !== definition.revisionId ||
+        nativeSha256(data.runtimeConfig?.[AUTHORED_AGENT_DEFINITION_KEY]) !== nativeSha256(definition)) return false;
+      try {
+        return nativeSha256(compileAuthoredAgentDefinition(definition.content, definition.revisionId, definition.candidateHash,
+          definition.procedureSnapshotHash, definition.publication ? { version: definition.version!, provenance: definition.publication } : undefined)) ===
+          nativeSha256(definition);
+      } catch { return false; }
+    })();
+    if (modelRoutingRollbackWouldChange(existing, nextModelRouting) && !canonicalAuthoredPublication)
+      throw conflict("Model or provider routing changes require a current qualified candidate and Human-reviewed publication", {
+        code: "model_migration_publication_required",
+      });
+    if (installsAuthoredDefinition || (hasAuthoredAgentDefinition(existing) && (hasConfigPatchFields(data) || data.permissions !== undefined))) {
+      if (!canonicalAuthoredPublication)
         throw conflict("Edit and publish a draft to change this identified Agent version", { code: "authored_agent_version_readonly" });
     }
     if(data.adapterType!==undefined||data.adapterConfig!==undefined)assertSaasRemoteAdapterConfig(data.adapterType??existing.adapterType,data.adapterConfig??existing.adapterConfig);
@@ -819,6 +839,7 @@ export function agentService(db: Db) {
         .returning()
         .then((rows) => rows[0] ?? null);
       if (!updated) return null;
+      await notifyDeliveryWork(txDb, DELIVERY_QUEUES.pluginLifecycle);
 
       const priorAdapterConfig = isPlainRecord(existing.adapterConfig) ? existing.adapterConfig : {};
       const afterConfig = isPlainRecord(updated.adapterConfig) ? updated.adapterConfig : {};
@@ -877,11 +898,34 @@ export function agentService(db: Db) {
       return normalizedUpdated;
     };
 
+    if (options?.transaction) return applyUpdate(options.transaction as unknown as Db);
     const transaction = (db as unknown as {
       transaction?: (callback: (tx: unknown) => Promise<AgentUpdateResult>) => Promise<AgentUpdateResult>;
     }).transaction;
     if (typeof transaction !== "function") return applyUpdate(db);
     return transaction.call(db, async (tx) => applyUpdate(tx as unknown as Db));
+  }
+
+  async function mutateStatus(id: string, action: "pause" | "resume" | "clearError", reason?: "manual" | "budget" | "system") {
+    return db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      const service = agentService(tx);
+      const existing = await service.getById(id);
+      if (!existing) return null;
+      if (action === "pause" && existing.status === "terminated") throw conflict("Cannot pause terminated agent");
+      if (action === "resume" && existing.status === "terminated") throw conflict("Cannot resume terminated agent");
+      if (action === "clearError" && existing.status === "terminated") throw conflict("Cannot clear error on terminated agent");
+      if (existing.status === "pending_approval") throw conflict(`Pending approval agents cannot be ${action === "clearError" ? "cleared" : `${action}d`}`);
+      if (action === "clearError" && existing.status !== "error") throw conflict("Only agents in error status can have their error cleared");
+      const patch = action === "pause" ? { status: "paused", pauseReason: reason ?? "manual", pausedAt: new Date(), errorReason: null, updatedAt: new Date() }
+        : { status: "idle", pauseReason: null, pausedAt: null, errorReason: null, updatedAt: new Date() };
+      const updated = await tx.update(agents).set(patch as Partial<typeof agents.$inferInsert>)
+        .where(and(eq(agents.id, id), ...(action === "clearError" ? [eq(agents.status, "error")] : [ne(agents.status, "pending_approval"), ne(agents.status, "terminated")])) )
+        .returning({ id: agents.id }).then(rows => rows[0]);
+      if (!updated) throw conflict("Agent state changed before lifecycle update; reload the agent");
+      await notifyDeliveryWork(tx, DELIVERY_QUEUES.pluginLifecycle);
+      return service.getById(id);
+    });
   }
 
   return {
@@ -931,7 +975,7 @@ export function agentService(db: Db) {
         nextConfig: adapterConfig,
         priorConfig: null,
       });
-      return db.transaction(async (tx) => {
+      const applyCreate = async (tx: AgentTransaction) => {
         const txDb = tx as unknown as Db;
         // Consume the stored-session claim and create the fixed definition inside
         // the same transaction that inserts the binding. A rejected claim rolls
@@ -959,6 +1003,7 @@ export function agentService(db: Db) {
           })
           .returning()
           .then((rows) => rows[0]);
+        await notifyDeliveryWork(txDb, DELIVERY_QUEUES.pluginLifecycle);
         if (options?.aiConnectionInstall) {
           await tx.insert(toolConnectionInstalls).values({
             companyId, connectionId: options.aiConnectionInstall.connectionId,
@@ -967,91 +1012,25 @@ export function agentService(db: Db) {
           }).onConflictDoNothing();
         }
         await syncAgentSecretBindings(created, txDb);
+        await synchronizeCompanyAgentRuntimeOwners(txDb, companyId);
         const normalizedCreated = await agentService(txDb).getById(created.id);
         if (!normalizedCreated) {
           throw notFound("Agent not found");
         }
         return normalizedCreated;
-      });
+      };
+      return options?.transaction
+        ? applyCreate(options.transaction)
+        : db.transaction(applyCreate);
     },
 
     update: updateAgent,
 
-    pause: async (id: string, reason: "manual" | "budget" | "system" = "manual") => {
-      const existing = await getById(id);
-      if (!existing) return null;
-      if (existing.status === "terminated") throw conflict("Cannot pause terminated agent");
-      if (existing.status === "pending_approval") throw conflict("Pending approval agents cannot be paused");
+    pause: async (id: string, reason: "manual" | "budget" | "system" = "manual") => mutateStatus(id, "pause", reason),
 
-      const updated = await db
-        .update(agents)
-        .set({
-          status: "paused",
-          pauseReason: reason,
-          pausedAt: new Date(),
-          errorReason: null,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(agents.id, id), ne(agents.status, "pending_approval"), ne(agents.status, "terminated")))
-        .returning()
-        .then((rows) => rows[0] ?? null);
-      if (!updated) throw conflict("Agent state changed before pause; reload the agent");
-      return updated ? getById(updated.id) : null;
-    },
+    resume: async (id: string) => mutateStatus(id, "resume"),
 
-    resume: async (id: string) => {
-      const existing = await getById(id);
-      if (!existing) return null;
-      if (existing.status === "terminated") throw conflict("Cannot resume terminated agent");
-      if (existing.status === "pending_approval") {
-        throw conflict("Pending approval agents cannot be resumed");
-      }
-
-      const updated = await db
-        .update(agents)
-        .set({
-          status: "idle",
-          pauseReason: null,
-          pausedAt: null,
-          errorReason: null,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(agents.id, id), ne(agents.status, "pending_approval"), ne(agents.status, "terminated")))
-        .returning()
-        .then((rows) => rows[0] ?? null);
-      if (!updated) throw conflict("Agent state changed before resume; reload the agent");
-      return updated ? getById(updated.id) : null;
-    },
-
-    clearError: async (id: string) => {
-      const existing = await getById(id);
-      if (!existing) return null;
-      if (existing.status === "terminated") throw conflict("Cannot clear error on terminated agent");
-      if (existing.status === "pending_approval") {
-        throw conflict("Pending approval agents cannot have errors cleared");
-      }
-      if (existing.status !== "error") {
-        throw conflict("Only agents in error status can have their error cleared");
-      }
-
-      const updated = await db
-        .update(agents)
-        .set({
-          status: "idle",
-          pauseReason: null,
-          pausedAt: null,
-          errorReason: null,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(agents.id, id), eq(agents.status, "error")))
-        .returning()
-        .then((rows) => rows[0] ?? null);
-
-      if (!updated) {
-        throw conflict("Only agents in error status can have their error cleared");
-      }
-      return getById(updated.id);
-    },
+    clearError: async (id: string) => mutateStatus(id, "clearError"),
 
     terminate: async (id: string) => {
       return db.transaction(async (transaction) => {
@@ -1068,6 +1047,7 @@ export function agentService(db: Db) {
             updatedAt: new Date(),
           })
           .where(eq(agents.id, id));
+        await notifyDeliveryWork(tx, DELIVERY_QUEUES.pluginLifecycle);
 
         await tx
           .update(agentApiKeys)
@@ -1122,6 +1102,7 @@ export function agentService(db: Db) {
           .where(eq(agents.id, id))
           .returning()
           .then((rows) => rows[0] ?? null);
+        if (deleted) await notifyDeliveryWork(tx as unknown as Db, DELIVERY_QUEUES.pluginLifecycle);
         return deleted ? normalizeAgentRow(deleted) : null;
       });
     },
@@ -1175,6 +1156,7 @@ export function agentService(db: Db) {
           .returning()
           .then((rows) => rows[0] ?? null);
         if (!updated) return null;
+        await notifyDeliveryWork(txDb, DELIVERY_QUEUES.pluginLifecycle);
         if (approvalBindingDecision) {
           await enforceClaudeOAuthBindingClaim(txDb, {
             companyId: existing.companyId,
@@ -1250,6 +1232,13 @@ export function agentService(db: Db) {
         .where(and(eq(agentConfigRevisions.agentId, id), eq(agentConfigRevisions.id, revisionId)))
         .then((rows) => rows[0] ?? null);
       if (!revision) return null;
+      const current = await getById(id);
+      if (!current) return null;
+      if (modelRoutingRollbackWouldChange(current, revision.afterConfig)) {
+        throw conflict("Model or provider routing changes require a current qualified candidate and Human-reviewed publication", {
+          code: "model_migration_publication_required",
+        });
+      }
       if (containsRedactedMarker(revision.afterConfig)) {
         throw unprocessable("Cannot roll back a revision that contains redacted secret values");
       }
@@ -1271,6 +1260,9 @@ export function agentService(db: Db) {
       scope: AgentApiKeyScope = { kind: "standard" },
       options?: { responsibleUserId?: string | null },
     ) => {
+      const parsedScope = agentApiKeyScopeSchema.safeParse(scope);
+      if (!parsedScope.success) throw unprocessable("Invalid Agent key scope", parsedScope.error.issues);
+      scope = parsedScope.data;
       const existing = await getById(id);
       if (!existing) throw notFound("Agent not found");
       if (existing.status === "pending_approval") {
@@ -1298,7 +1290,7 @@ export function agentService(db: Db) {
       return {
         id: created.id,
         name: created.name,
-        scope: normalizeAgentApiKeyScope(created.scopeConfig),
+        scope,
         responsibleUserId: created.responsibleUserId,
         token,
         createdAt: created.createdAt,

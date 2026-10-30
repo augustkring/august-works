@@ -1,0 +1,171 @@
+{
+  "screenId": "SETTINGS-GENERAL",
+  "journeyId": "settings",
+  "routeOrSurface": "/:companyPrefix/company/settings#company-section-general",
+  "targetExperienceProfiles": [
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Manage company identity and set the English/Danish language fallback and IANA timezone used for newly created company schedules.",
+  "entryConditions": [
+    "Current authenticated principal and selected company; current company membership and role are rechecked for locale/timezone changes.",
+    "Existing CEO permissions for company branding do not grant authority to change company defaults."
+  ],
+  "exitConditions": [
+    "Persist company identity and defaults through the canonical Company writer, or preserve entered values and report a validation, permission or system error.",
+    "New schedules inherit the company timezone only when the Routine writer receives no explicit timezone; existing schedules are not rewritten."
+  ],
+  "content": {
+    "h1": "Company",
+    "supportingCopy": "Company language is the fallback when a member has no personal language preference; company timezone is the default for new schedules that omit a timezone. Existing schedules and explicit account preferences remain unchanged.",
+    "customerTerms": [
+      "General",
+      "Company identity",
+      "Default language",
+      "Default timezone",
+      "New-agent approval and interaction defaults"
+    ],
+    "displayedState": [
+      "Stable category heading: General",
+      "Company name and description, with current persisted values prefilled",
+      "Company default language (English or Danish) and timezone (IANA timezone identifier)",
+      "Appearance, new-hire approval and interaction resolver settings remain in their existing sections"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "company-name",
+      "label": "Organization name",
+      "dataType": "Text",
+      "required": true,
+      "default": "Current company name",
+      "help": "The display name for the selected company.",
+      "validation": "Must not be blank.",
+      "autofillOrPrefill": "Prefilled from the selected company"
+    },
+    {
+      "id": "company-description",
+      "label": "Description",
+      "dataType": "Text",
+      "required": false,
+      "default": "Current company description or empty",
+      "help": "Optional description shown in the company profile.",
+      "validation": "Nullable text accepted by the Company API.",
+      "autofillOrPrefill": "Prefilled from the selected company"
+    },
+    {
+      "id": "company-locale",
+      "label": "Default language",
+      "dataType": "Single select",
+      "required": true,
+      "default": "Current company locale; en for legacy rows",
+      "help": "Used when a member has no personal language preference; does not replace an explicit account preference.",
+      "validation": "Only en and da are accepted by the Company API.",
+      "autofillOrPrefill": "Prefilled from the selected company"
+    },
+    {
+      "id": "company-timezone",
+      "label": "Default timezone",
+      "dataType": "IANA timezone identifier",
+      "required": true,
+      "default": "Current company timezone; UTC for legacy rows",
+      "help": "Used for new schedules only when a caller omits a timezone. Existing schedules keep their own timezone.",
+      "validation": "Must be accepted by the runtime's IANA timezone database.",
+      "autofillOrPrefill": "Prefilled from the selected company"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Save changes",
+      "operation": "PATCH the selected company through the existing Company writer; current owner/administrator membership is required for locale/timezone changes."
+    },
+    "secondary": [
+      "Save the locale and timezone together with the other General changes.",
+      "Correct an invalid timezone or refresh company authority before retrying."
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Current authenticated company membership and role",
+      "Current Company identity, locale and timezone"
+    ],
+    "canonicalWriteOperation": "Company identity/default mutations only through the existing Company writer; new schedule timezone fallback resolves in the existing Routine writer",
+    "authorityEffect": "The settings screen grants no authority. Locale/timezone writes require current owner/administrator membership; CEO-safe branding permissions do not extend to those defaults.",
+    "asyncWork": "The Company route validates locale/timezone, rechecks the current actor and company scope, then persists through the existing Company service.",
+    "receipt": "Company changes are shown from the persisted Company response; a newly created schedule stores the explicit timezone or the company default resolved by the Routine writer."
+  },
+  "states": {
+    "loading": "Keep controls associated with the selected company while its current values load.",
+    "empty": "No selected company is available; do not show another company's settings.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Do not save values for a prior company after selection changes; refresh values from the current company response.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Withhold changes that the current actor cannot make; do not infer write authority from the selected company alone.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Show company defaults from the persisted Company response. Do not imply that changing the company timezone rewrites existing schedules or that changing company language overwrites personal language preferences."
+  },
+  "navigation": {
+    "back": "Return to Company through the current company route.",
+    "cancelOrSaveExit": "Keep unsaved values local; discard them when the user changes company or leaves settings.",
+    "deepLink": "/:companyPrefix/company/settings#company-section-general",
+    "resume": "Reload current company values; never replay a prior mutation automatically."
+  },
+  "accessibility": {
+    "initialFocus": "Focus the Company page heading after the current authorized read; a category hash deep link moves focus to that category heading.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Keep focus at the General section and make the saved state available to assistive technology.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Company identity and locale/timezone defaults returned by the Company API."
+    ],
+    "dataCollected": [
+      "Company name, description, language and timezone are written by the existing Company owner; standard company.updated audit activity records changed fields."
+    ],
+    "sensitiveFields": [
+      "Membership, role, configuration, provider, security metadata and source references remain in their Original owner."
+    ],
+    "loggingConstraints": "Use the existing Company audit event for changed fields; do not add credentials, unrelated account data or raw validation errors to logs."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Company configuration",
+      "Membership or role data",
+      "Provider and security details",
+      "Credentials",
+      "Raw URLs/query strings",
+      "DOM, screenshots and destination payloads"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "On the exact artifact, verify the General category keeps its stable label and exposes the Company writer's identity, language and timezone controls.",
+      "Verify only English and Danish are accepted, invalid IANA timezones are rejected, and unauthorized members cannot change company defaults.",
+      "Verify account language preferences and existing schedule timezones remain unchanged, while newly created schedules inherit the company timezone only when their caller omits a timezone.",
+      "Verify account/company switching and permission withdrawal remove prior private entries before a late response can restore them."
+    ],
+    "accessibility": [
+      "Verify keyboard navigation, focus order, screen-reader names/status and 200/400% zoom manually on the exact artifact; this contract is not conformance evidence."
+    ],
+    "securityPrivacy": [
+      "Verify current company owner/administrator authorization, cross-tenant refusal, and no configuration writes from unauthorized members."
+    ],
+    "usability": [
+      "Run representative exploratory and pre-registered confirmatory setting journeys for the exact artifact, including empty, restricted and unavailable states; source checks alone do not qualify usability."
+    ]
+  }
+}

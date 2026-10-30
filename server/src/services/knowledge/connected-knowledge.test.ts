@@ -508,6 +508,7 @@ describe("Connected Knowledge registry", () => {
     const asOf = new Date();
 
     const result = await contextProvider.retrieve({
+      providerDeadlineAt: Date.now() + 750,
       request: {
         companyId,
         agentId,

@@ -1,0 +1,151 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > adopts former-owner comments only during an authorized handoff (handoff)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > adopts former-owner comments only during an authorized handoff (foreign_task)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > adopts former-owner comments only during an authorized handoff (running_source)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > adopts former-owner comments only during an authorized handoff (different_owner)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > adopts former-owner comments only during an authorized handoff (mention)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > adopts former-owner comments only during an authorized handoff (interaction)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > adopts former-owner comments only during an authorized handoff (chat)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (ready)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (unacknowledged)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (pause)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (recovery)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (controller)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (process_running)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (identity_missing)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (remote_pending)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (remote_stopped)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (first_delivered)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (last_delivered)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > delivers a saved native message after run-only Stop exactly once (mixed_authors)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > an explicit queued interrupt retries only its stopped sandbox, without granting automatic retries (pending)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > an explicit queued interrupt retries only its stopped sandbox, without granting automatic retries (failed)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > an explicit queued interrupt retries only its stopped sandbox, without granting automatic retries (historical)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > an explicit queued interrupt retries only its stopped sandbox, without granting automatic retries (shared)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > an explicit queued interrupt retries only its stopped sandbox, without granting automatic retries (retained)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > a durable queue interrupt authorizes older legacy messages but still requires the provider to stop
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > dispatches another user's queued legacy message using the consumed board interrupt receipt
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > verifies another author's queued Interrupt at execution setup: valid
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > verifies another author's queued Interrupt at execution setup: stale_retry_context
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > verifies another author's queued Interrupt at execution setup: wrong_actor
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > verifies another author's queued Interrupt at execution setup: wrong_run
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > verifies another author's queued Interrupt at execution setup: wrong_company
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > verifies another author's queued Interrupt at execution setup: discarded
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: valid
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: wrong_actor
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: consumed
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: discarded
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: operator_stop
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: already_delivered
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: earlier_delivered
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: unstarted_cancelled
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: unstarted_cancelled_metadata
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > validates automatic saved-message delivery: foreign_queue
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires exact local cleanup for a new turn after worker loss (verified)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires exact local cleanup for a new turn after worker loss (unproven)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires exact local cleanup for a new turn after worker loss (changed)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires exact local cleanup for a new turn after worker loss (dry_run)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires exact local cleanup for a new turn after worker loss (retry)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires exact local cleanup for a new turn after worker loss (duplicate)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > recovers a historical run without process metadata only from exact suspended state (suspended)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > recovers a historical run without process metadata only from exact suspended state (ready)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > recovers a historical run without process metadata only from exact suspended state (wrong_run)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > recovers a historical run without process metadata only from exact suspended state (wrong_thread)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > recovers a historical run without process metadata only from exact suspended state (active_provider)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > recovers a historical run without process metadata only from exact suspended state (pending_tool)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > recovers a historical run without process metadata only from exact suspended state (pending_output)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > recovers a historical run without process metadata only from exact suspended state (missing_state)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > recovers a historical run without process metadata only from exact suspended state (new_launch)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > settles a cancelled unclaimed coordinator after restart and admits one user successor
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > continues native-runner preparation cancelled before runtime selection
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with attempt evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with generation evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with controller evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with lease evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with process evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with launch evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with provider evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with cleanup evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with remote evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with preparing evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with closed evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains cancellation safeguards with reassigned evidence
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > preserves local stop proof after process metadata is cleared and invalidates it on another launch
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > records the ordinary local Native child exit with an exact PID clear
+ ✓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > persists the validated remote process marker when its PID collides with a local process 134ms
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > does not infer an ordinary Native Stop from an unknown or still-live process
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > does not accept invalid local stop proof: live
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > does not accept invalid local stop proof: remote
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > does not accept invalid local stop proof: provider_event
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > resumes saved local messages after restart exactly once: stopped_process
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > resumes saved local messages after restart exactly once: cancelled_startup
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > does not bypass an unsafe restore hold through issue_commented
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > does not bypass an unsafe restore hold through retry_failed_run
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > continues a legacy Daytona run lost before adapter.invoke: issue_commented
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > continues a legacy Daytona run lost before adapter.invoke: retry_failed_run
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > does not convert a known process run after switching the agent to Claude: claim
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > does not convert a known process run after switching the agent to Claude: invocation
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps failed remote cleanup blocked even after the lease release timestamp is recorded
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retries exhausted cleanup only for the selected failed run and adopts concurrent Retry clicks
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > allows a later user cleanup attempt after transient failure without resetting automatic retries
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > queues one exact Retry with fresh history and adopts repeated clicks
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > acknowledges a legacy remote Stop only after confirmed lease cleanup: true
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > acknowledges a legacy remote Stop only after confirmed lease cleanup: false
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a remote native predecessor only with confirmed termination: stopped
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a remote native predecessor only with confirmed termination: destroyed
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a remote native predecessor only with confirmed termination: missing
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a remote native predecessor only with confirmed termination: wrong_lease
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a remote native predecessor only with confirmed termination: cleanup_failed
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a remote native predecessor only with confirmed termination: active
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > resumes a user message after confirmed cleanup: {"runtime":"native","retry":false}
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > resumes a user message after confirmed cleanup: {"runtime":"native","retry":true}
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > resumes a user message after confirmed cleanup: {"runtime":"legacy","retry":false}
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > resumes a user message after confirmed cleanup: {"runtime":"legacy","retry":true}
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > resumes a user message after confirmed cleanup: {"runtime":"legacy_startup","retry":false}
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > resumes a user message after confirmed cleanup: {"runtime":"legacy_startup","retry":true}
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > queues the actual user wake with a fresh session and retained source context
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the existing pause gate on the actual user wake
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the existing dependency gate on the actual user wake
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the existing state gate on the actual user wake
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > preflights eligibility without retiring the hold or creating a successor
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains the message receipt without a phantom run when ownership is still live
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > lets a new human message continue after exhausted recovery without certifying old actions
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires a fully committed failed result and verified stop for a new turn (failed)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires a fully committed failed result and verified stop for a new turn (succeeded_result)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires a fully committed failed result and verified stop for a new turn (rejected_result)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires a fully committed failed result and verified stop for a new turn (still_committing)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires a fully committed failed result and verified stop for a new turn (controller)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires a fully committed failed result and verified stop for a new turn (successor)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > requires a fully committed failed result and verified stop for a new turn (live_process)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a fresh Slack message after failure only with current linked-user authority (linked)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a fresh Slack message after failure only with current linked-user authority (revoked)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a fresh Slack message after failure only with current linked-user authority (unlinked)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > admits a fresh Slack message after failure only with current linked-user authority (wrong_author)
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for live_process
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for missing_process
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for lease
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for coordinator
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for successor
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for agent_message
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for old_comment
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for wrong_author
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for run_authored
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for reassigned
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for automatic
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for approval
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for question
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for malformed_comment
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps the hold for legacy_owner
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > rejects unverified interruption context: foreign_source
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > rejects unverified interruption context: missing_authorization
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > rejects unverified interruption context: nonterminal_source
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > keeps one new turn under concurrent delivery of the same message
+ ↓ src/services/explicit-native-continuation.test.ts > explicit native conversation continuation > retains the source incident through prior rejected message admissions
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 141 skipped (142)
+   Start at  21:40:00
+   Duration  20.66s (transform 11.06s, setup 97ms, import 15.91s, tests 4.50s, environment 0ms)
+

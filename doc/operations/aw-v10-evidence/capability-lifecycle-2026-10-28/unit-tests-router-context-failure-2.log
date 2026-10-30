@@ -1,0 +1,42 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx (48 tests | 2 failed) 8594ms
+     × projects lifecycle and unqualified release evidence from the shared catalog 270ms
+     × no longer renders an 'Experimental' secondary badge on any card 99ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > projects lifecycle and unqualified release evidence from the shared catalog
+AssertionError: expected null not to be null
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:233:93
+    231|
+    232|     const lifecycle = container.querySelector('[data-testid="capabilit…
+    233|     expect(container.querySelector('[aria-label="Capability maturity: …
+       |                                                                                             ^
+    234|     expect(lifecycle?.textContent).toContain("no compatibility guarant…
+    235|     expect(lifecycle?.textContent).toContain("Not recorded");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > no longer renders an 'Experimental' secondary badge on any card
+AssertionError: expected [ 'Experimental', …(44) ] to not include 'Experimental'
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1052:24
+    1050|       (badge) => badge.textContent?.trim(),
+    1051|     );
+    1052|     expect(badges).not.toContain("Experimental");
+       |                        ^
+    1053|   });
+    1054| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  2 failed | 69 passed (71)
+   Start at  08:29:02
+   Duration  12.24s (transform 2.26s, setup 49ms, import 3.61s, tests 8.67s, environment 624ms)
+

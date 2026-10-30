@@ -1,0 +1,41 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/access-service.test.ts (22 tests | 1 failed) 4604ms
+     × keeps a private conversation routine with its source owner and pauses it during archive 37ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/access-service.test.ts > access service > keeps a private conversation routine with its source owner and pauses it during archive
+AssertionError: expected { member: { …(8) }, …(4) } to match object { reassignedRoutineCount: +0, …(2) }
+(10 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "ownerActionRoutineCount": 1,
+-   "pausedRoutineCount": 1,
++   "pausedRoutineCount": 0,
+    "reassignedRoutineCount": 0,
+  }
+
+ ❯ src/__tests__/access-service.test.ts:311:20
+    309|
+    310|     const result = await accessService(db).archiveMember(company.id, m…
+    311|     expect(result).toMatchObject({ reassignedRoutineCount: 0, pausedRo…
+       |                    ^
+    312|     expect((await accessService(db).getMemberById(company.id, member.i…
+    313|     const privateRoutine = (await db.select().from(routines).where(eq(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 51 passed (52)
+   Start at  20:56:06
+   Duration  29.73s (transform 10.86s, setup 138ms, import 19.06s, tests 9.66s, environment 526ms)
+

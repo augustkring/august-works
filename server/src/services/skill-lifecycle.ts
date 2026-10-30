@@ -13,7 +13,7 @@ import { assertV5Authorization, assertV5Enabled, v5HumanActorId } from "./v5-aut
 import { companySkillPolicyService, normalizeSkillPolicySourceType } from "./company-skill-policy.js";
 import { hashContextPolicySnapshot } from "./context/context-manifest.js";
 import { withV5ActivityTransaction } from "./v5-mutations.js";
-import { companySkillService } from "./company-skills.js";
+import { assertPlatformSkillCustomerMutable, companySkillService } from "./company-skills.js";
 import { logActivity, type ActivityPublication } from "./activity-log.js";
 
 type SkillProvenance = { sourcePlaybookRevisionId?: string; sourceSensitivity?: "public" | "internal" | "confidential" | "restricted"; files?: typeof companySkillVersions.$inferSelect.fileInventory; publication?: { id: string; companyId: string; versionId: string; hash: string } };
@@ -38,6 +38,7 @@ export function skillLifecycleService(db: Db) {
     await assertV5Enabled(tx, "skill_lifecycle_v5");
     await assertV5Authorization(tx, actor, companyId, "company_scope:read");
     if (row && !(await companySkillService(tx).canReadSkill(companyId, row.id, actor))) throw notFound("Skill not found");
+    if (row) assertPlatformSkillCustomerMutable(row);
     if (actor.type === "agent") {
       await assertV5Enabled(tx, "skill_autonomous_proposals_v5");
       if (action === "skills.promote") {

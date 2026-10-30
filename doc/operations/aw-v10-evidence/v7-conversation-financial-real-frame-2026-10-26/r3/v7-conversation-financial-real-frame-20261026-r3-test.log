@@ -1,0 +1,52 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 2 failed | 25 skipped) 174875ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 16562ms
+     × retains an actual unknown conversation hold and blocks canonical company purge 86980ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: Rehome shared agents before deleting their home organization
+ ❯ conflict src/errors.ts:29:10
+     27|
+     28| export function conflict(message: string, details?: unknown) {
+     29|   return new HttpError(409, message, details);
+       |          ^
+     30| }
+     31|
+ ❯ src/services/saas/offboarding.ts:87:15
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ purgeConversationCompany src/__tests__/v7-model-reservations.integration.test.ts:410:7
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:550:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains an actual unknown conversation hold and blocks canonical company purge
+Error: Rehome shared agents before deleting their home organization
+ ❯ conflict src/errors.ts:29:10
+     27|
+     28| export function conflict(message: string, details?: unknown) {
+     29|   return new HttpError(409, message, details);
+       |          ^
+     30| }
+     31|
+ ❯ src/services/saas/offboarding.ts:87:15
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:637:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed | 25 skipped (31)
+   Start at  14:19:54
+   Duration  194.45s (transform 13.82s, setup 74ms, import 19.37s, tests 174.88s, environment 0ms)
+

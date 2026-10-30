@@ -18,13 +18,13 @@ import { companyTransferRuns } from "@paperclipai/db";
 //   applying                --complete------> completed    terminal; no path ever reopens it
 //   applying                --releaseApplyClaim-> failed   guarded on "applying", so a cleanup error
 //                                                          after complete() is a no-op release
-//   applying                --recoverStrandedApplyingRuns-> failed
-//                                                          startup only: in-memory applies died with the process
+//   applying                --markApplyOutcomeUnknown/recoverStrandedApplyingRuns-> needs_reconciliation
+//                                                          unknown is not permission to replay
 //   pending|running (idle)  --cancelIfIdle--> cancelled    sweep claim; also guarded on a stale updatedAt
 //   pending|running|failed  --cancel--------> cancelled
-//   (any)                   --fail----------> failed       unguarded settle; callers use it only on runs
-//                                                          they know are open (else releaseApplyClaim)
+//   pending|running|failed   --fail----------> failed       pre-apply failures only; no effect replay inferred
 //
+//   needs_reconciliation: same run remains discoverable, never claimable.
 //   failed:    retryable — in the resume lookup and claimable by claimApply.
 //   completed: terminal — resumeOrCreate short-circuits with alreadyCompleted.
 //   cancelled: terminal and unclaimable — excluded from the resume lookup, so
@@ -37,6 +37,7 @@ export type CompanyTransferRunStatus =
   | "pending"
   | "running"
   | "applying"
+  | "needs_reconciliation"
   | "completed"
   | "failed"
   | "cancelled";
@@ -162,7 +163,7 @@ export const companyTransferRunService = {
             eq(companyTransferRuns.idempotencyKey, input.idempotencyKey),
             eq(companyTransferRuns.direction, input.direction),
             eq(companyTransferRuns.actorKey, input.actorKey),
-            inArray(companyTransferRuns.status, [...RESUMABLE_STATUSES, "applying", "completed"]),
+            inArray(companyTransferRuns.status, [...RESUMABLE_STATUSES, "applying", "needs_reconciliation", "completed"]),
           ),
         )
         .orderBy(desc(companyTransferRuns.createdAt))
@@ -337,33 +338,34 @@ export const companyTransferRunService = {
     return released.length > 0;
   },
 
-  /**
-   * Fail every run stranded in "applying" by a dead process. Apply jobs run
-   * in-memory in this single server process, so at boot any run still
-   * "applying" belongs to an apply that died without settling its claim and
-   * would otherwise 409 every retry forever. Failing it makes it claimable
-   * again with its spooled parts intact. Startup only — running this while
-   * applies may be live (e.g. from a periodic sweep) would kill them.
-   */
-  async recoverStrandedApplyingRuns(db: Db): Promise<string[]> {
-    const recovered = await db
-      .update(companyTransferRuns)
-      .set({
-        status: "failed",
-        error: "apply interrupted by a restart — verify whether the import completed before retrying",
-        finishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(companyTransferRuns.status, "applying"))
+  /** A domain call that may have written cannot be released for replay.
+   * An actual completion receipt can still settle it; uncertainty cannot. */
+  async markApplyOutcomeUnknown(db: Db, runId: string): Promise<boolean> {
+    const rows = await db.update(companyTransferRuns).set({
+      status: "needs_reconciliation", error: "Import outcome is unknown; reconcile the existing transfer before another apply.",
+      updatedAt: new Date(),
+    }).where(and(eq(companyTransferRuns.id, runId), eq(companyTransferRuns.status, "applying")))
       .returning({ id: companyTransferRuns.id });
-    return recovered.map((row) => row.id);
+    return rows.length > 0;
+  },
+
+  /** Startup observation cannot prove whether a non-idempotent apply wrote.
+   * Preserve the same logical run and its parts; never authorize a replay.
+   * This is conservative for another replica's live apply as well: its real
+   * completion can settle the run, while startup cannot create a new attempt. */
+  async recoverStrandedApplyingRuns(db: Db): Promise<string[]> {
+    const recovered = await db.update(companyTransferRuns).set({
+      status: "needs_reconciliation", error: "Import outcome is unknown after restart; reconcile the existing transfer before another apply.",
+      updatedAt: new Date(),
+    }).where(eq(companyTransferRuns.status, "applying")).returning({ id: companyTransferRuns.id });
+    return recovered.map(row => row.id);
   },
 
   async fail(db: Db, runId: string, error: string): Promise<void> {
     await db
       .update(companyTransferRuns)
       .set({ status: "failed", error, finishedAt: new Date(), updatedAt: new Date() })
-      .where(eq(companyTransferRuns.id, runId));
+      .where(and(eq(companyTransferRuns.id, runId), inArray(companyTransferRuns.status, RESUMABLE_STATUSES)));
   },
 
   async cancel(db: Db, runId: string): Promise<void> {

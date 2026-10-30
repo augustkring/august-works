@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/services/native-runtime/native-session-executor.test.ts
+test_pattern=terminates a detached runner when its process identity cannot be adopted|bootstraps only an untouched provider session

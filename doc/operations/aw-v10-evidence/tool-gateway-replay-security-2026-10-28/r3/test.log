@@ -1,0 +1,73 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > exports stable operation and first-party tool catalog hashes
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > keeps Task progress replay routed by its canonical manifest alias and owner
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > Blentera platform contract hashes > classifies the required least-authority domain projections without claiming unqualified channels
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > executes a pinned connector through a workflow and denies catalogue drift before another provider call
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > parks a user workflow for signed tool review, recovers its receipt, and blocks late approval after cancellation
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > exposes Memory self-tools only when the Memory feature gates are enabled
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > exposes AI workflow authoring tools only behind the full authoring feature gate
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > does not let a plugin shadow a reserved first-party name while its feature gate is closed
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > routes an MCP Task comment through the current Native owner and binds its honest transport identity
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > projects only current readable Projects through the canonical service and Human intersection
+[11:24:12] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"0f2e9983-6805-401c-8b10-0a3a471487b3","actorAgentId":"de76c8fb-c39c-4a55-9b37-9566b8f60fda","responsibleUserId":"gateway-workflow-human-ef040f14-dd07-49d1-8086-8c5959c48fdc"}[39m
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > creates an idempotent local Support request under the current Native Human and approved safe context 1557ms
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > reads public service status separately from Support intake under current run, Human, policy, and Skill pins
+ ✓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > executes create_workflow through the governed gateway without publishing 1115ms
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > gates write tools with an action request and executes only stored reviewed arguments once
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > approves a pending action request directly from the review queue and preserves signed arguments
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > commits one human decision and delivers once after the original run yields, including after service restart
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > waits for all reviews, then delivers both outcomes in one durable continuation
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > keeps reviewed results from different source runs in separate non-coalescing wakes
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > bounds many outcomes and recovers their full-result reference after wake commit
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > retires a former assignee's continuation after reassignment
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > recovers expired reviews beyond a full batch of approvals that cannot recover
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > settles expired reviews and interrupted execution without replaying an uncertain external action
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > remembers a read action atomically, allows changed arguments, and preserves explicit denials and definition review
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > rolls back approval when remembered permission cannot be saved
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > refuses to approve an action request through a different interaction
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > prevents another run from consuming an approved action request by id
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > executes an approved identical-args race once and returns the winner result
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > refuses to execute an approved action after its issue closes
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > keeps pre-execute-on-approve approved requests inert
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > does not let a stale legacy consumer overwrite the winning approved execution
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > does not leave unsigned action requests pending when signing is unavailable
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > explains how to recover when an approval-required session has no task
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > cancels a stale pending action request when direct approval sees an invalid signature
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > declines a pending action request and rejects the invocation (PAP-10859)
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > expires a stale identical request and creates a fresh approval
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > adds formal board approval for destructive tool actions and fails closed until approved
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > maps remote MCP elicitation to a durable issue interaction
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > initializes a fresh Streamable HTTP session before a stateful tools/call
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > hides cached Chat unread filters and blocks agent and board requests before provider dispatch
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > explains Google Workspace preview enrollment when a tool call is denied
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: token_run_cancel
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: initialize_grant_revoke
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: notification_run_cancel
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: notification_destination_change
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: call_grant_revoke
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: unauthorized_refresh
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: refresh_grant_revoke
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: token_grant_revoke
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: token_grant_revoke_ordinary
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: healthy_refresh
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fences scoped HTTP transport at native authority boundaries: healthy_last_rate_slot
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > injects Vercel tokens at dispatch and refreshes exactly once after an upstream 401
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > keeps managed GitHub personal identity even under a legacy shared policy
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > reselects a duplicate only before GitHub dispatch (upstream failure: false)
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > reselects a duplicate only before GitHub dispatch (upstream failure: true)
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > refreshes a customer OAuth grant once and retries after an upstream 401
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > marks a managed OAuth grant reconnect-required after one rejected refresh retry
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > fails clearly when remote MCP elicitation has no issue interaction path
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > blocks malicious plugin tool results before they reach the agent
+ ↓ |@paperclipai/server| src/__tests__/tool-gateway-service.test.ts > tool gateway service > passes original sensitive arguments to plugin executors while redacting stored summaries
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 58 skipped (60)
+   Start at  11:23:51
+   Duration  21.42s (transform 10.14s, setup 75ms, import 14.58s, tests 6.63s, environment 0ms)
+

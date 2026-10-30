@@ -6,9 +6,10 @@ import express from "express";
 import request from "supertest";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { agents, companies, companyMemberships, createDb, heartbeatRuns, issues, principalPermissionGrants, toolConnectionInstalls } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, issues, principalPermissionGrants, toolConnectionInstalls } from "@paperclipai/db";
 import { type AiConnectionBinding } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 import { agentRoutes } from "../routes/agents.js";
 import { errorHandler } from "../middleware/index.js";
 import { aiConnectionService } from "../services/ai-connections.js";
@@ -20,17 +21,21 @@ import { secretService } from "../services/secrets.js";
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
 let db: ReturnType<typeof createDb>;
 let home: string;
+let restoreHeartbeatApiUrl: (() => void) | null = null;
 
 beforeAll(async () => {
   home = await mkdtemp(path.join(os.tmpdir(), "paperclip-hire-ai-"));
   vi.stubEnv("PAPERCLIP_HOME", home);
   vi.stubEnv("PAPERCLIP_INSTANCE_ID", "hire-ai");
+  restoreHeartbeatApiUrl = installHeartbeatApiUrlFixture();
   database = await startEmbeddedPostgresTestDatabase("paperclip-hire-ai-db-");
   db = createDb(database.connectionString);
 }, 90_000);
 
 afterAll(async () => {
   await database?.cleanup();
+  restoreHeartbeatApiUrl?.();
+  restoreHeartbeatApiUrl = null;
   vi.unstubAllEnvs();
   if (home) await rm(home, { recursive: true, force: true });
 });
@@ -38,10 +43,12 @@ afterAll(async () => {
 async function fixture(provider: "anthropic" | "openai", method: "api_key" | "subscription" = "api_key") {
   const companyId = randomUUID();
   const agentId = randomUUID();
-  const userId = `owner-${companyId}`;
+  const userId = randomUUID();
   const binding = { provider, method, mode: "responsible_user" } as const;
   const adapterType = provider === "anthropic" ? "claude_local" : "codex_local";
   await db.insert(companies).values({ id: companyId, name: "Hiring connection test", issuePrefix: `H${companyId.slice(0, 7)}`, defaultResponsibleUserId: userId });
+  await db.insert(authUsers).values({ id: userId, name: "AI connection owner",
+    email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
   await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" });
   await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: userId, permissionKey: "agents:create" });
   await db.insert(agents).values({ id: agentId, companyId, name: "Manager", role: "ceo", adapterType, runtimeConfig: { aiConnection: binding } });
@@ -256,9 +263,13 @@ describe("hired agents sharing a subscription", () => {
     try {
       const run = await heartbeat.invoke(agent.id, "assignment", { issueId: issue.id, wakeReason: "issue_assigned", responsibleUserId: f.userId }, "system");
       expect(run).not.toBeNull();
-      await expect.poll(async () => (await heartbeat.getRun(run!.id))?.status, { timeout: 20_000 }).toBe("succeeded");
-      expect(execute).toHaveBeenCalledTimes(1);
+      await expect.poll(async () => {
+        const current = await heartbeat.getRun(run!.id);
+        return current && ["succeeded", "failed", "cancelled"].includes(current.status) ? current : null;
+      }, { timeout: 20_000 }).not.toBeNull();
       const finished = await heartbeat.getRun(run!.id);
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(finished, JSON.stringify({ errorCode: finished?.errorCode, error: finished?.error })).toMatchObject({ status: "succeeded" });
       expect(finished?.errorCode).not.toBe("ai_connection_busy");
       expect(finished?.contextSnapshot?.aiConnection).toMatchObject({ connectionId: f.account.connectionId, responsibleUserId: f.userId, method: "subscription" });
       expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.agentId, agent.id), eq(heartbeatRuns.scheduledRetryReason, "ai_connection_busy")))).toEqual([]);

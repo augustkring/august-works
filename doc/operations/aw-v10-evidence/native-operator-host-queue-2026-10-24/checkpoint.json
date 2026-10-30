@@ -1,0 +1,34 @@
+{
+  "parentCommit": "2d8f35d61e53445d72e53f9efda4f5c6e6421b2b",
+  "requirements": [
+    "CE-03",
+    "CE-04",
+    "V10-166"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "nativeHostBridgeSandboxHostAuth": {
+      "exit": 0,
+      "suites": 3,
+      "passed": 32
+    },
+    "serverCompiler": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "The canonical configured operator list is wired into native host-command admission. Missing configuration is denied. Human actor proof is retained and checked before details, within the queue transaction and before success/replay.",
+    "Read-only host metadata needs current passkey proof; prepare/probe/revocation/stop/destroy also need recent proof. Successful reply presentation rechecks original operator proof around native receipt/scope reading.",
+    "Native tests preserve actual encrypted host envelopes, current scope/epoch, claim token/lease, immutable response and rollback/expiry tests with owned host-reply fixtures. Missing/deleted proof and default-empty operators enqueue no command; stale native proof permits private capabilities but refuses preparation.",
+    "Original claim/complete/reconcile worker and provider outcome code is unchanged. New proof pins do not span provider I/O or invent session authority for a worker."
+  ],
+  "compatibility": [
+    "No migration/dependency change. SaaS platform supplies canonical operator IDs; private test factories now explicitly declare their operator fixture."
+  ],
+  "limits": [
+    "Complete durable operation admission provenance and later dispatch/current-operation authority/outcome qualification remain open. Requester ID is attribution rather than fresh native authentication.",
+    "This is native database/crypto-envelope/owned host-fixture evidence, not physical host or live provider qualification. Physical apply/start admission remains closed.",
+    "Powerful Board/CLI credential creation, enterprise recovery/SSO, other sensitive owners and original Context/Memory/privacy/typed-origin/portability/input-receipt work remain open.",
+    "Complete V10/latest full workspace gates and PR-ready or production qualification are not claimed."
+  ]
+}

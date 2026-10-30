@@ -1,0 +1,107 @@
+import { createHash, randomUUID } from "node:crypto";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { WebSocket } from "ws";
+import { agentApiKeys, agents, authUsers, companies, companyMemberships, createDb,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
+import { agentApiKeyScopeSchema, normalizeAgentApiKeyScope, type AgentApiKeyScope } from "@paperclipai/shared";
+import { authorizationService } from "../services/authorization.js";
+import { publishLiveEvent } from "../services/live-events.js";
+import { setupLiveEventsWebSocketServer } from "../realtime/live-events-ws.js";
+import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+
+describe("Native Agent-key live admission follows current company authority", () => {
+  let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
+  beforeAll(async () => {
+    database = await startEmbeddedPostgresTestDatabase("v10-live-agent-authority-");
+    db = createDb(database.connectionString, { maxConnections: 3 });
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  afterAll(async () => { await database?.cleanup(); }, 30000);
+
+  async function seed(scope: AgentApiKeyScope = { kind: "standard" }) {
+    const companyId = randomUUID(), userId = randomUUID(), agentId = randomUUID(), keyId = randomUUID(), token = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Current native Agent-key authority", issuePrefix: randomUUID() });
+    await db.insert(authUsers).values({ id: userId, name: "Actual accountable Human", email: `${userId}@example.test`, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values([{ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "admin" },
+      { companyId, principalType: "agent", principalId: agentId, status: "active", membershipRole: "member" }]);
+    await db.insert(agents).values({ id: agentId, companyId, name: "Actual local presence", role: "engineer", status: "idle", adapterType: "paperclip_runner" });
+    await db.insert(agentApiKeys).values({ id: keyId, companyId, agentId, name: "Actual native key", keyHash: createHash("sha256").update(token).digest("hex"), responsibleUserId: userId, scopeConfig: scope });
+    const actor = { type: "agent" as const, source: "agent_key" as const, agentId, companyId, keyId, keyScope: scope, onBehalfOfUserId: userId };
+    return { companyId, userId, agentId, keyId, token, actor };
+  }
+  type Seed = Awaited<ReturnType<typeof seed>>;
+  async function server(fixture: Seed) {
+    const http = createServer(), wss = setupLiveEventsWebSocketServer(http, db, { deploymentMode: "authenticated", deploymentProfile: "saas" });
+    http.listen(0, "127.0.0.1"); await once(http, "listening");
+    const address = http.address(); if (!address || typeof address === "string") throw new Error("Missing native listener");
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/companies/${fixture.companyId}/events/ws`, { headers: { Authorization: `Bearer ${fixture.token}` } });
+    socket.on("error", () => {});
+    return { socket, close: async () => {
+      if (socket.readyState !== WebSocket.CLOSED) { const closed = new Promise<void>(resolve => socket.once("close", () => resolve())); socket.terminate(); await closed; }
+      await new Promise<void>(resolve => wss.close(resolve));
+      await new Promise<void>((resolve, reject) => http.close(error => error ? reject(error) : resolve()));
+    } };
+  }
+  const companyDecision = (fixture: Seed) => authorizationService(db).decide({ actor: fixture.actor,
+    action: "company_scope:read", resource: { type: "company", companyId: fixture.companyId }, enforceResponsibleUserIntersection: true });
+
+  it.each(["human_membership", "human_account"] as const)("closes an existing key socket after %s withdrawal although the actual key remains active", async change => {
+    const fixture = await seed();
+    expect((await companyDecision(fixture)).allowed).toBe(true);
+    const live = await server(fixture);
+    try {
+      await once(live.socket, "open");
+      const initial = once(live.socket, "message");
+      publishLiveEvent({ companyId: fixture.companyId, type: "agent.status", payload: { marker: "current Agent and Human positive" } });
+      expect(JSON.parse((await initial)[0].toString()).payload.marker).toBe("current Agent and Human positive");
+      if (change === "human_membership") {
+        // The original HTTP key-auth contract permits paused read access.
+        await db.update(agents).set({ status: "paused" }).where(eq(agents.id, fixture.agentId));
+        expect((await companyDecision(fixture)).allowed).toBe(true);
+        const paused = once(live.socket, "message");
+        publishLiveEvent({ companyId: fixture.companyId, type: "agent.status", payload: { marker: "paused read remains canonical" } });
+        expect(JSON.parse((await paused)[0].toString()).payload.marker).toBe("paused read remains canonical");
+      }
+      if (change === "human_membership") await db.update(companyMemberships).set({ status: "suspended" }).where(and(
+        eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, fixture.userId)));
+      else await db.delete(authUsers).where(eq(authUsers.id, fixture.userId));
+      expect((await companyDecision(fixture)).allowed).toBe(false);
+      expect(await db.select({ id: agentApiKeys.id }).from(agentApiKeys).where(and(eq(agentApiKeys.id, fixture.keyId), isNull(agentApiKeys.revokedAt)))).toEqual([{ id: fixture.keyId }]);
+      const outcome = Promise.race([once(live.socket, "close").then(([code]) => ({ kind: "closed", code })), once(live.socket, "message").then(() => ({ kind: "message" }))]);
+      publishLiveEvent({ companyId: fixture.companyId, type: "agent.status", payload: { marker: "withdrawn Human must not receive" } });
+      expect(await outcome).toEqual({ kind: "closed", code: 1008 });
+    } finally { await live.close(); }
+  });
+
+  it("rejects an actually persisted malformed scoped key instead of broadening it to standard", async () => {
+    const fixture = await seed();
+    await db.execute(sql`update ${agentApiKeys} set scope_config=${JSON.stringify({ kind: "task_bridge", parentIssueId: "invalid-source-uuid" })}::jsonb where id=${fixture.keyId}::uuid`);
+    const [stored] = await db.select().from(agentApiKeys).where(eq(agentApiKeys.id, fixture.keyId));
+    expect(stored?.revokedAt).toBeNull();
+    expect(agentApiKeyScopeSchema.safeParse(stored?.scopeConfig).success).toBe(false);
+    expect.soft(normalizeAgentApiKeyScope(stored?.scopeConfig)).toBeNull();
+    const live = await server(fixture);
+    try {
+      const outcome = await Promise.race([
+        once(live.socket, "open").then(() => ({ kind: "open" })),
+        once(live.socket, "unexpected-response").then(([, response]) => { response.resume(); return { kind: "denied", status: response.statusCode }; }),
+      ]);
+      expect(outcome).toEqual({ kind: "denied", status: 403 });
+    } finally { await live.close(); }
+  });
+
+  it.each<AgentApiKeyScope>([{ kind: "skill_test", issueId: randomUUID() }, { kind: "task_bridge", parentIssueId: randomUUID() }])("rejects canonical scoped-key company subscription for $kind", async scope => {
+    const fixture = await seed(scope);
+    expect((await companyDecision(fixture)).allowed).toBe(false);
+    const live = await server(fixture);
+    try {
+      const outcome = await Promise.race([
+        once(live.socket, "open").then(() => ({ kind: "open" })),
+        once(live.socket, "unexpected-response").then(([, response]) => { response.resume(); return { kind: "denied", status: response.statusCode }; }),
+      ]);
+      expect(outcome).toEqual({ kind: "denied", status: 403 });
+    } finally { await live.close(); }
+  });
+});

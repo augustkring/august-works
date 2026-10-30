@@ -2056,6 +2056,24 @@ export function createTestHarness(options: TestHarnessOptions): TestHarness {
         const agent = agents.get(agentId);
         return isInCompany(agent, companyId) ? agent : null;
       },
+      async getRuntime(agentId, companyId) {
+        requireCapability(manifest, capabilitySet, "agents.lifecycle.manage");
+        const cid = requireCompanyId(companyId);
+        const agent = agents.get(agentId);
+        if (!isInCompany(agent, cid)) return null;
+        return {
+          revision: "0",
+          agent: agent!,
+          instructionsRootPath: null,
+          instructionsEntryFile: "AGENTS.md",
+          skillsReady: false,
+          skills: [],
+          connectionAssignments: {
+            connections: [],
+            profileIds: [],
+          },
+        };
+      },
       async pause(agentId, companyId) {
         requireCapability(manifest, capabilitySet, "agents.pause");
         const cid = requireCompanyId(companyId);

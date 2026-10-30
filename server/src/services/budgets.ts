@@ -246,11 +246,12 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
       await db
         .update(projects)
         .set({
+          payloadSourceSnapshot: sql`case when ${projects.pauseReason} is distinct from 'budget' then null else ${projects.payloadSourceSnapshot} end`,
           pauseReason: "budget",
           pausedAt: now,
           updatedAt: now,
         })
-        .where(eq(projects.id, policy.scopeId));
+        .where(and(eq(projects.companyId, policy.companyId), eq(projects.id, policy.scopeId)));
       return;
     }
 
@@ -293,11 +294,12 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
       await db
         .update(projects)
         .set({
+          payloadSourceSnapshot: null,
           pauseReason: null,
           pausedAt: null,
           updatedAt: now,
         })
-        .where(and(eq(projects.id, policy.scopeId), eq(projects.pauseReason, "budget")));
+        .where(and(eq(projects.companyId, policy.companyId), eq(projects.id, policy.scopeId), eq(projects.pauseReason, "budget")));
       return;
     }
 

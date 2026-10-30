@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { startReviewProvider } from "../fixtures/connection-review-provider";
 
@@ -48,7 +49,7 @@ async function createAgent(
 }
 
 function reviewAgentScript(connectionId: string, query: string) {
-  return `
+  const script = `
 const base = process.env.PAPERCLIP_API_URL + "/api";
 
 const headers = { authorization: "Bearer " + process.env.PAPERCLIP_API_KEY, "content-type": "application/json", "x-paperclip-run-id": process.env.PAPERCLIP_RUN_ID };
@@ -60,16 +61,21 @@ const api = async (path, method = "GET", body) => {
 const describePages = (raw) => {
   let value = raw;
   if (typeof value === "string") { try { value = JSON.parse(value); } catch {} }
-  const content = typeof value === "string" ? value : typeof value?.content === "string" ? value.content : value?.data?.content?.filter(item => item.type === "text").map(item => item.text).join(" ") ?? "No pages returned.";
+  const contentItems = Array.isArray(value?.content) ? value.content : Array.isArray(value?.data?.content) ? value.data.content : [];
+  const content = typeof value === "string" ? value : typeof value?.content === "string" ? value.content : contentItems.filter(item => item?.type === "text" && typeof item.text === "string").map(item => item.text).join(" ") || "No pages returned.";
   return "I found these recent pages: " + content.replace(/^Pages: /, "") + ".";
 };
 const issueId = process.env.PAPERCLIP_TASK_ID ?? (await api("/heartbeat-runs/" + process.env.PAPERCLIP_RUN_ID)).contextSnapshot.issueId;
 const interactions = await api("/issues/" + issueId + "/interactions");
 const review = interactions.find(i => i.payload?.toolAction);
-if (review?.status === "pending") { console.log("Still waiting for the existing review; no retry."); process.exit(0); }
+const actionResult = review?.result?.toolAction;
+const terminalToolAction = ["executed", "failed", "expired"].includes(actionResult?.status);
+if (review?.status === "pending" || (review?.status === "accepted" && !terminalToolAction)) {
+  console.log("Still waiting for the review or its execution result; no retry.");
+  process.exit(0);
+}
 if (review && review.status !== "pending") {
-  const result = review.result?.toolAction;
-  const message = review.status === "rejected" ? "Review declined. No pages were read." : result?.status === "failed" ? "Read failed: " + result.errorMessage : ["expired", "cancelled"].includes(review.status) ? "The review expired or was cancelled. No pages were read." : describePages(result?.resultSummary);
+  const message = review.status === "rejected" ? "Review declined. No pages were read." : actionResult?.status === "failed" ? "Read failed: " + actionResult.errorMessage : ["expired", "cancelled"].includes(review.status) ? "The review expired or was cancelled. No pages were read." : describePages(actionResult?.resultSummary);
   await api("/issues/" + issueId + "/comments", "POST", { body: message });
   await api("/issues/" + issueId, "PATCH", { status: "done" });
   console.log(message);
@@ -91,6 +97,13 @@ if (!call.ok) {
 await api("/issues/" + issueId + "/comments", "POST", { body: describePages(result.result) });
 await api("/issues/" + issueId, "PATCH", { status: "done" });
 `;
+  // The process adapter executes this exact source as an ES module via
+  // `node --input-type=module -e`. Keep a syntax preflight here so script
+  // regressions fail before an E2E run can strand the task as adapter_failed.
+  execFileSync(process.execPath, ["--input-type=module", "--check"], {
+    input: script,
+  });
+  return script;
 }
 
 for (const journey of [
@@ -302,13 +315,27 @@ for (const journey of [
         await page.getByRole("button", { name: "Hide result details" }).click();
       }
       expect(calls()).toBe(journey === "decline" ? 0 : 1);
+      // The decline case intentionally dropped the live interaction event and
+      // returned an empty first snapshot. Verify IssueDetail's retained polling
+      // reconciliation removes the stale pending card without a manual reload.
       await expect(
         page.getByRole("button", { name: "Approve & run", exact: true }),
-      ).not.toBeVisible();
+      ).not.toBeVisible({ timeout: 30_000 });
       await expect(
         queue.getByRole("button", { name: "Decline", exact: true }),
       ).not.toBeVisible({ timeout: 20_000 });
-      await page.reload();
+      await expect
+        .poll(
+          async () =>
+            (await json<{ status: string }>(await request.get(`/api/issues/${issue.id}`))).status,
+          { timeout: 30_000 },
+        )
+        .toBe("done");
+      const showResolvedDetails = page.getByRole("button", {
+        name: "Show result details",
+        exact: true,
+      });
+      if (await showResolvedDetails.isVisible()) await showResolvedDetails.click();
       await expect(
         page
           .getByText(
@@ -321,6 +348,11 @@ for (const journey of [
           )
           .first(),
       ).toBeVisible();
+      const hideResolvedDetails = page.getByRole("button", {
+        name: "Hide result details",
+        exact: true,
+      });
+      if (await hideResolvedDetails.isVisible()) await hideResolvedDetails.click();
       await page.screenshot({
         path: testInfo.outputPath("resolved-review.png"),
       });

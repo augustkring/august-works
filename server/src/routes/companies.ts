@@ -1,11 +1,16 @@
 import { createHash, randomUUID } from "node:crypto";
+import { canonicalJson } from "@paperclipai/shared/portability-hash";
+import { companyImportJobService, companyImportOperationReceipt, type CompanyImportJob } from "../services/company-import-jobs.js";
+import { assertCompanyCeoAgentOrBoard, authorizationService, canActorReadProjectPrivacy } from "../services/authorization.js";
+import { routineService } from "../services/routines.js";
+import { companyResponsibilityContactsService } from "../services/company-responsibility-contacts.js";
 import { isSaasDeployment } from "../deployment-profile.js";
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import { and, count as countFn, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { agents as agentsTable } from "@paperclipai/db";
+import { agents as agentsTable, companies } from "@paperclipai/db";
 import type { CompanyPortabilityImportResult } from "@paperclipai/shared";
 import {
   MAX_ZIP_ENTRY_DECOMPRESSED_BYTES,
@@ -25,6 +30,7 @@ import {
   feedbackVoteValueSchema,
   hidesCompanyPage,
   updateCompanyBrandingSchema,
+  updateCompanyResponsibilityContactsSchema,
   updateCompanySchema,
 } from "@paperclipai/shared";
 import {
@@ -35,7 +41,7 @@ import {
   type CompanyImportTransferPartUploadResult,
   type CompanyImportTransferStatus,
 } from "@paperclipai/shared/company-import-transfer";
-import { badRequest, conflict, forbidden, notFound, unprocessable } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound, unprocessable, HttpError, ImportPreflightError, ImportSourceChangedError } from "../errors.js";
 import { PORTABLE_ZIP_UPLOAD_LIMIT_BYTES } from "../http/body-limits.js";
 import { logger } from "../middleware/logger.js";
 import { validate } from "../middleware/validate.js";
@@ -52,6 +58,7 @@ import {
 import { companyTransferRunService } from "../services/company-transfer-runs.js";
 import { agentInstructionsBundleMode } from "../services/agent-instructions.js";
 import { resolvePortableExportAgentSelection } from "../services/company-portability-agent-selection.js";
+import { ImportCancellationError } from "../services/company-portability.js";
 import {
   accessService,
   agentService,
@@ -280,21 +287,74 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   const importTransferSpoolRoot =
     options?.importTransferSpoolRoot ?? resolveDefaultImportTransferSpoolRoot();
   const svc = companyService(db);
+  const responsibilityContacts = companyResponsibilityContactsService(db);
   const agents = agentService(db);
   const portability = companyPortabilityService(db, storage);
   const access = accessService(db);
   const budgets = budgetService(db);
   const artifacts = companyArtifactsService(db, storage);
   const feedback = feedbackService(db);
-  const importJobs = new Map<string, ImportJobRecord>();
-  // Terminal jobs are retained in memory for an hour after they settle. A long
-  // import can outlast a user stepping away, and dropping the completion after
-  // only a few minutes made a later poll 404 — surfacing a finished, fully
-  // written import as a scary failure. An hour is long enough to cover a real
-  // "walk away and come back" gap while keeping the map bounded, and it needs
-  // no new persistence (jobs remain in-memory-only; a restart still 404s, which
-  // the client now treats as a soft success once it has seen the job running).
-  const importJobTerminalRetentionMs = 60 * 60 * 1000;
+  const importJobs = companyImportJobService(db);
+  // Optional detail cache only. Status, identity, admission and compact result
+  // references always come from PostgreSQL; losing this cache loses no job.
+  const importResultCache = new Map<string, { result: CompanyPortabilityImportResult; expiresAt: number }>();
+  function cachedImportResult(id: string) {
+    for (const [key, entry] of importResultCache) if (entry.expiresAt <= Date.now()) importResultCache.delete(key);
+    return importResultCache.get(id)?.result;
+  }
+
+  async function runImportJob(job: CompanyImportJob, operation: (checkCancellation: () => Promise<boolean>) => Promise<CompanyPortabilityImportResult>,
+    domainInvoked: () => boolean, sourceActor: Request["actor"]) {
+    try {
+      if (!(await importJobs.start(job, sourceActor))) return;
+      const result = await operation(() => importJobs.cancellationRequested(job));
+      const settled = await importJobs.succeed(job, result);
+      if (!settled) throw conflict("The original import operation is unavailable", { code: "import_outcome_unknown" });
+      importResultCache.set(job.id, { result, expiresAt: Date.now() + 60 * 60_000 });
+      return result;
+    } catch (error) {
+      // This native callback knows whether it invoked portability. An error
+      // after that boundary cannot establish that no domain write committed.
+      const unknownOutcome = error instanceof ImportCancellationError
+        ? error.effectsStarted
+        : domainInvoked() && !(error instanceof ImportPreflightError) && !(error instanceof ImportSourceChangedError);
+      if (unknownOutcome) {
+        const failure = error as { code?: unknown };
+        const details = error instanceof HttpError && typeof error.details === "object" && error.details !== null
+          ? error.details as { code?: unknown }
+          : null;
+        logger.error({
+          operationId: job.id,
+          failureClass: error instanceof Error ? error.name : typeof error,
+          ...(error instanceof HttpError ? { httpStatus: error.status } : {}),
+          ...(typeof details?.code === "string" && /^[a-z0-9_]{1,80}$/.test(details.code)
+            ? { failureCode: details.code } : {}),
+          ...(typeof failure.code === "string" && /^[A-Z0-9_]{1,32}$/.test(failure.code)
+            ? { systemCode: failure.code } : {}),
+        }, "company import domain operation requires reconciliation");
+      }
+      try { await importJobs.fail(job, unknownOutcome, error instanceof ImportCancellationError && !error.effectsStarted
+        ? "import_cancelled" : error instanceof ImportSourceChangedError ? "import_preview_source_changed" : "import_rejected"); }
+      catch { logger.warn({ operationId: job.id }, "import outcome could not be saved; durable active operation is retained"); }
+      if (unknownOutcome) throw conflict("The import outcome is unknown. Reconcile the existing import before trying again.",
+        { code: "import_outcome_unknown", operationId: job.id });
+      throw error;
+    }
+  }
+
+  function importJobRecord(job: CompanyImportJob, fullResult?: CompanyPortabilityImportResult): ImportJobRecord {
+    return { id: job.id, actorKind: job.id.startsWith("tenant-import-") ? "cloud_tenant" : "board",
+      status: job.status, createdAt: job.createdAt.toISOString(), updatedAt: job.updatedAt.toISOString(),
+      ...(job.completedAt ? { completedAt: job.completedAt.toISOString() } : {}),
+      ...(job.resultRef ? { result: job.resultRef } : {}),
+      ...(job.errorCode ? { error: { message: job.errorCode === "import_outcome_unknown"
+        ? "The import outcome is unknown. Reconcile the existing import before trying again."
+        : job.errorCode === "import_preview_source_changed"
+          ? "The package changed after preview. Preview it again before importing."
+          : "The import request was rejected before import work started." } } : {}),
+      ...(fullResult && !job.id.startsWith("tenant-import-") ? { fullResult } : {}),
+    };
+  }
 
   function parseBooleanQuery(value: unknown) {
     return value === true || value === "true" || value === "1";
@@ -361,17 +421,42 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
 
   async function assertSameCompanyCeoAgentOrBoard(req: Request, companyId: string, capability: string) {
     assertCompanyAccess(req, companyId);
-    if (req.actor.type === "board") {
-      return;
-    }
-    if (!req.actor.agentId) throw forbidden("Agent authentication required");
+    await assertCompanyCeoAgentOrBoard(db, companyId, req.actor, capability);
+  }
 
-    const actorAgent = await agents.getById(req.actor.agentId);
-    if (!actorAgent || actorAgent.companyId !== companyId) {
-      throw forbidden("Agent key cannot access another company");
+  async function assertCompanyDefaultsAdmin(req: Request, companyId: string) {
+    await assertSameCompanyCeoAgentOrBoard(req, companyId, "company defaults");
+    if (req.actor.type !== "board" || req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) return;
+    const membership = req.actor.memberships?.find((item) => item.companyId === companyId && item.status === "active");
+    if (membership?.membershipRole !== "owner" && membership?.membershipRole !== "admin") {
+      throw forbidden("Only a company owner or administrator can change company defaults");
     }
-    if (actorAgent.role !== "ceo") {
-      throw forbidden(`Only CEO agents can manage ${capability}`);
+  }
+
+  async function assertHumanCompanyDefaultsAdmin(req: Request, companyId: string) {
+    const localTrusted = req.actor.type === "board" && req.actor.source === "local_implicit";
+    if (req.actor.type !== "board" || (!localTrusted && (req.actor.source !== "session" || !req.actor.userId))) {
+      throw forbidden("A current Human Board owner or administrator is required to manage responsibility contacts.");
+    }
+    const expectedUser = req.get("X-Blentera-Expected-User");
+    const expectedSession = req.get("X-Blentera-Expected-Session");
+    const actualUser = req.actor.userId ?? (localTrusted ? "local-board" : undefined);
+    if (expectedUser !== undefined && expectedUser !== actualUser) {
+      throw conflict("Account changed; review this request again", { code: "ACCOUNT_CHANGED" });
+    }
+    if (expectedSession !== undefined && expectedSession !== req.actor.sessionId) {
+      throw conflict("Sign-in changed; review this request again", { code: "AUTHENTICATION_STATE_CHANGED" });
+    }
+    await assertCompanyDefaultsAdmin(req, companyId);
+  }
+
+  function assertSupportCaseExportAccess(req: Request, body: z.infer<typeof companyPortabilityExportSchema>) {
+    if (!body.include?.supportCases) return;
+    if (req.actor.type !== "board") {
+      throw forbidden("Only a Board account can export support cases");
+    }
+    if (typeof body.expectedUserId !== "string" || req.actor.userId !== body.expectedUserId) {
+      throw conflict("Account changed; reload the export page", { code: "ACCOUNT_CHANGED" });
     }
   }
 
@@ -528,9 +613,10 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const companyId = req.params.companyId as string;
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company exports");
     const body = companyPortabilityExportSchema.parse(req.body);
+    assertSupportCaseExportAccess(req, body);
     if (body.includeV7State && (typeof body.expectedUserId!=="string" || req.actor.type!=="board" || req.actor.userId!==body.expectedUserId)) throw conflict("Account changed; reload the export page",{code:"ACCOUNT_CHANGED"});
     const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);
-    const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, ...(body.includeV7State ? { actor: req.actor } : {}) });
+    const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, actor: req.actor });
     res.json(result);
   });
 
@@ -574,6 +660,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   // two prefixes cover every import route registered below.
   router.use(COMPANY_IMPORT_ROUTE_PATH, importFloor);
   router.use("/:companyId/imports", importFloor);
+  router.use("/:companyId/import/jobs", importFloor);
 
   router.post("/import/preview", async (req, res) => {
     assertBoard(req);
@@ -583,26 +670,92 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     res.json(preview);
   });
 
-  router.get("/import/jobs/:jobId", async (req, res) => {
-    // Board sessions and trusted Cloud tenants both poll here. A job is
-    // readable only by the actor key that created it; every other caller —
-    // like every unknown or expired id — gets the same 404, so job ids
-    // cannot be probed across users or tenants. Jobs live in memory only
-    // (see the async block below), so a restart also surfaces as this 404.
+  router.get("/:companyId/import/jobs", async (req, res) => {
     assertBoard(req);
-    cleanupTerminalImportJobs(importJobs, importJobTerminalRetentionMs);
-    const job = importJobs.get(req.params.jobId as string);
-    if (!job || job.actorKey !== importJobActorKey(req)) {
-      res.status(404).json({ error: "Import job not found" });
-      return;
+    const companyId = z.uuid().parse(req.params.companyId);
+    assertCompanyAccess(req, companyId);
+    const query = z.strictObject({
+      limit: z.coerce.number().int().min(1).max(50).default(20),
+      cursor: z.string().min(1).max(512).optional(),
+      expectedUserId: z.string().optional(),
+    }).parse(req.query);
+    if (req.actor.source === "local_implicit") {
+      if (query.expectedUserId !== undefined && query.expectedUserId !== "local-board")
+        throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    } else if (req.actor.userId) {
+      if (query.expectedUserId !== req.actor.userId)
+        throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    } else if (query.expectedUserId !== undefined) {
+      throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
     }
-    res.json(importJobResponse(job));
+    let before: { createdAt: string; id: string } | undefined;
+    if (query.cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(query.cursor, "base64url").toString("utf8"));
+        const cursor = z.strictObject({ createdAt: z.string().datetime({ precision: 6 }),
+          id: z.string().regex(/^(?:tenant-)?import-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i) }).parse(decoded);
+        before = { createdAt: cursor.createdAt, id: cursor.id };
+      } catch { throw badRequest("Invalid import history cursor"); }
+    }
+    const page = await importJobs.listForRequesterCompany({ actorKey: importJobActorKey(req), companyId,
+      requestedByUserId: req.actor.userId ?? null, limit: query.limit, before }, req.actor);
+    const jobs = page.jobs.map(job => {
+      const record = importJobRecord(job);
+      const unconfirmedNewCompany = job.companyId === null && job.scopeKey === "new_company" &&
+        (job.status === "running" || job.status === "cancelled" || job.status === "needs_reconciliation");
+      return { job: {
+        id: record.id, status: record.status, createdAt: record.createdAt, updatedAt: record.updatedAt,
+        ...(record.completedAt ? { completedAt: record.completedAt } : {}),
+        ...(unconfirmedNewCompany ? { target: { mode: "new_company" as const, result: "not_confirmed" as const } }
+          : record.result ? { result: record.result } : {}),
+        ...(!unconfirmedNewCompany && record.error ? { error: record.error } : {}),
+      }, operation: companyImportOperationReceipt(job) };
+    });
+    const nextCursor = page.nextCursor ? Buffer.from(JSON.stringify({ createdAt: page.nextCursor.createdAt,
+      id: page.nextCursor.id })).toString("base64url") : null;
+    res.json({ jobs, nextCursor });
+  });
+
+  router.get("/import/jobs/:jobId", async (req, res) => {
+    assertBoard(req);
+    const job = await importJobs.get(req.params.jobId as string, importJobActorKey(req));
+    if (!job) { res.status(404).json({ error: "Import job not found" }); return; }
+    let result = job.id.startsWith("tenant-import-") ? undefined : cachedImportResult(job.id);
+    let canReadCompany = !job.resultRef;
+    if (job.resultRef) {
+      const decision = await authorizationService(db).decide({ actor: req.actor, action: "company_scope:read",
+        resource: { type: "company", companyId: job.resultRef.companyId }, enforceResponsibleUserIntersection: true });
+      canReadCompany = decision.allowed;
+      if (!canReadCompany) result = undefined;
+    }
+    // Cached names/titles are still source-dependent output, not a grant from
+    // an old receipt. Withhold details when current native sources are lost.
+    if (result) {
+      for (const project of result.projects) if (project.id && (!z.uuid().safeParse(project.id).success || !(await canActorReadProjectPrivacy(db, req.actor,
+        { companyId: result.company.id, id: project.id })))) { result = undefined; break; }
+    }
+    if (result) {
+      const reader = routineService(db, { sourceActor: req.actor });
+      try { for (const routine of result.routines) if (!routine.id || !z.uuid().safeParse(routine.id).success || !(await reader.getDetail(routine.id))) { result = undefined; break; } }
+      catch { result = undefined; }
+    }
+    const record = importJobRecord(job, result);
+    if (!canReadCompany) delete record.result;
+    res.json({ ...importJobResponse(record), operation: companyImportOperationReceipt(job) });
+  });
+
+  router.post("/import/jobs/:jobId/cancel", async (req, res) => {
+    assertBoard(req);
+    const job = await importJobs.requestCancellation(req.params.jobId as string, importJobActorKey(req), req.actor);
+    if (!job) { res.status(404).json({ error: "Import job not found" }); return; }
+    const record = importJobRecord(job);
+    res.json({ ...importJobResponse(record), operation: companyImportOperationReceipt(job) });
   });
 
   /**
    * Post-resolution import execution, shared by the single-shot upload route
    * and the chunked transfer apply route: validate the resolved body, run the
-   * import synchronously or through the in-memory async job machinery, and
+   * import synchronously or through the durable async job owner, and
    * fire the optional completion hooks (the transfer path uses them to settle
    * its ledger run) on the import's real outcome in either mode.
    */
@@ -611,6 +764,8 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     res: Response,
     rawImportBody: unknown,
     hooks?: {
+      /** Original transfer owner reference, never request-supplied authority. */
+      transferId?: string;
       onSuccess?: (result: CompanyPortabilityImportResult) => Promise<void>;
       /** Fires when the request is refused before any import work starts (e.g. another import is already running for the actor). */
       onConflict?: () => Promise<void>;
@@ -619,13 +774,23 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   ) {
     const actor = getActorInfo(req);
     const boardUserId = req.actor.type === "board" ? req.actor.userId : null;
-    const operation = async () => {
+    let domainInvoked = false;
+    let admittedJob: CompanyImportJob | null = null;
+    const operation = async (checkCancellation: () => Promise<boolean>) => {
       try {
         const importBody = companyPortabilityImportSchema.parse(rawImportBody);
         assertImportTargetAccess(req, importBody.target);
         const activity = importedCompanyActivityContext(actor, importBody.include ?? null);
+        domainInvoked = true;
         const result = await portability.importBundle(importBody, boardUserId, {
+          actor: req.actor,
+          privateWorkAdmission: "closed",
           pauseAutomations: importBody.pauseAutomations === true,
+          checkCancellation,
+          onSourceReleaseReview: admittedJob ? async receipt => { await importJobs.recordSourceReleaseReview(admittedJob!, receipt, req.actor); } : undefined,
+          onSourceReleaseTargetBound: admittedJob ? async companyId => { await importJobs.bindSourceReleaseTarget(admittedJob!, companyId, req.actor); } : undefined,
+          onAcceptedPlan: admittedJob ? async plan => { await importJobs.acceptPlan(admittedJob!, plan, req.actor); } : undefined,
+          onEffectCheckpoint: admittedJob ? async (checkpoint, tx) => { await importJobs.checkpointEffect(admittedJob!, checkpoint, tx); } : undefined,
         });
         // The import is committed. Settlement (hooks) runs before the
         // best-effort audit entry so a logging failure cannot make a
@@ -642,60 +807,53 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
         }
         return result;
       } catch (error) {
-        await hooks?.onFailure?.(errorMessage(error));
+        // Only the native pre-effect proof can turn an invoked owner into a
+        // known rejection. Ordinary throws remain an unknown outcome.
+        if (error instanceof ImportPreflightError || (error instanceof ImportCancellationError && !error.effectsStarted)) domainInvoked = false;
+        if (domainInvoked) await hooks?.onFailure?.(errorMessage(error));
+        else await hooks?.onConflict?.();
         throw error;
       }
     };
-    if (wantsAsyncImport(req)) {
-      // Async job path. Two kinds of callers opt in:
-      //  - trusted Cloud tenants (original behavior, kept byte-identical),
-      //    keyed by their tenant identity headers;
-      //  - any other board session, keyed by its user id, so long imports
-      //    survive proxies cutting the connection while the server finishes.
-      // Jobs are held in memory only and are lost on restart — existing
-      // semantics; the status route above 404s unknown ids, so a client
-      // that can no longer see its job treats it as gone and resubmits.
-      cleanupTerminalImportJobs(importJobs, importJobTerminalRetentionMs);
-      const isCloudTenant = req.actor.source === "cloud_tenant";
+    {
       const actorKey = importJobActorKey(req);
+      const rawTarget = typeof rawImportBody === "object" && rawImportBody !== null
+        ? (rawImportBody as { target?: { mode?: unknown; companyId?: unknown } }).target : undefined;
+      const companyId = rawTarget?.mode === "existing_company" && typeof rawTarget.companyId === "string"
+        && z.uuid().safeParse(rawTarget.companyId).success ? rawTarget.companyId : null;
+      if (companyId) assertImportTargetAccess(req, { mode: "existing_company", companyId });
       const signature = importRequestSignature(rawImportBody);
-      if (!isCloudTenant) {
-        // One live import per board actor: while a job for this key is still
-        // running, a resubmit of the *same* import gets 409 carrying the
-        // running job's id and status URL so the client adopts it instead of
-        // importing the same bundle twice. A *different* import (another tab,
-        // another target) gets a 409 without a job to adopt, so the client
-        // surfaces it as an error rather than switching to the wrong result.
-        // Terminal jobs never block a resubmit.
-        const running = findRunningImportJob(importJobs, actorKey);
-        if (running) {
-          // No import work starts on this path, so a caller holding a claim
-          // (the transfer apply) must be told to release it — otherwise the
-          // refused transfer would sit in "applying" until a restart.
-          await hooks?.onConflict?.();
-          if (running.signature === signature) {
-            res.status(409).json(importJobConflictResponse(running));
-          } else {
-            res.status(409).json(importAlreadyRunningResponse());
-          }
-          return;
-        }
+      let admitted: Awaited<ReturnType<typeof importJobs.admit>>;
+      try {
+        admitted = await importJobs.admit({ actorKey, userId: boardUserId ?? null,
+          actorKind: req.actor.source === "cloud_tenant" ? "cloud_tenant" : "board",
+          inputHash: signature, scopeKey: companyId ?? "new_company", companyId,
+          idempotencyKey: req.header("idempotency-key") ?? undefined, transferId: hooks?.transferId ?? null }, req.actor);
+      } catch (error) { await hooks?.onConflict?.(); throw error; }
+      admittedJob = admitted.job;
+      const record = importJobRecord(admitted.job);
+      if (admitted.replay) await hooks?.onConflict?.();
+      if (admitted.replay && admitted.job.status === "running") {
+        res.status(409).json(importJobConflictResponse(record));
+        return;
       }
-      const job = createImportJob(
-        actorKey,
-        isCloudTenant ? "cloud_tenant" : "board",
-        signature,
-      );
-      importJobs.set(job.id, job);
-      res.status(202).json(importJobAcceptedResponse(job));
-      setImmediate(() => {
-        void runImportJob(job, operation);
+      if (!wantsAsyncImport(req)) {
+        if (admitted.replay) throw conflict("This import already has a recorded outcome. Read its existing operation before starting another.",
+          { code: admitted.job.status === "succeeded" ? "import_already_completed" : "import_already_recorded",
+            operationId: admitted.job.id, statusUrl: importJobStatusUrl(record) });
+        const result = await runImportJob(admitted.job, operation, () => domainInvoked, req.actor);
+        if (!result) throw conflict("The original import attempt is no longer available for dispatch", { code: "import_outcome_unknown", operationId: admitted.job.id });
+        res.json(result);
+        return;
+      }
+      res.status(202).json(importJobAcceptedResponse(record));
+      if (!admitted.replay) setImmediate(() => {
+        void runImportJob(admitted.job, operation, () => domainInvoked, req.actor)
+          .catch(() => logger.warn({ operationId: admitted.job.id }, "import worker could not start; durable admission is retained"));
       });
       return;
     }
 
-    const result = await operation();
-    res.json(result);
   }
 
   router.post(COMPANY_IMPORT_ROUTE_PATH, async (req, res) => {
@@ -800,6 +958,11 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       idempotencyKey,
       containerRef: { kind: "chunked_zip_upload" },
     });
+    if (run.status === "needs_reconciliation") {
+      throw conflict("The previous import outcome is unknown. Reconcile this transfer before importing the package again.",
+        { code: "import_outcome_unknown", transferId: run.id });
+    }
+    if (run.status === "applying") throw conflict("Import transfer apply is in progress; retry after it settles");
     if (alreadyCompleted) {
       // Tell the caller WHERE the prior apply landed. companyId on the run is
       // written best-effort after apply and the company may have been deleted
@@ -852,6 +1015,9 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       if (run.status === "completed") {
         throw conflict("Import transfer has already been applied");
       }
+      if (run.status === "needs_reconciliation") throw conflict(
+        "The previous import outcome is unknown. Reconcile this transfer before changing its parts or applying it again.",
+        { code: "import_outcome_unknown", transferId: run.id });
       if (run.status === "applying") {
         // An apply is assembling the spool right now; accepting writes would
         // let a retried upload race the files being read. Parts are frozen
@@ -951,6 +1117,9 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     if (run.status === "completed") {
       throw conflict("Import transfer has already been applied");
     }
+    if (run.status === "needs_reconciliation") throw conflict(
+      "The previous import outcome is unknown. Reconcile this transfer before applying it again.",
+      { code: "import_outcome_unknown", transferId: run.id });
     if (run.status === "applying") {
       // An apply holds the claim right now: its assembly is reading the spool
       // and its success deletes it, so neither a preview nor a second apply
@@ -1047,6 +1216,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const { run, rawBody: rawImportBody } = resolved;
     try {
       await executeImportRequest(req, res, rawImportBody, {
+        transferId: run.id,
         onSuccess: async (result) => {
           // Settle the run the moment the import is committed: every later
           // step is best-effort, because any error escaping this hook reads
@@ -1054,7 +1224,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
           // claim on an already-committed import. complete() gets one retry;
           // if both attempts fail the run is left "applying" (unclaimable, so
           // no duplicate import) and logged for the operator; a restart's
-          // stranded-run recovery then makes it inspectable as failed.
+          // stranded-run recovery preserves it as needs_reconciliation.
           try {
             await companyTransferRunService.complete(db, run.id);
           } catch {
@@ -1090,13 +1260,13 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
             );
           }
         },
-        onFailure: async (message) => {
-          // Parts remain spooled: the failure is in the import itself, not
-          // the upload, so a retry of apply can reuse the verified parts.
-          // Guarded release, not a blind fail: this hook also fires when an
-          // error escapes onSuccess above, i.e. possibly after complete(),
-          // and a completed run must never be flipped back to claimable.
-          await companyTransferRunService.releaseApplyClaim(db, run.id, message);
+        onFailure: async () => {
+          // importBundle owns multiple domain writes. A thrown error cannot
+          // establish that none committed; preserve the claim for reconciliation.
+          try { await companyTransferRunService.markApplyOutcomeUnknown(db, run.id); }
+          catch { logger.warn({ transferId: run.id }, "import outcome remains unconfirmed; retained apply claim is not released"); }
+          throw conflict("The import outcome is unknown. Reconcile this transfer before importing the package again.",
+            { code: "import_outcome_unknown", transferId: run.id });
         },
         onConflict: async () => {
           // The request was refused before any import work (another import is
@@ -1110,12 +1280,10 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
         },
       });
     } catch (error) {
-      // Whatever escapes here (bad meta, an import error rethrown after
-      // onFailure) must not leave the run parked in "applying": release the
-      // claim, which keeps the run retryable. The release is guarded on
-      // "applying", so a run that already settled — failed by onFailure, or
-      // completed before a late error — keeps its terminal state.
-      await companyTransferRunService.releaseApplyClaim(db, run.id, errorMessage(error));
+      // Dispatch or settlement may have written even if the unknown-state
+      // UPDATE failed. Never turn that uncertainty back into a retryable run.
+      try { await companyTransferRunService.markApplyOutcomeUnknown(db, run.id); }
+      catch { logger.warn({ transferId: run.id }, "import outcome remains unconfirmed; retained apply claim is not released"); }
       throw error;
     }
   });
@@ -1124,9 +1292,10 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const companyId = req.params.companyId as string;
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company exports");
     const body = companyPortabilityExportSchema.parse(req.body);
+    assertSupportCaseExportAccess(req, body);
     if (body.includeV7State && (typeof body.expectedUserId!=="string" || req.actor.type!=="board" || req.actor.userId!==body.expectedUserId)) throw conflict("Account changed; reload the export page",{code:"ACCOUNT_CHANGED"});
     const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);
-    const preview = await portability.previewExport(companyId, body, { allowExternalInstructions });
+    const preview = await portability.previewExport(companyId, body, { allowExternalInstructions, actor: req.actor });
     res.json(preview);
   });
 
@@ -1134,9 +1303,10 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const companyId = req.params.companyId as string;
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company exports");
     const body = companyPortabilityExportSchema.parse(req.body);
+    assertSupportCaseExportAccess(req, body);
     if (body.includeV7State && (typeof body.expectedUserId!=="string" || req.actor.type!=="board" || req.actor.userId!==body.expectedUserId)) throw conflict("Account changed; reload the export page",{code:"ACCOUNT_CHANGED"});
     const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);
-    const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, ...(body.includeV7State ? { actor: req.actor } : {}) });
+    const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, actor: req.actor });
     res.json(result);
   });
 
@@ -1171,6 +1341,8 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const result = await portability.importBundle(body, req.actor.type === "board" ? req.actor.userId : null, {
       mode: "agent_safe",
       sourceCompanyId: companyId,
+      actor: req.actor,
+      privateWorkAdmission: "closed",
       pauseAutomations: body.pauseAutomations === true,
     });
     await logActivity(db, {
@@ -1246,6 +1418,10 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   router.patch("/:companyId", async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company settings");
+    if (req.actor.type === "board" && req.body && typeof req.body === "object" &&
+        (Object.hasOwn(req.body, "locale") || Object.hasOwn(req.body, "timezone"))) {
+      await assertCompanyDefaultsAdmin(req, companyId);
+    }
 
     const actor = getActorInfo(req);
     let body: Record<string, unknown>;
@@ -1261,6 +1437,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       res.status(404).json({ error: "Company not found" });
       return;
     }
+
 
     if (req.actor.type !== "agent") {
       if (body.feedbackDataSharingEnabled === true && !existingCompany.feedbackDataSharingEnabled) {
@@ -1318,6 +1495,35 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       });
     }
     res.json(company);
+  });
+
+  router.get("/:companyId/responsibility-contacts", async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertHumanCompanyDefaultsAdmin(req, companyId);
+    const [contacts] = await db.select({ securityContactUserId: companies.securityContactUserId,
+      supportIncidentContactUserId: companies.supportIncidentContactUserId }).from(companies)
+      .where(eq(companies.id, companyId)).limit(1);
+    if (!contacts) throw notFound("Company not found");
+    const eligibleUsers = await responsibilityContacts.listEligibleUsers(companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json({ ...contacts, eligibleUsers });
+  });
+
+  router.patch("/:companyId/responsibility-contacts", validate(updateCompanyResponsibilityContactsSchema), async (req, res) => {
+    const companyId = req.params.companyId as string;
+    await assertHumanCompanyDefaultsAdmin(req, companyId);
+    const contactIds = [req.body.securityContactUserId, req.body.supportIncidentContactUserId]
+      .filter((value): value is string => typeof value === "string");
+    await responsibilityContacts.assertEligible(companyId, contactIds);
+    const [updated] = await db.update(companies).set({ ...req.body, updatedAt: new Date() })
+      .where(eq(companies.id, companyId)).returning({ id: companies.id });
+    if (!updated) throw notFound("Company not found");
+    const actor = getActorInfo(req);
+    await logActivity(db, { companyId, actorType: actor.actorType, actorId: actor.actorId,
+      action: "company.responsibility_contacts_updated", entityType: "company", entityId: companyId,
+      details: { securityContactSet: Boolean(req.body.securityContactUserId),
+        supportIncidentContactSet: Boolean(req.body.supportIncidentContactUserId) } });
+    res.json({ ok: true });
   });
 
   router.patch("/:companyId/branding", async (req, res) => {
@@ -1380,24 +1586,11 @@ type CompanyImportResult = {
 
 type ImportJobActorKind = "cloud_tenant" | "board";
 
-/**
- * In-memory only: import jobs do not survive a server restart, and terminal
- * jobs are dropped after `importJobTerminalRetentionMs`. Both cases surface
- * to pollers as the status route's 404 for an unknown id.
- */
+/** Existing wire projection of the native durable import operation. */
 interface ImportJobRecord {
   id: string;
-  /** Identity that created the job; the only key allowed to read it. */
-  actorKey: string;
   actorKind: ImportJobActorKind;
-  /**
-   * Fingerprint of the import request body. A resubmit is adopted (409 →
-   * watch the running job) only when it carries the same signature, so a
-   * *different* import from another tab is rejected instead of silently
-   * adopting an unrelated job (and its target). Board jobs only.
-   */
-  signature?: string;
-  status: "running" | "succeeded" | "failed";
+  status: "running" | "cancelled" | "succeeded" | "failed" | "needs_reconciliation";
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
@@ -1409,9 +1602,8 @@ interface ImportJobRecord {
     companyAction: unknown;
   };
   /**
-   * Full import result, retained for board-created jobs only so the import
-   * page can run the same success path as the synchronous response. Cloud
-   * tenant job responses keep their original summary-only shape.
+   * Optional short-lived detail cache. The durable compact receipt remains
+   * authoritative if the process restarts; cloud jobs use the compact receipt.
    */
   fullResult?: CompanyPortabilityImportResult;
 }
@@ -1445,69 +1637,8 @@ function importJobActorKey(req: Request) {
   return `board:${req.actor.userId ?? "local-board"}`;
 }
 
-function createImportJob(
-  actorKey: string,
-  actorKind: ImportJobActorKind,
-  signature?: string,
-): ImportJobRecord {
-  const now = new Date().toISOString();
-  return {
-    // Cloud tenant job ids keep their original prefix; board jobs get their own.
-    id: `${actorKind === "cloud_tenant" ? "tenant-import" : "import"}-${randomUUID()}`,
-    actorKey,
-    actorKind,
-    signature,
-    status: "running",
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-/**
- * Stable fingerprint of an import request body. The same client resubmitting
- * the same import produces a byte-identical body (no nonce/timestamp), so its
- * signature matches; a different import differs. Used to tell a duplicate
- * submit apart from a concurrent, unrelated import.
- */
 function importRequestSignature(body: unknown): string {
-  return createHash("sha256").update(JSON.stringify(body) ?? "").digest("hex");
-}
-
-function findRunningImportJob(importJobs: Map<string, ImportJobRecord>, actorKey: string) {
-  for (const job of importJobs.values()) {
-    if (job.status === "running" && job.actorKey === actorKey) {
-      return job;
-    }
-  }
-  return undefined;
-}
-
-async function runImportJob(
-  job: ImportJobRecord,
-  operation: () => Promise<CompanyPortabilityImportResult>,
-) {
-  try {
-    const result = await operation();
-    const now = new Date().toISOString();
-    job.status = "succeeded";
-    job.updatedAt = now;
-    job.completedAt = now;
-    job.result = {
-      companyId: result.company.id,
-      agentCount: result.agents.length,
-      warningCount: result.warnings.length,
-      companyAction: result.company.action,
-    };
-    if (job.actorKind === "board") {
-      job.fullResult = result;
-    }
-  } catch (error) {
-    const now = new Date().toISOString();
-    job.status = "failed";
-    job.updatedAt = now;
-    job.completedAt = now;
-    job.error = { message: errorMessage(error) };
-  }
+  return createHash("sha256").update(canonicalJson(body) ?? "").digest("hex");
 }
 
 function importedCompanyActivityContext(
@@ -1586,7 +1717,7 @@ function importJobConflictResponse(job: ImportJobRecord) {
 }
 
 function importJobResponse(job: ImportJobRecord) {
-  const isTerminal = job.status === "succeeded" || job.status === "failed";
+  const isTerminal = job.status !== "running";
   const response: Record<string, unknown> = {
     job: {
       id: job.id,
@@ -1608,16 +1739,6 @@ function importJobResponse(job: ImportJobRecord) {
     response.reason = job.error.message;
   }
   return response;
-}
-
-function cleanupTerminalImportJobs(importJobs: Map<string, ImportJobRecord>, terminalRetentionMs: number) {
-  const now = Date.now();
-  for (const [jobId, job] of importJobs) {
-    if (job.status === "running" || !job.completedAt) continue;
-    if (now - Date.parse(job.completedAt) > terminalRetentionMs) {
-      importJobs.delete(jobId);
-    }
-  }
 }
 
 function errorMessage(error: unknown) {

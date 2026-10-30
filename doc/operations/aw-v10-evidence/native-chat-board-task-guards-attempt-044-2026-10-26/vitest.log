@@ -1,0 +1,48 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[13:14:42] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"6c771f5e-b7f5-439b-b191-8a9cbb54db41"}[39m
+    error: {
+      "type": "Error"
+    }
+[13:14:43] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"8e128f7f-a10b-4ad0-8f15-b19512c70a09"}[39m
+    error: {
+      "type": "Error"
+    }
+[13:14:43] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"282166e3-2d6b-453f-b632-995f6ba13f1a"}[39m
+    error: {
+      "type": "Error"
+    }
+[13:14:43] [33mWARN[39m: [36mSlack Board message wakeup will retry[39m [90m{"actionId":"871f378f-d8b3-484e-bce8-01c21f5d4c01"}[39m
+    error: {
+      "type": "Error"
+    }
+ ❯ src/__tests__/chat-channels.integration.test.ts (1051 tests | 4 failed | 1047 skipped) 6022ms
+     × does not bypass cancelled task guards from the Slack Board composer or its outbox 746ms
+     × does not bypass paused task guards from the Slack Board composer or its outbox 561ms
+     × does not bypass blocked task guards from the Slack Board composer or its outbox 398ms
+     × does not bypass closed-workspace task guards from the Slack Board composer or its outbox 365ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/chat-channels.integration.test.ts > chat channel control-plane integration > does not bypass cancelled task guards from the Slack Board composer or its outbox
+ FAIL  src/__tests__/chat-channels.integration.test.ts > chat channel control-plane integration > does not bypass paused task guards from the Slack Board composer or its outbox
+ FAIL  src/__tests__/chat-channels.integration.test.ts > chat channel control-plane integration > does not bypass blocked task guards from the Slack Board composer or its outbox
+ FAIL  src/__tests__/chat-channels.integration.test.ts > chat channel control-plane integration > does not bypass closed-workspace task guards from the Slack Board composer or its outbox
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ src/__tests__/chat-channels.integration.test.ts:4297:20
+    4295|     wakeup.mockRejectedValueOnce(new Error("scheduler unavailable"));
+    4296|     await service.publishBoardMessage(endpoint.id, conversation.id, "Q…
+    4297|     expect(wakeup).toHaveBeenCalledTimes(1);
+       |                    ^
+    4298|     expect(runtime.endpoints.get(endpoint.id)!.posts).toEqual([]);
+    4299|     if (guard === "cancelled") await db.update(issues).set({ status: "…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 1047 skipped (1051)
+   Start at  13:14:16
+   Duration  27.84s (transform 15.15s, setup 118ms, import 21.46s, tests 6.02s, environment 0ms)
+

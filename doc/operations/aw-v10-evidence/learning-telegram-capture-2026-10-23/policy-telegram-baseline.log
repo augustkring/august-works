@@ -1,0 +1,59 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/chat-channels.integration.test.ts (1049 tests | 1049 skipped) 30488ms
+ ❯ |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts (42 tests | 1 failed | 41 skipped) 11843ms
+     × preserves a bound Project capture for an unchanged roadmap policy and invalidates it when the policy changes 2678ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/chat-channels.integration.test.ts > chat channel control-plane integration
+Error: Hook timed out in 30000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+ ❯ src/__tests__/chat-channels.integration.test.ts:1024:3
+    1022|   );
+    1023|
+    1024|   beforeAll(async () => {
+       |   ^
+    1025|     mkdirSync(secretsTmpDir, { recursive: true });
+    1026|     process.env.PAPERCLIP_SECRETS_MASTER_KEY_FILE = path.join(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > preserves a bound Project capture for an unchanged roadmap policy and invalidates it when the policy changes
+Error: Failed query: update "projects" set "roadmap_policy" = $1, "updated_at" = $2 where "projects"."id" = $3
+params: {"allowAgentForecast":false,"allowLowRiskAgentScheduleUpdates":false,"scheduleToleranceDays":0,"fieldOwnership":{"title":"internal","status":"internal","assignee":"internal","plannedDates":"internal","forecast":"internal"},"externalSourceRef":null},2026-10-23T22:58:19.683Z,f1527c7e-1525-4425-a2c4-e1a4442f5f5a
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/learning/learning-service.ts:309:13
+    307|             const [project] = await tx.select().from(projects).where(a…
+    308|             if (!project || project.updatedAt.toISOString() !== row.pr…
+    309|             await tx.update(projects).set({ roadmapPolicy: roadmapPoli…
+       |             ^
+    310|           } else {
+    311|             if (row.targetId !== companyId || parent.scopeType !== "co…
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV7ActivityTransaction src/services/v7-mutations.ts:7:17
+ ❯ src/__tests__/v7-learning.integration.test.ts:1188:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "projects" set "roadmap_policy" = $1, "updated_at" = $2 where "projects"."id" = $3', parameters: [ '{"allowAgentForecast":false,"allowLowRiskAgentScheduleUpdates":false,"scheduleToleranceDays":0,"fieldOwnership":{"title":"internal","status":"internal","assignee":"internal","plannedDates":"internal","forecast":"internal"},"externalSourceRef":null}', '2026-10-23T22:58:19.683Z', 'f1527c7e-1525-4425-a2c4-e1a4442f5f5a' ], args: [ '{"allowAgentForecast":false,"allowLowRiskAgentScheduleUpdates":false,"scheduleToleranceDays":0,"fieldOwnership":{"title":"internal","status":"internal","assignee":"internal","plannedDates":"internal","forecast":"internal"},"externalSourceRef":null}', '2026-10-23T22:58:19.683Z', 'f1527c7e-1525-4425-a2c4-e1a4442f5f5a' ], types: [ 3802, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  1 failed | 1090 skipped (1091)
+   Start at  22:56:14
+   Duration  124.99s (transform 39.79s, setup 286ms, import 80.90s, tests 42.33s, environment 0ms)
+

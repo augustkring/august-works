@@ -1,0 +1,31 @@
+✔ CLI fixtures cannot earn complete physical capabilities or forced-stop probes (27.793254ms)
+✔ policy-bound process probe executes the pinned OpenShell command and hashes only its assertion (9.814993ms)
+✔ observed metadata cannot substitute for image or complete control enforcement (9.401098ms)
+✔ prepare returns only an observed exact stopped sandbox image and rejects drift (30.514884ms)
+✔ Stop checks immutable scope, targets one sandbox and persists a restart receipt (8.362299ms)
+✔ foreign labels and host epochs cannot run Stop (10.41551ms)
+✔ binary change and public CLI state close the command without leaking subprocess errors (8.128697ms)
+✔ provider revocation uses exact private names and unreachable fencing rechecks ownership (6.576452ms)
+✔ reused names and identical labels cannot replace a pinned instance after restart (10.609323ms)
+✔ absent gateway identity cannot be learned from labels (3.393114ms)
+✔ legacy unpinned observations stay fenced during journal migration (3.651375ms)
+✔ apply and start use pinned OpenShell policy APIs plus exact Docker identity observations (14.08399ms)
+✔ expired source policy deadlines fail before any host or CLI observation (4.134283ms)
+✔ a persisted unknown command intent is never replayed after host restart (4.528008ms)
+✔ static policy changes require sandbox recreation before any policy mutation (8.480237ms)
+✔ foreign Docker labels block policy mutation before any effect (8.767181ms)
+✔ an image repository digest mismatch blocks policy mutation before any effect (9.046842ms)
+✔ a changed OpenShell policy revision blocks workload start (19.056269ms)
+✔ physical inspection never promotes host observations to qualification (4.99947ms)
+✔ sandbox exec streams through pinned CLI argv without shell and journals no output or replay (26.878684ms)
+✔ sandbox broker capability enters through an expiring native provider, never CLI argv or workload env (53.155623ms)
+✔ managed model capability uses its exact Messages route profile and stays out of workload env and argv (26.041883ms)
+✔ sandbox exec preflight cancellation and deadline expiry never spawn the CLI (1119.589864ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1533.248324

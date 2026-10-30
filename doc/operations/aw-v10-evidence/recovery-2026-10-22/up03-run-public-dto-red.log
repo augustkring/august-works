@@ -1,0 +1,122 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[08:20:59] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[08:21:00] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[08:21:02] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+ ❯ |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts (86 tests | 3 failed | 83 skipped) 38830ms
+     × omits internal Run proofs from wakeup without changing user result metadata 30150ms
+     × omits internal Run proofs from heartbeat/invoke without changing user result metadata 6527ms
+     × omits internal Run proofs from cancel without changing user result metadata 2148ms
+[08:21:30] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+ ❯ |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts (5 tests | 1 failed | 4 skipped) 13335ms
+     × keeps internal Run input proofs out of the actual HTTP detail and preserves user result keys 821ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts > agent live run routes > omits internal Run proofs from wakeup without changing user result metadata
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/agent-live-run-routes.test.ts:1034:52
+    1032|   });
+    1033|
+    1034|   it.each(["wakeup", "heartbeat/invoke", "cancel"])("omits internal Ru…
+       |                                                    ^
+    1035|     const resultJson = { runnerProfileJson: "User result field", neste…
+    1036|     const run = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", companyI…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts > agent live run routes > omits internal Run proofs from heartbeat/invoke without changing user result metadata
+ FAIL  |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts > agent live run routes > omits internal Run proofs from cancel without changing user result metadata
+ FAIL  |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts > agent live run routes > omits internal Run proofs from cancel without changing user result metadata
+AssertionError: expected { …(7) } to not have property "runnerProfileJson"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "internalCanary": "Server-only input profile",
+}
+
+ ❯ src/__tests__/agent-live-run-routes.test.ts:1046:36
+    1044|     expect(response.body.id).toBe(run.id);
+    1045|     expect(response.body.resultJson).toEqual(resultJson);
+    1046|     expect.soft(response.body).not.toHaveProperty("runnerProfileJson");
+       |                                    ^
+    1047|     expect.soft(response.body).not.toHaveProperty("nativeInputSourcePr…
+    1048|     expect(run.runnerProfileJson.internalCanary).toBe("Server-only inp…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts > agent live run routes > omits internal Run proofs from heartbeat/invoke without changing user result metadata
+ FAIL  |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts > agent live run routes > omits internal Run proofs from cancel without changing user result metadata
+ FAIL  |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts > agent live run routes > omits internal Run proofs from cancel without changing user result metadata
+AssertionError: expected { …(7) } to not have property "nativeInputSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ src/__tests__/agent-live-run-routes.test.ts:1047:36
+    1045|     expect(response.body.resultJson).toEqual(resultJson);
+    1046|     expect.soft(response.body).not.toHaveProperty("runnerProfileJson");
+    1047|     expect.soft(response.body).not.toHaveProperty("nativeInputSourcePr…
+       |                                    ^
+    1048|     expect(run.runnerProfileJson.internalCanary).toBe("Server-only inp…
+    1049|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > keeps internal Run input proofs out of the actual HTTP detail and preserves user result keys
+AssertionError: expected { …(84) } to not have property "runnerProfileJson"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "internalCanary": "Server-only input profile",
+}
+
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:129:34
+    127|     expect(detail.body.id).toBe(run!.id);
+    128|     expect(detail.body.resultJson).toEqual(resultJson);
+    129|     expect.soft(detail.body).not.toHaveProperty("runnerProfileJson");
+       |                                  ^
+    130|     expect.soft(detail.body).not.toHaveProperty("nativeInputSourceProt…
+    131|     const [persisted] = await db.select().from(heartbeatRuns).where(eq…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > keeps internal Run input proofs out of the actual HTTP detail and preserves user result keys
+AssertionError: expected { …(84) } to not have property "nativeInputSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:130:34
+    128|     expect(detail.body.resultJson).toEqual(resultJson);
+    129|     expect.soft(detail.body).not.toHaveProperty("runnerProfileJson");
+    130|     expect.soft(detail.body).not.toHaveProperty("nativeInputSourceProt…
+       |                                  ^
+    131|     const [persisted] = await db.select().from(heartbeatRuns).where(eq…
+    132|     expect(persisted!.runnerProfileJson).toEqual(runnerProfileJson);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  4 failed | 87 skipped (91)
+   Start at  08:20:20
+   Duration  70.87s (transform 30.17s, setup 397ms, import 17.52s, tests 52.16s, environment 0ms)
+

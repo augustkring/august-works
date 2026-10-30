@@ -1,0 +1,9 @@
+{
+  "kind": "feature-lifecycle-posttest-source-check",
+  "recordedAt": "2026-10-28T08:36:00Z",
+  "pretestPins": "pretest-source-pins.json",
+  "pretestPinsSha256": "e1638f43d44852a2c762ba4fbc47022f37df1a75e1cf3a6166dc96d78b61fbe1",
+  "gitHead": "e8dcdf53e6d72ddf1859daf80aee7f23386cefa5",
+  "sourceChangedDuringVerification": [],
+  "result": "match"
+}

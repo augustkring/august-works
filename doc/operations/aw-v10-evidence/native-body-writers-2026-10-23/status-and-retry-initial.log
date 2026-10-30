@@ -1,0 +1,95 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[22:01:24] [33mWARN[39m: [36mFailed to withdraw obsolete native policy review; will retry on the next pass[39m [90m{"interactionId":"e08ada2a-a977-4c45-98d3-4887f823c704","issueId":"b4f90d75-672c-49d2-a818-2acb8eed2902"}[39m
+    err: {
+      "type": "Error",
+      "message": "injected cleanup failure",
+      "stack":
+          Error: injected cleanup failure
+              at /workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2271:75
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[22:01:25] [33mWARN[39m: [36mObsolete native policy review cleanup committed; live activity publication failed, history is preserved[39m [90m{"interactionId":"7881b8a9-a325-4d56-9a03-e3c368cc9bd7","issueId":"47654d01-baa5-44f0-8e79-34e6f2e72219"}[39m
+    err: {
+      "type": "Error",
+      "message": "injected live publication failure",
+      "stack":
+          Error: injected live publication failure
+              at /workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2293:13
+              at publishActivity (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)
+              at dismissObsoleteNativePolicyReviews (/workspace/blentera-v10/server/src/services/native-runtime/obsolete-policy-reviews.ts:143:9)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2296:7
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[22:01:25] [33mWARN[39m: [36mObsolete native policy review lookup failed; continuing native reconciliation[39m 
+    err: {
+      "type": "Error",
+      "message": "injected cleanup lookup failure",
+      "stack":
+          Error: injected cleanup lookup failure
+              at PostgresJsDatabase.<anonymous> (/workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2312:13)
+              at PostgresJsDatabase.select (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)
+              at dismissObsoleteNativePolicyReviews (/workspace/blentera-v10/server/src/services/native-runtime/obsolete-policy-reviews.ts:17:31)
+              at reconcileNativeFinalizations (/workspace/blentera-v10/server/src/services/native-runtime/native-finalization-reconciler.ts:549:9)
+              at /workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2315:32
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+ ❯ |@paperclipai/server| src/__tests__/native-status-arbiter-corpus.test.ts (31 tests | 2 failed) 32427ms
+     × executes all 53 fixtures in their production consumers and joins all 70 matrix rows 7612ms
+     × fails independently when any asserted field category is mutated 3099ms
+[22:02:01] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"7cd4ca6d-d837-486e-948c-276ce5a8881f","agentId":"44d35024-bb3a-48e6-a8c4-273d04485039","runId":"20fc65a6-5090-491d-9451-62d4a432612b"}[39m
+[22:02:01] [33mWARN[39m: [36mrun failure report has no task id, skipping Sentry report[39m [90m{"runId":"20fc65a6-5090-491d-9451-62d4a432612b"}[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-status-arbiter-corpus.test.ts > P6-31 Section 18.13 executable status-authority corpus > executes all 53 fixtures in their production consumers and joins all 70 matrix rows
+Error: Current organization access is required
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ pinIssueMutationHuman src/services/issues.ts:2103:20
+ ❯ runUpdate src/services/issues.ts:11389:13
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.update src/services/issues.ts:11747:22
+ ❯ executeFixture src/__tests__/native-status-arbiter-corpus.test.ts:1459:23
+ ❯ src/__tests__/native-status-arbiter-corpus.test.ts:1844:73
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-status-arbiter-corpus.test.ts > P6-31 Section 18.13 executable status-authority corpus > fails independently when any asserted field category is mutated
+Error: Current organization access is required
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ pinIssueMutationHuman src/services/issues.ts:2103:20
+ ❯ runUpdate src/services/issues.ts:11389:13
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.update src/services/issues.ts:11747:22
+ ❯ executeFixture src/__tests__/native-status-arbiter-corpus.test.ts:1459:23
+ ❯ src/__tests__/native-status-arbiter-corpus.test.ts:1890:73
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 80 passed (82)
+   Start at  22:00:19
+   Duration  123.09s (transform 26.84s, setup 365ms, import 47.23s, tests 74.69s, environment 1ms)
+

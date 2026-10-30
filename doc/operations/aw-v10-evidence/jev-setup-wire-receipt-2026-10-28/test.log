@@ -1,0 +1,16 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > uses the real Decisions adapter over a mock wire, settles its original company-purpose reservation, and never resends an idempotent request 250ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > rejects missing consent, caller-supplied principal, unsaved account, and mismatched profile before any provider request 69ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > retains an unknown charge and stable idempotency receipt without a second dispatch 122ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > records known usage and cost for an invalid answer without returning provider content 99ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > holds a reported provider charge above the immutable reservation quote 109ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > aborts a single in-flight request when the current company manager is revoked 1083ms
+ ✓ src/__tests__/jev-decisions-routes.integration.test.ts > Jev setup-test HTTP boundary > aborts at the profile expiry instead of allowing a late setup result 4056ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  11:46:15
+   Duration  24.16s (transform 9.40s, setup 90ms, import 13.91s, tests 9.98s, environment 0ms)
+

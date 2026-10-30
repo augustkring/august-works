@@ -1,0 +1,47 @@
+2026-10-22T20:25:34Z
+497ae64319dc76d53e33a4c45e79e689e0ab6a60
+5344593212b9890fec7e41607bacb130a1bda1813c8ba381d1aeff8d158eab24  server/src/services/authorization.ts
+395111484eaa16848c63c4fbe8e01ef5e06a004e8af0636784af7f446f34736f  server/src/__tests__/authorization-service.test.ts
+9f41bc0b885e6aed121bf5aca49f6aac67d5cd953392a66205ebf968b54a806e  packages/db/src/migrations/0503_furry_norman_osborn.sql
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/authorization-service.test.ts (78 tests | 1 failed | 77 skipped) 10003ms
+     × private core denies administrative DTOs, unrelated owners and every write influence channel 713ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > private core denies administrative DTOs, unrelated owners and every write influence channel
+AssertionError: expected { action: 'issue:read', …(3) } to match object { allowed: false, …(1) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": false,
+-   "reason": "deny_issue_private",
++   "allowed": true,
++   "reason": "allow_instance_admin",
+  }
+
+ ❯ src/__tests__/authorization-service.test.ts:2874:75
+    2872|     expect((await authz.decide({ actor: owner, action: "issue:read", r…
+    2873|     for (const action of ["issue:read", "issue:comment", "issue:mutate…
+    2874|       expect(await authz.decide({ actor, action, resource: f.resource …
+       |                                                                           ^
+    2875|     expect(await canActorReadIssuePrivacy(db, { type: "board", source:…
+    2876|     const [open] = await db.insert(issues).values({ companyId: f.compa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 77 skipped (78)
+   Start at  20:25:36
+   Duration  31.79s (transform 9.99s, setup 216ms, import 21.02s, tests 10.00s, environment 0ms)
+
+VITEST_EXIT=1

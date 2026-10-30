@@ -1,0 +1,34 @@
+{
+  "scope": "Shared product identity in original native transcript display fallbacks and adapter metadata",
+  "sources": {
+    "ui/src/adapters/paperclip-runner/index.ts": "c006e8a78d1b9429611029a0791d3fb4acf8b8555be4af0c1a0b6ad2a145c9d8",
+    "ui/src/adapters/codex-local/config-fields.test.tsx": "3eece96eb99b675c5d7420f0a609f81ae25987e8a5919eb6ce34186700ef1f93"
+  },
+  "baseline": {
+    "failed": 1,
+    "passed": 14,
+    "seconds": 20.44,
+    "exit": 1,
+    "log": "brand-runner-transcript-before.log",
+    "reason": "Existing Codex configuration assertion still expected Allow Paperclip reads after prior shared permission catalogue change; earlier bounded17-case registry/permission run did not cover this renderer assertion. Old fixture is retained by Git194430a23 and beforepins."
+  },
+  "change": "Original parser uses PRODUCT_IDENTITY for tool/operation/runner fallback labels, session display prefix and adapter display name. Actual event, protocol, operation, provider and model identities remain intact. Updates only existing directly affected Codex expected display text. No new copy tests or dependencies.",
+  "verification": {
+    "existingParserAndRenderer": {
+      "passed": 15,
+      "files": 2,
+      "seconds": 26.47,
+      "exit": 0
+    },
+    "uiTypecheck": 0,
+    "tokenGates": 0,
+    "processesClosed": true,
+    "finalPinsMatch": true
+  },
+  "review": "gpt-6-luna read full owner/callers and proposed bounded changes; Root reviewed actual diff and directly observed all final exits.",
+  "limits": [
+    "Remaining advanced setup/experimental and other customer identity inventory remains open.",
+    "Full workspace typecheck result separately pins earlier ba7cd42ca; current parser source is covered by final UI compiler, not represented as a new full recursive run.",
+    "Full tests/build and all open privacy/V10/release gates remain open."
+  ]
+}

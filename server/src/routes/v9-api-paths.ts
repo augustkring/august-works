@@ -1,5 +1,15 @@
 import { z } from "zod";
 import {
+  capabilityLifecycleNoticeListSchema,
+  trustAcceptanceNoticeListSchema,
+  trustDocumentAcceptanceCommandSchema, trustDocumentAcceptanceReceiptSchema, trustDocumentActionCommandSchema,
+  trustDocumentActionReceiptSchema, trustDocumentContentSchema,
+  trustDocumentListQuerySchema, trustDocumentRegisterCommandSchema,
+  trustDocumentRegistrationReceiptSchema, trustDocumentRegistrySchema,
+  trustDocumentGatedContentQuerySchema, trustDocumentGatedContentSchema,
+  trustDocumentGatedGrantCommandSchema, trustDocumentGatedGrantReceiptSchema,
+  trustDocumentGatedRegistrySchema, trustDocumentGatedRevokeCommandSchema,
+  trustDocumentGatedRevokeReceiptSchema,
   experienceObservationSchema, experienceObservationReceiptSchema, experienceObservationPreferenceSchema,
   experienceObservationPreferenceCommandSchema, experienceObservationPreferenceReceiptSchema, experienceObservationSummarySchema,
   orchestrationExperienceSchema,
@@ -20,6 +30,7 @@ import {
   agentRuntimeCandidateCreateSchema, agentRuntimeCandidateCatalogSchema, agentRuntimeCandidateViewSchema,
   agentRuntimeCandidateConformanceCommandSchema, agentRuntimeCandidateConformanceReviewSchema, agentRuntimeCandidateConformanceReceiptSchema,
   agentDraftPublicationReviewSchema, agentDraftPublicationCommandSchema, agentDraftPublicationReceiptSchema,
+  agentModelMigrationMonitorReviewSchema, agentModelMigrationMonitorCommandSchema, agentModelMigrationMonitorReceiptSchema,
   agentPackageSetupReviewSchema, agentPackageSetupCommandSchema, agentPackageSetupReceiptSchema,
   activationConnectionReviewSchema, activationConnectionConsentCommandSchema,
   activationConnectionConsentWithdrawalCommandSchema, activationConnectionConsentReceiptSchema,
@@ -81,6 +92,8 @@ import {
   workflowStopCommandSchema,
   workflowStopReceiptSchema,
   workflowRunControlSchema,
+  createHumanWorkflowCoverageSchema,
+  startWorkflowRunSchema,
 } from "@paperclipai/shared";
 
 /** Current mounted contracts. Listing an operation confers no rollout or execution qualification. */
@@ -88,6 +101,7 @@ export interface V9ApiOperation {
   method: "get" | "post" | "delete";
   path: string;
   summary: string;
+  description?: string;
   auth: "public" | "board" | "operator";
   query?: z.ZodType;
   body?: z.ZodType;
@@ -96,6 +110,7 @@ export interface V9ApiOperation {
   responseContent?: Record<string, { schema: unknown }>;
   result?: z.ZodType;
   successStatus?: 200 | 201 | 202;
+  additionalSuccessStatuses?: Array<200 | 201 | 202>;
   privateResponse?: boolean;
   cacheControl?: "no-store" | "private, no-store";
   unavailable?: boolean;
@@ -110,6 +125,21 @@ const internal = "/api/internal/customer-feedback/{companyId}";
 const account = z.object({ expectedUserId: z.string().optional() });
 const draftAccount = z.strictObject({ expectedUserId: z.string().min(1).max(300) });
 const page = account.extend({ before: z.uuid().optional() });
+const humanWorkflowCoverageResultSchema = z.strictObject({
+  id: z.uuid(), companyId: z.uuid(), principalUserId: z.string(), delegateeUserId: z.string(),
+  actionKey: z.literal("workflows:run"), workflowId: z.uuid(), workflowRevisionId: z.uuid(),
+  scopeType: z.enum(["manual", "task"]), taskId: z.uuid().nullable(),
+  startsAt: z.string().datetime(), expiresAt: z.string().datetime(), reason: z.string(),
+  revokedAt: z.string().datetime().nullable(), revokedByUserId: z.string().nullable(), createdAt: z.string().datetime(),
+});
+const workflowRunHeaders = z.strictObject({
+  "Idempotency-Key": z.string().trim().min(1).max(200).optional(),
+  "X-Human-Workflow-Coverage-Id": z.uuid().optional(),
+});
+const expectedHumanSessionHeaders = z.strictObject({
+  "X-Blentera-Expected-User": z.string().min(1).max(300).optional(),
+  "X-Blentera-Expected-Session": z.string().uuid().optional(),
+});
 const read = (
   path: string,
   summary: string,
@@ -143,6 +173,27 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  { method: "post", path: `${company}/workflows/{workflowId}/run`,
+    summary: "Start the published workflow as the current authenticated principal",
+    description: "The optional X-Human-Workflow-Coverage-Id header requires a current Human session. It routes only the named delegatee to the exact published revision under both principals' current rights; a Board API key cannot use Human coverage.",
+    auth: "board", query: z.strictObject({}), headers: workflowRunHeaders, body: startWorkflowRunSchema,
+    successStatus: 201, privateResponse: true, cacheControl: "private, no-store" },
+  { method: "post", path: `${company}/issues/{issueId}/workflows/{workflowId}/run`,
+    summary: "Start a published workflow for the exact current Task",
+    description: "The optional X-Human-Workflow-Coverage-Id header requires a current Human session and an exact Task-scoped coverage receipt for this Task and workflow revision. Both named Humans' current workflow and Task authority is rechecked before enqueue and dispatch.",
+    auth: "board", query: z.strictObject({}), headers: workflowRunHeaders, body: startWorkflowRunSchema,
+    successStatus: 201, privateResponse: true, cacheControl: "private, no-store" },
+  { ...read(`${company}/workflow-coverages`,
+    "List temporary workflow routing involving the current Human; each exact workflow and Task remains subject to current authority",
+    z.strictObject({ coverages: z.array(humanWorkflowCoverageResultSchema) }), z.strictObject({})), headers: expectedHumanSessionHeaders, cacheControl: "private, no-store" },
+  { ...write(`${company}/workflow-coverages`,
+    "Create bounded, idempotent Human routing for one exact published workflow revision and optional Task; no permission is copied",
+    createHumanWorkflowCoverageSchema, humanWorkflowCoverageResultSchema, 201),
+    additionalSuccessStatuses: [200], query: z.strictObject({}), headers: expectedHumanSessionHeaders, cacheControl: "private, no-store" },
+  { method: "delete", path: `${company}/workflow-coverages/{coverageId}`,
+    summary: "Revoke temporary workflow routing; a queued run must recheck this receipt before dispatch",
+    auth: "board", query: z.strictObject({}), headers: expectedHumanSessionHeaders, result: humanWorkflowCoverageResultSchema,
+    successStatus: 200, privateResponse: true, cacheControl: "private, no-store" },
   { ...read(`${company}/agent-package-installations/requests/{requestId}`, "Read the Original Human request binding and current Native installation metadata; absence stays unconfirmed and reading never installs, activates or grants access",
     packageInstallationRequestReceiptSchema, packageInstallationRequestQuerySchema), cacheControl: "private, no-store" },
   { ...read(`${company}/workflows/{workflowId}/experience/authors`, "Read current bounded Native conversation author choices for the exact saved draft; selection is not runtime admission or a new grant",
@@ -191,6 +242,18 @@ export const v9ApiPaths: V9ApiOperation[] = [
   read(`${company}/experience/observations/summary`, "Read only the current person's unexpired opt-in observation counts; no population, effort or successful-outcome inference", experienceObservationSummarySchema, draftAccount),
   read(`${company}/experience/analytics`, "Read bounded native experience measures without private payloads", experienceMeasuresSchema,
     z.strictObject({ expectedUserId: z.string().min(1).max(300) })),
+  read(`${company}/trust/documents`, "Read only explicitly public, current, reviewed, unexpired trust document metadata", trustDocumentRegistrySchema, trustDocumentListQuerySchema),
+  { ...read(`${company}/trust/gated/documents`, "Read current gated metadata only for a current company administrator or the Human holding an exact unexpired gated grant; NDA-required rows remain unconfigured until a canonical binding owner exists", trustDocumentGatedRegistrySchema, trustDocumentListQuerySchema), cacheControl: "private, no-store" },
+  { ...read(`${company}/notices/action-required`, "Read mandatory notices projected from current canonical owner state; optional announcement dismissal cannot hide or resolve them", trustAcceptanceNoticeListSchema, trustDocumentListQuerySchema), cacheControl: "no-store" },
+  { ...read(`${company}/notices/capability-lifecycle`, "Read informational lifecycle notices from declared feature catalog facts", capabilityLifecycleNoticeListSchema), cacheControl: "no-store" },
+  read(`${company}/trust/documents/{registryEntryId}/content`, "Read the exact current canonical body only for an explicitly public, source-free, current document revision", trustDocumentContentSchema, trustDocumentListQuerySchema),
+  { ...read(`${company}/trust/gated/documents/{registryEntryId}/content`, "Read a gated body only with the current Human's exact unexpired, unrevoked grant; current source privacy, revision, review, expiry and erasure are rechecked", trustDocumentGatedContentSchema, trustDocumentGatedContentQuerySchema), cacheControl: "private, no-store" },
+  { ...write(`${company}/trust/documents`, "Register an exact current immutable document revision with owner-declared lifecycle metadata and material-change action", trustDocumentRegisterCommandSchema, trustDocumentRegistrationReceiptSchema, 201), query: z.strictObject({}) },
+  { ...write(`${company}/trust/gated/grants`, "Grant one exact current gated document version to an existing active company Human with an explicit expiry; current company admin only; NDA-required grants fail closed without a canonical NDA binding", trustDocumentGatedGrantCommandSchema, trustDocumentGatedGrantReceiptSchema, 201), query: z.strictObject({}), cacheControl: "private, no-store" },
+  { ...write(`${company}/trust/gated/grants/{grantReceiptId}/revoke`, "Revoke one exact gated access grant with an immutable receipt; current company administrator only", trustDocumentGatedRevokeCommandSchema, trustDocumentGatedRevokeReceiptSchema, 201), query: z.strictObject({}), cacheControl: "private, no-store" },
+  { ...write(`${company}/trust/notices/read`, "Record a notice-only read receipt for one exact current Trust document version", trustDocumentActionCommandSchema, trustDocumentActionReceiptSchema, 201), query: z.strictObject({}) },
+  { ...write(`${company}/trust/admin-acknowledgments`, "Record a current company administrator acknowledgment of one exact Trust document version", trustDocumentActionCommandSchema, trustDocumentActionReceiptSchema, 201), query: z.strictObject({}) },
+  { ...write(`${company}/trust/acceptances`, "Record an explicit current Human acceptance of one configured exact public document version; never privacy-notice consent", trustDocumentAcceptanceCommandSchema, trustDocumentAcceptanceReceiptSchema, 201), query: z.strictObject({}) },
   read(`${company}/memory/experience/maintenance`, "Read original memory maintenance history or one exact job without asserting current deletion completion", memoryMaintenanceHistorySchema, memoryMaintenanceHistoryQuerySchema),
   { ...read(`${company}/issues/create-receipts/{idempotencyKey}`, "Read the current actor's original task creation receipt without creating a task"), cacheControl: "no-store" },
   { ...read(`${company}/projects/create-receipts/{idempotencyKey}`, "Read the current actor's original project creation receipt without creating a project"), cacheControl: "no-store" },
@@ -206,6 +269,10 @@ export const v9ApiPaths: V9ApiOperation[] = [
   read(`${drafts}/{id}/package-setup-review`, "Review current approved purpose and tested package setup without effects", agentPackageSetupReviewSchema, account.extend({ purposeId: z.uuid().optional() })),
   read(`${drafts}/{id}/package-setup-receipt`, "Read the exact original package setup receipt without replay", agentPackageSetupReceiptSchema.nullable(), account.extend({ requestId: z.uuid() })),
   write(`${drafts}/{id}/package-setup`, "Confirm the exact approved purpose and atomic package activation without publishing the Agent", agentPackageSetupCommandSchema, agentPackageSetupReceiptSchema),
+  read(`${drafts}/{id}/model-migrations/{revisionId}/monitor-review`, "Review exact current post-publication model tests and independent Human verification", agentModelMigrationMonitorReviewSchema),
+  read(`${drafts}/{id}/model-migrations/current/monitor-review`, "Find the current Agent model migration and review exact post-publication tests against a fresh draft", agentModelMigrationMonitorReviewSchema.nullable()),
+  read(`${drafts}/{id}/model-migrations/{revisionId}/monitor-receipt`, "Read the original Human monitoring receipt without renewing its evidence", agentModelMigrationMonitorReceiptSchema.nullable()),
+  write(`${drafts}/{id}/model-migrations/{revisionId}/monitor`, "Record an explicit current Human monitoring decision against the exact reviewed model publication", agentModelMigrationMonitorCommandSchema, agentModelMigrationMonitorReceiptSchema),
   read(`${drafts}/{id}/publication-review`, "Review the current saved candidate, independent verification and activation blockers", agentDraftPublicationReviewSchema),
   read(`${drafts}/{id}/publications`, "Read the owned draft's latest original publication", agentDraftPublicationReceiptSchema.nullable()),
   read(`${drafts}/{id}/publications/{requestId}`, "Read the exact owned publication without substituting a later version", agentDraftPublicationReceiptSchema.nullable()),

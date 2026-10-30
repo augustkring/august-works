@@ -1,0 +1,235 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts (7 tests | 7 failed) 8571ms
+     × invalidates a bound Memory envelope when actual persisted evidence is inserted 126ms
+     × rejects a retained-source-array change that leaves a stale bound Memory snapshot 58ms
+     × invalidates the referencing attachment after actual asset size mutation 60ms
+     × invalidates the referencing attachment after actual asset hash mutation 35ms
+     × invalidates the referencing attachment after actual asset metadata mutation 24ms
+     × refuses rewriting immutable selected Context source bindings or its frozen snapshot 51ms
+     × does not upgrade an unknown historical Context item from today's body 35ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > invalidates a bound Memory envelope when actual persisted evidence is inserted
+AssertionError: expected { owner: { …(4) }, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "digest": "7587e2253e3232aa47f2cdae9991f1f27e27a605f7f66371d6de1150de3fd048",
+  "inputs": [],
+  "owner": {
+    "companyId": "6d3610f1-cd83-4eac-91c5-1b061478a6d9",
+    "contentHash": "7141212221e336cb1bebf6d94aa8a7972aa9bbe92b97ea393dc1368636ac69b7",
+    "id": "f05ad3aa-7754-4f7d-a7ad-84456efc2b6e",
+    "kind": "memory_record",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ src/__tests__/native-payload-source-mutation-binding.integration.test.ts:61:44
+     59|     expect(evidence!.memoryRecordId).toBe(m.record.id);
+     60|     const [current] = await db.select().from(memoryRecords).where(eq(m…
+     61|     expect(current!.payloadSourceSnapshot).toBeNull();
+       |                                            ^
+     62|   });
+     63|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > rejects a retained-source-array change that leaves a stale bound Memory snapshot
+AssertionError: promise resolved "[]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[]
+
+ ❯ src/__tests__/native-payload-source-mutation-binding.integration.test.ts:66:145
+     64|   it("rejects a retained-source-array change that leaves a stale bound…
+     65|     const s = await seed(), m = await memory(s);
+     66|     await expect(db.update(memoryRecords).set({ sourceIssueIds: [s.iss…
+       |                                                                                                                                                 ^
+     67|       .rejects.toMatchObject({ cause: { code: "23514" } });
+     68|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > invalidates the referencing attachment after actual asset size mutation
+AssertionError: expected { owner: { …(4) }, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "digest": "11beeef4bc6ce17da0e3fc6b2401492abfa9fbe44854de9e7aec249162e5482d",
+  "inputs": [],
+  "owner": {
+    "companyId": "c636a038-08f4-4364-b1ef-5e4518e07273",
+    "contentHash": "b22f28e16b07433134de4dea50f594422d29b448d57f7ca56474b50300277916",
+    "id": "3cfc99ca-5e1a-473e-a00d-6032b3a0f289",
+    "kind": "attachment",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ src/__tests__/native-payload-source-mutation-binding.integration.test.ts:87:44
+     85|     await db.update(assets).set(change).where(eq(assets.id, asset!.id)…
+     86|     const [current] = await db.select().from(issueAttachments).where(e…
+     87|     expect(current!.payloadSourceSnapshot).toBeNull();
+       |                                            ^
+     88|   });
+     89|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > invalidates the referencing attachment after actual asset hash mutation
+AssertionError: expected { owner: { …(4) }, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "digest": "4cce81f77723f483bd110220c68bc00bdae4fb99d93f0e25dc8bdf0d67a9e69b",
+  "inputs": [],
+  "owner": {
+    "companyId": "88f4a991-151c-4edb-983d-7b63ceffcbbf",
+    "contentHash": "b447d6db9162e63fa4e4f69ca29d0eb47b56a2fa8b0360b20f3caea89dea3693",
+    "id": "c9663375-6324-4469-861e-fbc27875bdf0",
+    "kind": "attachment",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ src/__tests__/native-payload-source-mutation-binding.integration.test.ts:87:44
+     85|     await db.update(assets).set(change).where(eq(assets.id, asset!.id)…
+     86|     const [current] = await db.select().from(issueAttachments).where(e…
+     87|     expect(current!.payloadSourceSnapshot).toBeNull();
+       |                                            ^
+     88|   });
+     89|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > invalidates the referencing attachment after actual asset metadata mutation
+AssertionError: expected { owner: { …(4) }, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "digest": "d0abf3715b408d95926525fb7582a7705e23c448e8649d6f212ee6801327db38",
+  "inputs": [],
+  "owner": {
+    "companyId": "06a60315-604e-42e3-b9b6-4cf0ed990803",
+    "contentHash": "4f6adf1baff66a7145810ef20e21614dab9087c7c17acc46d52d743a3720b7e5",
+    "id": "9677cd32-681b-4311-a75f-6161fea900f2",
+    "kind": "attachment",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ src/__tests__/native-payload-source-mutation-binding.integration.test.ts:87:44
+     85|     await db.update(assets).set(change).where(eq(assets.id, asset!.id)…
+     86|     const [current] = await db.select().from(issueAttachments).where(e…
+     87|     expect(current!.payloadSourceSnapshot).toBeNull();
+       |                                            ^
+     88|   });
+     89|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > refuses rewriting immutable selected Context source bindings or its frozen snapshot
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > refuses rewriting immutable selected Context source bindings or its frozen snapshot
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > refuses rewriting immutable selected Context source bindings or its frozen snapshot
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > refuses rewriting immutable selected Context source bindings or its frozen snapshot
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > refuses rewriting immutable selected Context source bindings or its frozen snapshot
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > refuses rewriting immutable selected Context source bindings or its frozen snapshot
+AssertionError: promise resolved "[]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[]
+
+ ❯ src/__tests__/native-payload-source-mutation-binding.integration.test.ts:112:117
+    110|       const selected = await item(s, captured);
+    111|       expect(selected.payloadSourceSnapshot).toEqual(captured);
+    112|       await expect.soft(db.update(contextManifestItems).set(change).wh…
+       |                                                                                                                     ^
+    113|         .rejects.toMatchObject({ cause: { code: "23514" } });
+    114|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-mutation-binding.integration.test.ts > Native payload bindings survive child/source mutations without trusting old closures > does not upgrade an unknown historical Context item from today's body
+AssertionError: promise resolved "[]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[]
+
+ ❯ src/__tests__/native-payload-source-mutation-binding.integration.test.ts:120:56
+    118|     expect(selected.payloadSourceSnapshot).toBeNull();
+    119|     await expect(db.update(contextManifestItems).set({ payloadSourceSn…
+    120|       .where(eq(contextManifestItems.id, selected.id))).rejects.toMatc…
+       |                                                        ^
+    121|   });
+    122| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed (7)
+   Start at  05:29:56
+   Duration  22.57s (transform 8.29s, setup 220ms, import 13.24s, tests 8.57s, environment 0ms)
+

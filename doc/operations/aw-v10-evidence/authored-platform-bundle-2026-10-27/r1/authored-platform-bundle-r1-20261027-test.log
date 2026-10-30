@@ -1,0 +1,16 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v9-agent-authored-definition.integration.test.ts > Authored definitions use the Original Agent configuration revision owner > exports the exact published definition through the Original instruction owner
+ ↓ src/__tests__/v9-agent-authored-definition.integration.test.ts > Authored definitions use the Original Agent configuration revision owner > materializes the Agent revision when the effective adapter config has no definition field
+ ✓ src/__tests__/v9-agent-authored-definition.integration.test.ts > Authored definitions use the Original Agent configuration revision owner > keeps the immutable platform reference bundle alongside an authored definition without granting customer tools 619ms
+ ↓ src/__tests__/v9-agent-authored-definition.integration.test.ts > Authored definitions use the Original Agent configuration revision owner > retains the identified old definition when another revision is installed
+ ↓ src/__tests__/v9-agent-authored-definition.integration.test.ts > Authored definitions use the Original Agent configuration revision owner > rejects a foreign or changed version and never falls back to a host prompt
+ ↓ src/__tests__/v9-agent-authored-definition.integration.test.ts > Authored definitions use the Original Agent configuration revision owner > blocks generic configuration and instruction writes before filesystem effects
+ ↓ src/__tests__/v9-agent-authored-definition.integration.test.ts > Authored definitions use the Original Agent configuration revision owner > does not let a generic create or patch invent an authored revision
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 6 skipped (7)
+   Start at  02:33:57
+   Duration  19.46s (transform 10.40s, setup 76ms, import 14.68s, tests 4.58s, environment 0ms)
+

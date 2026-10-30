@@ -1,0 +1,16 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > negative triggers veto selection and empty trigger sets do not match every task
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > does not discard required Role Pack Skills when their resolver is disabled
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > allows explicitly authorized guest act forecasts, denies read/contribute mutations and rechecks revoked humans
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > preserves current-Human guest read and contribution within bounded plans while keeping guest act blocked
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > pins immutable provenance, rechecks resumed runs and rejects revoked human membership
+ ✓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > routes guest connected tools through current local authority and denies writes/revoked result disclosure 11093ms
+ ✓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > binds scoped discovery and invocation to the current Task policy context 3567ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 5 skipped (7)
+   Start at  17:45:45
+   Duration  36.69s (transform 11.65s, setup 96ms, import 17.19s, tests 19.26s, environment 0ms)
+

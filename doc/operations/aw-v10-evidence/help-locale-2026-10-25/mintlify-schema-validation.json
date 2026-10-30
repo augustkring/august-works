@@ -1,0 +1,7 @@
+{
+  "schemaUrl": "https://mintlify.com/docs.json",
+  "schemaSha256": "541b2e8b0cc5bf88a9d84cdd11fbf07e076e8697bc3114c137e6b644b88c3b47",
+  "checkedAt": "2026-10-25T00:18:56.515496+00:00",
+  "errors": 0,
+  "meaning": "Configuration conforms to the downloaded official schema; no hosted Mintlify build or publication is qualified."
+}

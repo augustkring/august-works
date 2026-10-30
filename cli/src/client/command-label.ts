@@ -1,4 +1,5 @@
 export function buildCliCommandLabel(): string {
-  const args = process.argv.slice(2);
-  return args.length > 0 ? `paperclipai ${args.join(" ")}` : "paperclipai";
+  // Challenges persist this label and display it in the browser. Arguments
+  // can contain credentials or private work, so identify only the client.
+  return "paperclipai";
 }

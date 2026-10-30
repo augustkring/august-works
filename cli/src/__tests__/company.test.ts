@@ -344,6 +344,8 @@ describe("renderCompanyImportPreview", () => {
         company: {
           path: "COMPANY.md",
           name: "Source Co",
+          locale: "en",
+          timezone: "UTC",
           description: null,
           logoPath: null,
           requireBoardApprovalForNewAgents: false,
@@ -579,6 +581,8 @@ describe("import selection catalog", () => {
         company: {
           path: "COMPANY.md",
           name: "Source Co",
+          locale: "en",
+          timezone: "UTC",
           description: null,
           logoPath: "images/company-logo.png",
           requireBoardApprovalForNewAgents: false,
@@ -754,6 +758,8 @@ describe("import selection catalog", () => {
         company: {
           path: "COMPANY.md",
           name: "Source Co",
+          locale: "en",
+          timezone: "UTC",
           description: null,
           logoPath: null,
           requireBoardApprovalForNewAgents: false,

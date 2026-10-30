@@ -1,0 +1,11 @@
+{
+  "purpose": "scoped_source_qualification_not_physical_host_or_whole_V10_acceptance",
+  "qualifiedRepositoryHead": "4ed298feacdc4f287608b5d392eeeb77a26ff671",
+  "workflowRun": 41038249001,
+  "job": 124004345291,
+  "vendorPatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
+  "archiveSha256": "3c1bec64b7f35d9a8ec34240df3aca2da6732a35145f3e3ef595298f51e8fe36",
+  "archiveBytes": 294530,
+  "fullRawArtifactIncluded": true,
+  "exactTestsPassed": 9
+}

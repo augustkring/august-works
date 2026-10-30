@@ -1,0 +1,172 @@
+
+> @paperclipai/server@0.3.1 typecheck /workspace/blentera-v10/server
+> pnpm run prepare:runner-vendor && pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit --singleThreaded
+
+
+> @paperclipai/server@0.3.1 prepare:runner-vendor /workspace/blentera-v10/server
+> pnpm --filter @paperclipai/paperclip-runner build
+
+
+> @paperclipai/paperclip-runner@0.0.0 build /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run check:protocol-manifest && pnpm run build:typescript && pnpm run check:capability-contract && pnpm run check:capability-inventory && pnpm run check:protocol-coverage && pnpm run check:semantic-contracts && pnpm run check:runner-workflow-traceability && pnpm run build:binary && node scripts/generate-replay-goldens.mjs --check && node scripts/generate-semantic-action-catalog.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-manifest /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-manifest.mjs --check
+
+The generated PRP contract manifest matches its sources.
+
+> @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+
+> @paperclipai/paperclip-runner@0.0.0 check:capability-contract /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-capability-contract.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:capability-inventory /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/check-capability-inventory.mjs
+
+Capability inventory completeness and generated-output checks passed.
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-coverage /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-coverage.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:semantic-contracts /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run build:typescript && node scripts/generate-semantic-contracts.mjs --check
+
+
+> @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+
+> @paperclipai/paperclip-runner@0.0.0 check:runner-workflow-traceability /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run build:typescript && node scripts/check-runner-workflow-traceability.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 build:typescript /workspace/blentera-v10/packages/paperclip-runner
+> pnpm run ensure:eval-build-deps && pnpm run check:protocol-types && node ./node_modules/typescript/bin/tsc --version && node ./node_modules/typescript/bin/tsc -p tsconfig.json && node ./node_modules/typescript/bin/tsc -p tsconfig.surfaces.json && node scripts/build-verified-provider-entrypoints.mjs
+
+
+> @paperclipai/paperclip-runner@0.0.0 ensure:eval-build-deps /workspace/blentera-v10/packages/paperclip-runner
+> pnpm --filter @paperclipai/paperclip-eval-kernel build
+
+
+> @paperclipai/paperclip-eval-kernel@0.1.0 build /workspace/blentera-v10/packages/paperclip-eval-kernel
+> tsc -p tsconfig.json
+
+
+> @paperclipai/paperclip-runner@0.0.0 check:protocol-types /workspace/blentera-v10/packages/paperclip-runner
+> node scripts/generate-protocol-schema-module.mjs --check && node scripts/generate-acpx-sidecar-contract.mjs --check
+
+Generated PRP schema modules match the JSON Schema sources.
+Generated TypeScript/Rust ACPX sidecar contracts match the schema.
+Version 7.0.2
+Runner stress traceability passed: 44 findings, 12 workflows, 1 explicit exclusion.
+
+> @paperclipai/paperclip-runner@0.0.0 build:binary /workspace/blentera-v10/packages/paperclip-runner
+> cargo build --release --manifest-path runner/Cargo.toml --locked -p paperclip-runner-core --bin paperclip-runnerd && node scripts/stage-runner-binary.mjs
+
+warning: unused imports: `OpenOptions` and `self`
+ --> crates/runner-core/src/process_supervisor.rs:3:15
+  |
+3 | use std::fs::{self, File, OpenOptions};
+  |               ^^^^        ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/runner-core/src/process_supervisor.rs:709:17
+    |
+709 |             let mut inherited = launch.inherited_command()?;
+    |                 ----^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/runner-core/src/process_supervisor.rs:710:17
+    |
+710 |             let mut result = Self::spawn_command(
+    |                 ----^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: fields `config` and `system_instructions` are never read
+    --> crates/runner-core/src/claude_managed_provider.rs:1248:5
+     |
+1232 | pub struct ClaudeManagedProvider {
+     |            --------------------- fields in this struct
+...
+1248 |     config: ClaudeManagedProviderConfig,
+     |     ^^^^^^
+1249 |     system_instructions: String,
+     |     ^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `receive_plain` is never used
+    --> crates/runner-core/src/durable/transport.rs:1545:4
+     |
+1545 | fn receive_plain(
+     |    ^^^^^^^^^^^^^
+
+warning: function `validate_tool_result_contract` is never used
+    --> crates/runner-core/src/provider_bridge.rs:1043:4
+     |
+1043 | fn validate_tool_result_contract(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `paperclip-runner-core` (lib) generated 6 warnings (run `cargo fix --lib -p paperclip-runner-core` to apply 3 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.87s
+Replay golden snapshots and parity summaries are current.
+
+> @paperclipai/plugin-sdk@1.0.0 ensure-build-deps /workspace/blentera-v10/packages/plugins/sdk
+> node ../../../scripts/ensure-plugin-build-deps.mjs
+
+[paperclip] Building @paperclipai/shared...
+[paperclip] Building @paperclipai/plugin-sdk...
+src/services/company-portability.ts(3627,50): error TS2345: Argument of type 'PgTransaction<PostgresJsQueryResultHKT, typeof import("/workspace/blentera-v10/packages/db/src/schema/index"), ExtractTablesWithRelations<typeof import("/workspace/blentera-v10/packages/db/src/schema/index")>> | (PostgresJsDatabase<...> & { ...; })' is not assignable to parameter of type 'PostgresJsDatabase<typeof import("/workspace/blentera-v10/packages/db/src/schema/index")> & { $client: Sql<{}>; }'.
+  Type 'PgTransaction<PostgresJsQueryResultHKT, typeof import("/workspace/blentera-v10/packages/db/src/schema/index"), ExtractTablesWithRelations<typeof import("/workspace/blentera-v10/packages/db/src/schema/index")>>' is not assignable to type 'PostgresJsDatabase<typeof import("/workspace/blentera-v10/packages/db/src/schema/index")> & { $client: Sql<{}>; }'.
+    Property '$client' is missing in type 'PgTransaction<PostgresJsQueryResultHKT, typeof import("/workspace/blentera-v10/packages/db/src/schema/index"), ExtractTablesWithRelations<typeof import("/workspace/blentera-v10/packages/db/src/schema/index")>>' but required in type '{ $client: Sql<{}>; }'.
+src/services/company-portability.ts(5964,46): error TS18047: 'targetCompany' is possibly 'null'.
+src/services/company-portability.ts(5991,46): error TS18047: 'targetCompany' is possibly 'null'.
+src/services/company-portability.ts(5993,38): error TS18047: 'targetCompany' is possibly 'null'.
+src/services/company-portability.ts(6513,42): error TS18047: 'targetCompany' is possibly 'null'.
+src/services/company-portability.ts(6515,63): error TS18047: 'targetCompany' is possibly 'null'.
+src/services/company-portability.ts(6525,15): error TS18047: 'targetCompany' is possibly 'null'.
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @paperclipai/server@0.3.1 typecheck: `pnpm run prepare:runner-vendor && pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit --singleThreaded`
+Exit status 1

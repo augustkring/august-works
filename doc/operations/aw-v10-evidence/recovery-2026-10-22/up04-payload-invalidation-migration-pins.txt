@@ -1,0 +1,2 @@
+5022cadf5f4a4d693e284145a4cd4f14948970732a87733ef0735043473b0b7c  packages/db/src/native-payload-invalidation-migration.test.ts
+7a1c88416f1c3915c7ad5fc2e71d984b28731849ae523bf248cece53f635565b  packages/db/src/migrations/0513_soft_risque.sql

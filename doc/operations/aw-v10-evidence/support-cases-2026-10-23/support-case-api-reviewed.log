@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts (9 tests | 1 failed) 11989ms
+     × blocks new intake without operator policy while preserving receipts and separately gated approval history 206ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > blocks new intake without operator policy while preserving receipts and separately gated approval history
+AssertionError: V9FeatureDependencyError: Invalid V9 feature dependencies: progressive_shell_v9 requires experience_projection_v9: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/v10-support-cases.integration.test.ts:159:110
+    157|     const history = await request(noPolicy).get(`/api/companies/${comp…
+    158|       .query({ expectedUserId: users.owner });
+    159|     expect(history.status, String((historyError as { cause?: unknown }…
+       |                                                                                                              ^
+    160|   });
+    161|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  17:30:02
+   Duration  64.63s (transform 34.28s, setup 436ms, import 51.43s, tests 11.99s, environment 0ms)
+

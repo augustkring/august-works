@@ -1,0 +1,8 @@
+5e6ce3e7884cc8272c212dfe5c3807715e5b9861a0560db3c88ae653dd542008  scripts/run-vitest-stable.mjs
+982c9f1f8cd27d1ace3318ee65b7d3723f2be95f5da4080f4a5598e55352f368  scripts/__tests__/run-vitest-stable-shard.test.mjs
+ad1e9279436897e9f293f64e7afc01681927443ceb10d266e99e897cf24e7394  server/src/__tests__/scheduled-work-server-restart.integration.test.ts
+cfc9e7d2f1b58451d70cffeb42c86f3bde16bab5f2b6c6c3ef6ebf49abf0d0f9  doc/operations/aw-v10-evidence/up13-server-restart-preflight-2026-10-26/source-pins-retry.json
+d075adc3831b0811a096095057905a31a2dca5a1ba3703d8fbe7dc035b29c908  doc/operations/aw-v10-evidence/up13-server-restart-preflight-2026-10-26/server-build-retry.log
+eeaf823167706d6013326cae32c26a7dc6825e2b904115d630a6054d7de8177d  doc/operations/aw-v10-evidence/up13-server-restart-preflight-2026-10-26/runtime-build-retry.log
+4756be7c9849469a444a2ab0d0cde209e621d0537d8301b41a36b3a23a25f064  doc/operations/aw-v10-evidence/up13-server-restart-preflight-2026-10-26/up13-vitest-retry.log
+5acd733821a1224b97056479d2d45c62f9830a9a3206f83225b40c0ff3bcd1e4  doc/operations/aw-v10-evidence/up13-server-restart-preflight-2026-10-26/runner-wiring.log

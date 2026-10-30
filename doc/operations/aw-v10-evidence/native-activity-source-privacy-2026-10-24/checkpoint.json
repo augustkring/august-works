@@ -1,0 +1,59 @@
+{
+  "parentCommit": "7bb97d348",
+  "requirements": [
+    "KRN-01"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "originalPrivateTaskExposure": {
+      "exit": 1,
+      "failed": 3,
+      "suites": 1,
+      "log": "native-activity-source-red.log"
+    },
+    "initialPrivateTaskControls": {
+      "exit": 0,
+      "passed": 3,
+      "log": "native-activity-source-checked.log"
+    },
+    "expandedOwnerAndLegacyStage": {
+      "exit": 1,
+      "passed": 34,
+      "failed": 4,
+      "suites": 4,
+      "log": "native-activity-source-owned.log",
+      "limit": "Native source9 and both existing service/audit suites19 passed. Four activity route mock expectations still omitted the new actual reader argument; their response and permission assertions were not weakened."
+    },
+    "correctedReaderTransportAndNativeOwners": {
+      "exit": 0,
+      "passed": 19,
+      "suites": 2,
+      "log": "native-activity-source-final.log",
+      "limit": "Native source9 and existing activity route10 passed. Production bytes are unchanged in the final10-case source stage, which adds malformed/missing/foreign source controls only."
+    },
+    "finalNativeSourceControls": {
+      "exit": 0,
+      "passed": 10,
+      "suites": 1,
+      "log": "native-activity-source-closure.log"
+    },
+    "finalServerCompiler": {
+      "exit": 0,
+      "log": "native-activity-source-types.log"
+    }
+  },
+  "observations": [
+    "Three actual PostgreSQL/current-Human HTTP controls first reproduced private Task metadata exposure in company activity, unified audit pagination/enrichment, and CSV export. A company audit grant did not imply source Task access. The private owner remains authorized while the other reader receives the next public row, without a private cursor or title/details leak.",
+    "The shared SQL narrowing uses the existing native Task/Project/run source graph. A new run SQL projection is the same expression as the original direct run reader, not a separate run authorization implementation. Native entity UUID casts are guarded; each owner and its company must actually exist.",
+    "Both activity and audit base row queries apply source privacy before LIMIT and audit cursor/enrichment. CSV uses the same filtered cursor pages. An actual run_id remains an independent source root even for company-type events. Native comments resolve through their actual Task; native document link/document IDs require same-company document and Task owners, rejecting any unreadable matching link.",
+    "HTTP routes supply the actual request actor after parsing customer filters. A query claiming the other actual user/session cannot supply this reader. Service-only unqualified callers use the privacy-none reader; the original company and audit permission gates remain independent.",
+    "The final10 native controls cover private/public Task activity, unified audit, CSV, comment, document-link ID, document ID, heartbeat-run entity, run reference on another entity, original native HTTP-created Project (subsequently made private by its domain owner), and malformed/missing/foreign native owners. Private fixture creation exercises domain/history state; product HTTP private-work admission is not enabled. Document/run fixtures provide actual native owner relationships, not complete payload/run receipt qualification."
+  ],
+  "limits": [
+    "This is native source privacy narrowing, not complete action authorization for every source/agent scope or full private-work/read-family acceptance. Original company/audit grants remain independently required.",
+    "Other activity entity families remain on their previous path. Issue-specific activity/run projections, other downstream metadata references, physical source/auth row pins through enrichment/export, credential/revocation waits and response/stream lifetimes require further work.",
+    "The existing canonical graph still has six known typed/private-Memory/temporal regressions. Reusing it does not claim to fix those or qualify complete Native input receipts.",
+    "Domain tests use real native DB users, sessions and memberships with a structural HTTP carrier, not maintained cookie/cryptographic or provider/hardware qualification. UI product code did not change and the browser suite was not repeated for this read-only backend slice.",
+    "No full V10, PR-ready, SaaS/release, compliance, merge or deployment acceptance is claimed."
+  ]
+}

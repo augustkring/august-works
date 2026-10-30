@@ -1,0 +1,12 @@
+sourceHead=b15547c1492b30507d4988146c507cc9a12f38a6
+node=v24.19.0
+pnpm=9.15.4
+workingDirectory=/workspace/blentera-v10/server
+command=../node_modules/.bin/vitest run src/__tests__/v9-conversation-authoring.integration.test.ts src/__tests__/v9-native-task-source-erasure.integration.test.ts src/__tests__/plugin-agent-runtime-state.integration.test.ts --maxWorkers=1
+serializationLock=/workspace/v10-preparation/v10-pg-tests.lock
+snapshotCommand=python3 /workspace/v10-preparation/snapshot-current-source-for-dependency-check.py doc/operations/aw-v10-evidence/platform-admission-fixture-2026-10-28/r2/source-pins.json
+syntaxCommand=node /workspace/v10-preparation/check-snapshot-syntax.cjs doc/operations/aw-v10-evidence/platform-admission-fixture-2026-10-28/r2/source-pins.json
+snapshotExit=0
+syntaxExit=0
+testExit=0
+result=3 test files passed; 43 tests passed

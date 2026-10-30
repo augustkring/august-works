@@ -40,6 +40,8 @@ import {
   selectPaperclipTaskMarkdown,
   stringifyPaperclipWakePayload,
   isPaperclipRecoveryWakePayload,
+  readPaperclipRuntimeSkillEntries,
+  readRequiredPlatformSkillFiles,
 } from "@paperclipai/adapter-utils/server-utils";
 
 import {
@@ -54,7 +56,9 @@ import {
   detectModel,
   resolveProvider,
 } from "./detect-model.js";
-import { reconcileHermesPaperclipSkills } from "./skills.js";
+import { reconcileHermesPaperclipSkills, resolveHermesDesiredSkillNames } from "./skills.js";
+import { hermesDataHome, hermesPresenceConfig, hermesProfileHash } from "./presence-profile.js";
+import { prepareHermesGovernedProfile } from "./governed-profile.js";
 
 // ---------------------------------------------------------------------------
 // Config helpers
@@ -144,7 +148,9 @@ export function buildPrompt(
   const context = (ctx as any).context || {};
   const template = cfgString(config.promptTemplate) || (context.conversationMode === true
     ? DEFAULT_PAPERCLIP_CONVERSATION_PROMPT_TEMPLATE
-    : HERMES_DEFAULT_PROMPT_TEMPLATE);
+    : ctx.platformSkillAdmission
+      ? 'You are "{{agent.name}}", a Blentera Co-worker. Discover and load the required blentera-platform Skill through skills_list/skill_view, then load only the references relevant to this work. Use the current governed MCP tools for business operations; tool results determine permissions and committed outcomes.'
+      : HERMES_DEFAULT_PROMPT_TEMPLATE);
   const taskId = cfgString(context.taskId) || cfgString(context.issueId) || cfgString(ctx.config?.taskId);
   const taskTitle = cfgString(context.taskTitle) || cfgString(ctx.config?.taskTitle) || "";
   const taskBody = cfgString(context.taskBody) || cfgString(ctx.config?.taskBody) || "";
@@ -338,7 +344,10 @@ function parseHermesOutput(stdout: string, stderr: string): ParsedOutput {
 export async function execute(
   ctx: AdapterExecutionContext,
 ): Promise<AdapterExecutionResult> {
-  const config = (ctx.config ?? ctx.agent?.adapterConfig ?? {}) as Record<string, unknown>;
+  const originalConfig = (ctx.config ?? ctx.agent?.adapterConfig ?? {}) as Record<string, unknown>;
+  const config = ctx.platformSkillAdmission || ctx.providerRuntime?.isolationMode === "isolated_per_presence"
+    ? hermesPresenceConfig(originalConfig, { companyId: ctx.agent.companyId, agentId: ctx.agent.id }, ctx.providerRuntime?.isolationMode)
+    : originalConfig;
 
   // ── Resolve configuration ──────────────────────────────────────────────
   const hermesCmd = resolveHermesCommand(config);
@@ -347,13 +356,28 @@ export async function execute(
   const graceSec = cfgNumber(config.graceSec) || DEFAULT_GRACE_SEC;
   const maxTurns = cfgNumber(config.maxTurnsPerRun);
   const toolsets = cfgString(config.toolsets) || cfgStringArray(config.enabledToolsets)?.join(",");
+  if (ctx.platformSkillAdmission && toolsets &&
+      toolsets.split(",").map(value => value.trim()).sort().join(",") !== "blentera_run_0,skills")
+    throw new Error("hermes_governed_toolset_configuration_required: select skills,blentera_run_0 or leave toolsets unset");
   const extraArgs = cfgStringArray(config.extraArgs);
+  if (ctx.platformSkillAdmission && extraArgs?.length)
+    throw new Error("hermes_governed_profile_disallows_extra_argv: use typed adapter settings");
   const persistSession = cfgBoolean(config.persistSession) !== false;
   const worktreeMode = cfgBoolean(config.worktreeMode) === true;
   const checkpoints = cfgBoolean(config.checkpoints) === true;
   const prevSessionId = cfgString(
     (ctx.runtime?.sessionParams as Record<string, unknown> | null)?.sessionId,
   );
+
+  if (ctx.platformSkillAdmission) {
+    const entries = (await readPaperclipRuntimeSkillEntries(config, import.meta.dirname))
+      .filter(entry => entry.key === "blentera-platform");
+    if (entries.length !== 1 || !entries[0]?.versionId || entries[0]?.sourceStatus === "missing")
+      throw new Error("hermes_required_platform_skill_unavailable");
+    await readRequiredPlatformSkillFiles(entries[0].source, ctx.platformSkillAdmission);
+    if (prevSessionId && ctx.runtime.sessionParams?.hermesProfileHash !== hermesProfileHash(config))
+      throw new Error("hermes_session_profile_unverified: start a newly admitted run in the current profile");
+  }
 
   // The server adds this runtime inventory at the run boundary. Requiring the
   // marker avoids touching a developer's real Hermes home in direct unit or
@@ -389,7 +413,7 @@ export async function execute(
 
   if (!explicitProvider) {
     try {
-      detectedConfig = await detectModel();
+      detectedConfig = await detectModel(ctx.platformSkillAdmission ? path.join(hermesDataHome(config), "config.yaml") : undefined);
     } catch {
       // Non-fatal — detection failure shouldn't block execution
     }
@@ -522,49 +546,85 @@ export async function execute(
   }
 
   // ── Log start ──────────────────────────────────────────────────────────
-  await ctx.onLog(
-    "stdout",
-    `[hermes] Starting Hermes Agent (model=${model}, provider=${resolvedProvider} [${resolvedFrom}], timeout=${timeoutSec}s${maxTurns ? `, max_turns=${maxTurns}` : ""})\n`,
-  );
-  if (prevSessionId) {
-    await ctx.onLog(
-      "stdout",
-      `[hermes] Resuming session: ${prevSessionId}\n`,
-    );
+  const availableSkills = ctx.platformSkillAdmission
+    ? await readPaperclipRuntimeSkillEntries(config, import.meta.dirname) : [];
+  const desiredSkills = new Set(resolveHermesDesiredSkillNames(config, availableSkills));
+  const governed = ctx.platformSkillAdmission ? await prepareHermesGovernedProfile({
+    config,
+    // The canonical assigned gateway includes static first-party and admitted
+    // App operations. Legacy auxiliary gateways are separate profiles.
+    servers: (ctx.runtimeMcp?.getServers() ?? []).filter(server => server.name === "paperclip-assigned"),
+    skills: availableSkills.filter(entry => desiredSkills.has(entry.key) && entry.sourceStatus !== "missing"),
+  }) : null;
+  if (governed) {
+    // Exact native toolset selection also limits which configured MCP servers
+    // Hermes connects. Arbitrary argv must not override it after this point.
+    const selected = args.indexOf("-t");
+    if (selected >= 0) args.splice(selected, 2);
+    args.push("-t", governed.toolsets);
+    Object.assign(env, governed.environment);
   }
 
-  // ── Execute ────────────────────────────────────────────────────────────
-  // Hermes writes non-error noise to stderr (MCP init, INFO logs, etc).
-  // Paperclip renders all stderr as red/error in the UI.
-  // Wrap onLog to reclassify benign stderr lines as stdout.
-  const wrappedOnLog = async (stream: "stdout" | "stderr", chunk: string) => {
-    if (stream === "stderr") {
-      const trimmed = chunk.trimEnd();
-      // Benign patterns that should NOT appear as errors:
-      // - Structured log lines: [timestamp] INFO/DEBUG/WARN: ...
-      // - MCP server registration messages
-      // - Python import/site noise
-      const isBenign = /^\[?\d{4}[-/]\d{2}[-/]\d{2}T/.test(trimmed) || // structured timestamps
-        /^[A-Z]+:\s+(INFO|DEBUG|WARN|WARNING)\b/.test(trimmed) || // log levels
-        /Successfully registered all tools/.test(trimmed) ||
-        /MCP [Ss]erver/.test(trimmed) ||
-        /tool registered successfully/.test(trimmed) ||
-        /Application initialized/.test(trimmed);
-      if (isBenign) {
-        return ctx.onLog("stdout", chunk);
+  let result: Awaited<ReturnType<typeof runChildProcess>>;
+  try {
+    if (governed) {
+      const outputs: string[] = [];
+      for (const section of ["mcp_servers", "skills"]) {
+        const probe = await runChildProcess(ctx.runId, hermesCmd, ["config", "get", section, "--json", "--raw"], {
+          cwd, env, timeoutSec: Math.min(timeoutSec, 15), graceSec,
+          // --raw contains the run bearer. Never forward configuration output
+          // to model/customer logs, including on a failed probe.
+          onLog: async () => {}, onSpawn: ctx.onSpawn,
+        });
+        if (probe.exitCode !== 0 || probe.timedOut) throw new Error("hermes_effective_policy_probe_failed");
+        outputs.push(probe.stdout || "");
       }
+      governed.assertEffectivePolicy(outputs[0], outputs[1]);
     }
-    return ctx.onLog(stream, chunk);
-  };
+    await ctx.onLog(
+      "stdout",
+      `[hermes] Starting Hermes Agent (model=${model}, provider=${resolvedProvider} [${resolvedFrom}], timeout=${timeoutSec}s${maxTurns ? `, max_turns=${maxTurns}` : ""})\n`,
+    );
+    if (prevSessionId) {
+      await ctx.onLog(
+        "stdout",
+        `[hermes] Resuming session: ${prevSessionId}\n`,
+      );
+    }
 
-  const result = await runChildProcess(ctx.runId, hermesCmd, args, {
-    cwd,
-    env,
-    timeoutSec,
-    graceSec,
-    onLog: wrappedOnLog,
-    onSpawn: ctx.onSpawn,
-  });
+    // ── Execute ────────────────────────────────────────────────────────────
+    // Hermes writes non-error noise to stderr (MCP init, INFO logs, etc).
+    // Paperclip renders all stderr as red/error in the UI.
+    // Wrap onLog to reclassify benign stderr lines as stdout.
+    const wrappedOnLog = async (stream: "stdout" | "stderr", chunk: string) => {
+      if (stream === "stderr") {
+        const trimmed = chunk.trimEnd();
+        // Benign patterns that should NOT appear as errors:
+        // - Structured log lines: [timestamp] INFO/DEBUG/WARN: ...
+        // - MCP server registration messages
+        // - Python import/site noise
+        const isBenign = /^\[?\d{4}[-/]\d{2}[-/]\d{2}T/.test(trimmed) || // structured timestamps
+          /^[A-Z]+:\s+(INFO|DEBUG|WARN|WARNING)\b/.test(trimmed) || // log levels
+          /Successfully registered all tools/.test(trimmed) ||
+          /MCP [Ss]erver/.test(trimmed) ||
+          /tool registered successfully/.test(trimmed) ||
+          /Application initialized/.test(trimmed);
+        if (isBenign) {
+          return ctx.onLog("stdout", chunk);
+        }
+      }
+      return ctx.onLog(stream, chunk);
+    };
+
+    result = await runChildProcess(ctx.runId, hermesCmd, args, {
+      cwd,
+      env,
+      timeoutSec,
+      graceSec,
+      onLog: wrappedOnLog,
+      onSpawn: ctx.onSpawn,
+    });
+  } finally { await governed?.dispose(); }
 
   // ── Parse output ───────────────────────────────────────────────────────
   const parsed = parseHermesOutput(result.stdout || "", result.stderr || "");
@@ -611,11 +671,19 @@ export async function execute(
     session_id: parsed.sessionId || null,
     usage: parsed.usage || null,
     cost_usd: parsed.costUsd ?? null,
+    ...(governed ? { hermesGovernedProfile: {
+      policyDigest: governed.policyDigest,
+      presenceProfileHash: hermesProfileHash(config),
+      platformSkill: ctx.platformSkillAdmission,
+      runtimeCapabilitySnapshotHash: ctx.providerRuntime?.capabilitySnapshotHash ?? null,
+      // Delivery evidence is distinct from provider/version conformance.
+      qualification: "requires_runtime_conformance",
+    } } : {}),
   };
 
   // Store session ID for next run
   if (persistSession && parsed.sessionId) {
-    executionResult.sessionParams = { sessionId: parsed.sessionId };
+    executionResult.sessionParams = { sessionId: parsed.sessionId, ...(ctx.platformSkillAdmission ? { hermesProfileHash: hermesProfileHash(config) } : {}) };
     executionResult.sessionDisplayId = parsed.sessionId.slice(0, 16);
   }
 

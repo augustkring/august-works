@@ -1,0 +1,26 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "60d9886b6b8066de0b11e07fb05a68cd6237169d",
+  "meaning": "Full Task service fixtures now create Projects through original native HTTP/local-trusted admission and use persisted verified Human users/current memberships for attributed mutations. Existing source denials, inheritance/assignment/OAuth expiry assertions and the private Agent body guard remain unchanged. Fullfile138PASS, after earlier18FAIL120PASS checkpoint preserved in private-memory-own-task evidence. No real authentication ceremony/provider qualification or reconstructed historical source provenance claimed.",
+  "logs": [
+    {
+      "name": "issues-service-fixture-final",
+      "exitCode": 0,
+      "rawSha256": "e6f5f9f3eeb4e14e0f41a88dc982b5137dbe47048d6463fabfd9d969ba29a712",
+      "sanitizedSha256": "51ab20b9d6eb15429dedd7a9a1b97953ac3fb124453b808be37fd41a83e19287",
+      "archiveSha256": "c66ccf8b80e8a5e7df3ef8bcf84faa796f4868cc44a87f76d2be4247a29b300c",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  138 passed (138)",
+        "Duration  74.17s (transform 11.37s, setup 75ms, import 15.82s, tests 58.15s, environment 0ms)"
+      ]
+    }
+  ]
+}

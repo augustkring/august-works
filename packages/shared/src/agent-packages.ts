@@ -2,6 +2,8 @@ import { z } from "zod";
 import { READINESS_ACTIONS } from "./readiness.js";
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const key = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,119}$/);
+/** Fixed protocol key; product display name remains Blentera Support. */
+export const FIRST_PARTY_SUPPORT_PACKAGE_KEY = "paperclip-support" as const;
 const evidence = z
   .object({
     uri: z
@@ -52,7 +54,7 @@ export const packageReleaseSchema = z
         purpose: z.string().min(1).max(2000),
         prohibitedUses: z.array(z.string().min(1).max(300)).min(1).max(30),
         role: z.string().min(1).max(120),
-        audience: z.enum(["internal_test", "customer"]),
+        audience: z.enum(["internal_test", "customer", "first_party_support"]),
         maximumRisk: z.enum(["C1", "C2", "C3"]),
         actionClasses: z.array(z.enum(READINESS_ACTIONS)).min(1).max(6),
         requiredKnowledge: z.array(z.string().min(1).max(120)).max(30),
@@ -65,6 +67,7 @@ export const packageReleaseSchema = z
         sandboxAssurance: z.enum([
           "byo_customer_responsibility",
           "qualified_managed",
+          "read_only_no_code_execution",
         ]),
         runtimeProviders: z
           .array(z.enum(["paperclip_native", "hermes", "openclaw"]))
@@ -138,6 +141,26 @@ export const packageReleaseSchema = z
         path: ["manifest"],
         message: "Internal tests are free, C1 internal drafts only",
       });
+    if (value.manifest.audience === "first_party_support") {
+      if (value.packageKey !== FIRST_PARTY_SUPPORT_PACKAGE_KEY)
+        ctx.addIssue({ code: "custom", path: ["packageKey"], message: "First-party support releases use the fixed platform package key" });
+      if (
+        value.manifest.maximumRisk !== "C1" ||
+        value.manifest.actionClasses.length !== 1 ||
+        value.manifest.actionClasses[0] !== "internal_draft" ||
+        value.manifest.requiredConnections.length !== 0 ||
+        value.manifest.optionalConnections.length !== 0 ||
+        value.manifest.memoryPolicy !== "no_persistent_memory" ||
+        value.manifest.commercialProductKey !== null ||
+        value.manifest.sandboxAssurance !== "read_only_no_code_execution" ||
+        value.manifest.runtimeProviders.length !== 1 ||
+        value.manifest.runtimeProviders[0] !== "paperclip_native" ||
+        value.manifest.requiredKnowledge.length === 0
+      )
+        ctx.addIssue({ code: "custom", path: ["manifest"], message: "First-party support is restricted to C1 internal drafts with no connections, no persistent memory, no commercial product, and the Native runtime" });
+      if (value.components.some((component) => ["workflow_template", "routine_template", "use_case_template", "onboarding_template"].includes(component.type)))
+        ctx.addIssue({ code: "custom", path: ["components"], message: "First-party support releases cannot contain autonomous or commercial activation templates" });
+    }
   });
 export type PackageRelease = z.infer<typeof packageReleaseSchema>;
 export type PackageComponent = z.infer<typeof packageComponentSchema>;

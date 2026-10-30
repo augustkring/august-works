@@ -3,10 +3,13 @@ import express from "express";
 import { eq } from "drizzle-orm";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, agents, companies, createDb, heartbeatRuns, issues, projects } from "@paperclipai/db";
+import { activityLog, agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, issues } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { actorMiddleware } from "../middleware/auth.js";
 import { issueRoutes } from "../routes/issues.js";
+import { projectRoutes } from "../routes/projects.js";
 import { issueService } from "../services/issues.js";
+import { canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy } from "../services/authorization.js";
 import { errorHandler } from "../middleware/index.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -24,10 +27,13 @@ describePostgres("tasks created from an issue", () => {
   const nativeRunId = randomUUID();
   const taskIdRunId = randomUUID();
   const taskKeyRunId = randomUUID();
+  const taskKeyOnlyRunId = randomUUID();
+  const consistentNativeRunId = randomUUID();
   const unrelatedRunId = randomUUID();
   const foreignRunId = randomUUID();
   const missingContextRunId = randomUUID();
   const foreignSourceId = randomUUID();
+  const ambiguousNativeTaskId = randomUUID();
   const expected = new Set<string>();
 
   beforeAll(async () => {
@@ -37,6 +43,10 @@ describePostgres("tasks created from an issue", () => {
       { id: companyId, name: "Origin", issuePrefix: "ORG", defaultResponsibleUserId: "board-user" },
       { id: otherCompanyId, name: "Other", issuePrefix: "OTH", defaultResponsibleUserId: "board-user" },
     ]);
+    await db.insert(authUsers).values({ id: "board-user", name: "Native test reader", email: "board-user@example.test",
+      createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "board-user",
+      status: "active", membershipRole: "admin" });
     const foreignAgentId = randomUUID();
     await db.insert(agents).values([
       { id: agentId, companyId, name: "Coder", role: "engineer", adapterType: "codex_local" },
@@ -48,19 +58,23 @@ describePostgres("tasks created from an issue", () => {
       { id: foreignSourceId, companyId: otherCompanyId, title: "Foreign source", identifier: "OTH-1" },
     ]);
     await db.insert(heartbeatRuns).values([
-      { id: legacyRunId, companyId, agentId, contextSnapshot: { issueId: sourceId }, responsibleUserId: "board-user" },
-      { id: nativeRunId, companyId, agentId, runtimeMode: "native", nativeIssueId: sourceId, contextSnapshot: { issueId: otherSourceId } },
-      { id: taskIdRunId, companyId, agentId, contextSnapshot: { taskId: sourceId } },
-      { id: taskKeyRunId, companyId, agentId, contextSnapshot: { taskKey: "ORG-1" } },
-      { id: unrelatedRunId, companyId, agentId, contextSnapshot: { issueId: otherSourceId, taskKey: "ORG-1" } },
-      { id: foreignRunId, companyId: otherCompanyId, agentId: foreignAgentId, contextSnapshot: { issueId: sourceId } },
+      { id: legacyRunId, companyId, agentId, scopeKind: "issue", issueId: sourceId, contextSnapshot: { issueId: sourceId }, responsibleUserId: "board-user" },
+      // This row is intentionally ambiguous and must never authorize either owner:
+      // its nativeIssueId and stored context point to different Tasks.
+      { id: nativeRunId, companyId, agentId, scopeKind: "issue", runtimeMode: "native", nativeIssueId: sourceId, contextSnapshot: { issueId: otherSourceId } },
+      { id: consistentNativeRunId, companyId, agentId, scopeKind: "issue", runtimeMode: "native", nativeIssueId: sourceId, contextSnapshot: { issueId: sourceId } },
+      { id: taskIdRunId, companyId, agentId, scopeKind: "issue", issueId: sourceId, contextSnapshot: { taskId: sourceId } },
+      { id: taskKeyRunId, companyId, agentId, scopeKind: "issue", issueId: sourceId, contextSnapshot: { taskKey: "ORG-1" } },
+      { id: taskKeyOnlyRunId, companyId, agentId, contextSnapshot: { taskKey: "ORG-1" } },
+      { id: unrelatedRunId, companyId, agentId, scopeKind: "issue", issueId: otherSourceId, contextSnapshot: { issueId: otherSourceId, taskKey: "ORG-1" } },
+      { id: foreignRunId, companyId: otherCompanyId, agentId: foreignAgentId, scopeKind: "issue", issueId: sourceId, contextSnapshot: { issueId: sourceId } },
       { id: missingContextRunId, companyId, agentId, contextSnapshot: {} },
     ]);
-    const projectId = randomUUID();
-    await db.insert(projects).values({ id: projectId, companyId, name: "Cross-project" });
+    const createdProject = await request(projectApp()).post(`/api/companies/${companyId}/projects`).send({ name: "Cross-project" }).expect(201);
+    const projectId = createdProject.body.id as string;
     const rows = [
       { title: "Legacy top-level", originRunId: legacyRunId, projectId },
-      { title: "Native child", originRunId: nativeRunId, parentId: sourceId },
+      { title: "Native child", originRunId: consistentNativeRunId, parentId: sourceId },
       { title: "Different parent", originRunId: taskIdRunId, parentId: otherSourceId },
       { title: "No project, completed", originRunId: taskKeyRunId, status: "done" },
     ].map((row) => ({ id: randomUUID(), companyId, createdByAgentId: agentId, ...row }));
@@ -70,12 +84,14 @@ describePostgres("tasks created from an issue", () => {
     expected.add(historicalId);
     await db.insert(issues).values([
       ...rows,
+      { id: ambiguousNativeTaskId, companyId, title: "Ambiguous native run task", originRunId: nativeRunId },
       { id: historicalId, companyId, title: "Historical child helper", parentId: otherSourceId },
       { id: commentedId, companyId, title: "Only commented on by source" },
       { companyId, title: "Manual child", parentId: sourceId },
       { companyId, title: "Same agent, unrelated run", createdByAgentId: agentId, originRunId: unrelatedRunId },
       { companyId, title: "Hidden", originRunId: legacyRunId, hiddenAt: new Date() },
       { companyId, title: "No context", originRunId: missingContextRunId },
+      { companyId, title: "TaskKey without a bound task pointer", originRunId: taskKeyOnlyRunId },
       { companyId, title: "Wrong run company", originRunId: foreignRunId },
       { companyId: otherCompanyId, title: "Wrong issue company", originRunId: legacyRunId },
     ]);
@@ -94,6 +110,15 @@ describePostgres("tasks created from an issue", () => {
       next();
     });
     app.use("/api", issueRoutes(db, {} as never));
+    app.use(errorHandler);
+    return app;
+  }
+
+  function projectApp() {
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+    app.use("/api", projectRoutes(db));
     app.use(errorHandler);
     return app;
   }
@@ -141,6 +166,28 @@ describePostgres("tasks created from an issue", () => {
     const foreign = await request(app()).get(`/api/companies/${companyId}/issues`).query({ createdFromIssueId: foreignSourceId });
     expect(foreign.status).toBe(200);
     expect(foreign.body).toEqual([]);
+  });
+
+  it("compares case-equivalent UUID references as one native Task identity", async () => {
+    const runId = randomUUID(), taskId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, scopeKind: "issue",
+      runtimeMode: "native", nativeIssueId: otherSourceId, contextSnapshot: { issueId: otherSourceId.toUpperCase() } });
+    const [task] = await db.insert(issues).values({ id: taskId, companyId, title: "Equivalent UUID spelling",
+      originRunId: runId }).returning();
+    const actor = { type: "board" as const, source: "session" as const, userId: "board-user" };
+    expect(await canActorReadHeartbeatRunPrivacy(db, actor, { id: runId, companyId })).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, actor, task!)).toBe(true);
+  });
+
+  it("denies an ambiguous native run binding at both the Run and Task readers", async () => {
+    const actor = { type: "board" as const, source: "session" as const, userId: "board-user" };
+    const [storedRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, nativeRunId));
+    expect(storedRun).toMatchObject({ scopeKind: "issue", issueId: sourceId, nativeIssueId: sourceId,
+      contextSnapshot: { issueId: otherSourceId } });
+    expect.soft(await canActorReadHeartbeatRunPrivacy(db, actor, { id: nativeRunId, companyId })).toBe(false);
+    const [ambiguousTask] = await db.select().from(issues).where(eq(issues.id, ambiguousNativeTaskId));
+    expect(ambiguousTask).toBeDefined();
+    expect.soft(await canActorReadIssuePrivacy(db, actor, ambiguousTask!)).toBe(false);
   });
 
   it("saves legacy child-helper creation provenance from the actor run", async () => {

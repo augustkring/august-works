@@ -1,0 +1,4 @@
+qualificationRoot=/workspace/v10-dep-qualification
+pnpm=9.15.4
+node=v24.19.0
+typescript=Version 7.0.2

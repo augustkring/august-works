@@ -1,0 +1,21 @@
+Packages are copied from the content-addressable store to the virtual store.
+  Content-addressable store is at: /workspace/.cloud-setup/pnpm-store/v3
+  Virtual store is at:             ../../tmp/paperclip-provider-pack-x5h2Cq/pack/node_modules/.pnpm
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Progress: resolved 344, reused 340, downloaded 0, added 0
+Progress: resolved 396, reused 347, downloaded 0, added 0
+ WARN  1 deprecated subdependencies found: @ungap/structured-clone@1.3.0
+.                                        | +249 +++++++++++++++++++++++++
+Progress: resolved 467, reused 354, downloaded 0, added 2
+ ERR_PNPM_ENOSPC  ENOSPC: no space left on device, copyfile '/workspace/.cloud-setup/pnpm-store/v3/files/c4/89fc38f42836ebc896b453c8ed840ad25e98fa5368807e998fa77d4ae70c8c46a2962dd4458334ef556f7baa22f8596e3229172f23376a81f3406bd01bf0c6' -> '/tmp/paperclip-provider-pack-x5h2Cq/pack/node_modules/.pnpm/decode-named-character-reference@1.3.0/node_modules/decode-named-character-reference_tmp_1546751/index.dom.js'
+file:///workspace/blentera-v10/packages/paperclip-runner/scripts/build-provider-pack.mjs:129
+    throw new Error(`pnpm deploy failed with exit code ${deployed.status}`);
+          ^
+
+Error: pnpm deploy failed with exit code 1
+    at file:///workspace/blentera-v10/packages/paperclip-runner/scripts/build-provider-pack.mjs:129:11
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+    at async node:internal/modules/esm/loader:643:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.19.0

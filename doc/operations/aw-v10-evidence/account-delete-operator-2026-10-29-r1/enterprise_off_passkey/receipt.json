@@ -1,0 +1,10 @@
+{
+  "attempt": "lifecycle-local-operator-passkey-enterprise-off-20261029-r1",
+  "sourceHead": "378b6b2a6d9d922bb35102261d809069fe4ae0ae",
+  "passed": 1,
+  "filtered": 3,
+  "testExit": 0,
+  "rawPatchSha256": "b4ae6f053fb280ff2b68ccb737d7d54791174d8f881cc5b27bfcc7c0cbadf4d3",
+  "rawLogSha256": "b0f9eefad632818dfde4e5645b9a2c4d26f3d736a50d33e4faa0e6317843df27",
+  "scope": "Actual UV WebAuthn and configured local-operator deletion while enterprise_identity_v7 is false. This is a separate captured source snapshot. Reconstruct the patch by gzip decompression; native enterprise-bound authentication guards remain active."
+}

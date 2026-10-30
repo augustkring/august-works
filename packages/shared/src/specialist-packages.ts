@@ -11,6 +11,7 @@ export const SPECIALIST_KEYS = [
   "aw-chief-of-staff",
   "aw-growth-specialist",
   "aw-research-specialist",
+  "blentera-meeting-notes-starter",
 ] as const;
 export type SpecialistKey = (typeof SPECIALIST_KEYS)[number];
 const common = {
@@ -183,6 +184,47 @@ export const SPECIALIST_CANDIDATES = {
       },
     ],
   },
+  "blentera-meeting-notes-starter": {
+    name: "Meeting Notes Starter",
+    category: "coordination",
+    description: "AI software that turns Human-supplied meeting notes into an internal follow-up draft for review.",
+    manifest: {
+      ...common,
+      role: "chief_of_staff",
+      purpose: "Turn meeting notes into a clear internal follow-up draft for review",
+      optionalConnections: [],
+      memoryPolicy: "no_persistent_memory",
+      commercialProductKey: "agent_package_chief_of_staff",
+      onboardingQuestions: [
+        "Which meeting notes should become an internal follow-up draft?",
+        "Which people or dates should remain explicit placeholders for your review?",
+      ],
+    },
+    sourceAssets: ["v10-managed-customer-starter-profile-1.0.0"],
+    cases: [
+      {
+        key: "source_fidelity",
+        objective: "Draft follow-up notes using only supported facts from the supplied meeting notes",
+        invariants: [
+          "source_fidelity: every factual statement is supported by the supplied meeting notes or marked as uncertain",
+        ],
+      },
+      {
+        key: "commitment_status",
+        objective: "Separate proposed follow-ups from commitments the participants explicitly agreed",
+        invariants: [
+          "commitment_status: distinguish proposed follow-ups from commitments the participants explicitly agreed",
+        ],
+      },
+      {
+        key: "owner_deadline",
+        objective: "Keep unknown owners and deadlines explicit for Human review",
+        invariants: [
+          "owner_and_deadline: do not invent an owner or deadline; leave unknown fields explicit for Human review",
+        ],
+      },
+    ],
+  },
 } as const;
 export function specialistCompletionContract(
   key: SpecialistKey,
@@ -193,7 +235,7 @@ export function specialistCompletionContract(
   if (!scenario) throw new Error("Unknown specialist evaluation case");
   return {
     objective: scenario.objective,
-    requiredOutputs: [{ key: "review_draft", jsonSchema: null }],
+    requiredOutputs: [{ kind: "task_document", key: "review_draft", jsonSchema: null }],
     businessInvariants: [...scenario.invariants],
     evidenceRequirements: [
       "Draft claims cite authorized, current source versions and mark material uncertainty",

@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[22:40:32] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_direct_tls_only","deploymentMode":"authenticated"}[39m
+[22:40:32] [32mINFO[39m: [36mplugin job coordinator started — listening to lifecycle events[39m [90m{"service":"plugin-job-coordinator"}[39m
+[22:40:32] [32mINFO[39m: [36mplugin job scheduler started[39m [90m{"service":"plugin-job-scheduler","tickIntervalMs":30000,"maxConcurrentJobs":10}[39m
+[22:40:32] [32mINFO[39m: [36minitializing plugin tool dispatcher[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[22:40:32] [32mINFO[39m: [36mplugin-dev-watcher: initialized[39m [90m{"service":"plugin-dev-watcher","resolvesInstalledPlugins":true}[39m
+[22:40:32] [32mINFO[39m: [36mplugin-loader: loading all ready plugins[39m [90m{"service":"plugin-loader"}[39m
+[22:40:32] [32mINFO[39m: [36mloaded tools from ready plugins[39m [90m{"service":"plugin-tool-dispatcher","readyPlugins":0,"registeredTools":0}[39m
+[22:40:32] [34mDEBUG[39m: [36msubscribed to lifecycle events[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[22:40:32] [32mINFO[39m: [36mplugin tool dispatcher initialized[39m [90m{"service":"plugin-tool-dispatcher","totalTools":0}[39m
+[22:40:32] [32mINFO[39m: [36mplugin-loader: no ready plugins to load[39m [90m{"service":"plugin-loader"}[39m
+[22:40:32] [33mWARN[39m: [36mPATCH /api/issues/cc36c02e-2128-4d6b-9bfe-4346bef3c70a 422[39m [90m{"reqBody":{"status":"in_review","comment":"The plan is ready for our next discussion."}}[39m
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent API call mutate its private conversation 769ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent direct-tool call create a private conversation Task 1684ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects creation, child helpers, and reparenting under a chat, while retaining legacy children 443ms
+[22:40:35] [33mWARN[39m: [36mPOST /api/companies/49cec4c8-3b5b-47c8-b242-02294a6c8e10/issues 422[39m [90m{"reqBody":{"visibility":"open","projectId":"ace06152-01b1-471b-a9fa-b7ce40701e28","parentId":null,"title":"MCP handoff","status":"todo","workMode":"standard","priority":"medium","assigneeAgentId":"89bc362f-4b82-4cd9-a34f-768989ade562","requestDepth":0,"initialPlan":"# Plan\nImplement in the execution task.","idempotencyKey":"chat-handoff:4b8df498-9304-46ae-8f66-220f50a8feeb:mcp","allowDuplicate":false}}[39m
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects an unqualified MCP Agent handoff while preserving the plan document 422ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > retains ordinary child delegation and projectless task creation 1730ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > creates one Project through the authenticated Human API when an idempotency request is replayed 1244ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > includes an explicitly selected repository in a Human-created Project workspace 927ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > registers and deduplicates repositories through the authenticated Human Project API 740ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > allows planning documents while denying project/task creation in Plan and Ask mode 2798ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects invented repository IDs through Human admission and rejects a cancelled Agent run 605ms
+[22:40:43] [32mINFO[39m: [36mplugin job scheduler stopped[39m [90m{"service":"plugin-job-scheduler","activeJobCount":0}[39m
+[22:40:43] [32mINFO[39m: [36mplugin job coordinator stopped[39m [90m{"service":"plugin-job-coordinator"}[39m
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  22:40:09
+   Duration  33.64s (transform 12.38s, setup 73ms, import 18.07s, tests 15.38s, environment 0ms)
+

@@ -1,0 +1,18 @@
+[
+  {
+    "file": "issues-goal-context-source-fixture-r4-20261026-test.log",
+    "sha256": "1ede6c434854de6974f2295287807f897b4918a207ab818233d8e60dc192df8d"
+  },
+  {
+    "file": "issues-goal-context-source-fixture-r4-20261026-snapshot.log",
+    "sha256": "81ad2e6825316d355e2e1f44cfb692e8a6838f8fb9d226c60df3c6af1f1c5e49"
+  },
+  {
+    "file": "issues-goal-context-source-fixture-r4-20261026-source-pins.json",
+    "sha256": "ab10c51797f76e6f62f4aba42be4c45b78a39b17957cdb5d28193d91a1fffb2a"
+  },
+  {
+    "file": "issues-goal-context-source-fixture-r4-20261026-test.exit",
+    "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  }
+]

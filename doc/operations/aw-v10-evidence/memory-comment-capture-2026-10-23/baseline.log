@@ -1,0 +1,106 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (24 tests | 1 failed | 23 skipped) 9277ms
+     × invalidates the same Comment capture when native presentation metadata is upgraded 238ms
+[22:36:35] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"0508f541-9c52-435d-8a30-f8c1299cfe1e","operationType":"dedupe"}[39m
+    err: {
+      "type": "DrizzleQueryError",
+      "message": "Failed query: update \"memory_records\" set \"source_memory_ids\" = $1, \"updated_at\" = $2 where (\"memory_records\".\"company_id\" = $3 and \"memory_records\".\"id\" = $4)\nparams: {\"7035656f-bcd5-4837-ba08-821bec6c354b\"},2026-10-23T22:36:35.097Z,3e1e9c25-e295-44e2-ada2-c20974d70794,46a2bbd0-c8be-42fb-9862-7fd61f111721: Native payload source snapshot does not bind its owner and body",
+      "stack":
+          Error: Failed query: update "memory_records" set "source_memory_ids" = $1, "updated_at" = $2 where ("memory_records"."company_id" = $3 and "memory_records"."id" = $4)
+          params: {"7035656f-bcd5-4837-ba08-821bec6c354b"},2026-10-23T22:36:35.097Z,3e1e9c25-e295-44e2-ada2-c20974d70794,46a2bbd0-c8be-42fb-9862-7fd61f111721
+              at PostgresJsPreparedQuery.queryWithCache (file:///workspace/blentera-v10/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at executeMemoryMaintenance (/workspace/blentera-v10/server/src/services/memory/memory-maintenance.ts:93:9)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:766:124
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:758:30)
+              at /workspace/blentera-v10/server/src/__tests__/memory-maintenance-publication.integration.test.ts:111:5
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+          caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+              at ErrorResponse (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30)
+              at handle (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6)
+              at Socket.data (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9)
+              at Socket.emit (node:events:514:28)
+              at addChunk (node:internal/streams/readable:568:12)
+              at readableAddChunkPushByteMode (node:internal/streams/readable:519:3)
+              at Socket.Readable.push (node:internal/streams/readable:399:5)
+              at TCP.onStreamRead (node:internal/stream_base_commons:189:23)
+      "query": "update \"memory_records\" set \"source_memory_ids\" = $1, \"updated_at\" = $2 where (\"memory_records\".\"company_id\" = $3 and \"memory_records\".\"id\" = $4)",
+      "params": [
+        "{\"7035656f-bcd5-4837-ba08-821bec6c354b\"}",
+        "2026-10-23T22:36:35.097Z",
+        "3e1e9c25-e295-44e2-ada2-c20974d70794",
+        "46a2bbd0-c8be-42fb-9862-7fd61f111721"
+      ]
+    }
+ ❯ |@paperclipai/server| src/__tests__/memory-maintenance-publication.integration.test.ts (3 tests | 1 failed | 2 skipped) 6634ms
+     × invalidates only the dedupe canonical capture while retaining the superseded duplicate body 211ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-maintenance-publication.integration.test.ts > Native maintenance publishes only committed Memory effects > invalidates only the dedupe canonical capture while retaining the superseded duplicate body
+AssertionError: expected { …(21) } to match object { status: 'succeeded', …(1) }
+(22 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "resultJson": {
+-     "canonicalRecordCount": 1,
+-     "scannedRecordCount": 2,
+-     "supersededCount": 1,
+-   },
+-   "status": "succeeded",
++   "resultJson": null,
++   "status": "failed",
+  }
+
+ ❯ src/__tests__/memory-maintenance-publication.integration.test.ts:114:21
+    112|
+    113|     const [settled]=await db.select().from(memoryJobs).where(eq(memory…
+    114|     expect(settled).toMatchObject({status:"succeeded",resultJson:{scan…
+       |                     ^
+    115|     const rows=await db.select().from(memoryRecords).where(eq(memoryRe…
+    116|     const canonical=rows.find(row=>row.id===sources.slice().sort((left…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > invalidates the same Comment capture when native presentation metadata is upgraded
+Error: Failed query: update "issue_comments" set "metadata" = $1, "updated_at" = $2 where ("issue_comments"."id" = $3 and "issue_comments"."company_id" = $4) returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "issue_id", "author_agent_id", "author_user_id", "on_behalf_of_user_id", "author_type", "created_by_run_id", "derived_author_agent_id", "derived_created_by_run_id", "derived_author_source", "client_request_id", "conversation_session_generation", "body", "presentation", "metadata", "deleted_at", "deleted_by_type", "deleted_by_agent_id", "deleted_by_user_id", "deleted_by_run_id", "source_trust", "created_at", "updated_at"
+params: {"authorizationReason":"allow_chat_run_presentation","version":1,"sections":[{"title":"Authorization","rows":[{"type":"key_value","label":"Reason","value":"allow_chat_run_presentation"}]}]},2026-10-23T22:36:18.790Z,1260df59-65b9-4875-aee1-4380389d63f6,1685225e-75ea-44c5-abbf-8cbdcc930d1b
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ addComment src/services/issues.ts:12856:17
+    12854|             shouldUpgradeExternalAuthorization ||
+    12855|             shouldUpgradeAttachmentAuthorization
+    12856|               ? await dbOrTx
+       |                 ^
+    12857|                   .update(issueComments)
+    12858|                   .set({
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ retryNativeChatReviewPresentation src/services/native-runtime/native-chat-review-presentation.ts:481:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:422:22
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issue_comments" set "metadata" = $1, "updated_at" = $2 where ("issue_comments"."id" = $3 and "issue_comments"."company_id" = $4) returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "issue_id", "author_agent_id", "author_user_id", "on_behalf_of_user_id", "author_type", "created_by_run_id", "derived_author_agent_id", "derived_created_by_run_id", "derived_author_source", "client_request_id", "conversation_session_generation", "body", "presentation", "metadata", "deleted_at", "deleted_by_type", "deleted_by_agent_id", "deleted_by_user_id", "deleted_by_run_id", "source_trust", "created_at", "updated_at"', parameters: [ '{"authorizationReason":"allow_chat_run_presentation","version":1,"sections":[{"title":"Authorization","rows":[{"type":"key_value","label":"Reason","value":"allow_chat_run_presentation"}]}]}', '2026-10-23T22:36:18.790Z', '1260df59-65b9-4875-aee1-4380389d63f6', '1685225e-75ea-44c5-abbf-8cbdcc930d1b' ], args: [ '{"authorizationReason":"allow_chat_run_presentation","version":1,"sections":[{"title":"Authorization","rows":[{"type":"key_value","label":"Reason","value":"allow_chat_run_presentation"}]}]}', '2026-10-23T22:36:18.790Z', '1260df59-65b9-4875-aee1-4380389d63f6', '1685225e-75ea-44c5-abbf-8cbdcc930d1b' ], types: [ 3802, 1184, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 25 skipped (27)
+   Start at  22:35:38
+   Duration  56.80s (transform 21.09s, setup 244ms, import 39.77s, tests 15.91s, environment 0ms)
+

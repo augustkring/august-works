@@ -30,7 +30,7 @@ const publicReceipt = (row: Receipt) => activationConnectionConsentReceiptSchema
  * replace current account, company membership, package or Apps authority. */
 async function owner(tx: Db, actor: AuthorizationActor, companyId: string, write = false) {
   await assertActivationAccess(tx, actor, companyId);
-  await lockActivationSnapshot(tx, companyId);
+  await lockActivationSnapshot(tx, companyId, write ? "write" : "read");
   await assertActivationAccess(tx, actor, companyId, true);
   const query = tx.select().from(companies).where(eq(companies.id, companyId));
   const [company] = await (write ? query.for("update") : query.for("share"));

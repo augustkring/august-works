@@ -12,6 +12,8 @@ import { CompanySettings } from "./CompanySettings";
 const mockCompaniesApi = vi.hoisted(() => ({
   update: vi.fn(),
   archive: vi.fn(),
+  responsibilityContacts: vi.fn(),
+  updateResponsibilityContacts: vi.fn(),
 }));
 
 const mockAssetsApi = vi.hoisted(() => ({
@@ -132,6 +134,7 @@ describe("CompanySettings archive departure", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     mockCompaniesApi.archive.mockResolvedValue({ id: ARCHIVING_COMPANY.id, status: "archived" });
+    mockCompaniesApi.responsibilityContacts.mockResolvedValue({ securityContactUserId: null, supportIncidentContactUserId: null, eligibleUsers: [] });
     vi.spyOn(window, "confirm").mockReturnValue(true);
     observedPath = "";
   });

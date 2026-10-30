@@ -1,0 +1,291 @@
+import { describe, expect, it } from "vitest";
+import type { ConnectionGrant, ToolConnection } from "@paperclipai/shared";
+import {
+  githubRepositoryAccessScopeHash,
+  githubRepositoryAccessSourceIdentityHash,
+  projectToolConnectionLifecycle,
+} from "./tool-connection-lifecycle.js";
+
+const connection = (overrides: Partial<ToolConnection> = {}): ToolConnection => ({
+  id: "connection-1", companyId: "company-1", applicationId: "app-1", name: "GitHub", uid: "github",
+  connectionKind: "managed", connectionPurpose: "tool", ownership: "customer", transport: "rest_api",
+  authKind: "oauth", credentialSource: "paperclip_vault", credentialPolicy: "shared", status: "active",
+  transportConfig: {}, config: { sourceTemplateKey: "github" }, credentialSecretRefs: [], credentialRefs: [],
+  healthStatus: "ok", healthCheckedAt: new Date("2026-10-28T00:00:00Z"), lastError: null, enabled: true,
+  createdByAgentId: null, createdByUserId: "owner-1", createdAt: new Date("2026-01-01T00:00:00Z"),
+  updatedAt: new Date("2026-10-28T00:00:00Z"), ...overrides,
+});
+const grant = (overrides: Partial<ConnectionGrant> = {}): ConnectionGrant => ({
+  id: "grant-1", companyId: "company-1", connectionId: "connection-1", kind: "organization",
+  subjectUserId: null, providerTenant: { oauth: { scopes: ["repo", "read:user"], accessTokenExpiresAt: "2026-10-28T02:00:00.000Z" } },
+  credentialSecretRefs: [], status: "active", isDefault: true, createdByAgentId: null, createdByUserId: "owner-1",
+  revokedAt: null, revokedByAgentId: null, revokedByUserId: null, lastUsedAt: null,
+  createdAt: new Date("2026-01-01T00:00:00Z"), updatedAt: new Date("2026-10-28T00:00:00Z"), ...overrides,
+});
+
+describe("tool connection lifecycle projection", () => {
+  const now = new Date("2026-10-28T00:00:00Z");
+
+  it("projects current grant scopes, scope hash, expiry and provider verification without credentials", () => {
+    const result = projectToolConnectionLifecycle(connection({ config: {} }), grant(), now);
+    expect(result).toMatchObject({
+      state: "HEALTHY", action: null, grantStatus: "active", scopeNames: ["read:user", "repo"],
+      credentialExpiresAt: "2026-10-28T02:00:00.000Z", credentialFreshness: "current",
+      providerLifecycle: "not_reported", syncReconciliation: {
+        domain: "not_reported", state: "not_reported", mode: "not_reported", accessRevision: null,
+        requiredReason: "not_reported", accessRevisionKind: "not_reported", lastSuccessAt: null, lastFullReconciledAt: null,
+        lastAttemptAt: null, nextAttemptAt: null, lastErrorCode: null, rateLimitRetryAt: null,
+        scopeHash: null, sourceIdentityHash: null, cursor: "not_reported", watermark: "not_reported",
+        gapDetection: "not_reported", rateLimitState: "not_reported",
+      },
+      knownObjectRefresh: { domain: "not_reported", mode: "not_reported", versionKind: "not_reported",
+        completeness: "not_reported", cursor: "not_reported" },
+      operations: {
+        credentialRefresh: "provider_dependent", subscriptionRenewal: "not_reported",
+        syncReconciliation: "not_reported", pause: "supported", revoke: "supported",
+        deprecation: "not_reported",
+      },
+      subscription: { state: "not_reported", expiresAt: null, renewal: "not_reported" },
+    });
+    expect(result.scopeHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(result).not.toHaveProperty("accessToken");
+    expect(result).not.toHaveProperty("refreshToken");
+    expect(JSON.stringify(result)).not.toContain("secret-value");
+  });
+
+  it("requires reauthorization and keeps explicit revocation distinct from health", () => {
+    expect(projectToolConnectionLifecycle(connection(), grant({ status: "needs_reauthorization" }), now))
+      .toMatchObject({ state: "REQUIRES_REAUTH", action: "reauthorize" });
+    expect(projectToolConnectionLifecycle(connection(), grant({ status: "revoked" }), now))
+      .toMatchObject({ state: "REVOKED", action: "reconnect" });
+  });
+
+  it("separates refreshable access expiry from expired refresh credentials", () => {
+    expect(projectToolConnectionLifecycle(connection(), grant({
+      providerTenant: { oauth: { scopes: ["repo"], accessTokenExpiresAt: "2026-10-27T23:00:00.000Z" } },
+    }), now)).toMatchObject({ state: "DEGRADED", reason: "access_credential_expired", credentialFreshness: "expired" });
+    expect(projectToolConnectionLifecycle(connection(), grant({
+      providerTenant: { oauth: { scopes: ["repo"], refreshTokenExpiresAt: "2026-10-27T23:00:00.000Z" } },
+    }), now)).toMatchObject({ state: "REQUIRES_REAUTH", reason: "refresh_credential_expired", action: "reauthorize" });
+  });
+
+  it("denies a healthy label for malformed grant expiry and preserves grant-over-config precedence", () => {
+    const result = projectToolConnectionLifecycle(connection({ config: { oauth: { expiresAt: "2027-01-01T00:00:00.000Z" } } }), grant({
+      providerTenant: { oauth: { accessTokenExpiresAt: "not-a-date" } },
+    }), now);
+    expect(result).toMatchObject({ state: "DEGRADED", reason: "credential_expiry_invalid", credentialFreshness: "unknown", credentialExpiresAt: null });
+    expect(projectToolConnectionLifecycle(connection({ config: {} }), grant({
+      providerTenant: { oauth: { refreshTokenExpiresAt: "malformed" } },
+    }), now)).toMatchObject({ state: "DEGRADED", reason: "refresh_credential_expiry_invalid" });
+  });
+
+  it("projects configured secret-reference expiry without returning secret identifiers", () => {
+    const result = projectToolConnectionLifecycle(connection({ config: {} }), grant({
+      credentialSecretRefs: [{ secretId: "private-secret-id", configPath: "apiKey", expiresAt: "2026-11-01T00:00:00.000Z" }],
+    }), now);
+    expect(result).toMatchObject({ state: "DEGRADED", reason: "secret_reference_expiring", secretReferenceFreshness: "expiring" });
+    expect(result.secretReferenceExpiresAt).toBe("2026-11-01T00:00:00.000Z");
+    expect(JSON.stringify(result)).not.toContain("private-secret-id");
+  });
+
+  it("uses the current Vercel Connect grant's expiry and verification metadata over connection fallbacks", () => {
+    const result = projectToolConnectionLifecycle(connection({
+      credentialSource: "vercel_connect",
+      externalCredential: { provider: "vercel_connect", connectorId: "connector-1", connectorUid: "uid-1", service: "github", connectorType: "github", principalMode: "app", headerName: "authorization", scopes: ["repo"] },
+      config: { oauth: { expiresAt: "2027-01-01T00:00:00.000Z" } },
+    }), grant({
+      externalCredential: { provider: "vercel_connect", subjectType: "app", expiresAt: "2026-10-28T00:30:00.000Z", lastVerifiedAt: "2026-10-27T23:00:00.000Z" },
+    }), now);
+    expect(result).toMatchObject({
+      state: "HEALTHY", credentialExpirySource: "vercel_connect_issuance", credentialExpiresAt: "2026-10-28T00:30:00.000Z", credentialFreshness: "expiring", lastAccessVerifiedAt: "2026-10-27T23:00:00.000Z",
+    });
+  });
+
+  it("projects a scope-bound repository access reconciliation without exposing provider identifiers", () => {
+    const repositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
+    const scopeHash = githubRepositoryAccessScopeHash(["repo", "read:user"], ["456"], repositories)!;
+    const sourceIdentityHash = githubRepositoryAccessSourceIdentityHash("123")!;
+    expect(githubRepositoryAccessScopeHash([], ["456"], repositories)).toMatch(/^[a-f0-9]{64}$/);
+    expect(githubRepositoryAccessScopeHash(undefined, ["456"], repositories)).toBeNull();
+    const result = projectToolConnectionLifecycle(connection(), grant({ providerTenant: {
+      oauth: { scopes: ["repo", "read:user"] },
+      github: {
+        userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        repositories, accessRevision: "revision-1", lastAccessRefreshAt: "2026-10-27T23:59:00.000Z", webhookHealth: "healthy",
+        repositoryAccessReconciliation: { state: "reconciled", mode: "full",
+          lastSuccessAt: "2026-10-27T23:59:01.000Z", lastFullReconciledAt: "2026-10-27T23:59:01.000Z",
+          nextAttemptAt: "2026-10-28T00:59:01.000Z", scopeHash, sourceIdentityHash },
+      },
+    } }), now);
+    expect(result.syncReconciliation).toMatchObject({ domain: "repository_access", state: "reconciled",
+      mode: "github_repository_full_snapshot", lastSuccessAt: "2026-10-27T23:59:01.000Z",
+      lastFullReconciledAt: "2026-10-27T23:59:01.000Z", scopeHash, sourceIdentityHash,
+      cursor: "not_reported", watermark: "not_reported", gapDetection: "not_reported", rateLimitState: "not_reported" });
+    expect(result.knownObjectRefresh).toEqual({ domain: "github_known_issue_or_pull_request", mode: "conditional_canonical_get",
+      versionKind: "github_updated_at_and_object_etag", completeness: "known_objects_only", cursor: "not_reported" });
+    expect(JSON.stringify(result.syncReconciliation)).not.toContain("123");
+    expect(JSON.stringify(result.syncReconciliation)).not.toContain("789");
+    expect(JSON.stringify(result.syncReconciliation)).not.toContain("octo/project");
+    const changedScopes = projectToolConnectionLifecycle(connection(), grant({ providerTenant: {
+      oauth: { scopes: ["repo", "read:user", "workflow"] },
+      github: {
+        userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        repositories, accessRevision: "revision-1", webhookHealth: "healthy",
+        repositoryAccessReconciliation: { state: "reconciled", mode: "full",
+          lastSuccessAt: "2026-10-27T00:00:01.000Z", lastFullReconciledAt: "2026-10-27T00:00:01.000Z",
+          scopeHash, sourceIdentityHash },
+      },
+    } }), now);
+    expect(changedScopes.syncReconciliation.state).toBe("required");
+  });
+
+  it("keeps an old snapshot stale after a bounded reconciliation failure", () => {
+    const repositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
+    const scopeHash = githubRepositoryAccessScopeHash(["repo", "read:user"], ["456"], repositories)!;
+    const sourceIdentityHash = githubRepositoryAccessSourceIdentityHash("123")!;
+    const result = projectToolConnectionLifecycle(connection(), grant({ providerTenant: {
+      oauth: { scopes: ["repo", "read:user"] },
+      github: {
+        userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        repositories, accessRevision: "revision-1", lastAccessRefreshAt: "2026-10-27T00:00:00.000Z", webhookHealth: "healthy",
+        repositoryAccessReconciliation: { state: "required", mode: "full", requiredReason: "provider_failure",
+          lastSuccessAt: "2026-10-26T00:00:00.000Z", lastFullReconciledAt: "2026-10-26T00:00:00.000Z",
+          scopeHash, sourceIdentityHash },
+      },
+    } }), now);
+    expect(result).toMatchObject({ state: "PERMISSION_CHANGED", action: "refresh_access" });
+    expect(result.syncReconciliation).toMatchObject({ state: "required", requiredReason: "provider_failure",
+      lastSuccessAt: "2026-10-26T00:00:00.000Z", lastFullReconciledAt: "2026-10-26T00:00:00.000Z" });
+  });
+
+  it("requires the named GitHub full snapshot when its scheduled freshness window expires", () => {
+    const repositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
+    const scopeHash = githubRepositoryAccessScopeHash(["repo", "read:user"], ["456"], repositories)!;
+    const sourceIdentityHash = githubRepositoryAccessSourceIdentityHash("123")!;
+    const lastFull = new Date(now.getTime() - 60 * 60_000 - 1).toISOString();
+    const result = projectToolConnectionLifecycle(connection(), grant({ providerTenant: {
+      oauth: { scopes: ["repo", "read:user"] },
+      github: {
+        userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        repositories, accessRevision: "revision-1", lastAccessRefreshAt: lastFull, webhookHealth: "healthy",
+        repositoryAccessReconciliation: { state: "reconciled", mode: "full", lastSuccessAt: lastFull,
+          lastFullReconciledAt: lastFull, nextAttemptAt: new Date(Date.parse(lastFull) + 60 * 60_000).toISOString(),
+          scopeHash, sourceIdentityHash },
+      },
+    } }), now);
+    expect(result.syncReconciliation).toMatchObject({ state: "required", requiredReason: "periodic_reconcile_due",
+      domain: "repository_access", mode: "github_repository_full_snapshot", cursor: "not_reported",
+      watermark: "not_reported", gapDetection: "not_reported" });
+  });
+
+  it("requires a first complete snapshot even when no local revision exists yet", () => {
+    const result = projectToolConnectionLifecycle(connection(), grant({ providerTenant: { github: {
+      userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+      repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+    } } }), now);
+    expect(result.syncReconciliation).toMatchObject({ domain: "repository_access", state: "required",
+      mode: "github_repository_full_snapshot", accessRevision: null, lastSuccessAt: null,
+      lastFullReconciledAt: null, cursor: "not_reported", gapDetection: "not_reported" });
+  });
+
+  it("does not claim verified GitHub health while access or webhook proof is pending", () => {
+    const noMetadata = projectToolConnectionLifecycle(connection(), grant(), now);
+    expect(noMetadata).toMatchObject({ state: "DEGRADED", reason: "provider_access_unverified", action: "refresh_access" });
+    const pendingRepositories = [{ id: "789", fullName: "octo/project", installationId: "456" }];
+    const pendingScopeHash = githubRepositoryAccessScopeHash(["repo"], ["456"], pendingRepositories)!;
+    const pendingIdentityHash = githubRepositoryAccessSourceIdentityHash("123")!;
+    const pendingWebhook = projectToolConnectionLifecycle(connection(), grant({ providerTenant: {
+      oauth: { scopes: ["repo"] },
+      github: { userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+        repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+        repositories: pendingRepositories, accessRevision: "version-1", lastAccessRefreshAt: "2026-10-27T23:59:00.000Z", webhookHealth: "pending",
+        repositoryAccessReconciliation: { state: "reconciled", mode: "full", lastSuccessAt: "2026-10-27T23:59:00.000Z",
+          lastFullReconciledAt: "2026-10-27T23:59:00.000Z", nextAttemptAt: "2026-10-28T00:59:00.000Z",
+          scopeHash: pendingScopeHash, sourceIdentityHash: pendingIdentityHash } },
+    } }), now);
+    expect(pendingWebhook).toMatchObject({ state: "DEGRADED", reason: "provider_webhook_unverified", webhook: { health: "pending" } });
+  });
+
+  it("treats GitHub repository access invalidation as a refresh action, never as webhook-complete sync", () => {
+    const item = grant({ providerTenant: { github: {
+      userId: "123", login: "octocat", installationCount: 1, repositoryCount: 2,
+      repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+      accessRevision: "version-2", lastAccessRefreshAt: "2026-10-27T00:00:00.000Z",
+      lastWebhookAt: "2026-10-27T01:00:00.000Z", webhookHealth: "unhealthy",
+    } } });
+    expect(projectToolConnectionLifecycle(connection({ healthStatus: "failed" }), item, now)).toMatchObject({
+      state: "PERMISSION_CHANGED", action: "refresh_access", accessVersion: "version-2",
+      webhook: { health: "unhealthy", lastDeliveryAt: "2026-10-27T01:00:00.000Z", expiry: "not_applicable" },
+      syncReconciliation: {
+        state: "required", mode: "github_repository_full_snapshot", accessRevision: "version-2",
+        accessRevisionKind: "local_access_revision", lastSuccessAt: null, lastFullReconciledAt: null,
+        cursor: "not_reported", gapDetection: "not_reported", rateLimitState: "not_reported",
+      },
+      subscription: { state: "not_applicable", expiresAt: null, renewal: "not_applicable" },
+    });
+  });
+
+  it("reports the last verified GitHub full snapshot without claiming delivery-gap detection", () => {
+    const verifiedGitHub = grant({ providerTenant: { github: {
+      userId: "123", login: "octocat", installationCount: 1, repositoryCount: 1,
+      repositorySelection: "selected", installationIds: ["456"], installationOwnerLogins: ["octo"],
+      repositories: [{ id: "789", fullName: "octo/project", installationId: "456" }],
+      accessRevision: "version-2", lastAccessRefreshAt: "2026-10-27T00:00:00.000Z",
+      webhookHealth: "healthy",
+    } } });
+    expect(projectToolConnectionLifecycle(connection(), verifiedGitHub, now).syncReconciliation).toMatchObject({
+      domain: "repository_access", state: "required", mode: "github_repository_full_snapshot", accessRevision: "version-2",
+      accessRevisionKind: "local_access_revision", lastSuccessAt: null, lastFullReconciledAt: null,
+      cursor: "not_reported", watermark: "not_reported", gapDetection: "not_reported", rateLimitState: "not_reported",
+    });
+    expect(projectToolConnectionLifecycle(connection({ config: {} }), grant(), now).syncReconciliation).toEqual({
+      domain: "not_reported", state: "not_reported", mode: "not_reported", accessRevision: null,
+      requiredReason: "not_reported", accessRevisionKind: "not_reported", lastSuccessAt: null, lastFullReconciledAt: null,
+      lastAttemptAt: null, nextAttemptAt: null, lastErrorCode: null, rateLimitRetryAt: null,
+      scopeHash: null, sourceIdentityHash: null, cursor: "not_reported", watermark: "not_reported",
+      gapDetection: "not_reported", rateLimitState: "not_reported",
+    });
+  });
+
+  it("does not treat an empty or malformed repository snapshot as a completed refresh", () => {
+    const invalidSnapshot = grant({ providerTenant: { github: {
+      userId: "123", login: "octocat", installationCount: 1, repositoryCount: 0,
+      repositorySelection: "none", installationIds: ["456"], installationOwnerLogins: ["octo"],
+      repositories: [], accessRevision: "local-version", lastAccessRefreshAt: "2026-10-27T00:00:00.000Z",
+    } } });
+    expect(projectToolConnectionLifecycle(connection(), invalidSnapshot, now)).toMatchObject({
+      state: "PERMISSION_CHANGED", action: "refresh_access",
+      syncReconciliation: {
+        state: "required", mode: "github_repository_full_snapshot", accessRevision: "local-version",
+        lastFullReconciledAt: null, gapDetection: "not_reported",
+      },
+    });
+  });
+
+  it("does not call an unverified or unhealthy connection healthy and exposes paused state", () => {
+    expect(projectToolConnectionLifecycle(connection({ healthStatus: "unchecked" }), grant(), now))
+      .toMatchObject({ state: "DEGRADED", reason: "health_not_checked" });
+    expect(projectToolConnectionLifecycle(connection({ healthStatus: "unknown" }), grant(), now))
+      .toMatchObject({ state: "DEGRADED", reason: "health_not_checked" });
+    expect(projectToolConnectionLifecycle(connection({ healthCheckedAt: null }), grant(), now))
+      .toMatchObject({ state: "DEGRADED", reason: "health_not_checked" });
+    expect(projectToolConnectionLifecycle(connection({ enabled: false }), grant(), now))
+      .toMatchObject({ state: "PAUSED" });
+  });
+
+  it("keeps subscription and deprecation behavior unknown when no provider owner reports facts", () => {
+    expect(projectToolConnectionLifecycle(connection({ config: {} }), grant(), now)).toMatchObject({
+      operations: {
+        credentialRefresh: "provider_dependent", subscriptionRenewal: "not_reported",
+        syncReconciliation: "not_reported", pause: "supported", revoke: "supported",
+        deprecation: "not_reported",
+      },
+      subscription: { state: "not_reported", expiresAt: null, renewal: "not_reported" },
+      providerLifecycle: "not_reported",
+    });
+  });
+});

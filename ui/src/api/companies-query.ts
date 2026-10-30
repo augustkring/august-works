@@ -75,7 +75,7 @@ const sessionQueryOptions = {
  */
 export function useAccountIdentity(options?: { staleTime?: number; refetchOnMount?: boolean }): { userId: string | null; localImplicit: boolean; settled: boolean; failed: boolean } {
   const { data: session, isSuccess, isError } = useQuery({ ...sessionQueryOptions, ...options });
-  return { userId: session?.user.id ?? null, localImplicit: session?.session.localImplicit === true, settled: isSuccess, failed: isError };
+  return { userId: session?.user?.id ?? null, localImplicit: session?.session?.localImplicit === true, settled: isSuccess, failed: isError };
 }
 
 /**

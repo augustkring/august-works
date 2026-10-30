@@ -1,0 +1,103 @@
+{
+  "purpose": "Scoped fixture qualification; not the final whole-source gate",
+  "ownedSourcePins": [
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "f7e95a244152365bcea01f5dcd18fed42255830027e51cbd6e1ba4055554c81c",
+      "qualificationSourceHead": "17f328275ef0c7bebaef228e0086ef3daa84ef64"
+    },
+    {
+      "path": "server/src/services/workflows/workflow-executor.test.ts",
+      "sha256": "581f929a6befb39ddeeea9f6ddfb5e5fe8758d9cc4d609d9e8f7e31d104357fd",
+      "qualificationSourceHead": "7c50fce45073140d836315a1aedd27c658afcbb3"
+    },
+    {
+      "path": "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
+      "sha256": "2048522980b3e540b752987b2a30bc55c9106caccd33a07e2185140cb6135ca6",
+      "qualificationSourceHead": "7c50fce45073140d836315a1aedd27c658afcbb3"
+    }
+  ],
+  "files": [
+    {
+      "path": "oxc.log",
+      "sha256": "fb7a7b7d9963f52832cbb92a9cb3b5958f97384c8a495abb2ca7b1544ab004d7",
+      "bytes": 61
+    },
+    {
+      "path": "SHA256SUMS",
+      "sha256": "7f49775ac1eb15a2b9ab11f9e3b7bd3f308253c5ba2caa52eb3fcee40c396e50",
+      "bytes": 1243
+    },
+    {
+      "path": "after-guard.log",
+      "sha256": "60eef284ccb75f3981f2f4b2205477154c63da2206d97888ea34db778ea6bb76",
+      "bytes": 107
+    },
+    {
+      "path": "after-guard.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "snapshot.log",
+      "sha256": "b866dfb52c75a9dc22b97052e1b7bd415cccfef04231df41b8b7a808724ac6d6",
+      "bytes": 38
+    },
+    {
+      "path": "test.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "stage-list.txt",
+      "sha256": "3c967d86e98d1f7a46b44b298d38641756458b3e67484dc78b293969b2fc27b7",
+      "bytes": 161
+    },
+    {
+      "path": "test.log",
+      "sha256": "8eb24688d46ff0070324992751251a4e5c5418b7dc7166d37a9e423c6733db97",
+      "bytes": 1639
+    },
+    {
+      "path": "run-details.txt",
+      "sha256": "91d6d3fd839f15e6ad67f405c60d22381bd4ebdffe1f4d27f2a78b1344e56614",
+      "bytes": 534
+    },
+    {
+      "path": "before-guard.log",
+      "sha256": "60eef284ccb75f3981f2f4b2205477154c63da2206d97888ea34db778ea6bb76",
+      "bytes": 107
+    },
+    {
+      "path": "untracked-source-files.tar.gz",
+      "sha256": "6b5c9fda1760b04a2f36479782f80e9a84d03abd1812578abc4bfe4d9dc09a20",
+      "bytes": 22510
+    },
+    {
+      "path": "runner.txt",
+      "sha256": "91d6d3fd839f15e6ad67f405c60d22381bd4ebdffe1f4d27f2a78b1344e56614",
+      "bytes": 534
+    },
+    {
+      "path": "source-patch.gz",
+      "sha256": "a5b3a653afc184fbdf29853c180f7a4b4f823fc2208d01f14fab2985ebaf2304",
+      "bytes": 135139
+    },
+    {
+      "path": "source-pins.json",
+      "sha256": "296627ff7c1ce89bd3e29acd1a158fc8a2927f0f169c5ad2dc0aa1a01d607b65",
+      "bytes": 190641
+    },
+    {
+      "path": "before-guard.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "README.md",
+      "sha256": "8afaa39b7497a4ba44e6a6f227c8c7c0e2ad5b0ade6fc9fc746614234206156d",
+      "bytes": 1063
+    }
+  ],
+  "archiveSha256": "c51d5575f44acf02034b1db7c9d14b53e435824d933bbc9f44ce570abacc7b47"
+}

@@ -226,6 +226,7 @@ export function activityRoutes(db: Db) {
 
     const filters = {
       companyId,
+      reader: req.actor,
       agentId: req.query.agentId as string | undefined,
       entityType: req.query.entityType as string | undefined,
       entityId: req.query.entityId as string | undefined,
@@ -255,7 +256,7 @@ export function activityRoutes(db: Db) {
       throw badRequest("Invalid agent action audit query", parsedQuery.error.issues);
     }
     if (parsedQuery.data.actorScope === "agents") {
-      const result = await agentAudit.list({ companyId, ...parsedQuery.data });
+      const result = await agentAudit.list({ companyId, ...parsedQuery.data, reader: req.actor });
       res.json({ ...result, accessTier: "full" });
       return;
     }
@@ -264,7 +265,7 @@ export function activityRoutes(db: Db) {
     if (!canViewAttribution && hasAttributionFilters(parsedQuery.data)) {
       throw forbidden("Audit filters require permission: audit:view_agent_actions");
     }
-    const result = await agentAudit.list({ companyId, ...parsedQuery.data });
+    const result = await agentAudit.list({ companyId, ...parsedQuery.data, reader: req.actor });
     res.json({
       ...(canViewAttribution ? result : stripAuditAttribution(result)),
       accessTier: canViewAttribution ? "full" : "basic",
@@ -284,7 +285,7 @@ export function activityRoutes(db: Db) {
     const rows: Awaited<ReturnType<typeof agentAudit.list>>["items"] = [];
     let cursor: string | undefined;
     do {
-      const page = await agentAudit.list({ companyId, ...filters, cursor, limit: AUDIT_CSV_PAGE_SIZE });
+      const page = await agentAudit.list({ companyId, ...filters, cursor, limit: AUDIT_CSV_PAGE_SIZE, reader: req.actor });
       for (const item of page.items) {
         if (rows.length >= AUDIT_CSV_EXPORT_MAX_ROWS) break;
         rows.push(item);

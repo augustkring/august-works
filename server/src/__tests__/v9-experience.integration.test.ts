@@ -16,6 +16,7 @@ import * as authorization from "../services/authorization.js";
 import * as attention from "../services/attention.js";
 import {
   companies,
+  authUsers,
   companyMemberships,
   principalPermissionGrants,
   createDb,
@@ -28,6 +29,7 @@ import {
   customerFeedback,
 } from "@paperclipai/db";
 import { experienceRoutes } from "../routes/experience.js";
+import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import {
@@ -81,6 +83,7 @@ const support = await getEmbeddedPostgresTestSupport();
         next();
       });
       application.use("/api", experienceRoutes(db));
+      application.use("/api", projectRoutes(db));
       application.use(errorHandler);
       return application;
     }
@@ -383,8 +386,8 @@ const support = await getEmbeddedPostgresTestSupport();
           experience_projection_v9: true,
           ambient_commands_v9: true,
         });
-        const target = randomUUID(),
-          title = "PRIVATE-COMMAND-SOURCE";
+        let target = randomUUID();
+        const title = "PRIVATE-COMMAND-SOURCE";
         let action: authorization.AuthorizationAction = "issue:read";
         if (kind === "terminated_agent") {
           action = "agent:read";
@@ -399,9 +402,15 @@ const support = await getEmbeddedPostgresTestSupport();
             });
         } else if (kind === "archived_project") {
           action = "project:read";
-          await db
-            .insert(projects)
-            .values({ id: target, companyId, name: title });
+          const now = new Date();
+          await db.insert(authUsers).values({ id: userId, name: "Experience member",
+            email: `${userId}@example.test`, createdAt: now, updatedAt: now }).onConflictDoNothing();
+          await db.update(companyMemberships).set({ membershipRole: "admin" }).where(and(
+            eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, userId)));
+          const created = await request(app(member())).post(`/api/companies/${companyId}/projects`)
+            .send({ name: title }).expect(201);
+          target = created.body.id;
         } else await db.insert(issues).values({ id: target, companyId, title });
         const assertChanged = afterFirstResourceRead(async () => {
           if (kind === "terminated_agent")

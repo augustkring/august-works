@@ -3,7 +3,13 @@ import type { Db } from "@paperclipai/db";
 import { forbidden } from "../../errors.js";
 import type { ContextPacket, EvidenceItem } from "@paperclipai/shared";
 import {
+  contextMemoryProviderTimeoutMs,
+  contextTaskProviderTimeoutMs,
+  contextTotalDeadlineMs,
+  DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS,
+  DEFAULT_CONTEXT_TOTAL_DEADLINE_MS,
   defaultConnectedKnowledgeContextProviders,
+  NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS,
   runContextProviders,
   serializeContextPacket,
   withContextStageDeadline,
@@ -90,6 +96,78 @@ describe("Context total deadline policy", () => {
 });
 
 describe("Context provider deadline policy", () => {
+  it("keeps generic Context at 1.5s and bounds Native bootstraps at 4s", async () => {
+    expect(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS).toBe(1_500);
+    expect(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS).toBe(4_000);
+    expect(contextTotalDeadlineMs()).toBe(1_500);
+    expect(contextTotalDeadlineMs(undefined, true)).toBe(4_000);
+    expect(contextTotalDeadlineMs(3_000)).toBe(3_000);
+    expect(contextTotalDeadlineMs(30_000, true)).toBe(4_000);
+    expect(DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS).toBe(900);
+    expect(contextMemoryProviderTimeoutMs(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS)).toBe(1_150);
+    expect(contextMemoryProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS)).toBe(3_650);
+    expect(contextTaskProviderTimeoutMs(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS)).toBe(900);
+    expect(contextTaskProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS, true)).toBe(3_650);
+    expect(contextTaskProviderTimeoutMs(400, true)).toBe(50);
+
+    let capturedSignal: AbortSignal | undefined;
+    let releaseLateResult: ((result: { evidence: EvidenceItem[] }) => void) | undefined;
+    const shortNativeMemorySlice = contextMemoryProviderTimeoutMs(400);
+    const result = await runContextProviders([{
+      key: "memory",
+      requirement: "optional",
+      timeoutMs: shortNativeMemorySlice,
+      retrieve: async ({ signal }) => {
+        capturedSignal = signal;
+        return new Promise(resolve => { releaseLateResult = resolve; });
+      },
+    }], request, Date.now() + 400);
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(result.evidence).toEqual([]);
+    releaseLateResult?.({ evidence: [evidence("late-memory-payload")] });
+    await Promise.resolve();
+    expect(result.evidence).toEqual([]);
+  });
+
+  it("runs Native agent providers concurrently while their shared deadline is active", async () => {
+    let firstSignal: AbortSignal | undefined;
+    let secondSawFirstLive = false;
+    let releaseFirst: (() => void) | undefined;
+    const secondStarted = new Promise<void>(resolve => { releaseFirst = resolve; });
+    const result = await runContextProviders([
+      { key: "first", requirement: "optional", timeoutMs: 250,
+        retrieve: async ({ signal }) => { firstSignal = signal; await secondStarted; return { evidence: [] }; } },
+      { key: "second", requirement: "optional", timeoutMs: 250,
+        retrieve: async () => { secondSawFirstLive = !firstSignal?.aborted; releaseFirst?.(); return { evidence: [] }; } },
+    ], { ...request, authorizationActor: { type: "agent", source: "agent_jwt" } }, Date.now() + 300);
+    expect(secondSawFirstLive).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("keeps Human inspection providers sequential on their shared transaction", async () => {
+    let firstActive = false;
+    let secondOverlapped = false;
+    await runContextProviders([
+      { key: "first", requirement: "optional", timeoutMs: 100,
+        retrieve: async () => { firstActive = true; await new Promise(resolve => setTimeout(resolve, 15)); firstActive = false; return { evidence: [] }; } },
+      { key: "second", requirement: "optional", timeoutMs: 100,
+        retrieve: async () => { secondOverlapped = firstActive; return { evidence: [] }; } },
+    ], { ...request, authorizationActor: { type: "board", source: "local_implicit" } }, Date.now() + 200);
+    expect(secondOverlapped).toBe(false);
+  });
+
+  it("keeps agent providers sequential when the caller supplied a transaction", async () => {
+    let firstActive = false;
+    let secondOverlapped = false;
+    await runContextProviders([
+      { key: "first", requirement: "optional", timeoutMs: 100,
+        retrieve: async () => { firstActive = true; await new Promise(resolve => setTimeout(resolve, 15)); firstActive = false; return { evidence: [] }; } },
+      { key: "second", requirement: "optional", timeoutMs: 100,
+        retrieve: async () => { secondOverlapped = firstActive; return { evidence: [] }; } },
+    ], { ...request, authorizationActor: { type: "agent", source: "agent_jwt" } }, Date.now() + 200, undefined, true);
+    expect(secondOverlapped).toBe(false);
+  });
+
   it("omits an optional provider that hangs and returns a visible warning", async () => {
     const provider: ContextProvider = {
       key: "slow_optional",
@@ -105,6 +183,28 @@ describe("Context provider deadline policy", () => {
       providerKey: "slow_optional",
       code: "provider_timeout",
     });
+  });
+
+  it("exposes the same bounded provider deadline and abort signal to cleanup-aware providers", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    let providerDeadlineAt: number | undefined;
+    const started = Date.now();
+    const provider: ContextProvider = {
+      key: "cleanup_aware",
+      requirement: "optional",
+      timeoutMs: 20,
+      retrieve: async ({ signal, providerDeadlineAt: deadline }) => {
+        capturedSignal = signal;
+        providerDeadlineAt = deadline;
+        return new Promise(() => undefined);
+      },
+    };
+
+    await runContextProviders([provider], request, started + 200);
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(providerDeadlineAt).toBeDefined();
+    expect(providerDeadlineAt).toBeLessThanOrEqual(started + 200);
+    expect(providerDeadlineAt).toBeLessThan(started + 100);
   });
 
   it("fails closed when a mandatory provider hangs", async () => {

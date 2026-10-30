@@ -1,0 +1,103 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "637b4a0ffbadd68c2956ba2b547b1742921dc5c1",
+  "meaning": "Current nativeFind/extract source scope before counts/snippets/limits; final12PASS incl ownerpositive/Bobzeroresult+count/foreignsource/retirement/expiredsession/overflow/Helpavailable/localpubliconly controls. Current fullservercompiler0 archivedwithMemoryslice. 256distinctRoutineRun candidate ceiling failsclosed; Tasklist/project/count/attention/sourceclosure work remainsopen.",
+  "logs": [
+    {
+      "name": "typed-routine-search-integration-1",
+      "exitCode": 1,
+      "rawSha256": "b249aea00097f8cbb10d1a7a687163a4104ab1edb27a839406295cb601d19377",
+      "sanitizedSha256": "b249aea00097f8cbb10d1a7a687163a4104ab1edb27a839406295cb601d19377",
+      "archiveSha256": "a1a852e3fbec5e93cc55f1fbfb1b9671a4ba02ab76d9213fec9f6927a1221f64",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 9 passed (11)",
+        "Duration  29.52s (transform 10.89s, setup 77ms, import 14.66s, tests 14.68s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "typed-routine-search-integration-2",
+      "exitCode": 0,
+      "rawSha256": "70b17d928508a8095e3320e7c11556b60f6bf73284c9303b415a9819daa33ff1",
+      "sanitizedSha256": "70b17d928508a8095e3320e7c11556b60f6bf73284c9303b415a9819daa33ff1",
+      "archiveSha256": "377d9dd5bd4c18d636bae95bae3ac55e2fcc7752d2de9673361975088b4b2988",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  29.20s (transform 9.53s, setup 77ms, import 13.04s, tests 15.96s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "typed-routine-search-integration-final",
+      "exitCode": 0,
+      "rawSha256": "eaace31af37c8963ddbe02746ac48cd8db657c371fbdb3d304d4d3d3cbe4d5b2",
+      "sanitizedSha256": "eaace31af37c8963ddbe02746ac48cd8db657c371fbdb3d304d4d3d3cbe4d5b2",
+      "archiveSha256": "03c99d1dc75cc4bac463647ace75936f0d1aabb613afa991e7297b5c38028d7b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  28.03s (transform 9.68s, setup 69ms, import 13.19s, tests 14.64s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "typed-routine-search-rootfix-final",
+      "exitCode": 0,
+      "rawSha256": "acba0efb0d512082a905b8c0af9c3fbdd34a47fd3d32b0f80fb171e92a9a99a5",
+      "sanitizedSha256": "acba0efb0d512082a905b8c0af9c3fbdd34a47fd3d32b0f80fb171e92a9a99a5",
+      "archiveSha256": "c3cf48c3cebfc835555bf4a301a1054ee2c632a9a5187ddbc8c2d48e8d805f27",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  31.09s (transform 10.28s, setup 87ms, import 13.92s, tests 16.96s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "typed-routine-search-reviewed-final",
+      "exitCode": 0,
+      "rawSha256": "cdead41e7db8702d58040aac7a5b978a9460b97c2f4969e943f7969813e1a536",
+      "sanitizedSha256": "cdead41e7db8702d58040aac7a5b978a9460b97c2f4969e943f7969813e1a536",
+      "archiveSha256": "76611218d249cffd76c4b86b2052fb3e2e50783fda1a36619682a40c80e543f7",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  12 passed (12)",
+        "Duration  33.67s (transform 11.76s, setup 73ms, import 15.78s, tests 17.70s, environment 0ms)"
+      ]
+    }
+  ]
+}

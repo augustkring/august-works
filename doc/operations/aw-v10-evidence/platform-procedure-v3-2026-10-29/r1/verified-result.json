@@ -1,0 +1,35 @@
+{
+  "status": "PASS",
+  "qualificationWorkspace": "/workspace/v10-dep-qualification",
+  "snapshotFilesCopied": 992,
+  "syntaxParser": {
+    "status": "passed",
+    "filesChecked": 835
+  },
+  "manifestHashes": {
+    "operationManifestHash": "52fe608c583066221d3cee9562cd2216e17abdb9d0860ba74d9b9adf33e50e20",
+    "toolCatalogContractHash": "5c9b1372bf12ad8b962b3249d2ce6e3679f33ba681f5cbc407d1459bee335825"
+  },
+  "manifestUnitGroup": {
+    "testFile": "server/src/__tests__/tool-gateway-service.test.ts",
+    "selector": "Blentera platform contract hashes",
+    "passed": 5,
+    "failed": 0,
+    "filteredSkipped": 57,
+    "vitestExit": 0
+  },
+  "platformAdmissionGroup": {
+    "testFile": "server/src/__tests__/platform-skill-admission.integration.test.ts",
+    "selector": "required platform procedure admission",
+    "passed": 4,
+    "failed": 0,
+    "vitestExit": 0
+  },
+  "runnerGateCorrection": "The initial post-test summary incorrectly treated 57 Vitest-filtered tests outside the selected manifest group as failures. Raw Vitest reported 5 selected manifest tests passed, 0 failed; all 4 PostgreSQL admission cases passed. The runner exit file remains 1 as an honest record of that checker bug; this corrected summary validates only selected test results and their actual exit codes.",
+  "runnerScriptSha256": "f57065ed170a14c3adfccc468e0c1edc71eb8210ccd5e2d2f392dfde83847ba7",
+  "sourcePinsSha256": "ab5f6238c83e79e8e4f0fb3b4396f066350db4babca920cf6e060b827535b619",
+  "testLogShas": {
+    "unit-test.log": "86dc1d4c51664e2b9dd4a333951ac8e6c64b7264733e8e92ba271044755a6318",
+    "admission-test.log": "08b53dd6a2683cf15a222ee0ac415a40703009e3ea14a4e895f18c2997a20779"
+  }
+}

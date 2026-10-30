@@ -52,8 +52,30 @@ const STATUS_CHIP: Record<GrantStatusTone, string> = {
   missing: brandChipBadge.gray,
 };
 
-function StatusText({ status }: { status: ConnectionGrant["status"] | null }) {
-  const tone = grantStatusTone(status);
+function StatusText({ status, lifecycle }: {
+  status: ConnectionGrant["status"] | null;
+  lifecycle?: ConnectionGrant["lifecycle"];
+}) {
+  const lifecycleLabels = {
+    HEALTHY: "Healthy",
+    DEGRADED: "Degraded",
+    REQUIRES_REAUTH: "Reconnect required",
+    PERMISSION_CHANGED: "Permissions changed",
+    SYNC_GAP: "Sync needs repair",
+    WEBHOOK_EXPIRING: "Webhook renewal needed",
+    PROVIDER_DEPRECATED: "Provider migration needed",
+    PAUSED: "Paused",
+    REVOKED: "Revoked",
+    ERROR: "Connection error",
+  } as const;
+  const label = lifecycle
+    ? lifecycleLabels[lifecycle.state]
+    : grantStatusLabel(status);
+  const tone: GrantStatusTone = !lifecycle
+    ? grantStatusTone(status)
+    : lifecycle.state === "HEALTHY" ? "connected"
+      : lifecycle.state === "PAUSED" || lifecycle.state === "REVOKED" ? "inactive"
+        : "attention";
   return (
     <span
       className={cn(
@@ -61,8 +83,39 @@ function StatusText({ status }: { status: ConnectionGrant["status"] | null }) {
         STATUS_CHIP[tone],
       )}
     >
-      {grantStatusLabel(status)}
+      {label}
     </span>
+  );
+}
+
+function LifecycleDetails({ lifecycle }: { lifecycle?: ConnectionGrant["lifecycle"] | null }) {
+  if (!lifecycle) return null;
+  const expiration = lifecycle.credentialExpiresAt
+    ? new Date(lifecycle.credentialExpiresAt).toLocaleString()
+    : null;
+  const refreshExpiration = lifecycle.refreshTokenExpiresAt
+    ? new Date(lifecycle.refreshTokenExpiresAt).toLocaleString()
+    : null;
+  const secretReferenceExpiration = lifecycle.secretReferenceExpiresAt
+    ? new Date(lifecycle.secretReferenceExpiresAt).toLocaleString()
+    : null;
+  return (
+    <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+      <div>Connection health: {lifecycle.connectionHealth.state}{lifecycle.connectionHealth.checkedAt ? `; last checked ${new Date(lifecycle.connectionHealth.checkedAt).toLocaleString()}` : "; not checked"}</div>
+      {lifecycle.scopeNames.length > 0 ? <div>Current authorized scopes: {lifecycle.scopeNames.join(", ")}</div> : null}
+      {expiration ? <div>{lifecycle.credentialExpirySource === "vercel_connect_issuance" ? "Last-issued Vercel credential expiry" : "OAuth access-token expiry"}: {expiration} ({lifecycle.credentialFreshness})</div> : null}
+      {refreshExpiration ? <div>Refresh credential expiry: {refreshExpiration} ({lifecycle.refreshCredentialFreshness})</div> : null}
+      {secretReferenceExpiration ? <div>Configured credential expiry: {secretReferenceExpiration} ({lifecycle.secretReferenceFreshness})</div> : null}
+      {lifecycle.lastAccessVerifiedAt ? <div>Provider access last verified: {new Date(lifecycle.lastAccessVerifiedAt).toLocaleString()}</div> : null}
+      {lifecycle.lastCredentialRefreshedAt ? <div>Credential last refreshed: {new Date(lifecycle.lastCredentialRefreshedAt).toLocaleString()}</div> : null}
+      {lifecycle.webhook ? (
+        <div>
+          GitHub webhook delivery: {lifecycle.webhook.health}
+          {lifecycle.webhook.lastDeliveryAt ? `; last received ${new Date(lifecycle.webhook.lastDeliveryAt).toLocaleString()}` : "; no delivery recorded"}.
+          Sync reconciliation is not reported.
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -181,6 +234,7 @@ export function IdentitiesSection({
         <IdentityRow
           title={github ? `@${github.login}` : "Dedicated GitHub account"}
           status={agentGrant?.status ?? null}
+          lifecycle={agentGrant?.lifecycle}
           detail={dedicatedAgent ? (
             <Link
               to={agentUrl(dedicatedAgent)}
@@ -211,6 +265,7 @@ export function IdentitiesSection({
         connectedName={usesPersonalIdentity ? personalSubjectLabel ?? connectedUser?.label ?? null : null}
         connectedImage={usesPersonalIdentity ? connectedUser?.image ?? null : null}
         status={(usesPersonalIdentity ? personalGrant : orgGrant)?.status ?? null}
+        lifecycle={(usesPersonalIdentity ? personalGrant : orgGrant)?.lifecycle}
         canEditAudience={orgGrant?.capabilities?.canEditAudience ?? false}
         onChooseAll={() => {
           if (orgGrant) onReplaceAudience(orgGrant, []);
@@ -235,6 +290,7 @@ export function IdentitiesSection({
               id="personal-identity"
               title="Personal account"
               status={null}
+              lifecycle={null}
               detail="Personal identity"
               actions={capabilities?.canConnectAsCurrentUser ? (
                   <Button size="sm" disabled={connectPending} onClick={onConnectAsMe}>
@@ -257,6 +313,7 @@ export function IdentitiesSection({
             <IdentityRow
               title="Organization account"
               status={null}
+              lifecycle={null}
               detail="Organization identity"
               actions={capabilities?.canCreateOrganizationGrant ? (
                   <Button size="sm" disabled={connectPending} onClick={onConnectOrganization}>
@@ -388,6 +445,7 @@ function HumanAccessCards({
   connectedName,
   connectedImage,
   status,
+  lifecycle,
   canEditAudience,
   onChooseAll,
   onChooseSelected,
@@ -397,6 +455,7 @@ function HumanAccessCards({
   connectedName: string | null;
   connectedImage: string | null;
   status: ConnectionGrant["status"] | null;
+  lifecycle?: ConnectionGrant["lifecycle"] | null;
   canEditAudience: boolean;
   onChooseAll: () => void;
   onChooseSelected: () => void;
@@ -436,10 +495,13 @@ function HumanAccessCards({
           },
         ]}
       />
-      {connectedName && status !== null ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Identity name={connectedName} avatarUrl={connectedImage} />
-          {status === "active" ? null : <StatusText status={status} />}
+      {status !== null ? (
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            {connectedName ? <Identity name={connectedName} avatarUrl={connectedImage} /> : null}
+            {lifecycle?.state === "HEALTHY" || (!lifecycle && status === "active") ? null : <StatusText status={status} lifecycle={lifecycle ?? undefined} />}
+          </div>
+          <LifecycleDetails lifecycle={lifecycle} />
         </div>
       ) : null}
     </div>
@@ -450,12 +512,14 @@ function IdentityRow({
   id,
   title,
   status,
+  lifecycle,
   detail,
   actions,
 }: {
   id?: string;
   title: string;
   status: ConnectionGrant["status"] | null;
+  lifecycle?: ConnectionGrant["lifecycle"] | null;
   detail: ReactNode;
   actions: ReactNode;
 }) {
@@ -464,9 +528,10 @@ function IdentityRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-foreground">{title}</span>
-          {status === "active" ? null : <StatusText status={status} />}
+          {lifecycle?.state === "HEALTHY" || (!lifecycle && status === "active") ? null : <StatusText status={status} lifecycle={lifecycle ?? undefined} />}
         </div>
         {detail ? <div className="mt-0.5 text-xs text-muted-foreground">{detail}</div> : null}
+        <LifecycleDetails lifecycle={lifecycle} />
       </div>
       <div className="flex flex-wrap items-center gap-2">{actions}</div>
     </div>

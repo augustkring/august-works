@@ -1,8 +1,15 @@
+import { productIdentityRoutes } from "./routes/product-identity.js";
+import { companyImportJobService, scheduleCompanyImportRecovery } from "./services/company-import-jobs.js";
 import { purgeExpiredNotificationChannelCommands } from "./services/notifications/channel-retention.js";
 import { customerSupportRoutes } from "./routes/customer-support.js";
+import { serviceHealthRoutes } from "./routes/service-health.js";
+import { readSupportCaseDataPolicy } from "./services/experience/support-case-configuration.js";
+import { firstPartySupportModelGateway } from "./services/orchestration/first-party-support-model-gateway.js";
+import { searchAuthorizedSupportHelp } from "./services/experience/support-assistant-help.js";
 import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
 import { experienceObservationRoutes } from "./routes/experience-observations.js";
 import { experienceMeasuresRoutes } from "./routes/experience-measures.js";
+import { trustDocumentRoutes } from "./routes/trust-documents.js";
 import { agentMonitorRoutes } from "./routes/agent-monitor.js";
 import { agentRetirementRoutes } from "./routes/agent-retirement.js";
 import { enterpriseRoutes } from "./routes/enterprise.js";
@@ -35,11 +42,12 @@ import { agentIdentityRoutes } from "./routes/agent-identities.js";
 import { slackToolRoutes } from "./routes/slack-tools.js";
 import { agentAvatarRoutes } from "./routes/agent-avatars.js";
 import { aiConnectionRoutes } from "./routes/ai-connections.js";
+import { jevDecisionRoutes } from "./routes/jev-decisions.js";
 import { projectToolRoutes } from "./routes/project-tools.js";
 import { emailChannelService } from "./services/email-channels.js";
 import { emailRoutes, emailWebhookRoutes } from "./routes/email.js";
 import { toolActionDeliveryService } from "./services/tool-action-delivery.js";
-import { registerAssignedMcpGateway } from "./services/native-runtime/assigned-mcp-tools.js";
+import { getAssignedMcpGateway, registerAssignedMcpGateway } from "./services/native-runtime/assigned-mcp-tools.js";
 import express, { Router, type Request as ExpressRequest } from "express";
 import {
   createServer as createHttpServer,
@@ -49,6 +57,8 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Db } from "@paperclipai/db";
+import { agentExecutionManifests, agentPresenceRuntimeBindings, heartbeatRuns } from "@paperclipai/db";
+import { and, eq } from "drizzle-orm";
 import {
   derivePaperclipViteHmrPort,
   type AwDeploymentProfile,
@@ -80,6 +90,7 @@ import { cloudControlMiddleware } from "./middleware/cloud-control.js";
 import { cloudRoutes } from "./routes/cloud.js";
 import { companyRoutes } from "./routes/companies.js";
 import { companySkillRoutes } from "./routes/company-skills.js";
+
 import { foundationRoutes } from "./routes/foundation.js";
 import { readinessRoutes } from "./routes/readiness.js";
 import { foundationBootstrapRoutes } from "./routes/foundation-bootstrap.js";
@@ -153,6 +164,7 @@ import { userProfileRoutes } from "./routes/user-profiles.js";
 import { sidebarBadgeRoutes } from "./routes/sidebar-badges.js";
 import { sidebarPreferenceRoutes } from "./routes/sidebar-preferences.js";
 import { announcementRoutes } from "./routes/announcements.js";
+import { announcementFeedService } from "./services/announcement-feed.js";
 import { serverVersion } from "./version.js";
 import { resourceMembershipRoutes } from "./routes/resource-memberships.js";
 import { inboxDismissalRoutes } from "./routes/inbox-dismissals.js";
@@ -216,6 +228,8 @@ import {
 import { subscribeAllCompanyLiveEvents } from "./services/live-events.js";
 import { heartbeatService } from "./services/heartbeat.js";
 import { pluginLifecycleManager } from "./services/plugin-lifecycle.js";
+import { createDeliveryWorkCoordinator } from "./services/delivery-work-coordinator.js";
+import { registerPluginLifecycleDelivery } from "./services/plugin-lifecycle-delivery.js";
 import { createPluginJobCoordinator } from "./services/plugin-job-coordinator.js";
 import {
   buildHostServices,
@@ -237,6 +251,7 @@ import { COMPANY_IMPORT_API_PATH } from "./routes/company-import-paths.js";
 import { apiCompression } from "./middleware/api-compression.js";
 import { chatWebhookBodyParser } from "./middleware/chat-webhook-body.js";
 import { createChatWebhookDiagnostics } from "./services/chat-webhook-diagnostics.js";
+
 
 type UiMode = "none" | "static" | "vite-dev";
 const FEEDBACK_EXPORT_FLUSH_INTERVAL_MS = 5_000;
@@ -548,6 +563,10 @@ export async function createApp(
     pluginMigrationDb?: Db;
     pluginWorkerManager?: PluginWorkerManager;
     decisionServiceOptions: DecisionServiceOptions;
+    /** Server-owned operator qualification registry; absent profiles fail closed. */
+    decisionShadow?: { sourceSha: string; profiles: readonly import("./services/jev-skill-suggestions.js").JevSkillSuggestionProfile[] };
+    /** Server-owned heartbeat instance for composed server fixtures. Never request-controlled. */
+    heartbeat?: ReturnType<typeof heartbeatService>;
     betterAuthHandler?: express.RequestHandler;
     resolveSession?: (
       req: ExpressRequest,
@@ -630,6 +649,10 @@ export async function createApp(
       bindHost: opts.bindHost,
     }),
   );
+  // Public contact discovery stays behind the configured origin/Host guards,
+  // and is available before sign-in without exposing tenant information.
+  app.use(productIdentityRoutes());
+  app.use(serviceHealthRoutes());
   if (opts.deploymentProfile !== "saas") app.use(cloudRuntimeIdentityMiddleware(db));
   // Connection-intent tools carry their own short-lived, run-bound bearer and
   // must be reachable by remote adapters that intentionally do not receive an
@@ -654,8 +677,10 @@ export async function createApp(
 
   const hostServicesDisposers = new Map<string, () => void>();
   const workerManager = opts.pluginWorkerManager ?? createPluginWorkerManager();
-  const connectionIntentHeartbeat = heartbeatService(db, {
+  const connectionIntentHeartbeat = opts.heartbeat ?? heartbeatService(db, {
     pluginWorkerManager: workerManager,
+    sandboxExec: opts.saasPlatform?.runtime.executeSandboxTask,
+    decisionShadow: opts.decisionShadow,
   });
   const chatChannels = chatChannelService(db, {
     notificationDelivery: opts.saasPlatform?.notifications?.channelDelivery,
@@ -761,13 +786,43 @@ export async function createApp(
   api.use(aiGovernanceRoutes(db));
   api.use(enterpriseRoutes(db, opts.saasPlatform ? { operatorUserIds: opts.saasPlatform.config.operatorUserIds, sourceSha: opts.saasPlatform.config.deployment.sourceSha, protectedEvidenceOrigin: opts.saasPlatform.config.objects.endpoint, appOrigin: opts.saasPlatform.origins.primaryAppOrigin } : undefined));
   api.use(agentPackageRoutes(db, { operatorUserIds: opts.saasPlatform?.config.operatorUserIds, protectedEvidenceOrigin: opts.saasPlatform?.config.objects.endpoint, sourceSha: opts.saasPlatform?.config.deployment.sourceSha }));
+  const resolveSandboxBrokerBindings = async (companyId: string, policy: import("@paperclipai/shared").SandboxPolicyCompilation) => {
+    const compiled = policy.compiledPolicy;
+    if (compiled.credentials.mode !== "brokered") return { authorizedConnectionGrantHashes: {}, bindings: [] };
+    const manifestRef = policy.sourcePolicyRefs.find(ref => ref.startsWith("manifest:"));
+    const match = manifestRef ? /^manifest:([0-9a-f-]{36}):([a-f0-9]{64})$/i.exec(manifestRef) : null;
+    if (!match) throw new Error("sandbox_broker_manifest_source_unavailable");
+    const [manifest] = await db.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.id, match[1]!), eq(agentExecutionManifests.hash, match[2]!),
+    )).limit(1);
+    const [run] = manifest ? await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, manifest.runId), eq(heartbeatRuns.agentId, manifest.agentId), eq(heartbeatRuns.status, "running"),
+    )).limit(1) : [];
+    const [presence] = manifest ? await db.select().from(agentPresenceRuntimeBindings).where(and(
+      eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, manifest.agentId), eq(agentPresenceRuntimeBindings.status, "active"),
+    )).limit(1) : [];
+    if (!manifest || !run?.responsibleUserId || !presence) throw new Error("sandbox_broker_run_source_unavailable");
+    return await getAssignedMcpGateway(db).resolveSandboxCredentialBrokerPolicyBindings({
+      companyId, agentId: manifest.agentId, runId: run.id, responsibleUserId: run.responsibleUserId,
+      presenceId: presence.id, bindings: compiled.credentials.bindings,
+    });
+  };
   api.use(executionSandboxRoutes(db, {
     operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
+    credentialBrokerOrigin: opts.saasPlatform?.origins.primaryAppOrigin,
     backendFor: opts.saasPlatform?.config.runtime.openshellProver ? (binding, actor) => binding.backend === "openshell" ? openShellBackend({
       identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId, cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
       boundary: binding.boundaryPolicy, bridge: opts.saasPlatform!.sandboxHosts.bridge(actor), evidenceKind: "protected_host_report", prover: opts.saasPlatform!.config.runtime.openshellProver!,
+      credentialBrokerOrigin: opts.saasPlatform!.origins.primaryAppOrigin,
+      resolveCredentialBrokerBindings: (policy) => resolveSandboxBrokerBindings(binding.companyId, policy),
     }) : undefined : undefined,
     nativeOperation: opts.saasPlatform ? (companyId, cellId, userId, action, idempotencyKey) => opts.saasPlatform!.runtime.request(companyId, cellId, userId, { action, idempotencyKey }) : undefined,
+    assertRuntimeStartAdmission: opts.saasPlatform?.runtime.assertSandboxStartAdmission
+      ? (tx, input) => opts.saasPlatform!.runtime.assertSandboxStartAdmission(tx, input)
+      : undefined,
+    recordRuntimeWorkloadState: opts.saasPlatform?.runtime.recordSandboxWorkloadState
+      ? (tx, input) => opts.saasPlatform!.runtime.recordSandboxWorkloadState(tx, input)
+      : undefined,
   }));
   api.use(cognitiveMemoryRoutes(db));
   api.use(memoryRoutes(db));
@@ -915,15 +970,21 @@ export async function createApp(
   api.use(processAnalysisRoutes(db));
   api.use(decisionIntelligenceRoutes(db));
   api.use(dashboardRoutes(db));
-  api.use(experienceRoutes(db));
+  api.use(experienceRoutes(db, { operatorUserIds: opts.saasPlatform?.config.operatorUserIds ?? [] }));
   api.use(agentAuthoringRoutes(db, opts.saasPlatform?.config));
   api.use(conversationAuthoringRoutes(db));
   api.use(agentMonitorRoutes(db));
   api.use(agentRetirementRoutes(db));
   api.use(maintenanceHistoryRoutes(db));
   api.use(experienceMeasuresRoutes(db));
+  api.use(trustDocumentRoutes(db));
   api.use(experienceObservationRoutes(db));
-  api.use(customerSupportRoutes(db));
+  api.use(customerSupportRoutes(db, { assistant: opts.saasPlatform ? firstPartySupportModelGateway(db, {
+    profiles: opts.saasPlatform.config.firstPartySupportModelProfiles ?? [],
+    sourceSha: opts.saasPlatform.config.deployment.sourceSha,
+    protectedEvidenceOrigin: opts.saasPlatform.config.objects.endpoint,
+    helpSearch: searchAuthorizedSupportHelp,
+  }) : undefined }));
   api.use(customerFeedbackRoutes(db,{operatorUserIds:opts.saasPlatform?.config.operatorUserIds, storage: scopedStorage}));
   api.use(attentionRoutes(db));
   api.use(decisionTrainingRoutes(db));
@@ -932,7 +993,15 @@ export async function createApp(
   api.use(userProfileRoutes(db));
   api.use(sidebarBadgeRoutes(db));
   api.use(sidebarPreferenceRoutes(db));
-  api.use(announcementRoutes(db, { ...opts.announcements, version: opts.hostVersion ?? serverVersion }));
+  const announcementOptions = { ...opts.announcements, version: opts.hostVersion ?? serverVersion };
+  const announcementFeed = announcementFeedService(announcementOptions);
+  api.use(announcementRoutes(db, announcementOptions, announcementFeed, opts.saasPlatform?.config.workerModelProfiles ?? [], {
+    readOnly: opts.saasPlatform?.config.readOnlyModelProfiles ?? [],
+    support: opts.saasPlatform?.config.firstPartySupportModelProfiles ?? [],
+    jev: opts.saasPlatform?.config.jevSkillSuggestionProfiles ?? [],
+    sourceSha: opts.saasPlatform?.config.deployment.sourceSha,
+    protectedEvidenceOrigin: opts.saasPlatform?.config.objects.endpoint,
+  }));
   api.use(resourceMembershipRoutes(db));
   api.use(inboxDismissalRoutes(db));
   api.use(instanceSettingsRoutes(db, {
@@ -947,6 +1016,12 @@ export async function createApp(
   setPluginEventBus(eventBus);
   const jobStore = pluginJobStore(db);
   const lifecycle = pluginLifecycleManager(db, { workerManager });
+  const pluginLifecycleWork = createDeliveryWorkCoordinator({
+    owner: db,
+    canRun: () => true,
+    onError: (err, queue) => logger.error({ err, queue }, "Plugin lifecycle outbox recovery failed"),
+  });
+  const resourceLifecycleDelivery = registerPluginLifecycleDelivery(pluginLifecycleWork, db, workerManager, lifecycle);
   const scheduler = createPluginJobScheduler({
     db,
     jobStore,
@@ -962,8 +1037,9 @@ export async function createApp(
     deploymentExposure: opts.deploymentExposure,
     trustedLocalStdioRuntimeHost,
   });
-  const toolActionDeliveries = toolActionDeliveryService(db, heartbeatService(db, { pluginWorkerManager: workerManager }));
+  const toolActionDeliveries = toolActionDeliveryService(db, connectionIntentHeartbeat);
   const toolGateway = createToolGatewayService(db, {
+    supportCaseDataPolicy: readSupportCaseDataPolicy(process.env),
     onToolActionSettled: (id) => toolActionDeliveries.deliver(id),
     pluginToolDispatcher: toolDispatcher,
     deploymentMode: opts.deploymentMode,
@@ -972,22 +1048,38 @@ export async function createApp(
     oauthGrantRefresher: (input) =>
       gatewayOAuthAccess.refreshOAuthGrantCredentials(input),
   });
+  if (opts.saasPlatform?.runtime) {
+    toolGateway.setSandboxBrokerAuthority((input) =>
+      opts.saasPlatform!.runtime.authorizeSandboxBrokerCapability(input),
+    );
+  }
   // Issue routes are intentionally mounted after the gateway is constructed because
   // issue approval endpoints delegate to it. The intervening routers use distinct
   // route prefixes, so this dependency does not change issue-route precedence.
   api.use(issueRoutes(db, scopedStorage, {
     chatRunRetries: chatChannels,
+    heartbeat: connectionIntentHeartbeat,
     feedbackExportService: opts.feedbackExportService,
+    announcementSearch: () => announcementFeed.searchable(),
     pluginWorkerManager: workerManager,
     approveToolActionRequest: (input) => toolGateway.approveActionRequest(input),
     declineToolActionRequest: (input) => toolGateway.declineActionRequest(input),
   }));
   api.use(slackToolRoutes(db, opts.authPublicBaseUrl));
   app.locals.toolGateway = toolGateway;
-  registerAssignedMcpGateway(db, toolGateway);
+  registerAssignedMcpGateway(db, toolGateway, (scopedDb) => createToolGatewayService(scopedDb, {
+    // Runtime authorization re-resolves broker grants inside its current
+    // transaction. Keep the same deployment/policy posture while binding the
+    // metadata-only resolver to that transaction; provider dispatch continues
+    // through the configured root service above.
+    deploymentMode: opts.deploymentMode,
+    deploymentExposure: opts.deploymentExposure,
+    trustedLocalStdioRuntimeHost,
+  }));
   app.locals.toolActionDeliveries = toolActionDeliveries;
   app.use(mcpGatewayProtocolRoutes(toolGateway));
   api.use(aiConnectionRoutes(db, { deploymentMode: opts.deploymentMode, deploymentExposure: opts.deploymentExposure, trustedLocalStdioRuntimeHost }));
+  api.use(jevDecisionRoutes(db, { sourceSha: opts.decisionShadow?.sourceSha, profiles: opts.decisionShadow?.profiles }));
   api.use(
     toolAccessRoutes(db, {
       deploymentMode: opts.deploymentMode,
@@ -1091,6 +1183,7 @@ export async function createApp(
       bindHost: opts.bindHost,
       allowedHostnames: opts.allowedHostnames,
       authPublicBaseUrl: opts.authPublicBaseUrl,
+      operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
       saasInviteRecipient:opts.saasPlatform?(invite,userId)=>opts.saasPlatform!.invitations.assertRecipient(invite,userId):undefined,
     }),
   );
@@ -1154,10 +1247,12 @@ export async function createApp(
           res.status(404).end();
           return;
         }
+        const cliApproval = req.path === "/cli-auth" || req.path.startsWith("/cli-auth/");
+        if (cliApproval) res.set("Referrer-Policy", "no-referrer");
         res
           .status(200)
           .set("Content-Type", "text/html")
-          .set("Cache-Control", "no-cache")
+          .set("Cache-Control", cliApproval ? "no-store" : "no-cache")
           .end(readBrandedStaticIndexHtml(uiDist));
       });
     } else {
@@ -1250,6 +1345,9 @@ export async function createApp(
       }
       try {
         const html = await renderViteHtml.render(req.originalUrl);
+        if (req.path === "/cli-auth" || req.path.startsWith("/cli-auth/")) {
+          res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+        }
         res.status(200).set({ "Content-Type": "text/html" }).end(html);
       } catch (err) {
         next(err);
@@ -1361,18 +1459,19 @@ export async function createApp(
       IMPORT_TRANSFER_SPOOL_SWEEP_INTERVAL_MS,
     );
   importTransferSweepTimer.unref?.();
-  // Startup only (never on the hourly interval — that would kill live
-  // applies): apply jobs are in-memory in this single process, so any run
-  // still "applying" now was interrupted by the previous shutdown and would
-  // otherwise 409 every retry forever. Fail those stranded runs — their
-  // spooled parts stay reusable — then run the normal sweep once.
+  // A process may start while the crashed owner's lease is still live. Keep
+  // checking so that only subsequently expired leases become inconclusive.
+  let stopImportJobRecovery: (() => Promise<void>) | null = scheduleCompanyImportRecovery(
+    () => companyImportJobService(db).recoverInterrupted(),
+    () => logger.error("interrupted durable import status could not be reconciled"),
+  );
   void companyTransferRunService
     .recoverStrandedApplyingRuns(db)
     .then((recovered) => {
       if (recovered.length > 0) {
         logger.warn(
           { count: recovered.length, runIds: recovered },
-          "failed company transfer runs stranded in applying by a restart",
+          "company transfer apply outcomes require reconciliation",
         );
       }
     })
@@ -1389,6 +1488,8 @@ export async function createApp(
     lifecycle,
     async (pluginId) =>
       (await pluginRegistry.getById(pluginId))?.packagePath ?? null,
+    undefined,
+    { unwatchedRoots: [bundledCatalogRoot] },
   );
   // Auto-provision bundled plugins so their providers are registered for
   // agent runs. Bundles are excluded from the pnpm
@@ -1442,7 +1543,8 @@ export async function createApp(
     })
     .catch((err) => {
       logger.error({ err }, "Failed to load ready plugins on startup");
-    });
+    })
+    .finally(() => resourceLifecycleDelivery.wake());
   app.locals.bundledPluginsStartup = bundledPluginsStartup;
   // The shutdown hook runs at most once. It caches the in-flight promise, so a
   // second caller (for example the `exit` handler) awaits the same completion
@@ -1455,6 +1557,8 @@ export async function createApp(
       // awaited teardown, so no tick runs after the caller ends the pool.
       scheduler.stop();
       jobCoordinator.stop();
+      resourceLifecycleDelivery.dispose();
+      await pluginLifecycleWork.stop();
       disableFeedbackExportFlushes();
       unsubscribeChatPublicationSignals();
       chatReconciliation.stop();
@@ -1466,6 +1570,11 @@ export async function createApp(
       if (importTransferSweepTimer) {
         clearInterval(importTransferSweepTimer);
         importTransferSweepTimer = null;
+      }
+      if (stopImportJobRecovery) {
+        const stopRecovery = stopImportJobRecovery;
+        stopImportJobRecovery = null;
+        await stopRecovery();
       }
       devWatcher?.close();
       viteHtmlRenderer?.dispose();

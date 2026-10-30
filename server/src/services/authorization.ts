@@ -1,20 +1,50 @@
+import { isDeepStrictEqual } from "node:util";
+import { createHash, randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { isSaasDeployment } from "../deployment-profile.js";
-import { and, eq, inArray, is, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, is, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
+import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 import {
+  executePrivacyIdSelect,
   agents,
+  agentApiKeys,
   agentExecutionManifests,
+  agentExecutionScopeRequests,
   authUsers,
+  authSessions,
+  boardApiKeys,
+  accountDeletionOperations,
   companyMemberships,
+  chatEndpoints,
+  chatExternalPrincipals,
+  chatIdentityLinks,
   heartbeatRuns,
   instanceUserRoles,
   issueComments,
+  issueAccessGrants,
+  issuePrivacySources,
   issues,
+  workflowRuns,
+  workflowRevisions,
+  workflows,
+  routineRuns,
+  routineRevisions,
+  routines,
+  pluginManagedResources,
+  plugins,
   principalPermissionGrants,
   projects,
+  projectAccessMembers,
   userInboxAgentPolicies,
+  memoryRecords,
+  memoryDeletionMarkers,
+  contextManifests,
+  contextManifestItems,
 } from "@paperclipai/db";
+import { agentExecutionScopeSchema, nativePayloadSourceSnapshotSchema, pluginOperationIssueOriginKind,
+  routineRevisionSnapshotV1Schema, type AgentExecutionScope } from "@paperclipai/shared";
 import type {
   AgentApiKeyScope,
   InboxAgentPolicyMode,
@@ -23,16 +53,20 @@ import type {
   SkillTestAgentKeyScope,
   TaskBridgeAgentKeyScope,
 } from "@paperclipai/shared";
-import { LOW_TRUST_REVIEW_PRESET, extractAgentMentionIds, type LowTrustBoundary } from "@paperclipai/shared";
+import { agentApiKeyScopeSchema, LOW_TRUST_REVIEW_PRESET, extractAgentMentionIds, type LowTrustBoundary } from "@paperclipai/shared";
 import {
   LOW_TRUST_ISSUE_ANCESTRY_MAX_DEPTH,
   isIssueWithinLowTrustBoundary,
   resolveCoreTrustPreset,
   type TrustPresetResolution,
 } from "./trust-preset-resolver.js";
+import { conflict, forbidden, HttpError, unprocessable } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { grantsForHumanRole, normalizeHumanRole } from "./company-member-roles.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
+import { nativeMemoryCapturePrincipalCondition } from "./memory/memory-privacy.js";
+import { assertRoutineSourceAccess } from "./routine-source-authority.js";
 
 /** Current native role evidence. The optional lock is owned by an enclosing
  * mutation transaction; a role copied into an actor is never this evidence. */
@@ -57,6 +91,9 @@ export type AuthorizationActor =
     agentId?: string | null;
     companyId?: string | null;
     keyId?: string | null;
+    /** Fingerprint retained by the original credential verifier, never client input. */
+    authenticatedKeyHash?: string | null;
+    authenticatedCredentialExpiresAt?: number | null;
     keyScope?: AgentApiKeyScope | null;
     runId?: string | null;
     onBehalfOfUserId?: string | null;
@@ -64,12 +101,35 @@ export type AuthorizationActor =
       | "local_implicit"
       | "session"
       | "board_key"
+      | "chat_link"
       | "agent_key"
       | "agent_jwt"
       | "cloud_tenant"
       | "cloud_control"
       | "none";
+    /** Exact current provider identity proof created only by the outbound
+     * chat author resolver. This is not an HTTP session or a generic grant. */
+    chatLink?: { companyId: string; endpointId: string; principalId: string; provider: "slack" | "microsoft-teams" };
+    nativeToolEffect?: NativeToolEffectClaim;
   };
+
+/** Shared owner check for the company APIs that admit only Board or CEO
+ * operators. Keep the role read live so a demoted Agent cannot continue a
+ * long operation with its admission-time role. */
+export async function assertCompanyCeoAgentOrBoard(
+  db: Db | DbTransaction,
+  companyId: string,
+  actor: AuthorizationActor,
+  capability: string,
+) {
+  if (actor.type === "board") return;
+  if (actor.type !== "agent" || !actor.agentId) throw forbidden("Agent authentication required");
+  const [actorAgent] = await db.select({ companyId: agents.companyId, role: agents.role }).from(agents)
+    .where(eq(agents.id, actor.agentId)).limit(1);
+  if (!actorAgent || actorAgent.companyId !== companyId)
+    throw forbidden("Agent key cannot access another company");
+  if (actorAgent.role !== "ceo") throw forbidden(`Only CEO agents can manage ${capability}`);
+}
 
 export type AuthorizationAction =
   | PermissionKey
@@ -126,6 +186,7 @@ export type AuthorizationDecision = {
     | "allow_issue_mention_grant"
     | "allow_direct_parent_report"
     | "allow_visible_issue_write"
+    | "allow_delegated_context_source"
     | "allow_self"
     | "allow_company_agent"
     | "allow_company_member"
@@ -143,6 +204,8 @@ export type AuthorizationDecision = {
     | "deny_policy_restricted"
     | "deny_low_trust_boundary"
     | "deny_scope"
+    | "deny_issue_private"
+    | "deny_project_private"
     | "deny_unsupported_action";
   grant?: {
     principalType: PrincipalType;
@@ -260,6 +323,7 @@ type ProjectAuthorizationRow = {
   id: string;
   companyId: string;
   executionWorkspacePolicy: unknown;
+  visibility: string;
 };
 type IssueAuthorizationRow = {
   id: string;
@@ -273,6 +337,12 @@ type IssueAuthorizationRow = {
   executionPolicy: unknown;
   originKind: string | null;
   originId: string | null;
+  visibility: string;
+  privacyRootIssueId: string | null;
+  privacyParentIssueId: string | null;
+  responsibleUserId: string | null;
+  createdByUserId: string | null;
+  hiddenAt: Date | null;
 };
 
 function evaluateAuthorizationPolicyForAssignment(
@@ -488,21 +558,1420 @@ type ResponsibleUserSnapshot = {
   activeMembership: { companyId: string; membershipRole?: string | null; status?: string } | null;
 };
 
-type ResponsibleUserActorWithMemo = AuthorizationActor & {
-  __responsibleUserSnapshotMemo?: Map<string, Promise<ResponsibleUserSnapshot>>;
-};
+export type IssuePrivacyRow = { id: string; companyId: string };
+export type ProjectPrivacyRow = { id: string; companyId: string };
+const privacyUuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/** A private ACL narrows current authority; retained actor claims never supply it. */
+function privatePrincipalCurrent(actor: AuthorizationActor, company: SQL): SQL<boolean> {
+  const userId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
+  if (!userId || actor.type === "none" || actor.source === "local_implicit") return sql<boolean>`false`;
+  const expiresAt = actor.authenticatedCredentialExpiresAt;
+  if (expiresAt != null && (!Number.isFinite(expiresAt) || expiresAt <= 0)) return sql<boolean>`false`;
+  // Evaluate verified credential lifetime when SQL executes, after earlier waits.
+  // Credential-free internal actors retain their original canonical policy.
+  const lifetime = expiresAt == null ? sql`true` : sql`extract(epoch from clock_timestamp())*1000<${expiresAt}`;
+  const session = actor.type === "board" && actor.source === "session" && actor.sessionId != null
+    ? sql`exists(select 1 from ${authSessions} s where s.id=${actor.sessionId}
+        and s.user_id=${userId} and s.expires_at>clock_timestamp())`
+    : sql`true`;
+  const human = sql<boolean>`exists (select 1 from ${authUsers} u join ${companyMemberships} m
+    on m.principal_id=u.id and m.principal_type='user' and m.company_id=${company} and m.status='active'
+    where u.id=${userId} and ${lifetime} and ${session})`;
+  if (actor.type === "board") {
+    if (actor.source !== "board_key") return human;
+    if (!actor.keyId || !privacyUuid.test(actor.keyId) || !actor.authenticatedKeyHash) return sql<boolean>`false`;
+    return sql<boolean>`(${human} and exists(select 1 from ${boardApiKeys} k
+      where k.id=${actor.keyId} and k.user_id=${userId} and k.key_hash=${actor.authenticatedKeyHash}
+        and k.revoked_at is null and (k.expires_at is null or k.expires_at>clock_timestamp())))`;
+  }
+  if (!actor.agentId || !privacyUuid.test(actor.agentId)) return sql<boolean>`false`;
+  const run = actor.runId && privacyUuid.test(actor.runId)
+    ? sql`(exists(select 1 from ${heartbeatRuns} r where r.id=${actor.runId} and r.company_id=${company}
+        and r.agent_id=${actor.agentId} and r.responsible_user_id=${userId} and r.status='running') or
+        ${nativeMemoryCapturePrincipalCondition(actor,company)})`
+    : sql`false`;
+  const key = actor.keyId && privacyUuid.test(actor.keyId)
+    ? sql`exists(select 1 from ${agentApiKeys} k where k.id=${actor.keyId} and k.company_id=${company}
+        and k.agent_id=${actor.agentId} and k.responsible_user_id=${userId} and k.revoked_at is null
+        and ${actor.authenticatedKeyHash != null ? sql`k.key_hash=${actor.authenticatedKeyHash}` : sql`true`})`
+    : sql`false`;
+  return sql<boolean>`(${human} and exists(select 1 from ${agents} a where a.id=${actor.agentId}
+    and a.company_id=${company} and a.status not in ('paused','terminated','pending_approval','error')) and
+    ${actor.runId ? run : key} and ${actor.keyId ? key : sql`true`})`;
+}
+
+/** Current principal admission without consuming any source payload authority. */
+export async function isCurrentTaskPrivacyPrincipal(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string): Promise<boolean> {
+  const [current] = await db.execute<{ allowed: boolean }>(sql`select ${privatePrincipalCurrent(actor, sql`${companyId}::uuid`)} as allowed`);
+  return current?.allowed === true;
+}
+
+function projectPrincipalAccess(actor: AuthorizationActor, project: SQL, company: SQL): SQL<boolean> {
+  const subjectType = actor.type === "board" ? "user" : "agent";
+  const subjectId = actor.type === "board" ? actor.userId : actor.agentId;
+  if (!subjectId || actor.type === "none") return sql<boolean>`false`;
+  const own = sql`exists(select 1 from ${projectAccessMembers} m where m.company_id=${company}
+    and m.project_id=${project} and m.subject_type=${subjectType} and m.subject_id=${subjectId})`;
+  const human = actor.type === "agent" && actor.onBehalfOfUserId
+    ? sql`exists(select 1 from ${projectAccessMembers} m where m.company_id=${company}
+        and m.project_id=${project} and m.subject_type='user' and m.subject_id=${actor.onBehalfOfUserId})`
+    : sql`true`;
+  return sql<boolean>`(${privatePrincipalCurrent(actor, company)} and ${own} and ${human})`;
+}
+
+/** Downward grants do not grant access to ancestors or siblings. */
+function issuePrincipalAccess(actor: AuthorizationActor, issue: SQL, company: SQL): SQL<boolean> {
+  const principal = (type: "user" | "agent", id: string | null | undefined) => !id ? sql`false` : sql`exists (
+    with recursive acl_ancestors as (
+      select p.id,p.privacy_parent_issue_id,p.responsible_user_id,p.created_by_user_id,p.assignee_user_id,p.assignee_agent_id,p.project_id,0 as depth
+      from issues p where p.id=${issue} and p.company_id=${company}
+      union
+      select p.id,p.privacy_parent_issue_id,p.responsible_user_id,p.created_by_user_id,p.assignee_user_id,p.assignee_agent_id,p.project_id,c.depth+1
+      from issues p join acl_ancestors c on p.id=c.privacy_parent_issue_id where p.company_id=${company} and c.depth<64
+    ) select 1 from acl_ancestors n where
+      ${type === "user" ? sql`(n.responsible_user_id=${id} or n.created_by_user_id=${id} or n.assignee_user_id=${id})` : sql`n.assignee_agent_id=${id}`}
+      or exists(select 1 from ${issueAccessGrants} g where g.company_id=${company} and g.issue_id=n.id
+        and g.subject_type=${type} and g.subject_id=${id} and g.revoked_at is null)
+      or exists(select 1 from ${projectAccessMembers} m join projects p on p.id=m.project_id and p.company_id=m.company_id and p.visibility='private'
+        where m.company_id=${company} and m.project_id=n.project_id and m.subject_type=${type} and m.subject_id=${id})
+  )`;
+  const own = actor.type === "board" ? principal("user", actor.userId)
+    : actor.type === "agent" ? principal("agent", actor.agentId) : sql`false`;
+  const human = actor.type === "agent" ? principal("user", actor.onBehalfOfUserId) : sql`true`;
+  return sql<boolean>`(${privatePrincipalCurrent(actor, company)} and ${own} and ${human})`;
+}
+
+/** Privacy narrowing only. The caller still applies company/action authorization. */
+export async function projectReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
+  return taskSourcePrivacySqlCondition(_db, "project", sql`${projects.id}`, sql`${projects.companyId}`, actor);
+}
+
+/** All retained Task sources survive ordinary moves and source erasure. Nodes
+ * and each node's actual enumerated edges have separate 256-entry budgets;
+ * repeated refs cannot hide incomplete work behind a small unique population.
+ * Cycles, missing/foreign sources and either overflow deny. */
+export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
+  return taskSourcePrivacySqlCondition(_db, "issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
+}
+
+let nativeIssuePrivacyDiagnosticStatements = 0;
+let nativeTaskReaderScopeDiagnostics = 0;
+const nativeIssuePrivacyDiagnosticPlans = new Set<string>();
+const nativeIssuePrivacyDiagnosticObservedSettings = new Set<string>();
+const nativeIssuePrivacyDiagnosticGroups = new Map<string, { stage: string; actorType: string; actorSource: string;
+  caller: string; count: number; totalMs: number; maxMs: number }>();
+type NativeIssuePrivacyQueryProfile = Map<string, { stage: string; actorType: string; actorSource: string;
+  caller: string; count: number; totalMs: number; maxMs: number }>;
+const nativeIssuePrivacyQueryProfiles = new AsyncLocalStorage<NativeIssuePrivacyQueryProfile>();
+export async function withNativeIssuePrivacyQueryProfile<T>(read: () => Promise<T>,
+  onComplete: (counts: Array<{ stage: string; actorType: string; actorSource: string; caller: string;
+    count: number; totalMs: number; maxMs: number }>) => void): Promise<T> {
+  const profile: NativeIssuePrivacyQueryProfile = new Map();
+  return nativeIssuePrivacyQueryProfiles.run(profile, async () => {
+    try { return await read(); }
+    finally { onComplete([...profile.values()].map(value => ({ ...value,
+      totalMs: Math.round(value.totalMs), maxMs: Math.round(value.maxMs) }))
+      .sort((left, right) => right.totalMs - left.totalMs)); }
+  });
+}
+async function nativeIssuePrivacyDiagnosticQuery<T>(db: Db | DbTransaction, actor: AuthorizationActor,
+  stage: "retained_source_graph" | "effective_acl", query: SQLWrapper, execute: () => Promise<T>): Promise<T> {
+  const queryProfile = nativeIssuePrivacyQueryProfiles.getStore();
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS !== "1" && !queryProfile) return execute();
+  const startedAt = performance.now();
+  let succeeded = false;
+  let failureCode: string | null = null;
+  try {
+    const result = await execute();
+    succeeded = true;
+    return result;
+  } catch (error) {
+    const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
+    failureCode = typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? code : null;
+    throw error;
+  } finally {
+    const elapsedMs = Math.max(0, performance.now() - startedAt);
+    const frames = new Error().stack?.split("\n").flatMap(line => {
+        const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+        return match && match[1] !== "authorization.ts" ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 4) ?? [];
+    const relevant = actor.type === "agent" && frames.some(frame =>
+      /native-direct-input|worker-model-gateway|native-session-executor|analytical-context-authority/.test(frame));
+    const caller = frames.find(frame => /native-direct-input|worker-model-gateway|native-session-executor|analytical-context-authority/.test(frame)) ?? "native:unknown";
+    const actorSource = actor.source ?? "unknown";
+    if (queryProfile) {
+      const key = `${stage}:${actor.type}:${actorSource}:${caller}`;
+      const group = queryProfile.get(key) ?? { stage, actorType: actor.type, actorSource, caller,
+        count: 0, totalMs: 0, maxMs: 0 };
+      group.count += 1;
+      group.totalMs += elapsedMs;
+      group.maxMs = Math.max(group.maxMs, elapsedMs);
+      queryProfile.set(key, group);
+    }
+    if (relevant) {
+      const key = `${stage}:${actor.type}:${actorSource}:${caller}`;
+      const group = nativeIssuePrivacyDiagnosticGroups.get(key) ?? { stage, actorType: actor.type,
+        actorSource, caller, count: 0, totalMs: 0, maxMs: 0 };
+      group.count = Math.min(1_000_000, group.count + 1);
+      group.totalMs = Math.min(1_000_000_000, group.totalMs + elapsedMs);
+      group.maxMs = Math.max(group.maxMs, elapsedMs);
+      nativeIssuePrivacyDiagnosticGroups.set(key, group);
+      const totalCount = [...nativeIssuePrivacyDiagnosticGroups.values()].reduce((sum, value) => sum + value.count, 0);
+      if (totalCount % 16 === 0) console.error("native_issue_privacy_query_summary", JSON.stringify(
+        [...nativeIssuePrivacyDiagnosticGroups.values()].sort((left, right) => right.totalMs - left.totalMs)
+          .slice(0, 16).map(value => ({ ...value, totalMs: Math.round(value.totalMs), maxMs: Math.round(value.maxMs) }))));
+    }
+    if (relevant && elapsedMs >= 100 && nativeIssuePrivacyDiagnosticStatements < 48) {
+      nativeIssuePrivacyDiagnosticStatements += 1;
+      let plan: Record<string, unknown> | null = null;
+      let observedSettings: Record<string, unknown> | null = null;
+      const explainDiagnosticsEnabled = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_EXPLAIN_DIAGNOSTICS === "1";
+      if (explainDiagnosticsEnabled && stage === "effective_acl" && nativeIssuePrivacyDiagnosticObservedSettings.size < 32 &&
+          !nativeIssuePrivacyDiagnosticObservedSettings.has(`${actorSource}:${caller}`)) {
+        nativeIssuePrivacyDiagnosticObservedSettings.add(`${actorSource}:${caller}`);
+        try {
+          const [settings] = await db.execute<{ jit: string; jitAboveCost: string }>(sql`
+            select current_setting('jit') as jit, current_setting('jit_above_cost') as "jitAboveCost"
+          `);
+          observedSettings = { jit: settings?.jit === "on", jitAboveCost: settings?.jitAboveCost ?? null };
+        } catch {
+          observedSettings = { unavailable: true };
+        }
+      }
+      const planKey = `${stage}:${actorSource}:${caller}`;
+      if (explainDiagnosticsEnabled && succeeded && elapsedMs >= 100 && nativeIssuePrivacyDiagnosticPlans.size < 8 &&
+          !nativeIssuePrivacyDiagnosticPlans.has(planKey)) {
+        nativeIssuePrivacyDiagnosticPlans.add(planKey);
+        try {
+          const [row] = await db.execute<{ "QUERY PLAN": unknown }>(sql`explain (format json) ${query}`);
+          const raw = row?.["QUERY PLAN"];
+          const rootValue = Array.isArray(raw) ? raw[0] : raw;
+          const explainRoot = rootValue && typeof rootValue === "object" && !Array.isArray(rootValue)
+            ? rootValue as Record<string, unknown> : null;
+          const planRoot = explainRoot?.Plan && typeof explainRoot.Plan === "object" && !Array.isArray(explainRoot.Plan)
+            ? explainRoot.Plan as Record<string, unknown> : null;
+          const nodes: string[] = [];
+          const indexes: string[] = [];
+          const visit = (node: Record<string, unknown>, depth: number) => {
+            if (depth > 64 || nodes.length >= 512) return;
+            if (typeof node["Node Type"] === "string") nodes.push(node["Node Type"] as string);
+            if (typeof node["Index Name"] === "string") indexes.push(node["Index Name"] as string);
+            const children = Array.isArray(node.Plans) ? node.Plans : [];
+            for (const child of children) if (child && typeof child === "object" && !Array.isArray(child))
+              visit(child as Record<string, unknown>, depth + 1);
+          };
+          if (planRoot) visit(planRoot, 0);
+          const [settings] = await db.execute<{ jit: string; jitAboveCost: string;
+            jitInlineAboveCost: string; jitOptimizeAboveCost: string; planCacheMode: string;
+            statementTimeout: string; lockTimeout: string }>(sql`
+            select current_setting('jit') as jit, current_setting('jit_above_cost') as "jitAboveCost",
+              current_setting('jit_inline_above_cost') as "jitInlineAboveCost",
+              current_setting('jit_optimize_above_cost') as "jitOptimizeAboveCost",
+              current_setting('plan_cache_mode') as "planCacheMode",
+              current_setting('statement_timeout') as "statementTimeout",
+              current_setting('lock_timeout') as "lockTimeout"
+          `);
+          plan = { totalCost: typeof planRoot?.["Total Cost"] === "number" ? planRoot["Total Cost"] : null,
+            startupCost: typeof planRoot?.["Startup Cost"] === "number" ? planRoot["Startup Cost"] : null,
+            nodes: nodes.slice(0, 64), indexes: [...new Set(indexes)].slice(0, 64),
+            jit: settings?.jit === "on", jitAboveCost: settings?.jitAboveCost ?? null,
+            jitInlineAboveCost: settings?.jitInlineAboveCost ?? null,
+            jitOptimizeAboveCost: settings?.jitOptimizeAboveCost ?? null,
+            planCacheMode: settings?.planCacheMode ?? null,
+            statementTimeout: settings?.statementTimeout ?? null, lockTimeout: settings?.lockTimeout ?? null };
+        } catch {
+          plan = { unavailable: true };
+        }
+      }
+      console.error("native_issue_privacy_query_diagnostic", JSON.stringify({ stage,
+        elapsedMs: Math.round(elapsedMs), actorType: actor.type, actorSource,
+        succeeded, failureCode, frames, ...(observedSettings ? { observedSettings } : {}), ...(plan ? { plan } : {}) }));
+    }
+  }
+}
+
+type NativeIssueSnapshotDiagnostic = { valid?: SQL<boolean>; corrupt?: SQL<boolean>; graphDenials?: SQL<string[]>;
+  projectFacts?: SQL<string> };
+async function issueReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor: AuthorizationActor, issueId: string,
+  diagnostic?: NativeIssueSnapshotDiagnostic, ignoreCorruptForDiagnostic = false) {
+  const capturedContextManifestIds=activeMemoryTemporalContexts(db,actor,"issue",issueId);
+  return capturedContextManifestIds === undefined && !diagnostic ? issueReadSqlCondition(db,actor)
+    : taskSourcePrivacySqlCondition(db,"issue",sql`${issues.id}`,sql`${issues.companyId}`,actor,capturedContextManifestIds,
+      diagnostic, ignoreCorruptForDiagnostic);
+}
+
+/** Evaluate the current Task reader predicate for an exact bounded set in one
+ * query per frozen Memory Context scope. Callers must hold the source locks and
+ * owner-row locks for this set; the result is transaction-local and must be
+ * consumed before leaving that lock phase. Rows withheld by the ordinary
+ * predicate still go through the canonical single-Task owner for private
+ * Routine access. */
+export async function canActorReadIssuePrivacyBatch(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, issueIds: readonly string[]): Promise<Map<string, boolean>> {
+  const ids = [...new Set(issueIds)];
+  if (ids.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+    throw forbidden("The complete current Task reader set is unavailable");
+  const readable = new Map(ids.map(id => [id, false]));
+  if (!ids.length) return readable;
+  if (!is(db, PgTransaction))
+    return db.transaction(tx => canActorReadIssuePrivacyBatch(tx, actor, companyId, ids));
+
+  const groups = new Map<string, { contextIds: readonly string[] | undefined; ids: string[] }>();
+  for (const id of ids) {
+    const contextIds = activeMemoryTemporalContexts(db, actor, "issue", id);
+    const key = contextIds === undefined ? "unscoped" : JSON.stringify(contextIds);
+    const group = groups.get(key) ?? { contextIds, ids: [] };
+    group.ids.push(id);
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    const condition = group.contextIds === undefined ? await issueReadSqlCondition(db, actor)
+      : taskSourcePrivacySqlCondition(db, "issue", sql`${issues.id}`, sql`${issues.companyId}`,
+        actor, group.contextIds);
+    for (let offset = 0; offset < group.ids.length; offset += 256) {
+      const chunk = group.ids.slice(offset, offset + 256);
+      const rows = await executePrivacyIdSelect(db, db.select({ id: issues.id }).from(issues).where(and(
+        eq(issues.companyId, companyId), inArray(issues.id, chunk), condition)));
+      for (const row of rows) readable.set(row.id, true);
+    }
+  }
+
+  for (const id of ids) {
+    if (readable.get(id)) continue;
+    readable.set(id, await canActorReadIssuePrivacy(db, actor, { companyId, id }));
+  }
+  return readable;
+}
+
+/** Batch Native Task ACLs only after each temporal Task's frozen Context prefix
+ * has been captured inside its own pinned owner callback. The callback accepts
+ * hashes, never Context IDs, so a broader ambient Memory scope cannot replace
+ * the Task's exact current prefix. */
+export async function canActorReadPinnedIssuePrivacyBatch(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, temporalTasks: readonly { issueId: string; contentHash: string; snapshotDigest: string }[],
+  unscopedIssueIds: readonly string[]): Promise<Map<string, boolean>> {
+  const temporal = new Map<string, { contentHash: string; snapshotDigest: string }>();
+  const invalid = new Set<string>();
+  for (const task of temporalTasks) {
+    const existing = temporal.get(task.issueId);
+    if (existing && (existing.contentHash !== task.contentHash || existing.snapshotDigest !== task.snapshotDigest))
+      invalid.add(task.issueId);
+    else temporal.set(task.issueId, { contentHash: task.contentHash, snapshotDigest: task.snapshotDigest });
+  }
+  const ids = [...new Set([...temporal.keys(), ...unscopedIssueIds])];
+  if (temporalTasks.length + unscopedIssueIds.length > 256 || ids.some(id => !privacyUuid.test(id)))
+    throw forbidden("The complete current Task reader set is unavailable");
+  const readable = new Map(ids.map(id => [id, false]));
+  if (!ids.length) return readable;
+  if (!is(db, PgTransaction))
+    return db.transaction(tx => canActorReadPinnedIssuePrivacyBatch(tx, actor, companyId, temporalTasks, unscopedIssueIds));
+
+  const readPinnedContext = async (issueId: string, expected: { contentHash: string; snapshotDigest: string }) => {
+    let captured: readonly string[] | undefined;
+    try {
+      const matches = await withReadPinnedNativeTaskSnapshot(db, actor, companyId, issueId,
+        async (contentHash, snapshotDigest) => {
+          const contexts = activeMemoryTemporalContexts(db, actor, "issue", issueId);
+          if (contentHash !== expected.contentHash || snapshotDigest !== expected.snapshotDigest || contexts === undefined)
+            return false;
+          captured = [...contexts];
+          return true;
+        });
+      return matches && captured !== undefined ? captured : null;
+    } catch (error) {
+      if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return null;
+      throw error;
+    }
+  };
+
+  const scopedGroups = new Map<string, { contextIds: readonly string[]; ids: string[] }>();
+  const pinnedContexts = new Map<string, readonly string[]>();
+  for (const [id, expected] of temporal) {
+    if (invalid.has(id)) continue;
+    const contextIds = await readPinnedContext(id, expected);
+    if (!contextIds) continue;
+    const key = JSON.stringify(contextIds);
+    const group = scopedGroups.get(key) ?? { contextIds, ids: [] };
+    group.ids.push(id);
+    pinnedContexts.set(id, contextIds);
+    scopedGroups.set(key, group);
+  }
+
+  // Preserve any enclosing exact Memory context for Tasks that have no frozen
+  // Native output snapshot of their own.
+  const unscoped = [...new Set(unscopedIssueIds)].filter(id => !temporal.has(id));
+  if (unscoped.length) {
+    const current = await canActorReadIssuePrivacyBatch(db, actor, companyId, unscoped);
+    for (const [id, allowed] of current) readable.set(id, allowed);
+  }
+
+  for (const group of scopedGroups.values()) {
+    const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId: group.ids[0]!,
+      actorKey: routineActorKey(actor), issueIds: new Set(group.ids), runIds: new Set(),
+      contextIds: group.contextIds, active: true };
+    try {
+      const current = await memoryTemporalReadScopes.run(scope,
+        () => canActorReadIssuePrivacyBatch(db, actor, companyId, group.ids));
+      for (const [id, allowed] of current) readable.set(id, allowed);
+    } finally { scope.active = false; }
+  }
+
+  // Keep the pin through the ACL queries and prove every exact owner prefix
+  // again after their waits before returning a transaction-local result.
+  for (const [id, expected] of temporal) {
+    const originalContexts = pinnedContexts.get(id);
+    const currentContexts = invalid.has(id) ? null : await readPinnedContext(id, expected);
+    if (!originalContexts || !currentContexts || !isDeepStrictEqual(currentContexts, originalContexts))
+      readable.set(id, false);
+  }
+  return readable;
+}
+
+/** Same retained-source SQL for the exact typed Workflow Run. A predicate
+ * captured inside the native callback still depends on its transaction-local
+ * token when executed, so the capability cannot escape callback lifetime. */
+export async function workflowRunReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
+  return taskSourcePrivacySqlCondition(_db, "workflow_run", sql`${workflowRuns.id}`, sql`${workflowRuns.companyId}`, actor);
+}
+
+/** Every native read uses the same persisted Task binding, including recursive
+ * list/count source checks. A display key cannot replace a missing UUID. */
+function heartbeatRunTaskBindingCondition(row: SQL): SQL<boolean> {
+  const context = sql`coalesce(${row}.context_snapshot,'{}'::jsonb)`;
+  return sql<boolean>`(jsonb_typeof(${context})='object' and (
+    (${row}.scope_kind='company' and ${row}.issue_id is null and ${row}.native_issue_id is null
+      and not (${context} ? 'issueId' or ${context} ? 'taskId' or ${context} ? 'taskKey'))
+    or (${row}.scope_kind='issue'
+      and (${context}->>'issueId' is null or ${context}->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+      and (${context}->>'taskId' is null or ${context}->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+      and (select count(distinct ref.id) from (values (${row}.issue_id),(${row}.native_issue_id),
+        (case when ${context}->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          then (${context}->>'issueId')::uuid end),
+        (case when ${context}->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          then (${context}->>'taskId')::uuid end)) ref(id))=1)
+  ))`;
+}
+
+/** A pipeline Routine source is admitted only by its exact, live pipeline
+ * execution ledger and the source Task set captured before dispatch. */
+function pipelineAutomationRoutineSourceCondition(company: SQL): SQL<boolean> {
+  const payload = sql`rr.trigger_payload`;
+  const taskIds = sql`case when jsonb_typeof(${payload}->'contextPack'->'taskSourceIssueIds')='array'
+    then ${payload}->'contextPack'->'taskSourceIssueIds' else '[]'::jsonb end`;
+  const outputItems = sql`case when jsonb_typeof(${payload}->'contextPack'->'outputSummaries'->'items')='array'
+    then ${payload}->'contextPack'->'outputSummaries'->'items' else '[]'::jsonb end`;
+  const producerRunIds = sql`case when jsonb_typeof(${payload}->'contextPack'->'case'->'producerRunIds')='array'
+    then ${payload}->'contextPack'->'case'->'producerRunIds' else '[]'::jsonb end`;
+  const producerUserIds = sql`case when jsonb_typeof(${payload}->'contextPack'->'case'->'producerUserIds')='array'
+    then ${payload}->'contextPack'->'case'->'producerUserIds' else '[]'::jsonb end`;
+  const capturedAt = sql`case when ${payload}->'contextPack'->'case'->>'capturedAt' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*(Z|[+-][0-9]{2}:[0-9]{2})$'
+    then (${payload}->'contextPack'->'case'->>'capturedAt')::timestamptz else 'epoch'::timestamptz end`;
+  return sql<boolean>`(
+    jsonb_typeof(${payload})='object'
+    and jsonb_typeof(${payload}->'contextPack')='object'
+    and jsonb_typeof(${payload}->'automation')='object'
+    and ${payload}->'pipeline'->>'id'=${payload}->'contextPack'->'pipeline'->>'id'
+    and ${payload}->'pipeline'->>'id'=p.origin_id
+    and ${payload}->'case'->>'id'=${payload}->'contextPack'->'case'->>'id'
+    and ${payload}->'stage'->>'id'=${payload}->'contextPack'->'stage'->>'id'
+    and ${payload}->>'triggeringEventId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+    and ${payload}->'automation'->>'automationExecutionId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+    and jsonb_typeof(${payload}->'contextPack'->'taskSourceIssueIds')='array'
+    and jsonb_array_length(${taskIds})<=256
+    and jsonb_typeof(${payload}->'contextPack'->'outputSummaries'->'items')='array'
+    and jsonb_array_length(${outputItems})<=5
+    and jsonb_array_length(${outputItems})=(select count(distinct output.item->>'id')
+      from jsonb_array_elements(${outputItems}) output(item))
+    and ${payload}->'contextPack'->'case'->>'capturedAt' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T.*(Z|[+-][0-9]{2}:[0-9]{2})$'
+    and jsonb_typeof(${payload}->'contextPack'->'case'->'producerRunIds')='array'
+    and jsonb_array_length(${producerRunIds})<=256
+    and jsonb_array_length(${producerRunIds})=(select count(distinct source.id) from jsonb_array_elements_text(${producerRunIds}) source(id))
+    and jsonb_typeof(${payload}->'contextPack'->'case'->'producerUserIds')='array'
+    and jsonb_array_length(${producerUserIds})<=256
+    and jsonb_array_length(${producerUserIds})=(select count(distinct source.id) from jsonb_array_elements_text(${producerUserIds}) source(id))
+    and not exists(select 1 from jsonb_array_elements_text(${producerRunIds}) source(id)
+      where source.id !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+    and not exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id)
+      where source.id !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+    and exists(select 1 from pipeline_automation_executions e
+      join pipeline_cases c on c.id=e.case_id and c.company_id=e.company_id
+      join pipeline_stages s on s.id=case when ${payload}->'contextPack'->'stage'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        then (${payload}->'contextPack'->'stage'->>'id')::uuid end and s.pipeline_id=c.pipeline_id
+      join pipeline_case_events ev on ev.id=case when ${payload}->>'triggeringEventId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        then (${payload}->>'triggeringEventId')::uuid end and ev.case_id=c.id and ev.company_id=c.company_id
+      where e.id=case when ${payload}->'automation'->>'automationExecutionId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          then (${payload}->'automation'->>'automationExecutionId')::uuid end
+        and e.company_id=${company} and e.routine_id=rr.routine_id and e.target_kind='routine'
+        and e.target_ref=rr.routine_id and e.case_id=c.id and c.pipeline_id::text=p.origin_id
+        and c.retired_at is null and c.hidden_from_board_at is null
+        and e.automation_id=${payload}->'automation'->>'automationId'
+        and e.generation::text=${payload}->'automation'->>'generation'
+        and e.triggering_event_id=case when ${payload}->>'triggeringEventId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          then (${payload}->>'triggeringEventId')::uuid end
+        and ${payload}->'contextPack'->'case'->>'sourceUserId' is not distinct from c.created_by_user_id
+        and ${payload}->'contextPack'->'case'->>'sourceAgentId' is not distinct from c.created_by_agent_id::text
+        and ${payload}->'contextPack'->'case'->>'sourceRunId' is not distinct from c.origin_run_id::text
+        and ((c.created_by_user_id is not null and c.created_by_agent_id is null and c.origin_run_id is null)
+          or (c.created_by_user_id is null and c.created_by_agent_id is not null and c.origin_run_id is not null
+              and exists(select 1 from heartbeat_runs producer_run
+                where producer_run.id=c.origin_run_id and producer_run.company_id=c.company_id
+                  and producer_run.agent_id=c.created_by_agent_id)))
+        and (select count(distinct source.id) from jsonb_array_elements_text(${producerRunIds}) source(id))
+          =(select count(distinct expected.id) from (select c.origin_run_id::text as id where c.origin_run_id is not null
+              union all select ev.run_id::text from pipeline_case_events ev where ev.company_id=c.company_id and ev.case_id=c.id
+                and ev.type='updated' and ev.payload->>'materialChanged'='true' and ev.actor_type='agent'
+                and ev.run_id is not null and ev.created_at<=${capturedAt}) expected)
+        and not exists(select 1 from jsonb_array_elements_text(${producerRunIds}) source(id)
+          where not (source.id=c.origin_run_id::text or exists(select 1 from pipeline_case_events ev
+            where ev.company_id=c.company_id and ev.case_id=c.id and ev.type='updated'
+              and ev.payload->>'materialChanged'='true' and ev.actor_type='agent' and ev.run_id::text=source.id
+              and ev.created_at<=${capturedAt})))
+        and (select count(distinct source.id) from jsonb_array_elements_text(${producerUserIds}) source(id))
+          =(select count(distinct expected.id) from (select c.created_by_user_id as id where c.created_by_user_id is not null
+              union all select ev.actor_user_id from pipeline_case_events ev where ev.company_id=c.company_id and ev.case_id=c.id
+                and ev.type='updated' and ev.payload->>'materialChanged'='true' and ev.actor_type='user'
+                and ev.actor_user_id is not null and ev.created_at<=${capturedAt}) expected)
+        and not exists(select 1 from jsonb_array_elements_text(${producerUserIds}) source(id)
+          where not (source.id=c.created_by_user_id or exists(select 1 from pipeline_case_events ev
+            where ev.company_id=c.company_id and ev.case_id=c.id and ev.type='updated'
+              and ev.payload->>'materialChanged'='true' and ev.actor_type='user' and ev.actor_user_id=source.id
+              and ev.created_at<=${capturedAt})))
+        and not exists(select 1 from pipeline_case_events ev where ev.company_id=c.company_id and ev.case_id=c.id
+          and ev.type='updated' and ev.payload->>'materialChanged'='true' and ev.actor_type='system' and ev.created_at<=${capturedAt})
+        and (select count(distinct source.id) from jsonb_array_elements_text(${taskIds}) source(id))
+          =(select count(distinct link.issue_id) from pipeline_case_issue_links link
+            where link.company_id=e.company_id and link.case_id=c.id and link.created_at<=e.created_at)
+        and not exists(select 1 from pipeline_case_issue_links link where link.company_id=e.company_id
+          and link.case_id=c.id and link.created_at<=e.created_at
+          and not exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id) where source.id=link.issue_id::text))
+        and not exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id)
+          where not exists(select 1 from pipeline_case_issue_links link
+            join issues source_issue on source_issue.company_id=link.company_id and source_issue.id=link.issue_id
+            where link.company_id=e.company_id and link.case_id=c.id and link.created_at<=e.created_at
+              and link.issue_id::text=source.id and source_issue.hidden_at is null
+              and source_issue.cancelled_at is null and source_issue.status<>'cancelled'))
+        and not exists(select 1 from jsonb_array_elements(${outputItems}) output(item) where not (
+          output.item->'sourceIssue'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          and exists(select 1 from jsonb_array_elements_text(${taskIds}) source(id)
+            where source.id=output.item->'sourceIssue'->>'id')
+          and case output.item->>'kind'
+            when 'document' then output.item->>'id' ~* '^document:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              and output.item->>'revisionId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              and exists(select 1 from issue_documents link
+                join documents d on d.company_id=link.company_id and d.id=link.document_id
+                join issues source_issue on source_issue.company_id=link.company_id and source_issue.id=link.issue_id
+                join document_revisions rev on rev.company_id=d.company_id and rev.document_id=d.id
+                  and rev.id=case when output.item->>'revisionId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then (output.item->>'revisionId')::uuid end
+                where link.company_id=e.company_id
+                  and link.issue_id=case when output.item->'sourceIssue'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then (output.item->'sourceIssue'->>'id')::uuid end
+                  and link.document_id=case when output.item->>'id' ~* '^document:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then substring(output.item->>'id' from 10)::uuid end
+                  and link.key=output.item->>'key'
+                  and coalesce(d.source_trust,source_issue.source_trust,'null'::jsonb)
+                    is not distinct from coalesce(output.item->'sourceTrust','null'::jsonb))
+            when 'work_product' then output.item->>'id' ~* '^work_product:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              and exists(select 1 from issue_work_products wp
+                join issues source_issue on source_issue.company_id=wp.company_id and source_issue.id=wp.issue_id
+                where wp.company_id=e.company_id
+                and wp.id=case when output.item->>'id' ~* '^work_product:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                  then substring(output.item->>'id' from 14)::uuid end
+                and wp.issue_id=case when output.item->'sourceIssue'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                  then (output.item->'sourceIssue'->>'id')::uuid end
+                and wp.type=output.item->>'key' and wp.title=output.item->>'title'
+                and coalesce(wp.source_trust,source_issue.source_trust,'null'::jsonb)
+                  is not distinct from coalesce(output.item->'sourceTrust','null'::jsonb))
+            when 'attachment' then output.item->>'id' ~* '^attachment:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              and exists(select 1 from issue_attachments attachment
+                join assets asset on asset.company_id=attachment.company_id and asset.id=attachment.asset_id
+                join issues source_issue on source_issue.company_id=attachment.company_id and source_issue.id=attachment.issue_id
+                where attachment.company_id=e.company_id
+                  and attachment.id=case when output.item->>'id' ~* '^attachment:[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then substring(output.item->>'id' from 12)::uuid end
+                  and attachment.issue_id=case when output.item->'sourceIssue'->>'id' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                    then (output.item->'sourceIssue'->>'id')::uuid end
+                  and asset.original_filename is not distinct from nullif(output.item->>'key',output.item->>'contentType')
+                  and coalesce(source_issue.source_trust,'null'::jsonb)
+                    is not distinct from coalesce(output.item->'sourceTrust','null'::jsonb))
+            else false
+          end
+        ))
+  ))`;
+}
+
+/** One native Task/Project source graph; this never authorizes a company action.
+ * Private Routine sources enter through the exact callback-local native owner.
+ * Empty stored arrays are relational facts only,
+ * never complete-input receipts or publication authority. */
+function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor,
+  capturedContextManifestIds?: readonly string[], diagnostic?: NativeIssueSnapshotDiagnostic,
+  ignoreCorruptForDiagnostic = false): SQL<boolean> {
+  const contextUuidArray = (ids: readonly string[]) => sql`array[${sql.join(ids.map(value => sql`${value}::uuid`), sql`, `)}]::uuid[]`;
+  const routineScope = nativeRoutineReadScopes.get(db as object);
+  const routineCapabilityActive = routineScope?.active && routineScope.companyId && routineScope.routineActorKey === routineActorKey(actor);
+  const workflowScope = nativeWorkflowReadScopes.get(db as object);
+  const workflowCapabilityActive = !!workflowScope?.active && !!workflowScope.companyId &&
+    workflowScope.workflowActorKey === workflowActorKey(actor);
+  const conversationRoutine = routineScope?.active
+    ? routineCapabilityActive
+      ? sql`((p.origin_kind='manual'
+      and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
+      and current_setting('paperclip.native_routine_scope_token',true)=${routineScope.routineScopeToken ?? ""}
+      and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])) or (p.origin_kind='conversation_draft'
+      and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
+      and current_setting('paperclip.native_routine_scope_token',true)=${routineScope.routineScopeToken ?? ""}
+      and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])) or
+      (p.origin_kind='pipeline_automation' and ${pipelineAutomationRoutineSourceCondition(company)}
+        and current_setting('paperclip.native_routine_actor_hash',true)=${routineActorHash(actor)}
+        and current_setting('paperclip.native_routine_scope_token',true)=${routineScope.routineScopeToken ?? ""}
+        and rr.id=any(string_to_array(nullif(current_setting('paperclip.native_routine_source_ids',true),''),',')::uuid[])))`
+      : sql`false`
+    : sql`(p.origin_kind='manual' or (p.origin_kind='pipeline_automation'
+      and ${pipelineAutomationRoutineSourceCondition(company)}))`;
+  const contextRoots = sql`
+    select 'issue'::text as kind,case when c.agent_id=r.agent_id then c.issue_id end as id
+      where c.issue_id is not null or c.agent_id<>r.agent_id
+    union all select 'project',c.project_id where c.project_id is not null
+    union all select 'issue',case when item.source_ref ~* '^issue://[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+      then substring(item.source_ref from 9)::uuid end
+      from context_manifest_items item where item.company_id=c.company_id and item.manifest_id=c.id
+        and item.source_provider='august_works_tasks'`;
+  const issueSnapshotValid: SQL<boolean> = kind === "issue" ? sql<boolean>`exists(select 1 from issues temporal_owner where temporal_owner.id=${id}
+    and temporal_owner.company_id=${company} and temporal_owner.payload_source_protocol_version=1
+    and temporal_owner.payload_source_snapshot is not null and temporal_owner.payload_source_snapshot_invalidated=false
+    and temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
+    and temporal_owner.payload_source_snapshot->'owner'->>'id'=temporal_owner.id::text
+    and temporal_owner.payload_source_snapshot->'owner'->>'companyId'=temporal_owner.company_id::text
+    and temporal_owner.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(temporal_owner))
+    and temporal_owner.payload_source_snapshot->>'digest'=encode(sha256(convert_to((temporal_owner.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+    and temporal_owner.payload_source_snapshot->'policy'->'issueIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+      from (select distinct s.source_id from issue_privacy_sources s where s.company_id=temporal_owner.company_id
+        and s.issue_id=temporal_owner.id and s.source_kind='issue') captured_ids),'[]'::jsonb)
+    and temporal_owner.payload_source_snapshot->'policy'->'projectIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+      from (select distinct s.source_id from issue_privacy_sources s where s.company_id=temporal_owner.company_id
+        and s.issue_id=temporal_owner.id and s.source_kind='project') captured_ids),'[]'::jsonb)
+    and temporal_owner.payload_source_snapshot->'policy'->'runIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+      from (select distinct s.source_id from issue_privacy_sources s where s.company_id=temporal_owner.company_id
+        and s.issue_id=temporal_owner.id and s.source_kind='run') captured_ids),'[]'::jsonb)
+    and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+      where captured_input->>'kind'='task' and (
+        captured_input->>'issueId' !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        or not exists(select 1 from issue_privacy_sources captured_task_edge
+          join issues captured_task on captured_task.company_id=captured_task_edge.company_id
+            and captured_task.id=captured_task_edge.source_id
+          where captured_task_edge.company_id=temporal_owner.company_id and captured_task_edge.issue_id=temporal_owner.id
+            and captured_task_edge.source_kind='issue' and captured_task_edge.context_manifest_id is null
+            and captured_task_edge.source_id=(captured_input->>'issueId')::uuid
+            -- New Task captures bind to the immutable payload-only owner
+            -- hash. Legacy captures used two closed JSON projections; compare
+            -- those against the current row too. This keeps operational row
+            -- timestamps out of source identity without accepting an unbound
+            -- hash or a stale Task body.
+            and captured_input->>'contentHash' ~ '^[0-9a-f]{64}$'
+            and (captured_input->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(captured_task))
+              or captured_input->>'contentHash'=encode(sha256(convert_to(
+                '{"id":'||to_json(captured_task.id::text)::text||',"identifier":'||coalesce(to_json(captured_task.identifier)::text,'null')||
+                ',"title":'||to_json(captured_task.title)::text||',"description":'||coalesce(to_json(captured_task.description)::text,'null')||
+                ',"workMode":'||to_json(captured_task.work_mode)::text||'}','UTF8')),'hex')
+              or captured_input->>'contentHash'=encode(sha256(convert_to(
+                '{"id":'||to_json(captured_task.id::text)::text||',"identifier":'||coalesce(to_json(captured_task.identifier)::text,'null')||
+                ',"title":'||to_json(captured_task.title)::text||',"status":'||to_json(captured_task.status)::text||
+                ',"priority":'||to_json(captured_task.priority)::text||'}','UTF8')),'hex'))
+            and captured_task.payload_source_protocol_version=1 and captured_task.payload_source_snapshot is not null
+            and captured_task.payload_source_snapshot_invalidated=false
+            and captured_task.payload_source_snapshot->'owner'->>'kind'='issue'
+            and captured_task.payload_source_snapshot->'owner'->>'id'=captured_task.id::text
+            and captured_task.payload_source_snapshot->'owner'->>'companyId'=captured_task.company_id::text
+            and captured_task.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(captured_task))
+            and captured_task.payload_source_snapshot->>'digest'=encode(sha256(convert_to((captured_task.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))))
+    and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+      where captured_input->>'kind' not in ('context','task','project','memory','foundation_revision','comment','interaction',
+        'document_revision','attachment','skill_version','runtime_skill','playbook_revision','role_pack_version',
+        'authored_definition','runtime_instructions','retained_run','retained_workspace','tool_result',
+        'completion_contract','native_task_wake','workspace_metadata','worker_model_dispatch','conversation_model_dispatch'))
+    and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
+      where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch') and (
+        captured_dispatch->>'runId' is distinct from temporal_owner.origin_run_id::text
+        or (select count(*) from heartbeat_runs producer
+          cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
+          where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
+            and producer.native_input_source_protocol_version=1
+            and case when jsonb_typeof(prefix.value->'inputs')='array' then case when jsonb_array_length(prefix.value->'inputs')>0
+              then prefix.value->'inputs'->(jsonb_array_length(prefix.value->'inputs')-1)=captured_dispatch else false end else false end)<>1
+        or not exists(select 1 from orchestration_model_reservations reservation
+          where reservation.company_id=temporal_owner.company_id and reservation.id::text=captured_dispatch->>'reservationId'
+            and reservation.purpose=case when captured_dispatch->>'kind'='conversation_model_dispatch' then 'conversation_model' else 'worker_model' end
+            and reservation.status='completed'
+            and reservation.input_hash=captured_dispatch->>'requestHash'
+            and reservation.provider_response_hash=captured_dispatch->>'responseHash'
+            and (captured_dispatch->>'kind'<>'conversation_model_dispatch' or (
+              reservation.conversation_agent_id::text=captured_dispatch->>'agentId'
+              and reservation.conversation_run_id::text=captured_dispatch->>'runId'
+              and reservation.conversation_issue_id::text=captured_dispatch->>'issueId'
+              and reservation.conversation_session_generation::text=captured_dispatch->>'conversationSessionGeneration'
+              and reservation.execution_manifest_id::text=captured_dispatch->>'executionManifestId'
+              and reservation.execution_manifest_hash=captured_dispatch->>'executionManifestHash')))
+        or not exists(select 1 from heartbeat_runs producer cross join lateral
+            jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeAwModelWireIntents','[]'::jsonb)) wire(value)
+          where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
+            and wire.value->>'reservationId'=captured_dispatch->>'reservationId'
+            and wire.value->>'callId'=captured_dispatch->>'callId'
+            and wire.value->>'requestHash'=captured_dispatch->>'requestHash'
+            and wire.value->>'wireBodyHash'=captured_dispatch->>'wireBodyHash'
+            and ((captured_dispatch->>'kind'='conversation_model_dispatch' and wire.value->>'modelPurpose'='conversation_model')
+              or (captured_dispatch->>'kind'='worker_model_dispatch' and
+                ((not (wire.value ? 'modelPurpose')) or wire.value->>'modelPurpose'='worker_model')))
+            and wire.value->>'endpoint'='https://api.anthropic.com/v1/messages' and wire.value->>'method'='POST')
+        or (captured_dispatch->>'kind'='conversation_model_dispatch' and not exists(
+          select 1 from heartbeat_runs producer join issues conversation_issue on conversation_issue.company_id=producer.company_id
+            and conversation_issue.id::text=captured_dispatch->>'issueId'
+          join agent_execution_manifests conversation_manifest on conversation_manifest.company_id=producer.company_id
+            and conversation_manifest.id::text=captured_dispatch->>'executionManifestId'
+            and conversation_manifest.agent_id::text=captured_dispatch->>'agentId'
+            and conversation_manifest.run_id::text=captured_dispatch->>'runId'
+          where producer.company_id=temporal_owner.company_id and producer.id::text=captured_dispatch->>'runId'
+            and producer.agent_id::text=captured_dispatch->>'agentId'
+            and producer.responsible_user_id::text=conversation_issue.conversation_user_id::text
+            and producer.context_snapshot->>'conversationSessionGeneration'=captured_dispatch->>'conversationSessionGeneration'
+            and conversation_issue.conversation_agent_id::text=captured_dispatch->>'agentId'
+            and coalesce(captured_dispatch->>'conversationSessionGeneration' ~ '^(0|[1-9][0-9]*)$',false)
+            and conversation_issue.conversation_session_generation >= coalesce(
+              case when captured_dispatch->>'conversationSessionGeneration' ~ '^(0|[1-9][0-9]*)$'
+                then (captured_dispatch->>'conversationSessionGeneration')::integer end,2147483647)
+            and conversation_issue.conversation_state in ('active','waiting') and conversation_issue.conversation_retired_at is null
+            and conversation_manifest.hash=captured_dispatch->>'executionManifestHash'
+            and conversation_manifest.manifest->>'responsibleUserId'=producer.responsible_user_id::text))
+      ))
+    and (not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
+      where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')) or exists(
+        select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') with ordinality current_dispatch(value,ordinality)
+        where current_dispatch.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')
+          and current_dispatch.ordinality=(select max(candidate.ordinality)
+            from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') with ordinality candidate(value,ordinality)
+            where candidate.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch'))
+          and (select count(*) from heartbeat_runs producer
+            cross join lateral jsonb_array_elements(coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) current_prefix(value)
+            where producer.company_id=temporal_owner.company_id and producer.id::text=current_dispatch.value->>'runId'
+              and producer.native_input_source_protocol_version=1
+              and current_prefix.value->'policy'=temporal_owner.payload_source_snapshot->'policy'
+              and current_prefix.value->'inputs'=temporal_owner.payload_source_snapshot->'inputs'
+              and case when jsonb_typeof(current_prefix.value->'inputs')='array' then case when jsonb_array_length(current_prefix.value->'inputs')>0
+                then current_prefix.value->'inputs'->(jsonb_array_length(current_prefix.value->'inputs')-1)=current_dispatch.value else false end else false end)=1))
+    and (not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+      where captured_input->>'kind' not in ('context','task')) or exists(
+        select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
+        where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')) or (
+          temporal_owner.conversation_agent_id is not null and temporal_owner.conversation_user_id is not null
+          and jsonb_array_length(temporal_owner.payload_source_snapshot->'inputs')=1
+          and temporal_owner.payload_source_snapshot->'policy'->'issueIds'='[]'::jsonb
+          and temporal_owner.payload_source_snapshot->'policy'->'projectIds'='[]'::jsonb
+          and temporal_owner.payload_source_snapshot->'policy'->'runIds'='[]'::jsonb
+          and temporal_owner.payload_source_snapshot->'policy'->'memoryIds'='[]'::jsonb
+          and temporal_owner.payload_source_snapshot->'policy'->'foundationRevisionIds'='[]'::jsonb
+          and ((not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') conversation_input
+            where conversation_input->>'kind'<>'comment' or conversation_input->>'issueId'<>temporal_owner.id::text
+              or conversation_input->>'commentId' !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+          and exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') conversation_input
+            join issue_comments conversation_comment on
+              conversation_comment.id=case when conversation_input->>'commentId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                then (conversation_input->>'commentId')::uuid end
+            where conversation_comment.company_id=temporal_owner.company_id
+              and conversation_comment.issue_id=temporal_owner.id
+              and conversation_input->>'kind'='comment'
+              and conversation_input->>'issueId'=temporal_owner.id::text
+              and conversation_comment.deleted_at is null and conversation_comment.author_type='user'
+              and conversation_comment.author_user_id=temporal_owner.conversation_user_id
+              and conversation_input->>'sourceVersion'=extract(epoch from conversation_comment.updated_at)::text
+              and conversation_comment.payload_source_protocol_version=1
+              and conversation_comment.payload_source_snapshot is not null
+              and conversation_comment.payload_source_snapshot_invalidated=false
+              and conversation_comment.payload_source_snapshot->'owner'->>'kind'='comment'
+              and conversation_comment.payload_source_snapshot->'owner'->>'id'=conversation_comment.id::text
+              and conversation_comment.payload_source_snapshot->'owner'->>'companyId'=conversation_comment.company_id::text
+              and conversation_comment.payload_source_snapshot->'owner'->>'contentHash'=
+                public.aw_native_payload_body_hash('comment',to_jsonb(conversation_comment))
+              and conversation_comment.payload_source_snapshot->'policy'->'issueIds'=
+                jsonb_build_array(temporal_owner.id::text)
+              and conversation_comment.payload_source_snapshot->'policy'->'projectIds'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->'policy'->'runIds'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->'policy'->'memoryIds'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->'policy'->'foundationRevisionIds'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->'inputs'='[]'::jsonb
+              and conversation_comment.payload_source_snapshot->>'digest'=
+                encode(sha256(convert_to((conversation_comment.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+              and conversation_input->>'contentHash'=encode(sha256(convert_to(public.aw_native_canonical_jsonb(
+                jsonb_build_object('body',conversation_comment.body,'presentation',conversation_comment.presentation,
+                  'metadata',conversation_comment.metadata)),'UTF8')),'hex')))
+          or exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') upload_input
+            join issue_attachments upload on upload.company_id=temporal_owner.company_id
+              and upload.issue_id=temporal_owner.id and upload.id::text=upload_input->>'attachmentId'
+            join assets upload_asset on upload_asset.company_id=upload.company_id and upload_asset.id=upload.asset_id
+            where upload_input->>'kind'='attachment' and upload_input->>'issueId'=temporal_owner.id::text
+              and upload_input->'commentId'='null'::jsonb and upload_input->>'disposition'='delivered'
+              and upload_input->>'assetId'=upload_asset.id::text and upload_input->>'sha256'=upload_asset.sha256
+              and upload_input->>'sha256' ~ '^[0-9a-f]{64}$'
+              and upload_input->>'byteSize'=upload_asset.byte_size::text
+              and upload_asset.byte_size>0 and upload_asset.byte_size<=9007199254740991
+              and upload_asset.created_by_user_id=temporal_owner.conversation_user_id
+              and upload_asset.created_by_agent_id is null and upload.issue_comment_id is null and upload.originating_run_id is null
+              and upload.payload_source_protocol_version=1 and not upload.payload_source_snapshot_invalidated
+              and upload.payload_source_snapshot->'owner'->>'kind'='attachment'
+              and upload.payload_source_snapshot->'owner'->>'id'=upload.id::text
+              and upload.payload_source_snapshot->'owner'->>'companyId'=upload.company_id::text
+              and upload.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('attachment',to_jsonb(upload))
+              and upload.payload_source_snapshot->'policy'=jsonb_build_object('issueIds',jsonb_build_array(temporal_owner.id::text),
+                'projectIds','[]'::jsonb,'runIds','[]'::jsonb,'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb)
+              and upload.payload_source_snapshot->'inputs'='[]'::jsonb
+              and upload.payload_source_snapshot->>'digest'=encode(sha256(convert_to((upload.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+              and exists(select 1 from activity_log capture where capture.company_id=temporal_owner.company_id
+                and capture.actor_type='user' and capture.actor_id=temporal_owner.conversation_user_id
+                and capture.entity_type='issue' and capture.entity_id=temporal_owner.id::text
+                and capture.action='attachment.payload_source_captured'
+                and capture.details->>'attachmentId'=upload.id::text and capture.details->>'assetId'=upload_asset.id::text
+                and capture.details->>'producer'='direct_manual_upload'
+                and capture.details->>'digest'=upload.payload_source_snapshot->>'digest')))
+        ))
+    and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+      where captured_input->>'kind'='context' and (
+        not exists(select 1 from context_manifests captured_context
+          where captured_context.company_id=temporal_owner.company_id
+            and captured_context.id=(captured_input->>'manifestId')::uuid
+            and captured_context.query_hash=captured_input->>'queryHash'
+            and captured_context.policy_snapshot_hash=captured_input->>'policySnapshotHash'
+            and (captured_context.run_id=any(array(select value::uuid from jsonb_array_elements_text(temporal_owner.payload_source_snapshot->'policy'->'runIds') refs(value)))
+              or captured_context.run_id=any(array(select case when dispatch.value->>'runId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                  then (dispatch.value->>'runId')::uuid end
+                from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') dispatch(value)
+                where dispatch.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')
+                  and dispatch.value->>'runId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'))))
+        or exists(select 1 from context_manifest_items captured_item where captured_item.company_id=temporal_owner.company_id
+          and captured_item.manifest_id=(captured_input->>'manifestId')::uuid and captured_item.source_provider='august_works_tasks'
+          and not exists(select 1 from issue_privacy_sources captured_edge where captured_edge.company_id=temporal_owner.company_id
+            and captured_edge.issue_id=temporal_owner.id and captured_edge.source_kind='issue'
+            and captured_edge.source_id=case when captured_item.source_ref ~* '^issue://[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              then substring(captured_item.source_ref from 9)::uuid end and captured_edge.context_manifest_id=(captured_input->>'manifestId')::uuid)))))` : sql<boolean>`false`;
+  const capturedContextIds = capturedContextManifestIds !== undefined ? contextUuidArray(capturedContextManifestIds)
+    : kind === "issue" ? sql`array(select (captured_input->>'manifestId')::uuid
+    from issues temporal_owner cross join lateral jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+    where temporal_owner.id=${id} and temporal_owner.company_id=${company} and temporal_owner.payload_source_protocol_version=1
+      and temporal_owner.payload_source_snapshot is not null and temporal_owner.payload_source_snapshot_invalidated=false
+      and temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
+      and temporal_owner.payload_source_snapshot->'owner'->>'id'=temporal_owner.id::text
+      and captured_input->>'kind'='context')`
+    : null;
+  const issueSnapshotCorrupt: SQL<boolean> = kind === "issue" ? sql<boolean>`exists(select 1 from issues temporal_owner where temporal_owner.id=${id}
+    and temporal_owner.company_id=${company} and temporal_owner.payload_source_protocol_version=1
+    and temporal_owner.payload_source_snapshot_invalidated=false
+    and (temporal_owner.payload_source_snapshot is null or (
+    temporal_owner.payload_source_snapshot->'owner'->>'kind'='issue'
+    and temporal_owner.payload_source_snapshot->'owner'->>'id'=temporal_owner.id::text
+    and not ${issueSnapshotValid})))` : sql<boolean>`false`;
+  if (kind === "issue" && diagnostic) {
+    diagnostic.valid = issueSnapshotValid;
+    diagnostic.corrupt = issueSnapshotCorrupt;
+  }
+  const currentContextAllowed = (manifestId: SQL) => kind === "issue" && capturedContextManifestIds === undefined
+    ? sql`(not ${issueSnapshotValid} or ${manifestId}=any(${capturedContextIds!}))`
+    : capturedContextManifestIds === undefined ? sql`true` : sql`${manifestId}=any(${capturedContextIds!})`;
+  const humanId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
+  const conversationIdentity = sql`(${privatePrincipalCurrent(actor, company)} and i.conversation_user_id=${humanId ?? null}
+    and ${actor.type === "board" ? sql`true` : actor.type === "agent" && actor.agentId ? sql`i.conversation_agent_id=${actor.agentId}` : sql`false`})`;
+  const workflowRunScope = workflowCapabilityActive
+    ? sql`current_setting('paperclip.native_workflow_actor_hash',true)=${workflowActorHash(actor)}
+        and current_setting('paperclip.native_workflow_scope_token',true)=${workflowScope.workflowScopeToken ?? ""}
+        and exists(select 1 from workflow_runs scoped_wr where scoped_wr.id=n.id and scoped_wr.company_id=${company}
+          and scoped_wr.id=any(string_to_array(nullif(current_setting('paperclip.native_workflow_run_ids',true),''),',')::uuid[]))`
+    : sql`false`;
+  // Plugin operation Tasks keep their originRunId in the Routine Run
+  // namespace. Only classify that edge after proving the exact current
+  // plugin-managed Routine binding and operation template; malformed or
+  // unbound plugin-shaped origins remain an invalid typed node below.
+  const pluginOperationOriginBinding = sql`exists(select 1 from routine_runs operation_run
+    join routines operation_routine on operation_routine.id=operation_run.routine_id
+      and operation_routine.company_id=operation_run.company_id
+    join routine_revisions operation_revision on operation_revision.id=operation_run.routine_revision_id
+      and operation_revision.routine_id=operation_run.routine_id and operation_revision.company_id=operation_run.company_id
+    join plugin_managed_resources operation_resource on operation_resource.company_id=operation_run.company_id
+      and operation_resource.resource_kind='routine' and operation_resource.resource_id=operation_routine.id
+    join plugins operation_plugin on operation_plugin.id=operation_resource.plugin_id
+      and operation_plugin.plugin_key=operation_resource.plugin_key
+    where operation_run.company_id=i.company_id
+      and operation_run.id=case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        then i.origin_run_id::uuid end
+      and operation_run.source in ('manual','api','schedule','webhook') and operation_routine.origin_kind='manual'
+      and operation_run.responsible_user_id is not distinct from operation_routine.responsible_user_id
+      and i.origin_kind='plugin:'||operation_plugin.plugin_key||':operation'
+      and operation_resource.defaults_json->'issueTemplate'->>'surfaceVisibility'='plugin_operation'
+      and operation_resource.defaults_json->'issueTemplate'->>'originId'=i.origin_id
+      and operation_revision.snapshot->'version'='1'::jsonb
+      and operation_revision.snapshot->'routine'->>'id'=operation_routine.id::text
+      and operation_revision.snapshot->'routine'->>'companyId'=operation_run.company_id::text
+      and not aw_conversation_routine_source_erased(operation_routine.company_id,operation_routine.id))`;
+  const edges = sql`        select 'issue'::text as kind,i.privacy_parent_issue_id as id from issues i
+          where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.privacy_parent_issue_id is not null
+        union all select 'issue',i.privacy_root_issue_id from issues i
+          where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.privacy_root_issue_id is not null and i.privacy_root_issue_id<>i.id
+        union all select 'project',i.project_id from issues i
+          where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.project_id is not null
+        union all select case when i.origin_kind='workflow_task' then 'workflow_run'
+            when i.origin_kind='routine_execution' then 'routine_run'
+            when i.origin_kind ~ '^plugin:[^:]+:operation(:|$)' then case when ${pluginOperationOriginBinding}
+              then 'routine_run' else 'invalid_typed_origin' end
+            else 'run' end,
+          case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            and (i.origin_kind not in ('workflow_task','routine_execution') or
+              (i.origin_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' and case i.origin_kind
+                when 'workflow_task' then exists(select 1 from workflow_runs wr where wr.company_id=i.company_id
+                  and wr.id=case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_run_id::uuid end
+                  and wr.workflow_id=case when i.origin_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_id::uuid end)
+                else exists(select 1 from routine_runs rr where rr.company_id=i.company_id
+                  and rr.id=case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_run_id::uuid end
+                  and rr.routine_id=case when i.origin_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_id::uuid end) end))
+            then i.origin_run_id::uuid end
+          from issues i where n.kind='issue' and i.id=n.id and i.company_id=${company}
+            and (i.origin_run_id is not null or i.origin_kind in ('workflow_task','routine_execution')
+              or i.origin_kind ~ '^plugin:[^:]+:operation(:|$)')
+            and (i.origin_kind in ('workflow_task','routine_execution') or not exists(
+              select 1 from ${heartbeatRuns} own_run where own_run.company_id=i.company_id
+                and own_run.id::text=i.origin_run_id and coalesce(own_run.issue_id,own_run.native_issue_id)=i.id))
+        union all select 'project',w.project_id from workflow_runs wr
+          join workflows w on w.id=wr.workflow_id and w.company_id=wr.company_id
+          where n.kind='workflow_run' and wr.id=n.id and wr.company_id=${company} and w.project_id is not null
+        union all select ref.kind,case when ref.id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then ref.id::uuid end
+          from routine_runs rr join routine_revisions v on v.id=rr.routine_revision_id
+            and v.routine_id=rr.routine_id and v.company_id=rr.company_id
+          cross join lateral (values ('project',v.snapshot->'routine'->>'projectId'),
+            ('issue',v.snapshot->'routine'->>'parentIssueId')) ref(kind,id)
+          where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company} and ref.id is not null
+        union all select 'issue',source.id::uuid from routine_runs rr
+          cross join lateral jsonb_array_elements_text(case
+            when jsonb_typeof(rr.trigger_payload->'contextPack'->'taskSourceIssueIds')='array'
+              then rr.trigger_payload->'contextPack'->'taskSourceIssueIds' else '[]'::jsonb end) source(id)
+          where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company}
+            and rr.trigger_payload->'automation'->>'automationExecutionId' is not null
+            and source.id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        union all select 'run',case when source.id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            then source.id::uuid end
+          from routine_runs rr join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+          cross join lateral jsonb_array_elements_text(case
+            when jsonb_typeof(rr.trigger_payload->'contextPack'->'case'->'producerRunIds')='array'
+              then rr.trigger_payload->'contextPack'->'case'->'producerRunIds' else '[]'::jsonb end) source(id)
+          where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company}
+            and rr.trigger_payload->'automation'->>'automationExecutionId' is not null
+            and ${pipelineAutomationRoutineSourceCondition(sql`${company}::uuid`)}
+        union all select 'issue',source.id from projects p cross join lateral unnest(p.source_issue_ids) source(id)
+          where n.kind='project' and p.id=n.id and p.company_id=${company}
+        union all select 'project',source.id from projects p cross join lateral unnest(p.source_project_ids) source(id)
+          where n.kind='project' and p.id=n.id and p.company_id=${company}
+        union all select s.source_kind,s.source_id from ${issuePrivacySources} s
+          join issues i on i.company_id=s.company_id and i.id=s.issue_id
+          where n.kind='issue' and s.issue_id=n.id and s.company_id=${company}
+            and (s.context_manifest_id is null or ${currentContextAllowed(sql`s.context_manifest_id`)})
+        union all select 'issue',ref.id from ${heartbeatRuns} r cross join lateral (
+          select r.issue_id as id where r.issue_id is not null
+          union all select r.native_issue_id where r.native_issue_id is not null
+          union all select case when r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            then (r.context_snapshot->>'issueId')::uuid end where r.context_snapshot ? 'issueId'
+          union all select case when r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            then (r.context_snapshot->>'taskId')::uuid end where r.context_snapshot ? 'taskId'
+          union all select null::uuid where r.scope_kind='issue' and r.issue_id is null and r.native_issue_id is null
+            and not coalesce(r.context_snapshot ? 'issueId',false) and not coalesce(r.context_snapshot ? 'taskId',false)
+        ) ref where n.kind='run' and r.id=n.id and r.company_id=${company}
+        union all select root.kind,root.id from ${heartbeatRuns} r
+          join context_manifests c on c.company_id=r.company_id and c.run_id=r.id
+          cross join lateral (${contextRoots}) root
+          where r.company_id=${company} and ${currentContextAllowed(sql`c.id`)} and ((n.kind='run' and r.id=n.id)
+            or (n.kind='issue' and coalesce(r.issue_id,r.native_issue_id)=n.id
+              and (root.id is null or root.kind<>'issue' or root.id<>n.id)))
+`;
+  const enumeratedEdges = sql`select * from (${edges}) native_edges limit 257`;
+  const privacyNodesCte = sql`with recursive privacy_nodes(kind,id) as (
+      select ${kind}::text,${id}
+      union
+      select edge.kind,edge.id from privacy_nodes n cross join lateral (${enumeratedEdges}) edge
+    ), bounded as materialized (select * from privacy_nodes limit 257)`;
+  const issueNodeReadable = sql`exists(
+    with exact_issue as materialized (
+      select source.id,source.company_id,source.conversation_retired_at,source.conversation_agent_id,
+        source.conversation_user_id,source.visibility,source.privacy_parent_issue_id,source.responsible_user_id,
+        source.created_by_user_id,source.assignee_user_id,source.assignee_agent_id,source.project_id
+      from issues source where source.id=n.id and source.company_id=${company}
+    )
+    select 1 from exact_issue i where i.conversation_retired_at is null
+      and ((i.conversation_agent_id is null and i.conversation_user_id is null) or ${conversationIdentity})
+      and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)}))`;
+  const sourceIssueConversationIdentity = sql`(${privatePrincipalCurrent(actor, company)}
+    and source.conversation_user_id=${humanId ?? null}
+    and ${actor.type === "board" ? sql`true` : actor.type === "agent" && actor.agentId
+      ? sql`source.conversation_agent_id=${actor.agentId}` : sql`false`})`;
+  const projectExists = sql`exists(select 1 from projects p where p.id=n.id and p.company_id=${company})`;
+  const projectQualified = sql`exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
+    and p.source_provenance_qualified)`;
+  const projectPrivateReadable = sql`exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
+    and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)}))`;
+  const runBindingExists = sql`exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
+    and ${heartbeatRunTaskBindingCondition(sql`r`)})`;
+  const runCopyExists = sql`exists(select 1 from ${heartbeatRuns} copy_run where copy_run.id=n.id and copy_run.company_id=${company})`;
+  const runCopyErased = sql`exists(select 1 from ${memoryDeletionMarkers} marker where marker.company_id=${company}
+    and marker.kind='source' and marker.key='memory-run-source-erasure:v1:'||n.id::text)`;
+  const runPrivateMemoryFailure = sql`exists(select 1 from context_manifests c
+    join context_manifest_memory_roots root on root.company_id=c.company_id and root.manifest_id=c.id
+    left join memory_records m on m.company_id=root.company_id and m.id=root.memory_record_id
+    where c.company_id=${company} and c.run_id=n.id and ${currentContextAllowed(sql`c.id`)} and (m.id is null
+      or (m.scope_type='agent' and m.private_owner_user_id is null)
+      or (m.private_owner_user_id is not null and
+        (m.private_owner_user_id is distinct from ${humanId ?? null} or not ${privatePrincipalCurrent(actor, company)}))
+      or (m.scope_type='agent' and ${actor.type === "agent"
+        ? sql`(m.owner_agent_id::text is distinct from ${actor.agentId ?? null} or m.scope_id is distinct from ${actor.agentId ?? null})`
+        : sql`false`})))`;
+  const workflowRunReadable = sql`exists(select 1 from workflow_runs wr
+    join workflows w on w.id=wr.workflow_id and w.company_id=wr.company_id
+    join workflow_revisions v on v.id=wr.workflow_revision_id and v.workflow_id=wr.workflow_id and v.company_id=wr.company_id
+    where wr.id=n.id and wr.company_id=${company}
+      and ((w.authoring_source_run_ids='[]'::jsonb and wr.authoring_source_workflow_ids='[]'::jsonb
+        and wr.memory_record_ids='[]'::jsonb and not exists(select 1 from workflow_step_runs step
+          where step.company_id=wr.company_id and step.workflow_run_id=wr.id and step.memory_record_ids is distinct from '[]'::jsonb)
+        and not exists(select 1 from learning_retained_assets lra
+          join learning_domain_candidates ldc on ldc.company_id=lra.company_id and ldc.id=lra.candidate_link_id
+          join learning_hypotheses lh on lh.company_id=ldc.company_id and lh.id=ldc.hypothesis_id
+          join learning_cycles lc on lc.company_id=lh.company_id and lc.id=lh.cycle_id
+          where lra.company_id=wr.company_id and lra.asset_type='workflow_revision' and lra.asset_id=wr.workflow_revision_id)
+        and not exists(select 1 from workflow_step_runs source_step
+          join learning_retained_assets lra on lra.company_id=source_step.company_id
+            and lra.asset_type='automation_artifact_version' and lra.asset_id=source_step.automation_artifact_version_id
+          join learning_domain_candidates ldc on ldc.company_id=lra.company_id and ldc.id=lra.candidate_link_id
+          join learning_hypotheses lh on lh.company_id=ldc.company_id and lh.id=ldc.hypothesis_id
+          join learning_cycles lc on lc.company_id=lh.company_id and lc.id=lh.cycle_id
+          where source_step.company_id=wr.company_id and source_step.workflow_run_id=wr.id)) or ${workflowRunScope})
+      and not aw_workflow_authoring_source_erased(w.company_id,w.id)
+      and not aw_workflow_run_authoring_source_erased(wr.company_id,wr.id))`;
+  const routineRunReadable = sql`exists(select 1 from routine_runs rr
+    join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+    join routine_revisions v on v.id=rr.routine_revision_id and v.routine_id=rr.routine_id and v.company_id=rr.company_id
+    where rr.id=n.id and rr.company_id=${company} and ${conversationRoutine}
+      and v.snapshot->'version'='1'::jsonb and lower(v.snapshot->'routine'->>'id')=rr.routine_id::text
+      and lower(v.snapshot->'routine'->>'companyId')=rr.company_id::text
+      and v.snapshot->'routine' ? 'projectId' and v.snapshot->'routine' ? 'parentIssueId'
+      and not aw_conversation_routine_source_erased(p.company_id,p.id))`;
+  const graphViolationRows = sql`with recursive source_edges as materialized (
+      select n.kind,n.id,edge.kind as source_kind,edge.id as source_id
+      from bounded n cross join lateral (${enumeratedEdges}) edge
+    ), reachable(kind,id,source_kind,source_id) as (
+      select kind,id,source_kind,source_id from source_edges
+      union
+      select r.kind,r.id,e.source_kind,e.source_id from reachable r
+        join source_edges e on e.kind=r.source_kind and e.id=r.source_id
+    )
+    select 'edge_limit'::text as reason from source_edges group by kind,id having count(*)>256
+    union all select 'cycle' from reachable where kind=source_kind and id=source_id
+    union all select 'unknown_kind' from bounded n
+      where n.kind not in ('issue','project','run','run_copy','workflow_run','routine_run')
+    union all select 'issue_missing_or_retired' from bounded n where n.kind='issue' and not exists(
+      select 1 from issues source where source.id=n.id and source.company_id=${company}
+        and source.conversation_retired_at is null)
+    union all select 'issue_conversation_identity' from bounded n where n.kind='issue' and exists(
+      select 1 from issues source where source.id=n.id and source.company_id=${company}
+        and not ((source.conversation_agent_id is null and source.conversation_user_id is null)
+          or ${sourceIssueConversationIdentity}))
+    union all select 'issue_private_unreadable' from bounded n where n.kind='issue' and exists(
+      select 1 from issues source where source.id=n.id and source.company_id=${company}
+        and source.visibility<>'open' and not ${issuePrincipalAccess(actor, sql`source.id`, sql`${company}`)})
+    union all select 'project_missing' from bounded n where n.kind='project' and not ${projectExists}
+    union all select 'project_unqualified' from bounded n where n.kind='project' and ${projectExists} and not ${projectQualified}
+    union all select 'project_private_unreadable' from bounded n where n.kind='project' and ${projectQualified}
+      and not ${projectPrivateReadable}
+    union all select 'run_missing_or_task_binding' from bounded n where n.kind='run' and not ${runBindingExists}
+    union all select 'run_copy_missing' from bounded n where n.kind='run_copy' and not ${runCopyExists}
+    union all select 'run_copy_erased' from bounded n where n.kind='run_copy' and ${runCopyErased}
+    union all select 'run_private_memory_root' from bounded n where n.kind='run' and ${runPrivateMemoryFailure}
+    union all select 'workflow_run_invalid' from bounded n where n.kind='workflow_run' and not ${workflowRunReadable}
+    union all select 'routine_run_invalid' from bounded n where n.kind='routine_run' and not ${routineRunReadable}`;
+  if (diagnostic && kind === "issue") diagnostic.graphDenials = sql`(
+    ${privacyNodesCte}
+    select coalesce(array_agg(reason order by reason),'{}'::text[]) from (
+      select 'node_limit'::text as reason where (select count(*) from bounded)>256
+      union all select 'snapshot_corrupt' where ${ignoreCorruptForDiagnostic ? sql`false` : issueSnapshotCorrupt}
+      union all select reason from (${graphViolationRows}) graph_violations
+    ) reasons)`;
+  if (diagnostic && kind === "issue") diagnostic.projectFacts = sql`(
+    ${privacyNodesCte}
+    select jsonb_build_object(
+      'nodeCount',count(*)::integer,
+      'boundRowCount',count(p.id)::integer,
+      'qualifiedCount',count(*) filter(where p.source_provenance_qualified)::integer,
+      'openCount',count(*) filter(where p.visibility='open')::integer,
+      'privateReadableCount',count(*) filter(where p.id is not null and p.visibility='private'
+        and ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})::integer,
+      'principalCurrent',${privatePrincipalCurrent(actor, company)},
+      'statusCounts',coalesce((select jsonb_object_agg(status,status_count) from (
+        select p2.status,count(*)::integer as status_count from bounded n2
+          join projects p2 on p2.id=n2.id and p2.company_id=${company}
+          where n2.kind='project' group by p2.status) statuses),'{}'::jsonb)
+    )::text from bounded n left join projects p on p.id=n.id and p.company_id=${company}
+      where n.kind='project')`;
+  return sql<boolean>`(
+    ${privacyNodesCte}
+    select case when (select count(*) from bounded)>256 or ${ignoreCorruptForDiagnostic ? sql`false` : issueSnapshotCorrupt} then false else not exists (
+      with recursive source_edges as materialized (
+        select n.kind,n.id,edge.kind as source_kind,edge.id as source_id
+        from bounded n cross join lateral (${enumeratedEdges}) edge
+      ), reachable(kind,id,source_kind,source_id) as (
+        select kind,id,source_kind,source_id from source_edges
+        union
+        select r.kind,r.id,e.source_kind,e.source_id from reachable r
+          join source_edges e on e.kind=r.source_kind and e.id=r.source_id
+      )
+      select 1 from source_edges group by kind,id having count(*)>256
+      union all
+      select 1 from reachable where kind=source_kind and id=source_id
+      union all
+      select 1 from bounded n where
+        n.kind not in ('issue','project','run','run_copy','workflow_run','routine_run')
+        or (n.kind='issue' and not ${issueNodeReadable})
+        or (n.kind='project' and not ${projectPrivateReadable})
+        or (n.kind='run' and not ${runBindingExists})
+        -- A Native model-output owner retains its producing Run only so the
+        -- output can be suppressed on Run erasure. That provenance edge does
+        -- not authorize reading the Run or inherit later Run Context roots.
+        or (n.kind='run_copy' and (not ${runCopyExists} or ${runCopyErased}))
+        -- Selected private Memory can narrow a derivative's audience, even when
+        -- the producer's original Task is public. This is a necessary denial,
+        -- not a complete Memory provenance receipt or a positive access grant.
+        or (n.kind='run' and ${runPrivateMemoryFailure})
+        or (n.kind='workflow_run' and not ${workflowRunReadable})
+        or (n.kind='routine_run' and not ${routineRunReadable})
+    ) end
+  )`;
+}
+
+export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow,
+): Promise<boolean> {
+  const taskPrivacyBatch = nativeTaskPrivacyBatches.get(db as object);
+  if (taskPrivacyBatch?.active && taskPrivacyBatch.companyId === issue.companyId && taskPrivacyBatch.actorKey === routineActorKey(actor)) {
+    return taskPrivacyBatch.issues.get(issue.id) ?? false;
+  }
+  const activeRoutineScope = nativeRoutineReadScopes.get(db as object);
+  if (!activeRoutineScope?.active && actor.type !== "none" && actor.source !== "local_implicit") {
+    const sourceGraphQuery = sql`
+      with recursive issue_chain(id) as (
+        select ${issue.id}::uuid
+        union
+        select parent.id from issue_chain c cross join lateral (
+          select coalesce(i.privacy_parent_issue_id,i.parent_id) as id from issues i
+            where i.id=c.id and i.company_id=${issue.companyId} and coalesce(i.privacy_parent_issue_id,i.parent_id) is not null
+          union select i.privacy_root_issue_id from issues i where i.id=c.id and i.company_id=${issue.companyId}
+            and i.privacy_root_issue_id is not null and i.privacy_root_issue_id<>i.id
+          union select s.source_id from issue_privacy_sources s where s.issue_id=c.id and s.company_id=${issue.companyId}
+            and s.source_kind='issue'
+        ) parent
+      ), bounded_nodes as materialized (select id from issue_chain limit 257), routine_ids as (
+        select i.origin_run_id::uuid as id from bounded_nodes c join issues i on i.id=c.id and i.company_id=${issue.companyId}
+          where i.origin_kind='routine_execution' and i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        union select s.source_id from bounded_nodes c join issue_privacy_sources s on s.issue_id=c.id and s.company_id=${issue.companyId}
+          where s.source_kind='routine_run'
+      ), bounded as materialized (select distinct id from routine_ids limit 257)
+      select coalesce(array_agg(id::text) filter(where id is not null),array[]::text[]) as ids,
+        ((select count(*) from bounded_nodes)>256 or (select count(*) from bounded)>256) as overflow from bounded
+    `;
+    const [sourceRows] = await nativeIssuePrivacyDiagnosticQuery(db, actor, "retained_source_graph", sourceGraphQuery,
+      () => db.execute<{ ids: string[]; overflow: boolean }>(sourceGraphQuery));
+    const routineIds = sourceRows?.ids ?? [];
+    if (sourceRows?.overflow) return false;
+    if (routineIds.length) {
+      if (is(db, PgTransaction)) {
+        return authorizationService(db).withReadRoutineSources(issue.companyId, actor, routineIds, async () =>
+          canActorReadIssuePrivacy(db, actor, issue));
+      }
+      return db.transaction(async rawTx => {
+        const tx = rawTx as unknown as DbTransaction;
+        return authorizationService(tx).withReadRoutineSources(issue.companyId, actor, routineIds, async () =>
+          canActorReadIssuePrivacy(tx, actor, issue));
+      });
+    }
+  }
+  const temporalScope = memoryTemporalReadScopes.getStore();
+  const readCondition = await issueReadSqlConditionInMemoryScope(db, actor, issue.id);
+  const readQuery = db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+    readCondition)).limit(1);
+  const readable = (await nativeIssuePrivacyDiagnosticQuery(db, actor, "effective_acl", readQuery,
+    () => executePrivacyIdSelect(db, readQuery))).length > 0;
+  if (!readable && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
+      temporalScope?.active && temporalScope.companyId === issue.companyId &&
+      nativeTaskReaderScopeDiagnostics < 16) {
+    nativeTaskReaderScopeDiagnostics += 1;
+    const company = sql`${issue.companyId}::uuid`;
+    const rowId = sql`${issue.id}::uuid`;
+    const ownerRead = issuePrincipalAccess(actor, rowId, company);
+    const diagnosticContextIds = activeMemoryTemporalContexts(db, actor, "issue", issue.id);
+    const captureSnapshotDiagnostic: NativeIssueSnapshotDiagnostic = {};
+    taskSourcePrivacySqlCondition(db, "issue", rowId, company, actor, diagnosticContextIds, captureSnapshotDiagnostic);
+    const graphOnlyDiagnostic: NativeIssueSnapshotDiagnostic = {};
+    const graphOnlyCondition = taskSourcePrivacySqlCondition(db, "issue", rowId, company, actor, diagnosticContextIds,
+      graphOnlyDiagnostic, true);
+    const humanId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
+    const actorRunCurrent = actor.type === "agent" && actor.agentId && actor.runId
+      ? sql`exists(select 1 from heartbeat_runs r where r.id=${actor.runId} and r.company_id=${company}
+          and r.agent_id=${actor.agentId} and r.responsible_user_id=${humanId ?? null} and r.status='running')`
+      : sql`false`;
+    const conversationRead = actor.type === "agent" && actor.agentId && humanId
+      ? sql`exists(select 1 from issues i where i.id=${rowId} and i.company_id=${company}
+          and i.conversation_agent_id=${actor.agentId} and i.conversation_user_id=${humanId}
+          and ${privatePrincipalCurrent(actor, company)})` : sql`false`;
+    const [facts] = await db.execute<{ ownerExists: boolean; isOpen: boolean; ownerAcl: boolean;
+      principalCurrent: boolean; conversationIdentity: boolean; protocolOne: boolean; snapshotPresent: boolean;
+      snapshotInvalidated: boolean; snapshotOwnerHashValid: boolean; snapshotDigestValid: boolean;
+      actorRunStatusRunning: boolean;
+      actualSnapshotValid: boolean; actualSnapshotCorrupt: boolean; graphOnlyReadable: boolean;
+      graphDenials: string[]; projectFacts: string;
+      issuePolicyEdgesValid: boolean; projectPolicyEdgesValid: boolean; runPolicyEdgesValid: boolean;
+      recognizedInputKinds: boolean; taskInputOwnersValid: boolean; contextInputOwnersValid: boolean;
+      finalDispatchPrefixValid: boolean; sourceEdgeKinds: string[]; unreadableDirectIssueSources: number;
+      scopeContextCount: number; scopeRunCount: number }>(sql`
+      select exists(select 1 from issues i where i.id=${rowId} and i.company_id=${company}) as "ownerExists",
+        coalesce((select i.visibility='open' from issues i where i.id=${rowId} and i.company_id=${company}),false) as "isOpen",
+        ${ownerRead} as "ownerAcl", ${privatePrincipalCurrent(actor, company)} as "principalCurrent",
+        ${actorRunCurrent} as "actorRunStatusRunning",
+        ${conversationRead} as "conversationIdentity",
+        ${captureSnapshotDiagnostic?.valid ?? sql`false`} as "actualSnapshotValid",
+        ${captureSnapshotDiagnostic?.corrupt ?? sql`false`} as "actualSnapshotCorrupt",
+        ${graphOnlyCondition} as "graphOnlyReadable",
+        ${graphOnlyDiagnostic.graphDenials ?? sql`'{}'::text[]`} as "graphDenials",
+        ${graphOnlyDiagnostic.projectFacts ?? sql`'{}'::text`} as "projectFacts",
+        coalesce((select i.payload_source_protocol_version=1 from issues i where i.id=${rowId} and i.company_id=${company}),false) as "protocolOne",
+        coalesce((select i.payload_source_snapshot is not null from issues i where i.id=${rowId} and i.company_id=${company}),false) as "snapshotPresent",
+        coalesce((select i.payload_source_snapshot_invalidated from issues i where i.id=${rowId} and i.company_id=${company}),true) as "snapshotInvalidated",
+        coalesce((select i.payload_source_snapshot->'owner'->>'contentHash'=
+          public.aw_native_payload_body_hash('issue',to_jsonb(i)) from issues i where i.id=${rowId} and i.company_id=${company}),false)
+          as "snapshotOwnerHashValid",
+        coalesce((select encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=
+          i.payload_source_snapshot->>'digest' from issues i where i.id=${rowId} and i.company_id=${company}),false) as "snapshotDigestValid",
+        coalesce((select i.payload_source_snapshot->'policy'->'issueIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+          from (select distinct s.source_id from issue_privacy_sources s where s.company_id=i.company_id and s.issue_id=i.id
+            and s.source_kind='issue') captured),'[]'::jsonb) from issues i where i.id=${rowId} and i.company_id=${company}),false)
+          as "issuePolicyEdgesValid",
+        coalesce((select i.payload_source_snapshot->'policy'->'projectIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+          from (select distinct s.source_id from issue_privacy_sources s where s.company_id=i.company_id and s.issue_id=i.id
+            and s.source_kind='project') captured),'[]'::jsonb) from issues i where i.id=${rowId} and i.company_id=${company}),false)
+          as "projectPolicyEdgesValid",
+        coalesce((select i.payload_source_snapshot->'policy'->'runIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
+          from (select distinct s.source_id from issue_privacy_sources s where s.company_id=i.company_id and s.issue_id=i.id
+            and s.source_kind='run') captured),'[]'::jsonb) from issues i where i.id=${rowId} and i.company_id=${company}),false)
+          as "runPolicyEdgesValid",
+        coalesce((select array_agg(distinct edge.source_kind order by edge.source_kind) from issue_privacy_sources edge
+          where edge.company_id=${company} and edge.issue_id=${rowId}),array[]::text[]) as "sourceEdgeKinds",
+        coalesce((select count(*) from issue_privacy_sources edge join issues source on source.company_id=edge.company_id
+          and source.id=edge.source_id where edge.company_id=${company} and edge.issue_id=${rowId} and edge.source_kind='issue'
+          and source.visibility<>'open' and not ${issuePrincipalAccess(actor, sql`source.id`, company)}),0)::integer
+          as "unreadableDirectIssueSources",
+        coalesce((select not exists(select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+          then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) input
+          where input->>'kind' not in ('context','task','project','memory','foundation_revision','comment','interaction',
+            'document_revision','attachment','skill_version','runtime_skill','playbook_revision','role_pack_version',
+            'authored_definition','runtime_instructions','retained_run','retained_workspace','tool_result',
+            'completion_contract','native_task_wake','workspace_metadata','worker_model_dispatch','conversation_model_dispatch'))
+          from issues i where i.id=${rowId} and i.company_id=${company}),false) as "recognizedInputKinds",
+        coalesce((select not exists(select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+          then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) input where input->>'kind'='task' and not exists(
+            select 1 from issues src join issue_privacy_sources edge on edge.company_id=src.company_id and edge.source_id=src.id
+            where src.company_id=i.company_id and src.id::text=input->>'issueId' and edge.issue_id=i.id
+              and edge.source_kind='issue' and edge.context_manifest_id is null
+              and input->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(src))))
+          from issues i where i.id=${rowId} and i.company_id=${company}),false) as "taskInputOwnersValid",
+        coalesce((select not exists(
+          select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+            then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) input
+          left join context_manifests cm on cm.company_id=i.company_id and cm.id::text=input->>'manifestId'
+          where input->>'kind'='context' and (cm.id is null or cm.query_hash is distinct from input->>'queryHash'
+            or cm.policy_snapshot_hash is distinct from input->>'policySnapshotHash'
+            or cm.run_id::text not in (
+              select jsonb_array_elements_text(case when jsonb_typeof(i.payload_source_snapshot->'policy'->'runIds')='array'
+                then i.payload_source_snapshot->'policy'->'runIds' else '[]'::jsonb end)
+              union all
+              select dispatch->>'runId' from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+                then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) dispatch
+                where dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')))
+          ) from issues i where i.id=${rowId} and i.company_id=${company}),false) as "contextInputOwnersValid",
+        coalesce((select exists(select 1 from jsonb_array_elements(case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array'
+          then i.payload_source_snapshot->'inputs' else '[]'::jsonb end) with ordinality dispatch(value,ordinality)
+          where dispatch.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')
+            and dispatch.ordinality=(select max(candidate.ordinality) from jsonb_array_elements(
+              case when jsonb_typeof(i.payload_source_snapshot->'inputs')='array' then i.payload_source_snapshot->'inputs'
+                else '[]'::jsonb end) with ordinality candidate(value,ordinality)
+              where candidate.value->>'kind' in ('worker_model_dispatch','conversation_model_dispatch'))
+            and exists(select 1 from heartbeat_runs producer cross join lateral jsonb_array_elements(
+              coalesce(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches','[]'::jsonb)) prefix(value)
+              where producer.company_id=i.company_id and producer.id::text=dispatch.value->>'runId'
+                and producer.native_input_source_protocol_version=1 and prefix.value->'policy'=i.payload_source_snapshot->'policy'
+                and prefix.value->'inputs'=i.payload_source_snapshot->'inputs'
+                and prefix.value->'inputs'->(jsonb_array_length(prefix.value->'inputs')-1)=dispatch.value))
+          from issues i where i.id=${rowId} and i.company_id=${company}),false) as "finalDispatchPrefixValid",
+        ${temporalScope.contextIds.length}::integer as "scopeContextCount",
+        ${temporalScope.runIds.size}::integer as "scopeRunCount"
+    `);
+    console.error("native_task_reader_scope_denial", JSON.stringify({ actorType: actor.type,
+      actorSource: actor.source ?? "unknown", scopeDbMatches: temporalScope.db === (db as object),
+      scopeActorMatches: temporalScope.actorKey === routineActorKey(actor), scopeIssueMember: temporalScope.issueIds.has(issue.id),
+      scopeRunMember: actor.type === "agent" && actor.runId ? temporalScope.runIds.has(actor.runId) : false,
+      snapshotPredicateCaptured: Boolean(captureSnapshotDiagnostic?.valid && captureSnapshotDiagnostic.corrupt),
+      facts: facts ?? null }));
+  }
+  return readable;
+}
+/** Typed Task execution owners are distinct namespaces from heartbeat runs.
+ * Workflow and Routine payload reads enter their original native authoring
+ * owners before the shared retained-source SQL checks run. */
+export async function canActorReadTypedTaskSourcePrivacy(db: Db | DbTransaction, actor: AuthorizationActor,
+  source: { sourceKind: "workflow_run" | "routine_run"; id: string; companyId: string }): Promise<boolean> {
+  const table = source.sourceKind === "workflow_run" ? workflowRuns : routineRuns;
+  const routineScope = nativeRoutineReadScopes.get(db as object);
+  if (source.sourceKind === "routine_run" && routineScope?.active &&
+    (routineScope.companyId !== source.companyId || routineScope.routineActorKey !== routineActorKey(actor) ||
+      !routineScope.routineRunIds?.has(source.id))) return false;
+  if (source.sourceKind === "routine_run" && actor.type === "board" && routineScope?.active &&
+    routineScope.companyId === source.companyId && routineScope.routineActorKey === routineActorKey(actor) &&
+    routineScope.routinePluginOperationRunIds?.has(source.id)) {
+    const [current] = await db.execute<{ allowed: boolean }>(sql`
+      select exists(select 1 from routine_runs rr join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+        where rr.id=${source.id}::uuid and rr.company_id=${source.companyId}::uuid and rr.source='manual'
+          and rr.responsible_user_id=${actor.userId ?? null} and p.origin_kind='manual'
+          and p.responsible_user_id=${actor.userId ?? null}
+          and not aw_conversation_routine_source_erased(p.company_id,p.id)) as allowed
+    `);
+    return current?.allowed === true;
+  }
+  if (source.sourceKind === "workflow_run" && !nativeWorkflowReadScopes.get(db as object)?.active
+    && actor.type !== "none" && actor.source !== "local_implicit") {
+    if (is(db, PgTransaction)) return authorizationService(db).withReadWorkflowSources(source.companyId, actor, [source.id], async () =>
+      canActorReadTypedTaskSourcePrivacy(db, actor, source));
+    return db.transaction(async rawTx => {
+      const tx = rawTx as unknown as DbTransaction;
+      return authorizationService(tx).withReadWorkflowSources(source.companyId, actor, [source.id], async () =>
+        canActorReadTypedTaskSourcePrivacy(tx, actor, source));
+    });
+  }
+  if (source.sourceKind === "routine_run" && !nativeRoutineReadScopes.get(db as object)?.active
+    && actor.type !== "none" && actor.source !== "local_implicit") {
+    if (is(db, PgTransaction)) return authorizationService(db).withReadRoutineSources(source.companyId, actor, [source.id], async () =>
+      canActorReadTypedTaskSourcePrivacy(db, actor, source));
+    return db.transaction(async rawTx => {
+      const tx = rawTx as unknown as DbTransaction;
+      return authorizationService(tx).withReadRoutineSources(source.companyId, actor, [source.id], async () =>
+        canActorReadTypedTaskSourcePrivacy(tx, actor, source));
+    });
+  }
+  const sourceCondition = await taskSourcePrivacySqlCondition(db, source.sourceKind, sql`${table.id}`, sql`${table.companyId}`, actor);
+  const rows = await db.select({ id: table.id }).from(table).where(and(eq(table.id, source.id), eq(table.companyId, source.companyId), sourceCondition)).limit(1);
+  return rows.length > 0;
+}
+export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, project: ProjectPrivacyRow) {
+  const taskPrivacyBatch = nativeTaskPrivacyBatches.get(db as object);
+  if (taskPrivacyBatch?.active && taskPrivacyBatch.companyId === project.companyId && taskPrivacyBatch.actorKey === routineActorKey(actor)) {
+    return taskPrivacyBatch.projects.get(project.id) ?? false;
+  }
+  return (await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, project.id), eq(projects.companyId, project.companyId), await projectReadSqlCondition(db, actor))).limit(1)).length > 0;
+}
+
+/** Original persisted run binding, never caller-supplied scope or context facts.
+ * This narrows payload visibility; company/action and V8 copy checks still apply. */
+export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string },
+): Promise<boolean> {
+  const readQuery = db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId),
+    await heartbeatRunReadSqlConditionInMemoryScope(db, actor, source.id),
+  )).limit(1);
+  const readable = (await executePrivacyIdSelect(db, readQuery)).length > 0;
+  if (!readable && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" && nativeRunReaderDiagnostics < 16) {
+    nativeRunReaderDiagnostics += 1;
+    const scope = memoryTemporalReadScopes.getStore();
+    const scopeMatches = scope?.active && scope.companyId === source.companyId &&
+      scope.actorKey === routineActorKey(actor) && scope.runIds.has(source.id);
+    const company = sql`${source.companyId}::uuid`;
+    const runId = sql`${source.id}::uuid`;
+    const actorRunId = actor.type === "agent" && actor.runId && privacyUuid.test(actor.runId) ? actor.runId : null;
+    // This counterfactual is read-only diagnostic evidence. It never supplies
+    // authorization or transports a temporal capability into another DB/tx.
+    const scopedGraph = scopeMatches
+      ? taskSourcePrivacySqlCondition(db, "run", runId, company, actor, scope.contextIds)
+      : sql`null::boolean`;
+    const [facts] = await db.execute<{
+      principalCurrent: boolean; sourceExists: boolean; sourceBindingValid: boolean;
+      sourceStatus: string | null; actorRunStatus: string | null; actorOwnsSource: boolean;
+      retainedContextCount: number; diagnosticScopedGraph: boolean | null;
+    }>(sql`select ${privatePrincipalCurrent(actor, company)} as "principalCurrent",
+      exists(select 1 from heartbeat_runs r where r.id=${runId} and r.company_id=${company}) as "sourceExists",
+      coalesce((select ${heartbeatRunTaskBindingCondition(sql`r`)} from heartbeat_runs r
+        where r.id=${runId} and r.company_id=${company}),false) as "sourceBindingValid",
+      (select r.status from heartbeat_runs r where r.id=${runId} and r.company_id=${company}) as "sourceStatus",
+      (select r.status from heartbeat_runs r where r.id=${actorRunId}::uuid and r.company_id=${company}) as "actorRunStatus",
+      coalesce((select r.agent_id::text=${actor.type === "agent" ? actor.agentId ?? null : null}
+        and r.responsible_user_id=${actor.type === "agent" ? actor.onBehalfOfUserId ?? null : null}
+        from heartbeat_runs r where r.id=${runId} and r.company_id=${company}),false) as "actorOwnsSource",
+      (select count(*)::integer from context_manifests c where c.company_id=${company} and c.run_id=${runId}) as "retainedContextCount",
+      ${scopedGraph} as "diagnosticScopedGraph"`);
+    console.error("native_run_reader_scope_denial", JSON.stringify({
+      actorType: actor.type, actorSource: actor.source ?? "unknown", actorIsSourceRun: actorRunId === source.id,
+      dbIsTransaction: is(db, PgTransaction), scopePresent: Boolean(scope?.active),
+      scopeDbMatches: scope?.db === (db as object), scopeActorAndRunMatch: Boolean(scopeMatches),
+      scopeContextCount: scope?.contextIds.length ?? null,
+      facts: facts ?? null,
+    }));
+  }
+  return readable;
+}
+/** Exact canonical Run readers, grouped only by their original transaction-bound
+ * frozen Context scopes. The caller consumes this result within its lock phase. */
+export async function canActorReadHeartbeatRunPrivacyBatch(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, runIds: readonly string[]): Promise<Map<string, boolean>> {
+  const ids = [...new Set(runIds)];
+  if (ids.length > 256 || ids.some(id => !privacyUuid.test(id)))
+    throw forbidden("The complete current Run reader set is unavailable");
+  const readable = new Map(ids.map(id => [id, false]));
+  if (!ids.length) return readable;
+  if (!is(db, PgTransaction))
+    return db.transaction(tx => canActorReadHeartbeatRunPrivacyBatch(tx, actor, companyId, ids));
+  const groups = new Map<string, { contextIds: readonly string[] | undefined; ids: string[] }>();
+  for (const id of ids) {
+    const contextIds = activeMemoryTemporalContexts(db, actor, "run", id);
+    const key = contextIds === undefined ? "unscoped" : JSON.stringify(contextIds);
+    const group = groups.get(key) ?? { contextIds, ids: [] };
+    group.ids.push(id); groups.set(key, group);
+  }
+  const evaluated = new Set<string>();
+  for (const group of groups.values()) {
+    const condition = group.contextIds === undefined ? await heartbeatRunReadSqlCondition(db, actor)
+      : taskSourcePrivacySqlCondition(db, "run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`,
+        actor, group.contextIds);
+    const rows = await executePrivacyIdSelect(db, db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.id, group.ids), condition)));
+    const allowed = new Set(rows.map(row => row.id));
+    for (const id of group.ids) {
+      readable.set(id, allowed.has(id) && (!evaluated.has(id) || readable.get(id) === true));
+      evaluated.add(id);
+    }
+  }
+  return readable;
+}
+
+let nativeRunReaderDiagnostics = 0;
+
+/** Same persisted native run closure for pre-limit projections and direct reads. */
+export async function heartbeatRunReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
+  return taskSourcePrivacySqlCondition(_db, "run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor);
+}
+
+async function heartbeatRunReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor: AuthorizationActor, runId: string) {
+  const capturedContextManifestIds=activeMemoryTemporalContexts(db,actor,"run",runId);
+  return capturedContextManifestIds === undefined ? heartbeatRunReadSqlCondition(db,actor)
+    : taskSourcePrivacySqlCondition(db,"run",sql`${heartbeatRuns.id}`,sql`${heartbeatRuns.companyId}`,actor,capturedContextManifestIds);
+}
 
 export function responsibleUserAuthzShadowMode() {
   const mode = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE?.trim().toLowerCase();
   const shadow = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_SHADOW?.trim().toLowerCase();
   return mode === "shadow" || shadow === "1" || shadow === "true" || shadow === "yes";
-}
-
-function activeActorMembership(
-  memberships: Array<{ companyId: string; membershipRole?: string | null; status?: string }> | null | undefined,
-  companyId: string,
-) {
-  return memberships?.find((membership) => membership.companyId === companyId && membership.status === "active") ?? null;
 }
 
 function activeResponsibleUserCanAuthorizeIssueAction(
@@ -549,6 +2018,244 @@ export function authorizationDeniedDetails(decision: AuthorizationDecision) {
 }
 
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type MemoryTemporalReadScope = {
+  readonly db: object;
+  readonly companyId: string;
+  readonly recordId: string;
+  readonly actorKey: string;
+  readonly issueIds: ReadonlySet<string>;
+  readonly runIds: ReadonlySet<string>;
+  readonly contextIds: readonly string[];
+  active: boolean;
+};
+export interface MemoryPageStructuralProofMemoStore {
+  readonly transaction: object;
+  readonly proofsByOwnerPrefix: Map<string, Set<string>>;
+}
+const memoryTemporalReadScopes = new AsyncLocalStorage<MemoryTemporalReadScope>();
+let nativeMemoryTemporalDiagnostics = 0;
+
+/** Bind a no-live-future-Context read to one existing immutable Memory output.
+ * This is callable only by the Memory source owner, never from request fields. */
+export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, recordId: string, read: (sourceDb: Db | DbTransaction) => Promise<T>, expected?: { sourceVersion: string; snapshot: unknown;
+    issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[] },
+  structuralProofMemoStore?: MemoryPageStructuralProofMemoStore): Promise<T | false> {
+  const diagnosticStartedAt = performance.now();
+  let diagnosticDb = db as object;
+  const diagnostic = (stage: "source_snapshot" | "source_body_hash" | "output_snapshot_currentness" |
+    "context_inputs_currentness" | "callback_reader",
+    facts: Record<string, boolean | number | string | null> = {}) => {
+    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeMemoryTemporalDiagnostics < 8) {
+      nativeMemoryTemporalDiagnostics += 1;
+      const map = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1"
+        ? (globalThis as unknown as Record<PropertyKey, unknown>)[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")]
+        : undefined;
+      const transactionOrdinal = map instanceof WeakMap ? map.get(diagnosticDb) ?? null : null;
+      console.error("native_memory_temporal_reader_test_denial", JSON.stringify({ stage,
+        elapsedMs: Math.round(performance.now() - diagnosticStartedAt), transactionOrdinal, ...facts }));
+    }
+  };
+  const readInTransaction = async (sourceDb: Db | DbTransaction): Promise<T | false> => {
+    diagnosticDb = sourceDb as object;
+    const [{ lockAnalyticalCompany, markAnalyticalPrivacyReadLocked }, { lockMemoryPrivacy }] = await Promise.all([
+      import("./analytical-privacy.js"), import("./memory/memory-privacy.js"),
+    ]);
+    await lockAnalyticalCompany(sourceDb as Db, companyId, "read");
+    await lockMemoryPrivacy(sourceDb as Db, companyId, "read");
+    markAnalyticalPrivacyReadLocked(sourceDb as object);
+    const [row] = await sourceDb.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId),
+      isNull(memoryRecords.deletedAt), sql`not exists(select 1 from ${memoryDeletionMarkers} d
+        where d.company_id=${companyId} and d.record_id=${recordId})`)).for("share");
+    const snapshot = row && nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
+    const dispatch = snapshot?.success ? snapshot.data.inputs.filter((input): input is Extract<typeof input,
+      { kind: "worker_model_dispatch" | "conversation_model_dispatch" }> =>
+      input.kind === "worker_model_dispatch" || input.kind === "conversation_model_dispatch").at(-1) : undefined;
+    const capturedRunIds = dispatch
+      ? [...new Set([...(snapshot?.success ? snapshot.data.policy.runIds : []), dispatch.runId])].sort()
+      : row?.sourceRunIds ?? [];
+    if (!row || expected && (row.updatedAt.toISOString() !== expected.sourceVersion ||
+        !isDeepStrictEqual(row.payloadSourceSnapshot, expected.snapshot) || !isDeepStrictEqual(row.sourceIssueIds, expected.issueIds) ||
+        !isDeepStrictEqual(row.sourceProjectIds, expected.projectIds) || !isDeepStrictEqual(row.sourceRunIds, expected.runIds) ||
+        !isDeepStrictEqual(row.sourceMemoryIds, expected.memoryIds) ||
+        !isDeepStrictEqual(row.sourceFoundationRevisionIds, expected.foundationRevisionIds)) ||
+      !snapshot?.success || !row.sourceProvenanceQualified || row.payloadSourceProtocolVersion !== 1 || row.payloadSourceSnapshotInvalidated
+      || snapshot.data.owner.kind !== "memory_record" || snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== recordId
+      || !dispatch && (!snapshot.data.policy.runIds.length || snapshot.data.inputs.some(input => input.kind !== "context"))
+      || !isDeepStrictEqual(snapshot.data.policy.issueIds, [...row.sourceIssueIds].sort())
+      || !isDeepStrictEqual(snapshot.data.policy.projectIds, [...row.sourceProjectIds].sort())
+      || !isDeepStrictEqual([...row.sourceRunIds].sort(), capturedRunIds)
+      || !isDeepStrictEqual(snapshot.data.policy.memoryIds, [...row.sourceMemoryIds].sort())
+      || !isDeepStrictEqual(snapshot.data.policy.foundationRevisionIds, [...row.sourceFoundationRevisionIds].sort()))
+      {
+        diagnostic("source_snapshot", { rowPresent: Boolean(row), expectedPresent: Boolean(expected), snapshotValid: Boolean(snapshot?.success),
+          sourceQualified: row?.sourceProvenanceQualified === true, protocolOne: row?.payloadSourceProtocolVersion === 1,
+          snapshotNotInvalidated: row?.payloadSourceSnapshotInvalidated === false,
+          ownerBound: Boolean(snapshot?.success && row && snapshot.data.owner.kind === "memory_record" &&
+            snapshot.data.owner.companyId === companyId && snapshot.data.owner.id === recordId),
+          expectedMatches: Boolean(row && expected && row.updatedAt.toISOString() === expected.sourceVersion &&
+            isDeepStrictEqual(row.payloadSourceSnapshot, expected.snapshot)) });
+        return false;
+      }
+    const [binding] = await sourceDb.execute<{ valid: boolean }>(sql`select
+      public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${snapshot.data.owner.contentHash}
+        and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid
+      from ${memoryRecords} m where m.company_id=${companyId} and m.id=${recordId}
+        and m.payload_source_snapshot is not null and m.payload_source_snapshot_invalidated=false`);
+    if (!binding?.valid) { diagnostic("source_body_hash", { bodyAndSnapshotDigestValid: binding?.valid === true }); return false; }
+    const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
+    const { withNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
+    const scope: MemoryTemporalReadScope = { db: sourceDb as object, companyId, recordId, actorKey: routineActorKey(actor),
+      issueIds: new Set(row.sourceIssueIds), runIds: new Set(capturedRunIds),
+      contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
+    let currentnessStage: "output_snapshot_currentness" | "context_inputs_currentness" = "output_snapshot_currentness";
+    let structuralProofMemo: { transaction: object; actorKey: string; memoryTemporalIdentity: string;
+      frozenTaskSnapshots: Set<string> } | undefined;
+    const memoActorKey = nativeSha256(actor);
+    try {
+      const result = await memoryTemporalReadScopes.run(scope, async () => {
+        try {
+          // Resolve the memo under this owner's ALS scope. Looking up the
+          // active prefix before `run` sees the parent's prefix (or none at the
+          // page root), so nested proofs either miss or bind to the wrong
+          // owner. The memo remains exact to this physical transaction,
+          // actor, and active temporal prefix.
+          const memoryTemporalIdentity = activeMemoryTemporalReadScopeIdentity(sourceDb, actor);
+          const memoKey = memoryTemporalIdentity
+            ? createHash("sha256").update(JSON.stringify({ actorKey: memoActorKey, memoryTemporalIdentity }), "utf8").digest("hex") : null;
+          if (dispatch && structuralProofMemoStore && structuralProofMemoStore.transaction === (sourceDb as object) &&
+            memoryTemporalIdentity && memoKey &&
+            (structuralProofMemoStore.proofsByOwnerPrefix.has(memoKey) || structuralProofMemoStore.proofsByOwnerPrefix.size < 128)) {
+            let frozenTaskSnapshots = structuralProofMemoStore.proofsByOwnerPrefix.get(memoKey);
+            if (!frozenTaskSnapshots) {
+              frozenTaskSnapshots = new Set();
+              structuralProofMemoStore.proofsByOwnerPrefix.set(memoKey, frozenTaskSnapshots);
+            }
+            structuralProofMemo = { transaction: sourceDb as object, actorKey: memoActorKey, memoryTemporalIdentity,
+              frozenTaskSnapshots };
+          }
+          const temporalProfile = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
+          let contextInputsCurrentnessMs = 0;
+          let callbackReaderMs = 0;
+          // The exact frozen Context prefix must govern the Memory owner proof
+          // itself, not only the final caller. Otherwise validating an older
+          // Memory can consult a later Context manifest before its ALS scope is
+          // installed and retroactively taint the earlier output.
+          const readWithCurrentContext = async (currentDb: Db | DbTransaction) => {
+            currentnessStage = "context_inputs_currentness";
+            const contextStartedAt = temporalProfile ? performance.now() : 0;
+            await assertNativeTemporalContextInputsCurrent(currentDb as Db, companyId, contextInputs);
+            const callbackStartedAt = temporalProfile ? performance.now() : 0;
+            const result = await read(currentDb);
+            if (temporalProfile) {
+              contextInputsCurrentnessMs = callbackStartedAt - contextStartedAt;
+              callbackReaderMs = performance.now() - callbackStartedAt;
+            }
+            return result;
+          };
+          const outputStartedAt = temporalProfile ? performance.now() : 0;
+          const result = dispatch ? await withNativeMemoryOutputSnapshotCurrent(sourceDb, {
+            companyId, recordId, snapshot: snapshot.data, actor,
+            ...(structuralProofMemo ? { structuralProofMemo } : {}),
+          }, readWithCurrentContext) : await readWithCurrentContext(sourceDb);
+          if (temporalProfile) console.error("native_memory_temporal_owner_stage", JSON.stringify({
+            outputSnapshotProofMs: Math.max(0, Math.round(performance.now() - outputStartedAt - contextInputsCurrentnessMs - callbackReaderMs)),
+            contextInputsCurrentnessMs: Math.round(contextInputsCurrentnessMs), callbackReaderMs: Math.round(callbackReaderMs),
+          }));
+          return result;
+        } catch (error) {
+          if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
+            const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {
+              const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+              return match ? [`${match[1]}:${match[2]}`] : [];
+            }).slice(0, 5);
+            diagnostic(currentnessStage, { status: error.status,
+              errorName: ["HttpError", "Error"].includes(error.name) ? error.name : "other", frames: frames.join(",") });
+            return false;
+          }
+          throw error;
+        }
+      });
+      if (result === false) diagnostic("callback_reader", { callbackReturnedFalse: true });
+      return result;
+    }
+    finally { scope.active = false; }
+  };
+  // The captured temporal prefix and the output owner/current-reader recheck
+  // must share the same physical transaction. If the pool is supplied, start
+  // that transaction here and hand it to the callback; otherwise a nested
+  // owner read would create a different transaction and lose the ALS scope.
+  return is(db, PgTransaction) ? readInTransaction(db) : db.transaction(tx => readInTransaction(tx));
+}
+
+/** Install the Context prefix from one exact, current Native output Task row.
+ * The Native direct-input owner validator must run inside the callback before
+ * any read result escapes; this scope only narrows the existing reader
+ * predicate to the frozen Context manifests and does not grant access. */
+export async function withReadPinnedNativeTaskSnapshot<T>(db: Db | DbTransaction, actor: AuthorizationActor,
+  companyId: string, issueId: string, read: (currentOwnerHash: string, currentSnapshotDigest: string) => Promise<T>): Promise<T> {
+  const [owner] = await db.select({ payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+    payloadSourceSnapshot: issues.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
+    ownerHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+    digestValid: sql<boolean>`encode(sha256(convert_to((${issues.payloadSourceSnapshot}-'digest')::text,'UTF8')),'hex')=${issues.payloadSourceSnapshot}->>'digest'` })
+    .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).for("share");
+  const snapshot = owner && nativePayloadSourceSnapshotSchema.safeParse(owner.payloadSourceSnapshot);
+  if (!owner || owner.payloadSourceProtocolVersion !== 1 || owner.payloadSourceSnapshotInvalidated ||
+    owner.digestValid !== true || !snapshot?.success || snapshot.data.owner.kind !== "issue" ||
+    snapshot.data.owner.companyId !== companyId || snapshot.data.owner.id !== issueId ||
+    snapshot.data.owner.contentHash !== owner.ownerHash)
+    throw forbidden("The Native Task temporal scope is unavailable");
+  const contextIds = snapshot.data.inputs.flatMap(input => input.kind === "context" ? [input.manifestId] : []);
+  const dispatches = snapshot.data.inputs.filter((input): input is Extract<typeof input,
+    { kind: "worker_model_dispatch" | "conversation_model_dispatch" }> =>
+    input.kind === "worker_model_dispatch" || input.kind === "conversation_model_dispatch");
+  const dispatch = dispatches.at(-1);
+  if (!dispatch || dispatches.length > 64 || snapshot.data.inputs.at(-1) !== dispatch)
+    throw forbidden("The Native Task temporal scope has no retained output dispatch");
+  const runIds = [...new Set([...snapshot.data.policy.runIds, ...(dispatch ? [dispatch.runId] : [])])].sort();
+  const issueIds = new Set([issueId, ...snapshot.data.policy.issueIds, ...snapshot.data.inputs.flatMap(input =>
+    input.kind === "task" ? [input.issueId] : [])]);
+  if (contextIds.length) {
+    const items = await db.select({ sourceProvider: contextManifestItems.sourceProvider, sourceRef: contextManifestItems.sourceRef })
+      .from(contextManifestItems).where(and(eq(contextManifestItems.companyId, companyId),
+        inArray(contextManifestItems.manifestId, contextIds))).for("share");
+    for (const item of items) if (item.sourceProvider === "august_works_tasks") {
+      const match = /^issue:\/\/([0-9a-f-]{36})$/i.exec(item.sourceRef);
+      if (match) issueIds.add(match[1]!);
+    }
+  }
+  const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId: issueId,
+    actorKey: routineActorKey(actor), issueIds, runIds: new Set(runIds), contextIds: [...new Set(contextIds)].sort(), active: true };
+  try { return await memoryTemporalReadScopes.run(scope, () => read(snapshot.data.owner.contentHash, snapshot.data.digest)); }
+  finally { scope.active = false; }
+}
+
+/** A nested Memory source owner with no captured Context prefix must use its
+ * ordinary current source policy. Temporarily shadow only a matching outer
+ * reader scope; never mutate the parent's active flag or supply Context IDs. */
+export async function withUnscopedMemorySourceReader<T>(db: Db | DbTransaction, actor: AuthorizationActor,
+  read: (sourceDb: Db | DbTransaction) => Promise<T>): Promise<T> {
+  const parent = memoryTemporalReadScopes.getStore();
+  if (!parent?.active || parent.db !== (db as object) || parent.actorKey !== routineActorKey(actor)) return read(db);
+  return memoryTemporalReadScopes.run({ ...parent, active: false }, () => read(db));
+}
+
+export function activeMemoryTemporalContexts(db: Db | DbTransaction, actor: AuthorizationActor,
+  kind: "issue" | "run", id: string): readonly string[] | undefined {
+  const scope = memoryTemporalReadScopes.getStore();
+  return scope?.active && scope.db === (db as object) && scope.actorKey === routineActorKey(actor)
+    && (kind === "issue" ? scope.issueIds.has(id) : scope.runIds.has(id)) ? scope.contextIds : undefined;
+}
+
+/** Opaque identity for a Native source proof's ambient Memory prefix. It is
+ * used only to keep transaction-local proof scopes separate across owners. */
+export function activeMemoryTemporalReadScopeIdentity(db: Db | DbTransaction, actor: AuthorizationActor): string | null {
+  const scope = memoryTemporalReadScopes.getStore();
+  if (!scope?.active || scope.db !== (db as object) || scope.actorKey !== routineActorKey(actor)) return null;
+  return createHash("sha256").update(JSON.stringify({ companyId: scope.companyId, recordId: scope.recordId,
+    actorKey: scope.actorKey, issueIds: [...scope.issueIds].sort(), runIds: [...scope.runIds].sort(),
+    contextIds: [...scope.contextIds].sort() }), "utf8").digest("hex");
+}
 
 export function authorizationService(db: Db | DbTransaction) {
   return createAuthorizationService(db);
@@ -561,45 +2268,955 @@ type ReadSourceDecisionInput = {
   scope?: Record<string, unknown> | null;
   enforceResponsibleUserIntersection?: boolean;
 };
-type ReadSourceOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
+export type NativeContextInspectionOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
+export type NativeDelegatedContextSource = { actor: AuthorizationActor; decide: ReadSourceOwner["decide"] };
+type ReadSourceOwner = NativeContextInspectionOwner & {
+  assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[], deadline?:number): Promise<void>;
+  readRoutineSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
+  readWorkflowSources?(runIds: string[], actor: AuthorizationActor, mode?: "strict" | "task_candidates"): Promise<string[]>;
+};
+type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection" | "routine_sources" | "workflow_sources" | "workflow_task_candidates" | "delegated_context";
+type DelegatedContextReadAuthority = { homeActor: AuthorizationActor; scope: AgentExecutionScope; scopeRequestId: string;
+  guestCompanyId: string; guestAgentId: string; guestActor: AuthorizationActor; credentialExpiresAt: number | null };
 type ReadSourceRows = {
   companyId: string;
+  agentId: string | null;
   issues: Map<string, IssueAuthorizationRow | null>;
   projects: Map<string, ProjectAuthorizationRow | null>;
   active: boolean;
+  credentialExpiresAt: number | null;
+  credentialUserId: string | null;
+  purpose: ReadScopePurpose;
+  routineRunIds?: Set<string>;
+  routinePluginOperationRunIds?: Set<string>;
+  routineActorKey?: string;
+  routineActor?: AuthorizationActor;
+  routineAgentIds?: Set<string>;
+  routineScopeToken?: string;
+  workflowRunIds?: Set<string>;
+  workflowSourceCheckRunIds?: Set<string>;
+  workflowReadableRunIds?: Set<string>;
+  workflowActorKey?: string;
+  workflowScopeToken?: string;
+  delegatedContext?: DelegatedContextReadAuthority;
 };
+type NativeTaskPrivacyBatch = {
+  active: boolean;
+  companyId: string;
+  actorKey: string;
+  issues: Map<string, boolean>;
+  projects: Map<string, boolean>;
+  decisionMemo: NativeTaskDecisionMemo;
+};
+type NativeTaskDecisionMemo = {
+  agents: Map<string, Promise<AgentAuthorizationRow | null>>;
+  memberships: Map<string, Promise<typeof companyMemberships.$inferSelect | null>>;
+  grants: Map<string, Promise<typeof principalPermissionGrants.$inferSelect | null>>;
+  responsibleUsers: Map<string, Promise<ResponsibleUserSnapshot>>;
+  runPolicies: Map<string, Promise<{ companyId: string; executionPolicy: Record<string, unknown> } | null>>;
+  instanceAdmins: Map<string, Promise<boolean>>;
+  readActorEvidence: Map<string, Promise<{ agent: AgentAuthorizationRow | null;
+    membership?: Pick<typeof companyMemberships.$inferSelect,
+      "id" | "companyId" | "principalType" | "principalId" | "membershipRole" | "status"> | null;
+    run: { companyId: string; executionPolicy: Record<string, unknown> } | null }>>;
+};
+const nativeRoutineReadScopes = new WeakMap<object, ReadSourceRows>();
+const nativeWorkflowReadScopes = new WeakMap<object, ReadSourceRows>();
+const nativeDelegatedContextReadScopes = new WeakMap<object, ReadSourceRows>();
+const nativeDelegatedContextSourceTokens = new WeakMap<object, { db: object; scope: ReadSourceRows }>();
+const nativeTaskPrivacyBatches = new WeakMap<object, NativeTaskPrivacyBatch>();
+export function isActiveNativeDelegatedContextSource(db: Db | DbTransaction, value: unknown): value is NativeDelegatedContextSource {
+  if (!value || typeof value !== "object") return false;
+  const token = nativeDelegatedContextSourceTokens.get(value as object);
+  return !!token && token.db === (db as object) && token.scope.active && token.scope.purpose === "delegated_context" &&
+    nativeDelegatedContextReadScopes.get(db as object) === token.scope;
+}
+function createNativeTaskDecisionMemo(): NativeTaskDecisionMemo {
+  return { agents: new Map(), memberships: new Map(), grants: new Map(), responsibleUsers: new Map(), runPolicies: new Map(), instanceAdmins: new Map(), readActorEvidence: new Map() };
+}
+function routineActorKey(actor: AuthorizationActor) {
+  return JSON.stringify(actor);
+}
+function routineActorHash(actor: AuthorizationActor) {
+  return createHash("sha256").update(routineActorKey(actor)).digest("hex");
+}
+function workflowActorKey(actor: AuthorizationActor) {
+  const { isInstanceAdmin: _instanceAdminProjection, ignoreInstanceAdmin: _ignoreInstanceAdminProjection, ...identity } = actor;
+  return JSON.stringify(identity);
+}
+function workflowActorHash(actor: AuthorizationActor) { return createHash("sha256").update(workflowActorKey(actor)).digest("hex"); }
+function isWithholdableWorkflowTaskCandidate(error: unknown) {
+  if (!(error instanceof HttpError) || ![403, 404, 409, 422].includes(error.status)) return false;
+  const details = error.details;
+  if (details && typeof details === "object" && "code" in details &&
+    (details.code === "workflow_source_review_cyclic" || details.code === "workflow_source_review_budget_exceeded")) return false;
+  // These are scope-wide failures, never evidence that this one candidate is
+  // unreadable. In particular, do not convert an incomplete batch review into
+  // a successful partial list/count.
+  return !/(budget|cyclic|review.*exceed|exceed.*review)/i.test(error.message);
+}
 const issueReadColumns = {
   id: issues.id, companyId: issues.companyId, projectId: issues.projectId, parentId: issues.parentId,
   assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId, checkoutRunId: issues.checkoutRunId,
   status: issues.status, executionPolicy: issues.executionPolicy, originKind: issues.originKind, originId: issues.originId,
+  visibility: issues.visibility, privacyRootIssueId: issues.privacyRootIssueId, privacyParentIssueId: issues.privacyParentIssueId,
+  responsibleUserId: issues.responsibleUserId, createdByUserId: issues.createdByUserId,
+  hiddenAt: issues.hiddenAt,
 };
-const projectReadColumns = { id: projects.id, companyId: projects.companyId, executionWorkspacePolicy: projects.executionWorkspacePolicy };
+const projectReadColumns = { id: projects.id, companyId: projects.companyId, executionWorkspacePolicy: projects.executionWorkspacePolicy, visibility: projects.visibility };
+
+/** Pins the native Board principal and verified credential on the caller's
+ * physical transaction. This is no company grant; callers retain their own
+ * canonical resource policy and check the deadline before returning data. */
+export async function pinCurrentBoardActor(db: Db | DbTransaction, actor: AuthorizationActor) {
+  if (!is(db, PgTransaction)) throw new Error("Current Board authority requires a native transaction");
+  if (actor.type !== "board" || !actor.userId || actor.source === "local_implicit") return null;
+  let credentialExpiresAt = actor.authenticatedCredentialExpiresAt ?? null;
+  if (credentialExpiresAt !== null && (!Number.isFinite(credentialExpiresAt) || credentialExpiresAt <= Date.now())) return null;
+  const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, actor.userId)).for("share", { noWait: true });
+  if (!user) return null;
+  if (actor.source === "session" && actor.sessionId != null) {
+    const [session] = await db.select({ userId: authSessions.userId, expiresAt: authSessions.expiresAt })
+      .from(authSessions).where(eq(authSessions.id, actor.sessionId)).for("share", { noWait: true });
+    if (!session || session.userId !== actor.userId || session.expiresAt.getTime() <= Date.now()) return null;
+    credentialExpiresAt = Math.min(credentialExpiresAt ?? Infinity, session.expiresAt.getTime());
+  }
+  if (actor.source === "board_key") {
+    if (!actor.keyId) return null;
+    const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.id, actor.keyId)).for("share", { noWait: true });
+    if (!key || key.keyHash !== actor.authenticatedKeyHash || key.userId !== actor.userId || key.revokedAt || (key.expiresAt && key.expiresAt.getTime() <= Date.now())) return null;
+    if (key.expiresAt) credentialExpiresAt = Math.min(credentialExpiresAt ?? Infinity, key.expiresAt.getTime());
+  }
+  if (actor.source === "chat_link") {
+    const proof = actor.chatLink;
+    if (!proof || !proof.companyId || !proof.endpointId || !proof.principalId ||
+      (actor.companyIds?.length && !actor.companyIds.includes(proof.companyId)) ||
+      !["slack", "microsoft-teams"].includes(proof.provider)) return null;
+    const [link] = await db.select({ id: chatIdentityLinks.id })
+      .from(chatIdentityLinks)
+      .innerJoin(chatEndpoints, and(
+        eq(chatEndpoints.companyId, chatIdentityLinks.companyId),
+        eq(chatEndpoints.id, chatIdentityLinks.endpointId),
+        eq(chatEndpoints.provider, proof.provider),
+      ))
+      .innerJoin(chatExternalPrincipals, and(
+        eq(chatExternalPrincipals.companyId, chatIdentityLinks.companyId),
+        eq(chatExternalPrincipals.id, chatIdentityLinks.principalId),
+        eq(chatExternalPrincipals.provider, proof.provider),
+        eq(chatExternalPrincipals.providerAccountId, chatEndpoints.providerAccountId ?? ""),
+        eq(chatExternalPrincipals.isBot, false),
+      ))
+      .where(and(
+        eq(chatIdentityLinks.companyId, proof.companyId),
+        eq(chatIdentityLinks.endpointId, proof.endpointId),
+        eq(chatIdentityLinks.principalId, proof.principalId),
+        eq(chatIdentityLinks.paperclipUserId, actor.userId),
+        eq(chatIdentityLinks.status, "linked"),
+        isNull(chatIdentityLinks.revokedAt),
+      )).for("share", { noWait: true });
+    if (!link) return null;
+    const [membership] = await db.select({ status: companyMemberships.status, membershipRole: companyMemberships.membershipRole })
+      .from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, proof.companyId),
+        eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, actor.userId),
+      )).for("share", { noWait: true });
+    if (membership?.status !== "active" || membership.membershipRole === "viewer") return null;
+  }
+  // Native instance roles are read by isInstanceAdmin below. A DTO bit is
+  // never a pinned role, including cloud tenant actors.
+  if (credentialExpiresAt !== null && credentialExpiresAt <= Date.now()) return null;
+  return { actor: { ...actor, isInstanceAdmin: false }, credentialExpiresAt };
+}
+
+async function requireActiveWorkflowBaselineMembership(db: Db | DbTransaction, companyId: string, actor: AuthorizationActor) {
+  if (actor.type === "none") return;
+  if (actor.type === "board" && actor.source === "local_implicit") return;
+  if (actor.type === "agent") {
+    const responsibleUserId = actor.onBehalfOfUserId?.trim();
+    if (!responsibleUserId) throw forbidden("Current Workflow baseline Human authority is unavailable.");
+    const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(and(
+      eq(authUsers.id, responsibleUserId), sql`not exists(select 1 from ${accountDeletionOperations} d where d.user_id=${authUsers.id})`,
+    )).for("share", { noWait: true });
+    const [humanMembership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, responsibleUserId), eq(companyMemberships.status, "active"),
+    )).for("share", { noWait: true });
+    if (!user || !humanMembership) throw forbidden("Current Workflow baseline Human authority is unavailable.");
+  }
+  const principalType = actor.type === "board" ? "user" : actor.type === "agent" ? "agent" : null;
+  const principalId = actor.type === "board" ? actor.userId : actor.type === "agent" ? actor.agentId : null;
+  if (!principalType || !principalId) throw forbidden("Current Workflow baseline membership is unavailable.");
+  const [membership] = await db.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+    eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
+    eq(companyMemberships.principalId, principalId), eq(companyMemberships.status, "active"),
+  )).for("share", { noWait: true });
+  if (!membership) throw forbidden("Current Workflow baseline membership is unavailable.");
+}
 
 // Only this native owner can construct the private row context. Caller DTOs
 // cannot supply row facts, policies, authorization results or a read capability.
-function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows) {
-  async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>): Promise<T> {
+function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows, sourceAuthorityPins = false) {
+  readSources ??= nativeDelegatedContextReadScopes.get(db as object);
+  const taskDecisionMemo = () => sourceAuthorityPins ? nativeTaskPrivacyBatches.get(db as object)?.decisionMemo : undefined;
+  function memoized<T>(cache: Map<string, Promise<T>> | undefined, key: string, load: () => Promise<T>): Promise<T> {
+    if (!cache) return load();
+    let pending = cache.get(key);
+    if (!pending) {
+      pending = load();
+      cache.set(key, pending);
+    }
+    return pending;
+  }
+  async function withReadScope<T>(companyId: string, issueIds: string[], projectIds: string[], purpose: ReadScopePurpose,
+    read: (owner: ReadSourceOwner) => Promise<T>, agentId: string | null = null, preflightActor?: AuthorizationActor,
+    delegatedContext?: DelegatedContextReadAuthority): Promise<T> {
     const locked = is(db, PgTransaction);
     const requestedIssues = [...new Set(issueIds)], requestedProjects = [...new Set(projectIds)];
     if (requestedIssues.length + requestedProjects.length > 20065) throw new Error("Native Source row transport exceeds its complete-population bound");
+    const context: ReadSourceRows = {
+      companyId, agentId, active: true, credentialExpiresAt: null, credentialUserId: null, purpose,
+      // Context inspection pins the original Human and current role before
+      // reading any Task/Project Source row. Other scopes retain their historic order.
+      issues: new Map(locked && purpose !== "context_inspection" ? requestedIssues.map(id => [id, null]) : []),
+      projects: new Map(locked && purpose !== "context_inspection" ? requestedProjects.map(id => [id, null]) : []),
+      ...(delegatedContext ? { delegatedContext } : {}),
+    };
+    if (purpose === "routine_sources") context.routineScopeToken = randomUUID();
+    if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") context.workflowScopeToken = randomUUID();
+    const owner: ReadSourceOwner = createAuthorizationService(db, context);
+    owner.readRoutineSources = async (runIds, actor) => {
+      if (purpose !== "routine_sources" || !locked || !context.active || context.companyId !== companyId)
+        throw forbidden("Private Routine reads require their original native source scope.");
+      if (actor.type === "none" || actor.source === "local_implicit")
+        throw forbidden("A current accountable Routine reader is required.");
+      if (runIds.length > 256 || new Set(runIds).size !== runIds.length || runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+        throw forbidden("The native Routine source population is incomplete.");
+      await db.execute(sql`select set_config('paperclip.native_routine_source_ids', '', true),
+        set_config('paperclip.native_routine_actor_hash', ${routineActorHash(actor)}, true),
+        set_config('paperclip.native_routine_scope_token', ${context.routineScopeToken ?? ""}, true)`);
+      const sourceActor = actor.type === "board" && actor.source === "session" && !actor.sessionId
+        ? null : await pinReadSourceActor(actor, companyId);
+      const company = sourceActor ? await owner.decide({ actor: sourceActor, action: "company_scope:read",
+        resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true })
+        : { allowed: false } as AuthorizationDecision;
+      const authorized = new Set<string>();
+      context.routineAgentIds ??= new Set<string>();
+      if (!company.allowed) {
+        context.routineRunIds = authorized;
+        context.routineActorKey = routineActorKey(actor);
+        return [];
+      }
+      for (const runId of runIds) {
+        const [run] = await db.select({ id: routineRuns.id, routineId: routineRuns.routineId,
+          revisionId: routineRuns.routineRevisionId, triggerPayload: routineRuns.triggerPayload,
+          source: routineRuns.source, responsibleUserId: routineRuns.responsibleUserId }).from(routineRuns).where(and(
+            eq(routineRuns.id, runId), eq(routineRuns.companyId, companyId))).for("share", { noWait: true });
+        if (!run) continue;
+        const [routine] = await db.select({ id: routines.id, companyId: routines.companyId, originKind: routines.originKind,
+          originId: routines.originId, createdByAgentId: routines.createdByAgentId, responsibleUserId: routines.responsibleUserId,
+          projectId: routines.projectId, parentIssueId: routines.parentIssueId })
+          .from(routines).where(and(eq(routines.id, run.routineId), eq(routines.companyId, companyId))).for("share", { noWait: true });
+        if (!routine || !run.revisionId) continue;
+        const [revision] = await db.select({ id: routineRevisions.id }).from(routineRevisions).where(and(
+          eq(routineRevisions.id, run.revisionId), eq(routineRevisions.routineId, routine.id),
+          eq(routineRevisions.companyId, companyId))).for("share", { noWait: true });
+        if (!revision) continue;
+        if (routine.originKind === "pipeline_automation") {
+          const [source] = await db.execute<{ valid: boolean }>(sql`
+            select ${pipelineAutomationRoutineSourceCondition(sql`${companyId}::uuid`)} as valid
+            from routine_runs rr join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+            where rr.id=${runId} and rr.company_id=${companyId}
+          `);
+          if (source?.valid !== true) continue;
+          const payload = run.triggerPayload;
+          const contextPack = payload && typeof payload === "object" && !Array.isArray(payload)
+            ? (payload as Record<string, unknown>).contextPack : null;
+          const taskSourceIssueIds = contextPack && typeof contextPack === "object" && !Array.isArray(contextPack)
+            ? (contextPack as Record<string, unknown>).taskSourceIssueIds : null;
+          if (!Array.isArray(taskSourceIssueIds) || taskSourceIssueIds.length > 256 || taskSourceIssueIds.some(id =>
+            typeof id !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id))) continue;
+          let readable = true;
+          for (const issueId of taskSourceIssueIds as string[]) {
+            const [sourceIssue] = await db.select(issueReadColumns).from(issues).where(and(
+              eq(issues.id, issueId), eq(issues.companyId, companyId))).for("share", { noWait: true });
+            if (!sourceIssue) { readable = false; break; }
+            context.issues.set(sourceIssue.id, sourceIssue);
+            if (sourceIssue.projectId && !context.projects.has(sourceIssue.projectId)) {
+              const [project] = await db.select(projectReadColumns).from(projects).where(and(
+                eq(projects.id, sourceIssue.projectId), eq(projects.companyId, companyId))).for("share", { noWait: true });
+              context.projects.set(sourceIssue.projectId, project ?? null);
+            }
+            const decision = await owner.decide({ actor: sourceActor!, action: "issue:read",
+              resource: { type: "issue", companyId, issueId: sourceIssue.id, projectId: sourceIssue.projectId,
+                parentIssueId: sourceIssue.parentId, status: sourceIssue.status,
+                assigneeAgentId: sourceIssue.assigneeAgentId, assigneeUserId: sourceIssue.assigneeUserId },
+              enforceResponsibleUserIntersection: true });
+            if (!decision.allowed) { readable = false; break; }
+          }
+          const caseContext = contextPack && typeof contextPack === "object" && !Array.isArray(contextPack)
+            ? (contextPack as Record<string, unknown>).case : null;
+          const caseRecord = caseContext && typeof caseContext === "object" && !Array.isArray(caseContext)
+            ? caseContext as Record<string, unknown> : null;
+          const producerRunIds = caseRecord?.producerRunIds;
+          const producerUserIds = caseRecord?.producerUserIds;
+          if (!Array.isArray(producerRunIds) || producerRunIds.length > 256 || !Array.isArray(producerUserIds) ||
+            producerUserIds.length > 256) readable = false;
+          if (readable) for (const sourceRunId of producerRunIds as unknown[]) {
+            if (typeof sourceRunId !== "string" || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(sourceRunId) ||
+              !await canActorReadHeartbeatRunPrivacy(db, sourceActor!, { id: sourceRunId, companyId })) {
+              readable = false; break;
+            }
+          }
+          if (readable && (producerUserIds as unknown[]).some(sourceUserId => typeof sourceUserId !== "string" || sourceUserId.length === 0))
+            readable = false;
+          if (readable) authorized.add(runId);
+          continue;
+        }
+        if (routine.originKind === "conversation_draft") {
+          if (!routine.originId || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(routine.originId)) continue;
+          const [authoringRun] = await db.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId,
+            userId: heartbeatRuns.responsibleUserId, issueId: heartbeatRuns.nativeIssueId,
+            snapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns).where(and(
+              eq(heartbeatRuns.id, routine.originId), eq(heartbeatRuns.companyId, companyId))).for("share", { noWait: true });
+          const conversationId = authoringRun?.issueId ?? authoringRun?.snapshot?.issueId ?? authoringRun?.snapshot?.taskId;
+          if (!authoringRun || authoringRun.agentId !== routine.createdByAgentId ||
+            authoringRun.userId !== routine.responsibleUserId || typeof conversationId !== "string" ||
+            !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(conversationId)) continue;
+          const [conversation] = await db.select(issueReadColumns).from(issues).where(and(
+            eq(issues.id, conversationId), eq(issues.companyId, companyId))).for("share", { noWait: true });
+          if (!conversation) continue;
+          context.issues.set(conversation.id, conversation);
+          if (conversation.projectId && !context.projects.has(conversation.projectId)) {
+            const [project] = await db.select(projectReadColumns).from(projects).where(and(
+              eq(projects.id, conversation.projectId), eq(projects.companyId, companyId))).for("share", { noWait: true });
+            context.projects.set(conversation.projectId, project ?? null);
+          }
+          context.routineAgentIds.add(authoringRun.agentId);
+          const agentDecision = await owner.decide({ actor: sourceActor!, action: "agent:read",
+            resource: { type: "agent", companyId, agentId: authoringRun.agentId }, enforceResponsibleUserIntersection: true });
+          const issueDecision = await owner.decide({ actor: sourceActor!, action: "issue:read",
+            resource: { type: "issue", companyId, issueId: conversation.id, projectId: conversation.projectId,
+              parentIssueId: conversation.parentId, status: conversation.status,
+              assigneeAgentId: conversation.assigneeAgentId, assigneeUserId: conversation.assigneeUserId },
+            enforceResponsibleUserIntersection: true });
+          if (!agentDecision.allowed || !issueDecision.allowed) continue;
+        }
+        try {
+          await assertRoutineSourceAccess(db, { id: routine.id, companyId: routine.companyId, originKind: routine.originKind,
+            originId: routine.originId, createdByAgentId: routine.createdByAgentId, responsibleUserId: routine.responsibleUserId }, sourceActor!);
+        } catch (error) {
+          if (error instanceof HttpError && (error.status === 403 || error.status === 404)) continue;
+          throw error;
+        }
+        if (routine.originKind === "conversation_draft") {
+          authorized.add(runId);
+          continue;
+        }
+        // An ordinary Human-authored manual Routine execution is a private
+        // Routine source only for the current Human who owns both live rows.
+        // Its exact immutable revision and both current and revision-bound
+        // Project/parent references must remain readable in this same scope.
+        if (routine.originKind === "manual" && routine.originId === null && !routine.createdByAgentId &&
+          sourceActor?.type === "board" && sourceActor.source === "session" && sourceActor.sessionId &&
+          sourceActor.userId && !sourceActor.keyId && !sourceActor.authenticatedKeyHash &&
+          sourceActor.userId === routine.responsibleUserId && run.source === "manual" &&
+          run.responsibleUserId === sourceActor.userId) {
+          const [binding] = await db.select({ id: pluginManagedResources.id }).from(pluginManagedResources).where(and(
+            eq(pluginManagedResources.companyId, companyId), eq(pluginManagedResources.resourceKind, "routine"),
+            eq(pluginManagedResources.resourceId, routine.id))).for("share", { noWait: true });
+          if (!binding) {
+            const [currentRevision] = await db.select({ snapshot: routineRevisions.snapshot }).from(routineRevisions).where(and(
+              eq(routineRevisions.companyId, companyId), eq(routineRevisions.id, run.revisionId),
+              eq(routineRevisions.routineId, routine.id))).for("share", { noWait: true });
+            const snapshot = routineRevisionSnapshotV1Schema.safeParse(currentRevision?.snapshot);
+            const snapshotRoutine = snapshot.success ? snapshot.data.routine : null;
+            let refsReadable = Boolean(snapshotRoutine && snapshotRoutine.id.toLowerCase() === routine.id.toLowerCase() &&
+              snapshotRoutine.companyId.toLowerCase() === companyId.toLowerCase() &&
+              snapshotRoutine.responsibleUserId === sourceActor.userId);
+            const projectIds = [...new Set([routine.projectId, snapshotRoutine?.projectId].filter((id): id is string => typeof id === "string"))];
+            const parentIssueIds = [...new Set([routine.parentIssueId, snapshotRoutine?.parentIssueId].filter((id): id is string => typeof id === "string"))];
+            for (const projectId of projectIds) {
+              if (!refsReadable) break;
+              const [project] = await db.select({ id: projects.id }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, projectId))).for("share", { noWait: true });
+              refsReadable = Boolean(project && (await db.select({ id: projects.id }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, projectId),
+                await projectReadSqlCondition(db, sourceActor))).limit(1)).length);
+            }
+            for (const parentIssueId of parentIssueIds) {
+              if (!refsReadable) break;
+              const [parent] = await db.select({ id: issues.id }).from(issues).where(and(
+                eq(issues.companyId, companyId), eq(issues.id, parentIssueId))).for("share", { noWait: true });
+              refsReadable = Boolean(parent && (await db.select({ id: issues.id }).from(issues).where(and(
+                eq(issues.companyId, companyId), eq(issues.id, parentIssueId),
+                await issueReadSqlCondition(db, sourceActor))).limit(1)).length);
+            }
+            if (refsReadable) {
+              authorized.add(runId);
+              continue;
+            }
+          }
+        }
+        // A plugin-managed manual Routine is an accountable operation source
+        // only for its current responsible Human. The active resource binding
+        // and its exact operation template establish the typed owner; arbitrary
+        // manual Routines do not enter this source scope.
+        if (routine.originKind === "manual" && sourceActor?.type === "board" && sourceActor.source === "session" &&
+          sourceActor.userId === routine.responsibleUserId && !sourceActor.keyId && !sourceActor.authenticatedKeyHash) {
+          const [binding] = await db.select({ pluginKey: pluginManagedResources.pluginKey,
+            defaultsJson: pluginManagedResources.defaultsJson })
+            .from(pluginManagedResources).innerJoin(plugins, and(eq(plugins.id, pluginManagedResources.pluginId),
+              eq(plugins.pluginKey, pluginManagedResources.pluginKey)))
+            .where(and(eq(pluginManagedResources.companyId, companyId), eq(pluginManagedResources.resourceKind, "routine"),
+              eq(pluginManagedResources.resourceId, routine.id))).for("share", { noWait: true });
+          const defaults = binding?.defaultsJson && typeof binding.defaultsJson === "object" && !Array.isArray(binding.defaultsJson)
+            ? binding.defaultsJson as Record<string, unknown> : null;
+          const template = defaults?.issueTemplate && typeof defaults.issueTemplate === "object" && !Array.isArray(defaults.issueTemplate)
+            ? defaults.issueTemplate as Record<string, unknown> : null;
+          const operationOriginKind = binding ? pluginOperationIssueOriginKind(binding.pluginKey) : null;
+          if (operationOriginKind && template?.surfaceVisibility === "plugin_operation" &&
+            typeof template.originId === "string" && template.originId.trim().length > 0) {
+            // For this exact manual operation, the generic Routine privacy
+            // closure contains only the pinned revision's Project and parent
+            // Task. Prove both through their ordinary current read predicates
+            // before caching the scoped run. Any automation payload or invalid
+            // snapshot remains on the complete generic closure path.
+            const [sourceRun] = await db.select({ source: routineRuns.source, responsibleUserId: routineRuns.responsibleUserId,
+              triggerPayload: routineRuns.triggerPayload }).from(routineRuns).where(and(
+                eq(routineRuns.companyId, companyId), eq(routineRuns.id, runId))).for("share", { noWait: true });
+            const [currentRevision] = await db.select({ snapshot: routineRevisions.snapshot }).from(routineRevisions).where(and(
+              eq(routineRevisions.companyId, companyId), eq(routineRevisions.id, run.revisionId),
+              eq(routineRevisions.routineId, routine.id))).for("share", { noWait: true });
+            const snapshot = routineRevisionSnapshotV1Schema.safeParse(currentRevision?.snapshot);
+            const triggerPayload = sourceRun?.triggerPayload && typeof sourceRun.triggerPayload === "object" && !Array.isArray(sourceRun.triggerPayload)
+              ? sourceRun.triggerPayload as Record<string, unknown> : null;
+            const automation = triggerPayload?.automation && typeof triggerPayload.automation === "object" && !Array.isArray(triggerPayload.automation)
+              ? triggerPayload.automation as Record<string, unknown> : null;
+            let refsReadable = Boolean(sourceRun && sourceRun.source === "manual" &&
+              sourceRun.responsibleUserId === sourceActor.userId && routine.responsibleUserId === sourceActor.userId &&
+              snapshot?.success && snapshot.data.routine.id.toLowerCase() === routine.id.toLowerCase() &&
+              snapshot.data.routine.companyId.toLowerCase() === companyId.toLowerCase() &&
+              !automation?.automationExecutionId);
+            const projectId = snapshot?.success ? snapshot.data.routine.projectId : null;
+            const parentIssueId = snapshot?.success ? snapshot.data.routine.parentIssueId : null;
+            if (refsReadable && projectId) {
+              const [project] = await db.select({ ...projectReadColumns,
+                sourceProvenanceQualified: projects.sourceProvenanceQualified }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, projectId))).for("share", { noWait: true });
+              refsReadable = Boolean(project && (await db.select({ id: projects.id }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, projectId), await projectReadSqlCondition(db, sourceActor))).limit(1)).length);
+            }
+            if (refsReadable && parentIssueId) {
+              const [parent] = await db.select(issueReadColumns).from(issues).where(and(
+                eq(issues.companyId, companyId), eq(issues.id, parentIssueId))).for("share", { noWait: true });
+              refsReadable = Boolean(parent && (await db.select({ id: issues.id }).from(issues).where(and(
+                eq(issues.companyId, companyId), eq(issues.id, parentIssueId), await issueReadSqlCondition(db, sourceActor))).limit(1)).length);
+            }
+            if (refsReadable) {
+              const [sourceCurrent] = await db.execute<{ erased: boolean }>(sql`
+                select aw_conversation_routine_source_erased(${companyId}::uuid,${routine.id}::uuid) as erased
+              `);
+              refsReadable = sourceCurrent?.erased === false;
+            }
+            if (refsReadable) {
+              authorized.add(runId);
+              context.routinePluginOperationRunIds ??= new Set<string>();
+              context.routinePluginOperationRunIds.add(runId);
+            }
+          }
+        }
+      }
+      context.routineRunIds = authorized;
+      context.routineActorKey = routineActorKey(actor);
+      context.routineActor = actor;
+      await db.execute(sql`select set_config('paperclip.native_routine_source_ids', ${[...authorized].join(",")}, true)`);
+      return [...authorized];
+    };
+    owner.readWorkflowSources = async (runIds, actor, mode = "strict") => {
+      const taskCandidates = purpose === "workflow_task_candidates" && mode === "task_candidates";
+      if ((purpose !== "workflow_sources" && !taskCandidates) || !locked || !context.active || context.companyId !== companyId || !context.workflowScopeToken)
+        throw forbidden("Private Workflow reads require their original native source scope.");
+      if (runIds.length > 256 || new Set(runIds).size !== runIds.length ||
+        runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+        throw forbidden("The native Workflow source population is incomplete.");
+      await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
+        set_config('paperclip.native_workflow_actor_hash', ${workflowActorHash(actor)}, true),
+        set_config('paperclip.native_workflow_scope_token', ${context.workflowScopeToken}, true)`);
+      const sourceActor = actor.type === "none" ? actor : await pinReadSourceActor(actor, companyId);
+      if (!sourceActor) throw forbidden("The current Workflow reader is unavailable.");
+      context.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
+        : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
+      context.workflowActorKey = workflowActorKey(actor);
+      const company = sourceActor.type === "none" ? null
+        : await owner.decide({ actor: sourceActor, action: "company_scope:read",
+          resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+      const { assertWorkflowRunPayloadSourceAccess, withWorkflowAuthoringSourceReview } = await import("./workflows/workflow-authoring-sources.js");
+      if (!company?.allowed) {
+        await requireActiveWorkflowBaselineMembership(db, companyId, sourceActor);
+        const readable = new Set<string>();
+        const reviewStartedAt = performance.now();
+        await withWorkflowAuthoringSourceReview(async () => {
+          for (const runId of runIds) {
+            const publicBaseline = await canActorReadTypedTaskSourcePrivacy(db as unknown as Db, { type: "none" },
+              { sourceKind: "workflow_run", id: runId, companyId });
+            if (!publicBaseline) {
+              if (taskCandidates) continue;
+              throw forbidden("Current Workflow source access is unavailable.", { code: "analytical_source_access_lost" });
+            }
+            try {
+              await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor);
+              readable.add(runId);
+            } catch (error) {
+              if (taskCandidates && isWithholdableWorkflowTaskCandidate(error)) continue;
+              throw error;
+            }
+          }
+        });
+        if (taskCandidates && performance.now() - reviewStartedAt > 8_000)
+          throw forbidden("Complete Workflow candidate source review exceeded its budget.", { code: "workflow_source_review_budget_exceeded" });
+        context.workflowRunIds = new Set();
+        context.workflowSourceCheckRunIds = new Set(runIds);
+        context.workflowReadableRunIds = taskCandidates ? readable : new Set(runIds);
+        await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true)`);
+        return [...(context.workflowReadableRunIds ?? [])].sort();
+      }
+      const authorized = new Set<string>();
+      const reviewStartedAt = performance.now();
+      await withWorkflowAuthoringSourceReview(async () => {
+        for (const runId of runIds) {
+          try {
+            await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
+            authorized.add(runId);
+          } catch (error) {
+            if (taskCandidates && isWithholdableWorkflowTaskCandidate(error)) continue;
+            throw error;
+          }
+        }
+      });
+      if (taskCandidates && performance.now() - reviewStartedAt > 8_000)
+        throw forbidden("Complete Workflow candidate source review exceeded its budget.", { code: "workflow_source_review_budget_exceeded" });
+      context.workflowRunIds = authorized;
+      context.workflowSourceCheckRunIds = new Set(runIds);
+      context.workflowReadableRunIds = new Set(authorized);
+      await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${[...authorized].sort().join(",")}, true)`);
+      return [...authorized];
+    };
+    if (purpose === "context_inspection") {
+      if (!locked || !preflightActor || preflightActor.type !== "board") throw forbidden("Human Context inspection requires its original native actor.");
+      const company = await owner.decide({ actor: preflightActor, action: "company_scope:read",
+        resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+      const agent = await owner.decide({ actor: preflightActor, action: "agent:read",
+        resource: { type: "agent", companyId, agentId: agentId! }, enforceResponsibleUserIntersection: true });
+      if (!company.allowed || !agent.allowed) throw forbidden("Human Context inspection authority is unavailable");
+    }
     const issueRows = locked && requestedIssues.length ? await db.select(issueReadColumns).from(issues)
       .where(and(eq(issues.companyId, companyId), inArray(issues.id, requestedIssues))).for("share") : [];
     const projectRefs = [...new Set([...requestedProjects, ...issueRows.map(row => row.projectId).filter((id): id is string => id !== null)])];
     if (requestedIssues.length + projectRefs.length > 20065) throw new Error("Native Source row transport exceeds its complete-population bound");
     const projectRows = locked && projectRefs.length ? await db.select(projectReadColumns).from(projects)
       .where(and(eq(projects.companyId, companyId), inArray(projects.id, projectRefs))).for("share") : [];
-    const context: ReadSourceRows = {
-      companyId, active: true,
-      // Outside a real transaction, keep the original per-call reads. An
-      // autocommit FOR SHARE cannot qualify reusable current Source facts.
-      issues: new Map((locked ? requestedIssues : []).map(id => [id, null])),
-      projects: new Map((locked ? projectRefs : []).map(id => [id, null])),
-    };
+    // Outside a real transaction, keep the original per-call reads. An
+    // autocommit FOR SHARE cannot qualify reusable current Source facts.
+    if (locked) {
+      for (const id of requestedIssues) if (!context.issues.has(id)) context.issues.set(id, null);
+      for (const id of projectRefs) if (!context.projects.has(id)) context.projects.set(id, null);
+    }
     for (const row of issueRows) context.issues.set(row.id, row);
     for (const row of projectRows) context.projects.set(row.id, row);
-    const owner = createAuthorizationService(db, context);
-    try { return await read({ decide: owner.decide }); }
-    finally { context.active = false; }
+    const priorDelegatedContext = purpose === "delegated_context" ? nativeDelegatedContextReadScopes.get(db as object) : undefined;
+    let readFailed = false;
+    try {
+      if (purpose === "routine_sources") nativeRoutineReadScopes.set(db as object, context);
+      if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") nativeWorkflowReadScopes.set(db as object, context);
+      if (purpose === "delegated_context") nativeDelegatedContextReadScopes.set(db as object, context);
+      const result = await read(owner);
+      if (purpose === "routine_sources" && context.routineActor) {
+        const before = [...(context.routineRunIds ?? [])].sort();
+        const after = await owner.readRoutineSources(before, context.routineActor);
+        if (before.length !== after.length || before.some((id, index) => id !== after[index]))
+          throw forbidden("Current Routine source authority changed during the read.");
+      }
+      if (purpose === "workflow_sources" && context.workflowActorKey) {
+        const candidates = [...(context.workflowSourceCheckRunIds ?? context.workflowRunIds ?? [])].sort();
+        const before = [...(context.workflowReadableRunIds ?? context.workflowRunIds ?? [])].sort();
+        const after = await owner.readWorkflowSources!(candidates, preflightActor!);
+        const sortedAfter = [...after].sort();
+        if (before.length !== sortedAfter.length || before.some((id, index) => id !== sortedAfter[index]))
+          throw forbidden("Current Workflow source authority changed during the read.");
+      }
+      if (purpose === "workflow_task_candidates" && context.workflowActorKey) {
+        const candidates = [...(context.workflowSourceCheckRunIds ?? [])].sort();
+        const before = [...(context.workflowReadableRunIds ?? [])].sort();
+        const after = await owner.readWorkflowSources!(candidates, preflightActor!, "task_candidates");
+        const sortedAfter = [...after].sort();
+        if (before.length !== sortedAfter.length || before.some((id, index) => id !== sortedAfter[index]))
+          throw forbidden("Current Workflow source authority changed during the read.");
+      }
+      if (context.credentialExpiresAt !== null || context.credentialUserId !== null) {
+        const deadlineCurrent = context.credentialExpiresAt === null ? sql`true`
+          : sql`clock_timestamp() < to_timestamp(${context.credentialExpiresAt} / 1000.0)`;
+        const principalAvailable = context.credentialUserId === null ? sql`true`
+          : sql`not exists(select 1 from ${accountDeletionOperations} where user_id=${context.credentialUserId})`;
+        const [credential] = await db.execute<{ current: boolean }>(sql`
+          select (${deadlineCurrent} and ${principalAvailable}) as current
+        `);
+        if (!credential?.current) throw forbidden("Native Source credential is no longer available.");
+      }
+      return result;
+    }
+    catch (error) {
+      readFailed = true;
+      throw error;
+    }
+    finally {
+      if (purpose === "routine_sources") {
+        try {
+          await db.execute(sql`select set_config('paperclip.native_routine_source_ids', '', true),
+            set_config('paperclip.native_routine_actor_hash', '', true),
+            set_config('paperclip.native_routine_scope_token', '', true)`);
+        } catch (cleanupError) {
+          // A failed statement can leave the transaction aborted, so GUC
+          // cleanup may fail too. Preserve the original read/authorization
+          // error instead of masking it with the cleanup failure.
+          if (!readFailed) throw cleanupError;
+        }
+        finally {
+          context.active = false;
+          if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);
+        }
+      } else if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") {
+        try {
+          await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
+            set_config('paperclip.native_workflow_actor_hash', '', true),
+            set_config('paperclip.native_workflow_scope_token', '', true)`);
+        } catch (cleanupError) {
+          // A failed source query can abort the transaction; preserve that
+          // original source/authorization error when transaction-local GUC
+          // cleanup can no longer execute. The surrounding transaction
+          // rollback clears these settings in that case.
+          if (!readFailed) throw cleanupError;
+        }
+        finally {
+          context.active = false;
+          if (nativeWorkflowReadScopes.get(db as object) === context) nativeWorkflowReadScopes.delete(db as object);
+        }
+      } else if (purpose === "delegated_context") {
+        context.active = false;
+        if (nativeDelegatedContextReadScopes.get(db as object) === context) {
+          if (priorDelegatedContext?.active) nativeDelegatedContextReadScopes.set(db as object, priorDelegatedContext);
+          else nativeDelegatedContextReadScopes.delete(db as object);
+        }
+      } else {
+        context.active = false;
+        if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);
+      }
+    }
+  }
+  async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>) {
+    return withReadScope(companyId, issueIds, projectIds, "task_sources", read);
+  }
+  async function withReadDelegatedContextSources<T>(input: { homeActor: AuthorizationActor; scope: AgentExecutionScope;
+    scopeRequestId: string; guestCompanyId: string; guestAgentId: string },
+    read: (source: { db: Db; actor: AuthorizationActor; decide: ReadSourceOwner["decide"]; nativeSource: NativeDelegatedContextSource }) => Promise<T>): Promise<T> {
+    if (!is(db, PgTransaction)) {
+      return (db as unknown as Db).transaction(async rawTx => authorizationService(rawTx as unknown as Db)
+        .withReadDelegatedContextSources(input, read));
+    }
+    if (nativeDelegatedContextReadScopes.get(db as object)?.active)
+      throw forbidden("Nested delegated Context source scopes are unavailable.");
+    const scope = agentExecutionScopeSchema.parse(input.scope);
+    // Authenticated Runner requests carry agent_jwt. The V5 fabric also uses
+    // a deliberately credential-free `source:none` actor after it has loaded
+    // the exact persisted run and claimed the current Human-authored scope
+    // request. Preserve that distinction: it is admitted only through the
+    // same run, responsible-Human, scope-request, and current membership pins
+    // below, and is never relabeled as a JWT.
+    if (input.homeActor.type !== "agent" ||
+      !(input.homeActor.source === "agent_jwt" || input.homeActor.source === "none") || !input.homeActor.runId ||
+      !input.homeActor.agentId || !input.homeActor.onBehalfOfUserId || input.homeActor.companyId !== scope.primaryCompanyId ||
+      input.homeActor.agentId !== scope.primaryAgentPresenceId)
+      throw forbidden("Delegated Context reads require their original accountable home actor.");
+    const selected = scope.delegatedScopes.find(item => item.companyId === input.guestCompanyId && item.agentPresenceId === input.guestAgentId);
+    if (!selected) throw forbidden("Delegated Context read is outside the exact requested guest scope.");
+    const pinnedHomeActor = await pinReadSourceActor(input.homeActor, scope.primaryCompanyId);
+    const sameHomeCredential = pinnedHomeActor && pinnedHomeActor.type === input.homeActor.type &&
+      pinnedHomeActor.source === input.homeActor.source && pinnedHomeActor.companyId === input.homeActor.companyId &&
+      pinnedHomeActor.agentId === input.homeActor.agentId && pinnedHomeActor.runId === input.homeActor.runId &&
+      pinnedHomeActor.onBehalfOfUserId === input.homeActor.onBehalfOfUserId && pinnedHomeActor.sessionId === input.homeActor.sessionId &&
+      pinnedHomeActor.keyId === input.homeActor.keyId && pinnedHomeActor.authenticatedKeyHash === input.homeActor.authenticatedKeyHash &&
+      isDeepStrictEqual(pinnedHomeActor.keyScope ?? null, input.homeActor.keyScope ?? null) &&
+      pinnedHomeActor.authenticatedCredentialExpiresAt === input.homeActor.authenticatedCredentialExpiresAt;
+    if (!sameHomeCredential)
+      throw forbidden("Delegated Context home credential changed before source access.");
+    const [request] = await db.select({ scope: agentExecutionScopeRequests.scope, requestedByUserId: agentExecutionScopeRequests.requestedByUserId,
+      expiresAt: agentExecutionScopeRequests.expiresAt }).from(agentExecutionScopeRequests).where(and(
+      eq(agentExecutionScopeRequests.id, input.scopeRequestId), eq(agentExecutionScopeRequests.companyId, scope.primaryCompanyId),
+      eq(agentExecutionScopeRequests.agentId, scope.primaryAgentPresenceId), eq(agentExecutionScopeRequests.runId, input.homeActor.runId))).for("share", { noWait: true });
+    if (!request || request.requestedByUserId !== input.homeActor.onBehalfOfUserId || request.expiresAt.getTime() <= Date.now() ||
+      !isDeepStrictEqual(agentExecutionScopeSchema.parse(request.scope), scope))
+      throw forbidden("Delegated Context read requires its exact current scope request.");
+    const { crossCompanyContextService } = await import("./cross-company-context.js");
+    const resolved = await crossCompanyContextService(db as unknown as Db).resolve(input.homeActor, scope, db as unknown as Db);
+    const guest = resolved.scopes.find(item => item.companyId === input.guestCompanyId && item.presence.id === input.guestAgentId);
+    if (!guest) throw forbidden("Delegated Context guest authority is unavailable.");
+    const authority: DelegatedContextReadAuthority = { homeActor: input.homeActor, scope, scopeRequestId: input.scopeRequestId,
+      guestCompanyId: input.guestCompanyId, guestAgentId: input.guestAgentId, guestActor: guest.localActor,
+      credentialExpiresAt: input.homeActor.authenticatedCredentialExpiresAt ?? null };
+    const result = await withReadScope(input.guestCompanyId, [], [], "delegated_context", async owner => {
+      const initialFailure = await delegatedContextCurrentFailure(authority);
+      if (initialFailure) throw forbidden(`Delegated Context source authority changed before provider reads (${initialFailure}).`);
+      const nativeSource: NativeDelegatedContextSource = Object.freeze({ actor: guest.localActor, decide: owner.decide.bind(owner) });
+      const scope = nativeDelegatedContextReadScopes.get(db as object);
+      if (!scope) throw forbidden("Delegated Context source scope is unavailable.");
+      nativeDelegatedContextSourceTokens.set(nativeSource, { db: db as object, scope });
+      const value = await read({ db: db as unknown as Db, actor: guest.localActor, decide: nativeSource.decide, nativeSource });
+      const finalFailure = await delegatedContextCurrentFailure(authority);
+      if (finalFailure) throw forbidden("Delegated Context source authority changed during provider reads.", { code: finalFailure });
+      if (authority.credentialExpiresAt !== null) {
+        const [deadline] = await db.execute<{ current: boolean }>(sql`select clock_timestamp() < to_timestamp(${authority.credentialExpiresAt} / 1000.0) as current`);
+        if (!deadline?.current) throw forbidden("Delegated Context home credential expired during provider reads.");
+      }
+      return value;
+    }, input.guestAgentId, undefined, authority);
+    return result;
+  }
+  async function assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[], deadline?:number) {
+    const checkDeadline=()=>{if(deadline!==undefined&&performance.now()>deadline)throw unprocessable("Forecast exceeds the native source time budget");};
+    checkDeadline();
+    if (!readSources || !is(db, PgTransaction) || !readSources.active || readSources.purpose !== "task_sources")
+      throw forbidden("Batched Task privacy checks require their active native source scope.");
+    const companyId = readSources.companyId;
+    const idsValid = (ids: string[]) => ids.length <= 20065 && new Set(ids).size === ids.length && ids.every(id =>
+      /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id));
+    const exactProjectIds = [...new Set([...projectIds, ...issueIds.map(id => readSources.issues.get(id)?.projectId).filter((id): id is string => id !== null && id !== undefined)])];
+    if (!idsValid(issueIds) || !idsValid(projectIds) || issueIds.some(id => !readSources.issues.has(id) || !readSources.issues.get(id)) ||
+      !idsValid(exactProjectIds) || exactProjectIds.some(id => !readSources.projects.has(id) || !readSources.projects.get(id)))
+      throw forbidden("Batched Task privacy input is not the complete captured native population.");
+
+    const valuesFor = (ids: string[]) => sql.join(ids.map(id => sql`(${id}::uuid)`), sql`, `);
+    checkDeadline();
+    const issueCondition = await issueReadSqlCondition(db, actor);
+    const projectCondition = await projectReadSqlCondition(db, actor);
+    checkDeadline();
+    const evaluate = async () => {
+      const issuesById = new Map<string, boolean>();
+      const projectsById = new Map<string, boolean>();
+      // Keep every exact per-root predicate and its independent 256-node/edge
+      // bound. Batching only removes client/server round trips; it never
+      // aggregates a filtered subset or omits a root from the decision.
+      for (let offset = 0; offset < issueIds.length; offset += 512) {
+        checkDeadline();
+        const ids = issueIds.slice(offset, offset + 512);
+        const roots = valuesFor(ids);
+        const query = sql`
+          select selected.id::text as id, (${issueCondition}) as allowed
+          from (values ${roots}) as selected(id)
+          join issues on issues.id=selected.id and issues.company_id=${companyId}
+        `;
+        const rows = await db.execute<{ id: string; allowed: boolean }>(query);
+        for (const row of rows) if (ids.includes(row.id)) issuesById.set(row.id, row.allowed === true);
+        for (const id of ids) {
+          if (issuesById.get(id) === true) continue;
+          // A private Routine edge requires its original canonical owner. The
+          // ordinary batched predicate intentionally has no Routine grant;
+          // only rows it withholds enter this exact per-source fallback.
+          const issue = readSources.issues.get(id);
+          if (issue && await canActorReadIssuePrivacy(db, actor, { id, companyId })) issuesById.set(id, true);
+        }
+        checkDeadline();
+      }
+      for (let offset = 0; offset < exactProjectIds.length; offset += 512) {
+        checkDeadline();
+        const ids = exactProjectIds.slice(offset, offset + 512);
+        const roots = valuesFor(ids);
+        const rows = await db.execute<{ id: string; allowed: boolean }>(sql`
+          select selected.id::text as id, (${projectCondition}) as allowed
+          from (values ${roots}) as selected(id)
+          join projects on projects.id=selected.id and projects.company_id=${companyId}
+        `);
+        for (const row of rows) if (ids.includes(row.id)) projectsById.set(row.id, row.allowed === true);
+        checkDeadline();
+      }
+      return { issues: issuesById, projects: projectsById };
+    };
+
+    // This private provisional map exists only while this closed owner method
+    // evaluates the canonical action/policy for every exact source. It is not
+    // passed to caller code or returned as an access grant. The complete
+    // retained-source privacy predicate runs once, after every base decision,
+    // and must pass before this owner returns.
+    const batch: NativeTaskPrivacyBatch = {
+      active: true,
+      companyId,
+      actorKey: routineActorKey(actor),
+      decisionMemo: createNativeTaskDecisionMemo(),
+      issues: new Map(issueIds.map(id => [id, true])),
+      projects: new Map(exactProjectIds.map(id => [id, true])),
+    };
+    nativeTaskPrivacyBatches.set(db as object, batch);
+    try {
+      const companyWideBoardReader=actor.type==="board"&&!actor.keyId&&!actor.authenticatedKeyHash&&(actor.source==="session"||actor.source==="cloud_tenant");
+      if(companyWideBoardReader) {
+        // Board action authority is company-membership based; Task and Project
+        // visibility is still evaluated separately for every exact root by the
+        // canonical SQL predicates below. Avoid re-reading the same Human
+        // membership/session for thousands of sources in this closed scope.
+        for(const id of issueIds) if(readSources.issues.get(id)!.hiddenAt) throw forbidden("A hidden Task cannot contribute to a metric.");
+        const firstIssue=issueIds[0]&&readSources.issues.get(issueIds[0]);
+        if(firstIssue) {
+          const decision=await decide({actor,action:"issue:read",enforceResponsibleUserIntersection:true,resource:{type:"issue",companyId,issueId:firstIssue.id,projectId:firstIssue.projectId,parentIssueId:firstIssue.parentId,assigneeAgentId:firstIssue.assigneeAgentId,assigneeUserId:firstIssue.assigneeUserId,status:firstIssue.status,originKind:firstIssue.originKind,originId:firstIssue.originId}});
+          if(!decision.allowed) throw forbidden("A Task source is outside the current authorization boundary.");
+        }
+        const firstProject=exactProjectIds[0];
+        if(firstProject) {
+          const decision=await decide({actor,action:"project:read",enforceResponsibleUserIntersection:true,resource:{type:"project",companyId,projectId:firstProject}});
+          if(!decision.allowed) throw forbidden("A Project source is outside the current authorization boundary.");
+        }
+        checkDeadline();
+      } else {
+        const checks = [
+          ...issueIds.map(id => async () => {
+            const issue = readSources.issues.get(id)!;
+            if (issue.hiddenAt) throw forbidden("A hidden Task cannot contribute to a metric.");
+            const decision = await decide({ actor, action: "issue:read", enforceResponsibleUserIntersection: true, resource: {
+              type: "issue", companyId, issueId: id, projectId: issue.projectId, parentIssueId: issue.parentId,
+              assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId, status: issue.status,
+              originKind: issue.originKind, originId: issue.originId,
+            } });
+            if (!decision.allowed) throw forbidden("A Task source is outside the current authorization boundary.");
+          }),
+          ...exactProjectIds.map(id => async () => {
+            const decision = await decide({ actor, action: "project:read", enforceResponsibleUserIntersection: true,
+              resource: { type: "project", companyId, projectId: id } });
+            if (!decision.allowed) throw forbidden("A Project source is outside the current authorization boundary.");
+          }),
+        ];
+        for (let offset = 0; offset < checks.length; offset += 32) {
+          const decisions = await Promise.allSettled(checks.slice(offset, offset + 32).map(check => check()));
+          for (const decision of decisions) if (decision.status === "rejected") throw decision.reason;
+          checkDeadline();
+        }
+      }
+    } finally {
+      batch.active = false;
+      nativeTaskPrivacyBatches.delete(db as object);
+    }
+    const final = await evaluate();
+    checkDeadline();
+    if (issueIds.some(id => final.issues.get(id) !== true) || exactProjectIds.some(id => final.projects.get(id) !== true))
+      throw forbidden("Task source privacy changed during the complete read.");
+  }
+  async function withReadCompany<T>(companyId: string, read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Company search requires a native read transaction.");
+    return withReadScope(companyId, [], [], "company_search", read);
+  }
+  async function withReadRoutineSources<T>(companyId: string, actor: AuthorizationActor, runIds: string[],
+    read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Private Routine reads require a native transaction.");
+    if (nativeRoutineReadScopes.get(db as object)?.active) throw forbidden("Nested Routine source scopes are unavailable.");
+    return withReadScope(companyId, [], [], "routine_sources", async owner => {
+      if (!owner.readRoutineSources) throw forbidden("Private Routine reader is unavailable.");
+      await owner.readRoutineSources(runIds, actor);
+      return read(owner);
+    }, null, actor);
+  }
+  async function withReadWorkflowSources<T>(companyId: string, actor: AuthorizationActor, runIds: string[],
+    read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Private Workflow reads require a native transaction.");
+    const existing = nativeWorkflowReadScopes.get(db as object);
+    if (existing?.active) {
+      if (existing.companyId !== companyId || existing.workflowActorKey !== workflowActorKey(actor))
+        throw forbidden("Nested Workflow source authority changed.");
+      const owner: ReadSourceOwner = createAuthorizationService(db, existing);
+      owner.readWorkflowSources = async (ids, currentActor) => {
+        if (!existing.active || currentActor.type === "none" || !existing.workflowScopeToken)
+          throw forbidden("Nested Workflow source authority is unavailable.");
+        const candidates = new Set(existing.workflowSourceCheckRunIds ?? existing.workflowRunIds ?? []);
+        const currentlyReadable = existing.workflowReadableRunIds ?? existing.workflowRunIds ?? new Set<string>();
+        const combined = [...new Set([...currentlyReadable, ...ids])].sort();
+        if (!combined.length || combined.length > 256) throw forbidden("The complete nested Workflow source population exceeds its bound.");
+        await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true),
+          set_config('paperclip.native_workflow_actor_hash', ${workflowActorHash(currentActor)}, true),
+          set_config('paperclip.native_workflow_scope_token', ${existing.workflowScopeToken}, true)`);
+        const sourceActor = await pinReadSourceActor(currentActor, companyId);
+        if (!sourceActor) throw forbidden("The nested Workflow reader is unavailable.");
+        const company = await owner.decide({ actor: sourceActor, action: "company_scope:read",
+          resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+        const { assertWorkflowRunPayloadSourceAccess, withWorkflowAuthoringSourceReview } = await import("./workflows/workflow-authoring-sources.js");
+        if (!company.allowed) {
+          await requireActiveWorkflowBaselineMembership(db, companyId, sourceActor);
+          await withWorkflowAuthoringSourceReview(async () => {
+            for (const runId of combined) {
+              const publicBaseline = await canActorReadTypedTaskSourcePrivacy(db as unknown as Db, { type: "none" },
+                { sourceKind: "workflow_run", id: runId, companyId });
+              if (!publicBaseline) throw forbidden("Current Workflow source access is unavailable.", { code: "analytical_source_access_lost" });
+              await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
+            }
+          });
+          existing.workflowRunIds = new Set();
+          combined.forEach(id => candidates.add(id));
+          existing.workflowSourceCheckRunIds = candidates;
+          existing.workflowReadableRunIds = new Set(combined);
+          existing.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
+            : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
+          await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true)`);
+          return combined;
+        }
+        await withWorkflowAuthoringSourceReview(async () => {
+          for (const id of combined) await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, id, sourceActor, "task");
+        });
+        existing.workflowRunIds = new Set(combined);
+        combined.forEach(id => candidates.add(id));
+        existing.workflowSourceCheckRunIds = candidates;
+        existing.workflowReadableRunIds = new Set(combined);
+        existing.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
+          : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
+        await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${combined.join(",")}, true)`);
+        return combined;
+      };
+      await owner.readWorkflowSources(runIds, actor);
+      return read(owner);
+    }
+    if (nativeRoutineReadScopes.get(db as object)?.active)
+      throw forbidden("Nested Workflow and Routine source scopes are unavailable.");
+    if (!runIds.length || runIds.length > 256 || new Set(runIds).size !== runIds.length ||
+      runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+      throw forbidden("The native Workflow source population is incomplete.");
+    return withReadScope(companyId, [], [], "workflow_sources", async owner => {
+      if (!owner.readWorkflowSources) throw forbidden("Private Workflow reader is unavailable.");
+      await owner.readWorkflowSources(runIds, actor);
+      return read(owner);
+    }, null, actor);
+  }
+  /** Route-only candidate filtering: unlike explicit Workflow source reads,
+   * inaccessible candidate Runs are withheld individually before list/count
+   * limits. The complete candidate population is rechecked before return. */
+  async function withReadWorkflowTaskCandidates<T>(companyId: string, actor: AuthorizationActor, runIds: string[],
+    read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Workflow Task candidate reads require a native transaction.");
+    if (nativeWorkflowReadScopes.get(db as object)?.active || nativeRoutineReadScopes.get(db as object)?.active)
+      throw forbidden("Nested Workflow Task candidate scopes are unavailable.");
+    if (runIds.length > 256 || new Set(runIds).size !== runIds.length ||
+      runIds.some(id => !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)))
+      throw forbidden("The native Workflow Task candidate population is incomplete.");
+    return withReadScope(companyId, [], [], "workflow_task_candidates", async owner => {
+      if (!owner.readWorkflowSources) throw forbidden("Private Workflow Task candidate reader is unavailable.");
+      await owner.readWorkflowSources(runIds, actor, "task_candidates");
+      return read(owner);
+    }, null, actor);
+  }
+  async function withReadContextInspection<T>(companyId: string, agentId: string, issueIds: string[], projectIds: string[],
+    actor: AuthorizationActor, read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Human Context inspection requires a native read transaction.");
+    return withReadScope(companyId, issueIds, projectIds, "context_inspection", async owner => {
+      const company = await owner.decide({ actor, action: "company_scope:read", resource: { type: "company", companyId },
+        enforceResponsibleUserIntersection: true });
+      const agent = await owner.decide({ actor, action: "agent:read", resource: { type: "agent", companyId, agentId },
+        enforceResponsibleUserIntersection: true });
+      if (!company.allowed || !agent.allowed) throw forbidden("Human Context inspection authority is unavailable");
+      return read(owner);
+    }, agentId, actor);
   }
   function prepareSourceInstanceAdminRead() {
     return db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
@@ -609,6 +3226,14 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
   let sourceInstanceAdminRead: ReturnType<typeof prepareSourceInstanceAdminRead> | undefined;
   async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
+    if (sourceAuthorityPins && userId) {
+      return memoized(taskDecisionMemo()?.instanceAdmins, userId, async () => {
+        const rows = await db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
+          eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
+        )).for("share", { noWait: true });
+        return rows.length > 0;
+      });
+    }
     if (readSources && userId) {
       sourceInstanceAdminRead ??= prepareSourceInstanceAdminRead();
       return (await sourceInstanceAdminRead.execute({ userId })).length > 0;
@@ -631,6 +3256,15 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     principalType: PrincipalType,
     principalId: string,
   ) {
+    if (sourceAuthorityPins) {
+      return memoized(taskDecisionMemo()?.memberships, `${companyId}:${principalType}:${principalId}`, async () => {
+        const [row] = await db.select().from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
+          eq(companyMemberships.principalId, principalId), eq(companyMemberships.status, "active"),
+        )).for("share", { noWait: true });
+        return row ?? null;
+      });
+    }
     if (readSources) {
       sourceMembershipRead ??= prepareSourceMembershipRead();
       const rows = await sourceMembershipRead.execute({ companyId, principalType, principalId });
@@ -651,70 +3285,23 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
 
   async function loadResponsibleUserSnapshot(companyId: string, userId: string): Promise<ResponsibleUserSnapshot> {
-    const [user, membership] = await Promise.all([
-      db
-        .select({ id: authUsers.id })
-        .from(authUsers)
-        .where(eq(authUsers.id, userId))
-        .then((rows) => rows[0] ?? null),
-      db
-        .select({
-          companyId: companyMemberships.companyId,
-          membershipRole: companyMemberships.membershipRole,
-          status: companyMemberships.status,
-        })
-        .from(companyMemberships)
-        .where(
-          and(
-            eq(companyMemberships.companyId, companyId),
-            eq(companyMemberships.principalType, "user"),
-            eq(companyMemberships.principalId, userId),
-            eq(companyMemberships.status, "active"),
-          ),
-        )
-        .then((rows) => rows[0] ?? null),
-    ]);
-    return {
-      userId,
-      companyId,
-      userExists: Boolean(user),
-      activeMembership: user ? membership : null,
-    };
-  }
-
-  function getResponsibleUserSnapshot(input: {
-    actor: AuthorizationActor;
-    companyId: string;
-    userId: string;
-  }): Promise<ResponsibleUserSnapshot> {
-    const actorWithMemo = input.actor as ResponsibleUserActorWithMemo;
-    const key = `${input.companyId}:${input.userId}`;
-    actorWithMemo.__responsibleUserSnapshotMemo ??= new Map();
-    const requestMemo = actorWithMemo.__responsibleUserSnapshotMemo.get(key);
-    if (requestMemo) return requestMemo;
-
-    const actorMembership = input.actor.onBehalfOfUserId === input.userId
-      ? activeActorMembership(input.actor.onBehalfOfMemberships, input.companyId)
-      : null;
-    if (actorMembership) {
-      const promise = Promise.resolve({
-        userId: input.userId,
-        companyId: input.companyId,
-        userExists: true,
-        activeMembership: actorMembership,
+    if (sourceAuthorityPins) {
+      return memoized(taskDecisionMemo()?.responsibleUsers, `${companyId}:${userId}`, async () => {
+        const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share", { noWait: true });
+        const membership = user ? await getActiveMembership(companyId, "user", userId) : null;
+        return { userId, companyId, userExists: Boolean(user), activeMembership: membership };
       });
-      actorWithMemo.__responsibleUserSnapshotMemo.set(key, promise);
-      return promise;
     }
-
-    const promise = loadResponsibleUserSnapshot(input.companyId, input.userId);
-    actorWithMemo.__responsibleUserSnapshotMemo.set(key, promise);
-    void promise.catch(() => {
-      if (actorWithMemo.__responsibleUserSnapshotMemo?.get(key) === promise) {
-        actorWithMemo.__responsibleUserSnapshotMemo.delete(key);
-      }
-    });
-    return promise;
+    // Read the current Human and membership in one statement. Neither fact
+    // nor its permission decision is reused by a later authorization call.
+    const [row] = await db.select({ userId: authUsers.id, membership: {
+      companyId: companyMemberships.companyId, membershipRole: companyMemberships.membershipRole,
+      status: companyMemberships.status,
+    } }).from(authUsers).leftJoin(companyMemberships, and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, authUsers.id), eq(companyMemberships.status, "active"),
+    )).where(eq(authUsers.id, userId));
+    return { userId, companyId, userExists: Boolean(row), activeMembership: row?.membership ?? null };
   }
 
   async function findGrant(
@@ -723,7 +3310,14 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     principalId: string,
     permissionKey: PermissionKey,
   ) {
-    return db
+    if (sourceAuthorityPins) return memoized(taskDecisionMemo()?.grants, `${companyId}:${principalType}:${principalId}:${permissionKey}`, async () => {
+      const [row] = await db.select().from(principalPermissionGrants).where(and(
+        eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalType, principalType),
+        eq(principalPermissionGrants.principalId, principalId), eq(principalPermissionGrants.permissionKey, permissionKey),
+      )).for("share", { noWait: true });
+      return row ?? null;
+    });
+    const query = db
       .select()
       .from(principalPermissionGrants)
       .where(
@@ -733,8 +3327,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           eq(principalPermissionGrants.principalId, principalId),
           eq(principalPermissionGrants.permissionKey, permissionKey),
         ),
-      )
-      .then((rows) => rows[0] ?? null);
+      );
+    const rows = await (sourceAuthorityPins ? query.for("share", { noWait: true }) : query);
+    return rows[0] ?? null;
   }
 
   async function decidePrincipalGrant(input: {
@@ -744,8 +3339,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     action: AuthorizationAction;
     permissionKey: PermissionKey;
     scope?: Record<string, unknown> | null;
+    currentMembership?: Pick<typeof companyMemberships.$inferSelect,
+      "id" | "companyId" | "principalType" | "principalId" | "membershipRole" | "status"> | null;
   }): Promise<PrincipalGrantDecision> {
-    const membership = await getActiveMembership(input.companyId, input.principalType, input.principalId);
+    const membership = input.currentMembership !== undefined
+      ? input.currentMembership
+      : await getActiveMembership(input.companyId, input.principalType, input.principalId);
     if (!membership) {
       return deny({
         action: input.action,
@@ -808,7 +3407,18 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
 
   async function loadAgent(agentId: string): Promise<AgentAuthorizationRow | null> {
-    return db
+    if (sourceAuthorityPins) return memoized(taskDecisionMemo()?.agents, agentId, async () => {
+      const [row] = await db.select({
+        id: agents.id,
+        companyId: agents.companyId,
+        role: agents.role,
+        status: agents.status,
+        reportsTo: agents.reportsTo,
+        permissions: agents.permissions,
+      }).from(agents).where(eq(agents.id, agentId)).for("share", { noWait: true });
+      return row ?? null;
+    });
+    const query = db
       .select({
         id: agents.id,
         companyId: agents.companyId,
@@ -818,8 +3428,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         permissions: agents.permissions,
       })
       .from(agents)
-      .where(eq(agents.id, agentId))
-      .then((rows) => rows[0] ?? null);
+      .where(eq(agents.id, agentId));
+    const rows = await (sourceAuthorityPins ? query.for("share", { noWait: true }) : query);
+    return rows[0] ?? null;
   }
 
   // Reuse compiled SQL only. Every Source executes fresh current reads; no
@@ -830,8 +3441,18 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         id: agents.id, companyId: agents.companyId, role: agents.role,
         status: agents.status, reportsTo: agents.reportsTo, permissions: agents.permissions,
       },
+      membership: {
+        id: companyMemberships.id, companyId: companyMemberships.companyId,
+        principalType: companyMemberships.principalType, principalId: companyMemberships.principalId,
+        membershipRole: companyMemberships.membershipRole, status: companyMemberships.status,
+      },
       run: { companyId: heartbeatRuns.companyId, contextSnapshot: heartbeatRuns.contextSnapshot },
-    }).from(agents).leftJoin(heartbeatRuns, and(
+    }).from(agents).leftJoin(companyMemberships, and(
+      eq(companyMemberships.companyId, sql.placeholder("companyId")),
+      eq(companyMemberships.principalType, "agent"),
+      sql`${companyMemberships.principalId} = ${agents.id}::text`,
+      eq(companyMemberships.status, "active"),
+    )).leftJoin(heartbeatRuns, and(
       eq(heartbeatRuns.id, sql.placeholder("runId")),
       eq(heartbeatRuns.companyId, sql.placeholder("companyId")),
       eq(heartbeatRuns.agentId, agents.id),
@@ -839,11 +3460,17 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
   let readActorQuery: ReturnType<typeof prepareReadActorEvidence> | undefined;
   async function loadReadActorEvidence(actor: AuthorizationActor, companyId: string) {
+    if (sourceAuthorityPins) return memoized(taskDecisionMemo()?.readActorEvidence,
+      `${companyId}:${actor.agentId ?? ""}:${actor.runId ?? ""}`, async () => ({
+        agent: await loadAgent(actor.agentId!), run: await loadRunPolicy(actor.runId, companyId, actor.agentId!),
+        membership: undefined,
+      }));
     readActorQuery ??= prepareReadActorEvidence();
     const [row] = await readActorQuery.execute({ runId: actor.runId!, companyId, agentId: actor.agentId! });
     const context = isPlainRecord(row?.run?.contextSnapshot) ? row.run.contextSnapshot : null;
     return {
       agent: row?.agent ?? null,
+      membership: row?.membership ?? null,
       run: isPlainRecord(context?.executionPolicy)
         ? { companyId: row!.run!.companyId, executionPolicy: context.executionPolicy }
         : null,
@@ -857,6 +3484,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         id: projects.id,
         companyId: projects.companyId,
         executionWorkspacePolicy: projects.executionWorkspacePolicy,
+        visibility: projects.visibility,
       })
       .from(projects)
       .where(eq(projects.id, projectId))
@@ -878,6 +3506,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         executionPolicy: issues.executionPolicy,
         originKind: issues.originKind,
         originId: issues.originId,
+        hiddenAt: issues.hiddenAt,
+        visibility: issues.visibility,
+        privacyRootIssueId: issues.privacyRootIssueId,
+        privacyParentIssueId: issues.privacyParentIssueId,
+        responsibleUserId: issues.responsibleUserId,
+        createdByUserId: issues.createdByUserId,
       })
       .from(issues)
       .where(eq(issues.id, issueId))
@@ -886,7 +3520,20 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
 
   async function loadRunPolicy(runId: string | null | undefined, companyId: string, agentId: string) {
     if (!runId) return null;
-    const row = await db
+    if (sourceAuthorityPins) return memoized(taskDecisionMemo()?.runPolicies, `${companyId}:${agentId}:${runId}`, async () => {
+      const [row] = await db.select({
+        id: heartbeatRuns.id,
+        companyId: heartbeatRuns.companyId,
+        agentId: heartbeatRuns.agentId,
+        contextSnapshot: heartbeatRuns.contextSnapshot,
+      }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).for("share", { noWait: true });
+      if (!row || row.companyId !== companyId || row.agentId !== agentId) return null;
+      const context = isPlainRecord(row.contextSnapshot) ? row.contextSnapshot : null;
+      return isPlainRecord(context?.executionPolicy)
+        ? { companyId: row.companyId, executionPolicy: context.executionPolicy }
+        : null;
+    });
+    const query = db
       .select({
         id: heartbeatRuns.id,
         companyId: heartbeatRuns.companyId,
@@ -894,8 +3541,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         contextSnapshot: heartbeatRuns.contextSnapshot,
       })
       .from(heartbeatRuns)
-      .where(eq(heartbeatRuns.id, runId))
-      .then((rows) => rows[0] ?? null);
+      .where(eq(heartbeatRuns.id, runId));
+    const [row] = await (sourceAuthorityPins ? query.for("share", { noWait: true }) : query);
     if (!row || row.companyId !== companyId || row.agentId !== agentId) return null;
     const context = isPlainRecord(row.contextSnapshot) ? row.contextSnapshot : null;
     return isPlainRecord(context?.executionPolicy)
@@ -1983,7 +4630,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       });
     }
 
-    const readActorEvidence = readSources && input.actor.runId
+    const readActorEvidence = (readSources || input.action === "company_scope:read") && input.actor.runId
       ? await loadReadActorEvidence(input.actor, companyId)
       : undefined;
     const actorAgent = readActorEvidence ? readActorEvidence.agent : await loadAgent(actorAgentId);
@@ -2106,11 +4753,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         });
       }
 
-      const targetSnapshot = await getResponsibleUserSnapshot({
-        actor: input.actor,
-        companyId,
-        userId: targetUserId,
-      });
+      const targetSnapshot = await loadResponsibleUserSnapshot(companyId, targetUserId);
       if (!targetSnapshot.userExists || !targetSnapshot.activeMembership) {
         return deny({
           action: input.action,
@@ -2373,6 +5016,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         action: input.action,
         permissionKey,
         scope: input.scope,
+        ...(readActorEvidence && readActorEvidence.membership !== undefined
+          ? { currentMembership: readActorEvidence.membership } : {}),
       });
       if (grantDecision.allowed) return grantDecision;
     }
@@ -2440,11 +5085,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     }
 
     const companyId = companyIdForResource(input.resource);
-    const snapshot = await getResponsibleUserSnapshot({
-      actor: input.actor,
-      companyId,
-      userId: responsibleUserId,
-    });
+    // Repeated decisions can follow row/operation lock waits on the same actor.
+    // Only current native account and membership rows supply Human authority.
+    const snapshot = await loadResponsibleUserSnapshot(companyId, responsibleUserId);
     const denyCode: AuthorizationDecision["code"] =
       snapshot.userExists && snapshot.activeMembership
         ? "RESPONSIBLE_USER_UNAUTHORIZED"
@@ -2519,6 +5162,50 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     return !input.enforceResponsibleUserIntersection && responsibleUserAuthzShadowMode() ? agentDecision : denied;
   }
 
+  // This path is created only by the same-company native Source callback.
+  // Row locks qualify the original canonical loaders; they do not grant access.
+  // NOWAIT avoids reversing account erasure / Agent lifecycle lock ordering.
+  async function pinReadSourceActor(actor: AuthorizationActor, companyId: string): Promise<AuthorizationActor | null> {
+    const expiresAt = actor.authenticatedCredentialExpiresAt;
+    if (expiresAt != null) {
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
+      if (readSources) readSources.credentialExpiresAt = Math.min(readSources.credentialExpiresAt ?? Infinity, expiresAt);
+    }
+    if (actor.type === "board" && actor.source === "local_implicit") return actor;
+    if (actor.type === "board") {
+      const current = await pinCurrentBoardActor(db, actor);
+      if (!current) return null;
+      if (current.credentialExpiresAt !== null && readSources)
+        readSources.credentialExpiresAt = Math.min(readSources.credentialExpiresAt ?? Infinity, current.credentialExpiresAt);
+      return current.actor;
+    }
+    if (actor.type !== "agent" || !actor.agentId || actor.companyId !== companyId || !actor.onBehalfOfUserId?.trim()) return null;
+    const agent = await loadAgent(actor.agentId);
+    if (!agent || agent.companyId !== companyId) return null;
+    if (actor.runId) {
+      const [run] = await db.select({ companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId })
+        .from(heartbeatRuns).where(eq(heartbeatRuns.id, actor.runId)).for("share", { noWait: true });
+      if (!run || run.companyId !== companyId || run.agentId !== actor.agentId || run.responsibleUserId !== actor.onBehalfOfUserId) return null;
+    }
+    let keyScope = actor.keyScope;
+    if (actor.keyId) {
+      const [key] = await db.select().from(agentApiKeys).where(eq(agentApiKeys.id, actor.keyId)).for("share", { noWait: true });
+      if (!key || key.keyHash !== actor.authenticatedKeyHash || key.companyId !== companyId || key.agentId !== actor.agentId || key.revokedAt || key.responsibleUserId !== actor.onBehalfOfUserId) return null;
+      const parsed = agentApiKeyScopeSchema.safeParse(key.scopeConfig ?? { kind: "standard" });
+      if (!parsed.success) return null;
+      // Keep the original authenticated request ceiling after Source row waits;
+      // a newly broader persisted credential cannot widen this request.
+      if (keyScope != null && !isDeepStrictEqual(agentApiKeyScopeSchema.parse(keyScope), parsed.data)) return null;
+      keyScope = parsed.data;
+    } else if (actor.source === "agent_key" || !actor.runId) return null;
+    if (keyScope != null) {
+      const parsed = agentApiKeyScopeSchema.safeParse(keyScope);
+      if (!parsed.success) return null;
+      keyScope = parsed.data;
+    }
+    return { ...actor, keyScope };
+  }
+
   async function decide(input: {
     actor: AuthorizationActor;
     action: AuthorizationAction;
@@ -2526,10 +5213,91 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     scope?: Record<string, unknown> | null;
     enforceResponsibleUserIntersection?: boolean;
   }): Promise<AuthorizationDecision> {
+    if (readSources?.purpose === "delegated_context" &&
+      (input.action === "foundation:read" || input.action === "company_scope:read")) {
+      const delegated = readSources.delegatedContext;
+      const guestActor = delegated && input.actor.type === "agent" && input.actor.source === "agent_jwt" &&
+        input.actor.companyId === delegated.guestCompanyId && input.actor.agentId === delegated.guestAgentId &&
+        (input.actor.onBehalfOfUserId ?? null) === (delegated.guestActor.onBehalfOfUserId ?? null) &&
+        (input.actor.runId ?? null) === (delegated.guestActor.runId ?? null) && (input.actor.sessionId ?? null) === (delegated.guestActor.sessionId ?? null) &&
+        (input.actor.keyId ?? null) === (delegated.guestActor.keyId ?? null) && (input.actor.authenticatedKeyHash ?? null) === (delegated.guestActor.authenticatedKeyHash ?? null) &&
+        (input.actor.authenticatedCredentialExpiresAt ?? null) === (delegated.guestActor.authenticatedCredentialExpiresAt ?? null) &&
+        input.actor.ignoreInstanceAdmin === delegated.guestActor.ignoreInstanceAdmin &&
+        isDeepStrictEqual(input.actor.keyScope ?? null, delegated.guestActor.keyScope ?? null);
+      const homeActor = delegated && isDeepStrictEqual(input.actor, delegated.homeActor);
+      const companyAllowed = delegated && input.resource.type === "company" &&
+        (input.action === "company_scope:read"
+          ? input.resource.companyId === delegated.guestCompanyId && guestActor || input.resource.companyId === delegated.scope.primaryCompanyId && homeActor
+          : input.resource.companyId === delegated.guestCompanyId && guestActor);
+      if (!delegated || !companyAllowed || input.scope && Object.keys(input.scope).length) {
+        return deny({ action: input.action, reason: "deny_scope", explanation: "Delegated Context read scope mismatch." });
+      }
+      if (await delegatedContextCurrentFailure(delegated))
+        return deny({ action: input.action, reason: "deny_missing_membership", explanation: "Delegated Context source authority is no longer current." });
+      return allow({ action: input.action, reason: "allow_delegated_context_source", explanation: "Allowed by the current native delegated Context source scope." });
+    }
     if (readSources) {
       if (!readSources.active) throw new Error("Native Source read scope has ended");
-      if (companyIdForResource(input.resource) !== readSources.companyId || !["issue:read", "project:read"].includes(input.action)) {
+      const foundationRead = input.action === "foundation:read" && input.resource.type === "company" && is(db, PgTransaction)
+        && (!input.scope || Object.keys(input.scope).length === 0);
+      const companySearchRead = readSources.purpose === "company_search" && input.action === "company_scope:read"
+        && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
+      const contextInspectionRead = readSources.purpose === "context_inspection" && (
+        input.action === "company_scope:read" && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0)
+        || input.action === "agent:read" && input.resource.type === "agent" && input.resource.agentId === readSources.agentId
+        || input.action === "issue:read" || input.action === "project:read" || foundationRead
+      );
+      const routineSourceRead = readSources.purpose === "routine_sources" && input.action === "company_scope:read"
+        && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
+      const workflowSourceRead = (readSources.purpose === "workflow_sources" || readSources.purpose === "workflow_task_candidates") && input.action === "company_scope:read"
+        && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
+      const routineAgentRead = readSources.purpose === "routine_sources" && input.action === "agent:read"
+        && input.resource.type === "agent" && Boolean(input.resource.agentId && readSources.routineAgentIds?.has(input.resource.agentId));
+      const routineIssueRead = readSources.purpose === "routine_sources" && input.action === "issue:read"
+        && input.resource.type === "issue" && Boolean(input.resource.issueId && readSources.issues.has(input.resource.issueId));
+      const readScopeAllows = readSources.purpose === "company_search" ? companySearchRead
+        : readSources.purpose === "context_inspection" ? contextInspectionRead
+          : readSources.purpose === "routine_sources" ? routineSourceRead || routineAgentRead || routineIssueRead
+            : readSources.purpose === "workflow_sources" || readSources.purpose === "workflow_task_candidates" ? workflowSourceRead
+            : (["issue:read", "project:read"].includes(input.action) || foundationRead);
+      if (companyIdForResource(input.resource) !== readSources.companyId || !readScopeAllows) {
         return deny({ action: input.action, reason: "deny_scope", explanation: "This native Source row scope admits same-company reads only." });
+      }
+    }
+    if (input.actor.type === "agent" && input.actor.keyScope != null && !agentApiKeyScopeSchema.safeParse(input.actor.keyScope).success) {
+      return deny({ action: input.action, reason: "deny_scope", explanation: "Agent credential scope is unavailable." });
+    }
+    if (readSources && is(db, PgTransaction)) {
+      if (input.action === "issue:read") {
+        const row = input.resource.type === "issue" && input.resource.issueId
+          ? readSources.issues.get(input.resource.issueId) : null;
+        if (!row || (row.projectId && !readSources.projects.get(row.projectId)))
+          return deny({ action: input.action, reason: "deny_scope", explanation: "Task is outside the captured native Source rows." });
+      }
+      if (input.action === "project:read" && (input.resource.type !== "project" || !input.resource.projectId
+        || !readSources.projects.get(input.resource.projectId)))
+        return deny({ action: input.action, reason: "deny_scope", explanation: "Project is outside the captured native Source rows." });
+      if (!sourceAuthorityPins) {
+        try { return await createAuthorizationService(db, readSources, true).decide(input); }
+        catch (error) {
+          let cause: unknown = error;
+          for (let depth = 0; cause && typeof cause === "object" && depth < 8; depth++, cause = (cause as { cause?: unknown }).cause) {
+            if ((cause as { code?: unknown }).code === "55P03") throw conflict("Native Source authority is busy.", { code: "native_source_authority_busy" });
+          }
+          throw error;
+        }
+      }
+      // Credential-free server actors keep their original canonical policy.
+      // A source label alone does not prove an HTTP credential was verified.
+      const credential = input.actor.keyId != null || input.actor.authenticatedKeyHash != null
+        || input.actor.authenticatedCredentialExpiresAt != null || input.actor.sessionId != null || input.actor.source === "board_key";
+      if (input.action === "foundation:read" || readSources.purpose === "company_search" || readSources.purpose === "workflow_sources"
+        || readSources.purpose === "workflow_task_candidates" || credential) {
+        const actor = await pinReadSourceActor(input.actor, readSources.companyId);
+        if (!actor) return deny({ action: input.action, reason: "deny_unauthenticated", explanation: "Current native Source principal is unavailable." });
+        readSources.credentialUserId = actor.type === "board" ? actor.userId ?? null
+          : actor.type === "agent" ? actor.onBehalfOfUserId ?? null : null;
+        input = { ...input, actor, enforceResponsibleUserIntersection: true };
       }
     }
     // A V5 run remains subject to strict human intersection even during a
@@ -2541,14 +5309,74 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       if (manifest) input = { ...input, enforceResponsibleUserIntersection: true };
     }
     const agentDecision = await decideBase(input);
-    const decision = await applyResponsibleUserIntersection(input, agentDecision);
+    let decision = await applyResponsibleUserIntersection(input, agentDecision);
+    if (decision.allowed && input.resource.type === "issue") {
+      const issueId = input.resource.issueId ?? input.resource.parentIssueId;
+      if (issueId && !(await canActorReadIssuePrivacy(db, input.actor, { id: issueId, companyId: input.resource.companyId }))) {
+        decision = deny({ action: input.action, reason: "deny_issue_private", explanation: "Task source access is unavailable." });
+      }
+      if (decision.allowed && input.resource.projectId && !input.resource.issueId &&
+        !(await canActorReadProjectPrivacy(db, input.actor, { id: input.resource.projectId, companyId: input.resource.companyId }))) {
+        decision = deny({ action: input.action, reason: "deny_project_private", explanation: "Project source access is unavailable." });
+      }
+    }
+    if (decision.allowed && input.action === "project:read" && input.resource.type === "project" && input.resource.projectId &&
+      !(await canActorReadProjectPrivacy(db, input.actor, { id: input.resource.projectId, companyId: input.resource.companyId }))) {
+      decision = deny({ action: input.action, reason: "deny_project_private", explanation: "Project source access is unavailable." });
+    }
     if (readSources && !readSources.active) throw new Error("Native Source read scope has ended");
     return decision;
+  }
+
+  async function delegatedContextCurrentFailure(context: DelegatedContextReadAuthority): Promise<string | null> {
+    const activeReadScope = readSources ?? nativeDelegatedContextReadScopes.get(db as object);
+    if (!activeReadScope?.active || activeReadScope.purpose !== "delegated_context" || !is(db, PgTransaction)) return "scope_inactive";
+    const [request] = await db.select({ scope: agentExecutionScopeRequests.scope, requestedByUserId: agentExecutionScopeRequests.requestedByUserId,
+      expiresAt: agentExecutionScopeRequests.expiresAt }).from(agentExecutionScopeRequests).where(and(
+      eq(agentExecutionScopeRequests.id, context.scopeRequestId), eq(agentExecutionScopeRequests.companyId, context.scope.primaryCompanyId),
+      eq(agentExecutionScopeRequests.agentId, context.scope.primaryAgentPresenceId), eq(agentExecutionScopeRequests.runId, context.homeActor.runId!))).for("share", { noWait: true });
+    if (!request || request.requestedByUserId !== context.homeActor.onBehalfOfUserId || request.expiresAt.getTime() <= Date.now() ||
+      !isDeepStrictEqual(agentExecutionScopeSchema.parse(request.scope), context.scope)) return "scope_request_changed";
+    // The canonical cross-company owner needs its ordinary policy path while
+    // it rechecks exact source identities. Temporarily suspend only this
+    // callback's delegated Foundation capability; restore it immediately.
+    if (nativeDelegatedContextReadScopes.get(db as object) === activeReadScope) nativeDelegatedContextReadScopes.delete(db as object);
+    try {
+      const pinned = await pinReadSourceActor(context.homeActor, context.scope.primaryCompanyId);
+      const credentialMatches = pinned?.type === context.homeActor.type && pinned.source === context.homeActor.source &&
+        pinned.companyId === context.homeActor.companyId && pinned.agentId === context.homeActor.agentId &&
+        pinned.runId === context.homeActor.runId && pinned.onBehalfOfUserId === context.homeActor.onBehalfOfUserId &&
+        pinned.sessionId === context.homeActor.sessionId && pinned.keyId === context.homeActor.keyId &&
+        pinned.authenticatedKeyHash === context.homeActor.authenticatedKeyHash &&
+        pinned.authenticatedCredentialExpiresAt === context.homeActor.authenticatedCredentialExpiresAt &&
+        isDeepStrictEqual(pinned.keyScope ?? null, context.homeActor.keyScope ?? null);
+      if (!credentialMatches) return "home_credential_changed";
+      const { crossCompanyContextService } = await import("./cross-company-context.js");
+      const resolved = await crossCompanyContextService(db as unknown as Db).resolve(context.homeActor, context.scope, db as unknown as Db);
+      const guest = resolved.scopes.find(candidate => candidate.companyId === context.guestCompanyId && candidate.presence.id === context.guestAgentId);
+      const matches = !!guest && guest.localActor.type === "agent" && guest.localActor.source === context.guestActor.source &&
+        guest.localActor.companyId === context.guestActor.companyId && guest.localActor.agentId === context.guestActor.agentId &&
+        guest.localActor.onBehalfOfUserId === context.guestActor.onBehalfOfUserId &&
+        isDeepStrictEqual(guest.localActor.keyScope ?? null, context.guestActor.keyScope ?? null);
+      return matches ? null : "current_scope_changed";
+    } catch (error) {
+      if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return "current_scope_denied";
+      throw error;
+    } finally {
+      if (activeReadScope.active) nativeDelegatedContextReadScopes.set(db as object, activeReadScope);
+    }
   }
 
   return {
     decide,
     decidePrincipalGrant,
     withReadSources,
+    withReadDelegatedContextSources,
+    assertTaskPrivacyBatch,
+    withReadCompany,
+    withReadRoutineSources,
+    withReadWorkflowSources,
+    withReadWorkflowTaskCandidates,
+    withReadContextInspection,
   };
 }

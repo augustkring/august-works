@@ -7,6 +7,7 @@ const mockIssueService = vi.hoisted(() => ({
   getByIdForUpdate: vi.fn(),
   getWakeableParentAfterChildCompletion: vi.fn(),
   listWakeableBlockedDependents: vi.fn(),
+  listBlockerAttention: vi.fn(),
   update: vi.fn(),
 }));
 
@@ -38,10 +39,20 @@ const mockDbSelectWhere = vi.hoisted(() => vi.fn(() => ({
 })));
 const mockDbSelectFrom = vi.hoisted(() => vi.fn(() => ({ where: mockDbSelectWhere })));
 const mockDbSelect = vi.hoisted(() => vi.fn(() => ({ from: mockDbSelectFrom })));
+const mockAuthorizationDecide = vi.hoisted(() => vi.fn(async () => ({
+  allowed: true,
+  action: "company_scope:read",
+  reason: "allow_test",
+  explanation: "Allowed by test mock.",
+})));
+// This telemetry-only fixture models a public Task source; native privacy
+// admission is covered by the typed-source integration suite.
+const mockCanReadPrivacy = vi.hoisted(() => vi.fn(async () => true));
 const mockDb = vi.hoisted(() => ({
   select: mockDbSelect,
-  transaction: vi.fn(async (callback: (tx: { select: typeof mockDbSelect }) => Promise<unknown>) =>
-    callback({ select: mockDbSelect })),
+  execute: vi.fn(async () => [{ ids: [], overflow: false }]),
+  transaction: vi.fn(async (callback: (tx: { select: typeof mockDbSelect; execute: () => Promise<Array<{ ids: string[]; overflow: boolean }>> }) => Promise<unknown>) =>
+    callback({ select: mockDbSelect, execute: mockDb.execute })),
 }));
 const mockRunnerGoalService = vi.hoisted(() => ({
   projection: vi.fn(async () => null),
@@ -63,6 +74,23 @@ function registerModuleMocks() {
     RunnerGoalActionError: class RunnerGoalActionError extends Error {},
     RunnerGoalConflictError: class RunnerGoalConflictError extends Error {},
   }));
+
+  vi.doMock("../services/authorization.js", async () => {
+    const actual = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
+    return {
+      ...actual,
+      canActorReadIssuePrivacy: mockCanReadPrivacy,
+      authorizationService: () => ({
+        withReadCompany: (_companyId: string, read: (owner: { decide: typeof mockAuthorizationDecide }) => Promise<unknown>) =>
+          read({ decide: mockAuthorizationDecide }),
+      }),
+    };
+  });
+
+  vi.doMock("../services/analytical-context-authority.js", async () => {
+    const actual = await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js");
+    return { ...actual, assertAnalyticalContextPayloadAccess: vi.fn(async () => undefined) };
+  });
 
   vi.doMock("../services/index.js", () => ({
     companyService: () => ({
@@ -175,6 +203,7 @@ describe("issue telemetry routes", () => {
     mockIssueService.getByIdForUpdate.mockImplementation(async () => mockIssueService.getById());
     mockIssueService.getWakeableParentAfterChildCompletion.mockResolvedValue(null);
     mockIssueService.listWakeableBlockedDependents.mockResolvedValue([]);
+    mockIssueService.listBlockerAttention.mockResolvedValue(new Map());
     mockIssueService.update.mockImplementation(async (_id: string, patch: Record<string, unknown>) => ({
       ...makeIssue("todo"),
       ...patch,
@@ -182,6 +211,7 @@ describe("issue telemetry routes", () => {
     mockDbSelect.mockImplementation(() => ({ from: mockDbSelectFrom }));
     mockDbSelectFrom.mockImplementation(() => ({ where: mockDbSelectWhere }));
     mockDbSelectWhere.mockImplementation(() => ({
+      limit: vi.fn(async () => []),
       for: () => ({
         then: (onFulfilled: (rows: unknown[]) => unknown, onRejected?: (reason: unknown) => unknown) =>
           Promise.resolve([{

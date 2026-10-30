@@ -4,6 +4,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { promisify } from "node:util";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -12,7 +14,9 @@ import {
   agentRuntimeState,
   agentWakeupRequests,
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   companySkills,
   createDb,
   documentRevisions,
@@ -30,6 +34,7 @@ import {
   issues,
   projects,
   projectWorkspaces,
+  principalPermissionGrants,
   workspaceOperations,
 } from "@paperclipai/db";
 import {
@@ -37,9 +42,14 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 import { heartbeatService } from "../services/heartbeat.ts";
 import { noticeMetadataReferencesRecoveryAction } from "../services/recovery/index.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
+import { projectRoutes } from "../routes/projects.js";
+import { errorHandler } from "../middleware/index.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import {
   WORKSPACE_WORKTREE_REQUIRES_PROJECT_CODE,
   WORKSPACE_WORKTREE_REQUIRES_PROJECT_MESSAGE,
@@ -128,6 +138,32 @@ async function runGit(cwd: string, args: string[]) {
 
 async function readGit(cwd: string, args: string[]) {
   return (await execFileAsync("git", args, { cwd })).stdout.trim();
+}
+
+async function seedNativeHuman(db: Db, companyId: string, userId: string) {
+  await db.insert(authUsers).values({ id: userId, name: "Branch fixture owner",
+    email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+  await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+    status: "active", membershipRole: "owner" });
+  await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+    companyId, principalType: "user" as const, principalId: userId, ...grant,
+  })));
+  return seedNativePasskeySession(db, userId);
+}
+
+async function createNativeProject(db: Db, companyId: string, userId: string, sessionId: string,
+  name: string, executionWorkspacePolicy: Record<string, unknown>) {
+  const app = express();
+  app.use(express.json());
+  app.use(((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
+    companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] }; next(); }) as RequestHandler);
+  app.use("/api", projectRoutes(db));
+  app.use(errorHandler);
+  const created = await request(app).post(`/api/companies/${companyId}/projects`).send({ name });
+  if (created.status !== 201) throw new Error(`Canonical Human Project creation failed: ${created.status}`);
+  const updated = await request(app).patch(`/api/projects/${created.body.id}`).send({ executionWorkspacePolicy });
+  if (updated.status !== 200) throw new Error(`Canonical Human Project policy update failed: ${updated.status}`);
+  return created.body.id as string;
 }
 
 async function createGitRepo() {
@@ -305,7 +341,7 @@ async function seedBranchContainmentRun(
   opts: { enableWorkspaceBranchReconcileForward?: boolean } = {},
 ) {
   const companyId = randomUUID();
-  const projectId = randomUUID();
+  let projectId: string;
   const projectWorkspaceId = randomUUID();
   const agentId = randomUUID();
   const runId = randomUUID();
@@ -315,6 +351,7 @@ async function seedBranchContainmentRun(
   const otherWorkspaceSiblingId = randomUUID();
   const sourceExecutionWorkspaceId = randomUUID();
   const otherExecutionWorkspaceId = randomUUID();
+  const responsibleUserId = randomUUID();
   const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
   const sourceIdentifier = `${issuePrefix}-1`;
   const sameSiblingIdentifier = `${issuePrefix}-2`;
@@ -333,16 +370,12 @@ async function seedBranchContainmentRun(
     name: "Acme",
     issuePrefix,
     status: "active",
-    defaultResponsibleUserId: "responsible-user",
+    defaultResponsibleUserId: responsibleUserId,
     createdAt: now,
     updatedAt: now,
   });
-  await db.insert(projects).values({
-    id: projectId,
-    companyId,
-    name: "Branch containment",
-    status: "active",
-    executionWorkspacePolicy: {
+  const humanSessionId = await seedNativeHuman(db, companyId, responsibleUserId);
+  projectId = await createNativeProject(db, companyId, responsibleUserId, humanSessionId, "Branch containment", {
       enabled: true,
       defaultMode: "isolated_workspace",
       workspaceStrategy: {
@@ -350,9 +383,6 @@ async function seedBranchContainmentRun(
         baseRef: "HEAD",
         branchTemplate: "{{issue.identifier}}-recorded",
       },
-    },
-    createdAt: now,
-    updatedAt: now,
   });
   await db.insert(projectWorkspaces).values({
     id: projectWorkspaceId,
@@ -468,7 +498,7 @@ async function seedBranchContainmentRun(
       taskId: sourceIssueId,
       wakeReason: "issue_assigned",
     },
-    responsibleUserId: "responsible-user",
+    responsibleUserId,
     createdAt: now,
     updatedAt: now,
   });
@@ -488,7 +518,7 @@ async function seedBranchContainmentRun(
       executionRunId: runId,
       executionAgentNameKey: "codexcoder",
       executionLockedAt: now,
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       issueNumber: 1,
       identifier: sourceIdentifier,
       executionWorkspaceId: callSite === "fresh_realize" ? sourceExecutionWorkspaceId : callSite === "persisted_restore" ? sourceExecutionWorkspaceId : null,
@@ -514,7 +544,7 @@ async function seedBranchContainmentRun(
       executionRunId: runId,
       executionAgentNameKey: "codexcoder",
       executionLockedAt: now,
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       issueNumber: 2,
       identifier: sameSiblingIdentifier,
       executionWorkspaceId: callSite === "finalize" ? null : sourceExecutionWorkspaceId,
@@ -540,7 +570,7 @@ async function seedBranchContainmentRun(
       executionRunId: runId,
       executionAgentNameKey: "codexcoder",
       executionLockedAt: now,
-      responsibleUserId: "responsible-user",
+      responsibleUserId,
       issueNumber: 3,
       identifier: otherSiblingIdentifier,
       executionWorkspaceId: otherExecutionWorkspaceId,
@@ -868,8 +898,10 @@ describeEmbeddedPostgres("heartbeat workspace branch containment", () => {
   let db!: Db;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const tempRoots: string[] = [];
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-branch-containment-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
@@ -919,12 +951,16 @@ describeEmbeddedPostgres("heartbeat workspace branch containment", () => {
     await db.delete(executionWorkspaces);
     await db.delete(environments);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
     await db.$client.end();
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   }, 60_000);
 
   it("blocks projectless isolated git-worktree issues before dispatch", async () => {

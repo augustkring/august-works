@@ -5,10 +5,60 @@ on:
       - 'doc/experience/v9/**'
       - 'evals/aw-v9/**'
       - 'packages/shared/src/**'
+      - 'packages/teams-catalog/generated/catalog.json'
+      - 'packages/skills-catalog/generated/catalog.json'
+      - 'skills-releases/blentera-platform/**'
+      - 'evals/platform-skill/**'
+      - 'AGENTS.md'
+      - '**/AGENTS.md'
+      - 'doc/operations/platform-skill-migration-register.json'
+      - 'packages/db/src/client.ts'
+      - 'packages/db/src/migrations/0554_company_import_fenced_effects.sql'
+      - 'packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql'
+      - 'packages/db/src/migrations/**'
+      - 'doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/**'
+      - 'scripts/check-v10-169-migration-phase-register.mjs'
+      - 'scripts/check-v10-169-migration-phase-register.test.mjs'
+      - 'scripts/lib/v10-169-migration-phase-register.mjs'
       - 'server/src/**'
+      - 'server/src/services/company-import-jobs.ts'
       - 'ui/src/**'
       - 'doc/reference/aw-v9/brief/**'
       - 'scripts/check-aw-v9-coverage.mjs'
+      - 'scripts/platform-skill-operating-knowledge.mjs'
+      - 'scripts/check-platform-skill-operating-knowledge.mjs'
+      - 'scripts/platform-skill-operating-knowledge.test.mjs'
+      - 'scripts/platform-skill-migration-register.mjs'
+      - 'scripts/platform-skill-migration-register.test.mjs'
+      - 'scripts/run-platform-skill-runtime-conformance.mjs'
+      - 'scripts/platform-skill-runtime-conformance.test.mjs'
+      - 'evals/platform-skill/runtime-conformance.json'
+      - 'evals/platform-skill/runtime-conformance.md'
+      - 'packages/adapter-utils/src/platform-skill.ts'
+      - 'packages/adapters/openclaw-gateway/**'
+      - 'packages/adapters/hermes/**'
+      - 'skills/paperclip/**'
+      - 'scripts/run-platform-skill-evals.mjs'
+      - 'scripts/check-aw-v10-operation-coverage.mjs'
+      - 'scripts/aw-v10-operation-coverage.mjs'
+      - 'scripts/check-aw-v10-operation-coverage.test.mjs'
+      - 'doc/operations/agent-native-ui-operation-coverage.json'
+      - 'package.json'
+      - 'doc/operations/v10-capability-projection.json'
+      - 'doc/operations/v10-security-fast-path.json'
+      - 'doc/operations/v10-safe-change-graph.json'
+      - 'doc/operations/v10-safe-change-graph.source.json'
+      - 'scripts/generate-v10-capability-projection.ts'
+      - 'scripts/check-v10-capability-projection.mjs'
+      - 'scripts/check-v10-security-fast-path.mjs'
+      - 'scripts/check-v10-security-fast-path.test.mjs'
+      - 'scripts/check-v10-security-regression-execution.mjs'
+      - 'scripts/check-v10-security-regression-execution.test.mjs'
+      - 'scripts/generate-v10-safe-change-graph.mjs'
+      - 'scripts/check-v10-safe-change-graph.mjs'
+      - 'scripts/v10-product-artifacts.test.mjs'
+      - 'packages/db/src/migration-transaction-budget.test.ts'
+      - 'server/src/services/agent-native-operation-manifest.ts'
       - 'scripts/aw-v9-release-prerequisites.mjs'
       - 'scripts/__tests__/aw-v9-release-prerequisites.test.mjs'
       - 'evals/aw-v7/pilot-readiness.json'
@@ -35,11 +85,43 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '24'
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+          run_install: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: node scripts/check-aw-v9-coverage.mjs
+      - name: Test Operating Knowledge coverage and field-regression gate
+        run: node --test scripts/platform-skill-operating-knowledge.test.mjs
+      - name: Check legacy Platform Skill migration register
+        run: pnpm run check:platform-skill-migration-register
+      - name: Test Platform Skill migration register source coverage
+        run: pnpm run test:platform-skill-migration-register
+      - name: Test cross-runtime conformance contract and report parser
+        run: pnpm run test:platform-skill-runtime-conformance
+      - name: Check runtime conformance source pins without running providers
+        run: pnpm run check:platform-skill-runtime-conformance
+      - name: Test fail-closed V10 coverage inventory
+        run: node --test scripts/check-aw-v10-operation-coverage.test.mjs
+      - name: Check V10-169 migration phase source coverage
+        run: pnpm run check:v10-169-migration-phases
+      - name: Test V10-169 migration phase fail-closed guard
+        run: pnpm run test:v10-169-migration-phases
+      - name: Verify generated V10 capability projection
+        run: node scripts/check-v10-capability-projection.mjs
+      - name: Verify V10 security fast-path selectors
+        run: node scripts/check-v10-security-fast-path.mjs
+      - name: Test V10 security selector execution guard
+        run: node --test scripts/check-v10-security-regression-execution.test.mjs
+      - name: Verify V10 Safe Change graph
+        run: node scripts/check-v10-safe-change-graph.mjs
+      - name: Test V10 security and product artifacts
+        run: node --test scripts/check-v10-security-fast-path.test.mjs scripts/v10-product-artifacts.test.mjs
       - name: Verify inherited release blockers cannot be bypassed
         run: node --test scripts/__tests__/aw-v9-release-prerequisites.test.mjs
       - name: Check frozen pilot and attention samples with private artifact validation

@@ -5,6 +5,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { and, asc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -13,7 +15,9 @@ import {
   agentTaskSessions,
   agentWakeupRequests,
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   companySkills,
   createDb,
   documentRevisions,
@@ -28,6 +32,7 @@ import {
   issuePlanDecompositions,
   issues,
   projects,
+  principalPermissionGrants,
   projectWorkspaces,
   workspaceOperations,
 } from "@paperclipai/db";
@@ -38,6 +43,11 @@ import {
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
 import { heartbeatService } from "../services/heartbeat.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
+import { projectRoutes } from "../routes/projects.js";
+import { errorHandler } from "../middleware/index.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -133,6 +143,29 @@ async function deleteHeartbeatRowsAfterActivityLogDrains(db: Db) {
   throw lastError;
 }
 
+async function seedNativeHuman(db: Db, companyId: string, userId: string) {
+  await db.insert(authUsers).values({ id: userId, name: "Finalization fixture owner",
+    email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+  await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+    status: "active", membershipRole: "owner" });
+  await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+    companyId, principalType: "user" as const, principalId: userId, ...grant,
+  })));
+  return seedNativePasskeySession(db, userId);
+}
+
+async function createNativeProject(db: Db, companyId: string, userId: string, sessionId: string, name: string) {
+  const app = express();
+  app.use(express.json());
+  app.use(((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
+    companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] }; next(); }) as RequestHandler);
+  app.use("/api", projectRoutes(db));
+  app.use(errorHandler);
+  const created = await request(app).post(`/api/companies/${companyId}/projects`).send({ name });
+  if (created.status !== 201) throw new Error(`Canonical Human Project creation failed: ${created.status}`);
+  return created.body.id as string;
+}
+
 function readAdapterWorkspace(input: unknown) {
   const context = (input as { context?: Record<string, unknown> }).context ?? {};
   const workspace = context.paperclipWorkspace as Record<string, unknown> | undefined;
@@ -148,10 +181,11 @@ function readAdapterWorkspace(input: unknown) {
 
 async function seedRunTarget(db: Db, repoRoot: string) {
   const companyId = randomUUID();
-  const projectId = randomUUID();
+  let projectId: string;
   const projectWorkspaceId = randomUUID();
   const issueId = randomUUID();
   const agentId = randomUUID();
+  const responsibleUserId = randomUUID();
 
   await instanceSettingsService(db).updateExperimental({
     enableIsolatedWorkspaces: true,
@@ -161,18 +195,12 @@ async function seedRunTarget(db: Db, repoRoot: string) {
     name: "Acme",
     issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
     status: "active",
-    defaultResponsibleUserId: "responsible-user",
+    defaultResponsibleUserId: responsibleUserId,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
-  await db.insert(projects).values({
-    id: projectId,
-    companyId,
-    name: "Workspace Finalize Branch Guard",
-    status: "active",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  const humanSessionId = await seedNativeHuman(db, companyId, responsibleUserId);
+  projectId = await createNativeProject(db, companyId, responsibleUserId, humanSessionId, "Workspace Finalize Branch Guard");
   await db.insert(projectWorkspaces).values({
     id: projectWorkspaceId,
     companyId,
@@ -211,6 +239,7 @@ async function seedRunTarget(db: Db, repoRoot: string) {
     workMode: "standard",
     priority: "medium",
     assigneeAgentId: agentId,
+    responsibleUserId,
     identifier: `PAP-${issueId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
     executionWorkspaceSettings: {
       mode: "isolated_workspace",
@@ -260,8 +289,10 @@ describeEmbeddedPostgres("heartbeat workspace finalization branch guard", () => 
   let db!: Db;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const tempRoots: string[] = [];
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-finalize-branch-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
@@ -306,12 +337,16 @@ describeEmbeddedPostgres("heartbeat workspace finalization branch guard", () => 
     await db.delete(executionWorkspaces);
     await db.delete(environments);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
     await db.$client.end();
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   }, 60_000);
 
   it("repairs clean unrecorded branch drift before recording workspace finalization", async () => {

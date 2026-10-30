@@ -1,0 +1,3 @@
+824483c42ed16c30adb246991d0472978d94c81761d3c202c084a8f90b14c57b  ui/src/components/new-agent/NewAgentSetup.tsx
+170ff8da5b3292eb72166ad7de15494841d05c6ce304245e65d29219637e3b35  ui/src/pages/InstanceExperimentalSettings.tsx
+c47d33bffdfcb0ad9e67fb3daa80e3fae6de4d195c70c8150bec88ff631aa583  ui/src/pages/InstanceExperimentalSettings.test.tsx

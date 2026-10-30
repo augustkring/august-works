@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v9-routine-authoring.integration.test.ts (24 tests | 1 failed | 23 skipped) 19681ms
+     × rejects reclassifying the actual private conversation source as manual or another origin 1664ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v9-routine-authoring.integration.test.ts > Conversation routine drafts use the Original owner without execution authority > rejects reclassifying the actual private conversation source as manual or another origin
+AssertionError: promise resolved "[]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[]
+
+ ❯ src/__tests__/v9-routine-authoring.integration.test.ts:77:91
+     75|     for (const patch of [{ originKind: "manual" }, { originId: randomU…
+     76|       { originKind: "manual", originId: null }]) {
+     77|       await expect(db.update(routines).set(patch).where(eq(routines.id…
+       |                                                                                           ^
+     78|         .rejects.toMatchObject({ cause: { code: "23514" } });
+     79|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 23 skipped (24)
+   Start at  15:46:14
+   Duration  84.38s (transform 46.10s, setup 320ms, import 63.90s, tests 19.68s, environment 0ms)
+

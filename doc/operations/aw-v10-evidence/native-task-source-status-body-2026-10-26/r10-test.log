@@ -1,0 +1,28 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/context/context-engine-integration.test.ts (10 tests | 1 failed | 9 skipped) 4431ms
+     × preserves an original Human Task source across status changes and rejects it after a canonical body edit 484ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/context/context-engine-integration.test.ts > Context Engine integration > preserves an original Human Task source across status changes and rejects it after a canonical body edit
+Error: in_progress issues require an assignee
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ Object.update src/services/issues.ts:11561:15
+ ❯ src/services/context/context-engine-integration.test.ts:773:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  10:53:51
+   Duration  18.94s (transform 10.16s, setup 75ms, import 14.29s, tests 4.43s, environment 0ms)
+

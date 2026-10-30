@@ -5,6 +5,8 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Costs } from "./Costs";
+import { useCostFormatting } from "../hooks/useCostFormatting";
+import { i18n } from "../i18n";
 
 const budgetOverviewMock = vi.hoisted(() => vi.fn());
 const setBreadcrumbsMock = vi.hoisted(() => vi.fn());
@@ -22,6 +24,15 @@ const costsApiMocks = vi.hoisted(() => ({
   windowSpend: vi.fn(),
   quotaWindows: vi.fn(),
 }));
+
+function CostFormattingProbe() {
+  const formatCost = useCostFormatting();
+  return <div>
+    <span data-testid="reported-zero">{formatCost(0, 0)}</span>
+    <span data-testid="unpriced-zero">{formatCost(0, 1)}</span>
+    <span data-testid="mixed">{formatCost(125, 2)}</span>
+  </div>;
+}
 
 vi.mock("../api/budgets", () => ({
   budgetsApi: {
@@ -88,5 +99,60 @@ describe("Costs embedded Audit surfaces", () => {
     expect(container.querySelector('[role="tab"]')).toBeFalsy();
     expect(setBreadcrumbsMock).not.toHaveBeenCalled();
     for (const mock of Object.values(costsApiMocks)) expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("localizes the difference between recorded zero, unknown price, and partial recorded spend", async () => {
+    root = createRoot(container);
+    await act(async () => {
+      await i18n.changeLanguage("en");
+      root.render(<CostFormattingProbe />);
+    });
+    expect(container.querySelector('[data-testid="reported-zero"]')?.textContent).toBe("$0.00");
+    expect(container.querySelector('[data-testid="unpriced-zero"]')?.textContent).toBe("Price unknown for 1 usage event");
+    expect(container.querySelector('[data-testid="mixed"]')?.textContent).toBe("$1.25 + 2 unpriced usage events");
+
+    await act(async () => {
+      await i18n.changeLanguage("da");
+    });
+    expect(container.querySelector('[data-testid="reported-zero"]')?.textContent).toBe("$0.00");
+    expect(container.querySelector('[data-testid="unpriced-zero"]')?.textContent).toBe("Pris ukendt for 1 forbrugshændelse");
+    expect(container.querySelector('[data-testid="mixed"]')?.textContent).toBe("$1.25 + 2 forbrugshændelser uden pris");
+    await act(async () => { await i18n.changeLanguage("en"); });
+  });
+
+  it("renders the successful-run provider cost only when event coverage supports it", async () => {
+    costsApiMocks.summary.mockResolvedValue({
+      companyId: "company-1", spendCents: 400, unpricedEventCount: 0,
+      budgetCents: 0, utilizationPercent: 0,
+      successfulRunCount: 2, successfulRunsWithCostEvents: 2,
+      successfulRunsWithoutCostEvents: 0, successfulRunProviderCostCents: 400,
+      successfulRunEstimatedEventCount: 0, successfulRunUnpricedEventCount: 0,
+      providerCostPerSuccessfulRunCoverage: "recorded_events_only",
+      providerCostPerSuccessfulRunCents: 200,
+      providerCostPerSuccessfulRunStatus: "reported_events",
+    });
+    costsApiMocks.byAgent.mockResolvedValue([]);
+    costsApiMocks.byProject.mockResolvedValue([]);
+    costsApiMocks.byAgentModel.mockResolvedValue([]);
+    costsApiMocks.financeSummary.mockResolvedValue({ netCents: 0, debitCents: 0, creditCents: 0, estimatedDebitCents: 0, eventCount: 0 });
+    costsApiMocks.financeByBiller.mockResolvedValue([]);
+    costsApiMocks.financeByKind.mockResolvedValue([]);
+    costsApiMocks.financeEvents.mockResolvedValue([]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    root = createRoot(container);
+    await act(async () => {
+      await i18n.changeLanguage("en");
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Costs />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(container.textContent).toContain("$2.00"));
+    });
+    expect(container.textContent).toContain("Recorded provider event cost per successful run");
+    expect(container.textContent).toContain("Recorded provider events across 2 successful runs; event capture completeness is not established.");
+    expect(container.textContent).toContain("not total cost to serve");
   });
 });

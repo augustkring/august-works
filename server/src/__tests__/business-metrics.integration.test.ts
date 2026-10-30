@@ -1,3 +1,8 @@
+import express from "express";
+import request from "supertest";
+import { actorMiddleware } from "../middleware/auth.js";
+import { errorHandler } from "../middleware/index.js";
+import { projectRoutes } from "../routes/projects.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -71,9 +76,17 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental(flags);
-    companyId = randomUUID(); otherCompanyId = randomUUID(); projectId = randomUUID();
+    companyId = randomUUID(); otherCompanyId = randomUUID();
     await db.insert(companies).values([{ id: companyId, name: "Metric test", issuePrefix: randomUUID() }, { id: otherCompanyId, name: "Other metric test", issuePrefix: randomUUID() }]);
-    await db.insert(projects).values({ id: projectId, companyId, name: "Source project" });
+    // The canonical Board route owns qualification; a raw historical row is unknown.
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const createdProject = await request(app).post(`/api/companies/${companyId}/projects`)
+      .send({ name: "Source project" }).expect(201);
+    projectId = createdProject.body.id;
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, analyticalPurpose())).id;
   });
   const service = () => businessMetricService(db);
@@ -388,7 +401,7 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
       await restored.insert(analyticalLineageEdges).values(backup.edges);
       await restored.insert(businessMetricObservations).values(backup.observations);
       const marker = { company_id: guard.companyId, input_type: guard.inputType, input_ref: guard.inputRef, suppressed_at: guard.suppressedAt.toISOString() };
-      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], feedback: [], analyticalSources: [marker, marker,
+      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], feedback: [], supportCases: [], analyticalSources: [marker, marker,
         { ...marker, company_id: otherCompanyId }, { ...marker, company_id: randomUUID() }] });
       await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
       expect((await instanceSettingsService(restored).getExperimental()).business_metrics_v8).toBe(false);

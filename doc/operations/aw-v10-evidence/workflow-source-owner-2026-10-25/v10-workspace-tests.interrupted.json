@@ -1,0 +1,8 @@
+{
+  "stoppedAt": "2026-10-25T07:16:28.098395+00:00",
+  "reason": "Diagnostic run started on22b97a442 with concurrently changing source; stopped after broad failure inventory to remove competing resource use before bounded throughput tests. Not final acceptance.",
+  "signal": "SIGINT",
+  "processGroup": 316927,
+  "observedWrapperExitCode": 0,
+  "acceptanceStatus": "interrupted; wrapper zero is not a passing test result"
+}

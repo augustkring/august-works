@@ -1,0 +1,26 @@
+[
+  {
+    "file": "current-server-metric-r18-20261026-source-pins.json",
+    "sha256": "5710d8a4b423c66abf747a6004a7f11aadb42cb4f75291a50d6c55936e28c93f"
+  },
+  {
+    "file": "current-server-metric-r18-20261026-tsc.exit",
+    "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  },
+  {
+    "file": "current-server-metric-r18-20261026-snapshot.log",
+    "sha256": "423ea28064940d7cf532b8982effcdb99afb26e18f099de2888459df9f2dbc33"
+  },
+  {
+    "file": "current-server-metric-r18-20261026-test.log",
+    "sha256": "5d86ed5e789b67ed858680a0cfa4136dfa77d8ab8f3810378d04d4b683fa7145"
+  },
+  {
+    "file": "current-server-metric-r18-20261026-tsc.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "file": "current-server-metric-r18-20261026-test.exit",
+    "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+  }
+]

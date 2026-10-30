@@ -1,0 +1,1 @@
+timeout_seconds=240ntest_file=src/__tests__/legacy-finalization-regression.test.tsntest_pattern=executes a flag-off heartbeat through the legacy adapter with byte-stable reads and zero native rowsn

@@ -1,0 +1,210 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "6d2f07e6b154bb6b9f0ae47965d947aaaeae6404",
+  "meaning": "Current Human nonexecution inspection uses original native authority; no fabricated Run/manifest. Full current readiness9PASS with actual Agent native Run positive/missing-Run denial; final-source rollback emits no event. Native runtime actual-run control1PASS. Earlier failed fixture/compiler runs retained; no full V10 or full server pass.",
+  "logs": [
+    {
+      "name": "readiness-human-pointer-full",
+      "exitCode": 1,
+      "rawSha256": "5c67cadf292621cc7117a2e0f2b6ef8289bd10a1972858d3b613cdfba976b317",
+      "sanitizedSha256": "5c67cadf292621cc7117a2e0f2b6ef8289bd10a1972858d3b613cdfba976b317",
+      "archiveSha256": "8e20d5adb8bdb0692c3318de192fe9752f8e9d3dce76051b1742351ec6fbedc6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 6 passed (7)",
+        "Duration  18.32s (transform 9.17s, setup 75ms, import 13.11s, tests 5.02s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-human-pointer-full-rerun",
+      "exitCode": 0,
+      "rawSha256": "a89f170d1ffc710774dca41e3fa0be851bd97a60fe25ff93326b04709ac105f8",
+      "sanitizedSha256": "a89f170d1ffc710774dca41e3fa0be851bd97a60fe25ff93326b04709ac105f8",
+      "archiveSha256": "840642ee289fac22ae59edffc92b659d7e20ab8f6afc945ba005ed2ae7e608fa",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed (7)",
+        "Duration  17.13s (transform 8.58s, setup 70ms, import 12.33s, tests 4.62s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-human-pointer-erasure-matrix",
+      "exitCode": 0,
+      "rawSha256": "aab8ca54dfd6e2d8f9085d566962371051ec142471fafb75e1df86cc03dec705",
+      "sanitizedSha256": "aab8ca54dfd6e2d8f9085d566962371051ec142471fafb75e1df86cc03dec705",
+      "archiveSha256": "f6b589da08bca4c23f3f875b173df9338fb94940a849b19ea78beb9d1b5c6c02",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed (7)",
+        "Duration  18.74s (transform 9.24s, setup 73ms, import 13.32s, tests 5.22s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-human-postcommit-final",
+      "exitCode": 0,
+      "rawSha256": "65b28771c6a8862cac2511f2f653a4d324840fd58151a188f0e3e9d6d37ff75f",
+      "sanitizedSha256": "65b28771c6a8862cac2511f2f653a4d324840fd58151a188f0e3e9d6d37ff75f",
+      "archiveSha256": "2abf1898b23e36a5a055c5b535a2435f7c817e428a9b09920fdab0922044e335",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  7 passed (7)",
+        "Duration  17.67s (transform 8.81s, setup 69ms, import 12.59s, tests 4.89s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-postcommit-recheck-exact-final",
+      "exitCode": 0,
+      "rawSha256": "0ef7233f868e468652c88bf7501eb422fc65a302df646ec69a492e16b0258e7e",
+      "sanitizedSha256": "0ef7233f868e468652c88bf7501eb422fc65a302df646ec69a492e16b0258e7e",
+      "archiveSha256": "75137200508f295809c7561323b3d0a3e4445cd93ecf3fd9011f8db3a5988fb9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  8 passed (8)",
+        "Duration  18.92s (transform 9.06s, setup 77ms, import 12.91s, tests 5.80s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-agent-run-final",
+      "exitCode": 0,
+      "rawSha256": "a69b4c79685f5ccddea34f359c87ac5dd04dc97d767a1e09071235b574d04121",
+      "sanitizedSha256": "a69b4c79685f5ccddea34f359c87ac5dd04dc97d767a1e09071235b574d04121",
+      "archiveSha256": "bbb1cdeac5149a694eb848191e98544cced156b5e313452f2df6c43db7b296b5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed (9)",
+        "Duration  22.04s (transform 10.97s, setup 91ms, import 15.32s, tests 6.48s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-runtime-actual-run-control",
+      "exitCode": 0,
+      "rawSha256": "f1325999dc09e266ba0288992e2872313e1b36e465a2938825e7b090ba560384",
+      "sanitizedSha256": "ac632169eb18fb6440e62c0023856037654f5f26b37e4bb5cce88d8d1e4e8dbd",
+      "archiveSha256": "0112f849dc903f6d64b3a2f236da75c625006ddce9333d3544086768cf2d3f6d",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 41 skipped (42)",
+        "Duration  22.12s (transform 9.15s, setup 69ms, import 13.01s, tests 8.94s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-human-root-typecheck",
+      "exitCode": 1,
+      "rawSha256": "d6af7f3a694fef7ffc83a136af029bcebbef62a064ab1f43b0574a01a613267c",
+      "sanitizedSha256": "d6af7f3a694fef7ffc83a136af029bcebbef62a064ab1f43b0574a01a613267c",
+      "archiveSha256": "044d63712b9272452425add6f66e3c8ca7cff4edd0b268bba1ed484606f1c6e1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "readiness-human-root-typecheck-final",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "readiness-package-full-current",
+      "exitCode": 1,
+      "rawSha256": "deea2f7a1a5f46a341f3147b87cd3a0eb0f6ad7fa2847bb24a73b24502c7284f",
+      "sanitizedSha256": "deea2f7a1a5f46a341f3147b87cd3a0eb0f6ad7fa2847bb24a73b24502c7284f",
+      "archiveSha256": "7010a288389b30faba9feb62e07767c4262050e472b4b6e8d94a7fcdd704e6ed",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 9 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  9 failed | 106 passed (115)",
+        "Duration  72.03s (transform 11.78s, setup 87ms, import 16.25s, tests 55.58s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-package-agent-carrier-current",
+      "exitCode": 0,
+      "rawSha256": "b3e5e14f9defc3de0cd8162a8c031a6a0fc68cc9dfc8dcdad023a85024712119",
+      "sanitizedSha256": "b3e5e14f9defc3de0cd8162a8c031a6a0fc68cc9dfc8dcdad023a85024712119",
+      "archiveSha256": "d9077f89eb125c74add3bf13681a3142b701b74e871f6ac7dc3a9179a3b74ddb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 114 skipped (115)",
+        "Duration  24.20s (transform 11.69s, setup 75ms, import 16.23s, tests 7.78s, environment 0ms)"
+      ]
+    }
+  ]
+}

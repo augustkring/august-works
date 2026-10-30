@@ -1,0 +1,33 @@
+{
+  "parentCommit": "ea7128e373da724391dc3277ecc5d90d71f711d3",
+  "requirements": [
+    "CE-03",
+    "CE-04",
+    "V10-166"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "nativeFleetCostsOperator": {
+      "exit": 0,
+      "suites": 3,
+      "passed": 14
+    },
+    "serverCompiler": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "Human host create/drain/fence/retire services require actual native configured recent passkey proof before provider availability, in the original write transaction and before successful/null returns. SaaS routes retain actual actor provenance.",
+    "Only the exact server-side scheduler argument chooses the existing nonhuman lane. An actor object whose user ID equals runtime-scheduler cannot select it; drain is human-only. Existing scale/liveness/offboarding code keeps its explicit original calls.",
+    "Native tests refuse missing, password, Board-key and wrong-principal proof before durable host/provider-operation writes, exercise successful human drain and preserve create ceilings, one ambiguous provider create, ownership fencing and storage-retirement evidence. Original automatic cost/inventory/EUR ceilings still pass.",
+    "Provider APIs use an owned fixture. Actual PostgreSQL proof rows are structural, not WebAuthn/cookie ceremonies. No external provider spending or physical host is qualified."
+  ],
+  "compatibility": [
+    "No migration or dependency change. Human internal callers now pass AuthorizationActor; only existing scheduler callers use the exact scheduler argument. Original provider worker and unknown-outcome code is unchanged."
+  ],
+  "limits": [
+    "Complete durable admission provenance, later provider dispatch/current-operation authority and receipt reconciliation qualification remain open; creator ID is attribution, not fresh authentication.",
+    "Sandbox host-command admission, other powerful-action/operator recovery/bootstrap owners and original Context/Memory/privacy/typed-origin/portability failures remain open.",
+    "Full V10 acceptance and latest complete workspace gates remain required. No PR-ready or release/production claim."
+  ]
+}

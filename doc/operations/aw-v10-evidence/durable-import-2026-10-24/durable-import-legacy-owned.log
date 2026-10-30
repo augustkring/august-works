@@ -1,0 +1,100 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:06:25] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-abfed3ec-d1f8-4bfa-93e2-ea12315c6601"}[39m
+[20:06:25] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-dcc65612-b7a9-4af8-bb63-9b1cadb5919e"}[39m
+ ❯ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts (44 tests | 5 failed) 44644ms
+     × accepts trusted Cloud async import jobs and reports success by job id 107ms
+     × reports trusted Cloud async import job failures with the tenant error message 278ms
+     × fails a board async import job when the bundle import throws 269ms
+     × forwards pauseAutomations from CEO-safe import apply bodies to the portability service 39ms
+     × keeps a board import synchronous when neither async signal is present 30013ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > accepts trusted Cloud async import jobs and reports success by job id
+AssertionError: expected 200 to be 404 // Object.is equality
+
+- Expected
++ Received
+
+- 404
++ 200
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1080:30
+    1078|     try {
+    1079|       const expired = await request(app).get(accepted.body.statusUrl).…
+    1080|       expect(expired.status).toBe(404);
+       |                              ^
+    1081|       expect(expired.body.error).toBe("Import job not found");
+    1082|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > reports trusted Cloud async import job failures with the tenant error message
+Error: Timed out waiting for import job to reach failed
+ ❯ waitForImportJobStatus src/__tests__/company-portability-routes.test.ts:205:9
+    203|     await new Promise((resolve) => setTimeout(resolve, 10));
+    204|   }
+    205|   throw new Error(`Timed out waiting for import job to reach ${status}…
+       |         ^
+    206| }
+    207|
+ ❯ src/__tests__/company-portability-routes.test.ts:1098:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > fails a board async import job when the bundle import throws
+Error: Timed out waiting for import job to reach failed
+ ❯ waitForImportJobStatusAs src/__tests__/company-portability-routes.test.ts:269:9
+    267|     await new Promise((resolve) => setTimeout(resolve, 10));
+    268|   }
+    269|   throw new Error(`Timed out waiting for import job to reach ${status}…
+       |         ^
+    270| }
+    271|
+ ❯ src/__tests__/company-portability-routes.test.ts:1313:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > forwards pauseAutomations from CEO-safe import apply bodies to the portability service
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1365:24
+    1363|       .send({ ...importRequest, pauseAutomations: true });
+    1364|
+    1365|     expect(res.status).toBe(200);
+       |                        ^
+    1366|     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalle…
+    1367|       { ...importRequest, pauseAutomations: true },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > keeps a board import synchronous when neither async signal is present
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/company-portability-routes.test.ts:1468:6
+    1466|   });
+    1467|
+    1468|   it.sequential("keeps a board import synchronous when neither async s…
+       |      ^
+    1469|     const app = await createBoardApp();
+    1470|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  5 failed | 47 passed (52)
+   Start at  20:06:08
+   Duration  56.30s (transform 10.96s, setup 124ms, import 5.48s, tests 50.46s, environment 0ms)
+

@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-29",
+  "qualifiedAttempt": "worker-gateway-final67-r2",
+  "result": "PASS: 67/67",
+  "qualifiedFiles": {
+    "server/src/services/orchestration/worker-model-gateway.ts": "30f1f5cfc250fc9331f033a55a47f02ef445cc671a6f9a82a3690af61899b936",
+    "server/src/__tests__/v7-worker-model-gateway.integration.test.ts": "3d6475a909c63d3ecab09bf6d690c80aaee923de36639bf9a243417d92487166",
+    "server/src/services/native-runtime/aw-text-draft-backend.ts": "30f10b6e085b7647c68590034d73fccba555e9450233dd2fd34f854ad2f27e64"
+  },
+  "changeOwnership": [
+    {
+      "file": "server/src/services/orchestration/worker-model-gateway.ts",
+      "hunk": "currentNativeWorkerSourceDispatchBinding and wire callback final lease checks",
+      "owner": "root plus temporal_recovery; root mandatory pre-wire financial/source persistence, temporal_recovery consumed-source component reconstruction; this agent changed only active lease phases to accept observed or running."
+    },
+    {
+      "file": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+      "hunk": "heartbeat MCP fixture, native source closure, Task-source mutation oracle, managed-service source admission",
+      "owner": "shared/root/lifecycle fixture changes; this agent changed the source-admission ordering (platform Skill after retained source closure), canonical in_progress status expectations, and Task-source usage assertion to stable unknown/no-disclosure regardless of watcher timing."
+    }
+  ],
+  "phaseRationale": "Actual scheduler heartbeat rows remain coordinator phase observed while heartbeatRuns.status is running and the finalization lease is live. The former worker predicate admitted only phase running, so both real heartbeat cases failed with zero provider calls. The change admits only observed or running while retaining running heartbeat status and DB-clock-live lease checks.",
+  "diagnosticArtifacts": "worker-gateway-heartbeat-guard-r4-test.log.gz records fixed guard tags, lease phase and duration, and safe failure frames. Temporary diagnostics were removed before the final67 snapshot.",
+  "limitations": "This is the native worker-model gateway integration suite only; it does not qualify provider production access or broader lifecycle suites."
+}

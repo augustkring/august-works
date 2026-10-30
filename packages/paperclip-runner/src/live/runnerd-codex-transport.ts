@@ -3201,11 +3201,30 @@ const OPEN_CODE_RUNNER_ENVIRONMENT_KEYS = new Set([
   "PAPERCLIP_NATIVE_MCP_TOKEN",
 ]);
 
+const MANAGED_OPEN_CODE_ENVIRONMENT_KEYS = [
+  "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+  "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+  "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+] as const;
+
 function createSanitizedOpenCodeRunnerEnvironment(
   source: NodeJS.ProcessEnv | undefined,
 ): NodeJS.ProcessEnv {
-  const candidate = { ...process.env, ...source };
-  return Object.fromEntries(
+  // Heartbeat has already composed the provider's configured values with the
+  // small runner-owned host allowlist. Preserve non-secret host context when
+  // callers provide a partial source, but never reintroduce ambient credentials
+  // such as API keys or MCP bearer tokens into a sandbox exec request.
+  const candidate = { ...(source ?? process.env) };
+  if (source) {
+    for (const key of OPEN_CODE_RUNNER_ENVIRONMENT_KEYS) {
+      if (source[key] !== undefined || /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)) {
+        continue;
+      }
+      const value = process.env[key];
+      if (typeof value === "string") candidate[key] = value;
+    }
+  }
+  const sanitized = Object.fromEntries(
     Object.entries(candidate).filter(
       ([key, value]) =>
         typeof value === "string" &&
@@ -3213,6 +3232,66 @@ function createSanitizedOpenCodeRunnerEnvironment(
           /^LC_[A-Z0-9_]{1,32}$/.test(key)),
     ),
   );
+  // These reserved values are minted by the server from the authenticated model
+  // capability. Never inherit them from the runnerd process environment: the
+  // source must carry one complete, bounded profile tuple.
+  for (const key of MANAGED_OPEN_CODE_ENVIRONMENT_KEYS) delete sanitized[key];
+  const origin = source?.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
+  const inputBound = parseManagedModelBound(
+    source?.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND,
+    1,
+    2_000_000,
+  );
+  const outputBound = parseManagedModelBound(
+    source?.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS,
+    256,
+    8_192,
+  );
+  if (isQualifiedManagedModelOrigin(origin) && inputBound !== null && outputBound !== null) {
+    sanitized.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = origin;
+    sanitized.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = String(inputBound);
+    sanitized.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = String(outputBound);
+  }
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    console.warn("managed_model_runner_environment_diagnostic", {
+      stage: "post_sanitizer",
+      sourceOriginQualified: isQualifiedManagedModelOrigin(origin),
+      sourceInputBoundValid: inputBound !== null,
+      sourceOutputBoundValid: outputBound !== null,
+      outputOriginPresent: typeof sanitized.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string",
+      outputInputBoundPresent: typeof sanitized.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === "string",
+      outputOutputBoundPresent: typeof sanitized.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === "string",
+    });
+  }
+  return sanitized;
+}
+
+function parseManagedModelBound(
+  raw: string | undefined,
+  minimum: number,
+  maximum: number,
+): number | null {
+  if (!raw || !/^(?:0|[1-9][0-9]*)$/.test(raw)) return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= minimum && value <= maximum
+    ? value
+    : null;
+}
+
+function isQualifiedManagedModelOrigin(raw: string | undefined): raw is string {
+  if (!raw || raw.length > 2_048) return false;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "https:" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      parsed.pathname === "/" &&
+      parsed.search === "" &&
+      parsed.hash === "" &&
+      raw === parsed.origin;
+  } catch {
+    return false;
+  }
 }
 
 export function resolveSourceCodexHome(
@@ -6637,6 +6716,10 @@ export const runnerdRecoveryInternals = Object.freeze({
   turnStartCommandResultValid,
   turnStartNotificationDisposition,
   turnStartResponseReady,
+});
+
+export const runnerdEnvironmentInternals = Object.freeze({
+  createSanitizedOpenCodeRunnerEnvironment,
 });
 
 

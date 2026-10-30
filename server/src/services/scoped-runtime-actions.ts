@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { heartbeatRuns, issues, playbookDocuments, type Db } from "@paperclipai/db";
+import { heartbeatRuns, issues, projects, playbookDocuments, toolCatalogEntries, type Db } from "@paperclipai/db";
 import { scopedRuntimeActionSchema } from "@paperclipai/shared";
 import type { z } from "zod";
 import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
@@ -14,6 +14,7 @@ import { budgetService } from "./budgets.js";
 import { projectControlService } from "./project-control.js";
 import { assertV5Authorization } from "./v5-authorization.js";
 import { ToolGatewayHttpError, type ToolGatewayService, type ScopedToolGatewayContext } from "./tool-gateway.js";
+import { hasOrchestrationPlan } from "./orchestration/orchestration-admission.js";
 
 export { scopedRuntimeActionSchema };
 
@@ -27,6 +28,42 @@ export function scopedRuntimeActionService(db: Db, toolGateway?: ToolGatewayServ
       await agentProviderBindingService(db).assertRuntime(companyId, run.agentId);
       const cross = crossCompanyContextService(db), resolved = await cross.resolve(actor, scope), local = resolved.scopes.find((s) => s.companyId === input.companyId);
       if (!local) throw forbidden("Target company is outside this pinned execution scope");
+      const runContext = run.contextSnapshot && typeof run.contextSnapshot === "object" ? run.contextSnapshot : null;
+      const executionIssueId = run.issueId ?? (typeof runContext?.issueId === "string" ? runContext.issueId : null);
+      let gatewayIssueId: string | null = null, gatewayProjectId: string | null = null;
+      if (input.companyId === companyId) {
+        const issueReferences = [run.nativeIssueId, run.issueId,
+          typeof runContext?.issueId === "string" ? runContext.issueId : null]
+          .filter((value): value is string => typeof value === "string" && value.length > 0);
+        const issueId = new Set(issueReferences).size === 1 ? issueReferences[0] : null;
+        if (issueId) {
+          const [task] = await db.select({ id: issues.id, projectId: issues.projectId,
+            responsibleUserId: issues.responsibleUserId, executionRunId: issues.executionRunId,
+            checkoutRunId: issues.checkoutRunId }).from(issues).where(and(
+              eq(issues.companyId, companyId), eq(issues.id, issueId), isNull(issues.hiddenAt), isNull(issues.harnessKind),
+            )).limit(1);
+          const runBound = task && (run.nativeIssueId === task.id || task.executionRunId === run.id || task.checkoutRunId === run.id);
+          if (runBound && task.responsibleUserId === run.responsibleUserId) {
+            gatewayIssueId = task.id;
+            if (task.projectId) {
+              const [project] = await db.select({ id: projects.id }).from(projects).where(and(
+                eq(projects.companyId, companyId), eq(projects.id, task.projectId),
+              )).limit(1);
+              gatewayProjectId = project?.id ?? null;
+            }
+          }
+        } else if (issueReferences.length === 0 && typeof runContext?.projectId === "string") {
+          const [project] = await db.select({ id: projects.id }).from(projects).where(and(
+            eq(projects.companyId, companyId), eq(projects.id, runContext.projectId),
+          )).limit(1);
+          gatewayProjectId = project?.id ?? null;
+        }
+      }
+      const assertBoundedGuestAct = async (accessMode: "read" | "contribute" | "act") => {
+        if (input.companyId !== companyId && accessMode === "act" && await hasOrchestrationPlan(db, companyId, executionIssueId))
+          throw forbidden("Bounded plans cannot dispatch delegated act scope until delegated side-effect and budget receipts are qualified");
+      };
+      await assertBoundedGuestAct(local.accessMode);
       const budgets = budgetService(db);
       if (await budgets.getInvocationBlock(companyId, run.agentId) || await budgets.getInvocationBlock(input.companyId, local.presence.id)) throw forbidden("Current company or agent budget blocks this scoped action");
       let result: unknown, classification = "internal";
@@ -35,14 +72,26 @@ export function scopedRuntimeActionService(db: Db, toolGateway?: ToolGatewayServ
         // Connection output has no general sensitivity contract. Treat it as
         // confidential rather than relabeling an arbitrary upstream response.
         classification = "confidential";
+        const discoveryCatalogEntryIds = input.action === "tool.list"
+          ? record.manifest.capabilities.filter((capability) => capability.type === "tool" &&
+            /^tool:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(capability.ref))
+            .map((capability) => capability.ref.slice("tool:".length))
+          : undefined;
         const context: ScopedToolGatewayContext = {
-          session: { id: randomUUID(), token: "", companyId: input.companyId, agentId: local.presence.id, runId: null, issueId: null, projectId: null, actorType: "agent", actorId: local.presence.id, responsibleUserId: run.responsibleUserId, createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000) },
+          ...(discoveryCatalogEntryIds ? { discoveryCatalogEntryIds } : {}),
+          session: { id: randomUUID(), token: "", companyId: input.companyId, agentId: local.presence.id,
+            runId: input.companyId === companyId ? runId : null,
+            issueId: input.companyId === companyId ? gatewayIssueId : null,
+            projectId: input.companyId === companyId ? gatewayProjectId : null,
+            actorType: "agent", actorId: local.presence.id, responsibleUserId: run.responsibleUserId,
+            createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000) },
           assertCurrent: async (tool) => {
             if (context.session.expiresAt.getTime() <= Date.now()) throw forbidden("Scoped tool request expired");
             const [current] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, run.agentId), eq(heartbeatRuns.status, "running"))).limit(1);
             if (!current || current.responsibleUserId !== actor.onBehalfOfUserId) throw forbidden("Primary execution authority changed");
             const fresh = (await cross.resolve(actor, scope)).scopes.find(entry => entry.companyId === input.companyId);
             if (!fresh) throw forbidden("Target company left this execution scope");
+            await assertBoundedGuestAct(fresh.accessMode);
             if (input.companyId !== companyId && !fresh.policy.allowedSensitivities.includes("confidential")) throw forbidden("Guest policy excludes confidential connection output");
             if (tool && tool.risk !== "read") {
               if (input.companyId !== companyId && fresh.accessMode !== "act") throw forbidden("Guest tool mutations require act scope");
@@ -50,6 +99,19 @@ export function scopedRuntimeActionService(db: Db, toolGateway?: ToolGatewayServ
             }
             await assertV5Authorization(db, fresh.localActor, input.companyId, "tools:use");
             if (await budgets.getInvocationBlock(companyId, run.agentId) || await budgets.getInvocationBlock(input.companyId, fresh.presence.id)) throw forbidden("Current budget blocks this scoped tool");
+          },
+          assertManifestCurrent: async (tool) => {
+            if (!["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType)) return;
+            if (!tool.catalogEntryId || !tool.connectionId)
+              throw forbidden("Connected tool has no pinned catalog identity", { code: "tool_catalog_identity_missing" });
+            const pinned = record.manifest.capabilities.find(capability => capability.type === "tool" && capability.ref === `tool:${tool.catalogEntryId}`);
+            if (!pinned) throw forbidden("Connected tool is outside the pinned execution manifest", { code: "tool_outside_execution_manifest" });
+            const [currentCatalog] = await db.select({ versionHash: toolCatalogEntries.versionHash })
+              .from(toolCatalogEntries).where(and(eq(toolCatalogEntries.companyId, input.companyId),
+                eq(toolCatalogEntries.id, tool.catalogEntryId), eq(toolCatalogEntries.entryKind, "tool"),
+                eq(toolCatalogEntries.status, "active"))).limit(1);
+            if (!currentCatalog || currentCatalog.versionHash !== pinned.versionHash)
+              throw conflict("Pinned tool catalog changed; reconcile and start a newly admitted execution", { code: "tool_catalog_manifest_drift" });
           },
         };
         try {

@@ -1,0 +1,45 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts (48 tests | 4 failed | 16 skipped) 16749ms
+     × serializes concurrent create retries to one effect and rejects changed content on the same key (20) 106ms
+     × serializes concurrent create retries to one effect and rejects changed content on the same key (22) 45ms
+     × serializes concurrent create retries to one effect and rejects changed content on the same key (27) 36ms
+     × serializes concurrent create retries to one effect and rejects changed content on the same key (31) 42ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (20)
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (22)
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (27)
+ FAIL  |@paperclipai/server| src/__tests__/v10-support-cases.integration.test.ts > V10 authenticated support cases > serializes concurrent create retries to one effect and rejects changed content on the same key (31)
+AssertionError: [["23505"]]: expected [ 500, 201 ] to deeply equal [ 201, 201 ]
+
+- Expected
++ Received
+
+  [
+-   201,
++   500,
+    201,
+  ]
+
+ ❯ src/__tests__/v10-support-cases.integration.test.ts:174:64
+    172|     const key = randomUUID();
+    173|     const [a, b] = await Promise.all([create(companyA, "opener", "One …
+    174|     expect([a.status, b.status], JSON.stringify(failureCodes)).toEqual…
+       |                                                                ^
+    175|     expect(a.body.id).toBe(b.body.id);
+    176|     expect(await db.select().from(supportCases).where(eq(supportCases.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 28 passed | 16 skipped (48)
+   Start at  19:41:58
+   Duration  75.63s (transform 38.19s, setup 287ms, import 58.04s, tests 16.75s, environment 0ms)
+

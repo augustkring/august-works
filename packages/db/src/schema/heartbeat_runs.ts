@@ -12,6 +12,7 @@ import {
   boolean,
   unique,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 import { agents } from "./agents.js";
@@ -22,6 +23,13 @@ export const heartbeatRuns = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     agentId: uuid("agent_id").notNull().references(() => agents.id),
+    scopeKind: text("scope_kind").$type<"company" | "issue">().notNull().default("company"),
+    // Retained source identity, including a deleted-source tombstone. Never SET NULL.
+    issueId: uuid("issue_id"),
+    // Native Context identities survive erasure. Qualification is separate:
+    // an empty historical array never proves there were no previous sources.
+    sourceContextManifestIds: uuid("source_context_manifest_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    sourceContextProvenanceQualified: boolean("source_context_provenance_qualified").notNull().default(false),
     invocationSource: text("invocation_source").notNull().default("on_demand"),
     triggerDetail: text("trigger_detail"),
     status: text("status").notNull().default("queued"),
@@ -45,6 +53,9 @@ export const heartbeatRuns = pgTable(
     runtimeModeReason: text("runtime_mode_reason"),
     runtimeModeResolvedAt: timestamp("runtime_mode_resolved_at", { withTimezone: true }),
     runnerProfileJson: jsonb("runner_profile_json").$type<Record<string, unknown>>(),
+    // Insert-only writer capability; never proves input qualification or admission.
+    // Historical and unspecified writers remain protocol 0.
+    nativeInputSourceProtocolVersion: integer("native_input_source_protocol_version").notNull().default(0),
     runnerInstanceId: uuid("runner_instance_id"),
     nativeSessionId: uuid("native_session_id"),
     nativeIssueId: uuid("native_issue_id"),
@@ -70,6 +81,8 @@ export const heartbeatRuns = pgTable(
     controllerBootId: uuid("controller_boot_id"),
     controllerLeaseExpiresAt: timestamp("controller_lease_expires_at", { withTimezone: true }),
     executionStage: text("execution_stage"),
+    // Original server-owned lifecycle projection; null is historical unknown.
+    nativeProcessCleanupPending: boolean("native_process_cleanup_pending"),
     processPid: integer("process_pid"),
     processGroupId: integer("process_group_id"),
     processStartedAt: timestamp("process_started_at", { withTimezone: true }),
@@ -97,6 +110,18 @@ export const heartbeatRuns = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    resourceLocalCleanupIdx: index("heartbeat_runs_resource_local_cleanup_idx").on(table.companyId, table.id)
+      .where(sql`${table.nativeProcessCleanupPending} is true or (${table.nativeProcessCleanupPending} is null and ${table.runtimeMode}='native'
+        and (${table.status}<>'queued' or ${table.startedAt} is not null or ${table.processStartedAt} is not null
+          or ${table.processPid} is not null or ${table.processGroupId} is not null or ${table.nativePhase} is not null
+          or ${table.sessionIdAfter} is not null))`),
+    resourceWorkspaceCleanupIdx: index("heartbeat_runs_resource_workspace_cleanup_idx").on(table.companyId, table.id)
+      .where(sql`${table.runnerProfileJson}->>'nativeWorkspaceFinalizationOwner' is not null`),
+    nativeInputSourceProtocolCheck: check("heartbeat_runs_native_input_source_protocol_check", sql`${table.nativeInputSourceProtocolVersion} in (0,1)`),
+    sourceContextBoundsCheck: check("heartbeat_runs_source_context_bounds_check", sql`cardinality(${table.sourceContextManifestIds}) <= 64
+      and array_position(${table.sourceContextManifestIds},null) is null`),
+    scopeBindingCheck: check("heartbeat_runs_scope_binding_check", sql`(${table.scopeKind} = 'company' and ${table.issueId} is null) or ${table.scopeKind} = 'issue'`),
+    companyIssueCreatedIdx: index("heartbeat_runs_company_issue_created_idx").on(table.companyId, table.issueId, table.createdAt),
     companyIdIdUq: uniqueIndex("heartbeat_runs_company_id_id_uq").on(
       table.companyId,
       table.id,

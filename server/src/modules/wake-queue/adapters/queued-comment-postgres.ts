@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agentWakeupRequests, agents, heartbeatRuns, issueComments, issues } from "@paperclipai/db";
 import type { IssueComment, IssueQueuedCommentQueue } from "@paperclipai/shared";
@@ -48,7 +48,7 @@ function buildTransaction(tx: Db, companyId: string, deps: QueuedCommentQueuePos
     async updateCommentBody({ issueId, commentId, body, updatedAt }) {
       const updated = await tx
         .update(issueComments)
-        .set({ body, updatedAt })
+        .set({ body, updatedAt, payloadSourceSnapshot: sql`case when ${issueComments.body} is distinct from ${body} then null else ${issueComments.payloadSourceSnapshot} end` })
         .where(and(eq(issueComments.id, commentId), eq(issueComments.issueId, issueId), eq(issueComments.companyId, companyId)))
         .returning({ id: issueComments.id })
         .then((rows) => rows[0] ?? null);
@@ -114,6 +114,7 @@ function buildTransaction(tx: Db, companyId: string, deps: QueuedCommentQueuePos
 
     async buildQueueSnapshot({ issue, actor, wake, state, queueRun, activeRun }): Promise<IssueQueuedCommentQueue> {
       const commentIds = queuedCommentIdsFromWakePayload(wake?.payload ?? null);
+      const wait = state === "deferred" ? parseObject(parseObject(wake?.payload).executionWait) : {};
       const rows =
         commentIds.length > 0
           ? await tx
@@ -159,6 +160,9 @@ function buildTransaction(tx: Db, companyId: string, deps: QueuedCommentQueuePos
       return buildQueuedCommentQueueSnapshot({
         issueId: issue.id,
         queueId: wake?.id ?? null,
+        executionWait: typeof wait.reason === "string" && typeof wait.message === "string"
+          ? { reason: wait.reason, message: wait.message }
+          : null,
         state,
         activeRunId: activeRun?.id ?? null,
         protocol: steering.protocol,

@@ -1,5 +1,12 @@
 // GENERATED — DO NOT EDIT.
 
+/**
+ * Blentera delivery contract: these registered event shapes do not authorize
+ * collection or transport. Delivery requires explicit operator enablement and
+ * an explicit destination; no inherited processor or redirect is authorized.
+ * Event names, dimensions and the compatible wire version remain unchanged.
+ */
+
 export interface PaperclipAgentCreatedDimensions {
 agent_id: string
 agent_role: ("ceo" | "cto" | "cmo" | "cfo" | "security" | "engineer" | "designer" | "pm" | "qa" | "devops" | "researcher" | "general" | "other")

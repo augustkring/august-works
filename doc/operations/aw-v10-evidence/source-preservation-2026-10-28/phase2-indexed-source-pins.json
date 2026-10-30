@@ -1,0 +1,294 @@
+{
+  "baseCommit": "bca34e962cfd3f21c829754b3e029359588982be",
+  "disposition": "in_progress_not_release_qualified",
+  "files": [
+    {
+      "path": "packages/db/src/migrations/0561_equal_supernaut.sql",
+      "sha256": "c2a75432c25d39c101c3332fab15b6c40610529a95fbb5c3968a8d4b357eafa8"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0561_snapshot.json",
+      "sha256": "646aca64c50093654144eb1e4ed7964bbe17f6870060205eaede783873cebe1b"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "6d2b7d6084a975a278e55ab86d6bc46de378e4fcaf46f4b9d24b0ae36d2d37d0"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "7dc23ac98dd1bd10395a3915dab249e71697636b087808b93b01433941e1a645"
+    },
+    {
+      "path": "packages/db/src/schema/workflows.ts",
+      "sha256": "6cb14b07252bdb21ec10da98e0d0a6d093cf2c2857bcff51ada7da5ae2e36dfc"
+    },
+    {
+      "path": "packages/shared/src/index.ts",
+      "sha256": "ac25abdc639217f3e7b6a693b73325ecb3d86462e8bfe95f36e597a625d6c137"
+    },
+    {
+      "path": "packages/shared/src/saas-costs.ts",
+      "sha256": "0d994a338c25b97ac749604ae81ae46580f118f8eecb7dff081d4a7b816b2bb1"
+    },
+    {
+      "path": "packages/shared/src/saas-operations.ts",
+      "sha256": "62974dadfdfc745cb24825edd328b96db4ed0cf438500fc41a0034fe618d957e"
+    },
+    {
+      "path": "packages/shared/src/types/access.ts",
+      "sha256": "7c3a9bceab5ed8e96f2a5f496e92003e991b71ef961cd8730e0cfb796a9112c0"
+    },
+    {
+      "path": "packages/shared/src/types/index.ts",
+      "sha256": "2d35f48dce30cd7142af8fd63adac5410cfa774484012f26341f66aae7ac99bd"
+    },
+    {
+      "path": "packages/shared/src/types/workflow.ts",
+      "sha256": "8cf27874f9af87af8ecd29d633d8367159f6313334270a6bcf4606faa8942853"
+    },
+    {
+      "path": "packages/shared/src/validators/access.ts",
+      "sha256": "97071806a7bd7c2182ef898139840aad7608eede7f4418a00e85d388149f2fff"
+    },
+    {
+      "path": "packages/shared/src/validators/index.ts",
+      "sha256": "a6cffd141f93b910ba90532362e0e280b002dc8d08db50672392fd285fbfb982"
+    },
+    {
+      "path": "server/src/__tests__/access-routes-permissions-upgrade.test.ts",
+      "sha256": "a1df4a4077e2b5f5866e15c6376cd5da35859416810116ba4c6ce9cdbd2a27bd"
+    },
+    {
+      "path": "server/src/__tests__/access-service.test.ts",
+      "sha256": "102c04cc913a067917203022df0a11a1474b79b5525143d31a286f8d07956d62"
+    },
+    {
+      "path": "server/src/__tests__/access-validators.test.ts",
+      "sha256": "e819b6d06719b569f251388818c0168dfec758a82d4ea3b95e0d2dc98e4f6a22"
+    },
+    {
+      "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
+      "sha256": "54c3fe5a6e4a705a9673a76651e313cf7e7dcf60b3fb14b889decced06f742a6"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "sha256": "7821731b7d8d468ad3a8279f334f4f6e7add4a48018ab2435d8e44d3d9cd68cb"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
+      "sha256": "d610b44068522526c1a4c68a812a56ceb281ca3be775e85c2fa0561a406fe7e0"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "ed3c121d17c42a632fa5b3975482e6805e62061b963d96abdc9a2a2fa2077f8d"
+    },
+    {
+      "path": "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
+      "sha256": "666902f915e6221fb3a04328831a8302d2d98e2848c39c33f7d74ed91093cccc"
+    },
+    {
+      "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "sha256": "6e483a14bd5c31f25e4c09f2477b551eed422df8919011bff2928a71257a00f1"
+    },
+    {
+      "path": "server/src/__tests__/openapi-routes.test.ts",
+      "sha256": "ae5aba45d2e3424eb6e8c7cbd6fe6aaab4dab4b211a6768a78207cdea13b0f46"
+    },
+    {
+      "path": "server/src/__tests__/v6-costs.integration.test.ts",
+      "sha256": "76591664a3d3b8b1da61f9b6cf0cdb9ea90578e83b9705238fd22d4220b5b908"
+    },
+    {
+      "path": "server/src/__tests__/v6-operator-access.integration.test.ts",
+      "sha256": "eb164bcc9a9f70906852f45c0fa0373c294bffcd94f419533241bb5f0e7a58e3"
+    },
+    {
+      "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+      "sha256": "b7b50e85241b3ea858face7968e3405534dce330124cde1b969e32067beb08d9"
+    },
+    {
+      "path": "server/src/__tests__/workflow-routes.test.ts",
+      "sha256": "6e1fdf1d13f433efa26d3c07df6bc1a7b013f461fa6506dfc22ddea89087b257"
+    },
+    {
+      "path": "server/src/agent-auth-jwt.ts",
+      "sha256": "c4701cea1748c449ef6e249849b6f4dbfdeb744b1371c91fbb86b58840ea55eb"
+    },
+    {
+      "path": "server/src/routes/access.ts",
+      "sha256": "0defa9c46afe25cd31bd3d6e8dff37667defc73e92106afc9090eab9ea799c2f"
+    },
+    {
+      "path": "server/src/routes/openapi.ts",
+      "sha256": "7dc6fc3ea3b3fe97303ab2f6c250506f215fb829eb692594cf42ec89b7b92a8e"
+    },
+    {
+      "path": "server/src/routes/saas.ts",
+      "sha256": "8d464da479416eb38abfe46de00bdb6ed4015dfae6edd6e36a58a1e9d431568f"
+    },
+    {
+      "path": "server/src/routes/v6-api-paths.ts",
+      "sha256": "81c8f7a158ec00289e114c6e6be72904e31d583b736efbd5f79a45124fef2edb"
+    },
+    {
+      "path": "server/src/routes/v9-api-paths.ts",
+      "sha256": "34a7b31f4852666059a807942f854a0ed4fb0a146c9337f0b46f10de85d53b86"
+    },
+    {
+      "path": "server/src/routes/workflows.ts",
+      "sha256": "45117a317a22c78441b7a3f1b0a44104e463f89234329a62a669a5d8a4e63705"
+    },
+    {
+      "path": "server/src/services/access.ts",
+      "sha256": "3fce67c5403920a0aa30533bf7dd4b05cb8bc511e771081a70fb0616e96b35d8"
+    },
+    {
+      "path": "server/src/services/agent-runtime-fabric.ts",
+      "sha256": "a42801d7cf6f558ec14c61bbf6724bd44479025ce46a5be7e5a8c480067cc843"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "b2e8b032f58d2891625011c4c983143fea8635d7bf102db2ee6938baa656079a"
+    },
+    {
+      "path": "server/src/services/analytical-privacy.ts",
+      "sha256": "49cfec3e0ecaa1972dc42c6601c9c8bfb0b9108562f6635da8198e02ec345be3"
+    },
+    {
+      "path": "server/src/services/analytical-purpose.ts",
+      "sha256": "b8da642565d53bac33f592b89efb4ea5d2e6e98a37d013a47fabc4b1c9467777"
+    },
+    {
+      "path": "server/src/services/billing/costs.ts",
+      "sha256": "01279656f6f888825b3bf4d521952414c28e07c59928d4c5b7a67f79b6e5a283"
+    },
+    {
+      "path": "server/src/services/business-metrics/purpose.ts",
+      "sha256": "aff4202a4489fdf1d9bc0516e4f535085e5527805603675a7abf819ef57216ce"
+    },
+    {
+      "path": "server/src/services/business-metrics/service.ts",
+      "sha256": "093901069dee755bc2df1b5115fa592bea3c1792abf6a884a272025b1ed97b32"
+    },
+    {
+      "path": "server/src/services/context/context-manifest.ts",
+      "sha256": "7ac92ec9f5fe0c168f5f2c73e40175e5290bf6065bc172974aabb46fbb4f0a68"
+    },
+    {
+      "path": "server/src/services/enterprise/portability.ts",
+      "sha256": "a3f233d082f11d44863e76e4375de328b6cbecf284edd315946b79c95a102ed0"
+    },
+    {
+      "path": "server/src/services/experience/model-dependency-inventory.test.ts",
+      "sha256": "e78a0508517631ce826d88f12ce16f2ef32949ab7dfc238873901bbe6093cb89"
+    },
+    {
+      "path": "server/src/services/experience/model-dependency-inventory.ts",
+      "sha256": "666c42901efd152c94e2befe07742377dc940cca2ffa66798ce8f5b0178eefc0"
+    },
+    {
+      "path": "server/src/services/heartbeat.ts",
+      "sha256": "04cb530dee420269a1f75d62c9c9e8bd0d21935658c326a4a9d954b1b5fe5341"
+    },
+    {
+      "path": "server/src/services/issues.ts",
+      "sha256": "9fde6c1ca4b69b6b2a7d8040864ad3d23818e57d55e37e6d87b578d69f3fe678"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "3936ab1484a0f40c9bec2ffca68a9179ce68e26f91d1b0c35db36e394d853c89"
+    },
+    {
+      "path": "server/src/services/native-direct-input.ts",
+      "sha256": "ab7be32d72a69222c99593972cd9e7df27136eb9f37399e6eb4ddb16d032cce2"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "sha256": "9d6bef3b8d4ef78fd32833da72150eefc62fe5f0affee5890b94415fe624fa41"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "eb5bd912759bbda41727da7c9dbd68cdd32793e987349499115cfb57cf6ef34b"
+    },
+    {
+      "path": "server/src/services/orchestration/native-tool-boundary.ts",
+      "sha256": "18418f03c4de86f1a4aa69a526a9b3cb95f1b2a11ee5bdd554287a30ea9e8366"
+    },
+    {
+      "path": "server/src/services/orchestration/worker-model-gateway.ts",
+      "sha256": "ab8bea051f2488f315267dfa689bb9e4259e92b9c05d5363e0e6ce7b8bece41f"
+    },
+    {
+      "path": "server/src/services/privacy-lock-diagnostics.ts",
+      "sha256": "0432e98be423495cdd689c97e16d4b1763a416ae0f05ab5a29ab79311bce207c"
+    },
+    {
+      "path": "server/src/services/scoped-runtime-actions.ts",
+      "sha256": "2bb4c0e556c8f679f6f675055b79fb4fde49281e24c47716696d74189285bab2"
+    },
+    {
+      "path": "server/src/services/strategy-execution/references.ts",
+      "sha256": "485f8067fa7be4eb13f561be88852a5fcd51054b0f85fcfa240b60ee30498b7b"
+    },
+    {
+      "path": "server/src/services/workflows/workflow-executor.ts",
+      "sha256": "07aeea242b701ec5e984865e01ab520628cea02088fec93555ab64333d3f604c"
+    },
+    {
+      "path": "tests/e2e/agent-chat-sessions.spec.ts",
+      "sha256": "40288634b218ab56b7f914474b19d70dcebed820e66021a6f319878b2151e384"
+    },
+    {
+      "path": "tests/e2e/aw-v10-agent-chat.config.ts",
+      "sha256": "b97e2ca9eaa616ba21cea2cc8f8542ca09ec7a8993b912e1526e5386e5ef9b4f"
+    },
+    {
+      "path": "ui/src/api/access.ts",
+      "sha256": "2265db6cdb2f32f3e8eacf1f104c48b1cf74b59367a0174bf07c54e9df364312"
+    },
+    {
+      "path": "ui/src/api/saas.ts",
+      "sha256": "ac5c1a4a0aef10d0f10a1ff235b26f271831f8fe10f33a1af7e05a246116dc42"
+    },
+    {
+      "path": "ui/src/api/workflows.ts",
+      "sha256": "ee9505c819c9caef8df121345bc3c9ea398fd8a66fcccb9f1ad85da3c735b30b"
+    },
+    {
+      "path": "ui/src/i18n/experience/da.json",
+      "sha256": "50d74c3021bdde9864576eac1901e6d6878ea52f14879c4fb4ad5da83377020e"
+    },
+    {
+      "path": "ui/src/i18n/experience/en.json",
+      "sha256": "abb8c9b4f8516051ce3bc33a3fe0c097c45ddb48228eb754ad826da6835d8d61"
+    },
+    {
+      "path": "ui/src/lib/queryKeys.ts",
+      "sha256": "e882938f9aa0457f3dd1d8605ba98e7432478b84833e9ba5803de4c28e8e2303"
+    },
+    {
+      "path": "ui/src/pages/CompanyAccess.test.tsx",
+      "sha256": "76ca997f851161ec49202e9e8184e9935b157870bd627aad124c48699a5c6e68"
+    },
+    {
+      "path": "ui/src/pages/CompanyAccess.tsx",
+      "sha256": "d8d6d0a14ee8a02d6946001077cd92076069bb352b8f636bf1fbdc6abd030180"
+    },
+    {
+      "path": "ui/src/pages/IssueDetail.tsx",
+      "sha256": "7ee9490800498fcdc60da20df9db9354dde3e10f02cce83e6c7532a640c2a0e7"
+    },
+    {
+      "path": "ui/src/pages/SaasOperations.test.tsx",
+      "sha256": "1a270438392bb34619b0bf8faca1e926e86fc58bdc437ab514c7f4ba4cd554f8"
+    },
+    {
+      "path": "ui/src/pages/SaasOperations.tsx",
+      "sha256": "37be458db872d7cd49a8685e37ea6757dc4f723aefb0d9400880b119665ab6a1"
+    },
+    {
+      "path": "ui/src/pages/WorkflowBuilder.tsx",
+      "sha256": "28efa18eb535f737764d3db93ef776edb1d72a52c80244df8c4a05a75098a7a4"
+    }
+  ]
+}

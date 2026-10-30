@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { type ComponentType, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -188,7 +189,7 @@ export function ConnectClientDialog({
                 </button>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs text-xs">
-                Give this MCP gateway configuration to your tool. It does not give it access to Paperclip or
+                Give this MCP gateway configuration to your tool. It does not give it access to {PRODUCT_IDENTITY.productName} or
                 skills; it only gateways calls between the client and the tools exposed here.
               </TooltipContent>
             </Tooltip>

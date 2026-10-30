@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import {
   createGitHubPrivateKeyReadGuard,
   GITHUB_PRIVATE_KEY_FILE_MAX_BYTES,
@@ -43,7 +44,7 @@ describe("readGitHubPrivateKeyFile", () => {
         },
       }),
     ).rejects.toThrow(
-      "Paperclip couldn't read that file. Choose the .pem file again or paste the private key.",
+      `${PRODUCT_IDENTITY.productName} couldn't read that file. Choose the .pem file again or paste the private key.`,
     );
   });
 

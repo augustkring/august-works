@@ -7,20 +7,24 @@ import { ensureHumanRoleDefaultGrants } from "../services/principal-access-compa
 import express from "express";
 import request from "supertest";
 import { issueRoutes } from "../routes/issues.js";
+import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { errorHandler } from "../middleware/index.js";
 import { actorMiddleware } from "../middleware/auth.js";
-import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createHash, randomUUID } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   authUsers,
+  authSessions,
   agents,
   agentTaskSessions,
   agentWakeupRequests,
   companyMemberships,
   companies,
   createDb,
+  documentRevisions,
+  documents,
   heartbeatRuns,
   issueComments,
   issueTreeHolds,
@@ -33,7 +37,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { issueService } from "../services/issues.js";
-import { documentService } from "../services/documents.js";
+import { documentService, type DocumentRevisionSourceCapture } from "../services/documents.js";
 import { getTaskPlanContext } from "../services/task-plan-context.js";
 import { terminalizeLegacyExecution, LEGACY_RECOVERY_CAUSE } from "../services/legacy-execution-recovery.js";
 import { settleUnrecoverableExecutions } from "../services/execution-recovery-resolution.js";
@@ -52,11 +56,14 @@ import {
 } from "../services/agent-conversations.js";
 import { classifyIssueGraphLiveness } from "../services/recovery/issue-graph-liveness.js";
 import { runningProcesses } from "../adapters/index.js";
+import { buildLowTrustSourceTrust, LOW_TRUST_QUARANTINED_BODY } from "../services/source-trust.js";
 import {
   buildPaperclipTaskMarkdown,
   buildPaperclipWakePayload,
   heartbeatService,
 } from "../services/heartbeat.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
@@ -66,7 +73,11 @@ const support = await getEmbeddedPostgresTestSupport();
     let db: ReturnType<typeof createDb>;
     let companyId: string;
     let agentId: string;
+    let localBoardSessionId: string;
+    let restoreApiUrl: (() => void) | null = null;
+    const sessionIds = new Map<string, string>();
     beforeAll(async () => {
+      restoreApiUrl = installHeartbeatApiUrlFixture();
       database = await startEmbeddedPostgresTestDatabase(
         "paperclip-agent-conversations-",
       );
@@ -90,7 +101,13 @@ const support = await getEmbeddedPostgresTestSupport();
           name: "Chats",
           issuePrefix: "CHAT",
           requireBoardApprovalForNewAgents: false,
+          defaultResponsibleUserId: "local-board",
         });
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "local-board",
+        status: "active", membershipRole: "owner" });
+      await ensureHumanRoleDefaultGrants(db, { companyId, principalId: "local-board", membershipRole: "owner", grantedByUserId: null });
+      localBoardSessionId = await seedNativePasskeySession(db, "local-board");
+      sessionIds.set("local-board", localBoardSessionId);
       await db
         .insert(agents)
         .values({
@@ -106,8 +123,10 @@ const support = await getEmbeddedPostgresTestSupport();
       });
     }, 90000);
     afterAll(async () => {
+      if (db) await heartbeatService(db).drainActiveRunExecutions();
       await db?.$client.end({ timeout: 0 });
       await database?.cleanup();
+      restoreApiUrl?.();
     });
     const create = (user = randomUUID()) =>
       issueService(db).create(companyId, {
@@ -137,6 +156,141 @@ const support = await getEmbeddedPostgresTestSupport();
           .returning()
       )[0]!;
     }
+    it.each(["owner", "stranger", "revoked", "accept", "reject", "stale", "foreign_confirmation", "revoked_confirmation"] as const)("admits only current conversation interaction resolutions: %s", async kind => {
+      const ownerId = randomUUID(), strangerId = randomUUID();
+      const actorFor = async (userId: string) => {
+        await db.insert(authUsers).values({ id: userId, name: "Question Human", email: `${userId}@example.test`,
+          emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+        await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+          status: "active", membershipRole: "operator" });
+        await ensureHumanRoleDefaultGrants(db, { companyId, principalId: userId, membershipRole: "operator", grantedByUserId: null });
+        return { type: "board" as const, source: "session" as const, userId,
+          sessionId: await seedNativePasskeySession(db, userId), companyIds: [companyId] };
+      };
+      const owner = await actorFor(ownerId), stranger = await actorFor(strangerId);
+      const appFor = (actor: typeof owner) => {
+        const app = express(); app.use(express.json());
+        app.use((req, _res, next) => { req.actor = actor; next(); });
+        const heartbeat = { wakeup: vi.fn(async () => null) } as unknown as ReturnType<typeof heartbeatService>;
+        app.use("/api", issueRoutes(db, {} as never, { heartbeat })); app.use(errorHandler); return app;
+      };
+      const ownerHttp = request(appFor(owner));
+      const opened = await ownerHttp.post(`/api/companies/${companyId}/chats/${agentId}`).send({}).expect(200);
+      await ownerHttp.post(`/api/issues/${opened.body.id}/comments`).send({ body: "Please ask about the audience.",
+        clientRequestId: randomUUID() }).expect(201);
+      const confirmation = !["owner", "stranger", "revoked"].includes(kind);
+      const plan = confirmation ? await documentService(db).upsertIssueDocument({ issueId: opened.body.id,
+        key: "plan", format: "markdown", title: "Current plan", body: "Approve this exact original plan.",
+        createdByUserId: ownerId, manualInputActor: owner }) : null;
+      const interaction = await issueThreadInteractionService(db).create({ id: opened.body.id, companyId }, confirmation ? {
+        kind: "request_confirmation", title: "Approve plan", resolverPolicy: "human_only", continuationPolicy: "wake_assignee_on_accept",
+        payload: { version: 1, prompt: "Approve this exact revision?", target: { type: "issue_document", key: "plan",
+          documentId: plan!.document.id, revisionId: plan!.document.latestRevisionId!, revisionNumber: plan!.document.latestRevisionNumber } },
+      } : {
+        kind: "ask_user_questions", title: "Choose audience", resolverPolicy: "human_only", continuationPolicy: "wake_assignee",
+        payload: { version: 1, questions: [{ id: "audience", prompt: "Who is this for?", selectionMode: "single",
+          required: true, options: [{ id: "garden", label: "Garden club" }] }] },
+      }, { userId: ownerId, requestActor: owner });
+      if (kind === "revoked" || kind === "revoked_confirmation") await db.update(companyMemberships).set({ status: "inactive" }).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, ownerId)));
+      if (kind === "stale") await documentService(db).upsertIssueDocument({ issueId: opened.body.id, key: "plan", format: "markdown",
+        body: "A later unapproved plan.", baseRevisionId: plan!.document.latestRevisionId, createdByUserId: ownerId });
+      const foreign = kind === "stranger" || kind === "foreign_confirmation";
+      const action = confirmation ? kind === "reject" ? "reject" : "accept" : "respond";
+      const response = await request(appFor(foreign ? stranger : owner))
+        .post(`/api/issues/${opened.body.id}/interactions/${interaction.id}/${action}`)
+        .send(confirmation ? kind === "reject" ? { reason: "Revise this original plan." } : {}
+          : { answers: [{ questionId: "audience", optionIds: ["garden"] }] });
+      const [stored] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interaction.id));
+      if (["owner", "accept", "reject"].includes(kind)) {
+        expect(response.status, JSON.stringify(response.body)).toBe(200);
+        expect(stored).toMatchObject({ status: kind === "accept" ? "accepted" : kind === "reject" ? "rejected" : "answered",
+          resolvedByUserId: ownerId });
+        if (kind === "owner") expect(stored!.result).toMatchObject({ answers: [{ questionId: "audience", optionIds: ["garden"] }] });
+        else expect(stored!.payload).toMatchObject({ target: { revisionId: plan!.document.latestRevisionId } });
+      } else {
+        expect(kind === "stale" ? [403, 404, 409, 422] : [403, 404]).toContain(response.status);
+        if (kind === "stale") expect(stored!.status).not.toBe("accepted");
+        else expect(stored).toMatchObject({ status: "pending", resolvedAt: null });
+      }
+    });
+    it("routes the first authenticated Human comment through the configured heartbeat owner", async () => {
+      const userId = randomUUID();
+      await db.insert(authUsers).values({ id: userId, name: "Configured heartbeat owner",
+        email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+        status: "active", membershipRole: "operator" });
+      await ensureHumanRoleDefaultGrants(db, { companyId, principalId: userId, membershipRole: "operator", grantedByUserId: null });
+      const sessionId = await seedNativePasskeySession(db, userId);
+      const heartbeat = { wakeup: vi.fn(async () => null) } as unknown as ReturnType<typeof heartbeatService>;
+      const app = express();
+      app.use(express.json());
+      app.use((req, _res, next) => {
+        req.actor = { type: "board", source: "session", userId, sessionId, companyIds: [companyId] };
+        next();
+      });
+      app.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      app.use(errorHandler);
+
+      const path = `/api/companies/${companyId}/chats/${agentId}`;
+      const shell = await request(app).post(path);
+      expect(shell.status, JSON.stringify(shell.body)).toBe(200);
+      const foreignApp = express();
+      foreignApp.use(express.json());
+      foreignApp.use((req, _res, next) => {
+        req.actor = { type: "board", source: "session", userId: "local-board",
+          sessionId: localBoardSessionId, companyIds: [companyId] };
+        next();
+      });
+      foreignApp.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      foreignApp.use(errorHandler);
+      const foreignFirstComment = await request(foreignApp).post(`/api/issues/${shell.body.id}/comments`).send({
+        body: "A different Human must not start this conversation.", clientRequestId: randomUUID(),
+      });
+      expect(foreignFirstComment.status).toBe(404);
+      expect(heartbeat.wakeup).not.toHaveBeenCalled();
+      expect(await db.select().from(issueComments).where(eq(issueComments.issueId, shell.body.id))).toHaveLength(0);
+      const linkedOwnerId = randomUUID();
+      await db.insert(authUsers).values({ id: linkedOwnerId, name: "Linked shell owner",
+        email: `${linkedOwnerId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: linkedOwnerId,
+        status: "active", membershipRole: "operator" });
+      await ensureHumanRoleDefaultGrants(db, { companyId, principalId: linkedOwnerId,
+        membershipRole: "operator", grantedByUserId: null });
+      const linkedSessionId = await seedNativePasskeySession(db, linkedOwnerId);
+      const linkedApp = express();
+      linkedApp.use(express.json());
+      linkedApp.use((req, _res, next) => {
+        req.actor = { type: "board", source: "session", userId: linkedOwnerId,
+          sessionId: linkedSessionId, companyIds: [companyId] };
+        next();
+      });
+      linkedApp.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      linkedApp.use(errorHandler);
+      const linkedShell = await request(linkedApp).post(path);
+      expect(linkedShell.status, JSON.stringify(linkedShell.body)).toBe(200);
+      const parent = await issueService(db).create(companyId, { title: "A shell with a parent is not empty" });
+      await db.update(issues).set({ parentId: parent.id }).where(eq(issues.id, linkedShell.body.id));
+      const linkedComment = await request(linkedApp).post(`/api/issues/${linkedShell.body.id}/comments`).send({
+        body: "A linked shell must not be admitted as an empty conversation.", clientRequestId: randomUUID(),
+      });
+      expect([403, 404]).toContain(linkedComment.status);
+      expect(heartbeat.wakeup).not.toHaveBeenCalled();
+      expect(await db.select().from(issueComments).where(eq(issueComments.issueId, linkedShell.body.id))).toHaveLength(0);
+      const firstComment = await request(app).post(`/api/issues/${shell.body.id}/comments`).send({
+        body: "Create the first authenticated Native conversation input.", clientRequestId: randomUUID(),
+      });
+      expect(firstComment.status, JSON.stringify(firstComment.body)).toBe(201);
+      expect(heartbeat.wakeup).toHaveBeenCalledTimes(1);
+      expect(heartbeat.wakeup).toHaveBeenCalledWith(agentId, expect.objectContaining({
+        reason: "issue_commented", requestedByActorType: "user", requestedByActorId: userId,
+        contextSnapshot: expect.objectContaining({ issueId: shell.body.id, source: "issue.comment" }),
+      }));
+      const [persisted] = await db.select().from(issues).where(eq(issues.id, shell.body.id));
+      expect(persisted).toMatchObject({ conversationState: "active", conversationUserId: userId,
+        payloadSourceProtocolVersion: 1, payloadSourceSnapshot: expect.any(Object) });
+      expect((await db.select().from(issueComments).where(eq(issueComments.id, firstComment.body.id)))).toHaveLength(1);
+    });
     it("atomically resolves one task per person and agent and excludes it from ordinary lists", async () => {
       const user = randomUUID();
       expect(
@@ -167,7 +321,7 @@ const support = await getEmbeddedPostgresTestSupport();
         issueService(db).update(results[0].id, { assigneeAgentId: null }),
       ).rejects.toThrow(/conversation/i);
     });
-    it("resolves through authenticated company routes, keeps opens read-only, and derives ownership", async () => {
+    it("resolves through authenticated company routes, keeps opens read-only, and limits conversation payloads to their Human owner", async () => {
       const appFor = (userId?: string, allowed = true) => {
         const app = express();
         app.use(express.json());
@@ -179,6 +333,7 @@ const support = await getEmbeddedPostgresTestSupport();
               type: "board",
               source: "session",
               userId,
+              sessionId: sessionIds.get(userId),
               companyIds: allowed ? [companyId] : [],
             };
             next();
@@ -192,6 +347,8 @@ const support = await getEmbeddedPostgresTestSupport();
       const colleague = randomUUID();
       const app = appFor(owner);
       for (const userId of [owner, colleague]) {
+        await db.insert(authUsers).values({ id: userId, name: "Conversation route user",
+          email: `${userId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
         await db
           .insert(companyMemberships)
           .values({
@@ -207,6 +364,7 @@ const support = await getEmbeddedPostgresTestSupport();
           membershipRole: "operator",
           grantedByUserId: null,
         });
+        sessionIds.set(userId, await seedNativePasskeySession(db, userId));
       }
       expect((await request(app).get(path)).body).toBeNull();
       expect(
@@ -220,30 +378,66 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(resolved.every((response) => response.status === 200)).toBe(true);
       expect(resolved[0].body.id).toBe(resolved[1].body.id);
       expect(resolved[0].body.conversationUserId).toBe(owner);
-      expect(
-        (
-          await request(appFor(colleague)).get(
-            `/api/issues/${resolved[0].body.id}`,
-          )
-        ).status,
-      ).toBe(200);
+      const ownerRead = await request(appFor(owner)).get(`/api/issues/${resolved[0].body.id}`);
+      expect(ownerRead.status).toBe(200);
+      expect(ownerRead.body).toMatchObject({ id: resolved[0].body.id, conversationUserId: owner });
+      const colleagueRead = await request(appFor(colleague)).get(`/api/issues/${resolved[0].body.id}`);
+      expect(colleagueRead.status).toBe(404);
+      expect(JSON.stringify(colleagueRead.body)).not.toContain("Conversation");
       expect(
         (await request(appFor(randomUUID(), false)).get(path)).status,
       ).toBe(403);
-      expect(
-        (
-          await request(app)
-            .post(`/api/issues/${resolved[0].body.id}/comments`)
-            .send({ body: "Hello" })
-        ).status,
-      ).toBe(422);
       const chatId = resolved[0].body.id;
+      const beforeModeChange = await issueService(db).getById(chatId);
+      expect(beforeModeChange?.workMode).toBe("standard");
+      expect(beforeModeChange).toMatchObject({ conversationAgentId: agentId, conversationUserId: owner });
+      await expect(issueService(db).update(chatId, {
+        workMode: "planning",
+        privateWorkAdmission: "owned_conversation_work_mode",
+        privacyActor: { type: "board", source: "session", userId: colleague, sessionId: sessionIds.get(colleague)! },
+      })).rejects.toThrow("The native conversation work mode change is unavailable");
+      await expect(issueService(db).update(chatId, {
+        workMode: "planning",
+        title: "Service token must not admit extra fields",
+        privateWorkAdmission: "owned_conversation_work_mode",
+        privacyActor: { type: "board", source: "session", userId: owner, sessionId: sessionIds.get(owner)! },
+      })).rejects.toThrow("The native conversation work mode change is unavailable");
+      expect((await issueService(db).getById(chatId))?.workMode).toBe("standard");
+      const ownerModeChange = await request(appFor(owner)).patch(`/api/issues/${chatId}`)
+        .send({ workMode: "planning" });
+      expect(ownerModeChange.status, JSON.stringify(ownerModeChange.body)).toBe(200);
+      expect((await issueService(db).getById(chatId))?.workMode).toBe("planning");
+      const colleagueModeChange = await request(appFor(colleague)).patch(`/api/issues/${chatId}`)
+        .send({ workMode: "standard" });
+      expect(colleagueModeChange.status).toBe(404);
+      expect((await issueService(db).getById(chatId))?.workMode).toBe("planning");
+      const expandedModeChange = await request(appFor(owner)).patch(`/api/issues/${chatId}`)
+        .send({ workMode: "standard", title: "Must not change through the narrow exception" });
+      // The mode-only exception is intentionally unavailable once this request
+      // carries any additional field, so the ordinary unreadable-shell path
+      // keeps the conversation hidden.
+      expect(expandedModeChange.status).toBe(404);
+      expect(await issueService(db).getById(chatId)).toMatchObject({
+        title: beforeModeChange!.title,
+        workMode: "planning",
+      });
+      const privateWorkTask = await issueService(db).create(companyId, {
+        title: "Private work must remain unavailable",
+        visibility: "private",
+        responsibleUserId: owner,
+        createdByUserId: owner,
+      });
+      const genericPrivateTaskWrite = await request(appFor(owner))
+        .post(`/api/issues/${privateWorkTask.id}/comments`)
+        .send({ body: "Hello", clientRequestId: randomUUID() });
+      expect(genericPrivateTaskWrite.status).toBe(422);
+      expect(genericPrivateTaskWrite.body.error).toBe("Private tasks are not available");
       const queuedInterrupt = { queueId: randomUUID(), revision: "queue-revision", targetRunId: randomUUID() };
       expect((await request(appFor(colleague)).post(`/api/issues/${chatId}/queued-comments/interrupt`)
-        .send(queuedInterrupt)).status).toBe(403);
+        .send(queuedInterrupt)).status).toBe(404);
       for (const body of ["Hello", "/new"]) {
         expect((await request(appFor(colleague)).post(`/api/issues/${chatId}/comments`)
-          .send({ body, clientRequestId: randomUUID() })).status).toBe(403);
+          .send({ body, clientRequestId: randomUUID() })).status).toBe(404);
       }
       expect((await request(appFor(colleague))
         .post(`/api/companies/${companyId}/issues/${chatId}/attachments`)
@@ -254,29 +448,52 @@ const support = await getEmbeddedPostgresTestSupport();
         continuationPolicy: "wake_assignee_on_accept", payload: { version: 1, prompt: "Hand off this plan?" },
       }).returning();
       expect((await request(appFor(colleague))
-        .post(`/api/issues/${chatId}/interactions/${planReview.id}/accept`).send({})).status).toBe(403);
+        .post(`/api/issues/${chatId}/interactions/${planReview.id}/accept`).send({})).status).toBe(404);
       expect((await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, planReview.id)))[0].status).toBe("pending");
       const [pause] = await db.insert(issueTreeHolds).values({
         companyId, rootIssueId: chatId, mode: "pause", status: "active",
         createdByActorType: "user", createdByUserId: owner,
         releasePolicy: { strategy: "manual", note: "leaf_pause" },
       }).returning();
-      const blockedSend = await request(app).post(`/api/issues/${chatId}/comments`)
+      const blockedSend = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
         .send({ body: "Continue working", clientRequestId: randomUUID() });
-      expect(blockedSend.status).toBe(409);
+      expect(blockedSend.status, JSON.stringify(blockedSend.body)).toBe(409);
       expect(await db.select().from(issueComments).where(eq(issueComments.issueId, chatId))).toHaveLength(0);
       const resetRequest = { body: "/new", clientRequestId: randomUUID() };
-      const reset = await request(app).post(`/api/issues/${chatId}/comments`).send(resetRequest);
+      const reset = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`).send(resetRequest);
       expect(reset.status).toBe(201);
       const retriedResets = await Promise.all(Array.from({ length: 3 }, () =>
-        request(app).post(`/api/issues/${chatId}/comments`).send(resetRequest)));
+        request(appFor(owner)).post(`/api/issues/${chatId}/comments`).send(resetRequest)));
       expect(retriedResets.every((response) => response.status === 201 && response.body.id === reset.body.id)).toBe(true);
       const addedEvents = await db.select().from(activityLog).where(and(
         eq(activityLog.entityId, chatId), eq(activityLog.action, "issue.comment_added"),
       ));
       expect(addedEvents).toHaveLength(1);
+      const ownerMessage = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
+        .send({ body: "Owner follow-up", clientRequestId: randomUUID() });
+      expect(ownerMessage.status, JSON.stringify(ownerMessage.body)).toBe(201);
 
       expect((await db.select().from(issueTreeHolds).where(eq(issueTreeHolds.id, pause.id)))[0].status).toBe("released");
+      await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, owner)));
+      const revokedMembershipMessage = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
+        .send({ body: "Revoked membership", clientRequestId: randomUUID() });
+      expect(revokedMembershipMessage.status).toBe(404);
+      expect((await db.select().from(issueComments).where(eq(issueComments.issueId, chatId)))
+        .some(comment => comment.body === "Revoked membership")).toBe(false);
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: owner,
+        status: "active", membershipRole: "operator" });
+      await ensureHumanRoleDefaultGrants(db, { companyId, principalId: owner, membershipRole: "operator", grantedByUserId: null });
+      await db.delete(authSessions).where(eq(authSessions.id, sessionIds.get(owner)!));
+      const revokedOwnerMessage = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
+        .send({ body: "Stale session", clientRequestId: randomUUID() });
+      expect(revokedOwnerMessage.status).toBe(404);
+      const revokedOwnerModeChange = await request(appFor(owner)).patch(`/api/issues/${chatId}`)
+        .send({ workMode: "standard" });
+      expect(revokedOwnerModeChange.status).toBe(404);
+      expect((await issueService(db).getById(chatId))?.workMode).toBe("planning");
+      const messagesAfterRevokedAttempt = await db.select().from(issueComments).where(eq(issueComments.issueId, chatId));
+      expect(messagesAfterRevokedAttempt.some(comment => comment.body === "Stale session")).toBe(false);
       const local = await request(appFor()).post(path);
       expect(local.body.conversationUserId).toBe("local-board");
       await instanceSettingsService(db).updateExperimental({
@@ -287,7 +504,7 @@ const support = await getEmbeddedPostgresTestSupport();
         .send(queuedInterrupt)).status).toBe(404);
       expect(
         (await request(app).get(`/api/issues/${resolved[0].body.id}`)).status,
-      ).toBe(200);
+      ).toBe(404);
       await instanceSettingsService(db).updateExperimental({
         enableAgentChat: true,
       });
@@ -407,7 +624,7 @@ const support = await getEmbeddedPostgresTestSupport();
         { userId: "local-board" },
       );
       expect(
-        await conversationReplay(db, companyId, issue.id, next.id),
+        (await conversationReplay(db, companyId, issue.id, next.id)).markdown,
       ).not.toContain("Old session");
       const payload = await buildPaperclipWakePayload({
         db, companyId,
@@ -424,11 +641,71 @@ const support = await getEmbeddedPostgresTestSupport();
         { userId: "local-board" },
       );
       expect(
-        await conversationReplay(db, companyId, issue.id, later.id),
+        (await conversationReplay(db, companyId, issue.id, later.id)).markdown,
       ).toContain("Fresh context");
       expect(
-        await conversationReplay(db, companyId, issue.id, next.id),
+        (await conversationReplay(db, companyId, issue.id, next.id)).markdown,
       ).not.toContain("Following turn");
+    });
+    it("captures replay renditions, exact selected versions and unknown source history without rereading", async () => {
+      const issue = await create();
+      const [captured] = await db.insert(issueComments).values({ companyId, issueId: issue.id,
+        authorUserId: "local-board", body: "Long replay ".repeat(900), payloadSourceProtocolVersion: 1,
+        createdAt: new Date("2026-10-01T00:00:01Z") }).returning();
+      const [quarantined] = await db.insert(issueComments).values({ companyId, issueId: issue.id,
+        authorAgentId: agentId, body: "PRIVATE_QUARANTINED_REPLAY",
+        sourceTrust: buildLowTrustSourceTrust({ issueId: issue.id, agentId }),
+        createdAt: new Date("2026-10-01T00:00:02Z") }).returning();
+      // A structural binding fixture, not production source qualification.
+      // The actual PostgreSQL envelope hash differs from the rendered line.
+      const [sealed] = await db.execute<{ snapshot: Record<string, unknown> }>(sql`
+        with body as (select public.aw_native_payload_body_hash('comment',to_jsonb(c)) as hash
+          from issue_comments c where c.id=${captured!.id}::uuid), content as (
+          select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','comment','companyId',${companyId}::text,
+            'id',${captured!.id}::text,'contentHash',hash),'policy',jsonb_build_object('issueIds','[]'::jsonb,
+            'projectIds','[]'::jsonb,'runIds','[]'::jsonb,'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),
+            'inputs','[]'::jsonb) as value from body)
+        update issue_comments set payload_source_snapshot=value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')),
+          updated_at='2026-10-01T01:02:03.123456Z'::timestamptz from content where id=${captured!.id}::uuid
+        returning payload_source_snapshot as snapshot`);
+      const replay = await conversationReplay(db, companyId, issue.id, null);
+      const lines = [JSON.stringify({ author: "user", body: captured!.body.slice(0,8000) }),
+        JSON.stringify({ author: "agent", body: LOW_TRUST_QUARANTINED_BODY })];
+      expect(replay.markdown).toBe(lines.join("\n"));
+      expect(replay.markdown).not.toContain("PRIVATE_QUARANTINED_REPLAY");
+      const [version] = await db.execute<{ version: string }>(sql`select extract(epoch from updated_at)::text as version
+        from issue_comments where id=${captured!.id}::uuid`);
+      expect(version!.version).toMatch(/123456$/);
+      expect(replay.sourceCaptures).toEqual([
+        { input: { kind: "comment", issueId: issue.id, commentId: captured!.id, sourceVersion: version!.version,
+          contentHash: createHash("sha256").update(lines[0]!,"utf8").digest("hex") }, payloadSourceSnapshot: sealed!.snapshot },
+        { input: { kind: "comment", issueId: issue.id, commentId: quarantined!.id,
+          sourceVersion: expect.any(String), contentHash: createHash("sha256").update(lines[1]!,"utf8").digest("hex") },
+          payloadSourceSnapshot: null },
+      ]);
+      await db.update(issueComments).set({ body: "Later replacement", payloadSourceSnapshot: null }).where(eq(issueComments.id,captured!.id));
+      expect(replay.sourceCaptures[0]!.payloadSourceSnapshot).toEqual(sealed!.snapshot);
+      expect(replay.markdown).toBe(lines.join("\n"));
+      const ordinary = await issueService(db).create(companyId,{ title: "Ordinary task" });
+      expect(await conversationReplay(db,companyId,ordinary.id,null)).toEqual({ markdown: "",sourceCaptures: [] });
+    });
+    it("captures replay only for the newest forty live comments between boundary and wake in delivery order", async () => {
+      const issue = await create();
+      const base = Date.parse("2026-10-02T00:00:00Z");
+      const [boundary] = await db.insert(issueComments).values({companyId,issueId:issue.id,body:"/new",authorUserId:"local-board",createdAt:new Date(base)}).returning();
+      await db.update(issues).set({conversationBoundaryCommentId:boundary!.id}).where(eq(issues.id,issue.id));
+      const rows = await db.insert(issueComments).values(Array.from({length:45},(_,i)=>({companyId,issueId:issue.id,
+        body:`Replay ${i}`,authorUserId:"local-board",createdAt:new Date(base+(i+1)*1000)}))).returning();
+      const [wake] = await db.insert(issueComments).values({companyId,issueId:issue.id,body:"Wake",authorUserId:"local-board",createdAt:new Date(base+50000)}).returning();
+      await db.insert(issueComments).values([
+        {companyId,issueId:issue.id,body:"Deleted",createdAt:new Date(base+49000),deletedAt:new Date()},
+        {companyId,issueId:issue.id,body:"Future",createdAt:new Date(base+51000)},
+        {companyId,issueId:issue.id,body:"Prior",createdAt:new Date(base-1000)},
+      ]);
+      const replay = await conversationReplay(db,companyId,issue.id,wake!.id);
+      expect(replay.sourceCaptures.map(capture=>capture.input.commentId)).toEqual(rows.slice(5).map(row=>row.id));
+      expect(replay.sourceCaptures.every(capture=>capture.payloadSourceSnapshot===null)).toBe(true);
+      expect(replay.markdown.split("\n").map(line=>JSON.parse(line).body)).toEqual(rows.slice(5).map(row=>row.body));
     });
     it("projects the resolved chat plan review into fresh and resumed prompts without replaying old reviews", async () => {
       const issue = await create();
@@ -526,6 +803,64 @@ const support = await getEmbeddedPostgresTestSupport();
         db, companyId, issueId: task.id, exposeLowTrustRaw: true,
       }))?.body).toBe("QUARANTINED_PLAN_BODY");
     });
+    it("captures selected task plan source rendition after redaction while preserving unknown history and public shape", async () => {
+      const task=await issueService(db).create(companyId,{title:"Plan source capture",initialPlan:"Original selected plan"});
+      const captures:Array<DocumentRevisionSourceCapture|null>=[];
+      const read=()=>getTaskPlanContext({db,companyId,issueId:task.id,onSourceCapture:capture=>captures.push(capture)});
+      const initial=await read();
+      expect(initial!.body).toBe("Original selected plan");
+      expect(captures[0]).toEqual({input:{kind:"document_revision",documentId:initial!.documentId,
+        revisionId:initial!.revisionId,issueId:task.id,contentHash:createHash("sha256").update(initial!.body,"utf8").digest("hex")},
+        payloadSourceSnapshot:null});
+      expect(initial).not.toHaveProperty("payloadSourceSnapshot");
+      expect(initial).not.toHaveProperty("sourceCapture");
+      await documentService(db).upsertIssueDocument({issueId:task.id,key:"plan",format:"markdown",body:"PRIVATE_QUARANTINED_PLAN_SOURCE",
+        baseRevisionId:initial!.revisionId,sourceTrust:buildLowTrustSourceTrust({issueId:task.id,agentId})});
+      const safe=await read();
+      expect(safe!.body).toBe(LOW_TRUST_QUARANTINED_BODY);
+      expect(captures[1]!.input.contentHash).toBe(createHash("sha256").update(safe!.body,"utf8").digest("hex"));
+      const rawCaptures:Array<DocumentRevisionSourceCapture|null>=[];
+      const raw=await getTaskPlanContext({db,companyId,issueId:task.id,exposeLowTrustRaw:true,onSourceCapture:capture=>rawCaptures.push(capture)});
+      expect(raw!.body).toBe("PRIVATE_QUARANTINED_PLAN_SOURCE");
+      expect(rawCaptures[0]!.input.contentHash).toBe(createHash("sha256").update(raw!.body,"utf8").digest("hex"));
+      expect(rawCaptures[0]!.input.contentHash).not.toBe(captures[1]!.input.contentHash);
+      for(const selection of [{companyId:randomUUID(),issueId:task.id},{companyId,issueId:task.id,approvedRevisionId:randomUUID()},
+        {companyId,issueId:(await create()).id}]){
+        const absent:Array<DocumentRevisionSourceCapture|null>=[];
+        expect(await getTaskPlanContext({db,...selection,onSourceCapture:capture=>absent.push(capture)})).toBeNull();
+        expect(absent).toEqual([null]);
+      }
+    });
+    it("captures exact approved task plan snapshot from the selected revision and retains it after later changes", async () => {
+      const task=await issueService(db).create(companyId,{title:"Pinned plan capture",initialPlan:"Earlier historical plan"});
+      const initial=await getTaskPlanContext({db,companyId,issueId:task.id});
+      const [revision]=await db.insert(documentRevisions).values({companyId,documentId:initial!.documentId,
+        revisionNumber:2,body:"Exact selected plan bytes",format:"markdown",payloadSourceProtocolVersion:1}).returning();
+      // Source-free canonical structural fixture, not native producer qualification.
+      const [sealed]=await db.execute<{snapshot:Record<string,unknown>}>(sql`with content as (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','document_revision','companyId',company_id::text,
+          'id',id::text,'contentHash',public.aw_native_payload_body_hash('document_revision',to_jsonb(r))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as value
+          from document_revisions r where id=${revision!.id}::uuid)
+        update document_revisions set payload_source_snapshot=value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex'))
+          from content where id=${revision!.id}::uuid returning payload_source_snapshot as snapshot`);
+      await db.update(documents).set({latestRevisionId:revision!.id,latestRevisionNumber:2,latestBody:revision!.body})
+        .where(eq(documents.id,initial!.documentId));
+      const captures:Array<DocumentRevisionSourceCapture|null>=[];
+      const selected=await getTaskPlanContext({db,companyId,issueId:task.id,onSourceCapture:capture=>captures.push(capture)});
+      expect(selected!.revisionId).toBe(revision!.id);
+      expect(captures[0]).toEqual({input:{kind:"document_revision",documentId:initial!.documentId,revisionId:revision!.id,
+        issueId:task.id,contentHash:createHash("sha256").update(revision!.body,"utf8").digest("hex")},payloadSourceSnapshot:sealed!.snapshot});
+      await documentService(db).upsertIssueDocument({issueId:task.id,key:"plan",format:"markdown",body:"Later unapproved replacement",baseRevisionId:revision!.id});
+      const approvedCaptures:Array<DocumentRevisionSourceCapture|null>=[];
+      expect((await getTaskPlanContext({db,companyId,issueId:task.id,approvedRevisionId:revision!.id,
+        onSourceCapture:capture=>approvedCaptures.push(capture)}))!.body).toBe(revision!.body);
+      expect(approvedCaptures[0]).toEqual(captures[0]);
+      await db.update(documentRevisions).set({body:"Later erased/unknown selected body",payloadSourceSnapshot:null}).where(eq(documentRevisions.id,revision!.id));
+      expect(selected!.body).toBe("Exact selected plan bytes");
+      expect(captures[0]!.payloadSourceSnapshot).toEqual(sealed!.snapshot);
+    });
     it("keeps concurrent delivery and multiple resets in separate ordered queue entries", async () => {
       const issue = await create();
       const first = await issueService(db).addComment(issue.id, "First", {
@@ -617,7 +952,12 @@ const support = await getEmbeddedPostgresTestSupport();
           name: "Runtime chat",
           issuePrefix: queuedBeforeStop ? "RCHATQ" : "RCHAT",
           requireBoardApprovalForNewAgents: false,
+          defaultResponsibleUserId: "local-board",
         });
+      await db.insert(companyMemberships).values({ companyId: runtimeCompany, principalType: "user", principalId: "local-board",
+        status: "active", membershipRole: "owner" });
+      await ensureHumanRoleDefaultGrants(db, { companyId: runtimeCompany, principalId: "local-board",
+        membershipRole: "owner", grantedByUserId: null });
       const generations: unknown[] = [];
       const app = express();
       app.use(express.json());

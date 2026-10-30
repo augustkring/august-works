@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-26",
+  "checks": [
+    {
+      "name": "tool-gateway-service-owner-suite",
+      "command": "pnpm-9 exec vitest run src/__tests__/tool-gateway-service.test.ts --reporter=dot --maxWorkers=1",
+      "exit": 0,
+      "result": "52 passed",
+      "sourcePins": "gateway-owner-source-pins.json",
+      "log": "gateway-owner.log",
+      "scope": "Existing Gateway owner tests; does not execute a scoped Native Memory replay."
+    },
+    {
+      "name": "warm-history-retained-session-owner-regression",
+      "command": "pnpm-9 exec vitest run src/services/native-runtime/native-session-executor.test.ts -t \"withholds a fresh-envelope closure when a prior warm-session transcript is retained\" --maxWorkers=1",
+      "exit": 0,
+      "result": "1 passed, 474 skipped",
+      "sourcePins": "warm-history-owner-source-pins.json",
+      "log": "warm-history-owner.log",
+      "scope": "Exercises the real in-process warm-session reuse owner and confirms the fresh-envelope closure is withheld."
+    },
+    {
+      "name": "warm-history-source-syntax-preflight",
+      "command": "node /workspace/v10-preparation/check-snapshot-syntax.cjs warm-history-guard-source-pins-20261026.json",
+      "exit": 0,
+      "sourcePins": "warm-history-source-pins.json",
+      "log": "warm-history-syntax.log"
+    },
+    {
+      "name": "initial-gateway-owner-suite-attempt",
+      "command": "pnpm-9 exec vitest run src/__tests__/tool-gateway-service.test.ts --reporter=dot",
+      "exit": 1,
+      "result": "No tests ran; Vite reported a duplicate source declaration in agent-runtime-fabric.ts before this suite's source was repaired.",
+      "sourcePins": "gateway-initial-parse-failure-source-pins.json",
+      "log": "gateway-initial-parse-failure.log",
+      "supersededBy": "tool-gateway-service-owner-suite"
+    }
+  ],
+  "currentLimitations": [
+    "The actual pinned managed Native temporal replay regression, which covers the shared receipt validator with producer-created Memory B and C rows plus revocation and erasure, has not run yet; it is pending the binary baseline queue.",
+    "The planned temporal regression exercises the extracted receipt validator rather than calling executeTool through the Gateway replay branch."
+  ]
+}

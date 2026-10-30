@@ -1,0 +1,94 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "7acabf9242048262a25a3cbe053f874dacc05351",
+  "meaning": "Workflow executor51PASS with persisted current Human fixtures, relative recovery timestamps, and actual30-day duration roundtrip. Generated531 widens step duration to bigint, DBbuild/snapshotdrift pass. Does not establish complete V10/whole-suite success.",
+  "logs": [
+    {
+      "name": "workflow-step-duration-generate",
+      "exitCode": 0,
+      "rawSha256": "9e11154e00b114df6fe2c18677303ef39e54c94b986da525c334ce9bf16cf86e",
+      "sanitizedSha256": "9e11154e00b114df6fe2c18677303ef39e54c94b986da525c334ce9bf16cf86e",
+      "archiveSha256": "fd5c5f6f5e9dac08195471b4980f92921803aaf8006862b59f220a7ec9028e00",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "workflow-step-duration-db-build",
+      "exitCode": 0,
+      "rawSha256": "735b13b321a0d844c61cc5735733c499e312a21d01d97261d985adaa507abe05",
+      "sanitizedSha256": "735b13b321a0d844c61cc5735733c499e312a21d01d97261d985adaa507abe05",
+      "archiveSha256": "e569e70f9707d13d935b9baaa08a884af39ce861656893768e9406139f34544b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "workflow-duration-snapshot-drift",
+      "exitCode": 0,
+      "rawSha256": "e5379e50d3e95f79e7e43ddf5ec2b304e8cbe3edcc9d398b210bc7e2a91c22a0",
+      "sanitizedSha256": "e5379e50d3e95f79e7e43ddf5ec2b304e8cbe3edcc9d398b210bc7e2a91c22a0",
+      "archiveSha256": "183637c0c8cf4ff6646523f490b1a0988feeb11945688a998f5dc374ff600eba",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  4.92s (transform 2.21s, setup 0ms, import 1.07s, tests 3.73s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "workflow-executor-full-51-final",
+      "exitCode": 0,
+      "rawSha256": "1d6b4511b80a59cf3bca5d1638013bff52183c73bddef9b136c6e4746435a8fa",
+      "sanitizedSha256": "24cfa8f193727072a364cdffa870e888a73a625d6cf59b7bbd767bbfe387bdc4",
+      "archiveSha256": "a0f833d088ce197f41fb4977914d5f8ee09d2bc20a259bcbbfd7be8c7c999558",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  51 passed (51)",
+        "Duration  35.76s (transform 11.21s, setup 78ms, import 15.48s, tests 20.08s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "workflow-executor-duration-bigint-final",
+      "exitCode": 0,
+      "rawSha256": "402c6052c170aaeb25d2ecb26af456f830a37f0dab66df015f7345e583361d1c",
+      "sanitizedSha256": "402c6052c170aaeb25d2ecb26af456f830a37f0dab66df015f7345e583361d1c",
+      "archiveSha256": "eebd6d764372b9d89ac8519a4720dd510a13f26cd03edb06f47e32a153317e28",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 50 skipped (51)",
+        "Duration  18.03s (transform 9.24s, setup 74ms, import 13.16s, tests 4.67s, environment 0ms)"
+      ]
+    }
+  ]
+}

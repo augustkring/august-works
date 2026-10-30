@@ -1,4 +1,4 @@
-import { Router, type Request } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import {
@@ -15,12 +15,14 @@ import {
   providerConformanceInputSchema,
   agentManagedRuntimeSetupCommandSchema,
   agentManagedRuntimeSetupReviewInputSchema,
+  agentModelMigrationMonitorCommandSchema,
 } from "@paperclipai/shared";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
-import { conflict } from "../errors.js";
+import { conflict, forbidden } from "../errors.js";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
 import { agentAuthoringPublicationService } from "../services/agents/authoring-publication.js";
+import { agentAuthoringModelMigrationMonitorService } from "../services/agents/authoring-model-migration-monitor.js";
 import { agentAuthoringPackageSetupService } from "../services/agents/authoring-package-setup.js";
 import { validate } from "../middleware/validate.js";
 import { installedNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
@@ -50,6 +52,11 @@ export function agentAuthoringRoutes(db: Db, platformConfig?: SaasPlatformConfig
         code: "ACCOUNT_CHANGED",
       });
     return id;
+  }
+  function requireModelMigrationMonitorSession(req: Request, _res: Response, next: NextFunction) {
+    if (req.actor.type !== "board" || req.actor.source !== "session" || !req.actor.userId || !req.actor.sessionId)
+      return next(forbidden("A current Human session is required", { code: "human_session_required" }));
+    next();
   }
   const root = "/companies/:companyId/agent-configuration-drafts";
   router.use(root, (_req, res, next) => {
@@ -227,6 +234,18 @@ export function agentAuthoringRoutes(db: Db, platformConfig?: SaasPlatformConfig
   ));
   router.post(`${root}/:id/publish`, validate(agentDraftPublicationCommandSchema), async (req, res) => res.json(
     await agentAuthoringPublicationService(db).publish(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
+  ));
+  router.get(`${root}/:id/model-migrations/current/monitor-review`, requireModelMigrationMonitorSession, async (req, res) => res.json(
+    await agentAuthoringModelMigrationMonitorService(db).current(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  router.get(`${root}/:id/model-migrations/:revisionId/monitor-review`, requireModelMigrationMonitorSession, async (req, res) => res.json(
+    await agentAuthoringModelMigrationMonitorService(db).review(req.actor, company(req), z.uuid().parse(req.params.id), z.uuid().parse(req.params.revisionId)),
+  ));
+  router.get(`${root}/:id/model-migrations/:revisionId/monitor-receipt`, requireModelMigrationMonitorSession, async (req, res) => res.json(
+    await agentAuthoringModelMigrationMonitorService(db).receipt(req.actor, company(req), z.uuid().parse(req.params.id), z.uuid().parse(req.params.revisionId)),
+  ));
+  router.post(`${root}/:id/model-migrations/:revisionId/monitor`, requireModelMigrationMonitorSession, validate(agentModelMigrationMonitorCommandSchema), async (req, res) => res.json(
+    await agentAuthoringModelMigrationMonitorService(db).record(req.actor, company(req), z.uuid().parse(req.params.id), z.uuid().parse(req.params.revisionId), req.body),
   ));
   router.get("/companies/:companyId/agent-configuration-drafts/:id/managed-runtime", async (req, res) => res.json(
     await managedSetup.catalog(req.actor, company(req), z.uuid().parse(req.params.id)),

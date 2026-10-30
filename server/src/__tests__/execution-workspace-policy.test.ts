@@ -22,6 +22,13 @@ import {
 } from "../services/execution-workspace-policy.ts";
 
 describe("execution workspace policy helpers", () => {
+  it("retains the explicit Project environment selection while parsing its native policy", () => {
+    expect(parseProjectExecutionWorkspacePolicy({ enabled: false, environmentId: "11111111-1111-4111-8111-111111111111" }))
+      .toEqual({ enabled: false, environmentId: "11111111-1111-4111-8111-111111111111" });
+    expect(parseProjectExecutionWorkspacePolicy({ enabled: false, environmentId: null })).toEqual({ enabled: false, environmentId: null });
+    expect(parseProjectExecutionWorkspacePolicy({ enabled: false, environmentId: 7 })).toEqual({ enabled: false });
+  });
+
   it("defaults new issue settings from enabled project policy", () => {
     expect(
       defaultIssueExecutionWorkspaceSettingsForProject({

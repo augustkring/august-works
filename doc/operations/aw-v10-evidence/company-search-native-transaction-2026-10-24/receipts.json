@@ -1,0 +1,45 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "d63f6dc7ac1e749d9c2a1128459168f4aa1eddc7",
+  "meaning": "Scoped native HTTP/PostgreSQL company search and extraction, original authenticated deadline, native query service, narrow callback purpose and escaped-owner invalidation. Real post-authentication session/user/member rows; no actual login ceremony, provider, complete source graph, full workspace or V10 acceptance claim. Existing native Memory erasure control is a separate receipt and required no new erasure implementation. Other import work was concurrently unstaged; this receipt covers the committed search/Memory owners only.",
+  "logs": [
+    {
+      "name": "company-search-native-transaction-final",
+      "exitCode": 0,
+      "rawSha256": "e56707fab4ef45ca1315ff671148ff19385da65a0b622fb7994551b347ffe86c",
+      "sanitizedSha256": "e56707fab4ef45ca1315ff671148ff19385da65a0b622fb7994551b347ffe86c",
+      "archiveSha256": "e389743ad8df34549f2b131e96e3e5332afa49e37af9abcd9936286e1bb0b41a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  4 passed (4)",
+        "Tests  49 passed (49)",
+        "Duration  46.44s (transform 10.72s, setup 233ms, import 21.48s, tests 24.30s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "private-memory-erasure-before",
+      "exitCode": 0,
+      "rawSha256": "ad5ed1c2b21ca38cda2a35581a1ab893cb032577d2486543ab1f0cd8ba068bb7",
+      "sanitizedSha256": "ad5ed1c2b21ca38cda2a35581a1ab893cb032577d2486543ab1f0cd8ba068bb7",
+      "archiveSha256": "e52dbb9e2ea7f13625d9700382db17e8a0cb94012f6c6ec127b2c1b6a9d14a70",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  20.83s (transform 11.33s, setup 67ms, import 15.27s, tests 5.38s, environment 0ms)"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/v9-artifact-replay-source-migration.integration.test.ts
+test_pattern=upgrades actual historical replay relationships

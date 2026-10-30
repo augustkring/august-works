@@ -1,24 +1,61 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agentPackageVersions, companyAgentPackageInstallations, agents, issues, workflows, readinessAssessments, readinessRequirements, knowledgeQualityFindings } from "@paperclipai/db";
-import type { Request } from "express";
+import type { AuthorizationActor } from "../authorization.js";
 import type { AssessReadiness, CreateReadinessRequirement, EvidenceItem } from "@paperclipai/shared";
 import { createReadinessRequirementSchema, resolveReadinessFindingSchema, readinessCriterionSchema } from "@paperclipai/shared";
 import type { z } from "zod";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
+import { contextEngineService, type AssembleContextInput } from "../context/context-engine.js";
 import { accessService } from "../access.js";
-import { contextEngineService } from "../context/context-engine.js";
 import { approvedFoundationView, foundationService } from "../foundation/foundation-service.js";
+import type { FoundationDocument } from "@paperclipai/shared";
+import { hashEvidenceContent } from "../context/context-manifest.js";
 import { logActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 import { logger } from "../../middleware/logger.js";
 import { evaluateReadiness, mandatoryReadinessPolicy, readinessHash, READINESS_POLICY_VERSION } from "./readiness-policy.js";
 
-type ReadinessActor = { actor: Request["actor"]; principalId: string; userId: string | null };
+type ReadinessActor = { actor: AuthorizationActor; principalId: string; userId: string | null };
 const FOUNDATION_DOMAINS: Record<string, string> = {
   company: "company_profile", business_model: "business_model", market_customer: "market_customer",
   products_services: "products_services", brand: "brand_positioning", strategy: "company_strategy",
   organization_leadership: "organization", operating_model: "operating_model", governance: "governance",
 };
+const MAX_READINESS_FOUNDATION_DOCUMENTS = 256;
+const MAX_READINESS_FOUNDATION_BYTES = 2 * 1024 * 1024;
+
+function readinessFoundationEvidence(companyId: string, documents: FoundationDocument[]) {
+  const observedAt = new Date().toISOString();
+  const approved = documents.map(approvedFoundationView).filter((item): item is FoundationDocument =>
+    !!item && item.authorityLevel === "canonical" && ["public", "internal"].includes(item.sensitivity));
+  if (approved.length > MAX_READINESS_FOUNDATION_DOCUMENTS ||
+    approved.reduce((total, item) => total + new TextEncoder().encode(item.body).length, 0) > MAX_READINESS_FOUNDATION_BYTES)
+    throw forbidden("Approved Foundation readiness evidence exceeds its source budget");
+  return approved.map(item => {
+    const revision = item.canonicalRevision!;
+    return {
+      id: `foundation:${item.id}:${revision.id}`, companyId, sourceClass: "foundation" as const,
+      sourceProvider: "august_works_foundation", sourceType: "approved_foundation",
+      sourceRef: `foundation://${item.id}/${revision.id}`, sourceVersion: revision.id,
+      title: item.title, excerpt: item.body,
+      sourceUpdatedAt: new Date(item.lastReviewedAt ?? revision.createdAt).toISOString(), observedAt,
+      validFrom: item.validFrom ? new Date(item.validFrom).toISOString() : null,
+      validUntil: item.validUntil ? new Date(item.validUntil).toISOString() : null,
+      authorityDomain: FOUNDATION_DOMAINS[item.category] ?? null,
+      trustLevel: "high" as const, sensitivity: item.sensitivity,
+      citation: { label: item.foundationKey },
+      metadata: { verificationState: "human_verified", conflictState: "none", foundationKey: item.foundationKey,
+        nextReviewAt: item.lastReviewedAt && item.reviewFrequencyDays
+          ? new Date(new Date(item.lastReviewedAt).getTime() + item.reviewFrequencyDays * 86400000).toISOString() : null },
+    } satisfies EvidenceItem;
+  });
+}
+
+function readinessEvidenceSourceHash(evidence: EvidenceItem[]) {
+  return readinessHash(evidence.map(item => ({ sourceProvider: item.sourceProvider, sourceRef: item.sourceRef,
+    sourceVersion: item.sourceVersion, contentHash: hashEvidenceContent(item) }))
+    .sort((a, b) => `${a.sourceProvider}:${a.sourceRef}`.localeCompare(`${b.sourceProvider}:${b.sourceRef}`)));
+}
 function publish(publications: ActivityPublication[]) {
   for (const item of publications) {
     try { publishActivity(item); } catch (error) { logger.error({ err: error }, "Readiness audit publication failed"); }
@@ -27,11 +64,9 @@ function publish(publications: ActivityPublication[]) {
 
 export function readinessService(db: Db) {
   const context = contextEngineService(db);
-  const access = accessService(db);
-  const foundation = foundationService(db);
-  async function requirements(companyId: string, actionClass?: string) {
+  async function requirements(companyId: string, actionClass?: string, sourceDb: Db = db) {
     // Select the latest immutable version of each key, then match its current action.
-    const rows = await db.selectDistinctOn([readinessRequirements.requirementKey]).from(readinessRequirements)
+    const rows = await sourceDb.selectDistinctOn([readinessRequirements.requirementKey]).from(readinessRequirements)
       .where(eq(readinessRequirements.companyId, companyId))
       .orderBy(readinessRequirements.requirementKey, desc(readinessRequirements.version));
     return actionClass ? rows.filter((row) => row.actionClass === actionClass) : rows;
@@ -123,79 +158,103 @@ export function readinessService(db: Db) {
       }
       const responsibleUserId = owner.userId;
       const enforceResponsibleUserIntersection = owner.actor.source !== "local_implicit";
-      const assembled = await context.assemble({
+      const assemblyInput: AssembleContextInput = {
         companyId, agentId: input.agentId, responsibleUserId, enforceResponsibleUserIntersection,
+        runId: owner.actor.type === "agent" ? owner.actor.runId ?? null : null,
         query: input.query, intent: input.actionClass, includeFoundation: false,
         issueId: input.subjectType === "task" ? subjectId : null,
         sensitivityCeiling: "internal",
-      });
-      const evidence = assembled.decisions.map((decision) => decision.evidence);
-      const foundationPermission = await access.decide({
-        actor: { type: "agent", agentId: input.agentId, companyId, onBehalfOfUserId: responsibleUserId, source: "agent_jwt" },
-        enforceResponsibleUserIntersection, action: "foundation:read", resource: { type: "company", companyId },
-      });
-      if (foundationPermission.allowed) {
-        // Exact approved revisions are inspected, not a search-result sample. Working
-        // governance fields cannot lend authority to an older approved revision.
-        for (const item of (await foundation.list(companyId)).map(approvedFoundationView)) {
-          if (!item || item.authorityLevel !== "canonical" || !["public", "internal"].includes(item.sensitivity)) continue;
-          const revision = item.canonicalRevision!;
-          evidence.push({
-            id: `foundation:${item.id}:${revision.id}`, companyId, sourceClass: "foundation",
-            sourceProvider: "august_works_foundation", sourceType: "approved_foundation",
-            sourceRef: `foundation://${item.id}/${revision.id}`, sourceVersion: revision.id,
-            title: item.title, excerpt: item.body,
-            sourceUpdatedAt: new Date(item.lastReviewedAt ?? revision.createdAt).toISOString(), observedAt: new Date().toISOString(),
-            validFrom: item.validFrom ? new Date(item.validFrom).toISOString() : null,
-            validUntil: item.validUntil ? new Date(item.validUntil).toISOString() : null,
-            authorityDomain: FOUNDATION_DOMAINS[item.category] ?? null,
-            trustLevel: item.authorityLevel === "canonical" ? "high" : "medium", sensitivity: item.sensitivity,
-            citation: { label: item.foundationKey },
-            metadata: { verificationState: "human_verified", conflictState: "none", foundationKey: item.foundationKey,
-              nextReviewAt: item.lastReviewedAt && item.reviewFrequencyDays
-                ? new Date(new Date(item.lastReviewedAt).getTime() + item.reviewFrequencyDays * 86400000).toISOString() : null },
-          } satisfies EvidenceItem);
-        }
-      }
-      const custom = await requirements(companyId, input.actionClass);
-      const packageRules: Parameters<typeof evaluateReadiness>[0]["requirements"] = [];
-      if(nativePackageVersionId){
-        const [release]=await db.select().from(agentPackageVersions).where(eq(agentPackageVersions.id,nativePackageVersionId));
-        if(!release||release.state!=="published"||!release.release.manifest.actionClasses.includes(input.actionClass))throw conflict("Current package capability qualification is required");
-        if(release.release.manifest.requiredKnowledge.length)packageRules.push({key:`system.package.${release.contentHash}`,version:1,criteria:release.release.manifest.requiredKnowledge.map(domain=>readinessCriterionSchema.parse({key:domain,domain,sourceClasses:["foundation"],mandatory:true,failureBehavior:"block",maxAgeSeconds:90*86400,allowedPurposes:[input.actionClass]}))});
-      }
-      const policies = [...packageRules, ...mandatoryReadinessPolicy(input.actionClass), ...custom.map((row) => ({ key: row.requirementKey, version: row.version, criteria: row.criteria }))];
-      const evaluation = evaluateReadiness({ action: input.actionClass, requirements: policies, evidence });
+      };
       const publications: ActivityPublication[] = parentPublications ?? [];
-      const row = await db.transaction(async (tx) => {
-        const [created] = await tx.insert(readinessAssessments).values({
-          companyId, agentId: input.agentId, principalId: owner.principalId, subjectType: input.subjectType, subjectId,
-          actionClass: input.actionClass, riskClass: evaluation.riskClass, status: evaluation.status,
-          requirementSnapshotHash: readinessHash(policies), policySnapshotHash: readinessHash({ version: READINESS_POLICY_VERSION, context: assembled.packet.manifest?.policySnapshotHash, principal: owner.principalId }),
-          contextManifestId: assembled.packet.manifest?.id ?? null, requirementSnapshot: policies,
-          assessment: evaluation, assessedAt: new Date(evaluation.assessedAt), expiresAt: new Date(evaluation.expiresAt),
-        }).returning();
-        const findings = evaluation.requirements.filter((criterion) => !criterion.satisfied).flatMap((criterion) => {
-          const failed = criterion.dimensions.filter((dimension) => !["satisfied", "not_applicable"].includes(dimension.state));
-          // A conjunction can fail even if different sources satisfy its dimensions separately.
-          const dimensions = failed.length ? failed : [{ dimension: "completeness", state: "failed", reason: "No single source satisfies all required dimensions" }];
-          return dimensions.map((dimension) => ({
-            companyId, assessmentId: created!.id,
-            findingHash: readinessHash([criterion.requirementKey, criterion.criterionKey, dimension.dimension]),
-            qualityDimension: dimension.dimension, requirementKey: criterion.requirementKey,
-            severity: criterion.mandatory ? "blocking" : "warning", summary: `${criterion.domain}: ${dimension.reason}`,
-            evidenceRefs: criterion.evidenceRefs, ruleVersion: READINESS_POLICY_VERSION,
-          }));
+      const persist = async (assembled: Awaited<ReturnType<typeof context.assemble>>, sourceDb: Db,
+        additionalEvidence: EvidenceItem[] = [], additionalSourceHash: string | null = null) => {
+        const evidence = [...assembled.decisions.map((decision) => decision.evidence), ...(assembled.inspectionEvidence ?? []), ...additionalEvidence];
+        const custom = await requirements(companyId, input.actionClass, sourceDb);
+        const packageRules: Parameters<typeof evaluateReadiness>[0]["requirements"] = [];
+        if(nativePackageVersionId){
+          const [release]=await sourceDb.select().from(agentPackageVersions).where(eq(agentPackageVersions.id,nativePackageVersionId));
+          if(!release||release.state!=="published"||!release.release.manifest.actionClasses.includes(input.actionClass))throw conflict("Current package capability qualification is required");
+          if(release.release.manifest.requiredKnowledge.length)packageRules.push({key:`system.package.${release.contentHash}`,version:1,criteria:release.release.manifest.requiredKnowledge.map(domain=>readinessCriterionSchema.parse({key:domain,domain,sourceClasses:["foundation"],mandatory:true,failureBehavior:"block",maxAgeSeconds:90*86400,allowedPurposes:[input.actionClass]}))});
+        }
+        const policies = [...packageRules, ...mandatoryReadinessPolicy(input.actionClass), ...custom.map((row) => ({ key: row.requirementKey, version: row.version, criteria: row.criteria }))];
+        const evaluation = evaluateReadiness({ action: input.actionClass, requirements: policies, evidence });
+        const write = async (tx: Db) => {
+          const [created] = await tx.insert(readinessAssessments).values({
+            companyId, agentId: input.agentId, principalId: owner.principalId, subjectType: input.subjectType, subjectId,
+            actionClass: input.actionClass, riskClass: evaluation.riskClass, status: evaluation.status,
+            requirementSnapshotHash: readinessHash(policies), policySnapshotHash: readinessHash({ version: READINESS_POLICY_VERSION,
+              context: assembled.inspection?.policySnapshotHash ?? assembled.packet.manifest?.policySnapshotHash,
+              sourceSnapshotHash: assembled.inspection?.sourceSnapshotHash ?? (additionalSourceHash
+                ? readinessHash({ contextManifestId: assembled.packet.manifest?.id ?? null, foundation: additionalSourceHash }) : null),
+              principal: owner.principalId }),
+            contextManifestId: assembled.packet.manifest?.id ?? null, requirementSnapshot: policies,
+            assessment: evaluation, assessedAt: new Date(evaluation.assessedAt), expiresAt: new Date(evaluation.expiresAt),
+          }).returning();
+          const findings = evaluation.requirements.filter((criterion) => !criterion.satisfied).flatMap((criterion) => {
+            const failed = criterion.dimensions.filter((dimension) => !["satisfied", "not_applicable"].includes(dimension.state));
+            // A conjunction can fail even if different sources satisfy its dimensions separately.
+            const dimensions = failed.length ? failed : [{ dimension: "completeness", state: "failed", reason: "No single source satisfies all required dimensions" }];
+            return dimensions.map((dimension) => ({
+              companyId, assessmentId: created!.id,
+              findingHash: readinessHash([criterion.requirementKey, criterion.criterionKey, dimension.dimension]),
+              qualityDimension: dimension.dimension, requirementKey: criterion.requirementKey,
+              severity: criterion.mandatory ? "blocking" : "warning", summary: `${criterion.domain}: ${dimension.reason}`,
+              evidenceRefs: criterion.evidenceRefs, ruleVersion: READINESS_POLICY_VERSION,
+            }));
+          });
+          if (findings.length) await tx.insert(knowledgeQualityFindings).values(findings);
+          await logActivity(tx as unknown as Db, { companyId, actorType: owner.actor.type === "agent" ? "agent" : "user",
+            actorId: owner.principalId, agentId: input.agentId, action: "readiness.assessed", entityType: "readiness_assessment", entityId: created!.id,
+            details: { actionClass: input.actionClass, status: evaluation.status, requirementSnapshotHash: created!.requirementSnapshotHash },
+          }, publications);
+          return created!;
+        };
+        const row = sourceDb === db ? await sourceDb.transaction(async tx => write(tx as unknown as Db)) : await write(sourceDb);
+        if (!parentPublications && sourceDb === db) publish(publications);
+        return row;
+      };
+
+      if (owner.actor.type === "board") {
+        const result = await context.inspectReadOnly(assemblyInput, owner.actor, {
+          addEvidence: async (txDb, authority) => {
+            const permission = await authority.decide({ actor: owner.actor, action: "foundation:read",
+              resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+            if (!permission.allowed) return [];
+            return readinessFoundationEvidence(companyId, await foundationService(txDb).list(companyId, owner.actor));
+          },
+          complete: (assembled, txDb) => persist(assembled, txDb),
         });
-        if (findings.length) await tx.insert(knowledgeQualityFindings).values(findings);
-        await logActivity(tx as unknown as Db, { companyId, actorType: owner.actor.type === "agent" ? "agent" : "user",
-          actorId: owner.principalId, agentId: input.agentId, action: "readiness.assessed", entityType: "readiness_assessment", entityId: created!.id,
-          details: { actionClass: input.actionClass, status: evaluation.status, requirementSnapshotHash: created!.requirementSnapshotHash },
-        }, publications);
-        return created!;
-      });
-      if (!parentPublications) publish(publications);
-      return row;
+        if (!parentPublications) publish(publications);
+        return result;
+      }
+      if (owner.actor.type === "agent") {
+        const assembled = await context.assemble(assemblyInput);
+        const row = await db.transaction(async rawTx => {
+          const tx = rawTx as unknown as Db;
+          const readFoundation = async () => {
+            const permission = await accessService(tx).decide({ actor: owner.actor,
+              enforceResponsibleUserIntersection, action: "foundation:read", resource: { type: "company", companyId } });
+            const evidence = permission.allowed
+              ? readinessFoundationEvidence(companyId, await foundationService(tx).list(companyId, owner.actor)) : [];
+            const refs = evidence.map(item => {
+              const match = /^foundation:\/\/([a-f0-9-]{36})\/([a-f0-9-]{36})$/i.exec(item.sourceRef);
+              if (!match || item.sourceVersion !== match[2]) throw forbidden("Foundation readiness source is unavailable");
+              return { documentId: match[1]!, revisionId: match[2]! };
+            });
+            await foundationService(tx).pinApprovedRevisions(companyId, refs, owner.actor);
+            return { evidence, sourceHash: readinessEvidenceSourceHash(evidence) };
+          };
+          const initial = await readFoundation();
+          const result = await persist(assembled, tx, initial.evidence, initial.sourceHash);
+          const current = await readFoundation();
+          if (current.sourceHash !== initial.sourceHash) throw conflict("Approved Foundation readiness evidence changed during assessment");
+          return result;
+        });
+        if (!parentPublications) publish(publications);
+        return row;
+      }
+      const assembled = await context.assemble(assemblyInput);
+      return persist(assembled, db);
     },
     list: (companyId: string, principalId: string) => db.select().from(readinessAssessments)
       .where(and(eq(readinessAssessments.companyId, companyId), eq(readinessAssessments.principalId, principalId)))

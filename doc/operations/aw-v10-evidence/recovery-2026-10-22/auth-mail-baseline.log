@@ -1,0 +1,115 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/saas/auth-delivery.test.ts (8 tests | 6 failed) 43ms
+     × uses the initiating Danish locale and preserves the legacy return context 21ms
+     × falls back to English for an invalid request locale 6ms
+     × prefers an explicit account locale over the initiating request 3ms
+     × preserves reset callback query context 2ms
+     × ignores unsafe or non-native callback context: https://evil.example.test/saas/welcome?legacy=1 3ms
+     × ignores unsafe or non-native callback context: https://app.example.test/other?legacy=1 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/saas/auth-delivery.test.ts > SaaS auth mail locale > uses the initiating Danish locale and preserves the legacy return context
+AssertionError: expected 'Verify your Blentera email' to contain 'Bekræft din'
+
+Expected: "Bekræft din"
+Received: "Verify your Blentera email"
+
+ ❯ src/services/saas/auth-delivery.test.ts:66:37
+     64|       callbackURL: "https://app.example.test/saas/welcome?legacy=1",
+     65|     });
+     66|     expect(result.payload?.subject).toContain("Bekræft din");
+       |                                     ^
+     67|     expect(result.payload?.message).toContain("Bekræft din e-mail");
+     68|     const callback = new URL(result.action!.searchParams.get("callback…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  |@paperclipai/server| src/services/saas/auth-delivery.test.ts > SaaS auth mail locale > falls back to English for an invalid request locale
+AssertionError: expected null to be 'en' // Object.is equality
+
+- Expected:
+"en"
+
++ Received:
+null
+
+ ❯ src/services/saas/auth-delivery.test.ts:77:97
+     75|     const result = await send({ requestLocale: "fr" });
+     76|     expect(result.payload?.subject).toContain("Verify your");
+     77|     expect(new URL(result.action!.searchParams.get("callbackURL")!).se…
+       |                                                                                                 ^
+     78|   });
+     79|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  |@paperclipai/server| src/services/saas/auth-delivery.test.ts > SaaS auth mail locale > prefers an explicit account locale over the initiating request
+AssertionError: expected null to be 'en' // Object.is equality
+
+- Expected:
+"en"
+
++ Received:
+null
+
+ ❯ src/services/saas/auth-delivery.test.ts:83:97
+     81|     const result = await send({ locale: "en", requestLocale: "da" });
+     82|     expect(result.payload?.subject).toContain("Verify your");
+     83|     expect(new URL(result.action!.searchParams.get("callbackURL")!).se…
+       |                                                                                                 ^
+     84|   });
+     85|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  |@paperclipai/server| src/services/saas/auth-delivery.test.ts > SaaS auth mail locale > preserves reset callback query context
+AssertionError: expected null to be 'mail' // Object.is equality
+
+- Expected:
+"mail"
+
++ Received:
+null
+
+ ❯ src/services/saas/auth-delivery.test.ts:95:49
+     93|     const callback = new URL(result.action!.searchParams.get("callback…
+     94|     expect(callback.pathname).toBe("/saas/reset-password");
+     95|     expect(callback.searchParams.get("source")).toBe("mail");
+       |                                                 ^
+     96|     expect(callback.searchParams.get("locale")).toBe("da");
+     97|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  |@paperclipai/server| src/services/saas/auth-delivery.test.ts > SaaS auth mail locale > ignores unsafe or non-native callback context: https://evil.example.test/saas/welcome?legacy=1
+ FAIL  |@paperclipai/server| src/services/saas/auth-delivery.test.ts > SaaS auth mail locale > ignores unsafe or non-native callback context: https://app.example.test/other?legacy=1
+AssertionError: expected null to be 'da' // Object.is equality
+
+- Expected:
+"da"
+
++ Received:
+null
+
+ ❯ src/services/saas/auth-delivery.test.ts:108:49
+    106|     expect(callback.pathname).toBe("/saas/welcome");
+    107|     expect(callback.searchParams.get("legacy")).toBeNull();
+    108|     expect(callback.searchParams.get("locale")).toBe("da");
+       |                                                 ^
+    109|   });
+    110|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 2 passed (8)
+   Start at  13:55:18
+   Duration  14.50s (transform 7.39s, setup 201ms, import 13.79s, tests 43ms, environment 0ms)
+

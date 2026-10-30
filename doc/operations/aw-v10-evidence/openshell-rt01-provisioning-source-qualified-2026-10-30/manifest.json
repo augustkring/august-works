@@ -1,0 +1,18 @@
+{
+  "purpose": "scoped software qualification; not physical host or whole V10 acceptance",
+  "qualifiedRepositoryHead": "4f7894452d67dc76d7349c940217bdb0be39fb40",
+  "workflowRun": 41051549768,
+  "patchSha256": "c5571c1418ccc23866b399682b4d9f6f48242103970bffb470c8c45b968c810b",
+  "qualifiedManifestSha256": "4b644b8cdbded54775f229dbccb5c75f9df919819e17a7502556cdba2587822e",
+  "evidenceOnlyRefreshedManifestSha256": "d1eba31372c0fc3768949527b21dd6adc762b62f0a913bdb1ebe784cb9081239",
+  "sourceFileHashesUnchanged": true,
+  "exactTestsPassed": 18,
+  "compiledPackages": [
+    "openshell-server",
+    "openshell-cli",
+    "openshell-driver-docker",
+    "openshell-sandbox"
+  ],
+  "archiveSha256": "8be6460d60743a37ca8e6e3451e05b0fffe5f018a1b3581e8dd7b9936d50520a",
+  "archiveBytes": 1228007
+}

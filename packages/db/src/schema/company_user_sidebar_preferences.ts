@@ -9,6 +9,7 @@ export const companyUserSidebarPreferences = pgTable(
     userId: text("user_id").notNull(),
     projectOrder: jsonb("project_order").$type<string[]>().notNull().default([]),
     experienceProfile: text("experience_profile"),
+    preferredAgentId: uuid("preferred_agent_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

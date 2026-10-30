@@ -29,13 +29,23 @@ const receipt = { id: "private-deletion-receipt", companyId: "PRIVATE-DELETION-C
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 let root: Root, host: HTMLDivElement, client: QueryClient;
 async function render() { await act(async () => root.render(<QueryClientProvider client={client}><SaasAccountPage /></QueryClientProvider>)); }
-async function mount(options: { coldSessionFailure?: boolean } = {}) {
+async function mount(options: { coldSessionFailure?: boolean; passwordless?: boolean; readyChallenge?: string; pendingFactorChallenge?: string;
+  twoFactorEnabled?: boolean; phishingResistantRequired?: boolean } = {}) {
   await i18n.changeLanguage("en"); context.company = "company-one";
+  const callbackChallenge = options.readyChallenge ?? options.pendingFactorChallenge;
+  if (callbackChallenge) window.history.replaceState({}, "", `/company/settings/security?accountDeletionReauth=${callbackChallenge}`);
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } } });
   if (!options.coldSessionFailure) client.setQueryData(queryKeys.auth.session, v9SessionFixture("owner"));
   client.setQueryData(["saas-capabilities"], capabilities);
   vi.spyOn(saasApi, "capabilities").mockResolvedValue(capabilities);
   const account = vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("owner"));
+  vi.spyOn(authApi, "securityStatus").mockResolvedValue({ userId: "owner", hasPassword: !options.passwordless,
+    twoFactorEnabled: !!options.twoFactorEnabled, phishingResistantRequired: !!options.phishingResistantRequired, passkeysAvailable: false });
+  vi.spyOn(authApi, "accountDeletionSsoStatus").mockResolvedValue({ userId: "owner", providerId: options.passwordless ? "qualified-oidc" : null,
+    available: !!options.passwordless, ready: !!options.readyChallenge,
+    requiresNativeFactor: !!options.twoFactorEnabled || !!options.phishingResistantRequired,
+    nativeFactorMethod: options.phishingResistantRequired ? "passkey" : options.twoFactorEnabled ? "totp" : null,
+    challengeId: callbackChallenge ?? null });
   if (options.coldSessionFailure) account.mockRejectedValueOnce(new Error("PRIVATE-COLD-BOOT-ERROR"));
   vi.spyOn(instanceSettingsApi, "getExperimental").mockResolvedValue({ notification_policy_v9: true } as never);
   vi.spyOn(saasApi, "sessions").mockResolvedValue([session]);
@@ -51,6 +61,7 @@ async function mount(options: { coldSessionFailure?: boolean } = {}) {
 afterEach(async () => {
   if (root) await act(async () => root.unmount());
   await client?.cancelQueries(); client?.clear(); host?.remove(); vi.restoreAllMocks();
+  window.history.replaceState({}, "", "/");
   localStorage.clear(); sessionStorage.clear(); await i18n.changeLanguage("en");
 });
 function setInput(input: HTMLInputElement, value: string) {
@@ -58,6 +69,7 @@ function setInput(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 const deletionSection = () => host.querySelector<HTMLElement>('section[aria-label="Delete your account"]')!;
+const deletionPassword = () => host.querySelector<HTMLInputElement>('section[aria-label="Delete your account"] input[type="password"]');
 async function confirmDeletion(password = "PRIVATE-CURRENT-PASSWORD") {
   await act(async () => {
     setInput(deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')!, "DELETE MY ACCOUNT");
@@ -71,11 +83,11 @@ it("withdraws private account data and preserves a same-person deletion draft th
   await mount(); await confirmDeletion();
   const current = deferred<ReturnType<typeof v9SessionFixture>>(); let recheck!: Promise<unknown>;
   await act(async () => { recheck = client.fetchQuery({ queryKey: queryKeys.auth.session, queryFn: () => current.promise }); });
-  await vi.waitFor(() => expect(host.querySelector('input[type="password"]')).toBeNull());
+  await vi.waitFor(() => expect(deletionPassword()).toBeNull());
   expect(host.textContent).not.toContain(receipt.companyId); expect(host.textContent).not.toContain("Signed in");
   expect(host.querySelector('input[name="timezone"]')).toBeNull();
   await act(async () => { current.resolve(v9SessionFixture("owner")); await recheck; });
-  await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe("PRIVATE-CURRENT-PASSWORD"));
+  await vi.waitFor(() => expect(deletionPassword()?.value).toBe("PRIVATE-CURRENT-PASSWORD"));
   await vi.waitFor(() => expect(host.textContent).toContain(receipt.companyId));
   expect(deletionSection().querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
   expect(document.activeElement).toBe(host.querySelector("h1"));
@@ -98,7 +110,7 @@ it("purges the previous person's password and unsaved policy when the actual ses
   await mount(); await confirmDeletion();
   await act(async () => setInput(host.querySelector<HTMLInputElement>('input[name="timezone"]')!, "Europe/Paris"));
   await act(async () => client.setQueryData(queryKeys.auth.session, v9SessionFixture("other-owner")));
-  await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>('input[type="password"]')?.value).toBe(""));
+  await vi.waitFor(() => expect(deletionPassword()?.value).toBe(""));
   await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>('input[name="timezone"]')?.value).toBe("Europe/Copenhagen"));
   expect(deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')?.value).toBe("");
   expect(deletionSection().querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(false);
@@ -157,7 +169,7 @@ it("keeps a late deletion acknowledgement unconfirmed across the same account's 
   await act(async () => submitDeletion()); await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
   const current = deferred<ReturnType<typeof v9SessionFixture>>(); let recheck!: Promise<unknown>;
   await act(async () => { recheck = client.fetchQuery({ queryKey: queryKeys.auth.session, queryFn: () => current.promise }); });
-  await vi.waitFor(() => expect(host.querySelector('input[type="password"]')).toBeNull());
+  await vi.waitFor(() => expect(deletionPassword()).toBeNull());
   await act(async () => accepted.resolve({ id: "native-deletion", status: "requested", createdAt: "2026-10-10T00:00:00Z", completedAt: null }));
   await act(async () => { current.resolve(v9SessionFixture("owner")); await recheck; });
   await vi.waitFor(() => expect(host.textContent).toContain("Your deletion request is not confirmed"));
@@ -167,13 +179,90 @@ it("requires all explicit deletion confirmations even when a form submit is disp
   await mount(); const remove = vi.spyOn(saasApi, "deleteAccount");
   await act(async () => submitDeletion()); expect(remove).not.toHaveBeenCalled();
 });
+it("requires a fresh company sign-in and keeps deletion behind the explicit confirmation form", async () => {
+  await mount({ passwordless: true, twoFactorEnabled: true });
+  const start = vi.spyOn(authApi, "startAccountDeletionSso").mockResolvedValue({
+    challengeId: "11111111-1111-4111-8111-111111111111", providerId: "qualified-oidc",
+    callbackURL: "https://example.test/company/settings/security?accountDeletionReauth=11111111-1111-4111-8111-111111111111",
+  });
+  const signIn = vi.spyOn(authApi, "signInAccountDeletionSso").mockReturnValue(new Promise(() => {}));
+  const remove = vi.spyOn(saasApi, "deleteAccount");
+  const submit = deletionSection().querySelector("form")!;
+  await act(async () => submit.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  expect(remove).not.toHaveBeenCalled();
+  const companySignIn = [...deletionSection().querySelectorAll("button")].find(button => button.textContent === "Continue with company sign-in")!;
+  await act(async () => companySignIn.click());
+  await vi.waitFor(() => expect(signIn).toHaveBeenCalledWith("qualified-oidc",
+    "https://example.test/company/settings/security?accountDeletionReauth=11111111-1111-4111-8111-111111111111", "owner", "session-owner"));
+  expect(start).toHaveBeenCalledWith("owner", "session-owner");
+  expect(remove).not.toHaveBeenCalled();
+});
+
+it("submits a session-bound company sign-in proof only after explicit delete and export confirmation", async () => {
+  const proofId = "22222222-2222-4222-8222-222222222222";
+  await mount({ passwordless: true, readyChallenge: proofId });
+  const remove = vi.spyOn(saasApi, "deleteAccount").mockReturnValue(new Promise(() => {}));
+  await act(async () => {
+    setInput(deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')!, "DELETE MY ACCOUNT");
+    deletionSection().querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+  });
+  await act(async () => submitDeletion());
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
+  expect(remove.mock.calls[0]![1]).toMatchObject({ confirmation: "DELETE MY ACCOUNT", reauthenticationProofId: proofId, acknowledgeExport: true });
+  expect(remove.mock.calls[0]![1]).not.toHaveProperty("password");
+});
+
+it("requires the existing native factor after fresh company sign-in before offering deletion", async () => {
+  const challengeId = "33333333-3333-4333-8333-333333333333";
+  await mount({ passwordless: true, twoFactorEnabled: true, pendingFactorChallenge: challengeId });
+  const complete = vi.spyOn(authApi, "completeAccountDeletionSsoFactor").mockResolvedValue({
+    userId: "owner", sessionId: "factor-session", challengeId,
+  });
+  const verify = vi.spyOn(authApi, "verifyTotp").mockResolvedValue({ sessionId: "factor-session" });
+  const freshSession = { ...v9SessionFixture("owner"), session: { ...v9SessionFixture("owner").session, id: "factor-session" } };
+  vi.mocked(authApi.getSession).mockResolvedValueOnce(freshSession);
+  vi.mocked(authApi.accountDeletionSsoStatus)
+    .mockResolvedValueOnce({ userId: "owner", providerId: "qualified-oidc", available: true, ready: true,
+      requiresNativeFactor: true, nativeFactorMethod: "totp", challengeId });
+  const remove = vi.spyOn(saasApi, "deleteAccount");
+  const factorInput = deletionSection().querySelector<HTMLInputElement>('input[inputmode="numeric"]')!;
+  await act(async () => setInput(factorInput, "123456"));
+  const confirm = [...deletionSection().querySelectorAll("button")].find(button => button.textContent === "Confirm my identity")!;
+  await act(async () => confirm.click());
+  await vi.waitFor(() => expect(complete).toHaveBeenCalledWith("owner", "factor-session"));
+  expect(verify).toHaveBeenCalledWith("123456", "owner", "session-owner");
+  expect(remove).not.toHaveBeenCalled();
+  expect(deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')?.value).toBe("");
+});
+
+it("offers only a pre-enrolled passkey after PR SSO even when global enterprise passkey availability is false", async () => {
+  const challengeId = "44444444-4444-4444-8444-444444444444";
+  await mount({ passwordless: true, phishingResistantRequired: true, pendingFactorChallenge: challengeId });
+  const authenticate = vi.spyOn(authApi, "authenticatePasskey").mockResolvedValue({ userId: "owner", sessionId: "passkey-session" });
+  const complete = vi.spyOn(authApi, "completeAccountDeletionSsoFactor").mockResolvedValue({
+    userId: "owner", sessionId: "passkey-session", challengeId,
+  });
+  const freshSession = { ...v9SessionFixture("owner"), session: { ...v9SessionFixture("owner").session, id: "passkey-session" } };
+  vi.mocked(authApi.getSession).mockResolvedValue(freshSession);
+  vi.mocked(authApi.accountDeletionSsoStatus).mockResolvedValue({ userId: "owner", providerId: "qualified-oidc",
+    available: true, ready: false, requiresNativeFactor: true, nativeFactorMethod: "passkey", challengeId });
+  const remove = vi.spyOn(saasApi, "deleteAccount");
+  const passkeyLabel = i18n.t("account.passkeys.confirm", { ns: "experience" });
+  const passkeyButton = [...deletionSection().querySelectorAll("button")]
+    .find(button => button.textContent === passkeyLabel)!;
+  expect(passkeyButton).toBeTruthy();
+  await act(async () => passkeyButton.click());
+  await vi.waitFor(() => expect(authenticate).toHaveBeenCalledWith("owner", "session-owner"));
+  await vi.waitFor(() => expect(complete).toHaveBeenCalledWith("owner", "passkey-session"));
+  expect(remove).not.toHaveBeenCalled();
+});
 it("hides private cached data after an actual session failure and exposes an original-session retry", async () => {
   await mount();
   const read = vi.mocked(authApi.getSession).mockRejectedValueOnce(new Error("PRIVATE-SESSION-FAILURE")).mockResolvedValueOnce(v9SessionFixture("owner"));
   await act(async () => { await client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true }); });
   await vi.waitFor(() => expect(host.textContent).toContain("Account access could not be checked"));
   expect(host.textContent).not.toContain(receipt.companyId); expect(host.textContent).not.toContain("PRIVATE-SESSION-FAILURE");
-  expect(host.querySelector('input[type="password"]')).toBeNull();
+  expect(deletionPassword()).toBeNull();
   const retry = [...host.querySelectorAll("button")].find(item => item.textContent === "Try again")!;
   await act(async () => retry.click());
   await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
@@ -190,7 +279,7 @@ it("does not read private accounts when the original SaaS capability owner repor
   await mount();
   await act(async () => client.setQueryData(["saas-capabilities"], null));
   await vi.waitFor(() => expect(host.textContent).toContain("Personal account features are currently unavailable"));
-  expect(host.querySelector('input[type="password"]')).toBeNull();
+  expect(deletionPassword()).toBeNull();
   expect(host.textContent).not.toContain(receipt.companyId);
   expect(saasApi.sessions).toHaveBeenCalledOnce(); expect(saasApi.notificationPreferences).toHaveBeenCalledOnce();
 });
@@ -206,7 +295,7 @@ it("offers an original-session retry after a cold-boot failure without any priva
 
 async function reopenAccount() {
   await act(async () => root.unmount()); root = createRoot(host);
-  await render(); await vi.waitFor(() => expect(host.querySelector('input[type="password"]')).toBeTruthy());
+  await render(); await vi.waitFor(() => expect(deletionPassword()).toBeTruthy());
 }
 it("reopens only the original deletion key after route unmount and requires new explicit consent without persisting a password", async () => {
   await mount(); await confirmDeletion();

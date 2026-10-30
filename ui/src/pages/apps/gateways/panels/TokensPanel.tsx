@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, KeyRound, Plus } from "lucide-react";
@@ -193,7 +194,7 @@ export function TokensPanel({
             Issue a reusable token for an external client. Its name is also used as the client label.
           </p>
           <p className="text-xs text-muted-foreground">
-            Paperclip creates a fresh one-hour runtime token when an agent run starts, then revokes it when the
+            {PRODUCT_IDENTITY.productName} creates a fresh one-hour runtime token when an agent run starts, then revokes it when the
             run ends. Codex can receive the same gateway through both an app connection and the managed-gateway
             path, so one run may leave two revoked rows. These are audit history, not repeated manual tokens.
           </p>

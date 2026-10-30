@@ -10,9 +10,17 @@ const mockIssueService = vi.hoisted(() => ({
   removeComment: vi.fn(),
   tombstoneComment: vi.fn(),
 }));
+const mockCanActorReadIssuePrivacy = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn(async () => undefined));
 
 const mockAccessService = vi.hoisted(() => ({
   canUser: vi.fn(),
+  decide: vi.fn(async (input: { action: string }) => ({
+    allowed: true,
+    action: input.action,
+    reason: "allow_test_fixture",
+    explanation: "The seeded public issue is within the fixture actor's boundary.",
+  })),
   hasPermission: vi.fn(),
 }));
 
@@ -98,6 +106,16 @@ function registerModuleMocks() {
   vi.doMock("../services/access.js", () => ({
     accessService: () => mockAccessService,
   }));
+
+  vi.doMock("../services/authorization.js", async () => {
+    const actual = await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js");
+    return { ...actual, canActorReadIssuePrivacy: mockCanActorReadIssuePrivacy };
+  });
+
+  vi.doMock("../services/analytical-context-authority.js", async () => {
+    const actual = await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js");
+    return { ...actual, assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess };
+  });
 
   vi.doMock("../services/activity-log.js", () => ({
     logActivity: mockLogActivity,
@@ -259,7 +277,17 @@ describe.sequential("issue comment cancel routes", () => {
       return deleted;
     });
     mockAccessService.canUser.mockResolvedValue(false);
+    mockAccessService.decide.mockImplementation(async (input) => ({
+      allowed: input.action === "issue:read",
+      action: input.action,
+      reason: input.action === "issue:read" ? "allow_test_fixture" : "deny_missing_grant",
+      explanation: input.action === "issue:read"
+        ? "The seeded public issue is within the fixture actor's boundary."
+        : "No unrelated permission is granted by this fixture.",
+    }));
     mockAccessService.hasPermission.mockResolvedValue(false);
+    mockCanActorReadIssuePrivacy.mockResolvedValue(true);
+    mockAnalyticalPayloadAccess.mockResolvedValue(undefined);
     mockFeedbackService.listIssueVotesForUser.mockResolvedValue([]);
     mockFeedbackService.saveIssueVote.mockResolvedValue({
       vote: null,
@@ -483,6 +511,17 @@ describe.sequential("issue comment cancel routes", () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe("Only the comment author can delete comments");
+    expect(mockIssueService.removeComment).not.toHaveBeenCalled();
+    expect(mockIssueService.tombstoneComment).not.toHaveBeenCalled();
+  });
+
+  it("does not cancel or delete comments when the issue privacy check denies access", async () => {
+    mockCanActorReadIssuePrivacy.mockResolvedValue(false);
+
+    const res = await request(await installActor(createApp()))
+      .delete("/api/issues/11111111-1111-4111-8111-111111111111/comments/comment-1?mode=cancel");
+
+    expect(res.status).toBe(404);
     expect(mockIssueService.removeComment).not.toHaveBeenCalled();
     expect(mockIssueService.tombstoneComment).not.toHaveBeenCalled();
   });

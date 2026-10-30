@@ -1,0 +1,80 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Focused PostgreSQL-backed Memory runtime erasure and company offboarding checks. These logs predate the current normal-heartbeat local Stop receipt helper and do not verify that addition. They use synthetic fixtures and local filesystem storage; they are not deployed provider or backup-retention qualification.",
+  "logs": [
+    {
+      "name": "managed-opencode-erasure-focused-final-20261025",
+      "exitCode": 0,
+      "exitSidecar": "managed-opencode-erasure-focused-final-20261025.log.exit",
+      "rawSha256": "20e7a569b76f5a4f86d8c3a9ee6f203595cc982fde17b48fe14c4cecd6d9bdb3",
+      "sanitizedSha256": "90fe15e2056704d4e06d3e378e318ea8b195e6a9d03ac12f7643f462322e3fb3",
+      "archiveSha256": "a253a6dcd1db6f5222fe8d2d59518d77589b882046ca474c6cabc3098ef65b39",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 55 skipped (56)",
+        "Duration  26.65s (transform 11.54s, setup 70ms, import 15.80s, tests 10.67s, environment 0ms)"
+      ],
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28"
+    },
+    {
+      "name": "managed-opencode-company-offboarding-final3-20261025",
+      "exitCode": 0,
+      "exitSidecar": "managed-opencode-company-offboarding-final3-20261025.log.exit",
+      "rawSha256": "0e068ab9ecb66f3753a7307e12ba03e36fa7ae21389348e9aa48f684c515ae84",
+      "sanitizedSha256": "f3bb17e987c6f8fa0a8bf4484c4725bc16bc6daecf88e8b586e0c26d5108b602",
+      "archiveSha256": "fd4bd71c5d6601607fe9cb28e9b5612e27a93971fcd3b100340bb67c465d96af",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 24 skipped (25)",
+        "Duration  17.78s (transform 9.35s, setup 70ms, import 12.95s, tests 4.64s, environment 0ms)"
+      ],
+      "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28"
+    },
+    {
+      "name": "native-local-stop-ordinary-child-focused-20261025",
+      "exitCode": 0,
+      "exitSidecar": "native-local-stop-ordinary-child-focused-20261025.log.exit",
+      "rawSha256": "c80d17e2fb962cc4670c048815a3c8072bcbaf560eaddca5c1e4c30f797b7038",
+      "sanitizedSha256": "c80d17e2fb962cc4670c048815a3c8072bcbaf560eaddca5c1e4c30f797b7038",
+      "archiveSha256": "712c2ec297388304116b2e4b76992b62677038e26fe983fc72765f6544939799",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 139 skipped (141)",
+        "Duration  22.85s (transform 12.54s, setup 75ms, import 17.42s, tests 5.21s, environment 0ms)"
+      ],
+      "sourceCommit": "0961a7e60298c6b5b0821e0ba5c9e8c6409843a7"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "0961a7e60298c6b5b0821e0ba5c9e8c6409843a7",
+      "meaning": "Focused PostgreSQL-backed check of the canonical ordinary local Stop receipt helper: one synthetic detached child reached its real close event; unknown identity and a live process were refused. This was a focused helper-level regression, not a full Heartbeat run/provider E2E or deployed-provider qualification.",
+      "logs": [
+        "native-local-stop-ordinary-child-focused-20261025"
+      ]
+    }
+  ]
+}

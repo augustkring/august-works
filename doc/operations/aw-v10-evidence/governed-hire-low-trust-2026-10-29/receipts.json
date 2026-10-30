@@ -1,0 +1,43 @@
+{
+  "record": "independent-full-file-governed-fixture-regressions-v1",
+  "runs": [
+    {
+      "id": "hire",
+      "attempt": "inventory-resume2-agent-hire-full-ci-20261029-r4",
+      "sourceHead": "d57131452f7ae0b87d498891a249bc78c89fd1a9",
+      "testFile": "server/src/__tests__/agent-hire-ai-connections.test.ts",
+      "testFileSha256": "60644557a1d629facafb66c325c3e65834f96516d154430cb82c947de9a0625f",
+      "passed": 40,
+      "skipped": 0,
+      "exit": 0,
+      "rawPatchSha256": "d537114010dc23c2afda4f02571ccc4a564b1c61deb828da0fea644c4efb0bcf",
+      "rawLogSha256": "ecb450cd0baab2577582fe80dde6f65e6a13c0fa1e44a529d81459444773a879",
+      "sanitizedLogSha256": "ecb450cd0baab2577582fe80dde6f65e6a13c0fa1e44a529d81459444773a879",
+      "redactions": {
+        "jwt": 0,
+        "bearer": 0,
+        "invite": 0,
+        "credential": 0
+      }
+    },
+    {
+      "id": "low-trust",
+      "attempt": "low-trust-red-team-full-r1-20261029",
+      "sourceHead": "d57131452f7ae0b87d498891a249bc78c89fd1a9",
+      "testFile": "server/src/__tests__/low-trust-red-team-routes.test.ts",
+      "testFileSha256": "944bf09303a156a82c47624352a2e832ff7b0a5161717fb9d7b4e76220f0142a",
+      "passed": 11,
+      "skipped": 0,
+      "exit": 0,
+      "rawPatchSha256": "d537114010dc23c2afda4f02571ccc4a564b1c61deb828da0fea644c4efb0bcf",
+      "rawLogSha256": "25f59e448baafd25908f41fb79535d146dc904e0360bc61277300d889a7b657c",
+      "sanitizedLogSha256": "25f59e448baafd25908f41fb79535d146dc904e0360bc61277300d889a7b657c",
+      "redactions": {
+        "jwt": 0,
+        "bearer": 0,
+        "invite": 0,
+        "credential": 0
+      }
+    }
+  ]
+}

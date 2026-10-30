@@ -1,0 +1,64 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/memory-candidate-steered-producer.integration.test.ts (1 test | 1 failed) 17796ms
+     × withholds Alice's source UUID and rolls back a new derived candidate after actual native steering to Bob 1830ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-candidate-steered-producer.integration.test.ts > New Memory candidate producer cannot copy an earlier Human's retained private Context > withholds Alice's source UUID and rolls back a new derived candidate after actual native steering to Bob
+AssertionError: expected '{"value":{"record":{"id":"7d599b85-aa…' not to contain '442aa7b2-b899-4dee-b185-b3e0472ed2ff'
+
+Expected: "442aa7b2-b899-4dee-b185-b3e0472ed2ff"
+Received: "{"value":{"record":{"id":"7d599b85-aa23-474a-98c5-c7e712d604dd","companyId":"4d6174a4-36f4-4c4a-90f1-df5b087b3e29","bindingId":"dd2a94ff-a4a7-426b-84da-921ac8454fd5","providerKey":"local","memoryType":"lesson","scopeType":"company","scopeId":null,"subjectType":null,"subjectId":null,"ownerAgentId":null,"title":"Bob's new lesson","content":"Bob's distinct input-only lesson","summary":null,"reviewState":"pending","verificationState":"unverified","sensitivityLabel":"internal","importance":50,"confidenceScore":0.5,"validFrom":null,"validUntil":null,"observedAt":"2026-10-22T22:15:25.434Z","retentionPolicy":"standard","expiresAt":null,"retentionState":"active","supersedesRecordId":null,"supersededByRecordId":null,"revokedAt":null,"revokedByActorType":null,"revokedByActorId":null,"revocationReason":null,"createdByActorType":"agent","createdByActorId":"3af75467-38f6-4b28-b977-46888a898387","createdByOperationId":"81399d66-3b7d-4c06-b475-970241b4220c","sourceProvenanceQualified":true,"privateOwnerUserId":null,"sourceRunIds":["01d24e55-5a2c-4167-b1b9-05003772fc8a"],"sourceIssueIds":["f6bcd5c4-5252-4b93-982f-f2262041e55d"],"sourceProjectIds":[],"sourceMemoryIds":["442aa7b2-b899-4dee-b185-b3e0472ed2ff"],"sourceFoundationRevisionIds":[],"metadata":{"memoryResolution":{"kind":"new","version":"v1","reasonCode":"no_comparable_active_record","resolvedAt":"2026-10-22T22:15:25.480Z","targetRecordId":null,"relatedRecordIds":[],"novelEvidenceCount":0}},"createdAt":"2026-10-22T22:15:25.504Z","updatedAt":"2026-10-22T22:15:25.504Z","deletedAt":null},"evidence":[{"id":"71355c0e-7162-4f74-b4c5-ab3164cda355","companyId":"4d6174a4-36f4-4c4a-90f1-df5b087b3e29","memoryRecordId":"7d599b85-aa23-474a-98c5-c7e712d604dd","sourceClass":"task","sourceProvider":"native_fixture","sourceType":"issue","sourceRef":"issue://f6bcd5c4-5252-4b93-982f-f2262041e55d","sourceVersion":"1","sourceUpdatedAt":null,"observedAt":"2026-10-22T22:15:25.434Z","excerptHash":"3d479f4e8107e4fada2867627f62202415d45f6517cc950a13ad32fec1e02260","citationJson":{"label":"Bob's input"},"trustLevel":"low","supportsOrContradicts":"supports","createdAt":"2026-10-22T22:15:25.441Z"}],"resolution":{"version":"v1","kind":"new","reasonCode":"no_comparable_active_record","targetRecordId":null,"relatedRecordIds":[],"novelEvidenceCount":0,"resolvedAt":"2026-10-22T22:15:25.480Z"}}}"
+
+ ❯ src/__tests__/memory-candidate-steered-producer.integration.test.ts:75:46
+     73|     // Check output and committed state independently: suppressing the…
+     74|     // must not leave an unauthorized durable derivative behind.
+     75|     expect.soft(JSON.stringify(outcome)).not.toContain(source.record.i…
+       |                                              ^
+     76|     expect.soft(JSON.stringify(outcome)).not.toContain(secret);
+     77|     expect.soft(committed).toHaveLength(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-candidate-steered-producer.integration.test.ts > New Memory candidate producer cannot copy an earlier Human's retained private Context > withholds Alice's source UUID and rolls back a new derived candidate after actual native steering to Bob
+AssertionError: expected [ { …(44) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/__tests__/memory-candidate-steered-producer.integration.test.ts:77:28
+     75|     expect.soft(JSON.stringify(outcome)).not.toContain(source.record.i…
+     76|     expect.soft(JSON.stringify(outcome)).not.toContain(secret);
+     77|     expect.soft(committed).toHaveLength(0);
+       |                            ^
+     78|     expect(outcome).toHaveProperty("error");
+     79|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-candidate-steered-producer.integration.test.ts > New Memory candidate producer cannot copy an earlier Human's retained private Context > withholds Alice's source UUID and rolls back a new derived candidate after actual native steering to Bob
+AssertionError: expected { value: { record: { …(44) }, …(2) } } to have property "error"
+ ❯ src/__tests__/memory-candidate-steered-producer.integration.test.ts:78:21
+     76|     expect.soft(JSON.stringify(outcome)).not.toContain(secret);
+     77|     expect.soft(committed).toHaveLength(0);
+     78|     expect(outcome).toHaveProperty("error");
+       |                     ^
+     79|   });
+     80| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  22:14:13
+   Duration  72.59s (transform 36.72s, setup 233ms, import 54.09s, tests 17.80s, environment 0ms)
+

@@ -1,0 +1,43 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/ui
+
+stderr | src/pages/CustomerHelpCenter.test.tsx > requires an expiring admin grant before showing or downloading gated evidence
+An update to TrustGatedEvidence inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ❯ src/pages/CustomerHelpCenter.test.tsx (11 tests | 1 failed) 421ms
+   × requires an expiring admin grant before showing or downloading gated evidence 25ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/CustomerHelpCenter.test.tsx > requires an expiring admin grant before showing or downloading gated evidence
+TypeError: Cannot read properties of undefined (reading 'click')
+ ❯ src/pages/CustomerHelpCenter.test.tsx:261:38
+    259|   const reviewButton = await vi.waitFor(() => [...container!.querySele…
+    260|     .find(button => button.textContent === "Review current document")!…
+    261|   await act(async () => reviewButton.click());
+       |                                      ^
+    262|   await vi.waitFor(() => expect(container!.textContent).toContain("Res…
+    263|   expect(trustMock.content).toHaveBeenCalledWith(state.companyId, gate…
+ ❯ process.env.NODE_ENV.exports.act ../node_modules/.pnpm/react@19.2.8/node_modules/react/cjs/react.development.js:814:22
+ ❯ src/pages/CustomerHelpCenter.test.tsx:261:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 passed (11)
+   Start at  10:30:26
+   Duration  3.67s (transform 1.53s, setup 22ms, import 2.49s, tests 421ms, environment 600ms)
+

@@ -1,0 +1,161 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts (24 tests | 2 failed | 22 skipped) 26435ms
+     × keeps private agent Memory bound to its Human even when its producer run has company scope 854ms
+     × does not admit another agent's private Memory through the same Human's Context 710ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > keeps private agent Memory bound to its Human even when its producer run has company scope
+AssertionError: expected { record: { …(43) }, …(1) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "evidence": [
+    {
+      "citationJson": {
+        "label": "Caller citation",
+      },
+      "companyId": "d249dfd0-6750-46cc-957b-1a8ea86a1c7e",
+      "createdAt": 2026-10-22T21:18:24.616Z,
+      "excerptHash": "aecc24132d837e1f307a313ba975bc6c05767893c2fc4756500884015bf5f3e1",
+      "id": "8cc2a35b-7d3b-4189-afc2-76449b6eb5f0",
+      "memoryRecordId": "5898cc49-4aac-4798-be67-c5143b06b921",
+      "observedAt": 2026-10-22T21:18:24.606Z,
+      "sourceClass": "task",
+      "sourceProvider": "caller_claim",
+      "sourceRef": "issue://35c642f2-4ac0-4f9b-bc49-4c044ce8eea8",
+      "sourceType": "issue",
+      "sourceUpdatedAt": null,
+      "sourceVersion": null,
+      "supportsOrContradicts": "supports",
+      "trustLevel": "low",
+    },
+  ],
+  "record": {
+    "bindingId": "f281d160-e14a-4055-8059-afb479150d0b",
+    "companyId": "d249dfd0-6750-46cc-957b-1a8ea86a1c7e",
+    "confidenceScore": 0.5,
+    "content": "PRIVATE retained source",
+    "createdAt": 2026-10-22T21:18:24.648Z,
+    "createdByActorId": "de28f06e-aa29-4c98-ac7b-92aae3e0dd31",
+    "createdByActorType": "agent",
+    "createdByOperationId": "0c1886cc-b2b7-4c28-a16b-920e2faff1ab",
+    "deletedAt": null,
+    "expiresAt": null,
+    "id": "5898cc49-4aac-4798-be67-c5143b06b921",
+    "importance": 50,
+    "memoryType": "lesson",
+    "metadata": {
+      "privateOperationFingerprint": "04f5c919cf08742618c083841924d9037fe6a6c41e56013f8608b6c999ed2099",
+      "sourcePrivacyQualified": true,
+      "sourceRunId": "d490be36-c6af-4d1d-9f76-1a02908b364c",
+    },
+    "observedAt": 2026-10-22T21:18:24.606Z,
+    "ownerAgentId": "de28f06e-aa29-4c98-ac7b-92aae3e0dd31",
+    "providerKey": "local",
+    "retentionPolicy": "standard",
+    "retentionState": "active",
+    "reviewState": "accepted",
+    "revocationReason": null,
+    "revokedAt": null,
+    "revokedByActorId": null,
+    "revokedByActorType": null,
+    "scopeId": "de28f06e-aa29-4c98-ac7b-92aae3e0dd31",
+    "scopeType": "agent",
+    "sensitivityLabel": "internal",
+    "sourceFoundationRevisionIds": [],
+    "sourceIssueIds": [],
+    "sourceMemoryIds": [],
+    "sourceProjectIds": [],
+    "sourceProvenanceQualified": true,
+    "sourceRunIds": [
+      "42b891a5-f0d2-4347-a088-875af183b5d2",
+    ],
+    "subjectId": null,
+    "subjectType": null,
+    "summary": null,
+    "supersededByRecordId": null,
+    "supersedesRecordId": null,
+    "title": "Private source lesson",
+    "updatedAt": 2026-10-22T21:18:24.648Z,
+    "validFrom": null,
+    "validUntil": null,
+    "verificationState": "unverified",
+  },
+}
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:363:101
+    361|     const created=await privateMemory(producerRunId);
+    362|     await expect(memoryService(db).get(companyId,created.record.id,mem…
+    363|     await expect(memoryService(db).get(companyId,created.record.id,mem…
+       |                                                                                                     ^
+    364|   });
+    365|   it("does not admit another agent's private Memory through the same H…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > does not admit another agent's private Memory through the same Human's Context
+AssertionError: promise resolved "{ manifest: { …(9) }, …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "items": [
++     {
++       "authorityDomain": "task_state",
++       "companyId": "031395bd-b1ea-464b-a30f-102ed94199a1",
++       "contentHash": "fb71992dcfedefad525c3a04cf00797f41e2d49a1796484dbd3be41cae432cb2",
++       "createdAt": 2026-10-22T21:18:25.509Z,
++       "id": "4274265c-7647-4e21-b59e-ebc74ad1fdb0",
++       "manifestId": "573f0699-1f3b-4a2b-95a6-14e03b945c08",
++       "rank": 0,
++       "retrievalScore": null,
++       "selectionReason": "preferred_authority",
++       "sensitivity": "internal",
++       "sourceClass": "private_memory",
++       "sourceProvider": "august_works_memory",
++       "sourceRef": "memory://record/23c60daf-d1b9-49df-8cfe-f23fcd69c5dc",
++       "sourceVersion": "2026-10-22T21:18:25.265Z",
++       "trustLevel": "high",
++     },
++   ],
++   "manifest": {
++     "agentId": "953feb43-be8b-4ab5-a314-7005bf7fe79f",
++     "companyId": "031395bd-b1ea-464b-a30f-102ed94199a1",
++     "createdAt": 2026-10-22T21:18:25.509Z,
++     "id": "573f0699-1f3b-4a2b-95a6-14e03b945c08",
++     "issueId": "65d2a4dc-d946-4385-a6f8-55eec9627449",
++     "policySnapshotHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
++     "projectId": null,
++     "queryHash": "d82277353e5855627b109021766967cf3d0a23af4d882ba033aa4ae5963fd51e",
++     "runId": "eaeb0f0a-2c02-4829-b497-e6cb2d398358",
++   },
+  }
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:378:89
+    376|       metadata:{recordId:created.record.id},excerpt:"PRIVATE other age…
+    377|     await expect(contextManifestService(db).create({companyId,agentId:…
+    378|       query:"Unauthorized private Memory scope",policySnapshot:{},sele…
+       |                                                                                         ^
+    379|   });
+    380|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 22 skipped (24)
+   Start at  21:17:19
+   Duration  67.11s (transform 28.78s, setup 283ms, import 39.76s, tests 26.44s, environment 0ms)
+

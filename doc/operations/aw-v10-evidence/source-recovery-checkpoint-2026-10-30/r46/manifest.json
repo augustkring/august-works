@@ -1,0 +1,362 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T08:01:11.568391+00:00",
+  "baseCommit": "a094a815a8fb3801f381a53b964dc8b655e719e3",
+  "patchBytes": 1891254,
+  "patchSha256": "aeff907bd194bb6062a78155936df9e1d6f787c554a393e7a060ee941193bfe2",
+  "archiveSha256": "61f2326a59e50939bf030bf1cd9c82dd84ee260ed6ecc96ee55051e0131a1273",
+  "untrackedSourceFiles": [],
+  "privateCandidateFiles": [
+    {
+      "path": "preparation/build-v10-final-claim-reconciliation-candidate.py",
+      "bytes": 23252,
+      "sha256": "65957de8fe384a003f07f6de1dbd6e64ae626bcc4e53967e42031042ec0b708b"
+    },
+    {
+      "path": "preparation/build-v10-safe-change-inventory-draft-current.py",
+      "bytes": 17006,
+      "sha256": "760c2d8c9fe90283dc5e62d0711a3af4ed8836f9c9fae1b15d42e1591af8b728"
+    },
+    {
+      "path": "preparation/check-private-safe-change-merge.mjs",
+      "bytes": 11838,
+      "sha256": "f76278970632e8d857c990632cc52481135d99631b185b4c4c06813d4839f715"
+    },
+    {
+      "path": "preparation/help-closeout-review-proposal-20261030.json",
+      "bytes": 48382,
+      "sha256": "5c231068697340d1423fd10c96f14ec88b677e91b9ec6f7a70a7b23979a8d861"
+    },
+    {
+      "path": "preparation/merge-safe-change-inventory-current.py",
+      "bytes": 4915,
+      "sha256": "6841b7dffd7537d8aa86e43dcb346f9f3298ad9c16cf4fcf1caaa735c5b83220"
+    },
+    {
+      "path": "preparation/native-frozen-reader-pins-r48-candidate/candidate.diff",
+      "bytes": 6279,
+      "sha256": "d191265df49ce286191e3d2b94bea4c108815a10f40468232c1e3950bc18af0e"
+    },
+    {
+      "path": "preparation/native-frozen-reader-pins-r48-candidate/manifest.json",
+      "bytes": 461,
+      "sha256": "a459cec2ca738dfae0085ad10d056e1dabf667c1aeae319e85b32f7ca7cc38ba"
+    },
+    {
+      "path": "preparation/native-frozen-reader-pins-r48-candidate/partial-pins-rejected.diff",
+      "bytes": 5853,
+      "sha256": "e5e366f8e5028c0106cdd49246989f52942ebac1d8d7cd7457976ec56c53e88a"
+    },
+    {
+      "path": "preparation/native-local-reader-provenance-r46-candidate/candidate.diff",
+      "bytes": 8782,
+      "sha256": "178549e635853fc74ac8d362b8ed3a9248ce50741040c91f1559bcae9b49d6c6"
+    },
+    {
+      "path": "preparation/native-local-reader-provenance-r46-candidate/manifest.json",
+      "bytes": 235,
+      "sha256": "52a2876791997da97db8d0705118000f3fabc51782b381a84388974579709c24"
+    },
+    {
+      "path": "preparation/native-memory-page-jit-r43-candidate/candidate.diff",
+      "bytes": 6219,
+      "sha256": "059eb0f89f864bbc0e1e24e17a63f99b7add71a6e30246d4b029294889b2e315"
+    },
+    {
+      "path": "preparation/native-memory-page-jit-r43-candidate/manifest.json",
+      "bytes": 706,
+      "sha256": "d0bcf32d579c7ad4f370a26d79d8dd67c8bc806da5a487eba244d3435198235b"
+    },
+    {
+      "path": "preparation/native-model-watch-drain-r45-candidate/candidate.diff",
+      "bytes": 3315,
+      "sha256": "0a315ec07cf64d9cd52a38915889c62b74ef2130f011cf43c89f681a1b1d6db7"
+    },
+    {
+      "path": "preparation/native-model-watch-drain-r45-candidate/gateway-test.diff",
+      "bytes": 4489,
+      "sha256": "3a56a4912a5fc0ad6d40f5d092b92400cb53e2d8ee1508bbf5d5d7228ff94a27"
+    },
+    {
+      "path": "preparation/native-model-watch-drain-r45-candidate/manifest.json",
+      "bytes": 504,
+      "sha256": "4836a5fbcb0d02433e42c24b90ed060dc10b884698d1bb8b0287e921293a6516"
+    },
+    {
+      "path": "preparation/native-model-watch-r45-portable-receipt/README.md",
+      "bytes": 638,
+      "sha256": "725f8a47fa9da3e888773f68d103c830db06a98ca32eb0c306bf110089acc464"
+    },
+    {
+      "path": "preparation/native-model-watch-r45-portable-receipt/SHA256SUMS",
+      "bytes": 649,
+      "sha256": "c8a8f30eaf0a515ac5396062c8dbb919470aa109704c9c3c639ff6fa91463b92"
+    },
+    {
+      "path": "preparation/native-model-watch-r45-portable-receipt/candidate.diff",
+      "bytes": 3315,
+      "sha256": "0a315ec07cf64d9cd52a38915889c62b74ef2130f011cf43c89f681a1b1d6db7"
+    },
+    {
+      "path": "preparation/native-model-watch-r45-portable-receipt/commands.txt",
+      "bytes": 629,
+      "sha256": "bf098610fd2e998494f344b53ba9f582b1452bc2e59d75607f89e34cbb973fb8"
+    },
+    {
+      "path": "preparation/native-model-watch-r45-portable-receipt/gateway-test.diff",
+      "bytes": 4489,
+      "sha256": "3a56a4912a5fc0ad6d40f5d092b92400cb53e2d8ee1508bbf5d5d7228ff94a27"
+    },
+    {
+      "path": "preparation/native-model-watch-r45-portable-receipt/gateway-watch.log",
+      "bytes": 30637,
+      "sha256": "f9c3cabbe5c4ec0e346bbfcdf831f08f576e30f0832bc4dacadf8a0d786458be"
+    },
+    {
+      "path": "preparation/native-model-watch-r45-portable-receipt/result.json",
+      "bytes": 1067,
+      "sha256": "8f4199260c090f8394a96f86856e11cd8a894ca64dbf7e3eaf324bc5586b6688"
+    },
+    {
+      "path": "preparation/native-model-watch-r45-portable-receipt/source-pins.json",
+      "bytes": 196325,
+      "sha256": "d65864ed77ebef3d4e69e7a2e7276290b6036ddd6948d13ed61aecf2c6ae1646"
+    },
+    {
+      "path": "preparation/native-model-watch-r45-portable-receipt/source-syntax.log",
+      "bytes": 62,
+      "sha256": "cd99b2c81d47a91133114d67c63b29da539d64eaffdd325219b15e0ee2243006"
+    },
+    {
+      "path": "preparation/native-reader-origin-r47-candidate/candidate.diff",
+      "bytes": 10486,
+      "sha256": "8f5a0938fbe32aa1dfd057c17fbd95c4684103a0f2bf24e59ef9f197c56fc59f"
+    },
+    {
+      "path": "preparation/native-reader-origin-r47-candidate/manifest.json",
+      "bytes": 700,
+      "sha256": "d83e0a12711cefc9c25c22fc22b53ef99b1df945f9af156d33f70dc43d01deed"
+    },
+    {
+      "path": "preparation/native-sql-compile-split-r44-candidate/candidate.diff",
+      "bytes": 3240,
+      "sha256": "eaae1e4177536738a7d49b2973d7ce5ca58fab980214d386d7d4c5f7b0cdb3ec"
+    },
+    {
+      "path": "preparation/native-sql-compile-split-r44-candidate/manifest.json",
+      "bytes": 466,
+      "sha256": "bb20011b669e9a5aff4cab26470ae0aca399ff139f7f4c1fa2479f36b5f56517"
+    },
+    {
+      "path": "preparation/portable-refresh-v10-final-claim-reconciliation-candidate.py",
+      "bytes": 9029,
+      "sha256": "87b2b354ae057c92f699abef0a470bfc4cb20832bd29d228b6263ecf1cfca81d"
+    },
+    {
+      "path": "preparation/pr42-body-current-20261030-0535.md",
+      "bytes": 7868,
+      "sha256": "b418935384c59715d725d0972e3f13b297f1e1ec1bd093d08eae4e74bfb2ba5f"
+    },
+    {
+      "path": "preparation/prepare-native-frozen-completed-obligations-r48.py",
+      "bytes": 5008,
+      "sha256": "aa943a794f53eba0179e4b984fb9a684dc931d83d21fb73ac83412e65b32e681"
+    },
+    {
+      "path": "preparation/preserve-r46.py",
+      "bytes": 3458,
+      "sha256": "fd8c9ef9e94f0d76ff94752cbb39de86f8ccbf126b957bb083efb81ad48989f5"
+    },
+    {
+      "path": "preparation/root-continuation-20261030-0800.md",
+      "bytes": 4015,
+      "sha256": "62a3f0cfecb172ef2a71ec5d7025cb6b2ea33d50c73d365462ede4a1f8134a3e"
+    },
+    {
+      "path": "preparation/root-continuation-latest.md",
+      "bytes": 4015,
+      "sha256": "62a3f0cfecb172ef2a71ec5d7025cb6b2ea33d50c73d365462ede4a1f8134a3e"
+    },
+    {
+      "path": "preparation/snapshot-current-source-for-dependency-check.py",
+      "bytes": 7027,
+      "sha256": "df80e1647511fef43169a05eac7447309bc41223aadbbd9647e8ab246dec0003"
+    },
+    {
+      "path": "preparation/v10-001-060-current-gap-audit-20261030.json",
+      "bytes": 75616,
+      "sha256": "5252b00226e2db01e9041a9806e28da75905d82aad8806a65a02bc7fd8e0cab3"
+    },
+    {
+      "path": "preparation/v10-169-061-120-current-gap-audit-luna-20261030.json",
+      "bytes": 267129,
+      "sha256": "a890d05a099d5d410e0dee2c990cebd92fc069b780ff9366f52591acd0c90d0e"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.SHA256SUMS",
+      "bytes": 228,
+      "sha256": "5eb0b4f3ba244b44c75c143377a58ca4bb3abe97c9aa2d5ef178551c8be947bf"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.json",
+      "bytes": 51731,
+      "sha256": "67ef0579d562007331c153debbdbfbad7e36f621cec2ae1b6000293f92e7d345"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.json.pre-current-update.bak",
+      "bytes": 40243,
+      "sha256": "a9962c011755bcc94b880efc533b62a0ed701bc1e5b625430702f41307bade25"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.md",
+      "bytes": 6896,
+      "sha256": "3caf0d4ad7a18e3a33ecc2206d38e16e3db76c92ffea480e6fc874b33d2c978e"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.md.pre-current-update.bak",
+      "bytes": 3860,
+      "sha256": "6a29fa12b71c5662cbe984f144c27a1aaacbc7e983971dd6d1cef4eebeb4c8d1"
+    },
+    {
+      "path": "preparation/v10-169-current-gap-audit-20261030.md",
+      "bytes": 14355,
+      "sha256": "df06754e85628d692883bf915fd3c997989b394b7d990a567b63fdc5a4f88e53"
+    },
+    {
+      "path": "preparation/v10-169-full-current-evidence-map-20261030.SHA256SUMS",
+      "bytes": 335,
+      "sha256": "d5c299493f5048b7c8b99b979b02caa8d90b4c0bf50a4841556c248a51ea22ce"
+    },
+    {
+      "path": "preparation/v10-169-full-current-evidence-map-20261030.json",
+      "bytes": 1325269,
+      "sha256": "7b3889c9c3a7ff8d3b4fbc86c93661fb3562873655c5dd56c41e103be1d167be"
+    },
+    {
+      "path": "preparation/v10-169-full-current-evidence-map-20261030.md",
+      "bytes": 1588,
+      "sha256": "d56aefe8048911b4815f5b8398c143cb8a5fb2d0abc871d9f2af13bf495f295c"
+    },
+    {
+      "path": "preparation/v10-169-full-current-gap-audit-20261030.SHA256SUMS",
+      "bytes": 326,
+      "sha256": "ac3b2d46cfe50bf8818cf7b0f0155ec6fcece0ad19ba2d6c18de68ddf9a7a1f8"
+    },
+    {
+      "path": "preparation/v10-169-full-current-gap-audit-20261030.json",
+      "bytes": 846921,
+      "sha256": "c1292ce5bdebce9664c02e593733dd79d0e6e41d1573ba56831e650730f9d2fc"
+    },
+    {
+      "path": "preparation/v10-169-full-current-gap-audit-20261030.md",
+      "bytes": 2470,
+      "sha256": "3b356c6aa89e46f05556719e7785fb0177dc65807e8c9747648d2cc513ba457a"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/README.md",
+      "bytes": 7150,
+      "sha256": "326dfa90c72760811af94f33364c3da002fa51ba6fb55f94d97cc05cf190466f"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/SHA256SUMS",
+      "bytes": 340,
+      "sha256": "e732715a00adb55b25bc7a8da2cbbc00183de899e523f2a6296cdf6a4bf0e4c5"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/portable-source-map.json",
+      "bytes": 10068,
+      "sha256": "94ffcd37ee220f4498d2705dc87ccbf3a78c32ad5919978bfb70e67728355355"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/reconciliation.json",
+      "bytes": 3918561,
+      "sha256": "9573c3717d50bdc44ca9f9a1ff3ebb8b202f5046fc002d6f83bb4685b7564edc"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle.tar.gz",
+      "bytes": 544365,
+      "sha256": "49d03dfff67011c027dce88b84072942a39c98899fca126a9b9b12c2a1e713a4"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/audits/v10-001-060-current-gap-audit-20261030.json",
+      "bytes": 75616,
+      "sha256": "5252b00226e2db01e9041a9806e28da75905d82aad8806a65a02bc7fd8e0cab3"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/audits/v10-061-120-current-gap-audit-luna-20261030.json",
+      "bytes": 267129,
+      "sha256": "a890d05a099d5d410e0dee2c990cebd92fc069b780ff9366f52591acd0c90d0e"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/audits/v10-121-169-current-gap-audit-20261030.json",
+      "bytes": 846921,
+      "sha256": "c1292ce5bdebce9664c02e593733dd79d0e6e41d1573ba56831e650730f9d2fc"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/audits/v10-121-169-current-gap-audit-20261030.md",
+      "bytes": 2470,
+      "sha256": "3b356c6aa89e46f05556719e7785fb0177dc65807e8c9747648d2cc513ba457a"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/audits/v10-169-current-gap-audit-20261030.md",
+      "bytes": 14355,
+      "sha256": "df06754e85628d692883bf915fd3c997989b394b7d990a567b63fdc5a4f88e53"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/cross-version/current-inherited-crosswalk-20261028.json",
+      "bytes": 140986,
+      "sha256": "40710c2bf318c1a0753711f432c0e12eada64100ea2d840fa275fae1aa1c1aa8"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/maps/v10-169-current-assessment-overlay-20261030.json",
+      "bytes": 51731,
+      "sha256": "67ef0579d562007331c153debbdbfbad7e36f621cec2ae1b6000293f92e7d345"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/maps/v10-169-full-current-evidence-map-20261030.json",
+      "bytes": 1325269,
+      "sha256": "7b3889c9c3a7ff8d3b4fbc86c93661fb3562873655c5dd56c41e103be1d167be"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/maps/v10-requirement-implementation-reconciliation-candidate-current-r2-20261029.json",
+      "bytes": 2275928,
+      "sha256": "7503087c46a0973f96243cadb92d1bd57e29c0ac0ff00121f6c16e9e0e086cb4"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/receipts/public-openapi-contract-r1-20261028-test.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/receipts/public-openapi-contract-r1-20261028-test.log",
+      "bytes": 4806,
+      "sha256": "a1d3d46890c6a0824862e75ac94ff365fd6f0a1764351bbf2fff50fff9c24528"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/receipts/root-operation-inventory-r2-20261030.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/receipts/root-operation-inventory-r2-20261030.log",
+      "bytes": 197,
+      "sha256": "0b5d8b8d2a404c5fdc601a415e33d9aaf47776ec6033bb48c5ad23e0e7fb5e2f"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/receipts/temporal9-reader-origin-r47-20261030-test.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/receipts/temporal9-reader-origin-r47-20261030-test.log",
+      "bytes": 58880,
+      "sha256": "b2d81bf96f30c85bd6c4bc65f16fd3da9d12bf5c056429a470bc7d5aa144a494"
+    },
+    {
+      "path": "preparation/v10-final-claim-reconciliation-candidate-20261030/source-bundle/receipts/v10-121-operation-coverage-refresh-20261030-README.md",
+      "bytes": 1455,
+      "sha256": "3b1d5100d08b913d21bab60c741f154f0099e7be3968a709b9b62f3215abcd02"
+    }
+  ],
+  "privateCandidateArchiveSha256": "e1315526aea650a8a94914c65ffdb4ceea39e69e7b0f747a839bb8ad4096d4d7"
+}

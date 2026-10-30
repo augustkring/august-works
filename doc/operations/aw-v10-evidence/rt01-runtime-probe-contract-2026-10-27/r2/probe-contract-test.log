@@ -1,0 +1,48 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-sandbox-host-bridge.integration.test.ts (13 tests | 2 failed) 9301ms
+     × retains unsupported host qualification without treating configured image as physical preparation 341ms
+     × admits a qualified native Task through the HTTP route and meters only the signed host start/stop receipts (CI transport simulation) 2924ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > retains unsupported host qualification without treating configured image as physical preparation
+AssertionError: expected [] to have a length of 18 but got +0
+
+- Expected
++ Received
+
+- 18
++ 0
+
+ ❯ src/__tests__/v7-sandbox-host-bridge.integration.test.ts:596:51
+    594|         hostOrImageRef: `cell:${cell.id}:1`,
+    595|       });
+    596|       expect(retained.qualifications[0]?.results).toHaveLength(18);
+       |                                                   ^
+    597|     }, 20000);
+    598|     it("admits a qualified native Task through the HTTP route and mete…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/v7-sandbox-host-bridge.integration.test.ts > native signed OpenShell command lane > admits a qualified native Task through the HTTP route and meters only the signed host start/stop receipts (CI transport simulation)
+Error: ENOSPC: no space left on device, mkdir '/home/agent/.paperclip/instances/default/companies/fd2572aa-d0ef-4a09-ba18-c9493ec04b65'
+ ❯ ensurePrivateDir ../packages/adapters/codex-local/src/server/codex-auth-cache.ts:192:3
+    190|     return;
+    191|   }
+    192|   await mkdir(dir, { recursive: true, mode: PRIVATE_DIR_MODE });
+       |   ^
+    193| }
+    194|
+ ❯ withAccountHomeSecretMutationLock ../packages/adapters/codex-local/src/server/codex-auth-cache.ts:343:3
+ ❯ src/__tests__/v7-sandbox-host-bridge.integration.test.ts:649:30
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  2 failed | 57 passed (59)
+   Start at  02:16:43
+   Duration  29.24s (transform 12.72s, setup 250ms, import 19.20s, tests 9.39s, environment 0ms)
+

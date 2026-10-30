@@ -18,6 +18,7 @@ import type { heartbeatService } from "../services/heartbeat.js";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 import { resolveGitHubOperationCredentials } from "../services/github-operation-credentials.js";
 import { workerModelCallSchema } from "@paperclipai/shared";
+import { selectMcpProtocolVersion } from "../services/mcp-http.js";
 import type { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 
 function bearer(req: Request) {
@@ -65,6 +66,33 @@ export function runtimeConnectionIntentRoutes(db: Db, workerModels?: ReturnType<
     }
   });
 
+  const managedMessagesRoute = async (req: Request, res: import("express").Response) => {
+    if (req.headers.origin || req.headers.cookie || req.headers["sec-fetch-site"])
+      throw forbidden("Managed model calls require runtime authentication");
+    const token = bearer(req);
+    const claims = verifyRuntimeToolsToken(token, "worker_model") ?? verifyRuntimeToolsToken(token, "conversation_model");
+    if (!claims) throw unauthorized("Invalid managed model capability");
+    if (!workerModels) throw forbidden("Worker model transport is not configured");
+    const controller = new AbortController();
+    const cancel = () => { if (!res.writableEnded) controller.abort(); };
+    req.on("aborted", cancel);
+    res.on("close", cancel);
+    try {
+      const result = await workerModels.callManagedMessages(claims, req.body, controller.signal);
+      res.status(200);
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.type("text/event-stream").send(result.sse);
+    } finally {
+      req.off("aborted", cancel);
+      res.off("close", cancel);
+    }
+  };
+  router.post("/runtime-tools/model/anthropic-messages", managedMessagesRoute);
+  // OpenCode's Anthropic provider appends `/v1/messages` to its configured
+  // baseURL, so this exact route is the one allowed in managed egress policy.
+  router.post("/runtime-tools/model/v1/messages", managedMessagesRoute);
+
   router.post("/runtime-tools/github/credentials", async (req, res) => {
     // This capability is never accepted as board/session authentication.
     // Node fetch sends Sec-Fetch-Mode too; browsers additionally send Origin or Sec-Fetch-Site.
@@ -80,7 +108,7 @@ export function runtimeConnectionIntentRoutes(db: Db, workerModels?: ReturnType<
 
   router.get("/mcp/runtime-tools", async (req, res) => {
     await service.validate(runtimeClaims(req));
-    res.json({ name: "paperclip-runtime-tools", protocolVersion: "2025-03-26" });
+    res.json({ name: "blentera-runtime-tools", protocolVersion: "2026-07-28" });
   });
 
   router.post("/mcp/runtime-tools", async (req, res) => {
@@ -96,9 +124,10 @@ export function runtimeConnectionIntentRoutes(db: Db, workerModels?: ReturnType<
         jsonrpc: "2.0",
         id,
         result: {
-          protocolVersion: "2025-03-26",
+          protocolVersion: selectMcpProtocolVersion(request.params && typeof request.params === "object"
+            ? (request.params as Record<string, unknown>).protocolVersion : undefined),
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "paperclip-runtime-tools", version: "1" },
+          serverInfo: { name: "blentera-runtime-tools", version: "1" },
         },
       });
       return;

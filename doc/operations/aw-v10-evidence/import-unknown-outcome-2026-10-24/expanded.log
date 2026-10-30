@@ -1,0 +1,56 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[19:32:26] [33mWARN[39m: [36mfailed to delete import transfer spool after a successful apply[39m [90m{"transferId":"5a43defd-b92b-4022-a8d4-3b0fbeb00daf"}[39m
+    err: {
+      "type": "Error",
+      "message": "EACCES: spool dir is busy",
+      "stack":
+          Error: EACCES: spool dir is busy
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:771:33
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:32:26] [33mWARN[39m: [36mfailed to attach the imported company to its transfer run[39m [90m{"transferId":"5a002c07-989c-43cc-8583-eadd3916e4f5"}[39m
+    err: {
+      "type": "Error",
+      "message": "registry write timed out",
+      "stack":
+          Error: registry write timed out
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:822:30
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+ ❯ |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts (26 tests | 1 failed) 4762ms
+     × keeps an apply with unknown outcome inspectable and blocks every same-content retry 20ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-transfer-routes.test.ts > company import transfer routes > keeps an apply with unknown outcome inspectable and blocks every same-content retry
+AssertionError: expected undefined to be 'd7f69b1d-b7ee-4244-ad16-57496caf29e4' // Object.is equality
+
+- Expected:
+"d7f69b1d-b7ee-4244-ad16-57496caf29e4"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/company-import-transfer-routes.test.ts:1015:40
+    1013|     expect(redeclared.status).toBe(409);
+    1014|     expect(redeclared.body.code).toBe("import_outcome_unknown");
+    1015|     expect(redeclared.body.transferId).toBe(transferId);
+       |                                        ^
+    1016|
+    1017|     const part = await putPart(transferId, 0, slices[0]!);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 35 passed (36)
+   Start at  19:32:17
+   Duration  14.32s (transform 2.68s, setup 121ms, import 5.62s, tests 8.35s, environment 0ms)
+

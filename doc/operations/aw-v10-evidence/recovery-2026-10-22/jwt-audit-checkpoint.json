@@ -1,0 +1,94 @@
+{
+  "date": "2026-10-22",
+  "requirement": "V10-147 / UP-01 rejected JWT mismatch audit",
+  "upstreamCommit": "514d8738cfa66f5ce5bb07d196a4c7412c0a42b8",
+  "sourceHashesObservedAtCheckpoint": {
+    "server/src/middleware/auth.ts": "e002afb69b5cdaf4e0856636b842dde52600b1c7126cf35edce3c9df938a61dd",
+    "server/src/__tests__/agent-auth-middleware.test.ts": "e5fbc6e9241bf634b4091582edcaaf7f473718e785940fdd01141f6fd65986de",
+    "server/src/__tests__/agent-auth-audit.integration.test.ts": "b3fc8b0a81f71b48c49a0d54947ad2294c6889088f102796d819feb4b1665595"
+  },
+  "runs": [
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/agent-auth-middleware.test.ts --maxWorkers=1",
+      "source": "original auth with regression",
+      "result": "FAIL",
+      "testsFailed": 6,
+      "testsPassed": 25,
+      "log": "up01-auth-red.log.txt"
+    },
+    {
+      "log": "up01-auth-green.log.txt",
+      "result": "FAIL",
+      "reason": "SDK dist prerequisite absent; zero tests ran"
+    },
+    {
+      "log": "up01-auth-green-2.log.txt",
+      "result": "PASS",
+      "testsPassed": 31
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/agent-auth-middleware.test.ts server/src/__tests__/cloud-actor-idempotent-read-retry.test.ts --maxWorkers=1",
+      "log": "up01-auth-final-green.log.txt",
+      "result": "PASS",
+      "testsPassed": 39,
+      "limitation": "Own three files stable. Imported Board auth source hold began after this run started; no whole-graph upfront pin is claimed."
+    },
+    {
+      "log": "up01-auth-postgres-green.log.txt",
+      "result": "FAIL",
+      "reason": "New test fixture TypeScript syntax error; zero tests, no cluster boot. Corrected before subsequent run."
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/agent-auth-audit.integration.test.ts --maxWorkers=1",
+      "log": "up01-auth-postgres-green-2.log.txt",
+      "result": "PASS",
+      "testsPassed": 5,
+      "source": "Eight upfront hashes retained in raw log; all unchanged during run. Board auth source subsequently changes independently.",
+      "observations": [
+        "Fully migrated real PostgreSQL; original actor middleware and audit transaction",
+        "Missing or foreign run persists security event without linking foreign FK; rejected request remains HTTP 422",
+        "Real pg_blocking_pids observes overlapping DELETE waiting on middleware key-share lock; audit commits, existing NO ACTION FK rejects DELETE with 23503",
+        "Embedded cluster exited and temporary data directory removed after capture"
+      ]
+    }
+  ],
+  "logs": [
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up01-auth-red.log.txt",
+      "sha256": "66931d174f91c02f7713fed2d216eb0a8bfb1853828f6dcbf7466aada5791041",
+      "sizeBytes": 32115
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up01-auth-green.log.txt",
+      "sha256": "473dbee70e9cbc97f44525d45a027bad31e84253a74c8b2be648996f5f6cd3c8",
+      "sizeBytes": 1333
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up01-auth-green-2.log.txt",
+      "sha256": "225f7e6bd8d0365a0e7466841ffedd1e67af890e8e7e71b33e6a7bf4a93da385",
+      "sizeBytes": 520
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up01-auth-final-green.log.txt",
+      "sha256": "de1be35a47baa61c78d0d7381700e490e29be571c4fad154f8869461b7082d3c",
+      "sizeBytes": 520
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up01-auth-postgres-green.log.txt",
+      "sha256": "adb2166ce17dc14c901fda689ce9b0bb9c2dfb1c24d31a4f036654287faa031f",
+      "sizeBytes": 3921
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up01-auth-postgres-green-2.log.txt",
+      "sha256": "56d01070cf6befb9df651776a7f7c9e9ce851579d26c3901488b243412c16d01",
+      "sizeBytes": 1376
+    }
+  ],
+  "review": "Root independently read auth diff, real PostgreSQL test, and original activity-log FK. No additional production abstraction or authorization grant introduced.",
+  "limitations": [
+    "Normal server typecheck pending normal Runner build prerequisite and current Board CLI source completion",
+    "Not staging, physical runtime or complete V10 qualification"
+  ],
+  "sourceComplete": false,
+  "prReady": false
+}

@@ -5,10 +5,11 @@ import type {
   InstanceExperimentalSettings,
   InstanceExperimentalSettingsWithManaged,
   InstanceFeatureKey,
+  CapabilityLifecycle,
   ManagedSettingMetadata,
   PatchInstanceExperimentalSettings,
 } from "@paperclipai/shared";
-import { V5_FEATURE_KEYS, V5_FEATURES, V5_ROLLOUT, V5_FEATURE_DEPENDENCIES, V5_BASE_FEATURE_REQUIREMENTS, v5FeatureEnabled, experimentalSettingKey } from "@paperclipai/shared";
+import { V5_FEATURE_KEYS, V5_FEATURES, V5_ROLLOUT, V5_FEATURE_DEPENDENCIES, V5_BASE_FEATURE_REQUIREMENTS, INSTANCE_FEATURE_CATALOG, INSTANCE_FEATURE_KEYS, isCapabilityMaturityAdvertisedForNewUse, v5FeatureEnabled, experimentalSettingKey } from "@paperclipai/shared";
 import { instanceSettingsApi } from "@/api/instanceSettings";
 import { useHiddenSettings } from "@/hooks/useHiddenSettings";
 import { getWorktreeInstanceId, isWorktreeRuntime } from "../lib/worktree-branding";
@@ -18,6 +19,9 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
+import { useTranslation } from "@/i18n";
+import { Link } from "react-router-dom";
 
 type WorktreeRunExecutionDisplayState =
   | { kind: "off" }
@@ -63,8 +67,40 @@ function ManagedByCloudBadge() {
   return (
     <Badge variant="outline" className="text-muted-foreground">
       <Lock aria-hidden="true" />
-      Managed by Paperclip Cloud
+      Managed by legacy Paperclip Cloud
     </Badge>
+  );
+}
+
+function CapabilityLifecycleDetails({ lifecycle }: { lifecycle: CapabilityLifecycle }) {
+  const { t } = useTranslation("experience");
+  return (
+    <dl className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+      <dt>{t("featureLifecycle.support")}</dt><dd>{t(`featureLifecycle.supportLevels.${lifecycle.supportLevel}`)}</dd>
+      <dt>{t("featureLifecycle.owner")}</dt><dd>{lifecycle.owner ?? t("featureLifecycle.notRecorded")}</dd>
+      <dt>{t("featureLifecycle.customerSurfaces")}</dt><dd>{lifecycle.customerSurfaces.join(", ") || t("featureLifecycle.notMapped")}</dd>
+      <dt>{t("featureLifecycle.experienceProfiles")}</dt><dd>{lifecycle.experienceProfiles.join(", ") || t("featureLifecycle.notMapped")}</dd>
+      <dt>{t("featureLifecycle.entitlement")}</dt><dd>{lifecycle.entitlementKey ?? t("featureLifecycle.notMapped")}</dd>
+      <dt>{t("featureLifecycle.criticality")}</dt><dd>{t(`featureLifecycle.criticalities.${lifecycle.criticality}`)}</dd>
+      <dt>{t("featureLifecycle.dataCategories")}</dt><dd>{lifecycle.dataCategories.join(", ") || t("featureLifecycle.notMapped")}</dd>
+      <dt>{t("featureLifecycle.serviceDependencies")}</dt><dd>{lifecycle.serviceDependencies.join(", ") || t("featureLifecycle.notMapped")}</dd>
+      <dt>{t("featureLifecycle.docsHelp")}</dt><dd>{lifecycle.docsRef ?? t("featureLifecycle.notLinked")}</dd>
+      <dt>{t("featureLifecycle.supportPath")}</dt>
+      <dd>{lifecycle.supportPathRef
+        ? <Link className="underline" to={lifecycle.supportPathRef}>{t("featureLifecycle.openHelp")}</Link>
+        : t("featureLifecycle.notLinked")}</dd>
+      <dt>{t("featureLifecycle.releaseEvidence")}</dt><dd>{lifecycle.releaseEvidenceRefs.join(", ") || t("featureLifecycle.notLinked")}</dd>
+      <dt>{t("featureLifecycle.deprecation")}</dt><dd>{lifecycle.deprecationAt ?? t("featureLifecycle.notScheduled")}</dd>
+      <dt>{t("featureLifecycle.sunset")}</dt><dd>{lifecycle.sunsetAt ?? t("featureLifecycle.notScheduled")}</dd>
+      <dt>{t("featureLifecycle.replacement")}</dt><dd>{lifecycle.replacementCapability ?? t("featureLifecycle.notRecorded")}</dd>
+      <dt>{t("featureLifecycle.migrationGuide")}</dt><dd>{lifecycle.migrationGuideRef ?? t("featureLifecycle.notLinked")}</dd>
+      <dt>{t("featureLifecycle.lastReviewed")}</dt><dd>{lifecycle.lastReviewedAt ?? t("featureLifecycle.notRecorded")}</dd>
+      <dt>{t("featureLifecycle.gaSecurityPrivacy")}</dt><dd>{t(`featureLifecycle.readiness.${lifecycle.gaReadiness.securityPrivacy}`)}</dd>
+      <dt>{t("featureLifecycle.gaAccessibility")}</dt><dd>{t(`featureLifecycle.readiness.${lifecycle.gaReadiness.accessibility}`)}</dd>
+      <dt>{t("featureLifecycle.gaOperability")}</dt><dd>{t(`featureLifecycle.readiness.${lifecycle.gaReadiness.operability}`)}</dd>
+      <dt>{t("featureLifecycle.gaMigrationPlan")}</dt><dd>{t(`featureLifecycle.readiness.${lifecycle.gaReadiness.migrationPlan}`)}</dd>
+      <dt>{t("featureLifecycle.gaCriticalityEvidence")}</dt><dd>{t(`featureLifecycle.readiness.${lifecycle.gaReadiness.criticalityEvidence}`)}</dd>
+    </dl>
   );
 }
 
@@ -91,7 +127,9 @@ function ExperimentalToggleCard({
   ariaLabel: string;
 }) {
   const { hidden: hiddenSettings } = useHiddenSettings();
+  const { t } = useTranslation("experience");
   const isManaged = managed?.managed === true;
+  const lifecycle = INSTANCE_FEATURE_CATALOG[settingKey].lifecycle;
   if (hiddenSettings.has(experimentalSettingKey(settingKey))) return null;
   return (
     <Card className="block bg-transparent p-5">
@@ -99,26 +137,39 @@ function ExperimentalToggleCard({
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold">{title}</h3>
+            <Badge variant="outline" aria-label={t("featureLifecycle.maturityLabel", { maturity: t(`featureLifecycle.maturities.${lifecycle.maturity}`) })}>
+              {t(`featureLifecycle.maturities.${lifecycle.maturity}`)}
+            </Badge>
             {isManaged ? <ManagedByCloudBadge /> : null}
           </div>
           <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>
           {footnote ? <p className="max-w-2xl text-xs text-muted-foreground">{footnote}</p> : null}
         </div>
-        <ToggleSwitch
-          checked={checked}
-          onCheckedChange={(next) => {
-            if (isManaged) return;
-            onCheckedChange(next);
-          }}
-          disabled={disabled || isManaged}
-          aria-label={ariaLabel}
-        />
+        {!isCapabilityMaturityAdvertisedForNewUse(lifecycle.maturity) ? (
+          <p className="max-w-48 text-right text-xs text-muted-foreground" role="status">
+            {lifecycle.maturity === "retired"
+              ? t("featureLifecycle.retiredNewUse")
+              : t("featureLifecycle.internalNewUse")}
+          </p>
+        ) : (
+          <ToggleSwitch
+            checked={checked}
+            onCheckedChange={(next) => {
+              if (isManaged) return;
+              onCheckedChange(next);
+            }}
+            disabled={disabled || isManaged}
+            aria-label={ariaLabel}
+          />
+        )}
       </div>
     </Card>
   );
 }
 
 export function InstanceExperimentalSettings() {
+  const { t } = useTranslation("experience");
+  const [lifecycleRegistryOpen, setLifecycleRegistryOpen] = useState(false);
   const { setBreadcrumbs } = useBreadcrumbs();
   const queryClient = useQueryClient();
   const { hidden: hiddenSettings } = useHiddenSettings();
@@ -192,7 +243,7 @@ export function InstanceExperimentalSettings() {
 
   const inWorktree = isWorktreeRuntime();
   // Present only on cloud-managed instances: keys the managed overlay controls
-  // render locked with the "Managed by Paperclip Cloud" badge. Self-hosted
+  // render locked with the "Managed by legacy Paperclip Cloud" badge. Self-hosted
   // responses carry no `managedKeys`, so every card stays editable.
   const managedKeys = experimentalQuery.data?.managedKeys ?? {};
   const enableWorktreeRunExecution = experimentalQuery.data?.enableWorktreeRunExecution === true;
@@ -307,7 +358,7 @@ export function InstanceExperimentalSettings() {
 
         <ExperimentalToggleCard
           title="Beta skills"
-          description="Allow agents to pin beta releases of the Paperclip core skill. Disabling this returns every agent to the default live skill without removing saved pins."
+          description={`Allow agents to pin beta releases of the ${PRODUCT_IDENTITY.productName} core skill. Disabling this returns every agent to the default live skill without removing saved pins.`}
           checked={enableBetaSkills}
           onCheckedChange={(checked) => toggleMutation.mutate({ enableBetaSkills: checked })}
           disabled={toggleMutation.isPending}
@@ -317,8 +368,21 @@ export function InstanceExperimentalSettings() {
         />
 
         <ExperimentalToggleCard
+          title={`${PRODUCT_IDENTITY.productName} Runner`}
+          description={`Allow new Codex agents to select the experimental Rust ${PRODUCT_IDENTITY.productName} Runner, including authenticated runner ingress when a sandbox requires it. Onboarding continues to use legacy adapters. Turning this off hides the choice without affecting existing native runs.`}
+          checked={enableNativeRunner}
+          onCheckedChange={(checked) =>
+            toggleMutation.mutate({ enableNativeRunner: checked })
+          }
+          disabled={toggleMutation.isPending}
+          settingKey="enableNativeRunner"
+          managed={managedKeys.enableNativeRunner}
+          ariaLabel={`Toggle ${PRODUCT_IDENTITY.productName} Runner experimental setting`}
+        />
+
+        <ExperimentalToggleCard
           title="Built-in Agents"
-          description="Show Paperclip-managed built-in agent surfaces, including built-in roster badges, the Built-in agents tab, and built-in agent setup controls."
+          description={`Show ${PRODUCT_IDENTITY.productName}-managed built-in agent surfaces, including built-in roster badges, the Built-in agents tab, and built-in agent setup controls.`}
           checked={enableBuiltInAgents}
           onCheckedChange={(checked) => toggleMutation.mutate({ enableBuiltInAgents: checked })}
           disabled={toggleMutation.isPending}
@@ -445,19 +509,6 @@ export function InstanceExperimentalSettings() {
         />
 
         <ExperimentalToggleCard
-          title="Paperclip Runner"
-          description="Allow new Codex agents to select the experimental Rust Paperclip Runner, including authenticated runner ingress when a sandbox requires it. Onboarding continues to use legacy adapters. Turning this off hides the choice without affecting existing native runs."
-          checked={enableNativeRunner}
-          onCheckedChange={(checked) =>
-            toggleMutation.mutate({ enableNativeRunner: checked })
-          }
-          disabled={toggleMutation.isPending}
-          settingKey="enableNativeRunner"
-          managed={managedKeys.enableNativeRunner}
-          ariaLabel="Toggle Paperclip Runner experimental setting"
-        />
-
-        <ExperimentalToggleCard
           title="Simplified English Interactions"
           description="Instruct agents to write user interactions (plan confirmations, questions, suggested tasks, checkbox prompts) in ASD-STE100 Simplified Technical English, with brief context on what information the decision needs and what happens for each choice."
           checked={enableSimplifiedEnglishInteractions}
@@ -551,10 +602,10 @@ export function InstanceExperimentalSettings() {
         <section className="space-y-3" aria-labelledby="developer-mode-heading">
           <div className="space-y-1">
             <h2 id="developer-mode-heading" className="text-sm font-semibold">
-              Paperclip Developer Mode
+              {PRODUCT_IDENTITY.productName} Developer Mode
             </h2>
             <p className="text-sm text-muted-foreground">
-              Internal tools for developing, testing, and debugging Paperclip.
+              Internal tools for developing, testing, and debugging {PRODUCT_IDENTITY.productName}.
             </p>
           </div>
 
@@ -572,6 +623,19 @@ export function InstanceExperimentalSettings() {
           />
 
           <ExperimentalToggleCard
+            title={`${PRODUCT_IDENTITY.productName} Developer Mode`}
+            description={`Show internal ${PRODUCT_IDENTITY.productName} maintainer tools and observability links, including Honeycomb trace queries on run pages.`}
+            checked={enablePaperclipDeveloperMode}
+            onCheckedChange={(checked) =>
+              toggleMutation.mutate({ enablePaperclipDeveloperMode: checked })
+            }
+            disabled={toggleMutation.isPending}
+            settingKey="enablePaperclipDeveloperMode"
+            managed={managedKeys.enablePaperclipDeveloperMode}
+            ariaLabel={`Toggle ${PRODUCT_IDENTITY.productName} developer mode experimental setting`}
+          />
+
+          <ExperimentalToggleCard
             title="Managed Environment Only"
             description="Hide the local environment and run all agents in the platform-managed environment."
             checked={enableManagedSandboxOnly}
@@ -582,19 +646,6 @@ export function InstanceExperimentalSettings() {
             settingKey="enableManagedSandboxOnly"
             managed={managedKeys.enableManagedSandboxOnly}
             ariaLabel="Toggle managed environment only experimental setting"
-          />
-
-          <ExperimentalToggleCard
-            title="Paperclip Developer Mode"
-            description="Show internal Paperclip maintainer tools and observability links, including Honeycomb trace queries on run pages."
-            checked={enablePaperclipDeveloperMode}
-            onCheckedChange={(checked) =>
-              toggleMutation.mutate({ enablePaperclipDeveloperMode: checked })
-            }
-            disabled={toggleMutation.isPending}
-            settingKey="enablePaperclipDeveloperMode"
-            managed={managedKeys.enablePaperclipDeveloperMode}
-            ariaLabel="Toggle Paperclip developer mode experimental setting"
           />
 
           {showWorktreeRunExecution ? (
@@ -730,6 +781,40 @@ export function InstanceExperimentalSettings() {
           />
         </section>
       ) : null}
+
+      <aside className="space-y-3" aria-labelledby="capability-lifecycle-heading">
+        <details
+          data-testid="capability-lifecycle-registry"
+          open={lifecycleRegistryOpen}
+          onToggle={(event) => setLifecycleRegistryOpen(event.currentTarget.open)}
+        >
+          <summary className="cursor-pointer space-y-1">
+            <h2 id="capability-lifecycle-heading" className="inline text-sm font-semibold">
+              {t("featureLifecycle.registryTitle")}
+            </h2>
+            <p className="text-sm text-muted-foreground">{t("featureLifecycle.registryDescription")}</p>
+          </summary>
+          {lifecycleRegistryOpen ? (
+            <div className="mt-3 space-y-2">
+              {INSTANCE_FEATURE_KEYS.map((key) => {
+                const entry = INSTANCE_FEATURE_CATALOG[key];
+                const lifecycle = entry.lifecycle;
+                const maturity = t(`featureLifecycle.maturities.${lifecycle.maturity}`);
+                return (
+                  <details key={key} className="rounded-md border px-3 py-2 text-sm" data-testid={`capability-lifecycle-${key}`}>
+                    <summary className="flex cursor-pointer flex-wrap items-center gap-2">
+                      <span className="font-medium">{lifecycle.customerName}</span>
+                      <Badge variant="outline" aria-label={t("featureLifecycle.maturityLabel", { maturity })}>{maturity}</Badge>
+                    </summary>
+                    <p className="mb-2 mt-1 text-xs text-muted-foreground">{entry.description}</p>
+                    <CapabilityLifecycleDetails lifecycle={lifecycle} />
+                  </details>
+                );
+              })}
+            </div>
+          ) : null}
+        </details>
+      </aside>
     </div>
   );
 }

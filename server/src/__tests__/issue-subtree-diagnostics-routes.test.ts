@@ -5,6 +5,9 @@ import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  authUsers,
+  companyMemberships,
+  principalPermissionGrants,
   agentWakeupRequests,
   agents,
   companies,
@@ -12,6 +15,8 @@ import {
   heartbeatRuns,
   issueComments,
   issueRelations,
+  memoryDeletionMarkers,
+  memoryJobs,
   issues,
   projects,
 } from "@paperclipai/db";
@@ -20,6 +25,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
 
@@ -52,14 +58,17 @@ function createApp(db: Db, actor: Express.Request["actor"]) {
   return app;
 }
 
+const humanSessions = new Map<string, string>();
+
 function boardActor(company: CompanyRow): Express.Request["actor"] {
   return {
     type: "board",
-    userId: "board-user",
+    userId: company.defaultResponsibleUserId!,
+    sessionId: humanSessions.get(company.id),
     companyIds: [company.id],
-    memberships: [{ companyId: company.id, membershipRole: "operator", status: "active" }],
-    isInstanceAdmin: true,
-    source: "local_implicit",
+    memberships: [{ companyId: company.id, membershipRole: "owner", status: "active" }],
+    isInstanceAdmin: false,
+    source: "session",
   };
 }
 
@@ -70,6 +79,8 @@ function agentActor(company: CompanyRow, agent: AgentRow, runId: string): Expres
     companyId: company.id,
     runId,
     source: "agent_jwt",
+    onBehalfOfUserId: company.defaultResponsibleUserId!,
+    onBehalfOfMemberships: [{ companyId: company.id, membershipRole: "owner", status: "active" }],
   };
 }
 
@@ -78,8 +89,11 @@ async function seedCompany(db: Db, label = "Subtree Diagnostics") {
   const [company] = await db.insert(companies).values({
     name: `${label} ${nonce}`,
     issuePrefix: `SD${nonce.slice(0, 4).toUpperCase()}`,
-    defaultResponsibleUserId: "board-user",
+    defaultResponsibleUserId: `subtree-human-${nonce}`,
   }).returning();
+  const human = await seedCurrentHumanSourceActor(db, [company!.id], company!.defaultResponsibleUserId!);
+  if (!human.sessionId) throw new Error("Subtree diagnostics requires a current Human session");
+  humanSessions.set(company!.id, human.sessionId);
   return company!;
 }
 
@@ -93,16 +107,18 @@ async function seedAgent(db: Db, companyId: string, permissions: Record<string, 
     runtimeConfig: {},
     permissions,
   }).returning();
+  await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agent!.id,
+    membershipRole: "member", status: "active" });
+  await db.insert(principalPermissionGrants).values({ companyId, principalType: "agent", principalId: agent!.id,
+    permissionKey: "company_scope:read" });
   return agent!;
 }
 
 async function seedProject(db: Db, companyId: string, name: string) {
-  const [project] = await db.insert(projects).values({
-    companyId,
-    name,
-    status: "in_progress",
-  }).returning();
-  return project!;
+  const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+  return createCanonicalHumanProject(db, companyId, { type: "board", source: "session",
+    userId: company!.defaultResponsibleUserId!, sessionId: humanSessions.get(companyId) }, name,
+  { status: "in_progress" });
 }
 
 async function seedIssue(
@@ -116,6 +132,7 @@ async function seedIssue(
     parentId?: string | null;
   },
 ) {
+  const [company] = await db.select().from(companies).where(eq(companies.id, input.companyId));
   const [issue] = await db.insert(issues).values({
     companyId: input.companyId,
     projectId: input.projectId ?? null,
@@ -124,7 +141,7 @@ async function seedIssue(
     status: input.status ?? "todo",
     priority: "medium",
     assigneeAgentId: input.assigneeAgentId ?? null,
-    responsibleUserId: "board-user",
+    responsibleUserId: company!.defaultResponsibleUserId,
   }).returning();
   return issue!;
 }
@@ -175,6 +192,7 @@ async function attachMentionScopedLowTrustRun(db: Db, fixture: {
   const [run] = await db.insert(heartbeatRuns).values({
     companyId: fixture.company.id,
     agentId: fixture.mentionedAgent.id,
+    responsibleUserId: fixture.company.defaultResponsibleUserId,
     status: "running",
     contextSnapshot: {
       issueId: fixture.root.id,
@@ -202,7 +220,14 @@ describeEmbeddedPostgres("issue subtree diagnostics route", () => {
     await db.delete(issues);
     await db.delete(agents);
     await db.delete(projects);
+    // Canonical source deletion may retain content-free erasure receipts/jobs.
+    await db.delete(memoryJobs);
+    await db.delete(memoryDeletionMarkers);
+    await db.delete(principalPermissionGrants);
+    await db.delete(companyMemberships);
     await db.delete(companies);
+    await db.delete(authUsers);
+    humanSessions.clear();
   });
 
   afterAll(async () => {
@@ -332,7 +357,7 @@ describeEmbeddedPostgres("issue subtree diagnostics route", () => {
         title: `Child ${String(index).padStart(3, "0")}`,
         status: "todo",
         priority: "medium",
-        responsibleUserId: "board-user",
+        responsibleUserId: company.defaultResponsibleUserId,
       });
     }
     await db.insert(issues).values(childRows);

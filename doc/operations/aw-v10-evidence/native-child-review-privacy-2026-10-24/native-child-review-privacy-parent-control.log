@@ -1,0 +1,80 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/paperclip-control-plane-port.test.ts (15 tests | 3 failed | 12 skipped) 18947ms
+     × revalidates every persisted native binding before open and completion 33ms
+     × P6-23 materializes native review through the authorized interaction service 1689ms
+     × returns a rejected native completion review to the original agent with the reviewer reason 57ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/paperclip-control-plane-port.test.ts > PaperclipControlPlanePort conformance > revalidates every persisted native binding before open and completion
+Error: Failed query: update "heartbeat_runs" set "native_issue_id" = $1 where "heartbeat_runs"."id" = $2
+params: 00000000-0000-4000-8000-000000000008,00000000-0000-4000-8000-000000000093
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/native-runtime/paperclip-control-plane-port.test.ts:946:7
+    944|     }>;
+    945|     for (const mutation of mutations) {
+    946|       await db.update(heartbeatRuns).set(mutation.invalid).where(eq(he…
+       |       ^
+    947|       await expect(createPort().openRun(open)).rejects.toThrow("native…
+    948|       await db.update(heartbeatRuns).set(mutation.restore).where(eq(he…
+
+Caused by: PostgresError: run source binding is immutable
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: 'P0001', where: 'PL/pgSQL function aw_bind_private_run_source() line 11 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "heartbeat_runs" set "native_issue_id" = $1 where "heartbeat_runs"."id" = $2', parameters: [ '00000000-0000-4000-8000-000000000008', '00000000-0000-4000-8000-000000000093' ], args: [ '00000000-0000-4000-8000-000000000008', '00000000-0000-4000-8000-000000000093' ], types: [ 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/paperclip-control-plane-port.test.ts > PaperclipControlPlanePort conformance > P6-23 materializes native review through the authorized interaction service
+Error: Current organization access is required
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ pinIssueMutationHuman src/services/issues.ts:2104:22
+ ❯ runUpdate src/services/issues.ts:11469:19
+ ❯ Object.update src/services/issues.ts:11827:22
+ ❯ src/services/issue-thread-interactions.ts:2255:104
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ acceptRequestConfirmation src/services/issue-thread-interactions.ts:2123:20
+ ❯ Object.acceptInteraction src/services/issue-thread-interactions.ts:3726:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/paperclip-control-plane-port.test.ts > PaperclipControlPlanePort conformance > returns a rejected native completion review to the original agent with the reviewer reason
+Error: Current organization access is required
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ pinIssueMutationHuman src/services/issues.ts:2106:20
+ ❯ runUpdate src/services/issues.ts:11469:13
+ ❯ Object.update src/services/issues.ts:11827:22
+ ❯ src/services/issue-thread-interactions.ts:2523:9
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ rejectRequestConfirmation src/services/issue-thread-interactions.ts:2402:21
+ ❯ src/services/native-runtime/paperclip-control-plane-port.test.ts:1673:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 12 skipped (15)
+   Start at  13:50:31
+   Duration  56.71s (transform 26.04s, setup 188ms, import 37.14s, tests 18.95s, environment 0ms)
+

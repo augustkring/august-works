@@ -1,6 +1,6 @@
 import { runtimeControlService } from "../runtime/control.js";
 import type { NotifyCompany } from "../notifications/notifications.js";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   activityLog,
   billingEntitlementOverrides,
@@ -25,6 +25,8 @@ import type { SaasPlatformConfig } from "../../saas-platform-config.js";
 import { sha256 } from "./crypto.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { instanceSettingsService } from "../instance-settings.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 
 export async function assertNativeSupportOwner(
   reader: Pick<Db, "select">,
@@ -479,12 +481,21 @@ export function saasSupportService(
   }
   async function authorize(
     sessionId: string,
-    userId: string,
+    actor: AuthorizationActor,
     scope: string,
-    now = new Date(),
-    reader: Pick<Db, "select"> = db,
+    _now = new Date(),
+    reader: Pick<Db, "select" | "execute"> = db,
     lock = false,
+    requireRecent = true,
   ) {
+    const userId = actor.type === "board" ? actor.userId : null;
+    await assertConfiguredOperatorAuthentication(
+      reader,
+      actor,
+      config.operatorUserIds,
+      { requireRecent },
+    );
+    if (!userId) throw forbidden("Internal operator access required");
     operator(userId);
     const query = reader
       .select()
@@ -494,7 +505,7 @@ export function saasSupportService(
           eq(supportSessions.id, sessionId),
           eq(supportSessions.operatorUserId, userId),
           isNull(supportSessions.revokedAt),
-          gt(supportSessions.expiresAt, now),
+          sql`${supportSessions.expiresAt}>clock_timestamp()`,
         ),
       )
       .limit(1);
@@ -583,15 +594,18 @@ export function saasSupportService(
     if (!row) throw notFound();
     return row;
   }
-  async function status(sessionId: string, userId: string) {
+  async function status(sessionId: string, actor: AuthorizationActor) {
+    const userId = actor.type === "board" ? actor.userId : null;
+    if (!userId) throw forbidden("Internal operator access required");
     return db.transaction(async (tx) => {
       const session = await authorize(
         sessionId,
-        userId,
+        actor,
         "status:read",
         new Date(),
         tx,
         true,
+        false,
       );
       const cells = await tx
         .select({
@@ -610,15 +624,18 @@ export function saasSupportService(
         action: "support.status_read",
         resourceId: session.companyId,
       });
+      await authorize(sessionId, actor, "status:read", new Date(), tx, true, false);
       return { companyId: session.companyId, runtimes: cells };
     });
   }
   async function override(
     sessionId: string,
-    userId: string,
+    actor: AuthorizationActor,
     raw: unknown,
     now = new Date(),
   ) {
+    const userId = actor.type === "board" ? actor.userId : null;
+    if (!userId) throw forbidden("Internal operator access required");
     const input = entitlementOverrideSchema.parse(raw),
       expiry = new Date(input.expiresAt);
     if (expiry <= now || expiry.getTime() > now.getTime() + 30 * 86400000)
@@ -632,7 +649,7 @@ export function saasSupportService(
     return db.transaction(async (tx) => {
       const session = await authorize(
         sessionId,
-        userId,
+        actor,
         "billing:override",
         now,
         tx,
@@ -667,6 +684,7 @@ export function saasSupportService(
           existing.expiresAt.getTime() !== expiry.getTime()
         )
           throw conflict("Idempotency key has a different override");
+        await authorize(sessionId, actor, "billing:override", new Date(), tx, true);
         return existing;
       }
       const [record] = await tx
@@ -708,16 +726,19 @@ export function saasSupportService(
           expiresAt: input.expiresAt,
         },
       });
+      await authorize(sessionId, actor, "billing:override", new Date(), tx, true);
       return record!;
     });
   }
   async function runtimeAction(
     sessionId: string,
-    userId: string,
+    actor: AuthorizationActor,
     cellId: string,
     raw: unknown,
     now = new Date(),
   ) {
+    const userId = actor.type === "board" ? actor.userId : null;
+    if (!userId) throw forbidden("Internal operator access required");
     const input = runtimeOperationSchema.parse(raw);
     if (["delete", "migrate"].includes(input.action))
       throw forbidden(
@@ -726,7 +747,7 @@ export function saasSupportService(
     return db.transaction(async (tx) => {
       const session = await authorize(
         sessionId,
-        userId,
+        actor,
         input.action === "restore" ? "backup:restore" : "runtime:manage",
         now,
         tx,
@@ -757,20 +778,23 @@ export function saasSupportService(
         entityId: cellId,
         details: { supportSessionId: session.id, operationId: operation.id },
       });
+      await authorize(sessionId, actor, input.action === "restore" ? "backup:restore" : "runtime:manage", new Date(), tx, true);
       return operation;
     });
   }
   async function canaryRuntime(
     sessionId: string,
-    userId: string,
+    actor: AuthorizationActor,
     raw: unknown,
     now = new Date(),
   ) {
+    const userId = actor.type === "board" ? actor.userId : null;
+    if (!userId) throw forbidden("Internal operator access required");
     const input = runtimeCellCreateSchema.parse(raw);
     return db.transaction(async (tx) => {
       const session = await authorize(
         sessionId,
-        userId,
+        actor,
         "runtime:manage",
         now,
         tx,
@@ -791,22 +815,26 @@ export function saasSupportService(
           cellId: result.cell.id,
         },
       });
+      await authorize(sessionId, actor, "runtime:manage", new Date(), tx, true);
       return result;
     });
   }
   async function backupStatus(
     sessionId: string,
-    userId: string,
+    actor: AuthorizationActor,
     cellId: string,
   ) {
+    const userId = actor.type === "board" ? actor.userId : null;
+    if (!userId) throw forbidden("Internal operator access required");
     return db.transaction(async (tx) => {
       const session = await authorize(
         sessionId,
-        userId,
+        actor,
         "backup:restore",
         new Date(),
         tx,
         true,
+        false,
       );
       const control = runtimeControlService(tx as unknown as Db, config);
       await control.getCell(session.companyId, cellId);
@@ -818,6 +846,7 @@ export function saasSupportService(
         action: "support.backup_status_read",
         resourceId: cellId,
       });
+      await authorize(sessionId, actor, "backup:restore", new Date(), tx, true, false);
       return backups;
     });
   }

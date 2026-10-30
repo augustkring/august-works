@@ -1,11 +1,12 @@
-import type { SandboxCapabilitySnapshot, SandboxPolicyCompilation } from "@paperclipai/shared";
+import { createHash } from "node:crypto";
+import { SANDBOX_CONTROLS, type SandboxCapabilitySnapshot, type SandboxPolicyCompilation } from "@paperclipai/shared";
 
 export interface SandboxIdentity { companyId: string; bindingId: string; cellId: string; cellGeneration: string; sandboxRef: string }
 export interface PreparedSandbox extends SandboxIdentity { backendVersion: string; imageDigest: string }
 export interface PolicyApplyResult { applied: boolean; requiresRecreate: boolean; observedPolicyHash: string | null; unsupportedFeatures: string[] }
 export interface SandboxObservation { state: "ready" | "running" | "stopped" | "failed" | "unknown"; policyHash: string | null; imageDigest: string | null; generation: string; controlsHealthy: boolean }
-export interface SandboxProbeCase { caseId: string; control: string; expected: "allow" | "deny" | "observe" }
-export interface SandboxProbeResult { verdict: "pass" | "fail" | "unsupported"; observationHash: string | null }
+export interface SandboxProbeCase { caseId: string; control: string; expected: "allow" | "deny" | "observe"; contractHash: string }
+export interface SandboxProbeResult { verdict: "pass" | "fail" | "unsupported"; observationHash: string | null; contractHash: string; targetQualificationHash?: string }
 
 /** A backend adapter cannot grant company permission. Every call receives a
  * controller-pinned identity and an already-authorized policy projection. */
@@ -15,7 +16,7 @@ export interface ExecutionSandboxBackend {
   /** null means no target-environment qualification; never invent a snapshot. */
   capabilities(): Promise<SandboxCapabilitySnapshot | null>;
   prepareSandbox(input: SandboxIdentity): Promise<PreparedSandbox>;
-  applyPolicy(input: SandboxIdentity & { policy: SandboxPolicyCompilation; currentStaticFingerprint: string | null }): Promise<PolicyApplyResult>;
+  applyPolicy(input: SandboxIdentity & { policy: SandboxPolicyCompilation; currentStaticFingerprint: string | null; expiresAt: string }): Promise<PolicyApplyResult>;
   startWorkload(input: SandboxIdentity & { policy: SandboxPolicyCompilation; expiresAt: string; idempotencyKey: string }): Promise<{ operationId: string }>;
   inspectWorkload(input: SandboxIdentity): Promise<SandboxObservation>;
   stopWorkload(input: SandboxIdentity & { idempotencyKey: string }): Promise<{ operationId: string }>;
@@ -23,7 +24,7 @@ export interface ExecutionSandboxBackend {
   probeBoundary(input: SandboxIdentity & { test: SandboxProbeCase }): Promise<SandboxProbeResult>;
 }
 
-export const SANDBOX_PROBE_CASES: SandboxProbeCase[] = [
+const PROBE_DEFINITIONS = [
   { caseId: "filesystem_allow", control: "filesystemPolicy", expected: "allow" }, { caseId: "filesystem_deny", control: "filesystemPolicy", expected: "deny" }, { caseId: "filesystem_escape", control: "filesystemPolicy", expected: "deny" },
   { caseId: "process_nonprivileged", control: "processPrivilegePolicy", expected: "observe" }, { caseId: "process_privilege_denied", control: "processPrivilegePolicy", expected: "deny" },
   { caseId: "syscall_allow", control: "syscallPolicy", expected: "allow" }, { caseId: "syscall_deny", control: "syscallPolicy", expected: "deny" },
@@ -31,4 +32,14 @@ export const SANDBOX_PROBE_CASES: SandboxProbeCase[] = [
   { caseId: "network_l7_allow", control: "networkLayer7Policy", expected: "allow" }, { caseId: "network_l7_deny", control: "networkLayer7Policy", expected: "deny" },
   { caseId: "credential_allow", control: "credentialBrokering", expected: "allow" }, { caseId: "credential_raw_read_deny", control: "credentialBrokering", expected: "deny" }, { caseId: "credential_wrong_destination_deny", control: "credentialBrokering", expected: "deny" }, { caseId: "credential_revoke_deny", control: "credentialBrokering", expected: "deny" },
   { caseId: "resource_exhaustion_contained", control: "resourceLimits", expected: "deny" }, { caseId: "force_stop", control: "forceStop", expected: "observe" },
-];
+] as const;
+
+/** The controller selects probes from the immutable binding policy and binds
+ * every host result to that policy. The host cannot substitute its own suite. */
+export function sandboxProbeCases(policyHash: string, requiredControls: readonly string[]): SandboxProbeCase[] {
+  const controls = requiredControls.length ? requiredControls : SANDBOX_CONTROLS;
+  return PROBE_DEFINITIONS.filter(test => controls.includes(test.control)).map(test => ({
+    ...test,
+    contractHash: createHash("sha256").update(JSON.stringify({ suiteVersion: "aw-v7-boundary-2", policyHash, ...test })).digest("hex"),
+  }));
+}

@@ -6,7 +6,9 @@ import express from "express";
 import type WebSocket from "ws";
 import request from "supertest";
 import { issueRoutes } from "../routes/issues.js";
+import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/index.js";
+import { actorMiddleware } from "../middleware/auth.js";
 import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
 import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
@@ -47,7 +49,6 @@ import {
   toolConnections,
   toolConnectionInstalls,
   connectionGrants,
-  projects,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import {
@@ -56,6 +57,7 @@ import {
 } from "../services/email-channels.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import {
   agentmailMessageSchema,
   type AgentmailMessage,
@@ -116,8 +118,15 @@ describe("AgentMail durable email pipeline", () => {
   });
   it("installs one connector skill and provider tools only for the assigned agent", async () => {
     const f = await fixture();
-    const binding = { companyId: f.companyId, agentId: f.agentId, runId: randomUUID() };
-    await db.insert(heartbeatRuns).values({ id: binding.runId, companyId: f.companyId, agentId: f.agentId, status: "running" });
+    const sourceActor = await seedCurrentHumanSourceActor(db, [f.companyId], "email-board");
+    const task = await issueService(db).create(f.companyId, {
+      title: "Inspect the assigned email connector",
+      description: "Human-authored request to inspect the assigned inbox tools.",
+      status: "todo", createdByUserId: "email-board", responsibleUserId: "email-board",
+    }, db, undefined, { manualInputActor: sourceActor, privacyActor: sourceActor, sourceAccessActor: sourceActor });
+    const binding = { companyId: f.companyId, agentId: f.agentId, runId: randomUUID(), issueId: task.id };
+    await db.insert(heartbeatRuns).values({ id: binding.runId, companyId: f.companyId, agentId: f.agentId,
+      nativeIssueId: task.id, responsibleUserId: "email-board", status: "running", contextSnapshot: { issueId: task.id } });
     const assignments = await resolveConnectorAssignments(db, binding);
     expect(assignments).toHaveLength(1);
     expect(assignments[0].resources[0].id).toBe(f.endpointId);
@@ -1155,10 +1164,16 @@ describe("AgentMail durable email pipeline", () => {
         { userId: "email-board" },
       ),
     ).rejects.toThrow(/boundary/);
-    const [project] = await db
-      .insert(projects)
-      .values({ companyId: f.companyId, name: "Email work" })
-      .returning();
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const projectResponse = await request(app)
+      .post(`/api/companies/${f.companyId}/projects`)
+      .send({ name: "Email work", status: "in_progress" })
+      .expect(201);
+    const project = projectResponse.body as { id: string };
     await db
       .update(agents)
       .set({

@@ -4,6 +4,13 @@ import { instanceSettingsService } from "./instance-settings.js";
 import { assertActivationConnectionPurpose, assertActivationConnectionPurposeInTransaction } from "./saas/activation-owner.js";
 import { readDeferredActivationSetup, recordDeferredActivationCompletion } from "./saas/activation-connection-completion.js";
 import { originalOAuthGrantExpiration } from "./tool-oauth-grant-metadata.js";
+import {
+  GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS,
+  githubRepositoryAccessProgressHash,
+  githubRepositoryAccessScopeHash,
+  githubRepositoryAccessSourceIdentityHash,
+  projectToolConnectionLifecycle,
+} from "./tool-connection-lifecycle.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { withV7ActivityTransaction } from "./v7-mutations.js";
 import type { ActivityPublication } from "./activity-log.js";
@@ -250,6 +257,8 @@ import { listConnectionLifecycleEvents } from "./tool-connection-activity.js";
 import { isRetiredComposioConnection, RETIRED_COMPOSIO_MESSAGE } from "@paperclipai/shared";
 import {
   appWithPaperclipCloudConnectorAvailability,
+  appWithSlackManagedOAuthAvailability,
+  MANAGED_SLACK_OAUTH_METHOD_KEY,
   paperclipCloudConnectorCapabilitiesFromEnv,
   createPaperclipCloudConnector,
   isPaperclipCloudConnectorStrategy,
@@ -669,6 +678,32 @@ type ToolAccessMutationDb = Pick<
   "select" | "insert" | "update" | "delete"
 >;
 
+async function lockToolAssignmentAgents(
+  client: ToolAccessMutationDb,
+  companyId: string,
+  targets: ReadonlyArray<{ targetType: string; targetId: string }>,
+) {
+  const allAgents = targets.some(
+    (target) => target.targetType === "company" && target.targetId === companyId,
+  );
+  const ids = targets
+    .filter((target) => target.targetType === "agent")
+    .map((target) => target.targetId);
+  if (!allAgents && ids.length === 0) return;
+  await client
+    .select({ id: agents.id })
+    .from(agents)
+    .where(
+      and(
+        eq(agents.companyId, companyId),
+        sql`${agents.status} NOT IN ('pending_approval', 'terminated')`,
+        allAgents ? undefined : inArray(agents.id, ids),
+      ),
+    )
+    .orderBy(agents.id)
+    .for("no key update");
+}
+
 export type McpToolDescriptor = {
   name: string;
   title?: string | null;
@@ -1021,7 +1056,8 @@ function connectionMethodFor(app: AppDefinition, methodKey?: string | null) {
   const toolMethods = app.methods.filter(
     (candidate) =>
       candidate.purpose !== "channel" && candidate.transport !== "chat_sdk"
-      && (availableMethods.has(candidate) || isPaperclipCloudConnectorStrategy(candidate.oauthStrategy)),
+      && (availableMethods.has(candidate) || isPaperclipCloudConnectorStrategy(candidate.oauthStrategy)
+        || (app.slug === "slack" && candidate.key === MANAGED_SLACK_OAUTH_METHOD_KEY)),
   );
   const method = normalizedMethodKey
     ? (toolMethods.find((candidate) => candidate.key === normalizedMethodKey) ??
@@ -2616,60 +2652,128 @@ export async function loadGitHubGrantMetadata(
 }> {
   let resolvedAppSlug = appSlug;
   const accessRefreshStartedAt = new Date().toISOString();
+  const reconciliationStartedAt = Date.now();
+  const requestBudget = 200;
+  const repositoryItemBudget = 10_000;
+  const requestDeadline = reconciliationStartedAt + 60_000;
+  let requestCount = 0;
+  let repositoryItems = 0;
+  const requestedUrls = new Set<string>();
+  const paginationTargets = new Set<string>();
+  const incomplete = () => unprocessable(
+    "GitHub repository access could not be completely reconciled within the local safety limits. Retry the refresh.",
+    { code: "github_access_refresh_incomplete" },
+  );
   const github = async (
     path: string,
-  ): Promise<{ data: Record<string, unknown>; hasNext: boolean }> => {
-    const response = await request(`https://api.github.com${path}`, {
-      headers: {
-        accept: "application/vnd.github+json",
-        authorization: `Bearer ${accessToken}`,
-        "user-agent": "Paperclip",
-        "x-github-api-version": "2022-11-28",
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
+  ): Promise<{ data: Record<string, unknown>; hasNext: boolean; nextUrl: string | null }> => {
+    const url = `https://api.github.com${path}`;
+    const remaining = requestDeadline - Date.now();
+    if (remaining <= 0 || requestCount >= requestBudget || requestedUrls.has(url)) throw incomplete();
+    requestCount += 1;
+    requestedUrls.add(url);
+    const timeoutMs = Math.max(1, Math.min(15_000, remaining));
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let response: Response;
+    let value: unknown;
+    try {
+      const completedRequest = await Promise.race([
+        (async () => {
+          const fetched = await request(url, {
+            headers: {
+              accept: "application/vnd.github+json",
+              authorization: `Bearer ${accessToken}`,
+              "user-agent": "Paperclip",
+              "x-github-api-version": "2022-11-28",
+            },
+            signal: controller.signal,
+          });
+          return { response: fetched, value: fetched.ok ? await fetched.json() as unknown : null };
+        })(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(incomplete());
+          }, timeoutMs);
+        }),
+      ]);
+      response = completedRequest.response;
+      value = completedRequest.value;
+    } catch (error) {
+      if (error instanceof HttpError && asRecord(error.details).code === "github_access_refresh_incomplete") throw error;
+      if (Date.now() >= requestDeadline) throw incomplete();
+      throw error;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
     if (!response.ok) {
+      const rateLimited = response.status === 429 ||
+        response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0";
+      const retryAt = rateLimited ? githubRateLimitRetryAt(response, new Date()) : null;
       throw unprocessable(
         "GitHub could not verify this account's installation access",
         {
           code:
             response.status === 401
               ? "oauth_reauthorization_required"
-              : "github_access_check_failed",
+              : rateLimited ? "github_rate_limited" : "github_access_check_failed",
+          ...(retryAt ? { retryAt } : {}),
         },
       );
     }
-    const value = (await response.json()) as unknown;
     if (!recordValue(value))
       throw unprocessable("GitHub returned invalid account metadata", {
         code: "github_bad_response",
       });
-    return {
-      data: value,
-      hasNext: /;\s*rel="next"/.test(response.headers.get("link") ?? ""),
-    };
+    const link = response.headers.get("link") ?? "";
+    const nextMatch = link.match(/<([^>]+)>\s*;\s*rel="?next"?/i);
+    if (link.includes("rel=\"next\"") && !nextMatch)
+      throw unprocessable("GitHub returned invalid pagination metadata", { code: "github_bad_response" });
+    let nextUrl: string | null = null;
+    if (nextMatch) {
+      try {
+        const parsed = new URL(nextMatch[1]!);
+        if (parsed.protocol !== "https:" || parsed.origin !== "https://api.github.com" || parsed.username || parsed.password)
+          throw new Error("invalid pagination origin");
+        nextUrl = parsed.toString();
+      } catch {
+        throw unprocessable("GitHub returned invalid pagination metadata", { code: "github_bad_response" });
+      }
+      if (paginationTargets.has(nextUrl)) throw incomplete();
+      paginationTargets.add(nextUrl);
+    }
+    return { data: value, hasNext: nextUrl !== null, nextUrl };
   };
   const list = async (
     path: string,
     key: string,
   ): Promise<Record<string, unknown>[]> => {
     const items: Record<string, unknown>[] = [];
-    for (let page = 1; ; page += 1) {
-      const { data, hasNext } = await github(
-        `${path}?per_page=100&page=${page}`,
-      );
+    let pageUrl = `https://api.github.com${path}?per_page=100&page=1`;
+    let priorPage = 0;
+    for (;;) {
+      const page = new URL(pageUrl).searchParams.get("page");
+      const pageNumber = Number(page);
+      if (!Number.isSafeInteger(pageNumber) || pageNumber <= priorPage || new URL(pageUrl).pathname !== path ||
+        new URL(pageUrl).searchParams.get("per_page") !== "100") throw incomplete();
+      priorPage = pageNumber;
+      const { data, hasNext, nextUrl } = await github(pageUrl.slice("https://api.github.com".length));
       const batch = data[key];
-      if (
-        !Array.isArray(batch) ||
-        !batch.every(recordValue) ||
-        (hasNext && batch.length === 0)
-      ) {
-        throw unprocessable("GitHub returned invalid access metadata", {
-          code: "github_bad_response",
-        });
+      if (!Array.isArray(batch) || !batch.every(recordValue)) {
+        throw unprocessable("GitHub returned invalid access metadata", { code: "github_bad_response" });
       }
+      if (hasNext && batch.length === 0) throw incomplete();
       items.push(...batch);
+      if (key === "installations" && items.length > 100) throw incomplete();
+      if (key === "repositories") {
+        repositoryItems += batch.length;
+        if (repositoryItems > repositoryItemBudget) throw incomplete();
+      }
       if (!hasNext) return items;
+      const next = new URL(nextUrl!);
+      if (next.pathname !== path || next.searchParams.get("per_page") !== "100" || !next.searchParams.get("page")) throw incomplete();
+      pageUrl = next.toString();
     }
   };
   const { data: user } = await github("/user");
@@ -2785,6 +2889,56 @@ export async function loadGitHubGrantMetadata(
     accessRevision: randomUUID(),
     lastAccessRefreshAt: accessRefreshStartedAt,
     webhookHealth: "pending",
+  };
+}
+
+function githubRateLimitRetryAt(response: Response, observedAt: Date): string | null {
+  const maxRetryDelayMs = 7 * 24 * 60 * 60_000;
+  const maxRetryAt = observedAt.getTime() + maxRetryDelayMs;
+  const candidates: number[] = [];
+  const retryAfterHeader = response.headers.get("retry-after");
+  const retryAfter = retryAfterHeader && retryAfterHeader.length <= 128 ? retryAfterHeader.trim() : null;
+  if (retryAfter && /^[0-9]{1,10}$/.test(retryAfter)) {
+    const seconds = Number(retryAfter);
+    const at = observedAt.getTime() + seconds * 1_000;
+    if (Number.isSafeInteger(seconds) && Number.isFinite(at) && at > observedAt.getTime() &&
+      at <= maxRetryAt && Number.isFinite(new Date(at).getTime())) {
+      candidates.push(at);
+    }
+  } else if (retryAfter) {
+    const at = Date.parse(retryAfter);
+    if (Number.isFinite(at) && at > observedAt.getTime() && at <= maxRetryAt) candidates.push(at);
+  }
+  const resetHeader = response.headers.get("x-ratelimit-reset");
+  const reset = resetHeader && resetHeader.length <= 32 ? resetHeader.trim() : null;
+  if (reset && /^[0-9]{1,10}$/.test(reset)) {
+    const seconds = Number(reset);
+    const at = seconds * 1_000;
+    if (Number.isSafeInteger(seconds) && Number.isFinite(at) && at > observedAt.getTime() &&
+      at <= maxRetryAt && Number.isFinite(new Date(at).getTime())) {
+      candidates.push(at);
+    }
+  }
+  return candidates.length ? new Date(Math.max(...candidates)).toISOString() : null;
+}
+
+function githubRepositoryAccessReconciliation(
+  metadata: { userId: string; installationIds: string[]; repositories: Array<{ id: string; installationId: string }> },
+  scopes: unknown,
+  completedAt: string,
+) {
+  const scopeHash = githubRepositoryAccessScopeHash(scopes, metadata.installationIds, metadata.repositories);
+  const sourceIdentityHash = githubRepositoryAccessSourceIdentityHash(metadata.userId);
+  if (!scopeHash || !sourceIdentityHash) return null;
+  return {
+    state: "reconciled" as const,
+    mode: "full" as const,
+    lastSuccessAt: completedAt,
+    lastFullReconciledAt: completedAt,
+    lastAttemptAt: completedAt,
+    nextAttemptAt: new Date(Date.parse(completedAt) + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS).toISOString(),
+    scopeHash,
+    sourceIdentityHash,
   };
 }
 
@@ -3082,13 +3236,15 @@ export function toolAccessService(
     return cachedCloudConnector;
   };
   async function appForConnectionSetup(app: AppDefinition): Promise<AppDefinition> {
-    if (!app.methods.some((method) => isPaperclipCloudConnectorStrategy(method.oauthStrategy))) {
-      return app;
-    }
-    const profiles = connectorWasProvided
-      ? (await currentCloudConnector()?.getCapabilities() ?? [])
-      : await paperclipCloudConnectorCapabilitiesFromEnv();
-    return appWithPaperclipCloudConnectorAvailability(app, profiles);
+    const withCloudProfiles = !app.methods.some((method) => isPaperclipCloudConnectorStrategy(method.oauthStrategy))
+      ? app
+      : appWithPaperclipCloudConnectorAvailability(
+          app,
+          connectorWasProvided
+            ? (await currentCloudConnector()?.getCapabilities() ?? [])
+            : await paperclipCloudConnectorCapabilitiesFromEnv(),
+        );
+    return appWithSlackManagedOAuthAvailability(withCloudProfiles);
   }
   /** Original setup metadata and actual managed scopes; never a guessed scope
    * from a gallery hint. Broker availability is read outside onboarding locks. */
@@ -3683,7 +3839,7 @@ export function toolAccessService(
     }
     if (typeof value === "string")
       return value
-        .split(/\s+/)
+        .split(/[\s,]+/)
         .map((item) => item.trim())
         .filter(Boolean);
     return [];
@@ -5236,13 +5392,42 @@ export function toolAccessService(
     return profile;
   }
 
+  async function lockManagedAppPolicies(dbClient: ToolAccessMutationDb, companyId: string, connectionId: string) {
+    await dbClient.select({ id: toolPolicies.id }).from(toolPolicies)
+      .where(and(
+        eq(toolPolicies.companyId, companyId),
+        eq(toolPolicies.policyType, "require_approval"),
+        sql`${toolPolicies.config}->>'source' = 'app_gallery_finish'`,
+        sql`${toolPolicies.config}->>'connectionId' = ${connectionId}`,
+      ))
+      .orderBy(toolPolicies.id)
+      .for("no key update");
+  }
+
+  async function lockToolConnectionRuntimeInputs(dbClient: ToolAccessMutationDb, companyId: string, connectionId: string) {
+    await dbClient.select({ id: toolApplications.id }).from(toolApplications)
+      .innerJoin(toolConnections, and(
+        eq(toolConnections.applicationId, toolApplications.id),
+        eq(toolConnections.companyId, toolApplications.companyId),
+      ))
+      .where(and(eq(toolConnections.id, connectionId), eq(toolConnections.companyId, companyId)))
+      .for("update", { of: toolApplications });
+    await dbClient.select({ id: toolConnections.id }).from(toolConnections)
+      .where(and(eq(toolConnections.id, connectionId), eq(toolConnections.companyId, companyId)))
+      .for("update");
+    await dbClient.select({ id: toolProfiles.id }).from(toolProfiles)
+      .where(and(eq(toolProfiles.companyId, companyId), eq(toolProfiles.profileKey, `app:${connectionId}`)))
+      .for("no key update");
+    await lockManagedAppPolicies(dbClient, companyId, connectionId);
+  }
+
   async function enableCatalogEntriesByDefault(input: {
     connection: typeof toolConnections.$inferSelect;
     newCatalogEntryIds: string[];
     activeCatalogEntryIds: string[];
     restoreDraftDefaults?: boolean;
     actor?: ActorInfo;
-  }) {
+  }, dbClient: ToolAccessMutationDb = db) {
     // Catalog discovery also runs while the setup wizard is still a draft.
     // Access is not granted until the operator finishes that wizard, so a
     // draft refresh must never manufacture a profile or company-wide binding.
@@ -5253,7 +5438,7 @@ export function toolAccessService(
     if (input.connection.status !== "active" && !input.restoreDraftDefaults)
       return;
     const profileKey = `app:${input.connection.id}`;
-    let [profile] = await db
+    let [profile] = await dbClient
       .select()
       .from(toolProfiles)
       .where(
@@ -5262,11 +5447,13 @@ export function toolAccessService(
           eq(toolProfiles.profileKey, profileKey),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
+    await lockManagedAppPolicies(dbClient, input.connection.companyId, input.connection.id);
     const createdProfile = !profile;
     const resetToRecommendedDefaults = !profile || profile.status !== "active";
     if (!profile) {
-      const [sameName] = await db
+      const [sameName] = await dbClient
         .select({ id: toolProfiles.id })
         .from(toolProfiles)
         .where(
@@ -5279,7 +5466,7 @@ export function toolAccessService(
       const profileName = sameName
         ? `${input.connection.name} (${input.connection.id.replace(/-/g, "").slice(0, 8)})`
         : input.connection.name;
-      [profile] = await db
+      [profile] = await dbClient
         .insert(toolProfiles)
         .values({
           companyId: input.connection.companyId,
@@ -5294,7 +5481,8 @@ export function toolAccessService(
           },
         })
         .returning();
-      await db.insert(toolProfileBindings).values({
+      await lockToolAssignmentAgents(dbClient, input.connection.companyId, [{ targetType: "company", targetId: input.connection.companyId }]);
+      await dbClient.insert(toolProfileBindings).values({
         companyId: input.connection.companyId,
         profileId: profile.id,
         targetType: "company",
@@ -5315,7 +5503,8 @@ export function toolAccessService(
       // references it (for example, an MCP gateway). Reconnecting revives the
       // same connection id, so restore that retained profile as a fresh
       // all-agents assignment instead of leaving every read action Off.
-      [profile] = await db
+      await lockToolAssignmentAgents(dbClient, input.connection.companyId, [{ targetType: "company", targetId: input.connection.companyId }]);
+      [profile] = await dbClient
         .update(toolProfiles)
         .set({
           name: input.connection.name,
@@ -5330,7 +5519,7 @@ export function toolAccessService(
         })
         .where(eq(toolProfiles.id, profile.id))
         .returning();
-      await db
+      await dbClient
         .delete(toolProfileBindings)
         .where(
           and(
@@ -5338,7 +5527,7 @@ export function toolAccessService(
             eq(toolProfileBindings.profileId, profile.id),
           ),
         );
-      await db
+      await dbClient
         .delete(toolProfileEntries)
         .where(
           and(
@@ -5346,7 +5535,7 @@ export function toolAccessService(
             eq(toolProfileEntries.profileId, profile.id),
           ),
         );
-      await db.insert(toolProfileBindings).values({
+      await dbClient.insert(toolProfileBindings).values({
         companyId: input.connection.companyId,
         profileId: profile.id,
         targetType: "company",
@@ -5374,7 +5563,7 @@ export function toolAccessService(
         connection: input.connection,
         askFirstEntries: [],
         actor: input.actor,
-      });
+      }, dbClient);
     }
 
     // A new or revived connection starts with every discovered action enabled.
@@ -5388,7 +5577,7 @@ export function toolAccessService(
       ),
     ];
     if (candidateIds.length === 0) return;
-    const existingEntries = await db
+    const existingEntries = await dbClient
       .select({ catalogEntryId: toolProfileEntries.catalogEntryId })
       .from(toolProfileEntries)
       .where(
@@ -5405,7 +5594,7 @@ export function toolAccessService(
     );
     const entryIds = candidateIds.filter((id) => !configuredIds.has(id));
     if (entryIds.length === 0) return;
-    await db.insert(toolProfileEntries).values(
+    await dbClient.insert(toolProfileEntries).values(
       entryIds.map((catalogEntryId) => ({
         companyId: input.connection.companyId,
         profileId: profile.id,
@@ -6252,16 +6441,6 @@ export function toolAccessService(
       )
       .returning({ id: companySecretBindings.id });
 
-    const removedInstalls = await db
-      .delete(toolConnectionInstalls)
-      .where(
-        and(
-          eq(toolConnectionInstalls.companyId, connection.companyId),
-          eq(toolConnectionInstalls.connectionId, connection.id),
-        ),
-      )
-      .returning({ id: toolConnectionInstalls.id });
-
     // The app-managed profile exists only to carry this connection's action
     // selection, so it goes with the connection. Operator-authored profiles that
     // happen to mention the connection are left alone — the archived connection
@@ -6276,10 +6455,24 @@ export function toolAccessService(
         ),
       )
       .limit(1);
+    const { removedInstalls, removedProfileBindings } = await db.transaction(async (tx) => {
+      const installs = await tx.select().from(toolConnectionInstalls).where(and(
+        eq(toolConnectionInstalls.companyId, connection.companyId),
+        eq(toolConnectionInstalls.connectionId, connection.id),
+      ));
+      const profileBindings = appProfile ? await tx.select().from(toolProfileBindings).where(and(
+        eq(toolProfileBindings.companyId, connection.companyId),
+        eq(toolProfileBindings.profileId, appProfile.id),
+      )) : [];
+      await lockToolAssignmentAgents(tx, connection.companyId, [...installs, ...profileBindings]);
+      if (installs.length) await tx.delete(toolConnectionInstalls).where(inArray(toolConnectionInstalls.id, installs.map(row => row.id)));
+      if (profileBindings.length) await tx.delete(toolProfileBindings).where(inArray(toolProfileBindings.id, profileBindings.map(row => row.id)));
+      return { removedInstalls: installs.map(({ id }) => ({ id })), removedProfileBindings: profileBindings };
+    });
     let appProfileOutcome: ToolConnectionRemovalSummary["appProfile"] =
       "absent";
     let appProfileEntriesRemoved = 0;
-    let appProfileBindingsRemoved = 0;
+    let appProfileBindingsRemoved = removedProfileBindings.length;
     let gatewayTokensRevoked = 0;
     let gatewaySessionsRevoked = 0;
     if (appProfile) {
@@ -6294,18 +6487,6 @@ export function toolAccessService(
           )
           .returning({ id: toolProfileEntries.id })
       ).length;
-      appProfileBindingsRemoved = (
-        await db
-          .delete(toolProfileBindings)
-          .where(
-            and(
-              eq(toolProfileBindings.companyId, connection.companyId),
-              eq(toolProfileBindings.profileId, appProfile.id),
-            ),
-          )
-          .returning({ id: toolProfileBindings.id })
-      ).length;
-
       const gatewayRows = await db
         .select({ id: toolMcpGateways.id })
         .from(toolMcpGateways)
@@ -7623,7 +7804,7 @@ export function toolAccessService(
     const preserveMcpAccess = connection.config.mcpPreserveAccess === true
       && isRemoteMcpConnectorMethod(connection.config.sourceTemplateKey, connection.config.connectionMethodKey);
     if (!refreshOptions.skipDefaultProfileSync || preserveMcpAccess) {
-      await enableCatalogEntriesByDefault({
+      await db.transaction((tx) => enableCatalogEntriesByDefault({
         connection: updatedConnection,
         // Discovery must not re-enable actions the operator turned Off,
         // including curated MCP connections during API-key replacement.
@@ -7636,7 +7817,7 @@ export function toolAccessService(
         activeCatalogEntryIds: activeEntries.map((entry) => entry.id),
         restoreDraftDefaults: refreshOptions.restoreDraftDefaults || preserveMcpAccess,
         actor,
-      });
+      }, tx));
     }
     await audit({
       companyId: connection.companyId,
@@ -8234,35 +8415,34 @@ export function toolAccessService(
     existing: typeof toolProfileBindings.$inferSelect | null,
     actor?: ActorInfo,
   ): Promise<ToolProfileBinding> {
-    const metadata = {
-      ...(existing?.metadata ?? {}),
-      source: "paperclip_example",
-      safeDefault: true,
-    };
-    if (existing) {
-      const [updated] = await db
-        .update(toolProfileBindings)
-        .set({ priority: 100, metadata, updatedAt: new Date() })
-        .where(eq(toolProfileBindings.id, existing.id))
+    return db.transaction(async (tx) => {
+      await lockToolAssignmentAgents(tx, companyId, [{ targetType: "company", targetId: companyId }]);
+      const metadata = {
+        ...(existing?.metadata ?? {}),
+        source: "paperclip_example",
+        safeDefault: true,
+      };
+      if (existing) {
+        const [updated] = await tx.update(toolProfileBindings)
+          .set({ priority: 100, metadata, updatedAt: new Date() })
+          .where(eq(toolProfileBindings.id, existing.id))
+          .returning();
+        return toProfileBinding(updated);
+      }
+      const [created] = await tx.insert(toolProfileBindings)
+        .values({
+          companyId,
+          profileId,
+          targetType: "company",
+          targetId: companyId,
+          priority: 100,
+          metadata,
+          createdByAgentId: actor?.actorType === "agent" ? (actor.actorId ?? null) : null,
+          createdByUserId: actor?.actorType === "user" ? (actor.actorId ?? null) : null,
+        })
         .returning();
-      return toProfileBinding(updated);
-    }
-    const [created] = await db
-      .insert(toolProfileBindings)
-      .values({
-        companyId,
-        profileId,
-        targetType: "company",
-        targetId: companyId,
-        priority: 100,
-        metadata,
-        createdByAgentId:
-          actor?.actorType === "agent" ? (actor.actorId ?? null) : null,
-        createdByUserId:
-          actor?.actorType === "user" ? (actor.actorId ?? null) : null,
-      })
-      .returning();
-    return toProfileBinding(created);
+      return toProfileBinding(created);
+    });
   }
 
   async function exampleSmokeActor(companyId: string, actor?: ActorInfo) {
@@ -8517,6 +8697,24 @@ export function toolAccessService(
     connection: typeof toolConnections.$inferSelect,
     provider: string,
   ) {
+    const connectionConfig = asRecord(connection.config);
+    const storedOAuth = asRecord(connectionConfig.oauth);
+    if (
+      provider === "slack" &&
+      connectionConfig.sourceTemplateKey === "slack" &&
+      connectionConfig.connectionMethodKey === "mcp-oauth" &&
+      storedOAuth.clientRegistrationSource === "manual"
+    ) {
+      // Choosing Slack's advanced own-app method is an explicit ownership
+      // decision. Do not silently substitute the instance's Blentera-managed
+      // client after the customer supplied their separate client.
+      return {
+        clientIdEnv: null,
+        clientSecretEnv: null,
+        clientId: null,
+        clientSecret: null,
+      };
+    }
     if (isSmokeLabOAuthFixture(connection) && provider === "smoke_lab") {
       return {
         clientIdEnv: "SMOKE_LAB_FIXED_CLIENT_ID",
@@ -8678,7 +8876,7 @@ export function toolAccessService(
       );
     if (typeof value === "string")
       return value
-        .split(/\s+/)
+        .split(/[\s,]+/)
         .map((item) => item.trim())
         .filter(Boolean);
     return [];
@@ -11644,6 +11842,13 @@ export function toolAccessService(
     initialGrant: typeof connectionGrants.$inferSelect,
     actor?: ActorInfo,
   ) {
+    const retryAt = initialGrant.providerTenant?.github?.repositoryAccessReconciliation?.rateLimitRetryAt;
+    if (retryAt && Number.isFinite(Date.parse(retryAt)) && Date.parse(retryAt) > now().getTime()) {
+      throw unprocessable("GitHub asked this connection to wait before its next access refresh", {
+        code: "github_rate_limited",
+        retryAt: new Date(Date.parse(retryAt)).toISOString(),
+      });
+    }
     let grant = await refreshOAuthGrantCredentials({
       companyId: connection.companyId,
       connectionId: connection.id,
@@ -11670,6 +11875,52 @@ export function toolAccessService(
     };
     let metadata;
     let accessToken = await resolveAccessToken();
+    let expectedProgressHash = githubRepositoryAccessProgressHash(
+      grant.providerTenant?.github,
+      grant.providerTenant?.oauth?.scopes,
+    );
+    const markAccessRequiredIfCurrent = async () => db.transaction(async (tx) => {
+      const [currentGrant] = await tx.select().from(connectionGrants)
+        .where(and(
+          eq(connectionGrants.id, grant.id),
+          eq(connectionGrants.companyId, connection.companyId),
+          eq(connectionGrants.connectionId, connection.id),
+        )).for("update").limit(1);
+      if (!currentGrant || currentGrant.status !== "active" ||
+        githubRepositoryAccessProgressHash(currentGrant.providerTenant?.github, currentGrant.providerTenant?.oauth?.scopes) !== expectedProgressHash) return false;
+      const [currentConnection] = await tx.select().from(toolConnections)
+        .where(and(eq(toolConnections.id, connection.id), eq(toolConnections.companyId, connection.companyId)))
+        .for("update").limit(1);
+      if (!currentConnection || !currentConnection.enabled || currentConnection.status !== "active") return false;
+      const currentTenant = currentGrant.providerTenant;
+      const currentGitHub = currentTenant?.github;
+      if (!currentGitHub) return false;
+      const providerTenant = {
+        ...(currentTenant ?? {}),
+        github: {
+          ...currentGitHub,
+          repositoryAccessReconciliation: {
+            ...(currentGitHub.repositoryAccessReconciliation ?? {}),
+            state: "required" as const,
+            mode: "full" as const,
+            requiredReason: "provider_failure" as const,
+            lastAttemptAt: now().toISOString(),
+            nextAttemptAt: new Date(now().getTime() + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS).toISOString(),
+            lastErrorCode: "github_access_refresh_incomplete",
+            reconcileLeaseId: undefined,
+            reconcileLeaseUntil: undefined,
+          },
+        },
+      };
+      const [updated] = await tx.update(connectionGrants).set({ providerTenant, updatedAt: now() })
+        .where(and(
+          eq(connectionGrants.id, currentGrant.id),
+          eq(connectionGrants.companyId, currentGrant.companyId),
+          eq(connectionGrants.connectionId, currentGrant.connectionId),
+          eq(connectionGrants.status, "active"),
+        )).returning({ id: connectionGrants.id });
+      return Boolean(updated);
+    });
     try {
       metadata = await loadGitHubGrantMetadata(
         accessToken,
@@ -11679,6 +11930,7 @@ export function toolAccessService(
     } catch (error) {
       const providerCode =
         error instanceof HttpError ? asRecord(error.details).code : null;
+      if (providerCode === "github_access_refresh_incomplete") await markAccessRequiredIfCurrent();
       if (providerCode !== "oauth_reauthorization_required") throw error;
       // GitHub may invalidate an access token before its recorded expiry. If an
       // expiring token pair exists, rotate it once under the same durable lease
@@ -11690,6 +11942,10 @@ export function toolAccessService(
         forceRefresh: true,
         actor,
       });
+      expectedProgressHash = githubRepositoryAccessProgressHash(
+        grant.providerTenant?.github,
+        grant.providerTenant?.oauth?.scopes,
+      );
       accessToken = await resolveAccessToken();
       try {
         metadata = await loadGitHubGrantMetadata(
@@ -11702,6 +11958,7 @@ export function toolAccessService(
           retryError instanceof HttpError
             ? asRecord(retryError.details).code
             : null;
+        if (retryCode === "github_access_refresh_incomplete") await markAccessRequiredIfCurrent();
         if (retryCode === "oauth_reauthorization_required") {
           await db
             .update(connectionGrants)
@@ -11716,6 +11973,17 @@ export function toolAccessService(
         throw retryError;
       }
     }
+    const fetchedIdentityHash = githubRepositoryAccessSourceIdentityHash(metadata.userId);
+    const expectedIdentityHash = githubRepositoryAccessSourceIdentityHash(grant.providerTenant?.github?.userId);
+    const preflightReconciliation = githubRepositoryAccessReconciliation(
+      metadata,
+      grant.providerTenant?.oauth?.scopes,
+      now().toISOString(),
+    );
+    if (!preflightReconciliation || !expectedIdentityHash || fetchedIdentityHash !== expectedIdentityHash) {
+      await markAccessRequiredIfCurrent();
+      throw conflict("GitHub access changed during refresh. Try again.", { code: "github_access_changed" });
+    }
     const { updated, previousGitHub } = await db.transaction(async (tx) => {
       const [currentGrant] = await tx
         .select()
@@ -11728,26 +11996,29 @@ export function toolAccessService(
         )
         .for("update")
         .limit(1);
-      if (!currentGrant || currentGrant.status === "revoked")
+      if (!currentGrant || currentGrant.status !== "active")
         throw notFound("GitHub authorization not found");
+      const [currentConnection] = await tx.select().from(toolConnections)
+        .where(and(eq(toolConnections.id, connection.id), eq(toolConnections.companyId, connection.companyId)))
+        .for("update").limit(1);
+      if (!currentConnection || !currentConnection.enabled || currentConnection.status !== "active")
+        throw conflict("GitHub connection changed during refresh. Try again.", { code: "github_access_changed" });
       const previousGitHub = currentGrant.providerTenant?.github;
-      const initialGitHub = grant.providerTenant?.github;
-      // No lock is held during provider requests. Reject a snapshot if another
-      // refresh or webhook changed access while those requests were in flight.
-      if (
-        previousGitHub?.accessRevision !== initialGitHub?.accessRevision ||
-        previousGitHub?.lastWebhookAt !== initialGitHub?.lastWebhookAt ||
-        previousGitHub?.lastAccessRefreshAt !==
-          initialGitHub?.lastAccessRefreshAt
-      ) {
+      // No lock is held during provider requests. Pin identity, effective scope,
+      // snapshot bytes, webhook revision, and every prior progress field.
+      if (githubRepositoryAccessProgressHash(previousGitHub, currentGrant.providerTenant?.oauth?.scopes) !== expectedProgressHash) {
         throw conflict("GitHub access changed during refresh. Try again.", {
           code: "github_access_changed",
         });
       }
+      const currentIdentityHash = githubRepositoryAccessSourceIdentityHash(previousGitHub?.userId);
+      if (!currentIdentityHash || currentIdentityHash !== fetchedIdentityHash)
+        throw conflict("GitHub access changed during refresh. Try again.", { code: "github_access_changed" });
       const providerTenant = {
         ...(currentGrant.providerTenant ?? {}),
         github: {
           ...metadata,
+          repositoryAccessReconciliation: preflightReconciliation,
           ...(previousGitHub?.lastWebhookAt
             ? { lastWebhookAt: previousGitHub.lastWebhookAt }
             : {}),
@@ -11814,70 +12085,219 @@ export function toolAccessService(
     return updated;
   }
 
-  async function sweepGitHubConnectionContinuity() {
-    if (now().getTime() < nextGitHubContinuitySweepAt) {
-      return { checked: 0, due: 0, refreshed: 0, failed: 0 };
+  async function sweepGitHubConnectionContinuity(options: { force?: boolean } = {}) {
+    const startedAt = Date.now();
+    if (!options.force && now().getTime() < nextGitHubContinuitySweepAt) {
+      return { checked: 0, due: 0, refreshed: 0, failed: 0, deferred: 0 };
     }
-    nextGitHubContinuitySweepAt = now().getTime() + 60 * 60_000;
-    const cutoff = now().getTime() - 30 * 24 * 60 * 60_000;
+    nextGitHubContinuitySweepAt = now().getTime() + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS;
+    const at = now();
+    const atIso = at.toISOString();
+    const cutoffIso = new Date(at.getTime() - GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS).toISOString();
+    const expiresSoonIso = new Date(at.getTime() + 60 * 60_000).toISOString();
+    const state = sql`${connectionGrants.providerTenant} #>> '{github,repositoryAccessReconciliation,state}'`;
+    const lastFull = sql`${connectionGrants.providerTenant} #>> '{github,repositoryAccessReconciliation,lastFullReconciledAt}'`;
+    const nextAttempt = sql`${connectionGrants.providerTenant} #>> '{github,repositoryAccessReconciliation,nextAttemptAt}'`;
+    const rateLimitRetry = sql`${connectionGrants.providerTenant} #>> '{github,repositoryAccessReconciliation,rateLimitRetryAt}'`;
+    const tokenExpiry = sql`${connectionGrants.providerTenant} #>> '{oauth,accessTokenExpiresAt}'`;
+    const timestampPattern = "^\\d{4}-\\d{2}-\\d{2}T";
     const rows = await db
       .select({ grant: connectionGrants, connection: toolConnections })
       .from(connectionGrants)
-      .innerJoin(
-        toolConnections,
-        and(
-          eq(toolConnections.id, connectionGrants.connectionId),
-          eq(toolConnections.companyId, connectionGrants.companyId),
-        ),
-      )
-      .where(
-        and(
-          eq(connectionGrants.status, "active"),
-          eq(toolConnections.status, "active"),
-          eq(toolConnections.enabled, true),
-        ),
-      );
-    const due = rows.filter(({ grant, connection }) => {
-      const config = asRecord(connection.config);
-      const oauth = asRecord(config.oauth);
-      if (
-        config.sourceTemplateKey !== "github" ||
-        oauth.connectorProfile !== "github.code" ||
-        !grant.providerTenant?.github
-      )
-        return false;
-      const expiresAt = grant.providerTenant.oauth?.accessTokenExpiresAt;
-      const refreshedAt = grant.providerTenant.oauth?.refreshedAt
-        ? Date.parse(grant.providerTenant.oauth.refreshedAt)
-        : Number.NaN;
-      const accessCheckedAt = grant.providerTenant.github.lastAccessRefreshAt
-        ? Date.parse(grant.providerTenant.github.lastAccessRefreshAt)
-        : Number.NaN;
-      if (typeof expiresAt === "string") {
-        const expiry = Date.parse(expiresAt);
-        return (
-          !Number.isFinite(expiry) ||
-          expiry <= now().getTime() + 60 * 60_000 ||
-          !Number.isFinite(refreshedAt) ||
-          refreshedAt <= cutoff
-        );
-      }
-      return !Number.isFinite(accessCheckedAt) || accessCheckedAt <= cutoff;
-    });
+      .innerJoin(toolConnections, and(
+        eq(toolConnections.id, connectionGrants.connectionId),
+        eq(toolConnections.companyId, connectionGrants.companyId),
+      ))
+      .where(and(
+        eq(connectionGrants.status, "active"),
+        eq(toolConnections.status, "active"),
+        eq(toolConnections.enabled, true),
+        sql`${toolConnections.config}->>'sourceTemplateKey' = 'github'`,
+        sql`${toolConnections.config}->'oauth'->>'connectorProfile' = 'github.code'`,
+        sql`${connectionGrants.providerTenant}->'github' IS NOT NULL`,
+        sql`(
+          (${nextAttempt} IS NULL OR ${nextAttempt} !~ ${timestampPattern} OR ${nextAttempt} <= ${atIso})
+          AND (${rateLimitRetry} IS NULL OR ${rateLimitRetry} !~ ${timestampPattern} OR ${rateLimitRetry} <= ${atIso})
+          AND (
+            ${state} = 'required'
+            OR ${lastFull} IS NULL OR ${lastFull} !~ ${timestampPattern} OR ${lastFull} <= ${cutoffIso}
+            OR (${tokenExpiry} IS NOT NULL AND (${tokenExpiry} !~ ${timestampPattern} OR ${tokenExpiry} <= ${expiresSoonIso}))
+          )
+        )`,
+      ))
+      .orderBy(asc(connectionGrants.updatedAt), asc(connectionGrants.id))
+      .limit(100);
+
+    const maxRefreshes = 5;
+    const maxPassMs = 5 * 60_000;
     let refreshed = 0;
     let failed = 0;
-    for (const row of due) {
+    let deferred = 0;
+    let attempted = 0;
+    for (const row of rows) {
+      if (attempted >= maxRefreshes || Date.now() - startedAt >= maxPassMs) {
+        deferred += 1;
+        continue;
+      }
+      const claim = await claimGitHubRepositoryAccessReconciliation(row.grant, row.connection, at);
+      if (!claim) {
+        deferred += 1;
+        continue;
+      }
+      attempted += 1;
       try {
-        await refreshManagedGitHubGrantAccess(row.connection, row.grant, {
+        await refreshManagedGitHubGrantAccess(claim.connection, claim.grant, {
           actorType: "system",
           actorId: "github-connection-continuity",
         });
         refreshed += 1;
-      } catch {
+      } catch (error) {
         failed += 1;
+        await recordGitHubRepositoryAccessFailure(claim, error, now());
       }
     }
-    return { checked: rows.length, due: due.length, refreshed, failed };
+    if (deferred > 0) {
+      // Keep the one-hour per-grant freshness/backoff and bounded pass size,
+      // but revisit a deferred backlog on the next minute scheduler tick. This
+      // also cools down when every eligible row is currently leased.
+      nextGitHubContinuitySweepAt = now().getTime() + 60_000;
+    }
+    return { checked: rows.length, due: rows.length, refreshed, failed, deferred };
+  }
+
+  async function claimGitHubRepositoryAccessReconciliation(
+    initialGrant: typeof connectionGrants.$inferSelect,
+    initialConnection: typeof toolConnections.$inferSelect,
+    at: Date,
+  ) {
+    const leaseId = randomUUID();
+    const atIso = at.toISOString();
+    return db.transaction(async (tx) => {
+      const [grant] = await tx.select().from(connectionGrants).where(and(
+        eq(connectionGrants.id, initialGrant.id),
+        eq(connectionGrants.companyId, initialGrant.companyId),
+        eq(connectionGrants.connectionId, initialConnection.id),
+        eq(connectionGrants.status, "active"),
+      )).for("update").limit(1);
+      if (!grant?.providerTenant?.github) return null;
+      const [connection] = await tx.select().from(toolConnections).where(and(
+        eq(toolConnections.id, initialConnection.id),
+        eq(toolConnections.companyId, initialConnection.companyId),
+        eq(toolConnections.status, "active"),
+        eq(toolConnections.enabled, true),
+      )).for("update").limit(1);
+      if (!connection) return null;
+      const github = grant.providerTenant.github;
+      const previous = github.repositoryAccessReconciliation;
+      const nextAt = previous?.nextAttemptAt ? Date.parse(previous.nextAttemptAt) : Number.NaN;
+      const rateRetryAt = previous?.rateLimitRetryAt ? Date.parse(previous.rateLimitRetryAt) : Number.NaN;
+      const leaseUntil = previous?.reconcileLeaseUntil ? Date.parse(previous.reconcileLeaseUntil) : Number.NaN;
+      if ((Number.isFinite(nextAt) && nextAt > at.getTime()) ||
+        (Number.isFinite(rateRetryAt) && rateRetryAt > at.getTime()) ||
+        (Number.isFinite(leaseUntil) && leaseUntil > at.getTime())) return null;
+      const sourceHash = githubRepositoryAccessSourceIdentityHash(github.userId);
+      const scopeHash = githubRepositoryAccessScopeHash(
+        grant.providerTenant.oauth?.scopes,
+        github.installationIds,
+        github.repositories,
+      );
+      const previousFullAt = previous?.lastFullReconciledAt ? Date.parse(previous.lastFullReconciledAt) : Number.NaN;
+      const expiryAt = grant.providerTenant.oauth?.accessTokenExpiresAt
+        ? Date.parse(grant.providerTenant.oauth.accessTokenExpiresAt)
+        : Number.NaN;
+      const identityOrScopeChanged = !sourceHash || !scopeHash ||
+        previous?.sourceIdentityHash !== sourceHash || previous?.scopeHash !== scopeHash;
+      const due = previous?.state === "required" || identityOrScopeChanged ||
+        !Number.isFinite(previousFullAt) || previousFullAt <= at.getTime() - GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS ||
+        Number.isFinite(expiryAt) && expiryAt <= at.getTime() + 60 * 60_000;
+      if (!due) return null;
+      const reconciliation = {
+        ...previous,
+        state: "required" as const,
+        mode: "full" as const,
+        requiredReason: identityOrScopeChanged ? "source_or_scope_mismatch" as const
+          : previous?.state === "required" ? previous.requiredReason ?? "provider_failure" as const
+            : "periodic_reconcile_due" as const,
+        lastAttemptAt: atIso,
+        nextAttemptAt: new Date(at.getTime() + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS).toISOString(),
+        reconcileLeaseId: leaseId,
+        reconcileLeaseUntil: new Date(at.getTime() + 3 * 60_000).toISOString(),
+      };
+      const providerTenant = {
+        ...grant.providerTenant,
+        github: { ...github, repositoryAccessReconciliation: reconciliation },
+      };
+      const [claimed] = await tx.update(connectionGrants).set({ providerTenant, updatedAt: at })
+        .where(and(eq(connectionGrants.id, grant.id), eq(connectionGrants.companyId, grant.companyId),
+          eq(connectionGrants.connectionId, connection.id), eq(connectionGrants.status, "active")))
+        .returning();
+      if (!claimed) return null;
+      return {
+        grant: claimed,
+        connection,
+        leaseId,
+        pin: {
+          sourceHash,
+          scopeHash,
+          accessRevision: github.accessRevision ?? null,
+          lastAccessRefreshAt: github.lastAccessRefreshAt ?? null,
+        },
+      };
+    });
+  }
+
+  async function recordGitHubRepositoryAccessFailure(
+    claim: NonNullable<Awaited<ReturnType<typeof claimGitHubRepositoryAccessReconciliation>>>,
+    error: unknown,
+    at: Date,
+  ) {
+    const details = error instanceof HttpError ? asRecord(error.details) : {};
+    const candidateCode = details.code;
+    const errorCode = typeof candidateCode === "string" && /^[a-z0-9_]{1,64}$/.test(candidateCode)
+      ? candidateCode : "github_access_refresh_failed";
+    const retryAt = errorCode === "github_rate_limited" && typeof details.retryAt === "string" &&
+      Number.isFinite(Date.parse(details.retryAt)) && Date.parse(details.retryAt) > at.getTime()
+      ? new Date(Date.parse(details.retryAt)).toISOString() : null;
+    const normalRetryAt = at.getTime() + GITHUB_REPOSITORY_ACCESS_RECONCILE_INTERVAL_MS;
+    const nextAttemptAt = new Date(Math.max(normalRetryAt, retryAt ? Date.parse(retryAt) : normalRetryAt)).toISOString();
+    await db.transaction(async (tx) => {
+      const [grant] = await tx.select().from(connectionGrants).where(and(
+        eq(connectionGrants.id, claim.grant.id),
+        eq(connectionGrants.companyId, claim.grant.companyId),
+        eq(connectionGrants.connectionId, claim.connection.id),
+        eq(connectionGrants.status, "active"),
+      )).for("update").limit(1);
+      if (!grant?.providerTenant?.github) return;
+      const github = grant.providerTenant.github;
+      const current = github.repositoryAccessReconciliation;
+      const sourceHash = githubRepositoryAccessSourceIdentityHash(github.userId);
+      const scopeHash = githubRepositoryAccessScopeHash(
+        grant.providerTenant.oauth?.scopes,
+        github.installationIds,
+        github.repositories,
+      );
+      if (current?.reconcileLeaseId !== claim.leaseId ||
+        sourceHash !== claim.pin.sourceHash || scopeHash !== claim.pin.scopeHash ||
+        (github.accessRevision ?? null) !== claim.pin.accessRevision ||
+        (github.lastAccessRefreshAt ?? null) !== claim.pin.lastAccessRefreshAt) return;
+      const reconciliation = {
+        ...current,
+        state: "required" as const,
+        mode: "full" as const,
+        requiredReason: "provider_failure" as const,
+        lastAttemptAt: current.lastAttemptAt ?? at.toISOString(),
+        nextAttemptAt,
+        lastErrorCode: errorCode,
+        ...(retryAt ? { rateLimitRetryAt: retryAt } : { rateLimitRetryAt: undefined }),
+      };
+      delete (reconciliation as { reconcileLeaseId?: string }).reconcileLeaseId;
+      delete (reconciliation as { reconcileLeaseUntil?: string }).reconcileLeaseUntil;
+      const providerTenant = { ...grant.providerTenant, github: { ...github, repositoryAccessReconciliation: reconciliation } };
+      await tx.update(connectionGrants).set({ providerTenant, updatedAt: at }).where(and(
+        eq(connectionGrants.id, grant.id), eq(connectionGrants.companyId, grant.companyId),
+        eq(connectionGrants.connectionId, claim.connection.id), eq(connectionGrants.status, "active"),
+      ));
+    });
   }
 
   function policyNameForApp(
@@ -12052,7 +12472,9 @@ export function toolAccessService(
       galleryEntry?.slug === "google-sheets" &&
       Array.isArray(input.configValues?.allowedSpreadsheetIds)
         ? "local"
-        : input.connectionMethodKey;
+        : !input.connectionMethodKey && galleryEntry?.slug === "slack"
+          ? getAvailableConnectionMethod(galleryEntry)?.key
+          : input.connectionMethodKey;
     if (!galleryEntry && input.connectionMethodKey)
       throw badRequest("Connection method selection requires a gallery app");
     if (
@@ -12243,7 +12665,10 @@ export function toolAccessService(
       }
     }
     const requestedGrantKind =
-      retainedGrantKind ?? input.grantKind ?? "organization";
+      retainedGrantKind ?? input.grantKind ?? (
+        method?.defaultGrantKind ??
+          (method?.grantKinds?.length === 1 ? method.grantKinds[0]! : "organization")
+      );
     if (method?.grantKinds && !method.grantKinds.includes(requestedGrantKind)) {
       throw badRequest(
         `${galleryEntry?.name ?? "This app"} supports only ${method.grantKinds.join(" or ")} credentials`,
@@ -12553,6 +12978,10 @@ export function toolAccessService(
           : "shared";
     const connectionOwnership = isPaperclipCloudConnectorStrategy(
       method?.oauthStrategy,
+    ) || (
+      galleryEntry?.slug === "slack" &&
+      method?.key === MANAGED_SLACK_OAUTH_METHOD_KEY &&
+      method.ownershipModes.includes("platform_shared")
     )
       ? "platform_shared"
       : "customer";
@@ -13677,16 +14106,7 @@ export function toolAccessService(
       const currentSetup = currentPurpose ? await readDeferredActivationSetup(tx as unknown as Db, currentPurpose, false) : null;
       if (currentPurpose && !currentSetup)
         throw conflict("The original personal connection needs a current successful validation");
-      await tx
-        .select({ id: toolConnections.id })
-        .from(toolConnections)
-        .where(
-          and(
-            eq(toolConnections.id, connectionId),
-            eq(toolConnections.companyId, companyId),
-          ),
-        )
-        .for("update");
+      await lockToolConnectionRuntimeInputs(tx, companyId, connectionId);
       const [existingProfile] = await tx
         .select()
         .from(toolProfiles)
@@ -13697,13 +14117,21 @@ export function toolAccessService(
           ),
         )
         .limit(1);
+      const priorBindings = existingProfile
+        ? await tx.select().from(toolProfileBindings)
+            .where(and(eq(toolProfileBindings.companyId, companyId), eq(toolProfileBindings.profileId, existingProfile.id)))
+        : [];
+      const priorInstalls = await tx.select().from(toolConnectionInstalls)
+        .where(and(eq(toolConnectionInstalls.companyId, companyId), eq(toolConnectionInstalls.connectionId, connection.id)));
+      await lockToolAssignmentAgents(tx, companyId, [
+        ...priorBindings,
+        ...priorInstalls,
+        ...bindingInputs,
+        ...(input.access === "all_agents" ? [{ targetType: "company", targetId: companyId }] : []),
+      ]);
       let profileId: string;
       if (existingProfile) {
         if (input.preserveExistingAccess) {
-          const priorBindings = await tx
-            .select()
-            .from(toolProfileBindings)
-            .where(eq(toolProfileBindings.profileId, existingProfile.id));
           for (const prior of priorBindings)
             if (
               !bindingInputs.some(
@@ -14593,7 +15021,13 @@ export function toolAccessService(
       ? (requestedScopes ?? [])
       : (input.scopes ?? endpoints.scopes);
     if (authorizationScopes.length > 0)
-      authorizationUrl.searchParams.set("scope", authorizationScopes.join(" "));
+      authorizationUrl.searchParams.set(
+        "scope",
+        galleryEntry?.slug === "slack" &&
+          (galleryMethod?.key === MANAGED_SLACK_OAUTH_METHOD_KEY || galleryMethod?.key === "mcp-oauth")
+          ? authorizationScopes.join(",")
+          : authorizationScopes.join(" "),
+      );
     const reviewedAuthorizationParams =
       galleryMethod?.defaults?.oauthAuthorizationParams;
     if (reviewedAuthorizationParams?.access_type)
@@ -14818,6 +15252,9 @@ export function toolAccessService(
           "OAuth callback user does not match the requested subject",
         );
       }
+      if (stateRow.createdByActorType === "user") {
+        assertSameOAuthActor(stateRow, actor);
+      }
     } else {
       assertSameOAuthActor(stateRow, actor);
     }
@@ -15022,24 +15459,18 @@ export function toolAccessService(
               targetId: agentId,
             }));
       if (installTargets.length > 0) {
-        await db
-          .insert(toolConnectionInstalls)
-          .values(
-            installTargets.map((target) => ({
+        await db.transaction(async (tx) => {
+          await lockToolAssignmentAgents(tx, input.connection.companyId, installTargets);
+          await tx.insert(toolConnectionInstalls)
+            .values(installTargets.map((target) => ({
               companyId: input.connection.companyId,
               connectionId: input.connection.id,
               ...target,
-              createdByAgentId:
-                input.actor?.actorType === "agent"
-                  ? (input.actor.actorId ?? null)
-                  : null,
-              createdByUserId:
-                input.actor?.actorType === "user"
-                  ? (input.actor.actorId ?? null)
-                  : null,
-            })),
-          )
-          .onConflictDoNothing();
+              createdByAgentId: input.actor?.actorType === "agent" ? (input.actor.actorId ?? null) : null,
+              createdByUserId: input.actor?.actorType === "user" ? (input.actor.actorId ?? null) : null,
+            })))
+            .onConflictDoNothing();
+        });
       }
     }
     return finished;
@@ -15301,6 +15732,12 @@ export function toolAccessService(
         accessRef,
         ...(refreshRef ? [refreshRef] : []),
       ];
+      const callbackCompletedAt = now().toISOString();
+      const callbackGitHubReconciliation = githubMetadata
+        ? githubRepositoryAccessReconciliation(githubMetadata, credentials.scopes, callbackCompletedAt)
+        : null;
+      if (githubMetadata && !callbackGitHubReconciliation)
+        throw unprocessable("GitHub returned incomplete repository access metadata", { code: "github_access_refresh_incomplete" });
       const grantValues = {
         providerTenant: {
           name: githubMetadata?.login ?? providerName,
@@ -15317,7 +15754,10 @@ export function toolAccessService(
               ? { refreshedAt: now().toISOString() }
               : {}),
           },
-          ...(githubMetadata ? { github: githubMetadata } : {}),
+          ...(githubMetadata ? { github: {
+            ...githubMetadata,
+            repositoryAccessReconciliation: callbackGitHubReconciliation!,
+          } } : {}),
         },
         credentialSecretRefs,
         status: "active" as const,
@@ -15800,6 +16240,9 @@ export function toolAccessService(
     const galleryEntry = sourceTemplateKey
       ? getConnectableAppDefinition(sourceTemplateKey)
       : null;
+    const galleryMethod = galleryEntry
+      ? connectionMethodForConnection(galleryEntry, connection)
+      : null;
     assertOAuthRedirectConstraints(galleryEntry, input.redirectUri);
     const endpoints = await oauthEndpointsForConnection(
       connection,
@@ -15830,6 +16273,16 @@ export function toolAccessService(
       code: input.code,
       resource: endpoints.resource,
     });
+    if (
+      galleryEntry?.slug === "slack" &&
+      (galleryMethod?.key === MANAGED_SLACK_OAUTH_METHOD_KEY || galleryMethod?.key === "mcp-oauth") &&
+      token.scope
+    ) {
+      const requested = new Set(normalizeOauthScopes(stateRow.requestedScopes));
+      const unexpected = normalizeOauthScopes(token.scope).filter((scope) => !requested.has(scope));
+      if (unexpected.length > 0)
+        throw forbidden("Slack returned permissions outside the consent request");
+    }
     const connectedAt = now();
     const expiresAt = token.expiresIn
       ? new Date(connectedAt.getTime() + token.expiresIn * 1000).toISOString()
@@ -16726,16 +17179,20 @@ export function toolAccessService(
       },
       actor,
     );
-    if (!onboardingPurpose) await db
-      .insert(toolConnectionInstalls)
-      .values({
+    if (!onboardingPurpose) await db.transaction(async (tx) => {
+      const installTarget = {
+        targetType: requestingAgentId ? "agent" as const : "company" as const,
+        targetId: requestingAgentId ?? companyId,
+      };
+      await lockToolAssignmentAgents(tx, companyId, [installTarget]);
+      await tx.insert(toolConnectionInstalls).values({
         companyId,
         connectionId: connection.id,
-        targetType: requestingAgentId ? "agent" : "company",
-        targetId: requestingAgentId ?? companyId,
+        ...installTarget,
         createdByUserId: actorUserId,
       })
       .onConflictDoNothing();
+    });
     return finished;
   }
 
@@ -16956,8 +17413,10 @@ export function toolAccessService(
       const row = await getConnectionRow(connectionId, companyId);
       const identity = await fixedPersonalIdentityForReconnect(row, userId, { actorType: "user", actorId: userId });
       if (!identity) return null;
-      return { userId: identity.subjectUserId, grant: identity.grant ? {
-        id: identity.grant.id, status: identity.grant.status, updatedAt: identity.grant.updatedAt.toISOString(),
+      const grant = identity.grant ? toConnectionGrant(identity.grant) : null;
+      return { userId: identity.subjectUserId, grant: grant ? {
+        id: grant.id, status: grant.status, updatedAt: grant.updatedAt.toISOString(),
+        lifecycle: projectToolConnectionLifecycle(toConnection(row), grant),
       } : null };
     },
 
@@ -18312,6 +18771,7 @@ export function toolAccessService(
         profileId: string;
       }> = [];
       await db.transaction(async (tx) => {
+        await lockToolConnectionRuntimeInputs(tx, connection.companyId, connection.id);
         const existing = await tx
           .select()
           .from(toolConnectionInstalls)
@@ -18321,6 +18781,24 @@ export function toolAccessService(
               eq(toolConnectionInstalls.connectionId, connection.id),
             ),
           );
+        const [installProfile] = await tx
+          .select({ id: toolProfiles.id })
+          .from(toolProfiles)
+          .where(and(
+            eq(toolProfiles.companyId, connection.companyId),
+            eq(toolProfiles.profileKey, `app:${connection.id}`),
+          ))
+          .limit(1);
+        const existingBindings = installProfile
+          ? await tx.select({ targetType: toolProfileBindings.targetType, targetId: toolProfileBindings.targetId })
+              .from(toolProfileBindings)
+              .where(and(eq(toolProfileBindings.companyId, connection.companyId), eq(toolProfileBindings.profileId, installProfile.id)))
+          : [];
+        await lockToolAssignmentAgents(tx, connection.companyId, [
+          ...existing,
+          ...requested.values(),
+          ...existingBindings,
+        ]);
         const existingKeys = new Set(
           existing.map(
             (install) => `${install.targetType}:${install.targetId}`,
@@ -18347,16 +18825,6 @@ export function toolAccessService(
           // Only bindings tagged `source: "tool_connection_install"` are removed.
           // A binding the operator authored through the access model carries a
           // different source and must survive an uninstall.
-          const [installProfile] = await tx
-            .select({ id: toolProfiles.id })
-            .from(toolProfiles)
-            .where(
-              and(
-                eq(toolProfiles.companyId, connection.companyId),
-                eq(toolProfiles.profileKey, `app:${connection.id}`),
-              ),
-            )
-            .limit(1);
           if (installProfile) {
             for (const install of removals) {
               await tx
@@ -19153,18 +19621,21 @@ export function toolAccessService(
         );
       }
       if (input.includeAssignments && bindings.length > 0) {
-        await db.insert(toolProfileBindings).values(
-          bindings.map((binding) => ({
-            companyId: binding.companyId,
-            profileId: created.id,
-            targetType: binding.targetType,
-            targetId: binding.targetId,
-            priority: binding.priority,
-            metadata: binding.metadata ?? {},
-            createdByAgentId: binding.createdByAgentId,
-            createdByUserId: binding.createdByUserId,
-          })),
-        );
+        await db.transaction(async (tx) => {
+          await lockToolAssignmentAgents(tx, existing.companyId, bindings);
+          await tx.insert(toolProfileBindings).values(
+            bindings.map((binding) => ({
+              companyId: binding.companyId,
+              profileId: created.id,
+              targetType: binding.targetType,
+              targetId: binding.targetId,
+              priority: binding.priority,
+              metadata: binding.metadata ?? {},
+              createdByAgentId: binding.createdByAgentId,
+              createdByUserId: binding.createdByUserId,
+            })),
+          );
+        });
       }
       return profileDetails(created.id, existing.companyId);
     },
@@ -19231,30 +19702,30 @@ export function toolAccessService(
             !targetKeys.has(`${binding.targetType}:${binding.targetId}`),
         );
         if (copiedBindings.length > 0) {
-          await db.insert(toolProfileBindings).values(
-            copiedBindings.map((binding) => ({
-              companyId: binding.companyId,
-              profileId: target.id,
-              targetType: binding.targetType,
-              targetId: binding.targetId,
-              priority: binding.priority,
-              metadata: binding.metadata ?? {},
-              createdByAgentId: binding.createdByAgentId,
-              createdByUserId: binding.createdByUserId,
-            })),
-          );
+          await db.transaction(async (tx) => {
+            await lockToolAssignmentAgents(tx, existing.companyId, copiedBindings);
+            await tx.insert(toolProfileBindings).values(
+              copiedBindings.map((binding) => ({
+                companyId: binding.companyId,
+                profileId: target.id,
+                targetType: binding.targetType,
+                targetId: binding.targetId,
+                priority: binding.priority,
+                metadata: binding.metadata ?? {},
+                createdByAgentId: binding.createdByAgentId,
+                createdByUserId: binding.createdByUserId,
+              })),
+            );
+            await tx.update(toolProfiles).set({ updatedAt: new Date() }).where(eq(toolProfiles.id, target.id));
+          });
           reassignedBindingCount = copiedBindings.length;
-          await db
-            .update(toolProfiles)
-            .set({ updatedAt: new Date() })
-            .where(eq(toolProfiles.id, target.id));
         }
       }
 
-      const [deleted] = await db
-        .delete(toolProfiles)
-        .where(eq(toolProfiles.id, existing.id))
-        .returning();
+      const [deleted] = await db.transaction(async (tx) => {
+        await lockToolAssignmentAgents(tx, existing.companyId, details.bindings);
+        return tx.delete(toolProfiles).where(eq(toolProfiles.id, existing.id)).returning();
+      });
       if (!deleted) throw notFound("Tool profile not found");
       return {
         profile: toProfile(deleted),
@@ -19367,26 +19838,29 @@ export function toolAccessService(
         input.targetType,
         input.targetId,
       );
-      const [row] = await db
-        .insert(toolProfileBindings)
-        .values({
-          companyId: profile.companyId,
-          profileId: profile.id,
-          targetType: input.targetType,
-          targetId: input.targetId,
-          priority: input.priority ?? 100,
-          metadata: input.metadata ?? {},
-          createdByAgentId:
-            actor?.actorType === "agent" ? (actor.actorId ?? null) : null,
-          createdByUserId:
-            actor?.actorType === "user" ? (actor.actorId ?? null) : null,
-        })
-        .returning();
-      await db
-        .update(toolProfiles)
-        .set({ updatedAt: new Date() })
-        .where(eq(toolProfiles.id, profile.id));
-      return toProfileBinding(row);
+      return db.transaction(async (tx) => {
+        await lockToolAssignmentAgents(tx, profile.companyId, [input]);
+        const [row] = await tx
+          .insert(toolProfileBindings)
+          .values({
+            companyId: profile.companyId,
+            profileId: profile.id,
+            targetType: input.targetType,
+            targetId: input.targetId,
+            priority: input.priority ?? 100,
+            metadata: input.metadata ?? {},
+            createdByAgentId:
+              actor?.actorType === "agent" ? (actor.actorId ?? null) : null,
+            createdByUserId:
+              actor?.actorType === "user" ? (actor.actorId ?? null) : null,
+          })
+          .returning();
+        await tx
+          .update(toolProfiles)
+          .set({ updatedAt: new Date() })
+          .where(eq(toolProfiles.id, profile.id));
+        return toProfileBinding(row);
+      });
     },
 
     unbindProfile: async (
@@ -19399,24 +19873,27 @@ export function toolAccessService(
         input.targetType,
         input.targetId,
       );
-      const rows = await db
-        .delete(toolProfileBindings)
-        .where(
-          and(
-            eq(toolProfileBindings.companyId, profile.companyId),
-            eq(toolProfileBindings.profileId, profile.id),
-            eq(toolProfileBindings.targetType, input.targetType),
-            eq(toolProfileBindings.targetId, input.targetId),
-          ),
-        )
-        .returning({ id: toolProfileBindings.id });
-      if (rows.length > 0) {
-        await db
-          .update(toolProfiles)
-          .set({ updatedAt: new Date() })
-          .where(eq(toolProfiles.id, profile.id));
-      }
-      return { unbound: rows.length };
+      return db.transaction(async (tx) => {
+        await lockToolAssignmentAgents(tx, profile.companyId, [input]);
+        const rows = await tx
+          .delete(toolProfileBindings)
+          .where(
+            and(
+              eq(toolProfileBindings.companyId, profile.companyId),
+              eq(toolProfileBindings.profileId, profile.id),
+              eq(toolProfileBindings.targetType, input.targetType),
+              eq(toolProfileBindings.targetId, input.targetId),
+            ),
+          )
+          .returning({ id: toolProfileBindings.id });
+        if (rows.length > 0) {
+          await tx
+            .update(toolProfiles)
+            .set({ updatedAt: new Date() })
+            .where(eq(toolProfiles.id, profile.id));
+        }
+        return { unbound: rows.length };
+      });
     },
 
     getEffectiveProfilesForAgent: async (

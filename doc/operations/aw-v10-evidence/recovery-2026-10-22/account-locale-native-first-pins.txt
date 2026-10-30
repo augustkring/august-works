@@ -1,0 +1,6 @@
+e98676d67411af1ed20c751680abe52ad19eac7c3e9178a9322552f69f623214  packages/db/src/schema/auth.ts
+bdd81375075bbac207cbae77661f9d49c26a28a7f2e57a67c9cbc40ddbd9edad  packages/shared/src/validators/access.ts
+44f93a1ee7cd2681d43cfdd2777c1e4eb2330873225e3df8d50058c6d5f7ed71  server/src/auth/better-auth.ts
+f835c00946931c638fb51d25ee28011a26c05a611abc55af1d57000a3894378f  server/src/routes/auth.ts
+ff837073a6643627778005eb29871a5c88f9fcc9cb04e5a04d3a4ba22c280863  server/src/__tests__/v6-saas-auth.integration.test.ts
+9165b31400c351ff521a39a024d29793e189174d2fb9436f8186a64a63a9eff4  packages/db/src/migrations/0514_abandoned_hex.sql

@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[13:10:01] [31mERROR[39m: [36mfailed to cancel scheduled retry superseded by issue comment[39m [90m{"issueId":"11111111-1111-4111-8111-111111111111","runId":"retry-run-1"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1241,
+        "column": 7
+      }
+    }
+[13:10:01] [33mWARN[39m: [36mfailed to re-fetch issue for comment wake decision; falling back to in-hand snapshot[39m [90m{"issueId":"11111111-1111-4111-8111-111111111111"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1351,
+        "column": 30
+      }
+    }
+[13:10:01] [31mERROR[39m: [36mfailed to cancel scheduled retry superseded by issue comment[39m [90m{"issueId":"11111111-1111-4111-8111-111111111111","runId":"retry-run-1"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 1979,
+        "column": 7
+      }
+    }
+
+ Test Files  1 passed (1)
+      Tests  100 passed (100)
+   Start at  13:09:48
+   Duration  12.63s (transform 10.30s, setup 71ms, import 11.86s, tests 589ms, environment 0ms)
+

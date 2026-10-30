@@ -6,11 +6,45 @@ import { promisify } from "node:util";
 import { cleanupGitHubOperationLaunchers } from "@paperclipai/adapter-utils/execution-target";
 import type { CommandManagedRuntimeRunner } from "@paperclipai/adapter-utils/command-managed-runtime";
 import { describe, expect, it, vi } from "vitest";
-import { prepareHeartbeatGitHubLaunchers } from "./heartbeat-github-launchers.js";
+import {
+  prepareHeartbeatGitHubLaunchers,
+  prepareHeartbeatProjectlessNativeEnvironment,
+} from "./heartbeat-github-launchers.js";
 
 const target = { kind: "remote" as const, transport: "sandbox" as const, providerKey: "daytona", remoteCwd: "/workspace" };
 
 describe("heartbeat GitHub launcher lifetime", () => {
+  it("records an exact projectless Native workspace as no-Git without target commands or ambient credentials", () => {
+    const env = prepareHeartbeatProjectlessNativeEnvironment({
+      PATH: "/provider/bin:/usr/bin:/bin",
+      GH_TOKEN: "ambient-secret",
+      GITHUB_TOKEN: "ambient-other-secret",
+      SSH_AUTH_SOCK: "/ambient/socket",
+      PAPERCLIP_GIT_METADATA_ROOTS: '["/injected"]',
+      PAPERCLIP_RUNNER_NETWORK_ROOTS: '["/injected"]',
+    }, true);
+
+    expect(env).toMatchObject({
+      PATH: "/provider/bin:/usr/bin:/bin",
+      GH_TOKEN: "",
+      GITHUB_TOKEN: "",
+      SSH_AUTH_SOCK: "",
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_SYSTEM: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+      GH_CONFIG_DIR: "/dev/null",
+      ZDOTDIR: "/dev/null",
+      BASH_ENV: "/dev/null",
+      PAPERCLIP_GITHUB_LAUNCHER_DIR: "",
+      PAPERCLIP_GIT_METADATA_ROOTS: "[]",
+      PAPERCLIP_GITHUB_AUTH_MODE: "managed",
+      PAPERCLIP_RUNNER_NETWORK_ACCESS: "enabled",
+    });
+    expect(env.PAPERCLIP_GITHUB_BROKER_TOKEN).toBe("");
+    expect(env.PAPERCLIP_GITHUB_BROKER_URL).toBe("");
+    expect(env.PAPERCLIP_RUNNER_NETWORK_ROOTS).toBeUndefined();
+  });
+
   it.each([target, null])("defers native managed authorization/staging to the session owner (%j)", async (target) => {
     const prepare = vi.fn();
     const mint = vi.fn();

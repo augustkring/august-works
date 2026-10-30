@@ -1,0 +1,59 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/access-service.test.ts (22 tests | 1 failed) 4702ms
+     × keeps a private conversation routine with its source owner and pauses it during archive 27ms
+[20:58:05] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"ff85b7a2-e18d-4824-8147-86f81c760fc7"}[39m
+    err: {
+      "type": "Error",
+      "message": "queue unavailable",
+      "stack":
+          Error: queue unavailable
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:2034:15)
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:201:41)
+              at queueIssueAssignmentWakeup (/workspace/blentera-v10/server/src/services/issue-assignment-wakeup.ts:58:6)
+              at /workspace/blentera-v10/server/src/services/routines.ts:2029:17
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at dispatchRoutineRun (/workspace/blentera-v10/server/src/services/routines.ts:2490:19)
+              at /workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:2038:17
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:58:05] [33mWARN[39m: [36mroutine Task dispatch remains pending[39m [90m{"routineRunId":"9414d964-e457-4c7a-a309-5d91ccc85cba"}[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/access-service.test.ts > access service > keeps a private conversation routine with its source owner and pauses it during archive
+AssertionError: expected { member: { …(8) }, …(4) } to match object { reassignedRoutineCount: +0, …(2) }
+(10 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "ownerActionRoutineCount": 1,
+-   "pausedRoutineCount": 1,
++   "pausedRoutineCount": 0,
+    "reassignedRoutineCount": 0,
+  }
+
+ ❯ src/__tests__/access-service.test.ts:311:20
+    309|
+    310|     const result = await accessService(db).archiveMember(company.id, m…
+    311|     expect(result).toMatchObject({ reassignedRoutineCount: 0, pausedRo…
+       |                    ^
+    312|     expect((await accessService(db).getMemberById(company.id, member.i…
+    313|     const privateRoutine = (await db.select().from(routines).where(eq(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 125 passed (126)
+   Start at  20:57:23
+   Duration  56.96s (transform 12.22s, setup 211ms, import 25.20s, tests 30.41s, environment 632ms)
+

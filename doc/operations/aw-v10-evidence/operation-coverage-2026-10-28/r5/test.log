@@ -1,0 +1,20 @@
+✔ accepts classified material operations and explicit Human-only actions (7.185442ms)
+✔ fails closed when a new material manifest operation lacks UI classification (0.870835ms)
+✔ keeps existing API-only contracts explicitly unqualified and tool-free (2.807911ms)
+✔ rejects an unmapped mounted UI operation instead of accepting a wildcard (0.772817ms)
+✔ fails when a new UI client mutation appears while the inventory stays unchanged (1.504802ms)
+✔ requires an authorization classification and source citations for each inventoried callsite (1.088553ms)
+✔ keeps computed HTTP client methods unknown and fails when they are unclassified (0.817114ms)
+✔ classifies client reads from HTTP definitions and catches custom-named writes (2.93357ms)
+✔ keeps opaque fetch init objects unknown instead of assuming GET (0.908322ms)
+✔ treats a second direct POST endpoint in one source as a distinct operation (1.414376ms)
+✔ fails for an API action in a newly mounted source outside the existing inventory (10.430403ms)
+✔ rejects inventory entries that are absent from the canonical manifest (0.487967ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 274.773986

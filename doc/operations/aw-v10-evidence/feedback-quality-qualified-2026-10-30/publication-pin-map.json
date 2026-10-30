@@ -1,0 +1,147 @@
+{
+  "purpose": "Exact qualification-label mapping to published files or historical prior-state Git blobs; this is source integrity, not final workspace acceptance",
+  "pins": [
+    {
+      "label": "packages/db/src/schema/customer_feedback.ts",
+      "currentPath": "packages/db/src/schema/customer_feedback.ts",
+      "sha256": "7a2eb7259af3e243b1d8c1569d6986f0777c106e386a47dad9be3d2bc307be0d"
+    },
+    {
+      "label": "packages/db/src/schema/customer_feedback_experience_measures.ts",
+      "currentPath": "packages/db/src/schema/customer_feedback_experience_measures.ts",
+      "sha256": "dbf45db715ae0221e9a734f54bf154b3026227fde1a5189252d3d32627e3b7b3"
+    },
+    {
+      "label": "packages/db/src/schema/index.ts",
+      "currentPath": "packages/db/src/schema/index.ts",
+      "sha256": "7708b55d3dae51c544f1fed15e9818a6c1ae4e6fa87dfd04d5248b4529c1a8eb"
+    },
+    {
+      "label": "packages/shared/src/customer-feedback.test.ts",
+      "currentPath": "packages/shared/src/customer-feedback.test.ts",
+      "sha256": "2ff78e4ba2e71b965efd5edd7f585ec933983328e8b386a75eb0d641fb8006c5"
+    },
+    {
+      "label": "packages/shared/src/customer-feedback.ts",
+      "currentPath": "packages/shared/src/customer-feedback.ts",
+      "sha256": "adec57a5d71176f49d0f939c104d7fd0763f3364c9c6d12543bcf7c476f95c1e"
+    },
+    {
+      "label": "packages/shared/src/customer-problem-evidence.ts",
+      "currentPath": "packages/shared/src/customer-problem-evidence.ts",
+      "sha256": "27d3545710377f56c9fb5b7915187d5e5589f740568307406ef567ed45590849"
+    },
+    {
+      "label": "packages/shared/src/customer-success-quality.test.ts",
+      "currentPath": "packages/shared/src/customer-success-quality.test.ts",
+      "sha256": "18d2bd9c2b7bfd3c81dfb920fd1888a07f0b101bc5b687be2b3db00a8c8706d1"
+    },
+    {
+      "label": "packages/shared/src/customer-success-quality.ts",
+      "currentPath": "packages/shared/src/customer-success-quality.ts",
+      "sha256": "69fc404f559c87dcb29378332689faa02da0514e2fec1629ab8eb36d0f7fcd9f"
+    },
+    {
+      "label": "server/src/__tests__/v9-customer-feedback.integration.test.ts",
+      "currentPath": "server/src/__tests__/v9-customer-feedback.integration.test.ts",
+      "sha256": "fc5ff4b2e0514010a2df40accbcbe1d2fbb9fab64f92bae7b54d2a7b17286c40"
+    },
+    {
+      "label": "server/src/__tests__/v9-feedback-retention-erasure.integration.test.ts",
+      "currentPath": "server/src/__tests__/v9-feedback-retention-erasure.integration.test.ts",
+      "sha256": "9a4c0f5ea0f9028cdf1edecb47d4c4699f63bd2b886b1e6ba88ecd8c679ee477"
+    },
+    {
+      "label": "server/src/routes/customer-feedback.ts",
+      "currentPath": "server/src/routes/customer-feedback.ts",
+      "sha256": "38777adbec5cab25bb9892f866b4c0e49452aec965ad6c2812ddd7c773c670d8"
+    },
+    {
+      "label": "server/src/services/customer-feedback-retention-erasure.ts",
+      "currentPath": "server/src/services/customer-feedback-retention-erasure.ts",
+      "sha256": "9eada3f382e30693ea934d5bee0b3e482177663c61bb0c3cd99619cee2a6bdfc"
+    },
+    {
+      "label": "server/src/services/customer-feedback.ts",
+      "currentPath": "server/src/services/customer-feedback.ts",
+      "sha256": "7e39b9d211b7e32896e012e78f0ee48e568172698a05277b94a5803d226aab85"
+    },
+    {
+      "label": "server/src/services/saas/account-deletion.ts",
+      "currentPath": "server/src/services/saas/account-deletion.ts",
+      "sha256": "8c7c4cf8f84785c2f3ff34b32184e4659f7715f4e0fb30994e48a411b8759d5b"
+    },
+    {
+      "label": "server/src/services/saas/company-purge.ts",
+      "currentPath": "server/src/services/saas/company-purge.ts",
+      "sha256": "7029e53654164155404e2af113253022b43f4a221eaf13b34e230370d2dd13b1"
+    },
+    {
+      "label": "ui/src/api/customer-feedback.ts",
+      "currentPath": "ui/src/api/customer-feedback.ts",
+      "sha256": "5b306038bb1ecd3688dca99b7af6f7d728b322280b0ed49de6a0bdd1a4b95c6d"
+    },
+    {
+      "label": "ui/src/components/CustomerFeedbackDialog.test.tsx",
+      "currentPath": "ui/src/components/CustomerFeedbackDialog.test.tsx",
+      "sha256": "9246829c5930f61059641f48bedc959ac073ba186a0de57273c908e4e7c90665"
+    },
+    {
+      "label": "ui/src/components/CustomerFeedbackDialog.tsx",
+      "currentPath": "ui/src/components/CustomerFeedbackDialog.tsx",
+      "sha256": "9d02a894749f3f6f195795c89727d69ed569fc3a6fcc1ba1cdbb93192ee3f142"
+    },
+    {
+      "label": "ui/src/i18n/experience/da.json",
+      "currentPath": "ui/src/i18n/experience/da.json",
+      "sha256": "7355ea71d31b6de8e7dd85cc59cc082cdf88f8f3aa041f800f3b5d947841e364"
+    },
+    {
+      "label": "ui/src/i18n/experience/en.json",
+      "currentPath": "ui/src/i18n/experience/en.json",
+      "sha256": "b98a803e5d9d66a9e25e6b9b55368a7ef834572afc4ef04ba467f01777a10199"
+    },
+    {
+      "label": "ui/src/pages/FeedbackHistory.test.tsx",
+      "currentPath": "ui/src/pages/FeedbackHistory.test.tsx",
+      "sha256": "7fe2f0c36a9df267b731e83ae751a9795497d2ed5e8460e06665117eeabb7657"
+    },
+    {
+      "label": "ui/src/pages/FeedbackTriage.tsx",
+      "currentPath": "ui/src/pages/FeedbackTriage.tsx",
+      "sha256": "515452312a5355ef2720acc7236c638b67d56ef4711ad6128a7b2ba3c4ba2bfe"
+    },
+    {
+      "label": "ui/src/pages/MyFeedback.tsx",
+      "currentPath": "ui/src/pages/MyFeedback.tsx",
+      "sha256": "794690ec24dfa17ad51629d14c5baecb11ec64db658adf52829e44353cf1bbcb"
+    },
+    {
+      "label": "packages/db/src/migrations/0566_customer_feedback_experience_measures.sql",
+      "currentPath": "packages/db/src/migrations/0566_customer_feedback_experience_measures.sql",
+      "sha256": "d84292b1b5bbdb66175393ca3bcb82d3df0db351f6d31fa0d11e695fe303b97e"
+    },
+    {
+      "label": "packages/db/src/migrations/meta/0566_snapshot.json",
+      "currentPath": "packages/db/src/migrations/meta/0566_snapshot.json",
+      "sha256": "3e8c20042016b196fc5d117ea1d1aa4c3b2c29c1b024d995b9dd77679b35240d"
+    },
+    {
+      "label": "candidate-0566-journal/_journal.json",
+      "currentPath": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "4e5b0d53fcca968ddf9486c43049b30a29d9475c98c84b6fc67c0baa429b3a8c"
+    },
+    {
+      "label": "published-0565-journal/_journal.json",
+      "historicalCommit": "5904b5e88595dae197057971d5797df9abf0252e",
+      "historicalPath": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "2127e77f623190c9805cb8a397862034d5440f19aeae4a75fa93e890d5246bad"
+    },
+    {
+      "label": "pruned-0561-snapshot/snapshot.json",
+      "historicalCommit": "5904b5e88595dae197057971d5797df9abf0252e",
+      "historicalPath": "packages/db/src/migrations/meta/0561_snapshot.json",
+      "sha256": "646aca64c50093654144eb1e4ed7964bbe17f6870060205eaede783873cebe1b"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/services/explicit-native-continuation.test.ts
+test_pattern=persists

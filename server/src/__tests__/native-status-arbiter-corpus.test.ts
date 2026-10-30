@@ -4,10 +4,12 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   agents,
   agentWakeupRequests,
+  authUsers,
+  companyMemberships,
   companies,
   completionContracts,
   createDb,
@@ -384,6 +386,8 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
     db = createDb(temporary.connectionString);
     await db.insert(companies).values({ id: companyId, name: "Status corpus", issuePrefix: "PSC" });
     await db.insert(companies).values({ id: outsideCompanyId, name: "Outside corpus", issuePrefix: "OUT" });
+    await db.insert(authUsers).values({ id: "status-corpus-board", name: "Status corpus Human", email: "status-corpus@example.test", emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "status-corpus-board", membershipRole: "owner", status: "active" });
     await db.insert(agents).values([
       {
         id: agentId,
@@ -431,6 +435,7 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
       status: priorStatus,
       assigneeAgentId: agentId,
       workMode: "standard",
+      ...(fixture.id === "current-track-blocker-without-alternative" ? { payloadSourceProtocolVersion: 1 } : {}),
     });
     if (!nativeRecords) return {
       issueId,
@@ -561,6 +566,18 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
   ): Promise<FixtureObservation> {
     const completionState = String(fixture.given.completionState ?? "");
     const seeded = await seedFixture(fixture);
+    if (fixture.id === "current-track-blocker-without-alternative") {
+      // Structural snapshot for the mutation guard only; this corpus fixture
+      // does not claim an authenticated source capture.
+      await db.execute(sql`update issues target set payload_source_snapshot=(
+        select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+          select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','issue','companyId',target.company_id,
+            'id',target.id,'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(target))),
+            'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+              'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+        ) body
+      ) where target.company_id=${companyId}::uuid and target.id=${seeded.issueId}::uuid`);
+    }
     const consumerExecutions: ConsumerExecution[] = [];
     const materializedEffects = new Set<string>();
     const operationalEffects = new Set<string>();
@@ -1531,6 +1548,8 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
         checkoutRunId: issues.checkoutRunId,
         executionRunId: issues.executionRunId,
         unblockDescriptor: issues.unblockDescriptor,
+        payloadSourceSnapshot: issues.payloadSourceSnapshot,
+        payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
       })
         .from(issues).where(eq(issues.id, seeded.issueId)).then((rows) => rows[0] ?? null),
       db.select({
@@ -1608,6 +1627,10 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
       expect(persistedIssue?.executionRunId, `${fixture.id}:execution released`).toBeNull();
     }
     if (persistedEffects.includes("bind_blocker")) expect(persistedIssue?.unblockDescriptor, `${fixture.id}:blocker target`).not.toBeNull();
+    if (fixture.id === "current-track-blocker-without-alternative") {
+      expect(persistedIssue?.payloadSourceSnapshot).toBeNull();
+      expect(persistedIssue?.payloadSourceSnapshotInvalidated).toBe(true);
+    }
     if (materializedEffects.has("accept_replacement_turn")) expect(persistedRun?.continuationAttempt, `${fixture.id}:replacement target`).toBeGreaterThan(0);
     if (persistedEffects.includes("release_run_resources")) {
       expect(persistedRun?.processPid, `${fixture.id}:pid released`).toBeNull();

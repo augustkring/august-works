@@ -10,6 +10,8 @@ import { PaperclipRunnerToolAuthority } from "../services/native-runtime/papercl
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { documentService } from "../services/documents.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 
 describe("Native saved tasks inherit their actual originating source erasure", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -27,6 +29,8 @@ describe("Native saved tasks inherit their actual originating source erasure", (
     const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
       status: "running", runtimeMode: "native", nativeIssueId: conversationId, contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
     runId = run!.id;
+    await preparePlatformSkillAdmission(db, { companyId: f.home, agentId: f.presence.id, runId,
+      responsibleUserId: f.userId, requireExisting: false }, blenteraPlatformContractHashes());
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, conversationId));
     const receipt = await new PaperclipRunnerToolAuthority(db, { companyId: f.home, agentId: f.presence.id, runId, issueId: conversationId })
       .execute({ tool: "create_task", callId: "derived", arguments: { idempotencyKey: randomUUID(), status: "backlog",
@@ -37,6 +41,8 @@ describe("Native saved tasks inherit their actual originating source erasure", (
   async function nextTask(parentId: string) {
     const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
       status: "running", runtimeMode: "native", nativeIssueId: parentId }).returning();
+    await preparePlatformSkillAdmission(db, { companyId: f.home, agentId: f.presence.id, runId: run!.id,
+      responsibleUserId: f.userId, requireExisting: false }, blenteraPlatformContractHashes());
     await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, parentId));
     const receipt = await new PaperclipRunnerToolAuthority(db, { companyId: f.home, agentId: f.presence.id, runId: run!.id, issueId: parentId })
       .execute({ tool: "create_task", callId: "descendant", arguments: { idempotencyKey: randomUUID(), status: "backlog",
@@ -82,6 +88,7 @@ describe("Native saved tasks inherit their actual originating source erasure", (
     expect(await issueService(db).getById(unrelated.id)).toMatchObject({ title: "Unrelated work", description: "Keep this body" });
   });
   it.each(["missing", "malformed", "foreign", "mismatched", "cycle"])("withholds invalid Native task provenance: %s", async failure => {
+    const invalidTaskId = randomUUID();
     let originRunId = randomUUID(), originIssueId = conversationId;
     if (failure === "malformed") originRunId = "untrusted malformed origin";
     else if (failure === "foreign") {
@@ -90,11 +97,23 @@ describe("Native saved tasks inherit their actual originating source erasure", (
     } else if (failure === "mismatched") { originRunId = runId; originIssueId = randomUUID(); }
     else if (failure === "cycle") {
       const [cyclicRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id,
-        status: "running", runtimeMode: "native", nativeIssueId: taskId }).returning();
-      originRunId = cyclicRun!.id; originIssueId = taskId;
+        responsibleUserId: f.userId, status: "running", runtimeMode: "native", nativeIssueId: invalidTaskId }).returning();
+      await preparePlatformSkillAdmission(db, { companyId: f.home, agentId: f.presence.id, runId: cyclicRun!.id,
+        responsibleUserId: f.userId, requireExisting: false }, blenteraPlatformContractHashes());
+      originRunId = cyclicRun!.id; originIssueId = invalidTaskId;
     }
-    await db.update(issues).set({ originRunId, originId: `paperclip-runner:create-task:${originIssueId}:invalid` }).where(eq(issues.id, taskId));
-    await expect(assertAnalyticalContextPayloadAccess(db, f.home, f.actor, { issueId: taskId })).rejects.toMatchObject({ status: 403 });
+    const [original] = await db.select().from(issues).where(and(eq(issues.companyId, f.home), eq(issues.id, taskId)));
+    // Origin identity is immutable. Seed a new adversarial row instead of
+    // bypassing that production guard to corrupt an existing Native result.
+    const invalidInsert = db.insert(issues).values({ ...original!, id: invalidTaskId, identifier: null, issueNumber: null,
+      originRunId, originId: `paperclip-runner:create-task:${originIssueId}:invalid` });
+    if (failure === "malformed") {
+      await expect(invalidInsert).rejects.toMatchObject({ cause: { code: "P0001", message: "task origin run identity is invalid" } });
+      expect(await db.select().from(issues).where(eq(issues.id, invalidTaskId))).toEqual([]);
+      return;
+    }
+    await invalidInsert;
+    await expect(assertAnalyticalContextPayloadAccess(db, f.home, f.actor, { issueId: invalidTaskId })).rejects.toMatchObject({ status: 403 });
   });
   it("withholds an over-budget ancestry rather than approving a partial source chain", async () => {
     let parent = taskId;
