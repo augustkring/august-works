@@ -14,7 +14,6 @@ import { scopedRuntimeActionService } from "../services/scoped-runtime-actions.j
 import { authorizationService } from "../services/authorization.js";
 import { resolveDelegatedContextManifestBindings } from "../services/context/delegated-context-binding.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
-import { projectControlService } from "../services/project-control.js";
 import { issueService } from "../services/issues.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { foundationIndexService } from "../services/foundation/foundation-index.js";
@@ -22,7 +21,7 @@ import { orchestrationService } from "../services/orchestration/orchestration-se
 import { playbookService } from "../services/playbooks.js";
 import { rolePackService } from "../services/role-packs.js";
 import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
-import { roadmapPolicySchema, crossCompanyPolicySchema } from "@paperclipai/shared";
+import { crossCompanyPolicySchema } from "@paperclipai/shared";
 
 it("negative triggers veto selection and empty trigger sets do not match every task", () => {
   expect(skillTaskMatches("review database migration", ["database"], [])).toBe(true);
@@ -70,7 +69,6 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
     }
     await cross.setPolicy(f.actor, f.guest, crossCompanyPolicySchema.parse({ allowRead: true, allowContribute: true, allowAct: true }));
     const project = await createCanonicalHumanProject(db, f.guest, currentHuman, "Guest delivery");
-    await projectControlService(db).policy(currentHuman, f.guest, project.id, roadmapPolicySchema.parse({ allowAgentForecast: true }));
     const task = await issueService(db).create(f.guest, { projectId: project.id, title: "Guest task", status: "todo",
       assigneeAgentId: f.guestPresence.id, createdByUserId: f.userId, responsibleUserId: f.userId }, db, undefined,
       { manualInputActor: currentHuman, privacyActor: currentHuman, sourceAccessActor: currentHuman });

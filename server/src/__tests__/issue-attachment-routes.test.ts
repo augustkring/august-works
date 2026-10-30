@@ -181,7 +181,7 @@ async function createApp(storage: StorageService, options?: { companyIds?: strin
     };
     next();
   });
-  app.use("/api", issueRoutes({} as any, storage));
+  app.use("/api", issueRoutes({ transaction: async () => false } as any, storage));
   app.use((error: unknown, _req: express.Request, _res: express.Response, next: express.NextFunction) => {
     app.locals.routeError = error;
     next(error);
@@ -294,7 +294,7 @@ describe("issue attachment routes", () => {
       .post("/api/companies/company-1/issues/11111111-1111-4111-8111-111111111111/attachments")
       .attach("file", Buffer.from("zip"), { filename: "bundle.zip", contentType: "application/zip" });
 
-    expect([200, 201]).toContain(res.status);
+    expect([200, 201], String(app.locals.routeError?.stack ?? app.locals.routeError)).toContain(res.status);
     const putFileCall = storage.__calls.putFile;
     expect(putFileCall).toMatchObject({
       companyId: "company-1",

@@ -287,7 +287,7 @@ describe("native support case storage and erasure boundaries", () => {
       // whichever row happens to have the largest surrogate ID. Migrations
       // live in Drizzle's configured schema, not public.
       await restored.execute(sql`drop table support_case_issue_links`);
-      await restored.execute(sql`delete from drizzle.__drizzle_migrations where created_at >= 1793202169674`);
+      await restored.execute(sql`delete from drizzle.__drizzle_migrations where created_at in (1793202169674, 1793214428685)`);
 
       await prepareRestoredQuarantine(restored, target.toString(), {
         companies: [], memory: [], businessEvents: [], analyticalSources: [], feedback: [], supportCases: [],
