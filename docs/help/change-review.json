@@ -365,10 +365,10 @@
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "b4ee7289e09e3f9e88bdc50c6beee244ac62c5260de7017ffc9415b6bef12e44",
+      "sourceSha256": "63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a",
       "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
       "decision": "updated",
-      "rationale": "The route now reads durable requester-bound operation records and applies current authorization at history and cancellation boundaries; the article describes requester-only receipts, retained access checks, and reconciliation limits."
+      "rationale": "Current routes read durable requester-bound operation records and recheck current authorization at history and cancellation boundaries. The article already explains requester-only receipts, reconciliation for unknown outcomes, and current access checks."
     },
     {
       "source": "server/src/routes/openapi.ts",
@@ -501,10 +501,10 @@
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "b4ee7289e09e3f9e88bdc50c6beee244ac62c5260de7017ffc9415b6bef12e44",
+      "sourceSha256": "63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a",
       "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
       "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: the route now reads durable requester-bound operation records and applies current authorization at history and cancellation boundaries; the article describes requester-only receipts, retained access checks, and reconciliation limits."
+      "rationale": "Den danske artikel beskriver allerede anmodningsbundne kvitteringer, afstemning ved ukendt resultat og aktuelle adgangskontroller for historik og annullering."
     },
     {
       "source": "server/src/routes/openapi.ts",
@@ -693,10 +693,10 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "8c3e54b700044da4ce16a229a9fbb38bb28e7133561462aa39a151012e2d6077",
+      "sourceSha256": "7029e53654164155404e2af113253022b43f4a221eaf13b34e230370d2dd13b1",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Company purge remains staged around unresolved provider outcomes and managed erasure; the article distinguishes accepted deletion from completed erasure."
+      "rationale": "Company deletion remains staged while provider outcomes or managed erasure are unresolved. The article distinguishes an accepted request from verified completion."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
@@ -773,10 +773,10 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "8c3e54b700044da4ce16a229a9fbb38bb28e7133561462aa39a151012e2d6077",
+      "sourceSha256": "7029e53654164155404e2af113253022b43f4a221eaf13b34e230370d2dd13b1",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Company purge remains staged around unresolved provider outcomes and managed erasure; the article distinguishes accepted deletion from completed erasure."
+      "rationale": "Sletning af virksomheden afventer fortsat uafklarede udbyderresultater eller administreret sletning. Artiklen skelner mellem en accepteret anmodning og bekræftet gennemførelse."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
@@ -829,18 +829,18 @@
     {
       "source": "packages/shared/src/customer-feedback.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "0f49bdcaf851b08f3dab373ba79b49d0809072d47fa5d88f7aeae1f2315804c7",
+      "sourceSha256": "adec57a5d71176f49d0f939c104d7fd0763f3364c9c6d12543bcf7c476f95c1e",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "decision": "no_change",
+      "rationale": "The current shared contract defines optional, explicitly consented and withdrawable product-experience ratings. It does not change support-case intake or the Support-to-Task handoff described here; no unrelated rating instructions belong in this article."
     },
     {
       "source": "packages/shared/src/customer-support.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2",
+      "sourceSha256": "e1ca8152ba3944e78f88d4a9a94dccdff64ee6daa990f1d6431e412bbca51cef",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "updated",
-      "rationale": "The shared Support detail now carries the authorized related Issue pointer; the article describes the link and existing review handoff without implying copied support content."
+      "rationale": "The current Support detail includes an authorized related-Issue pointer. The article describes linking existing follow-up work when the reader can access both records and keeps support messages in the case."
     },
     {
       "source": "packages/shared/src/model-broker.ts",
@@ -885,10 +885,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "cf1bedc73cfc5c846953817ab0987a2206559c325a181fbe767c11c73269dc50",
+      "sourceSha256": "850149356579b398bcb0bafa128d1bfc9e1fef0c08a5e38a820740f8d4e04a8b",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Reviewed the canonical configured-profile wiring for company notices. Help continues to offer the existing company support case and direct human-contact actions described in this article."
+      "rationale": "Current configured-profile wiring for company notices does not change the customer actions in Help. The article still describes support cases, status information, and direct human contact."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1005,10 +1005,10 @@
     {
       "source": "server/src/services/experience/support-cases.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9",
+      "sourceSha256": "aea590b7e2032042c8812c63a721576a84d2e888805f6e551b793c07e37263fc",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "updated",
-      "rationale": "The original Support owner validates current private case and Task access, includes authorized pointers in export, and removes links with original retention/deletion owners. The article explains that support messages remain in the case."
+      "rationale": "The case service checks current case and Task access before exposing the related pointer; support messages remain in the case. The article already states both boundaries."
     },
     {
       "source": "server/src/services/orchestration/first-party-support-model-gateway.ts",
@@ -1141,18 +1141,18 @@
     {
       "source": "packages/shared/src/customer-feedback.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "0f49bdcaf851b08f3dab373ba79b49d0809072d47fa5d88f7aeae1f2315804c7",
+      "sourceSha256": "adec57a5d71176f49d0f939c104d7fd0763f3364c9c6d12543bcf7c476f95c1e",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "decision": "no_change",
+      "rationale": "Den aktuelle fælles kontrakt beskriver valgfrie produktoplevelsesvurderinger med udtrykkeligt samtykke og mulighed for tilbagetrækning. Den ændrer ikke supportsager eller overdragelsen fra Support til Opgave, som beskrives her."
     },
     {
       "source": "packages/shared/src/customer-support.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "fb618a2ec15968cf4f09d29dd8dd6eb2bffeaddb2ae9e1df8754b0fda5f02ec2",
+      "sourceSha256": "e1ca8152ba3944e78f88d4a9a94dccdff64ee6daa990f1d6431e412bbca51cef",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The shared Support detail now carries the authorized related Issue pointer; the article describes the link and existing review handoff without implying copied support content."
+      "rationale": "Den aktuelle Support-detalje indeholder en relateret opgavehenvisning, når adgangen er godkendt. Artiklen beskriver allerede, at eksisterende opfølgningsarbejde kun kan knyttes, når læseren har adgang til begge poster, og at supportbeskederne bliver i sagen."
     },
     {
       "source": "packages/shared/src/model-broker.ts",
@@ -1197,10 +1197,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "cf1bedc73cfc5c846953817ab0987a2206559c325a181fbe767c11c73269dc50",
+      "sourceSha256": "850149356579b398bcb0bafa128d1bfc9e1fef0c08a5e38a820740f8d4e04a8b",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Reviewed the canonical configured-profile wiring for company notices. Help continues to offer the existing company support case and direct human-contact actions described in this article."
+      "rationale": "Den aktuelle profilkonfiguration for virksomhedsbeskeder ændrer ikke kundens handlinger i Hjælp. Artiklen beskriver fortsat supportsager, statusoplysninger og direkte menneskelig kontakt."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1317,10 +1317,10 @@
     {
       "source": "server/src/services/experience/support-cases.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "8ad9cf3c2c5424b034cd13591527485de5fa180baed280c131e438d3b31ba8c9",
+      "sourceSha256": "aea590b7e2032042c8812c63a721576a84d2e888805f6e551b793c07e37263fc",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The original Support owner validates current private case and Task access, includes authorized pointers in export, and removes links with original retention/deletion owners. The article explains that support messages remain in the case."
+      "rationale": "Sagsservicen kontrollerer aktuel adgang til sagen og opgaven, før den relaterede henvisning vises; supportbeskederne bliver i sagen. Artiklen beskriver allerede begge grænser."
     },
     {
       "source": "server/src/services/orchestration/first-party-support-model-gateway.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
+      "sourceSha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the current heartbeat source: continuation receipts bind to the exact company, agent, issue, interaction, and status; rejected responses wake only under the wake_assignee policy or for a rejected plan-change confirmation. The article still directs people to inspect the original task and its current run before retrying; no user-facing recovery instruction changes."
+      "rationale": "Current continuation remains tied to the original Task/run and only resumes for eligible saved interactions. The article already directs readers to inspect the original Task and current run before retrying."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "368ce1f106b547b39ee89bb9badaa16c86efa531626d3457974cd542ed75f3ac",
+      "sourceSha256": "6aa1ec858b47db80855f9ea23c205962a51fbb0cd7b0835a60205a635b9b42d3",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Gennemg\u00e5et den aktuelle heartbeat-kilde: forts\u00e6ttelseskvitteringer bindes til den pr\u00e6cise virksomhed, agent, opgave, interaktion og status; afviste svar v\u00e6kker kun agenten med politikken wake_assignee eller ved en afvist plan\u00e6ndring. Artiklen vejleder fortsat om at kontrollere den oprindelige opgave og dens aktuelle k\u00f8rsel f\u00f8r et nyt fors\u00f8g; brugerens genopretningsvejledning \u00e6ndres ikke."
+      "rationale": "Fortsættelsen er fortsat knyttet til den oprindelige opgave og kørsel og genoptages kun for tilladte gemte interaktioner. Artiklen vejleder allerede om at kontrollere den oprindelige opgave og aktuelle kørsel før et nyt forsøg."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1757,10 +1757,10 @@
     {
       "source": "server/src/services/saas/activation.ts",
       "articleId": "start-and-first-result",
-      "sourceSha256": "4dbe56416e4ee80b9e8abb4a426cb994f05f97e54101bee4fb609fd0585730a7",
+      "sourceSha256": "25e39921b40d1523391a615833ba94d5a93fe8298ec044258dc60efd8bc0fe09",
       "articleSha256": "7a0f6911e596e02e212fae1d400a07d178380163dbf8be42eb4c221e0a655613",
       "decision": "updated",
-      "rationale": "Replaced the old autonomous-company tutorial with bounded steps grounded in guided activation, first Co-worker setup, first-task start, and result review."
+      "rationale": "The current guided activation leads through initial setup, first Co-worker, first Task, and result review. The article gives those same bounded steps."
     },
     {
       "source": "ui/src/components/ActivationFirstAgent.tsx",
@@ -1789,10 +1789,10 @@
     {
       "source": "ui/src/pages/Activation.tsx",
       "articleId": "start-and-first-result",
-      "sourceSha256": "e62bddf303170a0d7f9cc21f4973eaff934e97b91afa7f26e5f2dbeeef57fb52",
+      "sourceSha256": "e5f2323104495b9d9e86764117bed0034c60b170d01b82a2cb09a72c13673168",
       "articleSha256": "7a0f6911e596e02e212fae1d400a07d178380163dbf8be42eb4c221e0a655613",
       "decision": "updated",
-      "rationale": "Replaced the old autonomous-company tutorial with bounded steps grounded in guided activation, first Co-worker setup, first-task start, and result review."
+      "rationale": "The current page presents guided setup, first Co-worker and Task, and result review; the article describes those steps without promising autonomous setup."
     },
     {
       "source": "server/src/services/saas/activation-first-task.ts",
@@ -1805,10 +1805,10 @@
     {
       "source": "server/src/services/saas/activation.ts",
       "articleId": "start-and-first-result-da",
-      "sourceSha256": "4dbe56416e4ee80b9e8abb4a426cb994f05f97e54101bee4fb609fd0585730a7",
+      "sourceSha256": "25e39921b40d1523391a615833ba94d5a93fe8298ec044258dc60efd8bc0fe09",
       "articleSha256": "0fe2ed3f3a0ab78fa404729e29dedc25548dd4ff7c9d9f1e0b40c7d6df026eaf",
       "decision": "updated",
-      "rationale": "Danish translation of start-and-first-result: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Den aktuelle guidede aktivering fører gennem den første opsætning, Co-worker, opgave og resultatevaluering. Artiklen beskriver de samme afgrænsede trin."
     },
     {
       "source": "ui/src/components/ActivationFirstAgent.tsx",
@@ -1837,10 +1837,10 @@
     {
       "source": "ui/src/pages/Activation.tsx",
       "articleId": "start-and-first-result-da",
-      "sourceSha256": "e62bddf303170a0d7f9cc21f4973eaff934e97b91afa7f26e5f2dbeeef57fb52",
+      "sourceSha256": "e5f2323104495b9d9e86764117bed0034c60b170d01b82a2cb09a72c13673168",
       "articleSha256": "0fe2ed3f3a0ab78fa404729e29dedc25548dd4ff7c9d9f1e0b40c7d6df026eaf",
       "decision": "updated",
-      "rationale": "Danish translation of start-and-first-result: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Den aktuelle side viser guidet opsætning, den første Co-worker og opgave samt evaluering af resultatet; artiklen beskriver trinene uden at love autonom opsætning."
     },
     {
       "source": "server/src/routes/workflows.ts",
@@ -2166,9 +2166,9 @@
       "source": "server/src/services/tool-connection-lifecycle.ts",
       "articleId": "apps-and-connections",
       "articleSha256": "a148a97495f45184970a7c2e5924a75bec820c93e210aee119a7e9bfa0779957",
-      "sourceSha256": "3124e06a45d28d7d38e580d1ac93d558a3bd171121976678d75507e3a239b789",
+      "sourceSha256": "3b22188622a3112fa762e8c9168344a745a69c70c71db11efb4a7355bca2db88",
       "decision": "no_change",
-      "rationale": "The lifecycle projection now reports the existing GitHub repository full-snapshot reconciliation and its successful refresh time. The article already requires a current repository-access check and following the displayed repair action; it makes no claim of provider event completeness."
+      "rationale": "The server projection validates GitHub repository-access full-snapshot state and freshness. The article already tells readers to check current repository access and webhook health and follow the displayed repair action; it makes no claim of event completeness or refresh timing."
     },
     {
       "source": "server/src/services/experience/connector-recovery.ts",
@@ -2262,9 +2262,9 @@
       "source": "server/src/services/tool-connection-lifecycle.ts",
       "articleId": "apps-and-connections-da",
       "articleSha256": "ca26e138f3506d4e3f4c9acce94c7eb530bb929ec95f939b662e7852bfb8478f",
-      "sourceSha256": "3124e06a45d28d7d38e580d1ac93d558a3bd171121976678d75507e3a239b789",
+      "sourceSha256": "3b22188622a3112fa762e8c9168344a745a69c70c71db11efb4a7355bca2db88",
       "decision": "no_change",
-      "rationale": "The lifecycle projection now reports the existing GitHub repository full-snapshot reconciliation and its successful refresh time. The article already requires a current repository-access check and following the displayed repair action; it makes no claim of provider event completeness."
+      "rationale": "Serverens projektion kontrollerer tilstanden og aktualiteten af GitHubs fulde snapshot af repository-adgang. Artiklen beder allerede læseren kontrollere aktuel repository-adgang og webhook-status samt følge den viste reparationshandling; den lover hverken fuldstændige hændelser eller et bestemt opdateringsinterval."
     },
     {
       "source": "server/src/services/experience/connector-recovery.ts",
@@ -2453,26 +2453,26 @@
     {
       "source": "server/src/routes/access.ts",
       "articleId": "workflows-preview",
-      "sourceSha256": "a279232cd4603363ef4c3f8a1177745d73deb5154614964f3d403aeaed74030d",
+      "sourceSha256": "6bf4ffe5a4699d6b2343345466671373fb58f29adf94d79c8567a52035c69d29",
       "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
-      "rationale": "The workflow article describes the authenticated coverage controls and explicit revocation; existing member access remains separate."
+      "rationale": "Current routes provide authenticated temporary-coverage controls while keeping ordinary membership access separate. The article describes those controls and distinction."
     },
     {
       "source": "server/src/services/access.ts",
       "articleId": "workflows-preview",
-      "sourceSha256": "1db330169f2492f12baf454114298c556a01a761baea72b9e0f68f2fd13c2d9e",
+      "sourceSha256": "8b717130bdc9a6e17473ef01c2124f15ec01e2ad4a65233ad283d838bff4902f",
       "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
-      "rationale": "Coverage validates both current Humans and source access; required permission withdrawal permanently revokes the arrangement rather than reviving it on later regrant."
+      "rationale": "Coverage remains bound to current Human/source access and the selected published version; withdrawing required permission invalidates it instead of reviving it on regrant. The article states these conditions."
     },
     {
       "source": "server/src/services/workflows/workflow-executor.ts",
       "articleId": "workflows-preview",
-      "sourceSha256": "ff4193591ab70cbfbe78dd0d333a0d6e95e81615f7a7eec46e416cfbdf3b7f4f",
+      "sourceSha256": "247f249b4fd6f2a821678c6983b648668ffd08bc2c918f21a2ddf37bdf8d1c37",
       "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
-      "rationale": "Documents the original initiator continuation using the same saved request and the current coverage/revocation/expiry checks before consuming a child-result wait."
+      "rationale": "The original initiator can continue the same saved run only after current coverage and access checks; the continuation does not create another child run. The article says so."
     },
     {
       "source": "packages/shared/src/validators/access.ts",
@@ -2485,10 +2485,10 @@
     {
       "source": "packages/db/src/schema/workflows.ts",
       "articleId": "workflows-preview",
-      "sourceSha256": "6cb14b07252bdb21ec10da98e0d0a6d093cf2c2857bcff51ada7da5ae2e36dfc",
+      "sourceSha256": "09affeab6594e5d161381ae2f5a44e861f55e2338aa3ff134d8256f5bd807db4",
       "articleSha256": "e68a45008a97f9974290dee1b2643aea50daa383897188c70db08334e163c35f",
       "decision": "updated",
-      "rationale": "The workflow article describes the persisted exact-version coverage and actual starting Human; it does not imply a copied role or new permission grant."
+      "rationale": "Persisted coverage is tied to the actual starting Human and exact workflow version; it does not copy a role or grant permission. The article describes those limits."
     },
     {
       "source": "ui/src/pages/CompanyAccess.tsx",
@@ -2509,26 +2509,26 @@
     {
       "source": "server/src/routes/access.ts",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "a279232cd4603363ef4c3f8a1177745d73deb5154614964f3d403aeaed74030d",
+      "sourceSha256": "6bf4ffe5a4699d6b2343345466671373fb58f29adf94d79c8567a52035c69d29",
       "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The workflow article describes the authenticated coverage controls and explicit revocation; existing member access remains separate."
+      "rationale": "De aktuelle ruter tilbyder godkendte kontroller for midlertidig workflow-dækning, adskilt fra almindelig medlemsadgang. Artiklen beskriver kontrollerne og forskellen."
     },
     {
       "source": "server/src/services/access.ts",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "1db330169f2492f12baf454114298c556a01a761baea72b9e0f68f2fd13c2d9e",
+      "sourceSha256": "8b717130bdc9a6e17473ef01c2124f15ec01e2ad4a65233ad283d838bff4902f",
       "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. Coverage validates both current Humans and source access; required permission withdrawal permanently revokes the arrangement rather than reviving it on later regrant."
+      "rationale": "Dækning er fortsat knyttet til den aktuelle adgang for Human og kilde samt den valgte publicerede version. Tilbagetrækning af en nødvendig tilladelse ugyldiggør dækningen, og en senere gentildeling genopliver den ikke. Artiklen beskriver disse vilkår."
     },
     {
       "source": "server/src/services/workflows/workflow-executor.ts",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "ff4193591ab70cbfbe78dd0d333a0d6e95e81615f7a7eec46e416cfbdf3b7f4f",
+      "sourceSha256": "247f249b4fd6f2a821678c6983b648668ffd08bc2c918f21a2ddf37bdf8d1c37",
       "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
-      "rationale": "Documents the original initiator continuation using the same saved request and the current coverage/revocation/expiry checks before consuming a child-result wait."
+      "rationale": "Den oprindelige initiativtager kan kun fortsætte den samme gemte kørsel efter aktuelle kontroller af dækning og adgang; fortsættelsen opretter ikke en ny underordnet kørsel. Artiklen beskriver dette."
     },
     {
       "source": "packages/shared/src/validators/access.ts",
@@ -2541,10 +2541,10 @@
     {
       "source": "packages/db/src/schema/workflows.ts",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "6cb14b07252bdb21ec10da98e0d0a6d093cf2c2857bcff51ada7da5ae2e36dfc",
+      "sourceSha256": "09affeab6594e5d161381ae2f5a44e861f55e2338aa3ff134d8256f5bd807db4",
       "articleSha256": "eea74e4540b63283f260a77d1a26d448a79ba358b5645c795f41561f09452a51",
       "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The workflow article describes the persisted exact-version coverage and actual starting Human; it does not imply a copied role or new permission grant."
+      "rationale": "Den gemte dækning er knyttet til den Human, der faktisk starter, og den præcise workflowversion; den kopierer ikke en rolle eller tildeler tilladelser. Artiklen beskriver disse begrænsninger."
     },
     {
       "source": "ui/src/components/ServiceHealth.tsx",
