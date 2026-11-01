@@ -36,7 +36,7 @@ async function newPaperclipHome() {
   return home;
 }
 
-async function fixture(companyId = randomUUID(), agentId = randomUUID(), paperclipHomeInput?: string) {
+async function fixture(companyId: string = randomUUID(), agentId: string = randomUUID(), paperclipHomeInput?: string) {
   const paperclipHome = paperclipHomeInput ?? await newPaperclipHome();
   process.env.PAPERCLIP_HOME = paperclipHome;
   const runId = randomUUID();
@@ -60,6 +60,14 @@ async function fixture(companyId = randomUUID(), agentId = randomUUID(), papercl
   return { context, server, paperclipHome };
 }
 
+function requiredHermesHome(profileConfig: Record<string, unknown>): string {
+  const env = profileConfig.env;
+  if (!env || typeof env !== "object" || Array.isArray(env) || !("HERMES_HOME" in env) ||
+      typeof env.HERMES_HOME !== "string" || env.HERMES_HOME.length === 0)
+    throw new Error("Hermes test profile has no configured HERMES_HOME");
+  return env.HERMES_HOME;
+}
+
 beforeEach(() => { childState.calls.length = 0; });
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map(root => fs.rm(root, { recursive: true, force: true })));
@@ -71,7 +79,7 @@ it("delivers and verifies the exact immutable Platform Skill at Hermes adapter d
   const { context, paperclipHome } = await fixture("company-positive", "agent-positive");
   const result = await execute(context);
   const profileConfig = hermesPresenceConfig(context.config, { companyId: context.agent.companyId, agentId: context.agent.id });
-  const profileHome = profileConfig.env.HERMES_HOME as string;
+  const profileHome = requiredHermesHome(profileConfig);
   expect(result.exitCode).toBe(0);
   expect(result.resultJson?.hermesGovernedProfile).toMatchObject({ platformSkill: context.platformSkillAdmission, qualification: "requires_runtime_conformance" });
   expect(await fs.readlink(path.join(profileHome, "skills", "blentera-platform"))).toBe(skillRoot);
@@ -96,7 +104,7 @@ it("rejects a missing Platform Skill before Hermes starts", async () => {
 it("rejects a reserved-name profile collision before Hermes starts", async () => {
   const { context } = await fixture("company-collision", "agent-collision");
   const profileConfig = hermesPresenceConfig(context.config, { companyId: context.agent.companyId, agentId: context.agent.id });
-  const skillsHome = path.join(profileConfig.env.HERMES_HOME as string, "skills");
+  const skillsHome = path.join(requiredHermesHome(profileConfig), "skills");
   await fs.mkdir(path.join(skillsHome, "blentera-platform"), { recursive: true });
   await fs.writeFile(path.join(skillsHome, "blentera-platform", "SKILL.md"), "# Customer shadow\n");
   await expect(execute(context)).rejects.toThrow("platform_skill_collision");
@@ -109,8 +117,8 @@ it("keeps two admitted companies on distinct Hermes profiles and Skill deliverie
   const second = await fixture("company-isolated-b", "agent-isolated-b", paperclipHome);
   const firstResult = await execute(first.context);
   const secondResult = await execute(second.context);
-  const firstHome = hermesPresenceConfig(first.context.config, { companyId: first.context.agent.companyId, agentId: first.context.agent.id }).env.HERMES_HOME as string;
-  const secondHome = hermesPresenceConfig(second.context.config, { companyId: second.context.agent.companyId, agentId: second.context.agent.id }).env.HERMES_HOME as string;
+  const firstHome = requiredHermesHome(hermesPresenceConfig(first.context.config, { companyId: first.context.agent.companyId, agentId: first.context.agent.id }));
+  const secondHome = requiredHermesHome(hermesPresenceConfig(second.context.config, { companyId: second.context.agent.companyId, agentId: second.context.agent.id }));
   expect(firstHome).not.toBe(secondHome);
   const firstProfile = firstResult.resultJson?.hermesGovernedProfile as Record<string, any>;
   const secondProfile = secondResult.resultJson?.hermesGovernedProfile as Record<string, any>;
