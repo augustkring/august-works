@@ -3339,7 +3339,6 @@ export function agentRoutes(
   async function testManagedEnvironment(adapterType: string, context: Parameters<ReturnType<typeof requireServerAdapter>["testEnvironment"]>[0], binding: AiConnectionBinding) {
     await assertManagedAiProjectAuth(context.config, binding.provider, context.executionTarget);
     const result = await requireServerAdapter(adapterType).testEnvironment(context);
-    if (result.status === "fail") return result;
     // The resolved method, not binding.method — on a responsible_user binding
     // that field is wire-compat only and the default connection decides.
     const resolvedMethod = (context.config as { managedAiConnection?: { method?: string } }).managedAiConnection?.method;
@@ -3369,6 +3368,7 @@ export function agentRoutes(
       }
       return result;
     }
+    if (result.status === "fail") return result;
     if (!result.checks.some(check => check.code.includes("hello_probe"))) {
       const providerAdapter = { anthropic: "claude_local", openai: "codex_local", openrouter: "opencode_local", xai: "grok_local" }[binding.provider];
       const probe = await requireServerAdapter(providerAdapter).testEnvironment({ ...context, adapterType: providerAdapter, config: { ...context.config, engine: "cli" } });

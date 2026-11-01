@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, inArray, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, is, isNull, lte, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
+import type { NativeSiblingToolSourceProofs } from "../native-direct-input.js";
 import { agentExecutionManifests, providerTraceRecords,
   memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryPrivateSharePublications, memoryRetentionPolicies,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
@@ -13,7 +15,7 @@ import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
 import { conflict, forbidden, HttpError } from "../../errors.js";
 import { nativePayloadSourceSnapshotSchema, type MemoryCandidateInputParsed } from "@paperclipai/shared";
-import type { AuthorizationActor, MemoryPageStructuralProofMemoStore } from "../authorization.js";
+import type { AuthorizationActor, MemoryNativeSourceRowsScope, MemoryPageStructuralProofMemoStore } from "../authorization.js";
 import { agentAuthoringTestMemorySourceReadActive } from "../agents/authoring-test-memory-source-scope.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { invalidateDerivedMemory } from "./derived-privacy.js";
@@ -117,12 +119,16 @@ export async function withNativeMemoryCaptureSources<T>(db: Db, companyId: strin
 /** Current source authority, independent of a Memory record's display scope.
  * A shared/corrected copy keeps every original root. Unknown history is withheld. */
 type MemorySourceReadBudget = { signal?: AbortSignal; deadlineAt?: number; forbiddenRecordId?: string;
+  /** Selected only by server-owned Native capture/currentness readers. */
+  nativeInspection?: true;
   structuralProofMemoStore?: MemoryPageStructuralProofMemoStore };
-type MemorySourceReadScope = { active:Set<string>;deadline:number;startedAt:number;work:number;signal?:AbortSignal;
+type MemorySourceReadScope = {
+  sourceGraphLedgers?: WeakMap<object, NativeSiblingToolSourceProofs>; sourceGraphProofsDisabled?: boolean;
+  active:Set<string>;deadline:number;startedAt:number;work:number;signal?:AbortSignal;
   /** Page structural proofs are available only to nested reads on their bound
    * physical transaction; source rows and live reader authority are still
    * checked by every inspection. */
-  structuralProofMemoStore?: MemoryPageStructuralProofMemoStore;
+  structuralProofMemoStore?: MemoryPageStructuralProofMemoStore; nativeSourceRows?: MemoryNativeSourceRowsScope;
   /** Set only while one bounded source-set read has checked the same live actor
    * before and after all of its owner rows. Never retained across operations. */
   batchAdmittedActors?:Set<string> };
@@ -131,13 +137,27 @@ function assertMemorySourceReadActive(state: MemorySourceReadScope) {
   if (performance.now() > state.deadline) throw new Error("Memory source read deadline exceeded");
 }
 const memorySourceReads=new AsyncLocalStorage<MemorySourceReadScope>();
+/** This ALS is owned only by the callback-free source reviewers below, never
+ * by the public temporal-scope callback helper. Bind after Native has acquired
+ * its actual physical transaction; a pool cannot identify a checkpoint pass. */
+export function activeMemorySourceGraphReadLedger(db: object): NativeSiblingToolSourceProofs | undefined {
+  const state = memorySourceReads.getStore();
+  if (!state || state.sourceGraphProofsDisabled || !is(db, PgTransaction)) return undefined;
+  const ledgers = state.sourceGraphLedgers ??= new WeakMap();
+  let ledger = ledgers.get(db);
+  if (!ledger) { ledger = new Map(); ledgers.set(db, ledger); }
+  return ledger;
+}
+export function disableMemorySourceGraphReadCheckpoints(): void {
+  const state = memorySourceReads.getStore();
+  if (!state) return;
+  state.sourceGraphProofsDisabled = true;
+  delete state.sourceGraphLedgers;
+}
+
+
 let nativeMemorySourceFailureDiagnostics = 0;
 let nativeMemorySourceAgentFailureDiagnostics = 0;
-function memorySourceDiagnosticTransactionOrdinal(db: object): number | null {
-  if (process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS !== "1") return null;
-  const map = (globalThis as unknown as Record<PropertyKey, unknown>)[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")];
-  return map instanceof WeakMap ? map.get(db) ?? null : null;
-}
 type NativeMemorySourceFailureStage = "source_owner" | "source_snapshot" | "private_owner" | "agent_scope" |
   "ancestor_retention" | "root_shape" | "human_evidence" | "snapshot_binding" | "published_share" |
   "nested_source" | "run_reader" | "task_reader" | "memory_temporal_reader" | "project_reader" |
@@ -153,10 +173,12 @@ export function memoryShareContentFingerprint(record:typeof memoryRecords.$infer
 }
 export async function canActorReadMemorySources(db: Db, companyId: string, actor: AuthorizationActor | undefined, recordId: string,
   budget: MemorySourceReadBudget = {}):Promise<boolean> {
-  const inherited=memorySourceReads.getStore(),startedAt=performance.now(),state=inherited??{active:new Set<string>(),deadline:startedAt+8000,startedAt,work:0,
+  const inherited=memorySourceReads.getStore(),startedAt=performance.now();
+  const state: MemorySourceReadScope = inherited??{active:new Set<string>(),deadline:startedAt+(budget.nativeInspection?12_000:8000),startedAt,work:0,
     ...(budget.signal ? { signal: budget.signal } : {}),
     ...(budget.structuralProofMemoStore?.transaction === (db as object)
-      ? { structuralProofMemoStore: budget.structuralProofMemoStore } : {})};
+      ? { structuralProofMemoStore: budget.structuralProofMemoStore } : {}),
+    nativeSourceRows: { transaction: db as object, byActor: new Map() }};
   const diagnosticDenied = (reason: NativeMemorySourceFailureStage | "scope_guard" | "cycle" | "deadline" | "work_budget",
     facts: Record<string, boolean | number | string | null> = {}) => {
     const focusAgent = actor?.type === "agent" && Boolean(actor.onBehalfOfUserId);
@@ -169,8 +191,7 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
         readerRole: actor?.type === "agent" ? actor.onBehalfOfUserId ? "agent_human" : "agent_no_human" :
           actor?.type === "board" ? "board_user" : "none",
         activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
-        signalAborted: state.signal?.aborted ?? false, elapsedMs: Math.round(performance.now() - state.startedAt),
-        transactionOrdinal: memorySourceDiagnosticTransactionOrdinal(db as object), ...facts }));
+        signalAborted: state.signal?.aborted ?? false, elapsedMs: Math.round(performance.now() - state.startedAt), ...facts }));
     }
   };
   if (budget.deadlineAt !== undefined) state.deadline = Math.min(state.deadline, performance.now() + Math.max(0, budget.deadlineAt - Date.now()));
@@ -195,8 +216,20 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
  * A forbidden target is used only for a staged write that may add these roots
  * beneath that target; reaching it would create a cycle after commit. */
 export async function canActorReadMemorySourceSet(db: Db, companyId: string, actor: AuthorizationActor | undefined,
-  recordIds: readonly string[], forbiddenRecordId?: string): Promise<boolean> {
-  const inherited=memorySourceReads.getStore(),startedAt=performance.now(),state=inherited??{active:new Set<string>(),deadline:startedAt+8000,startedAt,work:0};
+  recordIds: readonly string[], forbiddenRecordId?: string,
+  structuralProofMemoStore?: MemoryPageStructuralProofMemoStore, budget: MemorySourceReadBudget = {}): Promise<boolean> {
+  const inherited=memorySourceReads.getStore(),startedAt=performance.now();
+  const state: MemorySourceReadScope = inherited ?? {active:new Set<string>(),deadline:startedAt+(budget.nativeInspection?12_000:8000),startedAt,work:0};
+  if (budget.deadlineAt !== undefined) state.deadline = Math.min(state.deadline, performance.now() + Math.max(0, budget.deadlineAt-Date.now()));
+  if (budget.signal && state.signal !== budget.signal)
+    state.signal = state.signal ? AbortSignal.any([state.signal, budget.signal]) : budget.signal;
+  const previousStructuralProofMemoStore = state.structuralProofMemoStore;
+  const previousNativeSourceRows = state.nativeSourceRows;
+  state.nativeSourceRows = { transaction: db as object, byActor: new Map() };
+  const transactionStore = structuralProofMemoStore?.transaction === (db as object)
+    ? structuralProofMemoStore
+      : { transaction: db as object, proofsByOwnerPrefix: new Map<string, Map<string, Set<string>>>() };
+  if (state.structuralProofMemoStore !== transactionStore) state.structuralProofMemoStore = transactionStore;
   const inspect=async()=>{
     const ids=[...new Set(recordIds)].sort();
     if(ids.length>256 || (forbiddenRecordId && ids.includes(forbiddenRecordId)))return false;
@@ -237,8 +270,7 @@ export async function canActorReadMemorySourceSet(db: Db, companyId: string, act
             readerRole: actor?.type === "agent" ? actor.onBehalfOfUserId ? "agent_human" : "agent_no_human" :
               actor?.type === "board" ? "board_user" : "none",
             activeCount: state.active.size, work: state.work, deadlineExpired: performance.now() > state.deadline,
-            signalAborted: state.signal?.aborted ?? false, elapsedMs: Math.round(performance.now() - state.startedAt),
-            transactionOrdinal: memorySourceDiagnosticTransactionOrdinal(db as object), ...facts }));
+            signalAborted: state.signal?.aborted ?? false, elapsedMs: Math.round(performance.now() - state.startedAt), ...facts }));
         }
       },forbiddenRecordId,true,state.structuralProofMemoStore?.transaction === (db as object)
         ? state.structuralProofMemoStore : undefined))return false;
@@ -247,7 +279,18 @@ export async function canActorReadMemorySourceSet(db: Db, companyId: string, act
       if(batchAdmission&&actorKey&&!priorAdmission)state.batchAdmittedActors?.delete(actorKey);
     }
   };
-  return inherited?inspect():memorySourceReads.run(state,inspect);
+  try {
+    const result = await (inherited?inspect():memorySourceReads.run(state,inspect));
+    try { assertMemorySourceReadActive(state); } catch { return false; }
+    return result;
+  } finally {
+    if (state.structuralProofMemoStore === transactionStore) {
+      if (previousStructuralProofMemoStore) state.structuralProofMemoStore = previousStructuralProofMemoStore;
+      else delete state.structuralProofMemoStore;
+    }
+    if (previousNativeSourceRows) state.nativeSourceRows = previousNativeSourceRows;
+    else delete state.nativeSourceRows;
+  }
 }
 async function memorySourceActorCurrent(db:Db,companyId:string,actor:AuthorizationActor|undefined,sourceRootId?:string):Promise<boolean> {
   if(!actor)return false;
@@ -275,9 +318,9 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   state:MemorySourceReadScope,diagnosticDenied:(reason:NativeMemorySourceFailureStage|"scope_guard"|"cycle"|"deadline"|"work_budget",
     facts?:Record<string,boolean|number|string|null>)=>void,
   forbiddenRecordId?:string,skipActorAdmission=false,structuralProofMemoStore?:MemoryPageStructuralProofMemoStore):Promise<boolean> {
+  let previousPlannerMode: string | undefined;
+  const inspect = async (): Promise<boolean> => {
   if (!actor) { diagnosticDenied("source_owner"); return false; }
-  const sourceProfile = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
-  const sourceProfileStartedAt = sourceProfile ? performance.now() : 0;
   const { authorizationService, canActorReadIssuePrivacy, canActorReadIssuePrivacyBatch,
     canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
   const roots = typeof recordIds === "string" ? [recordIds] : [...new Set(recordIds)].sort();
@@ -309,6 +352,19 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,id),memoryPayloadVisible()))
       .for("share");
     if (!row?.sourceProvenanceQualified || (row.expiresAt && row.expiresAt.getTime()<=Date.now())) { diagnosticDenied("source_owner"); return false; }
+    if (row.payloadSourceProtocolVersion === 1 && previousPlannerMode === undefined && is(db, PgTransaction)) {
+      // Keep every source/ACL read fresh while avoiding repeated custom planning
+      // of the large Native privacy predicate on this borrowed transaction.
+      try { assertMemorySourceReadActive(state); }
+      catch { diagnosticDenied("source_deadline"); return false; }
+      const [setting] = await db.execute<{ mode: string }>(sql`select current_setting('plan_cache_mode') as mode`);
+      if (!setting || !["auto", "force_custom_plan", "force_generic_plan"].includes(setting.mode))
+        throw new Error("Native privacy planner setting is unavailable");
+      previousPlannerMode = setting.mode;
+      if (previousPlannerMode !== "force_generic_plan") await db.execute(sql`set local plan_cache_mode=force_generic_plan`);
+      try { assertMemorySourceReadActive(state); }
+      catch { diagnosticDenied("source_deadline"); return false; }
+    }
     if (row.payloadSourceProtocolVersion === 1 && row.payloadSourceSnapshot === null) { diagnosticDenied("source_snapshot"); return false; }
     const publicationSource=authorizedPrivateOwnerEdge;
     const readerUserId=actor.type==="board"?actor.userId:actor.onBehalfOfUserId;
@@ -424,11 +480,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   };
   for (const rootId of roots) {
     try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("scope_guard"); return false; }
-    const traversalStartedAt = sourceProfile ? performance.now() : 0;
     if (!await visit(rootId)) { diagnosticDenied("nested_source"); return false; }
-    if (sourceProfile) console.error("native_memory_source_stage", JSON.stringify({ stage: "root_traversal",
-      elapsedMs: Math.round(performance.now() - traversalStartedAt), rootCount: roots.length,
-      transactionOrdinal: memorySourceDiagnosticTransactionOrdinal(db as object) }));
   }
   const {withReadMemoryTemporalSources,withUnscopedMemorySourceReader}=await import("../authorization.js");
   const {canActorReadNativeTaskSource}=await import("../native-direct-input.js");
@@ -467,7 +519,6 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   for (const ownerId of new Set([...qualifiedOutputMemoryIds, ...temporalOwnerChecks.keys()])) {
     try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
     const checks = temporalOwnerChecks.get(ownerId) ?? { runs: [], tasks: [] };
-    const ownerStartedAt = sourceProfile ? performance.now() : 0;
     const allowed = await withReadMemoryTemporalSources(db,actor,companyId,ownerId,async sourceDb => {
       for (const id of checks.runs) {
         try { assertMemorySourceReadActive(state); } catch { diagnosticDenied("source_deadline"); return false; }
@@ -492,10 +543,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
         }
       }
       return true;
-    }, qualifiedOutputMemoryExpectations.get(ownerId), structuralProofMemoStore);
-    if (sourceProfile) console.error("native_memory_source_stage", JSON.stringify({ stage: "temporal_owner_reader",
-      elapsedMs: Math.round(performance.now() - ownerStartedAt), allowed, transactionOrdinal:
-        memorySourceDiagnosticTransactionOrdinal(db as object) }));
+    }, qualifiedOutputMemoryExpectations.get(ownerId), structuralProofMemoStore, state.nativeSourceRows);
     if (!allowed) { diagnosticDenied("memory_temporal_reader"); return false; }
   }
   for (const id of projectIds) {
@@ -516,10 +564,26 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   }
   if (performance.now()>deadline) { diagnosticDenied("source_deadline"); return false; }
   if (!skipActorAdmission&&!await admitted()) { diagnosticDenied("source_owner"); return false; }
-  if (sourceProfile) console.error("native_memory_source_stage", JSON.stringify({ stage: "complete",
-    elapsedMs: Math.round(performance.now() - sourceProfileStartedAt), rootCount: roots.length,
-    transactionOrdinal: memorySourceDiagnosticTransactionOrdinal(db as object) }));
   return true;
+  };
+  let allowed: boolean;
+  let inspectionFailed = false;
+  try { allowed = await inspect(); }
+  catch (error) { inspectionFailed = true; throw error; }
+  finally {
+    if (previousPlannerMode !== undefined && previousPlannerMode !== "force_generic_plan") {
+      try { await db.execute(sql`select set_config('plan_cache_mode', ${previousPlannerMode}, true)`); }
+      catch (error) {
+        const code = error && typeof error === "object" && "cause" in error
+          ? (error.cause as { code?: string } | undefined)?.code : (error as { code?: string } | null)?.code;
+        // A failed SQL transaction restores SET LOCAL on its mandatory rollback.
+        if (!inspectionFailed || code !== "25P02") throw error;
+      }
+    }
+  }
+  try { assertMemorySourceReadActive(state); }
+  catch { diagnosticDenied("source_deadline"); return false; }
+  return allowed;
 }
 
 /** Grants one edge only when the exact share payload, source version, owner

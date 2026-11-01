@@ -261,11 +261,15 @@ describe("Native capture source purpose stays inside its actual PostgreSQL trans
       ]).returning();
       expect(left).toBeDefined();
       expect(right).toBeDefined();
-      expect(await canActorReadMemorySourceSet(tx,companyId,actor(),[left!.id,right!.id])).toBe(true);
+      const pageStore = { transaction: tx as object, proofsByOwnerPrefix: new Map<string, Map<string, Set<string>>>() };
+      expect(await canActorReadMemorySourceSet(tx,companyId,actor(),[left!.id,right!.id],undefined,pageStore)).toBe(true);
 
       await memoryService(tx).revoke(companyId,source.record.id,{reason:"The shared retained source was revoked"},
         {principal:{type:"user",userId}});
-      expect(await canActorReadMemorySourceSet(tx,companyId,actor(),[left!.id,right!.id])).toBe(false);
+      // Reuse the same transaction-bound structural store across two owner
+      // checks in one transaction. Raw FOR SHARE rows are scoped to each
+      // source-set traversal, and the later revocation must still deny.
+      expect(await canActorReadMemorySourceSet(tx,companyId,actor(),[left!.id,right!.id],undefined,pageStore)).toBe(false);
     }));
   });
 });

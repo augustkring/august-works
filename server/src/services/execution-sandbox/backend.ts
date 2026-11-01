@@ -47,3 +47,12 @@ export function sandboxProbeCases(policyHash: string, requiredControls: readonly
     contractHash: createHash("sha256").update(JSON.stringify({ suiteVersion: "aw-v7-boundary-2", policyHash, ...test })).digest("hex"),
   }));
 }
+
+/** Cleanup is a different, one-off operation from workload admission. The
+ * fixed local eraser cannot call models, brokers or application endpoints.
+ * Fresh protected capability observations still require all isolation controls;
+ * only these local execution mechanisms have applicable active probes. */
+export function nativeRuntimeCleanupProbeCases(policyHash:string,_requiredControls:readonly string[]):SandboxProbeCase[]{
+  return sandboxProbeCases(policyHash,SANDBOX_CONTROLS).filter(test=>
+    !["credentialBrokering","networkDestinationPolicy","networkLayer7Policy"].includes(test.control));
+}

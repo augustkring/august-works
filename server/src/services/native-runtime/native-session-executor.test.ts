@@ -69,6 +69,11 @@ const githubAccess = vi.hoisted(() => ({
 vi.mock("./native-github-access.js", () => ({
   createNativeGitHubAccess: githubAccess.create,
 }));
+// These tests exercise lifecycle, persistence and recovery in isolation. The
+// focused admission test file exercises the real guard at executor entry.
+vi.mock("./paid-transport-admission.js", () => ({
+  assertNativePaidTransportAdmitted: () => undefined,
+}));
 
 type BackendFactoryOptions = {
   runnerInstanceId?: string;
@@ -687,6 +692,7 @@ describe("remote runner process supervision", () => {
         useSession?: boolean;
         bypassSession?: boolean;
         nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare";
+        modelBrokerSessionPhase?: "start" | "refresh" | "stop";
       }) => {
         const label = input.args?.[2];
         if (label === "paperclip-runner-launch") {
@@ -772,6 +778,7 @@ describe("remote runner process supervision", () => {
       diagnosticsDirectory: "/runtime/diagnostics",
       runnerInstanceId: "runner-remote",
       nativeSessionStart: true,
+      managedModelSession: true,
       nativeHarnessState: true,
       onSpawn,
       onLog,
@@ -795,6 +802,7 @@ describe("remote runner process supervision", () => {
       timeoutMs: 20_000,
       bypassSession: true,
       nativePreparationPurpose: "native_session_start",
+      modelBrokerSessionPhase: "start",
     });
     expect(launch?.useSession).toBeUndefined();
     expect(execute.mock.calls.filter(([input]) => input.nativePreparationPurpose === "native_session_start")
@@ -802,10 +810,14 @@ describe("remote runner process supervision", () => {
     const harnessStateCalls = execute.mock.calls
       .filter(([input]) => input.nativePreparationPurpose === "native_harness_state")
       .map(([input]) => input);
-    expect(harnessStateCalls.slice(0, 3).map(input => input.args?.[2])).toEqual([
+    expect(harnessStateCalls.slice(0, 4).map(input => input.args?.[2])).toEqual([
       "paperclip-runner-process-identity",
       "paperclip-runner-monitor",
+      "paperclip-runner-monitor",
       "paperclip-runner-diagnostics",
+    ]);
+    expect(harnessStateCalls.slice(0, 4).map(input => input.modelBrokerSessionPhase)).toEqual([
+      undefined, "refresh", "stop", undefined,
     ]);
     expect(harnessStateCalls.at(-1)?.args?.[1]).toContain("base64");
     expect(launch?.args?.[1]).toContain("nohup setsid");

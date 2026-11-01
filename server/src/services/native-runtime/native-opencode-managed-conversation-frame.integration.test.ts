@@ -1,7 +1,7 @@
 import {and,desc,eq,gte,inArray,sql} from "drizzle-orm";
 import {createHash,randomUUID} from "node:crypto";
 import {agents,authSessions,authUsers,companyDeletionOperations,companyMemberships,companies,environmentLeases,heartbeatRunEvents,heartbeatRuns,issues,memoryJobs,nativeRunFinalizations,nativeRunResults,projectWorkspaces,projects,runtimeHostCommands,runtimeSandboxBindings} from "@paperclipai/db";
-import type {BusinessMetricQuery} from "@paperclipai/shared";
+import { SANDBOX_HOST_COMMAND, type BusinessMetricQuery } from "@paperclipai/shared";
 import {instanceSettingsService} from "../instance-settings.js";
 import {businessMetricService} from "../business-metrics/service.js";
 import {aiGovernanceService} from "../ai-governance/governance-service.js";
@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDb } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { makeConversationFixtureTreeWritable, runManagedNativeConversationFrame } from "../../__tests__/helpers/managed-native-conversation-frame.js";
@@ -47,18 +47,28 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   let root = "";
+  let preserveFailure = false;
+  let instanceId = "";
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), "managed-native-conversation-frame-"));
     vi.stubEnv("PAPERCLIP_HOME", root);
-    vi.stubEnv("PAPERCLIP_INSTANCE_ID", `conversation-frame-${Date.now()}`);
-    database = await startEmbeddedPostgresTestDatabase("managed-native-conversation-frame-");
+    instanceId = `conversation-frame-${Date.now()}`;
+    vi.stubEnv("PAPERCLIP_INSTANCE_ID", instanceId);
+    database = await startEmbeddedPostgresTestDatabase("managed-native-conversation-frame-",
+      { preserveDataOnFailure: () => preserveFailure });
     db = createDb(database.connectionString);
   }, 60_000);
+  afterEach(context => { if (context.task.result?.state === "fail") preserveFailure = true; });
   afterAll(async () => {
     await db?.$client.end({ timeout: 0 });
     await database?.cleanup();
     vi.unstubAllEnvs();
-    if (root) { await makeConversationFixtureTreeWritable(root); await rm(root, { recursive: true, force: true }); }
+    if (root && preserveFailure) {
+      await fs.writeFile(path.join(root, "native-c7-preserved-state.json"), JSON.stringify({
+        dataDir: database.dataDir, root, instanceId,
+      }, null, 2), { mode: 0o600 });
+      console.info("native_c7_failure_state_preserved", JSON.stringify({ dataDir: database.dataDir, root }));
+    } else if (root) { await makeConversationFixtureTreeWritable(root); await rm(root, { recursive: true, force: true }); }
   }, 30_000);
 
   it("uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows", async () => {
@@ -129,12 +139,15 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
     const settledRunEvidence: { current: Record<string, unknown> | null } = { current: null };
     let eraseRemoteNativeRuntimeAsset: Awaited<ReturnType<typeof configureManagedConversationSandboxHost>>["eraseRemoteNativeRuntimeAsset"] | null = null;
+    const sandboxHostFacts: { read?: () => Record<string, unknown> } = {};
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
     const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary, sandboxRelay: true, timeoutSec: 600,
+      sandboxRelayDnsLookup: async () => [{ address: "127.0.0.1", family: 4 }],
       configureHeartbeat: async context => {
-        const host = await configureManagedConversationSandboxHost({ ...context, root });
+        const host = await configureManagedConversationSandboxHost({ ...context, root, wallClockSeconds: 120 });
         eraseRemoteNativeRuntimeAsset = host.eraseRemoteNativeRuntimeAsset;
+        sandboxHostFacts.read = host.facts;
         return host;
       },
       beforeProviderResponse: async facts => {
@@ -145,6 +158,45 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       },
       afterRunSettledBeforeTeardown: async facts => {
         if (!facts.run) return;
+        if (facts.run.status !== "succeeded") {
+          preserveFailure = true;
+          await fs.writeFile(path.join(root, "native-c7-failed-run-checkpoint.json"), JSON.stringify({
+            dataDir: database.dataDir, root, instanceId, companyId: facts.companyId, agentId: facts.agentId,
+            runId: facts.run.id, issueId: facts.issueId,
+          }, null, 2), { mode: 0o600 });
+          const leases = await db.select({ status: environmentLeases.status, expiresAt: environmentLeases.expiresAt,
+            cleanupStatus: environmentLeases.cleanupStatus }).from(environmentLeases).where(and(
+            eq(environmentLeases.companyId, facts.companyId), eq(environmentLeases.heartbeatRunId, facts.run.id)));
+          const spans = await db.select({ eventType: heartbeatRunEvents.eventType, payload: heartbeatRunEvents.payload })
+            .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, facts.companyId),
+              eq(heartbeatRunEvents.runId, facts.run.id))).orderBy(desc(heartbeatRunEvents.seq)).limit(24);
+          const commands = await db.select({ status: runtimeHostCommands.status, errorCode: runtimeHostCommands.errorCode,
+            createdAt: runtimeHostCommands.createdAt, completedAt: runtimeHostCommands.completedAt,
+            deadlineAt: runtimeHostCommands.deadlineAt,
+            purpose: sql<string | null>`${runtimeHostCommands.payload}->>'nativePreparationPurpose'`,
+          }).from(runtimeHostCommands).where(and(eq(runtimeHostCommands.companyId, facts.companyId),
+            sql`${runtimeHostCommands.payload}->>'runId' = ${facts.run.id}`))
+            .orderBy(desc(runtimeHostCommands.createdAt)).limit(8);
+          const failureAt = facts.run.finishedAt?.getTime() ?? Date.now();
+          const safeSpan = (value: unknown) => {
+            const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+            return Object.fromEntries(["name", "stage", "durationMs", "elapsedMs", "totalMs", "budgetMs", "remainingMs"]
+              .flatMap(key => typeof record[key] === "number" || typeof record[key] === "boolean" ||
+                typeof record[key] === "string" && /^[A-Za-z0-9_.:-]{1,100}$/.test(record[key] as string)
+                ? [[key, record[key]]] : []));
+          };
+          console.info("native_c7_failed_run_facets", JSON.stringify({ status: facts.run.status,
+            errorCode: facts.run.errorCode, nativePhase: facts.run.nativePhase,
+            elapsedSinceRunStartMs: facts.run.startedAt ? failureAt - facts.run.startedAt.getTime() : null,
+            providerCallCount: facts.providerCallCount, providerHookInvoked: facts.providerHookInvoked,
+            leases: leases.map(lease => ({ status: lease.status, cleanupStatus: lease.cleanupStatus,
+              originalExpiryMinusFailureMs: lease.expiresAt ? lease.expiresAt.getTime() - failureAt : null })),
+            spans: spans.map(span => ({ eventType: span.eventType, facts: safeSpan(span.payload) })),
+            commands: commands.map(command => ({ status: command.status, errorCode: command.errorCode,
+              purpose: command.purpose, durationMs: command.completedAt ? command.completedAt.getTime() - command.createdAt.getTime() : null,
+              originalDeadlineMinusFailureMs: command.deadlineAt.getTime() - failureAt })),
+          }));
+        }
         expect(facts.run.status).toBe("succeeded");
         expect(facts.providerCallCount).toBeGreaterThan(0);
         expect(facts.providerHookInvoked).toBe(true);
@@ -286,7 +338,6 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
             remoteProvider: Boolean(leaseLifecycle?.provider && leaseLifecycle.provider !== "local"),
             providerLeaseIdPresent: Boolean(leaseLifecycle?.providerLeaseId),
           });
-          expect(leaseLifecycle?.expiresAt?.getTime()).toBeLessThan(Date.now());
           const sessionsRoot = path.join(remoteCwd, ".paperclip-runtime", "paperclip-runner", "sessions");
           const siblingSessionRoot = path.join(sessionsRoot, "f".repeat(64));
           await fs.mkdir(siblingSessionRoot, { recursive: true });
@@ -342,14 +393,14 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           let resumeLostWorker!: () => void;
           const resumeLostWorkerAfterRecovery = new Promise<void>(resolve => { resumeLostWorker = resolve; });
           const relatedErasureCommands = async () => (await db.select().from(runtimeHostCommands).where(and(
-            eq(runtimeHostCommands.companyId, facts.companyId), eq(runtimeHostCommands.commandType, "sandbox_exec"),
-            sql`${runtimeHostCommands.payload}->>'nativePreparationPurpose' = 'native_provider_data_erasure'`)))
+            eq(runtimeHostCommands.companyId, facts.companyId), eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND),
+            sql`${runtimeHostCommands.payload}->>'action' = 'erase_native_session'`)))
             .filter(command => {
               const payload = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
                 ? command.payload as Record<string, unknown> : {};
-              const erasure = payload.remoteRuntimeAssetErasure && typeof payload.remoteRuntimeAssetErasure === "object" &&
-                !Array.isArray(payload.remoteRuntimeAssetErasure)
-                ? payload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
+              const erasure = payload.__stoppedNativeErasure && typeof payload.__stoppedNativeErasure === "object" &&
+                !Array.isArray(payload.__stoppedNativeErasure)
+                ? payload.__stoppedNativeErasure as Record<string, unknown> : {};
               return erasure.jobKey === jobKey;
             });
           const raceWorker = memoryJobService(db, { ownerId: crashWorkerId,
@@ -360,6 +411,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                 { ...commandInput, companyPurgeOperationId: randomUUID() })).rejects.toBeDefined();
               await expect(eraseRemoteNativeRuntimeAsset!(currentLocator,
                 { ...commandInput, jobId: randomUUID() })).rejects.toBeDefined();
+              await expect(eraseRemoteNativeRuntimeAsset!(currentLocator,
+                { ...commandInput, jobAttemptNumber: commandInput.jobAttemptNumber + 1 })).rejects.toBeDefined();
+              await expect(eraseRemoteNativeRuntimeAsset!(currentLocator,
+                { ...commandInput, executionOwnerId: randomUUID() })).rejects.toBeDefined();
               expect(await relatedErasureCommands()).toHaveLength(0);
               const possibleStartCommands = await db.select().from(runtimeHostCommands).where(and(
                 eq(runtimeHostCommands.companyId, facts.companyId), eq(runtimeHostCommands.commandType, "sandbox_exec"),
@@ -387,15 +442,19 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
               const [sandboxBinding] = await db.select().from(runtimeSandboxBindings).where(and(
                 eq(runtimeSandboxBindings.companyId, facts.companyId),
                 eq(runtimeSandboxBindings.id, String(startBinding.bindingId)))).limit(1);
-              if (!sandboxBinding || sandboxBinding.status !== "running")
-                throw new Error("conversation_remote_erasure_current_binding_missing");
-              await db.update(runtimeSandboxBindings).set({ status: "stopped" })
-                .where(eq(runtimeSandboxBindings.id, sandboxBinding.id));
+              if (!sandboxBinding || sandboxBinding.status !== "stopped")
+                throw new Error("conversation_remote_erasure_canonical_stopped_binding_missing");
+              const [originalLease] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, currentLocator.environmentLeaseId));
+              if (!originalLease?.metadata?.remoteExecutionTermination)
+                throw new Error("conversation_remote_erasure_canonical_stop_receipt_missing");
+              // DB stopped state alone is insufficient. Remove only its proof
+              // reference temporarily; never renew the binding or business lease.
+              const { remoteExecutionTermination: _physicalProof, ...withoutProof } = originalLease.metadata;
+              await db.update(environmentLeases).set({ metadata: withoutProof }).where(eq(environmentLeases.id, originalLease.id));
               try {
                 await expect(eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput)).rejects.toBeDefined();
               } finally {
-                await db.update(runtimeSandboxBindings).set({ status: "running" })
-                  .where(eq(runtimeSandboxBindings.id, sandboxBinding.id));
+                await db.update(environmentLeases).set({ metadata: originalLease.metadata }).where(eq(environmentLeases.id, originalLease.id));
               }
               expect(await relatedErasureCommands()).toHaveLength(0);
               await db.update(runtimeHostCommands).set({ status: "FAILED" })
@@ -409,15 +468,18 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                   .where(eq(runtimeHostCommands.id, startClaim.id));
               }
               expect(await relatedErasureCommands()).toHaveLength(0);
+              // This case selected a 120-second original boundary before
+              // qualification. Never shorten or renew its admitted expiry here.
               // Let the originally admitted protected report expire naturally
               // after fail-closed generation checks. The successful cleanup
-              // below must obtain a new signed report and fixed probes.
+              // below must use only the original signed stopped-session cleanup authority.
               const reportExpiryWaitMs = originalReportExpiresAt - Date.now() + 1;
               if (reportExpiryWaitMs > 0) {
                 if (reportExpiryWaitMs > 120_000) throw new Error("conversation_remote_erasure_report_ttl_exceeds_test_bound");
                 await new Promise(resolve => setTimeout(resolve, reportExpiryWaitMs));
               }
               expect(Date.now()).toBeGreaterThan(originalReportExpiresAt);
+              expect(leaseLifecycle?.expiresAt?.getTime()).toBeLessThan(Date.now());
               const concurrent = await Promise.allSettled([
                 eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput),
                 eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput),
@@ -486,42 +548,28 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
               expect(receipts.every(receipt => receipt.commandRequestId === receipts[0]!.commandRequestId)).toBe(true);
               const [durableErasure] = await db.select().from(runtimeHostCommands).where(and(
                 eq(runtimeHostCommands.companyId, facts.companyId),
-                eq(runtimeHostCommands.idempotencyKey, receipts[0]!.commandRequestId),
-                eq(runtimeHostCommands.status, "SUCCEEDED"),
+                eq(runtimeHostCommands.id, receipts[0]!.commandRequestId),
+                eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
               )).limit(1);
-              const durableResult = durableErasure?.safeResult && typeof durableErasure.safeResult === "object" &&
-                !Array.isArray(durableErasure.safeResult) ? durableErasure.safeResult as Record<string, unknown> : {};
-              const durableErasureMetadata = durableResult.remoteRuntimeAssetErasure &&
-                typeof durableResult.remoteRuntimeAssetErasure === "object" && !Array.isArray(durableResult.remoteRuntimeAssetErasure)
-                ? durableResult.remoteRuntimeAssetErasure as Record<string, unknown> : {};
-              const freshAttestation = durableErasureMetadata.cleanupAttestation &&
-                typeof durableErasureMetadata.cleanupAttestation === "object" && !Array.isArray(durableErasureMetadata.cleanupAttestation)
-                ? durableErasureMetadata.cleanupAttestation as Record<string, unknown> : {};
-              expect(commandInput.companyPurgeOperationId).toBe(operationId);
-              expect(freshAttestation).toMatchObject({ schema: "paperclip.remote-runtime-cleanup-attestation.v1",
-                jobId: commandInput.jobId, jobKey: commandInput.jobKey, attemptNumber: expect.any(Number),
-                executionOwnerId: expect.any(String), locatorDigest: remoteRuntimeAssetLocatorDigest(locator), companyPurgeOperationId: operationId,
-                capabilityCommandId: expect.any(String), expiresAt: expect.any(String) });
-              const refreshedCapabilities = freshAttestation.capabilities as Record<string, unknown>;
-              expect(Date.parse(String(refreshedCapabilities.testedAt))).toBeGreaterThan(oldAuthorityExpiry.getTime());
-              expect(Date.parse(String(refreshedCapabilities.expiresAt))).toBeGreaterThan(Date.now());
-              const probeReceipts = Array.isArray(freshAttestation.probes) ? freshAttestation.probes as Array<Record<string, unknown>> : [];
-              expect(probeReceipts.length).toBeGreaterThan(0);
-              expect(probeReceipts.every(probe => probe.verdict === "pass" &&
-                probe.targetQualificationHash === (freshAttestation.capabilities as Record<string, unknown> | undefined)?.qualificationHash &&
-                /^[a-f0-9]{64}$/.test(String(probe.observationHash)))).toBe(true);
-              const freshCommandIds = [freshAttestation.capabilityCommandId, ...probeReceipts.map(probe => probe.commandId)]
-                .filter((value): value is string => typeof value === "string");
-              const freshCommands = await db.select().from(runtimeHostCommands).where(and(
-                eq(runtimeHostCommands.companyId, facts.companyId), inArray(runtimeHostCommands.id, freshCommandIds),
-                eq(runtimeHostCommands.status, "SUCCEEDED"),
-              ));
-              expect(freshCommands).toHaveLength(freshCommandIds.length);
-              expect(freshCommands.every(command => {
-                const request = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
-                  ? command.payload as Record<string, unknown> : {};
-                return request.requesterUserId === undefined && request.cleanupAttestation !== undefined;
-              })).toBe(true);
+              expect(durableErasure).toBeDefined();
+              const privateClaim = durableErasure!.payload.__stoppedNativeErasure as Record<string, unknown>;
+              const descriptor = durableErasure!.payload.nativeSessionErasure as Record<string, unknown>;
+              expect(privateClaim).toMatchObject({ jobId: commandInput.jobId, jobKey: commandInput.jobKey,
+                jobAttemptNumber: commandInput.jobAttemptNumber, executionOwnerId: commandInput.executionOwnerId,
+                locatorDigest: remoteRuntimeAssetLocatorDigest(locator), companyPurgeOperationId: operationId });
+              expect(durableErasure!.payload.requesterUserId).toBeUndefined();
+              expect(durableErasure!.payload.cleanupAttestation).toBeUndefined();
+              expect(durableErasure!.safeResult).toMatchObject({ action: "erase_native_session", erased: true,
+                sessionDigest: locator.normalizedSessionIdDigest, startBindingDigest: descriptor.startBindingDigest,
+                sandboxId: descriptor.sandboxId, containerId: descriptor.containerId,
+                upperLayerAbsent: true, mergedViewAbsent: true, stoppedBefore: true, stoppedAfter: true });
+              expect(receipts[0]!.stopProof).toMatchObject({ schema: "paperclip.native-sandbox-workload-stop.v1",
+                runtimeOperationId: expect.any(String), receiptDigest: privateClaim.stopReceiptDigest,
+                startBindingDigest: descriptor.startBindingDigest, sandboxId: descriptor.sandboxId,
+                containerId: descriptor.containerId });
+              const [checkpoint] = await db.select({ resultJson: memoryJobs.resultJson }).from(memoryJobs)
+                .where(eq(memoryJobs.id, commandInput.jobId));
+              expect(checkpoint?.resultJson?.remoteRuntimeAssetRemovalReceipt).toEqual(receipts[0]);
               await db.update(memoryJobs).set({ leaseExpiresAt: new Date(Date.now() - 1), updatedAt: new Date() })
                 .where(and(eq(memoryJobs.id, commandInput.jobId), eq(memoryJobs.status, "running"),
                   eq(memoryJobs.executionOwnerId, crashWorkerId)));
@@ -641,16 +689,38 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                 stopProof: expect.objectContaining({ runId: facts.run.id,
                   normalizedSessionIdDigest: locator.normalizedSessionIdDigest,
                   environmentLeaseId: locator.environmentLeaseId, providerLeaseId: locator.providerLeaseId,
-                  pid: expect.any(Number), processStartFingerprintDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }) });
+                  schema: "paperclip.native-sandbox-workload-stop.v1", runtimeOperationId: expect.any(String),
+                  receiptDigest: expect.stringMatching(/^[a-f0-9]{64}$/) }) });
             expect((job?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt)
-              .toMatchObject({ commandRequestId: beforeRecoveryCommands[0]?.idempotencyKey });
+              .toMatchObject({ commandRequestId: beforeRecoveryCommands[0]?.id });
+            const hostFactsAfterErasure = sandboxHostFacts.read?.();
+            const backingTransfers = Array.isArray(hostFactsAfterErasure?.nativeSessionBackingTransfers)
+              ? hostFactsAfterErasure.nativeSessionBackingTransfers as Array<Record<string, unknown>> : [];
+            const erasureFacts = Array.isArray(hostFactsAfterErasure?.nativeSessionBackingObservations)
+              ? hostFactsAfterErasure.nativeSessionBackingObservations as Array<Record<string, unknown>> : [];
+            expect(backingTransfers).toHaveLength(1);
+            expect(backingTransfers[0]).toMatchObject({ sessionDigest: locator.normalizedSessionIdDigest,
+              taskRootMatches: true, rootIdentityWitnessed: true, witnessMatched: true });
+            expect(Number(backingTransfers[0]?.fileCount)).toBeGreaterThan(0);
+            expect(Number(backingTransfers[0]?.byteCount)).toBeGreaterThan(0);
+            expect(erasureFacts.length).toBeGreaterThan(0);
+            for (const erasureFact of erasureFacts) expect(erasureFact).toMatchObject({ exactReply: true,
+              targetAbsent: true, logicalTargetAbsent: true, neighborPresent: true,
+              actualRunnerFilesBacked: true, runnerStateFilePresent: true, runnerIdentityFilePresent: true,
+              backingWitnessMatches: true,
+              originalContainerArchiveRoot200: true,
+              originalContainerArchiveTarget404: true, helperContainersRemoved: true });
+            expect(erasureFacts.some(erasureFact => erasureFact.backingMoved === true)).toBe(true);
+            expect(erasureFacts.every(erasureFact => erasureFact.backingMoved === true ||
+              erasureFact.replayAliasExact === true)).toBe(true);
             releaseLostWorker();
             await lostWorkerTick;
             const [staleAttempt] = await db.select({ status: memoryJobs.status, errorCode: memoryJobs.errorCode,
               error: memoryJobs.error, resultJson: memoryJobs.resultJson }).from(memoryJobs)
               .where(eq(memoryJobs.id, blockedJob!.id));
             expect(staleAttempt).toMatchObject({ status: "failed", errorCode: "worker_lost" });
-            expect((staleAttempt?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt).toBeUndefined();
+            expect((staleAttempt?.resultJson as Record<string, unknown> | null)?.remoteRuntimeAssetRemovalReceipt)
+              .toMatchObject({ commandRequestId: beforeRecoveryCommands[0]?.id });
             expect(await relatedErasureCommands()).toHaveLength(1);
             await expect(fs.stat(path.join(sessionsRoot, locator.normalizedSessionIdDigest))).rejects.toMatchObject({ code: "ENOENT" });
             await expect(fs.readFile(path.join(siblingSessionRoot, "retained-neighbor.txt"), "utf8")).resolves.toBe("neighbor remains");
@@ -697,7 +767,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     expect(result.sandboxRuntimeFacts).toMatchObject({ mode: "controlled_signed_host_relay", relayAuthenticated: true });
     const runtimeFacts = result.sandboxRuntimeFacts as Record<string, unknown> | null;
     expect(typeof runtimeFacts?.providerAttestedLeaseExpiresAt).toBe("string");
-    expect(Date.parse(String(runtimeFacts?.providerAttestedLeaseExpiresAt))).toBeGreaterThan(Date.now());
+    expect(Date.parse(String(runtimeFacts?.providerAttestedLeaseExpiresAt))).toBeLessThan(Date.now());
     expect(runtimeFacts?.execCount).toEqual(expect.any(Number));
     expect(Number(runtimeFacts?.execCount)).toBeGreaterThan(0);
     expect(Number(runtimeFacts?.exactPrivateCwdCount)).toBeGreaterThan(0);
@@ -735,7 +805,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     expect(sandboxExecutionChecks.some(check => check.runtimeMode === "native" &&
       check.runStatusRunning === true && check.nativeIssueIdPresent === true &&
       check.contextIssueExecutionRunMatches === true && check.managedGitContextProbe !== true)).toBe(true);
-  }, 450_000);
+  }, 900_000);
   it("continues the real conversation after a metric tool result with its original immutable source receipt",async()=>{
     const binary=qualifiedOpenCodeBinary();
     if(!binary)throw new Error("qualified_opencode_binary_unavailable");

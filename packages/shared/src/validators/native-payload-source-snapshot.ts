@@ -81,6 +81,23 @@ export const nativePayloadSourceInputSchema = z.discriminatedUnion("kind", [
     reservationId: id, callId: text, requestHash: sha256, wireBodyHash: sha256, responseHash: sha256 }).strict(),
 ]);
 
+/** Canonical source union for one accountable capture. Identical captures can
+ * occur through overlapping source components; collapse only those exact
+ * parsed tuples. Distinct versions and hashes remain present for the owning
+ * source validator to accept or reject with its current-source evidence. */
+export function unionNativePayloadSourceInputs(groups: readonly (readonly unknown[])[]): NativePayloadSourceInput[] {
+  const byCanonicalCapture = new Map<string, NativePayloadSourceInput>();
+  const result: NativePayloadSourceInput[] = [];
+  for (const group of groups) for (const raw of group) {
+    const input = nativePayloadSourceInputSchema.parse(raw);
+    const canonical = JSON.stringify(input);
+    if (byCanonicalCapture.has(canonical)) continue;
+    byCanonicalCapture.set(canonical, input);
+    result.push(input);
+  }
+  return result;
+}
+
 const sourceFields = {
   policy: nativePayloadSourcePolicySchema,
   inputs: z.array(nativePayloadSourceInputSchema).max(NATIVE_PAYLOAD_SOURCE_REFERENCE_LIMIT),

@@ -17800,6 +17800,7 @@ export function toolAccessService(
       companyId: string,
       userId: string | null,
       localTrusted = false,
+      includeAuthorizationWitnesses = false,
     ) => {
       const [connections, grants, members, memberships] = await Promise.all([
         db
@@ -17837,6 +17838,9 @@ export function toolAccessService(
         string,
         import("@paperclipai/shared").ProjectRepository
       >();
+      const repositoryAuthorizationWitnesses = new Map<string, Array<{
+        repositoryId: string; connectionId: string; grantId: string | null;
+      }>>();
       let connectionCount = 0;
       let failedConnectionCount = 0;
       for (const connection of connections) {
@@ -17920,6 +17924,12 @@ export function toolAccessService(
             }
             for (const row of rows) {
               mergeProjectRepository(repositories, row, connection.name);
+              const witnesses = repositoryAuthorizationWitnesses.get(row.id) ?? [];
+              const witness = { repositoryId: row.id, connectionId: connection.id,
+                grantId: initialGrant?.id ?? null };
+              if (!witnesses.some((value) => value.connectionId === witness.connectionId &&
+                value.grantId === witness.grantId)) witnesses.push(witness);
+              repositoryAuthorizationWitnesses.set(row.id, witnesses);
             }
           } catch {
             // Credential/provider errors may contain secrets. Only expose an
@@ -17935,7 +17945,78 @@ export function toolAccessService(
         ),
         connectionCount,
         failedConnectionCount,
+        ...(includeAuthorizationWitnesses ? {
+          repositoryAuthorizationWitnesses: Object.fromEntries(repositoryAuthorizationWitnesses),
+        } : {}),
       };
+    },
+
+    /** Revalidate the exact credential path that returned each selected
+     * repository. This performs database reads only; provider requests and
+     * credential refreshes must happen in listProjectRepositories before the
+     * caller opens its write transaction. Connection/grant locks serialize
+     * this bounded creation against disabling or revoking those credentials. */
+    assertProjectRepositoryAuthorizationWitnessesCurrent: async (input: {
+      companyId: string;
+      userId: string;
+      repositoryIds: string[];
+      witnesses: Array<{ repositoryId: string; connectionId: string; grantId: string | null }>;
+    }) => {
+      const repositoryIds = [...new Set(input.repositoryIds)];
+      const connectionIds = [...new Set(input.witnesses.map((value) => value.connectionId))].sort();
+      if (!repositoryIds.length) return;
+      if (!input.userId || !connectionIds.length || input.witnesses.some((value) =>
+        !repositoryIds.includes(value.repositoryId) || !connectionIds.includes(value.connectionId) ||
+        (value.grantId !== null && typeof value.grantId !== "string")))
+        throw forbidden("A selected repository no longer has its original Human authorization");
+
+      // Match the grant/audience writer's order: connection -> grant ->
+      // audience -> membership. Locking the parent connection also prevents a
+      // grant from being inserted after a legacy shared connection was
+      // confirmed to have no grant rows.
+      const connections = await db.select().from(toolConnections).where(and(
+        eq(toolConnections.companyId, input.companyId), inArray(toolConnections.id, connectionIds),
+      )).orderBy(asc(toolConnections.id)).for("update");
+      const grants = await db.select().from(connectionGrants).where(and(
+        eq(connectionGrants.companyId, input.companyId), inArray(connectionGrants.connectionId, connectionIds),
+      )).orderBy(asc(connectionGrants.id)).for("update");
+      const grantIds = grants.map((grant) => grant.id);
+      const members = grantIds.length ? await db.select().from(connectionGrantMembers).where(and(
+        eq(connectionGrantMembers.companyId, input.companyId), inArray(connectionGrantMembers.grantId, grantIds),
+        eq(connectionGrantMembers.subjectType, "user"),
+      )).orderBy(asc(connectionGrantMembers.id)).for("share") : [];
+      const [membership] = await db.select().from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, input.companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, input.userId),
+      )).for("share");
+      const activeMember = membership?.status === "active";
+      const connectionById = new Map(connections.map((connection) => [connection.id, connection]));
+      const grantsByConnection = new Map<string, typeof grants>();
+      for (const grant of grants) grantsByConnection.set(grant.connectionId,
+        [...(grantsByConnection.get(grant.connectionId) ?? []), grant]);
+      const audienceByGrant = new Map<string, string[]>();
+      for (const member of members) audienceByGrant.set(member.grantId,
+        [...(audienceByGrant.get(member.grantId) ?? []), member.subjectId]);
+
+      for (const repositoryId of repositoryIds) {
+        const repositoryWitnesses = input.witnesses.filter((value) => value.repositoryId === repositoryId);
+        const stillAuthorized = repositoryWitnesses.some((witness) => {
+          const connection = connectionById.get(witness.connectionId);
+          if (!connection || !connection.enabled || connection.status !== "active" ||
+            asRecord(connection.config).sourceTemplateKey !== "github") return false;
+          const connectionGrants = grantsByConnection.get(connection.id) ?? [];
+          if (witness.grantId === null) return connectionGrants.length === 0 &&
+            connection.credentialPolicy === "shared" && activeMember;
+          const grant = connectionGrants.find((value) => value.id === witness.grantId);
+          if (!grant || grant.status !== "active" ||
+            (grant.kind === "organization" && ["per_user", "per_agent"].includes(connection.credentialPolicy)))
+            return false;
+          return canBrowseProjectRepositoryGrant({ grant, userId: input.userId, activeMember,
+            audience: audienceByGrant.get(grant.id) ?? [] });
+        });
+        if (!stillAuthorized)
+          throw forbidden("A selected repository's original Human authorization changed before Project creation");
+      }
     },
 
     listConnections: async (

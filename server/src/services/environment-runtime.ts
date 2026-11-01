@@ -1,5 +1,6 @@
 import { readEnvironmentCreationCleanupError } from "@paperclipai/plugin-sdk";
-import { remoteTerminationReceipt } from "./remote-execution-termination.js";
+import { verifyNativeCleanupRuntimeState } from "./execution-sandbox/run-lease-cleanup.js";
+import { remoteTerminationReceipt, recordNativeRemoteWorkloadStopped } from "./remote-execution-termination.js";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -545,6 +546,7 @@ export interface EnvironmentDriverExecuteInput extends EnvironmentDriverLeaseInp
   /** Private Native setup phase for pinned artifacts, exact run-owned harness
    * state access, immutable runtime context staging, or the conversation Runnerd launch. Never user/model-supplied. */
   nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+  modelBrokerSessionPhase?: "start" | "refresh" | "stop";
   /**
    * Force the command onto the lease's persistent session even when no run step
    * is active. The ACP process session bridge sets this so the long-lived agent
@@ -1287,6 +1289,7 @@ function createSandboxEnvironmentDriver(
   db: Db,
   options: {
     pluginWorkerManager?: PluginWorkerManager;
+    stopSandboxRunLease?: (input: { companyId: string; runId: string; leaseId: string }) => Promise<unknown>;
     executeSandboxTask?: (input: {
       companyId: string;
       runId: string | null;
@@ -1299,6 +1302,7 @@ function createSandboxEnvironmentDriver(
       timeoutMs?: number;
       signal?: AbortSignal;
       nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+      modelBrokerSessionPhase?: "start" | "refresh" | "stop";
       onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
     }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;
@@ -1330,6 +1334,18 @@ function createSandboxEnvironmentDriver(
     options.deferredOrphanCleanupBufferLimit ?? DEFAULT_DEFERRED_ORPHAN_CLEANUP_BUFFER_LIMIT,
   );
   const environmentsSvc = environmentService(db);
+  const stopNativeLease = async (lease: EnvironmentLease): Promise<Record<string, unknown> | undefined> => {
+    const [run] = lease.heartbeatRunId ? await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, lease.companyId), eq(heartbeatRuns.id, lease.heartbeatRunId),
+    )) : [];
+    if (!run?.runnerProfileJson || typeof run.runnerProfileJson !== "object" || Array.isArray(run.runnerProfileJson) ||
+      run.runnerProfileJson.nativeRemoteRuntimeAssetLocator === undefined) return undefined;
+    const scope = { companyId: run.companyId, runId: run.id, leaseId: lease.id };
+    if (!options.stopSandboxRunLease) throw new Error("The canonical Native Sandbox cleanup state owner is unavailable");
+    const receipt = await options.stopSandboxRunLease(scope);
+    return await verifyNativeCleanupRuntimeState(db, scope, receipt);
+  };
+
 
   // A live sandbox whose teardown failed needs a durable `pending_cleanup` row,
   // so a sweep can find and release it. When every synchronous write attempt
@@ -2528,7 +2544,12 @@ function createSandboxEnvironmentDriver(
     },
 
     async releaseRunLease(input) {
-      if (input.status === "expired" && input.lease.leasePolicy === "reuse_by_environment") {
+      const [run] = input.lease.heartbeatRunId ? await db.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, input.lease.companyId), eq(heartbeatRuns.id, input.lease.heartbeatRunId),
+      )) : [];
+      const nativeRemote = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" &&
+        !Array.isArray(run.runnerProfileJson) && run.runnerProfileJson.nativeRemoteRuntimeAssetLocator !== undefined;
+      if (!nativeRemote && input.status === "expired" && input.lease.leasePolicy === "reuse_by_environment") {
         return await destroyReusableSandboxLease({
           environment: input.environment,
           lease: input.lease,
@@ -2563,7 +2584,9 @@ function createSandboxEnvironmentDriver(
       }
 
       let cleanupStatus: "success" | "failed" = "success";
+      let termination: Record<string, unknown> | undefined;
       try {
+        if (nativeRemote) termination = await stopNativeLease(input.lease);
         await releaseSandboxProviderLease({
           config: parsed.config,
           providerLeaseId: input.lease.providerLeaseId,
@@ -2572,13 +2595,17 @@ function createSandboxEnvironmentDriver(
       } catch {
         cleanupStatus = "failed";
       }
-      const releaseStatus = input.lease.leasePolicy === "retain_on_failure" && input.status === "failed"
-        ? "retained" as const
-        : input.status;
-      return await environmentsSvc.releaseLease(input.lease.id, releaseStatus, {
-        failureReason: input.status === "failed" ? "adapter_or_run_failure" : undefined,
+      const releaseStatus = cleanupStatus === "failed" ? "pending_cleanup" as const
+        : input.lease.leasePolicy === "retain_on_failure" && input.status === "failed"
+          ? "retained" as const : input.status;
+      const released = await environmentsSvc.releaseLease(input.lease.id, releaseStatus, {
+        failureReason: input.status === "failed" ? "adapter_or_run_failure" : cleanupStatus === "failed" ? "release_cleanup_failed" : undefined,
         cleanupStatus,
+        ...(cleanupStatus === "success" && termination ? { remoteExecutionTermination: termination } : {}),
       });
+      if (released && cleanupStatus === "success" && termination && input.lease.heartbeatRunId)
+        await recordNativeRemoteWorkloadStopped(db, { companyId: input.lease.companyId, runId: input.lease.heartbeatRunId });
+      return released;
     },
 
     async retryPendingSandboxTeardown(input) {
@@ -2673,10 +2700,12 @@ function createSandboxEnvironmentDriver(
         metadataConfig,
         { issueId: input.lease.issueId, heartbeatRunId: input.lease.heartbeatRunId },
       );
+      const termination = await stopNativeLease(input.lease);
       await destroySandboxProviderLease({
         config: cleanupConfig,
         providerLeaseId: input.lease.providerLeaseId,
       });
+      return termination;
     },
 
     async isPendingCleanupWorkerReady(input) {
@@ -2810,6 +2839,7 @@ function createSandboxEnvironmentDriver(
           timeoutMs: input.timeoutMs,
           signal: input.signal,
           nativePreparationPurpose: input.nativePreparationPurpose,
+          modelBrokerSessionPhase: input.modelBrokerSessionPhase,
           onOutput: input.onLog,
         });
         if (nativeResult) return nativeResult;
@@ -3242,7 +3272,7 @@ function createSandboxEnvironmentDriver(
     failureReason: string;
   }): Promise<EnvironmentLease | null> {
     let cleanupStatus: "success" | "failed" = "success";
-    let termination: ReturnType<typeof remoteTerminationReceipt>;
+    let termination: Record<string, unknown> | undefined;
     const metadata = input.lease.metadata ?? {};
 
     try {
@@ -3287,6 +3317,7 @@ function createSandboxEnvironmentDriver(
         if (parsed.driver !== "sandbox") {
           cleanupStatus = "failed";
         } else {
+          termination = await stopNativeLease(input.lease);
           await destroySandboxProviderLease({
             config: parsed.config,
             providerLeaseId: input.lease.providerLeaseId,
@@ -3297,7 +3328,7 @@ function createSandboxEnvironmentDriver(
       cleanupStatus = "failed";
     }
 
-    return await environmentsSvc.releaseLease(
+    const released = await environmentsSvc.releaseLease(
       input.lease.id,
       cleanupStatus === "success" ? "expired" : "pending_cleanup",
       {
@@ -3308,6 +3339,9 @@ function createSandboxEnvironmentDriver(
         ...(cleanupStatus === "success" && termination ? { remoteExecutionTermination: termination } : {}),
       },
     );
+    if (released && cleanupStatus === "success" && termination && input.lease.heartbeatRunId)
+      await recordNativeRemoteWorkloadStopped(db, { companyId: input.lease.companyId, runId: input.lease.heartbeatRunId });
+    return released;
   }
 }
 
@@ -3741,6 +3775,7 @@ export function environmentRuntimeService(
   options: {
     drivers?: EnvironmentRuntimeDriver[];
     pluginWorkerManager?: PluginWorkerManager;
+    stopSandboxRunLease?: (input: { companyId: string; runId: string; leaseId: string }) => Promise<unknown>;
     executeSandboxTask?: (input: {
       companyId: string;
       runId: string | null;
@@ -3753,6 +3788,7 @@ export function environmentRuntimeService(
       timeoutMs?: number;
       signal?: AbortSignal;
       nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+      modelBrokerSessionPhase?: "start" | "refresh" | "stop";
       onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
     }) => Promise<PluginEnvironmentExecuteResult | null>;
     pluginWorkerReadyTimeoutMs?: number;
@@ -3773,6 +3809,7 @@ export function environmentRuntimeService(
     createSandboxEnvironmentDriver(db, {
       pluginWorkerManager: options.pluginWorkerManager,
       executeSandboxTask: options.executeSandboxTask,
+      stopSandboxRunLease: options.stopSandboxRunLease,
       pluginWorkerReadyTimeoutMs: options.pluginWorkerReadyTimeoutMs,
       pluginWorkerReadyPollMs: options.pluginWorkerReadyPollMs,
       pendingCleanupWriteAttempts: options.pendingCleanupWriteAttempts,

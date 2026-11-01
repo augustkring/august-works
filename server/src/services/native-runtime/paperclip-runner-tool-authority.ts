@@ -11,10 +11,11 @@ import { authorizationService, issueReadSqlCondition, type AuthorizationActor } 
 import { handoffPlanContext } from "./handoff-plan-context.js";
 import { callCreateSkillTool } from "../skill-tools.js";
 import { callProjectTool } from "../project-tools.js";
-import { createManagedNativeProjectOutput, type NativeProjectCreateReceipt } from "../native-project-output.js";
+import { createManagedNativeProjectOutput, managedNativeProjectArgumentsSchema, managedNativeProjectApiCallSchema,
+  type NativeProjectCreateReceipt } from "../native-project-output.js";
 import { isConnectorTool, executeConnectorTool, type ConnectorAssignment } from "../connector-runtime.js";
 import { resolveNativeRuntimeMcpSnapshot } from "./runtime-context.js";
-import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
+import { nativeCallApiResultEnvelope, nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
 import { connectionIntentService } from "../connection-intents.js";
 import { RUNTIME_CONNECTION_TOOL_DEFINITIONS } from "../connection-tool-definitions.js";
 import { connectionsSearchInputSchema, connectionRequestInputSchema, CONNECTION_INTENT_AGENT_GUIDANCE,
@@ -123,6 +124,9 @@ export type NativeManagedProjectCreateCapture = {
   receipt: NativeProjectCreateReceipt;
   sourceSet: NativePayloadSourceSet;
   outputCapture: NativeModelOutputCapture;
+  /** Exact signed runner API effect for the managed call_api POST result. */
+  apiEffect?: Pick<NativeToolEffectClaim, "operationId" | "method" | "pathAndQuery" | "apiReceiptDigest" |
+    "bodyHash" | "turnId" | "dispatchId" | "eventSeq" | "attempt">;
 };
 
 const NATIVE_REVIEW_READ_TOOLS = new Set([
@@ -314,7 +318,10 @@ export type NativeProjectToolResultSource = {
   /** Hash of the validated runner-api request. The request body is never retained. */
   requestHash: string;
   pathAndQuery: string;
+  /** Exact provider-visible call_api result envelope digest. */
   resultDigest: string;
+  /** Exact raw executeRunnerApi response digest retained by the API receipt. */
+  apiResultDigest: string;
   source: Extract<NativePayloadSourceInput, { kind: "project" }> | null;
 };
 
@@ -348,11 +355,12 @@ export function captureNativeProjectToolResult(input: {
     projectId: requestedId,
     requestHash: input.requestHash,
     pathAndQuery: input.pathAndQuery,
-    // #executeAdmitted strips the internal discriminator and returns the
-    // normalized API response with this public operation identity. Bind to
-    // those exact model-visible bytes; the capture's operationId is separate
-    // for validation but is also part of the returned object digest.
-    resultDigest: createHash("sha256").update(JSON.stringify({ ...toolResponse, apiOperationId: "GET /api/projects/{id}" })).digest("hex"),
+    // Runnerd binds HTTP results inside the semantic call_api envelope before
+    // they enter the provider transcript. Hash that exact public result while
+    // retaining the Project DTO's separate owner hash above.
+    resultDigest: nativeSha256(nativeCallApiResultEnvelope(input.callId,
+      { ...toolResponse, apiOperationId: "GET /api/projects/{id}" })),
+    apiResultDigest: nativeSha256(input.result),
     source: source?.kind === "project" ? source : null,
   };
 }
@@ -676,7 +684,7 @@ export class PaperclipRunnerToolAuthority {
     }
     if (RUNTIME_CONNECTION_TOOL_DEFINITIONS.some((tool) => tool.name === call.tool)) {
       await this.#boundContext();
-      const { run } = await captureRunIdentity(this.db, this.binding);
+      const { run } = await this.#captureIdentity();
       if (!run.responsibleUserId) throw forbidden("This task needs a responsible user before requesting a connection");
       const claims = {
         sub: this.binding.agentId, company_id: this.binding.companyId,
@@ -829,16 +837,11 @@ export class PaperclipRunnerToolAuthority {
           throw forbidden("Managed Project creation has no exact provider tool-use capture");
         if (call.tool === "create_project" && this.binding.nativeModelOutputCapture?.value?.managedOpenCodeToolUse) {
           const managedCapture = this.binding.nativeModelOutputCapture.value;
-          if (Object.keys(input).some(key => !["name", "description", "workspace", "idempotencyKey"].includes(key)) ||
-            typeof input.name !== "string" || typeof input.idempotencyKey !== "string" ||
-            !input.workspace || typeof input.workspace !== "object" || Array.isArray(input.workspace) ||
-            (input.description !== undefined && typeof input.description !== "string") ||
-            typeof input.idempotencyKey !== "string" ||
-            Object.keys(record(input.workspace)).length !== 1 || typeof record(input.workspace).name !== "string")
+          if (!managedNativeProjectArgumentsSchema.safeParse(input).success)
             throw forbidden("Managed Project creation arguments are invalid");
-          const managedArguments = { name: input.name, idempotencyKey: input.idempotencyKey,
-            ...(input.description === undefined ? {} : { description: input.description as string }),
-            workspace: { name: record(input.workspace).name as string } };
+          // Pass the untouched provider JSON into the owner so its idempotency
+          // hash remains bound to the exact arguments captured at dispatch.
+          const managedArguments = input;
           await this.binding.testBeforeManagedProjectCreate?.(managedCapture);
           const created = await createManagedNativeProjectOutput({ db: this.db, actor: reader,
             companyId: this.binding.companyId, issueId: this.binding.issueId, callId: call.callId,
@@ -887,7 +890,10 @@ export class PaperclipRunnerToolAuthority {
         // PRP reserves operationId/callId for semantic result identity. The
         // HTTP operation is metadata, including in previously saved receipts;
         // exposing it as operationId makes the runner reject a valid response.
-        const { operationId, ...response } = record(await this.#callApi(call.callId, call.arguments, onProjectToolResult));
+        const { operationId, ...response } = record(await this.#callApi(call.callId, call.arguments,
+          onProjectToolResult, onManagedProjectCreateCapture
+            ? async capture => { onManagedProjectCreateCapture(capture); }
+            : undefined));
         return { ...response, apiOperationId: operationId };
       }
       case "get_task_context": {
@@ -1110,11 +1116,11 @@ export class PaperclipRunnerToolAuthority {
       case "report_progress": return this.#reportProgress(input);
       case "update_task": return this.#updateTask(input);
       case "propose_completion": return this.#proposeCompletion(input,
-        (await captureRunIdentity(this.db, this.binding)).context?.id ?? null);
+        (await this.#captureIdentity()).context?.id ?? null);
       case "request_human_input": return this.#requestHumanInput(input,
-        (await captureRunIdentity(this.db, this.binding)).context?.id ?? null);
+        (await this.#captureIdentity()).context?.id ?? null);
       case "create_task": return this.#createTask(input,
-        (await captureRunIdentity(this.db, this.binding)).context?.id ?? null);
+        (await this.#captureIdentity()).context?.id ?? null);
       case "reassign_task": return this.#reassignTask(input);
       case "set_dependencies": return this.#setDependencies(input);
       case "register_deliverable": return this.#registerDeliverable(input);
@@ -1123,7 +1129,8 @@ export class PaperclipRunnerToolAuthority {
   }
 
   async #callApi(callId: string, value: unknown,
-    onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>): Promise<unknown> {
+    onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
+    onManagedProjectCreateToolResult?: (capture: NativeManagedProjectCreateCapture) => Promise<void>): Promise<unknown> {
     const bound = await this.#boundContext();
     const context = { ...this.binding, issueIdentifier: bound.issue.identifier, workMode: bound.issue.workMode };
     const { input, operation } = validateRunnerApiCall(value, context);
@@ -1133,6 +1140,14 @@ export class PaperclipRunnerToolAuthority {
     const callIdentity = nativeBackendToolCallIdentity.getStore();
     const nativeInputDispatch = resolveNativeInputDispatchReceiptIdentity(bound.run.runnerProfileJson, callIdentity, "call_api");
     const mutation = !["GET", "HEAD", "OPTIONS"].includes(operation.method);
+    const managedProjectApiCall = managedNativeProjectApiCallSchema.safeParse(value);
+    const managedProjectOutputCapture = this.binding.nativeModelOutputCapture?.value ?? null;
+    const managedProjectApiCapture = managedProjectApiCall.success && managedProjectApiCall.data.pathParams.companyId === this.binding.companyId &&
+      managedProjectOutputCapture?.runId === this.binding.runId &&
+      managedProjectOutputCapture.managedOpenCodeToolUse?.toolName === "call_api" &&
+      managedProjectOutputCapture.managedOpenCodeToolUse.callId === callId &&
+      managedProjectOutputCapture.managedOpenCodeToolUse.argumentsHash === nativeSha256(value)
+      ? managedProjectOutputCapture : null;
     const contentType = input.contentType ?? (input.files?.length ? "multipart/form-data" : "application/json");
     if (mutation && nativeInputDispatch && callIdentity && !input.files?.length &&
       (!input.body || (typeof input.body === "object" && !Array.isArray(input.body))) &&
@@ -1164,6 +1179,10 @@ export class PaperclipRunnerToolAuthority {
         };
       }
     }
+    if (managedProjectApiCapture && (!nativeToolEffect || !managedProjectApiCall.success ||
+      nativeToolEffect.operationId !== managedProjectApiCall.data.operationId || nativeToolEffect.method !== "POST" ||
+      nativeToolEffect.pathAndQuery !== `/api/companies/${this.binding.companyId}/projects`))
+      throw forbidden("Managed Project API creation requires the exact signed POST effect claim");
     const token = createLocalAgentJwt(this.binding.agentId, this.binding.companyId, bound.actor.adapterType,
       this.binding.runId, bound.run.responsibleUserId, { kind: "standard" }, nativeToolEffect);
     if (!token) throw new Error("Paperclip run authentication is unavailable");
@@ -1223,7 +1242,7 @@ export class PaperclipRunnerToolAuthority {
               attempt: nativeInputDispatch.attempt, operationId: capture.operationId, method: "GET",
               pathAndQuery: capture.pathAndQuery, requestHash: capture.requestHash,
               argumentsHash: associations[0]!.argumentsHash as string, state: "completed", status: 200,
-              resultDigest: capture.resultDigest };
+              resultDigest: capture.apiResultDigest, providerResultDigest: capture.resultDigest };
             if (receipts[receiptKey] && JSON.stringify(receipts[receiptKey]) !== JSON.stringify(receipt))
               throw new Error("native_project_api_receipt_conflict");
             receipts[receiptKey] = receipt;
@@ -1250,8 +1269,23 @@ export class PaperclipRunnerToolAuthority {
         return { result: existing.result ?? { ok: false, status: null, error: "api_outcome_unknown", outcome: "unknown", guidance: "Inspect state before issuing another mutation." } };
       }
       if (Object.keys(receipts).length >= 512) throw badRequest("Run API mutation limit reached");
-      receipts[key] = { digest, operationId: operation.operationId, state: "pending" };
-      await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, apiToolReceipts: receipts } }).where(eq(heartbeatRuns.id, this.binding.runId));
+      const receipt = { digest, operationId: operation.operationId, state: "pending" as const,
+        ...(managedProjectApiCapture ? { argumentsHash: managedProjectOutputCapture!.managedOpenCodeToolUse!.argumentsHash } : {}),
+        ...(nativeToolEffect ? { callId, turnId: nativeToolEffect.turnId, dispatchId: nativeToolEffect.dispatchId,
+          eventSeq: nativeToolEffect.eventSeq, attempt: nativeToolEffect.attempt,
+          method: nativeToolEffect.method, pathAndQuery: nativeToolEffect.pathAndQuery,
+          bodyHash: nativeToolEffect.bodyHash } : {}) };
+      receipts[key] = receipt;
+      const captures = record(resultJson.nativeManagedProjectApiCaptures);
+      if (managedProjectApiCapture && nativeToolEffect && managedProjectApiCall.success &&
+        nativeToolEffect.operationId === managedProjectApiCall.data.operationId &&
+        nativeToolEffect.method === "POST" && nativeToolEffect.pathAndQuery === `/api/companies/${this.binding.companyId}/projects` &&
+        nativeToolEffect.apiReceiptDigest === digest) {
+        captures[key] = { operationId: nativeToolEffect.operationId, apiReceiptDigest: digest,
+          capture: managedProjectApiCapture };
+      }
+      await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, apiToolReceipts: receipts,
+        nativeManagedProjectApiCaptures: captures } }).where(eq(heartbeatRuns.id, this.binding.runId));
       return null;
     });
     if (prior) return prior.result;
@@ -1269,9 +1303,43 @@ export class PaperclipRunnerToolAuthority {
       const [run] = await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, this.binding.runId)).for("update");
       const resultJson = record(run?.resultJson);
       const receipts = record(resultJson.apiToolReceipts);
-      receipts[key] = { digest, operationId: operation.operationId, state: "completed", result };
-      await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, apiToolReceipts: receipts } }).where(eq(heartbeatRuns.id, this.binding.runId));
+      const { operationId: _httpOperationId, ...publicResult } = record(result);
+      const providerResultDigest = nativeSha256(nativeCallApiResultEnvelope(callId,
+        { ...publicResult, apiOperationId: operation.operationId }));
+      receipts[key] = { digest, operationId: operation.operationId, state: "completed", providerResultDigest, result,
+        ...(managedProjectApiCapture ? { argumentsHash: managedProjectOutputCapture!.managedOpenCodeToolUse!.argumentsHash } : {}),
+        ...(nativeToolEffect ? { callId, turnId: nativeToolEffect.turnId, dispatchId: nativeToolEffect.dispatchId,
+          eventSeq: nativeToolEffect.eventSeq, attempt: nativeToolEffect.attempt,
+          method: nativeToolEffect.method, pathAndQuery: nativeToolEffect.pathAndQuery,
+          bodyHash: nativeToolEffect.bodyHash } : {}) };
+      const captures = record(resultJson.nativeManagedProjectApiCaptures);
+      delete captures[key];
+      await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, apiToolReceipts: receipts,
+        nativeManagedProjectApiCaptures: captures } }).where(eq(heartbeatRuns.id, this.binding.runId));
     });
+    const resultData = "data" in result ? result.data : undefined;
+    if (managedProjectApiCapture && managedProjectApiCall.success && result.ok === true && result.status === 201 &&
+      resultData && typeof resultData === "object" && !Array.isArray(resultData)) {
+      const [run] = await this.db.select({ resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, this.binding.companyId), eq(heartbeatRuns.id, this.binding.runId),
+        eq(heartbeatRuns.agentId, this.binding.agentId), eq(heartbeatRuns.nativeIssueId, this.binding.issueId)));
+      const receipts = record(record(run?.resultJson).nativeProjectCreateReceipts);
+      const createReceipt = record(receipts[key]) as unknown as NativeProjectCreateReceipt;
+      if (createReceipt.callId !== callId || createReceipt.tool !== "call_api" ||
+        createReceipt.argumentsHash !== managedProjectOutputCapture?.managedOpenCodeToolUse?.argumentsHash ||
+        createReceipt.projectId !== (resultData as Record<string, unknown>).id ||
+        createReceipt.resultDigest !== nativeSha256(resultData))
+        throw forbidden("Managed Project API result receipt is unavailable");
+      if (!nativeToolEffect || nativeToolEffect.operationId !== managedProjectApiCall.data.operationId ||
+        nativeToolEffect.method !== "POST" || nativeToolEffect.pathAndQuery !== `/api/companies/${this.binding.companyId}/projects`)
+        throw forbidden("Managed Project API effect receipt is unavailable");
+      await onManagedProjectCreateToolResult?.({ project: resultData as Record<string, unknown>,
+        receipt: createReceipt, sourceSet: managedProjectOutputCapture.sourceSet, outputCapture: managedProjectOutputCapture,
+        apiEffect: { operationId: nativeToolEffect.operationId, method: nativeToolEffect.method,
+          pathAndQuery: nativeToolEffect.pathAndQuery, apiReceiptDigest: nativeToolEffect.apiReceiptDigest,
+          bodyHash: nativeToolEffect.bodyHash, turnId: nativeToolEffect.turnId,
+          dispatchId: nativeToolEffect.dispatchId, eventSeq: nativeToolEffect.eventSeq, attempt: nativeToolEffect.attempt } });
+    }
     return result;
   }
 
@@ -1334,6 +1402,7 @@ export class PaperclipRunnerToolAuthority {
       sessionToken: session.token,
       tool: MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL,
       parameters: record(call.arguments),
+      timeoutMs: 60_000,
       idempotencyKey: `aw-native-tool:${this.binding.runId}:${use.callId}`,
     }, undefined, scopedContext);
     const completed = record(gatewayResult);
@@ -2527,6 +2596,19 @@ export class PaperclipRunnerToolAuthority {
     const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: this.binding.companyId,
       agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
     await assertPlatformSkillAdmission(tx, actor, blenteraPlatformContractHashes());
+  }
+
+  async #captureIdentity() {
+    return this.db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      // Source acknowledgement holds these boundaries before the run and
+      // then reads the Task. Join that same order before identity locks the
+      // Task and run, so a first tool cannot invert the two row locks.
+      await lockAnalyticalCompany(tx, this.binding.companyId);
+      await lockMemoryPrivacy(tx, this.binding.companyId);
+      await lockNativeToolPlan(tx, this.binding);
+      return await captureRunIdentity(tx, this.binding);
+    });
   }
 
   async #lockAuthorizedMutationContext(tx: Db): Promise<{

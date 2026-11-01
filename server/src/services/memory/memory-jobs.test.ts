@@ -195,6 +195,21 @@ describePg("Memory jobs", () => {
     };
   }
 
+  it("preserves an existing remote-effect checkpoint when the current erasure handler fails before delegation",async()=>{
+    const seeded=await seedCaptureRun();let delegations=0;
+    const service=memoryJobService(db,{ownerId:"remote-checkpoint-worker",eraseRemoteNativeRuntimeAsset:async()=>{
+      delegations++;throw new Error("must not delegate an invalid locator");
+    }});
+    const checkpoint={opaquePriorCheckpoint:"preserve for authenticated-ledger revalidation; never shape authority"};
+    const [queued]=await db.insert(memoryJobs).values({companyId:seeded.companyId,operationType:"retention",
+      jobKey:`runtime-asset-erasure:v1:${seeded.run.id}`,sourceRefJson:{kind:"runtime_asset_erasure",runId:seeded.run.id,
+        legacyDigests:[],remoteAssetLocator:{invalid:true}},resultJson:checkpoint}).returning();
+    const claimed=await service.claimNext(new Date(),seeded.companyId);expect(claimed?.id).toBe(queued!.id);
+    await service.executeClaimed(claimed!);
+    const [failed]=await db.select().from(memoryJobs).where(eq(memoryJobs.id,queued!.id));
+    expect(delegations).toBe(0);expect(failed).toMatchObject({status:"failed",resultJson:checkpoint});
+  });
+
   it("enqueues one idempotent capture attempt per successful run", async () => {
     const seeded = await seedCaptureRun();
     const svc = memoryJobService(db, { ownerId: "worker-a" });

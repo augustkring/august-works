@@ -3,6 +3,8 @@ import { qualificationProbeFixtureSchema, sandboxCapabilitySnapshotSchema, sandb
 import { runtimeGenerationSchema } from "./runtime-host-contracts.js";
 
 export const SANDBOX_HOST_COMMAND = "v7_openshell_rpc";
+export const NATIVE_RUNTIME_CLEANUP_PURPOSE = "native_runtime_asset_erasure" as const;
+export const NATIVE_RUNTIME_CLEANUP_PROFILE = "fixed_local_eraser_v1" as const;
 const digest = z.string().regex(/^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/);
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 export const sandboxHostScopeSchema = z
@@ -101,6 +103,7 @@ export const sandboxHostRequestSchema = z
       "probe",
       "revoke_providers",
       "stop",
+      "erase_native_session",
       "destroy",
     ]),
     probe: z
@@ -179,7 +182,10 @@ export const sandboxHostRequestSchema = z
      * controller-selected fixed boundary probe for the active erasure job. */
     cleanupAttestation: z
       .object({
-        version: z.literal(1),
+        version: z.literal(2),
+        purpose: z.literal(NATIVE_RUNTIME_CLEANUP_PURPOSE),
+        executionProfile: z.literal(NATIVE_RUNTIME_CLEANUP_PROFILE),
+        executionProfileHash: hash,
         jobId: z.string().uuid(),
         jobKey: z.string().min(1).max(300),
         attemptNumber: z.number().int().positive(),
@@ -190,6 +196,27 @@ export const sandboxHostRequestSchema = z
       })
       .strict()
       .optional(),
+    /** A signed, one-purpose deletion of one stopped Native session. The Host
+     * derives the storage path from this digest and its immutable creation
+     * journal; callers never supply a host filesystem path or command. */
+    nativeSessionErasure: z.object({
+      schema: z.literal("paperclip.remote-native-session-erasure.v1"),
+      startBindingDigest: hash,
+      sessionKey: hash,
+      leaseId: z.string().uuid(),
+      taskRoot: z.string().min(1).max(1000),
+      sessionDigest: hash,
+      policyHash: hash,
+      sandboxId: z.string().uuid(),
+      containerId: z.string().regex(/^[a-f0-9]{64}$/),
+      imageDigest: digest,
+      dockerEngineIdHash: hash,
+      cellGeneration: runtimeGenerationSchema,
+      runId: z.string().uuid(),
+      runnerInstanceId: z.string().uuid(),
+    }).strict().optional(),
+    /** Server-signed attenuation to the original admitted physical workload. */
+    expectedTarget: z.object({ sandboxId: z.string().uuid(), containerId: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
     hostEpoch: z.number().int().positive(),
     imageDigest: digest,
     requesterUserId: z.string().min(1).max(200).optional(),
@@ -201,10 +228,16 @@ export const sandboxHostRequestSchema = z
       (value.action === "probe") !== Boolean(value.probe) ||
       (value.action === "apply") !== Boolean(value.admission) ||
       (value.action === "start") !== Boolean(value.start) ||
+      (value.action === "erase_native_session") !== Boolean(value.nativeSessionErasure) ||
       (Boolean(value.provisioning) && value.action !== "prepare") ||
+      (Boolean(value.expectedTarget) && !["stop", "inspect"].includes(value.action)) ||
       (Boolean(value.cleanupAttestation) &&
-        (!['capabilities', 'probe'].includes(value.action) || value.requesterUserId !== undefined)) ||
-      (!value.cleanupAttestation && !value.requesterUserId)
+        (!['capabilities', 'probe'].includes(value.action) || value.requesterUserId !== undefined ||
+          value.probe?.qualificationCredentialCapability !== undefined ||
+          value.probe?.qualificationCredentialNonce !== undefined || (value.probe &&
+            ["credentialBrokering","networkDestinationPolicy","networkLayer7Policy"].includes(value.probe.control)))) ||
+      (!value.cleanupAttestation && value.action !== "erase_native_session" && !value.requesterUserId) ||
+      (value.action === "erase_native_session" && (Boolean(value.cleanupAttestation) || value.requesterUserId !== undefined))
     )
       ctx.addIssue({
         code: "custom",
@@ -241,6 +274,8 @@ export const sandboxHostReplySchema = z.discriminatedUnion("action", [
     .object({
       action: z.literal("inspect"),
       state: z.enum(["ready", "running", "stopped", "failed", "unknown"]),
+      sandboxId: z.string().uuid().optional(),
+      containerId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
       policyHash: hash.nullable(),
       imageDigest: digest.nullable(),
       generation: runtimeGenerationSchema,
@@ -286,7 +321,29 @@ export const sandboxHostReplySchema = z.discriminatedUnion("action", [
   z
     .object({ action: z.literal("revoke_providers"), revoked: z.literal(true) })
     .strict(),
-  z.object({ action: z.literal("stop"), stopped: z.literal(true) }).strict(),
+  z.object({ action: z.literal("stop"), stopped: z.literal(true),
+    sandboxId: z.string().uuid().optional(), containerId: z.string().regex(/^[a-f0-9]{64}$/).optional() }).strict(),
+  z.object({
+    action: z.literal("erase_native_session"),
+    erased: z.literal(true),
+    schema: z.literal("paperclip.remote-native-session-erasure.v1"),
+    startBindingDigest: hash,
+    sessionKey: hash,
+    leaseId: z.string().uuid(),
+    sessionDigest: hash,
+    policyHash: hash,
+    sandboxId: z.string().uuid(),
+    containerId: z.string().regex(/^[a-f0-9]{64}$/),
+    imageDigest: digest,
+    dockerEngineIdHash: hash,
+    cellGeneration: runtimeGenerationSchema,
+    runId: z.string().uuid(),
+    runnerInstanceId: z.string().uuid(),
+    upperLayerAbsent: z.literal(true),
+    mergedViewAbsent: z.literal(true),
+    stoppedBefore: z.literal(true),
+    stoppedAfter: z.literal(true),
+  }).strict(),
   z
     .object({ action: z.literal("destroy"), destroyed: z.literal(true) })
     .strict(),

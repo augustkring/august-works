@@ -17,6 +17,11 @@ export interface HumanizedSystemNotice {
 
 const FALLBACK_TITLE = "System update";
 const DETAIL_MAX_CHARS = 80;
+export const NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE =
+  "This runtime is not available for managed model calls. Choose an available runtime in Runtime settings.";
+
+export const TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE =
+  "This tool is not available for managed work. Choose an available tool or contact your company administrator.";
 
 /** Failure code the recovery comments embed as "Latest retry failure: `code`". */
 function retryFailureCode(body: string): string | null {
@@ -46,15 +51,31 @@ function firstSentence(body: string): string | undefined {
 export function humanizeSystemNotice(input: {
   body: string;
   presentation?: IssueCommentPresentation | null;
+  toolUnavailableCopy?: { title: string; detail: string };
+  runtimeUnavailableCopy?: { title: string; detail: string };
 }): HumanizedSystemNotice {
   const presentationTitle = input.presentation?.title?.trim();
   const presentationTone = input.presentation?.tone;
-  if (presentationTitle) {
+  const body = input.body ?? "";
+  const toolUnavailable = body.includes(TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE);
+  const paidRuntimeUnavailable = body.includes(NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE);
+  const genericConfigurationTitle = presentationTitle?.toLocaleLowerCase() === "configuration incomplete";
+  if (presentationTitle && !((paidRuntimeUnavailable || toolUnavailable) && genericConfigurationTitle)) {
     return { title: presentationTitle, tone: presentationTone ?? "neutral" };
   }
 
-  const body = input.body ?? "";
   const code = retryFailureCode(body);
+  if (toolUnavailable) {
+    return { title: input.toolUnavailableCopy?.title ?? "Task paused — tool unavailable",
+      tone: presentationTone ?? "warning", detail: input.toolUnavailableCopy?.detail ?? TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE };
+  }
+  if (paidRuntimeUnavailable) {
+    return {
+      title: input.runtimeUnavailableCopy?.title ?? "Task paused — runtime unavailable",
+      tone: presentationTone ?? "warning",
+      detail: input.runtimeUnavailableCopy?.detail ?? NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE,
+    };
+  }
 
   if (code === "claude_auth_required") {
     return {

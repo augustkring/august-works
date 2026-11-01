@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
@@ -26,6 +26,7 @@ import {
   externalObjectMentions,
   externalObjects,
   issues,
+  issuePrivacySources,
   projects,
   instanceSettings,
   memoryBindings,
@@ -48,20 +49,22 @@ import {
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { memoryService } from "../memory/memory-service.js";
 import { assertMemorySourcesRetained, canActorReadMemorySources, expireMemoryPayloads } from "../memory/memory-privacy.js";
-import { issueService, type NativeTaskSourceCapture } from "../issues.js";
+import { issueService, lockIssuePrivacyTree, type NativeTaskSourceCapture } from "../issues.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowExecutorService } from "../workflows/workflow-executor.js";
 import { foundationService } from "../foundation/foundation-service.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { contextEngineService } from "./context-engine.js";
+import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 import { revalidateNativeBootstrapContextWitness } from "./context-manifest.js";
-import { readNativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
+import { captureNativeBootstrapContextWitness, readNativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
 import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { errorHandler } from "../../middleware/index.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { buildPaperclipTaskMarkdown, getIssueExecutionContext } from "../heartbeat.js";
 import { buildNativeBootstrapSourceSet } from "../native-runtime/native-execution-input.js";
-import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
+import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent,
+  assertNativeTemporalContextInputsCurrent } from "../native-direct-input.js";
 import { createLocalAgentJwt, verifyLocalAgentJwt } from "../../agent-auth-jwt.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { createToolGatewayService } from "../tool-gateway.js";
@@ -178,6 +181,149 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       status:"running",runtimeMode:"native",nativeIssueId:issue!.id,issueId:issue!.id}).returning();
     return { companyId, userId, humanActor, agent: agent!, issue: issue!, run:run! };
   }
+
+  it("keeps a timed-out mandatory Task provider inside its deadline and releases its privacy locks", async () => {
+    const seeded = await seed();
+    let releaseWriter!: () => void;
+    let signalWriterReady!: () => void;
+    const writerReady = new Promise<void>(resolve => { signalWriterReady = resolve; });
+    const writerGate = new Promise<void>(resolve => { releaseWriter = resolve; });
+    const writer = db.transaction(async tx => {
+      await lockIssuePrivacyTree(tx, seeded.companyId);
+      signalWriterReady();
+      await writerGate;
+    });
+    await writerReady;
+
+    const startedAt = Date.now();
+    try {
+      await expect(contextEngineService(db).assemble({
+        runId: seeded.run.id, companyId: seeded.companyId, agentId: seeded.agent.id,
+        responsibleUserId: seeded.userId, issueId: seeded.issue.id, query: "deadline lock regression",
+        sensitivityCeiling: "internal", totalDeadlineMs: 3_000,
+      })).rejects.toMatchObject({ status: 503, details: expect.objectContaining({ providerKey: "task" }) });
+      let pendingPrivacyWaiters = 1;
+      while (pendingPrivacyWaiters > 0 && Date.now() - startedAt < 1_500) {
+        const [sample] = await db.execute<{ count: number }>(sql`select count(*)::int as count
+          from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid()
+            and wait_event_type='Lock' and query ilike 'select pg_advisory%'`);
+        pendingPrivacyWaiters = sample?.count ?? 0;
+        if (pendingPrivacyWaiters > 0) await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      expect(pendingPrivacyWaiters).toBe(0);
+      expect(Date.now() - startedAt).toBeLessThan(1_500);
+    } finally {
+      releaseWriter();
+      await writer;
+    }
+
+    const context = await contextEngineService(db).assemble({
+      runId: seeded.run.id, companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, issueId: seeded.issue.id, query: "nested statement deadline regression",
+      sensitivityCeiling: "internal", totalDeadlineMs: 3_000,
+    });
+    expect(context.packet.manifest?.id).toBeTruthy();
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as ReturnType<typeof createDb>;
+      await tx.execute(sql`set local statement_timeout='500ms'`);
+      await assertAnalyticalContextPayloadAccess(tx, seeded.companyId, seeded.humanActor, { issueId: seeded.issue.id }, undefined,
+        { privacyLockMode: "read" });
+      const [timeout] = await tx.execute<{ value: string }>(sql`select current_setting('statement_timeout') as value`);
+      const durationMs = Number.parseFloat(timeout?.value ?? "0") * (timeout?.value.endsWith("s") && !timeout.value.endsWith("ms") ? 1_000 : 1);
+      expect(durationMs).toBeGreaterThan(0);
+      expect(durationMs).toBeLessThanOrEqual(500);
+    });
+
+    const releasedAt = Date.now();
+    await db.transaction(async tx => {
+      await tx.execute(sql`set local statement_timeout='500ms'`);
+      await lockIssuePrivacyTree(tx, seeded.companyId);
+    });
+    expect(Date.now() - releasedAt).toBeLessThan(500);
+  });
+
+  it("captures append-only native Context alongside shared readers and rechecks a later source withdrawal", async () => {
+    const seeded = await seed();
+    const primaryTask = await issueService(db).create(seeded.companyId, {
+      title: "Native append-only privacy capture",
+      description: "The original Human-owned Task payload for Native Context.",
+      createdByUserId: seeded.userId,
+      responsibleUserId: seeded.userId,
+    }, db, undefined, { manualInputActor: seeded.humanActor, privacyActor: seeded.humanActor,
+      sourceAccessActor: seeded.humanActor });
+    const [nativeRun] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId,
+      agentId: seeded.agent.id, responsibleUserId: seeded.userId, issueId: primaryTask.id,
+      nativeIssueId: primaryTask.id, runtimeMode: "native", status: "running" }).returning();
+    const memory = await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      content: "Native append-only privacy capture Memory with a Human source Task.", humanActor: seeded.humanActor,
+      privateSourceTask: true });
+    await instanceSettingsService(db).updateExperimental({ enableContextEngineV1: true, enableFoundationV1: false,
+      enableCollectiveMemoryV1: true });
+    const actor = { type: "agent" as const, source: "none" as const, companyId: seeded.companyId,
+      agentId: seeded.agent.id, runId: nativeRun!.id, onBehalfOfUserId: seeded.userId };
+    let releaseReader!: () => void;
+    let signalReaderReady!: () => void;
+    const readerReady = new Promise<void>(resolve => { signalReaderReady = resolve; });
+    const readerGate = new Promise<void>(resolve => { releaseReader = resolve; });
+    const reader = db.transaction(async tx => {
+      await lockIssuePrivacyTree(tx, seeded.companyId, "read");
+      signalReaderReady();
+      await readerGate;
+    });
+    await readerReady;
+
+    let captured: Awaited<ReturnType<typeof assembleNativeContextRead>> | null = null;
+    let withdrawal: Promise<unknown> | null = null;
+    let captureDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const capture = await Promise.race([
+        assembleNativeContextRead(db, { companyId: seeded.companyId, agentId: seeded.agent.id, runId: nativeRun!.id,
+          issueId: primaryTask.id, projectId: null, responsibleUserId: seeded.userId,
+          actor, query: "append-only privacy capture" })
+          .then(result => ({ result })),
+        new Promise<{ timedOut: true }>(resolve => {
+          captureDeadlineTimer = setTimeout(() => resolve({ timedOut: true }), 4_250);
+        }),
+      ]);
+      if (captureDeadlineTimer) clearTimeout(captureDeadlineTimer);
+      if ("timedOut" in capture) throw new Error("Append-only native Context waited behind another shared reader");
+      captured = capture.result;
+      const capturedManifestId = captured.manifestIds[0]!.contextManifestId;
+      const capturedItems = await db.select().from(contextManifestItems).where(and(
+        eq(contextManifestItems.companyId, seeded.companyId), eq(contextManifestItems.manifestId, capturedManifestId)));
+      expect(capturedItems.length).toBeGreaterThan(0);
+      expect(capturedItems.every(item => (item.sourceProvider === "august_works_tasks" &&
+        item.sourceRef === `issue://${primaryTask.id}`) || (item.sourceProvider === "august_works_memory" &&
+        item.sourceRef === `memory://record/${memory.id}`))).toBe(true);
+      expect(captured.sourceSet.policy.memoryIds).toContain(memory.id);
+      expect(await db.select().from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, seeded.companyId),
+        eq(issuePrivacySources.issueId, primaryTask.id)))).toHaveLength(0);
+
+      withdrawal = memoryService(db).revoke(seeded.companyId, memory.id, { reason: "Native Context privacy withdrawal regression" }, {
+        principal: { type: "user", userId: seeded.userId }, authorizationActor: seeded.humanActor,
+      });
+      let waitingWriter = false;
+      const waitDeadline = Date.now() + 1_000;
+      while (Date.now() < waitDeadline && !waitingWriter) {
+        const [sample] = await db.execute<{ count: number }>(sql`select count(*)::int as count from pg_stat_activity
+          where datname=current_database() and pid<>pg_backend_pid() and wait_event_type='Lock'
+            and query ilike 'select pg_advisory%'`);
+        waitingWriter = (sample?.count ?? 0) > 0;
+        if (!waitingWriter) await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      expect(waitingWriter).toBe(true);
+    } finally {
+      if (captureDeadlineTimer) clearTimeout(captureDeadlineTimer);
+      releaseReader();
+      await reader;
+    }
+    if (!withdrawal) throw new Error("Human Memory withdrawal did not start");
+    await withdrawal;
+    if (!captured) throw new Error("Native append-only Context capture did not complete");
+    await expect(assertNativeContextReadSourceSetCurrent(db, { companyId: seeded.companyId, agentId: seeded.agent.id,
+      runId: nativeRun!.id, issueId: primaryTask.id, actor, sourceSet: captured.sourceSet,
+      manifestIds: captured.manifestIds })).rejects.toMatchObject({ status: 403 });
+  });
 
   async function createOwnerPrivateMemoryThroughNativeGateway(input: {
     companyId: string; agentId: string; userId: string; issueId: string; bindingKey: string; content: string;
@@ -755,6 +901,37 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await expect(assertNativeContextReadSourceSetCurrent(db,{...contextReadInput,sourceSet:{...contextRead.sourceSet,
       inputs:contextRead.sourceSet.inputs.map(value=>value.kind==="task"?{...value,contentHash:"0".repeat(64)}:value)}}))
       .rejects.toMatchObject({status:403});
+    const nestedContextInput=contextRead.sourceSet.inputs.find(value=>value.kind==="context");
+    if(!nestedContextInput||nestedContextInput.kind!=="context")throw new Error("Nested Context source is unavailable");
+    const overBoundContextInputs=[...contextRead.sourceSet.inputs,...Array.from({length:64},()=>({
+      ...nestedContextInput,manifestId:randomUUID()}))];
+    await expect(assertNativeContextReadSourceSetCurrent(db,{...contextReadInput,sourceSet:{...contextRead.sourceSet,
+      inputs:overBoundContextInputs}})).rejects.toMatchObject({status:403});
+    const [outerManifest]=await db.select().from(contextManifests).where(and(eq(contextManifests.companyId,seeded.companyId),
+      eq(contextManifests.id,context.packet.manifest!.id)));
+    if(!outerManifest)throw new Error("Outer Context manifest is unavailable");
+    const outerItems=await db.select().from(contextManifestItems).where(and(eq(contextManifestItems.companyId,seeded.companyId),
+      eq(contextManifestItems.manifestId,context.packet.manifest!.id)));
+    const nestedSnapshotWitness=captureNativeBootstrapContextWitness({companyId:seeded.companyId,runId:run!.id,
+      agentId:seeded.agent.id,issueId:task.id,actor:assembleInput.authorizationActor,renderedMarkdown:context.markdown,
+      manifest:outerManifest,items:outerItems.map(item=>{
+        if(item.sourceProvider!=="august_works_tasks"||item.sourceRef!==`issue://${task.id}`)return item;
+        if(!item.payloadSourceSnapshot||typeof item.payloadSourceSnapshot!=="object"||Array.isArray(item.payloadSourceSnapshot))
+          throw new Error("Native Context Task snapshot is unavailable");
+        const snapshot=item.payloadSourceSnapshot as {inputs?:unknown[]};
+        if(!Array.isArray(snapshot.inputs))throw new Error("Native Context Task snapshot inputs are unavailable");
+        const inputs=snapshot.inputs;
+        return {...item,payloadSourceSnapshot:{...snapshot,inputs:inputs.some(value=>JSON.stringify(value)===JSON.stringify(nestedContextInput))
+          ?inputs:[...inputs,nestedContextInput]}};
+      }),roots:[]});
+    const nestedWitnessClosure=readNativeBootstrapContextWitness(nestedSnapshotWitness,{companyId:seeded.companyId,runId:run!.id,
+      agentId:seeded.agent.id,issueId:task.id,renderedMarkdown:context.markdown,
+      manifestIds:[{companyId:seeded.companyId,contextManifestId:context.packet.manifest!.id}]});
+    expect(nestedWitnessClosure?.inputs).toContainEqual(nestedContextInput);
+    await expect(assertNativeTemporalContextInputsCurrent(db,seeded.companyId,[nestedContextInput])).resolves.toBeUndefined();
+    await db.delete(contextManifests).where(and(eq(contextManifests.companyId,seeded.companyId),
+      eq(contextManifests.id,nestedContextInput.manifestId)));
+    await expect(assertNativeTemporalContextInputsCurrent(db,seeded.companyId,[nestedContextInput])).rejects.toMatchObject({status:403});
     const witnessInput = { witness: context.nativeBootstrapWitness!, companyId: seeded.companyId, runId: run!.id,
       agentId: seeded.agent.id, issueId: task.id, renderedMarkdown: context.markdown,
       manifestIds: [{ companyId: seeded.companyId, contextManifestId: context.packet.manifest!.id }] };

@@ -814,6 +814,7 @@ export async function createApp(
       identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId, cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
       boundary: binding.boundaryPolicy, bridge: opts.saasPlatform!.sandboxHosts.bridge(actor), evidenceKind: "protected_host_report", prover: opts.saasPlatform!.config.runtime.openshellProver!,
       credentialBrokerOrigin: opts.saasPlatform!.origins.primaryAppOrigin,
+      credentialBrokerDatabase: db,
       resolveCredentialBrokerBindings: (policy) => resolveSandboxBrokerBindings(binding.companyId, policy),
     }) : undefined : undefined,
     nativeOperation: opts.saasPlatform ? (companyId, cellId, userId, action, idempotencyKey) => opts.saasPlatform!.runtime.request(companyId, cellId, userId, { action, idempotencyKey }) : undefined,
@@ -1039,6 +1040,7 @@ export async function createApp(
   });
   const toolActionDeliveries = toolActionDeliveryService(db, connectionIntentHeartbeat);
   const toolGateway = createToolGatewayService(db, {
+    qualificationBrokerOrigin: opts.saasPlatform?.origins.primaryAppOrigin,
     operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
     supportCaseDataPolicy: readSupportCaseDataPolicy(process.env),
     onToolActionSettled: (id) => toolActionDeliveries.deliver(id),
@@ -1050,8 +1052,9 @@ export async function createApp(
       gatewayOAuthAccess.refreshOAuthGrantCredentials(input),
   });
   if (opts.saasPlatform?.runtime) {
-    toolGateway.setSandboxBrokerAuthority((input) =>
-      opts.saasPlatform!.runtime.authorizeSandboxBrokerCapability(input),
+    toolGateway.setSandboxBrokerAuthority(
+      opts.saasPlatform.runtime.authorizeSandboxBrokerCapability,
+      opts.saasPlatform!.origins.primaryAppOrigin,
     );
   }
   // Issue routes are intentionally mounted after the gateway is constructed because

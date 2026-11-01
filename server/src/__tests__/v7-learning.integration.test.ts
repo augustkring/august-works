@@ -35,7 +35,7 @@ import {assertRuntimeStorageDirectories} from "../services/runtime-skill-cache.j
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflowOptimizerObservations, workflowOptimizerSuggestions, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, providerTraceRecords, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
+import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflowOptimizerObservations, workflowOptimizerSuggestions, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, providerTraceRecords, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryBindingTargets, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
 import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, roadmapPolicySchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
@@ -69,10 +69,12 @@ import {companySkillService} from "../services/company-skills.js";
 import type {AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { issueService } from "../services/issues.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)("V7 Organizational Learning domain promotion", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
   let companyId: string, roots: string[], tasks: string[], targetId: string, revisionId: string;
+  let sourceActor: Awaited<ReturnType<typeof seedCurrentHumanSourceActor>>;
   const owner = { type: "board" as const, source: "local_implicit" as const }, principal = { principal: { type: "system" as const, service: "local-board" } };
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v7-learning-"); db = createDb(database.connectionString);
     await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableWorkflowsV1: true, enableWorkflowOptimizerSuggestions: true, enableWorkflowOptimizerShadow: true, enableAutomationArtifactsV1: true, agent_identities_v5: true, agent_provider_bindings_v5: true, agent_runtime_fabric_v5: true, role_packs_v5: true, enableCollectiveMemoryV1: true, enableContextEngineV1: true, readiness_engine_v7: true, cognitive_memory_v7: true, memory_observations_v7: true, skill_lifecycle_v5: true, playbooks_v5: true, project_roadmap_v5: true, learning_engine_v7: true }); });
@@ -82,17 +84,74 @@ const support = await getEmbeddedPostgresTestSupport();
     const now = new Date();
     await db.insert(authUsers).values({ id: "local-board", name: "Local Learning reviewer", email: "learning-local-board@example.test",
       emailVerified: true, createdAt: now, updatedAt: now }).onConflictDoNothing();
-    companyId = randomUUID(); roots = [randomUUID(), randomUUID()]; tasks = Array.from({ length: 4 }, () => randomUUID());
+    companyId = randomUUID(); roots = []; tasks = [];
     await db.insert(companies).values({ id: companyId, name: "Learning fixture", issuePrefix: `L${companyId.slice(0, 7)}` });
-    const sourceTasks = await Promise.all(tasks.map(async (id) => {
-      const [task] = await db.insert(issues).values({ id, companyId, title: `Reviewed outcome ${id}`, status: "done", completedAt: new Date() }).returning();
-      return task!;
+    sourceActor = await seedCurrentHumanSourceActor(db, [companyId], "local-board");
+    if (sourceActor.type !== "board" || sourceActor.source !== "session" || !sourceActor.userId || !sourceActor.sessionId)
+      throw new Error("Learning fixture requires its actual current Human source session");
+    await db.insert(principalPermissionGrants).values(["company_scope:read","issue:read"].map(permissionKey=>({companyId,principalType:"user",principalId:sourceActor.userId!,permissionKey}))).onConflictDoNothing();
+    const sourceTasks = await Promise.all(Array.from({ length: 4 }, async (_, index) => {
+      const created = await issueService(db).create(companyId, {
+        title: `Reviewed outcome ${index + 1}`,
+        description: `Human-authored completed outcome ${index + 1}`,
+        createdByUserId: sourceActor.userId,
+        responsibleUserId: sourceActor.userId,
+      }, db, undefined, { manualInputActor: sourceActor });
+      const completed = await issueService(db).update(created.id, {
+        status: "done",
+        actorUserId: sourceActor.userId,
+        privacyActor: sourceActor,
+        companyGuard: companyId,
+      });
+      if (!completed) throw new Error("Canonical Human Task fixture disappeared before completion");
+      return completed;
     }));
+    tasks = sourceTasks.map((task) => task.id);
+    roots = [];
     const [binding] = await db.insert(memoryBindings).values({ companyId, key: "learning", name: "Verified outcomes", providerKey: "local" }).returning();
-    for (const [index, id] of roots.entries()) {
-      const task = sourceTasks[index]!;
-      await db.insert(memoryRecords).values({ id, companyId, bindingId: binding!.id, providerKey: "local", memoryType: "outcome", scopeType: "company", content: `Actual customer outcome ${index}`, reviewState: "accepted", verificationState: "human_verified", observedAt: new Date(), sourceProvenanceQualified: true, sourceIssueIds: [task.id], createdByActorType: "system", createdByActorId: "fixture" });
-      await db.insert(memoryEvidence).values({ companyId, memoryRecordId: id, sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${task.id}`, sourceVersion: task.updatedAt.toISOString(), observedAt: new Date(), excerptHash: String(index).repeat(64), citationJson: { label: "Reviewed Task" }, trustLevel: "high", supportsOrContradicts: "supports" });
+    await db.insert(memoryBindingTargets).values({ companyId, bindingId: binding!.id, targetType: "company", targetId: companyId });
+    for (const [index, task] of sourceTasks.slice(0, 2).entries()) {
+      const observedAt = new Date().toISOString();
+      const sourceVersion = task.updatedAt.toISOString();
+      const memoryActor = { principal: { type: "user" as const, userId: sourceActor.userId }, authorizationActor: sourceActor };
+      const candidate = await memoryService(db).createCandidate(companyId, {
+        bindingId: binding!.id,
+        memoryType: "outcome",
+        scope: { type: "company", id: null },
+        subject: null,
+        ownerAgentId: null,
+        title: `Human-reviewed outcome ${index + 1}`,
+        content: `Actual customer outcome ${index}`,
+        summary: "A current Human reviewed completed Task outcome.",
+        sensitivity: "internal",
+        importance: 50,
+        confidenceScore: 0.8,
+        validFrom: null,
+        validUntil: null,
+        observedAt,
+        retentionPolicy: "standard",
+        expiresAt: null,
+        createdByOperationId: randomUUID(),
+        metadata: {},
+        evidence: [{
+          sourceClass: "task",
+          sourceProvider: "august_works_tasks",
+          sourceType: "issue",
+          sourceRef: `issue://${task.id}`,
+          sourceVersion,
+          sourceUpdatedAt: sourceVersion,
+          observedAt,
+          excerptHash: nativeSha256({ taskId: task.id, updatedAt: sourceVersion }),
+          citation: { label: "Reviewed Task" },
+          trustLevel: "high",
+          relation: "supports",
+        }],
+      }, memoryActor);
+      const accepted = await memoryService(db).reviewCandidate(companyId, candidate.record.id, {
+        decision: "accept",
+        reason: "Software fixture records this explicit completed outcome as Human reviewed.",
+      }, memoryActor);
+      roots.push(accepted.record.id);
     }
     const document = await foundationService(db).createDraft(companyId, { foundationKey: "company_profile", title: "Company profile", body: "Original governed baseline", category: "company", documentType: "profile", sensitivity: "internal", reviewFrequencyDays: 30 }, principal);
     targetId = document.id; revisionId = document.latestRevisionId!;
@@ -103,10 +162,10 @@ const support = await getEmbeddedPostgresTestSupport();
   const hypothesisInput = (version: number) => ({ expectedCycleVersion: version, claim: "Earlier evidence review should reduce repeated late corrections", predictedEffect: "Fewer late corrections without removing any approval gate", targetDomain: "foundation" as const, targetId, riskClass: "material" as const, evaluationContract: contract() });
   const judgment = (quality: number) => ({ correctness: true, safety: true, policy: true, businessOutcome: quality, reliability: 1, latencyMs: 100, costCents: 10 });
   const evaluationInput = (version: number) => ({ expectedHypothesisVersion: version, method: "manual_review" as const, cases: [0, 1].map((index) => ({ baselineTaskId: tasks[index * 2]!, challengerTaskId: tasks[index * 2 + 1]!, baseline: judgment(0.7), challenger: judgment(0.9), invariantResults: [true], rationale: "Reviewed saved work products and current canonical outcomes" })), limitations: ["Small manually selected case set; no randomized causal comparison"] });
-  async function supported() {
-    const service = learningService(db), cycle = await service.create(owner, companyId, cycleInput());
-    const hypothesis = await service.addHypothesis(owner, companyId, cycle.id, hypothesisInput(cycle.version));
-    const evaluation = await service.evaluate(owner, companyId, hypothesis.id, evaluationInput(hypothesis.version));
+  async function supported(actor:typeof owner|typeof sourceActor=owner, input:ReturnType<typeof cycleInput>=cycleInput()) {
+    const service = learningService(db), cycle = await service.create(actor, companyId, input);
+    const hypothesis = await service.addHypothesis(actor, companyId, cycle.id, hypothesisInput(cycle.version));
+    const evaluation = await service.evaluate(actor, companyId, hypothesis.id, evaluationInput(hypothesis.version));
     return { service, cycle, hypothesis, evaluation };
   }
   async function domainProposal(target: string, baseline: string, rawChange: LearningChange, analyticalSources?:AnalyticalContextAuthorityPin[]) {
@@ -122,9 +181,13 @@ const support = await getEmbeddedPostgresTestSupport();
     const policy=await aiGovernanceService(db).obligation(owner,companyId,purpose),metrics=businessMetricService(db);
     const metric=await metrics.create(companyId,owner,{key:"learning_signal",definition:{...metricDefinition(policy.id),sensitivity,ownerUserId}});
     await metrics.publish(companyId,owner,metric.metric.id,{expectedRevision:1,versionId:metric.version.id});
-    const sourceId=randomUUID();await db.insert(issues).values({id:sourceId,companyId,title:"Independent synthetic analytical signal",status:"done",completedAt:new Date()});
+    const humanActor=ownerUserId===sourceActor.userId?sourceActor:await seedCurrentHumanSourceActor(db,[companyId],ownerUserId);
+    const sourceTask=await issueService(db).create(companyId,{title:"Independent synthetic analytical signal",description:"Current Human-authored source for a controlled metric observation",status:"todo",createdByUserId:ownerUserId,responsibleUserId:ownerUserId},db,undefined,{manualInputActor:humanActor});
+    const completedSource=await issueService(db).update(sourceTask.id,{status:"done",actorUserId:ownerUserId,privacyActor:humanActor,companyGuard:companyId});
+    if(!completedSource)throw new Error("Canonical Human analytical source Task disappeared before completion");
+    const sourceId=completedSource.id;
     const now=Date.now(),observation=await metrics.query(companyId,owner,{metricId:metric.metric.id,versionId:metric.version.id,from:new Date(now-86400000).toISOString(),until:new Date(now+1000).toISOString(),dimensions:[],maxRows:100});
-    return {sourceId,observation,pin:{kind:"analytical_evidence" as const,source:{type:"metric_observation" as const,id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}}};
+    return {sourceId,observation,humanActor,pin:{kind:"analytical_evidence" as const,source:{type:"metric_observation" as const,id:observation.id,metricId:observation.metricId,metricVersionId:observation.versionId}}};
   }
   it("retains a supplemental original V8 signal while still requiring verified native Task outcomes and current source access",async()=>{
     const signal=await analyticalSignal(),service=learningService(db);
@@ -515,7 +578,7 @@ const support = await getEmbeddedPostgresTestSupport();
       // Current declared Source owner and native company membership are
       // software identity prerequisites, not a browser/JWT or Human trial.
       await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",status:"active",membershipRole:"owner"}).onConflictDoNothing();
-      const human={principal:{type:"user" as const,userId:"local-board"}};
+      const human={principal:{type:"user" as const,userId:"local-board"},authorizationActor:sourceActor};
       await expect(optimizer.requestPromotionApproval(companyId,replay.evaluationId,human)).rejects.toMatchObject({status:409});
       for(const value of [9,10]){
         const run=await executor.startManualRun(companyId,created.id,{input:{value}},human,null);
@@ -656,9 +719,9 @@ const support = await getEmbeddedPostgresTestSupport();
   });
   it.each(["verified_memory","workflow_signal"] as const)("erases actual no-wait Workflow Tasks and native/preparation child copies: %s",async sourceKind=>{
     const signal=sourceKind==="workflow_signal"?await analyticalSignal():null;
-    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"owner",status:"active"});
+    // beforeEach already creates the actual sourceHuman owner membership.
     await db.insert(principalPermissionGrants).values(["company_scope:read","workflows:read","issue:read","agent:read"].map(permissionKey=>({companyId,principalType:"user",principalId:"local-board",permissionKey}))).onConflictDoNothing();
-    const human={principal:{type:"user" as const,userId:"local-board"}},service=workflowService(db);
+    const human={principal:{type:"user" as const,userId:sourceActor.userId!},authorizationActor:sourceActor},service=workflowService(db);
     const created=await service.create(companyId,{name:"Retained no-wait Task procedure"},human);
     const graph={version:1 as const,nodes:[
       {id:"start",type:"core.manual_trigger",name:"Start",position:{x:0,y:0},config:{}},
@@ -838,9 +901,7 @@ const support = await getEmbeddedPostgresTestSupport();
     await instanceSettingsService(db).updateExperimental({ learning_engine_v7: true });
   });
   it.each(["preparation","native"])("retains actual analytical Foundation Context for an ordinary assigned %s run and preserves independent verified outcomes on C7",async(stage)=>{
-    const userId=randomUUID();await db.insert(authUsers).values({id:userId,name:"Current Context operator",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
-    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"admin"});
-    await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"user",principalId:userId,permissionKey})));
+    const userId=sourceActor.userId!;
     const signal=await analyticalSignal("internal",userId),link=await domainProposal(targetId,`foundation://${targetId}/${revisionId}`,change(),[signal.pin]),foundation=foundationService(db);
     await foundation.acceptProposal(companyId,targetId,link.candidateId,principal);const approved=(await foundation.get(companyId,targetId,owner))!.latestRevisionId!;
     await foundation.submitForReview(companyId,targetId,approved,principal);await foundation.approve(companyId,targetId,approved,principal);
@@ -848,7 +909,9 @@ const support = await getEmbeddedPostgresTestSupport();
     const [agent]=await db.insert(agents).values({companyId,agentIdentityId:identity!.id,name:"Actual Context consumer",status:"idle",adapterType:"paperclip_runner"}).returning();
     await db.insert(companyMemberships).values({companyId,principalType:"agent",principalId:agent!.id,status:"active"});
     await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"agent",principalId:agent!.id,permissionKey})));
-    const [task]=await db.insert(issues).values({companyId,title:"Apply evidence review",status:"in_progress",description:"Actual assigned procedure",assigneeAgentId:agent!.id,responsibleUserId:userId}).returning();
+    const createdTask=await issueService(db).create(companyId,{title:"Apply evidence review",status:"todo",description:"Actual assigned procedure",assigneeAgentId:agent!.id,createdByUserId:userId,responsibleUserId:userId},db,undefined,{manualInputActor:signal.humanActor});
+    const task=await issueService(db).update(createdTask.id,{status:"in_progress",actorUserId:userId,privacyActor:signal.humanActor,companyGuard:companyId});
+    if(!task)throw new Error("Canonical Human analytical Context Task disappeared before assignment");
     const [run]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,status:"running",responsibleUserId:userId,contextSnapshot:{issueId:task!.id}}).returning();await db.update(issues).set({executionRunId:run!.id}).where(eq(issues.id,task!.id));
     const input={companyId,agentId:agent!.id,runId:run!.id,issueId:task!.id,responsibleUserId:userId,enforceResponsibleUserIntersection:true,query:"evidence review",intent:"native_task_execution",totalDeadlineMs:30000};
     const assembled=await contextEngineService(db).assemble(input);expect(assembled.packet.foundation).toHaveLength(1);expect(assembled.markdown).toContain(change().proposedBody);
@@ -899,9 +962,7 @@ const support = await getEmbeddedPostgresTestSupport();
     await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,cognitive_memory_v7:true,memory_observations_v7:true,enableCollectiveMemoryV1:true});
   });
   it.each(["role_pack","playbook"])("retains actual learned %s signals before ordinary native runtime consumption",async(domain)=>{
-    const userId=randomUUID();await db.insert(authUsers).values({id:userId,name:"Runtime operator",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
-    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"admin"});
-    await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"user",principalId:userId,permissionKey})));
+    const userId=sourceActor.userId!;
     const signal=await analyticalSignal("internal",userId),packs=rolePackService(db),pack=await packs.create(owner,companyId,{key:"runtime-learning",name:"Runtime learning",description:""});
     const playbooks=playbookService(db);let playbook:{id:string;revisionId:string}|null=null;
     if(domain==="playbook"){
@@ -922,10 +983,21 @@ const support = await getEmbeddedPostgresTestSupport();
     await db.insert(companyMemberships).values({companyId,principalType:"agent",principalId:agent!.id,status:"active"});
     await db.insert(principalPermissionGrants).values(["company_scope:read","foundation:read","issue:read"].map(permissionKey=>({companyId,principalType:"agent",principalId:agent!.id,permissionKey})));
     await packs.assign(owner,companyId,{scopeType:"agent",scopeId:agent!.id,rolePackId:pack.id,versionPolicy:"pinned",pinnedVersionId:candidate.candidateId});
-    const [task]=await db.insert(issues).values({companyId,title:"Apply evidence review",status:"in_progress",assigneeAgentId:agent!.id,responsibleUserId:userId}).returning();
+    const createdTask=await issueService(db).create(companyId,{title:"Apply evidence review",status:"todo",assigneeAgentId:agent!.id,createdByUserId:userId,responsibleUserId:userId},db,undefined,{manualInputActor:signal.humanActor});
+    const task=await issueService(db).update(createdTask.id,{status:"in_progress",actorUserId:userId,privacyActor:signal.humanActor,companyGuard:companyId});
+    if(!task)throw new Error("Canonical Human learned-asset Task disappeared before assignment");
     const [run]=await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,responsibleUserId:userId,status:"running",runtimeMode:"native",runtimeModeResolvedAt:new Date(),nativeIssueId:task!.id,contextSnapshot:{issueId:task!.id}}).returning();
     await db.update(issues).set({executionRunId:run!.id}).where(eq(issues.id,task!.id));
     const actor={type:"agent" as const,source:"agent_jwt" as const,companyId,agentId:agent!.id,runId:run!.id,onBehalfOfUserId:userId};
+    // The server-bound runtime actor is admitted only while this exact Human,
+    // running assignment, Task and run remain current. A forged none actor
+    // cannot read the retained source after reassignment.
+    const serverActor={...actor,source:"none" as const};
+    await db.update(issues).set({assigneeAgentId:null}).where(eq(issues.id,task!.id));
+    try{
+      if(domain==="role_pack")await expect(packs.resolve(serverActor,companyId,agent!.id,undefined,"task")).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+      else await expect(playbookResolverService(db).validate(serverActor,companyId,{playbookId:playbook!.id,revisionId:playbook!.revisionId,required:true},"task")).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+    }finally{await db.update(issues).set({assigneeAgentId:agent!.id}).where(eq(issues.id,task!.id));}
     // The ordinary configuration reader retains its conversation gate. Only
     // actual assigned runtime assembly selects the explicit native Task scope.
     if(domain==="role_pack")await expect(packs.resolve(actor,companyId,agent!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
@@ -1153,7 +1225,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await providers.attach(owner,companyId,agent!.id,{providerBindingId:binding.id,providerProfileRef:agent!.id});
       await providers.recordDiscovery(companyId,agent!.id,await discoverNativeCapabilities({companyId,adapterType:agent!.adapterType,config:agent!.adapterConfig}),{connect:true,identity:true,start:true,stream:true,wait:true,cancel:true,resume:true,memoryScoping:true});
       await instanceSettingsService(db).updateExperimental({skill_resolver_v5:true});
-      const prepared=await fabric.prepare(input);expect(prepared!.manifest.skills).toMatchObject([{skillId:created.skillId,versionId:candidate.candidateId,selection:"required"}]);
+      const prepared=await fabric.prepare(input);expect(prepared!.manifest.skills).toEqual(expect.arrayContaining([expect.objectContaining({skillId:created.skillId,versionId:candidate.candidateId,selection:"required"})]));
       const human={type:"board" as const,source:"session" as const,userId};
       const [harness]=test?[test]:await db.insert(companySkillTestRuns).values({companyId,skillId:created.skillId,skillVersionId:candidate.candidateId,agentId:agent!.id,issueId:task!.id,inputSnapshot:"Native copied case",status:"succeeded"}).returning();
       await db.update(companySkillTestRuns).set({outputSnapshot:"PRIVATE COPIED TASK OUTPUT",agentConfigSnapshot:{private:"COPIED CONFIGURATION"},templateName:"COPIED NAME",templateBody:"COPIED TEMPLATE",renderedTemplateBody:"COPIED RENDERED TEMPLATE",harnessIssueDescription:"COPIED HARNESS DESCRIPTION"}).where(eq(companySkillTestRuns.id,harness!.id));
@@ -1181,13 +1253,12 @@ const support = await getEmbeddedPostgresTestSupport();
         // During that bounded preselection window only this still-current,
         // company-visible version is materializable; the manifest pin and
         // complete source graph remain mandatory.
-        await db.update(heartbeatRuns).set({runtimeMode:null,runtimeModeResolvedAt:null}).where(eq(heartbeatRuns.id,run!.id));
+        await db.update(heartbeatRuns).set({runtimeMode:"native",runtimeModeResolvedAt:null}).where(eq(heartbeatRuns.id,run!.id));
         const [preselectionEntry]=await original.listRuntimeSkillEntries(companyId,options);
         expect(preselectionEntry).toMatchObject({sourceStatus:"available",versionId:candidate.candidateId});
         expect(await fs.readFile(path.join(preselectionEntry!.source,"SKILL.md"),"utf8")).toBe(markdown);
         await db.update(heartbeatRuns).set({runtimeMode:"legacy",runtimeModeResolvedAt:new Date()}).where(eq(heartbeatRuns.id,run!.id));
-        const [resolvedLegacyEntry]=await original.listRuntimeSkillEntries(companyId,options);
-        expect(resolvedLegacyEntry?.sourceStatus).toBe("missing");
+        await expect(original.listRuntimeSkillEntries(companyId,options)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
         await db.update(heartbeatRuns).set({runtimeMode:"native",runtimeModeResolvedAt:new Date()}).where(eq(heartbeatRuns.id,run!.id));
         const privateDraft=await lifecycle.propose(owner,companyId,created.skillId,{baseActiveVersionId:candidate.candidateId,markdown:"PRIVATE NEXT VERSION MUST NOT REPLACE THE PIN",summary:"Unreviewed follow-up",dependencies:[],sharing:"private_draft"});
         expect(await original.getVersion(companyId,created.skillId,privateDraft.id,actor,"task")).toBeNull();
@@ -1387,13 +1458,20 @@ const support = await getEmbeddedPostgresTestSupport();
   });
   it("rejects reflected-only evidence, copied cases, forged baselines and unevaluated edits", async () => {
     await db.update(memoryEvidence).set({ sourceRef: `issue://${randomUUID()}` }).where(eq(memoryEvidence.memoryRecordId, roots[0]!));
-    await expect(learningService(db).create(owner, companyId, cycleInput())).rejects.toMatchObject({ status: 404 });
+    const cyclesBefore = await db.select({ id: learningCycles.id }).from(learningCycles).where(eq(learningCycles.companyId, companyId));
+    await expect(learningService(db).create(owner, companyId, cycleInput())).rejects.toMatchObject({ status: 403, message: "Derived source access is unavailable" });
+    expect(await db.select({ id: learningCycles.id }).from(learningCycles).where(eq(learningCycles.companyId, companyId))).toEqual(cyclesBefore);
+    const [originalSource] = await db.select({ deletedAt: memoryRecords.deletedAt }).from(memoryRecords).where(eq(memoryRecords.id, roots[0]!));
+    expect(originalSource?.deletedAt).toBeNull();
     await db.update(memoryEvidence).set({ sourceRef: `issue://${tasks[0]}` }).where(eq(memoryEvidence.memoryRecordId, roots[0]!));
-    const { service, hypothesis, evaluation, cycle } = await supported();
-    const copied = evaluationInput(2); copied.cases[1] = copied.cases[0]!; await expect(service.evaluate(owner, companyId, hypothesis.id, copied)).rejects.toBeDefined();
-    await expect(service.proposeChange(owner, companyId, hypothesis.id, { expectedHypothesisVersion: 2, evaluationId: evaluation.id, change: { ...change(), proposedBody: "An unevaluated security exception" } })).rejects.toMatchObject({ status: 409 });
-    const current = await service.get(owner, companyId, cycle.id);
-    await expect(service.addHypothesis(owner, companyId, cycle.id, { ...hypothesisInput(current.version), evaluationContract: { ...contract(), baselineRef: `foundation://${targetId}/${randomUUID()}` } })).rejects.toMatchObject({ status: 409 });
+    // Updating evidence invalidates the row's immutable payload-source snapshot;
+    // restoring the display ref cannot revive that original source. Continue
+    // with the separate untouched canonical Human-reviewed Memory root.
+    const { service, hypothesis, evaluation, cycle } = await supported(sourceActor,{...cycleInput(),memoryRecordIds:[roots[1]!]});
+    const copied = evaluationInput(2); copied.cases[1] = copied.cases[0]!; await expect(service.evaluate(sourceActor, companyId, hypothesis.id, copied)).rejects.toBeDefined();
+    await expect(service.proposeChange(sourceActor, companyId, hypothesis.id, { expectedHypothesisVersion: 2, evaluationId: evaluation.id, change: { ...change(), proposedBody: "An unevaluated security exception" } })).rejects.toMatchObject({ status: 409 });
+    const current = await service.get(sourceActor, companyId, cycle.id);
+    await expect(service.addHypothesis(sourceActor, companyId, cycle.id, { ...hypothesisInput(current.version), evaluationContract: { ...contract(), baselineRef: `foundation://${targetId}/${randomUUID()}` } })).rejects.toMatchObject({ status: 409 });
   });
   it("serializes hypothesis budgets and rejects agent self-certification and foreign evidence", async () => {
     const service = learningService(db), cycle = await service.create(owner, companyId, { ...cycleInput(), maxHypotheses: 1 });

@@ -616,7 +616,8 @@ export async function withOrchestrationNativeTool(
         );
     return result;
   } catch (error) {
-    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" ||
+      process.env.PAPERCLIP_NATIVE_TOOL_FAILURE_DIAGNOSTICS === "1") {
       const facts = error && typeof error === "object"
         ? error as { status?: unknown; stack?: unknown; details?: unknown } : {};
       const details = facts.details && typeof facts.details === "object"

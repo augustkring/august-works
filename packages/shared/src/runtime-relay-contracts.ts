@@ -37,6 +37,19 @@ const sandboxExecRequest = z.object({
     inputTokensUpperBound: z.number().int().min(1).max(2_000_000),
     maxOutputTokens: z.number().int().min(256).max(8192),
   }).strict().optional(),
+  // Managed OpenCode keeps one provider attached to its exact Native runner
+  // session. These phases travel only in signed sandbox_exec commands; their
+  // remaining run/cell/manifest/policy scope is the request itself.
+  modelBrokerSession: z.object({
+    phase: z.enum(["start", "refresh", "stop"]),
+    sessionKey: digest,
+    nativeSessionIdDigest: digest,
+    runnerInstanceId: z.string().uuid(),
+    leaseId: z.string().uuid(),
+    sessionDeadlineAt: z.iso.datetime(),
+    expectedCapabilityHash: digest.optional(),
+    startBindingDigest: digest.optional(),
+  }).strict().optional(),
   // Pipe the bounded string schema into the regex validator so Zod never
   // evaluates the expression against an over-limit attacker-controlled body.
   stdinBase64: z.string().max(512 * 1024).pipe(z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)),
@@ -63,7 +76,24 @@ const sandboxExecRequest = z.object({
   } else if (inputBound !== undefined || outputBound !== undefined) {
     ctx.addIssue({ code: "custom", message: "managed_model_bounds_require_typed_credential" });
   }
+  if (value.modelBrokerSession) {
+    const session = value.modelBrokerSession;
+    if (session.phase === "start" && session.expectedCapabilityHash !== undefined)
+      ctx.addIssue({ code: "custom", message: "managed_model_session_start_must_not_have_old_hash" });
+    if (session.phase !== "start" && session.startBindingDigest !== undefined)
+      ctx.addIssue({ code: "custom", message: "managed_model_session_start_binding_digest_is_start_only" });
+    if (session.phase !== "start" && !session.expectedCapabilityHash)
+      ctx.addIssue({ code: "custom", message: "managed_model_session_transition_requires_old_hash" });
+    if (session.phase !== "stop" && !value.modelBrokerCredential)
+      ctx.addIssue({ code: "custom", message: "managed_model_session_requires_typed_credential" });
+  }
 });
+export const runtimeModelBrokerSessionReceiptSchema = z.object({
+  sessionKey: digest,
+  capabilityHash: digest,
+  expiresAt: z.iso.datetime(),
+}).strict();
+export type RuntimeModelBrokerSessionReceipt = z.infer<typeof runtimeModelBrokerSessionReceiptSchema>;
 export const runtimeSandboxExecRelayRequestSchema = sandboxExecRequest;
 export type RuntimeSandboxExecRelayRequest = z.infer<typeof sandboxExecRequest>;
 export const runtimeRelayMessageSchema = z.discriminatedUnion("type", [
@@ -97,6 +127,7 @@ export const runtimeRelayMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("exec_output"), channelId,
     stream: z.enum(["stdout", "stderr"]), base64: z.string().min(1).max(128 * 1024),
   }).strict(),
-  z.object({ type: z.literal("exec_exit"), channelId, exitCode: z.number().int().min(-255).max(255), timedOut: z.boolean() }).strict(),
+  z.object({ type: z.literal("exec_exit"), channelId, exitCode: z.number().int().min(-255).max(255), timedOut: z.boolean(),
+    modelBrokerSessionReceipt: runtimeModelBrokerSessionReceiptSchema.optional() }).strict(),
   z.object({ type: z.literal("exec_error"), channelId, code: z.enum(["runtime_unavailable", "policy_changed", "exec_unknown", "exec_rejected", "exec_timeout"]) }).strict(),
 ]);

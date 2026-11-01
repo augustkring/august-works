@@ -509,6 +509,7 @@ export async function resolveEnvironmentExecutionTarget(input: {
                     // over `forceSession` and over the active-step selection.
                     bypassSession: commandInput.bypassSession,
                     nativePreparationPurpose: commandInput.nativePreparationPurpose,
+                    modelBrokerSessionPhase: commandInput.modelBrokerSessionPhase,
                   });
                 } catch (error) {
                   // The provider execution threw. Mark the span failed with the

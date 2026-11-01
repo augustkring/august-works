@@ -19,20 +19,20 @@
     "noneStated": "Der er ikke angivet begrænsninger i denne note."
   },
   "costPricing": {
-      "unknown_one": "Pris ukendt for {{count}} forbrugshændelse",
-      "unknown_other": "Pris ukendt for {{count}} forbrugshændelser",
-      "partial_one": "{{amount}} + {{count}} forbrugshændelse uden pris",
-      "partial_other": "{{amount}} + {{count}} forbrugshændelser uden pris",
-      "recordedPeriodSpend": "Registreret forbrug i perioden: {{amount}}",
-      "recordedWeekSpend": "Denne uge: {{amount}}",
-      "budgetComparisonUnavailable": "Budget sammenlignes ikke, når nogle priser er ukendte.",
-      "recordedProviderEventsPerSuccessfulRun": "Registreret omkostning for leverandørhændelser pr. gennemført kørsel",
-      "providerCostPerSuccessfulRunScope": "Kun registrerede leverandøromkostningshændelser knyttet til gennemførte kørsler. Det er ikke bekræftet, at alle hændelser er registreret. Udelukker fejlede kørsler samt omkostninger til runtime, lager, netværk, værktøjer, analyse og support; dette er ikke den samlede serviceomkostning.",
-      "providerCostPerSuccessfulRunReportedEvents": "Registrerede leverandørhændelser på tværs af {{count}} gennemførte kørsler; det er ikke bekræftet, at alle hændelser er registreret.",
-      "providerCostPerSuccessfulRunEstimatedEvents": "Inkluderer estimerede registrerede leverandørhændelser på tværs af {{count}} gennemførte kørsler; det er ikke bekræftet, at alle hændelser er registreret.",
-      "providerCostPerSuccessfulRunIncomplete": "Ikke tilgængelig",
-      "providerCostPerSuccessfulRunUnavailable": "Ingen gennemførte kørsler i denne periode",
-      "providerCostPerSuccessfulRunMissing": "{{missing}} gennemførte kørsler mangler en tilknyttet omkostningshændelse; {{unpriced}} tilknyttede hændelser mangler en pris."
+    "unknown_one": "Pris ukendt for {{count}} forbrugshændelse",
+    "unknown_other": "Pris ukendt for {{count}} forbrugshændelser",
+    "partial_one": "{{amount}} + {{count}} forbrugshændelse uden pris",
+    "partial_other": "{{amount}} + {{count}} forbrugshændelser uden pris",
+    "recordedPeriodSpend": "Registreret forbrug i perioden: {{amount}}",
+    "recordedWeekSpend": "Denne uge: {{amount}}",
+    "budgetComparisonUnavailable": "Budget sammenlignes ikke, når nogle priser er ukendte.",
+    "recordedProviderEventsPerSuccessfulRun": "Registreret omkostning for leverandørhændelser pr. gennemført kørsel",
+    "providerCostPerSuccessfulRunScope": "Kun registrerede leverandøromkostningshændelser knyttet til gennemførte kørsler. Det er ikke bekræftet, at alle hændelser er registreret. Udelukker fejlede kørsler samt omkostninger til runtime, lager, netværk, værktøjer, analyse og support; dette er ikke den samlede serviceomkostning.",
+    "providerCostPerSuccessfulRunReportedEvents": "Registrerede leverandørhændelser på tværs af {{count}} gennemførte kørsler; det er ikke bekræftet, at alle hændelser er registreret.",
+    "providerCostPerSuccessfulRunEstimatedEvents": "Inkluderer estimerede registrerede leverandørhændelser på tværs af {{count}} gennemførte kørsler; det er ikke bekræftet, at alle hændelser er registreret.",
+    "providerCostPerSuccessfulRunIncomplete": "Ikke tilgængelig",
+    "providerCostPerSuccessfulRunUnavailable": "Ingen gennemførte kørsler i denne periode",
+    "providerCostPerSuccessfulRunMissing": "{{missing}} gennemførte kørsler mangler en tilknyttet omkostningshændelse; {{unpriced}} tilknyttede hændelser mangler en pris."
   },
   "slackConnection": {
     "requestedUserScopes": "Slack anmoder om disse brugertilladelser. Slack-botappen til chat er separat:",
@@ -130,7 +130,11 @@
     "searchHelp": "Prøv et andet navn eller en anden rolle.",
     "clearSearch": "Ryd søgning",
     "noPreference": "Spørg mig hver gang",
-    "status": { "paused": "Sat på pause", "terminated": "Afsluttet", "pendingApproval": "Afventer godkendelse" }
+    "status": {
+      "paused": "Sat på pause",
+      "terminated": "Afsluttet",
+      "pendingApproval": "Afventer godkendelse"
+    }
   },
   "needsYou": "Kræver dig",
   "inProgress": "I gang",
@@ -277,9 +281,21 @@
       "disclosure": "De to vurderinger gemmes sammen med denne feedback og vises til dig og autoriserede produktoperatører. De er valgfrie, samles ikke til en score og følger feedbackens regler for opbevaring og sletning. Du kan senere trække dem tilbage under Min feedback.",
       "choose": "Vælg en vurdering",
       "satisfaction": "Hvor tilfreds var du med det resultat, du forsøgte at opnå?",
-      "satisfactionOptions": { "very_dissatisfied": "Meget utilfreds", "dissatisfied": "Utilfreds", "neither": "Hverken tilfreds eller utilfreds", "satisfied": "Tilfreds", "very_satisfied": "Meget tilfreds" },
+      "satisfactionOptions": {
+        "very_dissatisfied": "Meget utilfreds",
+        "dissatisfied": "Utilfreds",
+        "neither": "Hverken tilfreds eller utilfreds",
+        "satisfied": "Tilfreds",
+        "very_satisfied": "Meget tilfreds"
+      },
       "effort": "Hvor let eller svært var det at opnå resultatet?",
-      "effortOptions": { "very_difficult": "Meget svært", "difficult": "Svært", "neither": "Hverken let eller svært", "easy": "Let", "very_easy": "Meget let" },
+      "effortOptions": {
+        "very_difficult": "Meget svært",
+        "difficult": "Svært",
+        "neither": "Hverken let eller svært",
+        "easy": "Let",
+        "very_easy": "Meget let"
+      },
       "withdrawNotice": "Du har tidligere delt valgfrie vurderinger af oplevelsen med denne feedback.",
       "withdraw": "Træk de valgfrie vurderinger tilbage",
       "withdrawing": "Trækker tilbage…",
@@ -316,7 +332,12 @@
       "product_outcome": "Produktresultat",
       "other": "Andet"
     },
-    "problemImpacts": { "blocked": "Blokeret", "limited": "Begrænset", "question": "Spørgsmål", "unknown": "Ukendt" },
+    "problemImpacts": {
+      "blocked": "Blokeret",
+      "limited": "Begrænset",
+      "question": "Spørgsmål",
+      "unknown": "Ukendt"
+    },
     "omitName": "Medtag ikke mit navn i denne feedback",
     "nameNotice": "Virksomhed og teknisk kontekst kan stadig medtages. En separat beskyttet kontorelation giver dig adgang til din feedback; sikkerhedslogning har sit eget formål.",
     "imagesUnavailable": "Billedvedhæftninger er midlertidigt utilgængelige.",
@@ -3735,7 +3756,11 @@
       "placementNone": "Ingen dedikeret placering",
       "placementGateway": "Dedikeret gateway",
       "placementVm": "Dedikeret virtuel maskine",
-      "placementValues": { "none": "Ingen dedikeret placering", "dedicated_gateway": "Dedikeret gateway", "dedicated_vm": "Dedikeret virtuel maskine" },
+      "placementValues": {
+        "none": "Ingen dedikeret placering",
+        "dedicated_gateway": "Dedikeret gateway",
+        "dedicated_vm": "Dedikeret virtuel maskine"
+      },
       "retention": "Aktuel beskrivelse af opbevaringspolitikken",
       "contractEvidence": "Gennemgået kontraktdokumentation (valgfri)",
       "contractEvidenceHelp": "Tilføj den præcise gennemgåede HTTPS-fil og dens SHA-256, eller lad begge felter være tomme, hvis der ikke er registreret aktuel dokumentation.",
@@ -3754,13 +3779,38 @@
       "placementRequired": "Vælg virksomhedens aktuelle placering.",
       "factsInvalid": "Nogle driftsforhold mangler eller er ugyldige. Kontrollér beskrivelsen af opbevaring, dokumentationsfelterne, udbyderposterne og mindst én aktuel begrænsning."
     },
-    "statuses": { "draft": "Kladde", "qualified": "Kvalificeret", "suspended": "Suspenderet", "retired": "Afsluttet" },
-    "responsibilities": { "aw_subprocessor": "Blentera-underdatabehandler", "customer_selected": "Kundevalgt udbyder" },
+    "statuses": {
+      "draft": "Kladde",
+      "qualified": "Kvalificeret",
+      "suspended": "Suspenderet",
+      "retired": "Afsluttet"
+    },
+    "responsibilities": {
+      "aw_subprocessor": "Blentera-underdatabehandler",
+      "customer_selected": "Kundevalgt udbyder"
+    },
     "dpaStatus": "DPA-status",
-    "dpaStatuses": { "unknown": "Ukendt", "pending": "Afventer", "reviewed": "Gennemgået", "customer_selected_responsibility": "Kundevalgt ansvar" },
-    "criticalities": { "low": "Lav", "material": "Væsentlig", "high": "Høj" },
-    "providerStatuses": { "unknown": "Ukendt", "active": "Aktiv", "withdrawn": "Tilbagekaldt" },
-    "bindingStatuses": { "active": "Aktiv", "withdrawn": "Tilbagekaldt", "suspended": "Suspenderet" }
+    "dpaStatuses": {
+      "unknown": "Ukendt",
+      "pending": "Afventer",
+      "reviewed": "Gennemgået",
+      "customer_selected_responsibility": "Kundevalgt ansvar"
+    },
+    "criticalities": {
+      "low": "Lav",
+      "material": "Væsentlig",
+      "high": "Høj"
+    },
+    "providerStatuses": {
+      "unknown": "Ukendt",
+      "active": "Aktiv",
+      "withdrawn": "Tilbagekaldt"
+    },
+    "bindingStatuses": {
+      "active": "Aktiv",
+      "withdrawn": "Tilbagekaldt",
+      "suspended": "Suspenderet"
+    }
   },
   "aiGovernance": {
     "title": "AI-styring",
@@ -3854,8 +3904,18 @@
         "social_scoring": "Social bedømmelse",
         "sensitive_trait_inference": "Slutninger om følsomme egenskaber"
       },
-      "criticality": { "low": "Lav", "medium": "Middel", "high": "Høj", "critical": "Kritisk" },
-      "framework": { "eu_ai_act": "EU's AI-forordning", "gdpr": "GDPR", "company_policy": "Virksomhedspolitik", "sector_overlay": "Branchespecifikt rammeværk" },
+      "criticality": {
+        "low": "Lav",
+        "medium": "Middel",
+        "high": "Høj",
+        "critical": "Kritisk"
+      },
+      "framework": {
+        "eu_ai_act": "EU's AI-forordning",
+        "gdpr": "GDPR",
+        "company_policy": "Virksomhedspolitik",
+        "sector_overlay": "Branchespecifikt rammeværk"
+      },
       "classification": {
         "uncertain": "Usikker",
         "reviewed": "Gennemgået",
@@ -3864,7 +3924,12 @@
         "high_risk": "Høj risiko",
         "prohibited": "Forbudt"
       },
-      "friaApplicability": { "yes": "Ja", "no": "Nej", "uncertain": "Usikker", "review_required": "Gennemgang påkrævet" },
+      "friaApplicability": {
+        "yes": "Ja",
+        "no": "Nej",
+        "uncertain": "Usikker",
+        "review_required": "Gennemgang påkrævet"
+      },
       "oversightMode": {
         "monitor_only": "Kun overvågning",
         "review_before_material_action": "Gennemgang før væsentlig handling",
@@ -3928,7 +3993,10 @@
           "applicable": "Gældende",
           "not_applicable": "Ikke gældende"
         },
-        "analyticalStatus": { "approved": "Godkendt efter Human-gennemgang", "suspended": "Suspenderet" },
+        "analyticalStatus": {
+          "approved": "Godkendt efter Human-gennemgang",
+          "suspended": "Suspenderet"
+        },
         "analyticalPurpose": {
           "management_intelligence": "Ledelsesindsigt",
           "process_intelligence": "Procesindsigt"
@@ -3945,7 +4013,10 @@
           "planning": "Planlægning",
           "reviews": "Gennemgange"
         },
-        "sensitivity": { "internal": "Intern", "confidential": "Fortrolig" }
+        "sensitivity": {
+          "internal": "Intern",
+          "confidential": "Fortrolig"
+        }
       }
     }
   },
@@ -4111,5 +4182,11 @@
     "registryTitle": "Register over kapabiliteters livscyklus",
     "registryDescription": "Komplet oversigt fra det fælles kapabilitetskatalog. Tomme eller ukvalificerede felter er ikke kvalificeret endnu; de betyder ikke, at en kapabilitet eller dens data mangler.",
     "internalNewUse": "Intern — tilbydes ikke til kundebrug. Denne indstilling sletter ikke eksisterende data eller annullerer gendannelsesarbejde, som eksisterende tjenester ejer."
+  },
+  "taskChatSystemNotice": {
+    "runtimeUnavailableTitle": "Opgaven er sat på pause — runtime utilgængelig",
+    "runtimeUnavailableDetail": "Denne runtime kan ikke bruges til administrerede modelkald. Vælg en tilgængelig runtime i Runtime-indstillinger.",
+    "toolUnavailableTitle": "Opgaven er sat på pause — værktøjet er utilgængeligt",
+    "toolUnavailableDetail": "Dette værktøj kan ikke bruges til administreret arbejde. Vælg et tilgængeligt værktøj, eller kontakt din virksomheds administrator."
   }
 }

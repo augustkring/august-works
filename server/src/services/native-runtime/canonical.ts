@@ -17,6 +17,11 @@ export function nativeSha256(value: unknown): string {
   return createHash("sha256").update(canonicalNativeJson(value), "utf8").digest("hex");
 }
 
+/** Runnerd's provider-visible wrapper for a successful call_api tool result. */
+export function nativeCallApiResultEnvelope<T>(callId: string, result: T) {
+  return { ok: true as const, operationId: "call_api" as const, callId, result };
+}
+
 /** Hash the exact public comment projection returned by Native history reads.
  * This is deliberately distinct from the database owner-snapshot body hash. */
 export function nativeCommentProjectionHash(input: { body: unknown; presentation?: unknown; metadata?: unknown }): string {

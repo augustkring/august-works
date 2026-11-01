@@ -1,7 +1,8 @@
+import { readRunLeaseCleanup, verifyRunLeaseCleanupReceipt, verifyNativeCleanupRuntimeState } from "./run-lease-cleanup.js";
 import { randomUUID } from "node:crypto";
 import type { SandboxQualificationCredentialClaim } from "../../agent-auth-jwt.js";
 import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, environmentLeases, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, type Db } from "@paperclipai/db";
+import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, environmentLeases, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, runtimeOperations, sandboxQualificationRuns, type Db } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
@@ -44,7 +45,6 @@ export function sandboxCapabilityFacts(value: ReturnType<typeof sandboxCapabilit
     openshellCliSha256: qualificationTarget.openshellCliSha256,
     dockerEngineIdHash: qualificationTarget.dockerEngineIdHash,
     policyVersion: qualificationTarget.policyVersion,
-    configRevision: qualificationTarget.configRevision,
     mechanism: qualificationTarget.mechanism,
     probeFixtureHash: qualificationTarget.probeFixtureHash,
     qualificationCredentialFixture: qualificationTarget.qualificationCredentialFixture ?? null,
@@ -58,7 +58,7 @@ export function executionSandboxService(db: Db, options: {
   backendFor?: (binding: Binding, actor: AuthorizationActor) => ExecutionSandboxBackend | undefined;
   nativeOperation?: (companyId: string, cellId: string, userId: string, action: "stop" | "delete", idempotencyKey: string) => Promise<{ id: string }>;
   assertRuntimeStartAdmission?: (tx: Db, input: { actor: AuthorizationActor; companyId: string; cellId: string; userId: string }) => Promise<unknown>;
-  recordRuntimeWorkloadState?: (tx: Db, input: { action: "start" | "stop"; companyId: string; cellId: string; bindingId: string; generation: string; hostCommandId: string; claimKey: string; policySnapshotId: string; executionManifestId: string; executionManifestHash: string; policyHash: string; userId: string; idempotencyKey?: string }) => Promise<unknown>;
+  recordRuntimeWorkloadState?: (tx: Db, input: { action: "start" | "stop"; companyId: string; cellId: string; bindingId: string; generation: string; hostCommandId: string; claimKey: string; policySnapshotId: string; executionManifestId: string; executionManifestHash: string; policyHash: string; userId: string; idempotencyKey?: string; nativeCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; originalRequesterUserId: string } }) => Promise<unknown>;
 } = {}) {
   async function access(tx: Db, actor: AuthorizationActor, companyId: string, mutate = false) {
     if (mutate) await assertConfiguredOperatorAuthentication(tx, actor, options.operatorUserIds ?? []);
@@ -410,7 +410,102 @@ export function executionSandboxService(db: Db, options: {
     }
     return { row, currentCell, imageDigest, snapshot, capability, source, selected, claimEvent };
   }
+  async function finishStop(actor: AuthorizationActor | null, companyId: string, id: string,
+    initial: { claimKey: string; policySnapshotId: string; executionManifestId: unknown; executionManifestHash: unknown; policyHash: unknown },
+    scope: ReturnType<typeof identity>, operationId: string, idempotencyKey: string,
+    nativeCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; originalRequesterUserId: string }) {
+    return withV7ActivityTransaction(db, async (tx, publications) => {
+          await tx.select({ id: runtimeCells.id }).from(runtimeCells).where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, scope.cellId))).for("update");
+          const [current] = await tx.select().from(runtimeSandboxBindings).where(and(
+            eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, id),
+            eq(runtimeSandboxBindings.cellGeneration, scope.cellGeneration),
+            inArray(runtimeSandboxBindings.status, nativeCleanup ? ["admitting", "running", "stopping", "quarantined", "stopped"] : ["admitting", "running", "stopping", "quarantined"]),
+          )).for("update");
+          if (!current) throw conflict("Sandbox changed while Stop was completing");
+          if (actor) await assertV7Authorization(tx, actor, companyId, "runtime:manage");
+          else if (!nativeCleanup) throw conflict("Native cleanup completion requires its exact signed receipt");
+          if (nativeCleanup) {
+            const physical = await verifyRunLeaseCleanupReceipt(tx, nativeCleanup, nativeCleanup.receipt);
+            // Recheck under the same cell/binding locks after a competing Stop
+            // may have committed; an unlocked discovery miss is not a new effect.
+            const [completed] = await tx.select({ id: runtimeOperations.id }).from(runtimeOperations).where(and(
+              eq(runtimeOperations.companyId, companyId), eq(runtimeOperations.runtimeCellId, scope.cellId),
+              eq(runtimeOperations.operationType, "stop"), eq(runtimeOperations.idempotencyKey, idempotencyKey),
+            )).limit(1);
+            if (completed) return { binding: current, receipt: await verifyNativeCleanupRuntimeState(tx, nativeCleanup,
+              { ...physical, sandboxStop: { ...physical.sandboxStop, runtimeOperationId: completed.id } }) };
+          }
+          let stopping = current;
+          if (nativeCleanup && current.status !== "stopping") {
+            const [claimed] = await tx.update(runtimeSandboxBindings).set({ status: "stopping", version: current.version + 1, updatedAt: new Date() }).where(and(
+              eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, id),
+              eq(runtimeSandboxBindings.cellGeneration, scope.cellGeneration), eq(runtimeSandboxBindings.version, current.version),
+            )).returning();
+            if (!claimed) throw conflict("Sandbox changed before its cleanup Stop claim was recorded");
+            stopping = claimed;
+            await logActivity(tx, { companyId, actorType: "system", actorId: "native-run-cleanup",
+              action: "sandbox.workload_stop_claimed", entityType: "runtime_sandbox", entityId: id,
+              details: { generation: scope.cellGeneration, policySnapshotId: initial.policySnapshotId,
+                claimKey: initial.claimKey, idempotencyKey, originalRequesterUserId: nativeCleanup.originalRequesterUserId } }, publications);
+          }
+          if (!options.recordRuntimeWorkloadState || typeof initial.executionManifestId !== "string" || typeof initial.executionManifestHash !== "string" || typeof initial.policyHash !== "string")
+            throw conflict("Original runtime state owner or exact admission claim is unavailable");
+          const stateReceipt = await options.recordRuntimeWorkloadState(tx, {
+            action: "stop", companyId, cellId: scope.cellId, bindingId: id,
+            generation: scope.cellGeneration, hostCommandId: operationId!,
+            claimKey: initial.claimKey, policySnapshotId: initial.policySnapshotId,
+            executionManifestId: initial.executionManifestId,
+            executionManifestHash: initial.executionManifestHash,
+            policyHash: initial.policyHash, userId: actor ? v7HumanActorId(actor) : nativeCleanup!.originalRequesterUserId,
+            ...(nativeCleanup ? { nativeCleanup } : {}),
+            idempotencyKey,
+          });
+          const [updated] = await tx.update(runtimeSandboxBindings).set({ status: "stopped", version: stopping.version + 1, updatedAt: new Date() }).where(and(
+            eq(runtimeSandboxBindings.id, id), eq(runtimeSandboxBindings.version, stopping.version),
+          )).returning();
+          if (!updated) throw conflict("Sandbox changed while recording Stop");
+          await tx.update(runtimePolicySnapshots).set({ status: "revoked" }).where(and(
+            eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, id),
+            inArray(runtimePolicySnapshots.status, ["draft", "qualified"]),
+          ));
+          await logActivity(tx, {
+            companyId, actorType: actor ? "user" : "system", actorId: actor ? v7HumanActorId(actor) : "native-run-cleanup",
+            action: "sandbox.workload_stopped", entityType: "runtime_sandbox", entityId: id,
+            details: { cellId: scope.cellId, generation: scope.cellGeneration, policySnapshotId: initial.policySnapshotId, claimKey: initial.claimKey, idempotencyKey, operationId, stopConfirmed: true,
+              ...(nativeCleanup ? { originalRequesterUserId: nativeCleanup.originalRequesterUserId } : {}) },
+          }, publications);
+          if (nativeCleanup) {
+            const id = stateReceipt && typeof stateReceipt === "object" && "id" in stateReceipt ? stateReceipt.id : null;
+            if (typeof id !== "string") throw conflict("The canonical runtime state owner returned no receipt");
+            const physical = await verifyRunLeaseCleanupReceipt(tx, nativeCleanup, nativeCleanup.receipt);
+            const receipt = await verifyNativeCleanupRuntimeState(tx, nativeCleanup,
+              { ...physical, sandboxStop: { ...physical.sandboxStop, runtimeOperationId: id } });
+            return { binding: updated!, receipt };
+          }
+          return { binding: updated!, receipt: undefined };
+    });
+  }
   return {
+    async recordNativeCleanupStop(input: { companyId: string; runId: string; leaseId: string }, physicalReceipt: unknown) {
+      const owner = await readRunLeaseCleanup(db, input);
+      const physical = await verifyRunLeaseCleanupReceipt(db, input, physicalReceipt);
+      const key = `native-run-cleanup:${input.runId}:${input.leaseId}:${physical.sandboxStop.stopCommandId}`;
+      const [completed] = await db.select({ id: runtimeOperations.id }).from(runtimeOperations).where(and(
+        eq(runtimeOperations.companyId, input.companyId), eq(runtimeOperations.runtimeCellId, owner.scope.cellId),
+        eq(runtimeOperations.operationType, "stop"), eq(runtimeOperations.idempotencyKey, key),
+      )).limit(1);
+      if (completed) return await verifyNativeCleanupRuntimeState(db, input,
+        { ...physical, sandboxStop: { ...physical.sandboxStop, runtimeOperationId: completed.id } });
+      const result = await finishStop(null, input.companyId, owner.scope.bindingId, {
+        claimKey: owner.claimKey, policySnapshotId: owner.session.policySnapshotId,
+        executionManifestId: owner.session.manifestId, executionManifestHash: owner.session.manifestHash,
+        policyHash: owner.session.policyHash,
+      }, owner.scope, physical.sandboxStop.stopCommandId,
+      key,
+      { companyId: input.companyId, runId: input.runId, leaseId: input.leaseId,
+        receipt: physical, originalRequesterUserId: owner.startRequest.requesterUserId! });
+      return result.receipt!;
+    },
     assertTaskExecutionContext,
     posture: async (actor: AuthorizationActor, companyId: string, cellId: string): Promise<SandboxPosture> => {
       await access(db, actor, companyId); const current = await cell(db, companyId, cellId);
@@ -485,7 +580,11 @@ export function executionSandboxService(db: Db, options: {
       const preparedForQualification = provisioningIntent
         ? await selected.prepareSandbox(identity(initial), provisioningIntent)
         : undefined;
-      const report = await runSandboxQualification(selected, identity(initial), startedAt, initial.boundaryPolicyHash, initial.boundaryPolicy.requiredControls,
+      // `startedAt` remains the immutable source for the original qualification
+      // expiry. The attestation's testedAt is checked against the time after
+      // Host preparation, which may legitimately take several seconds.
+      const qualificationObservedAt = new Date();
+      const report = await runSandboxQualification(selected, identity(initial), qualificationObservedAt, initial.boundaryPolicyHash, initial.boundaryPolicy.requiredControls,
         preparedForQualification?.sandboxId && preparedForQualification.containerId && preparedForQualification.hostEpoch && preparedForQualification.provisioningHash && preparedForQualification.policyHash && preparedForQualification.probePolicyHash && preparedForQualification.resourceLimits
           ? { bindingVersion: initial.version, sandboxId: preparedForQualification.sandboxId, containerId: preparedForQualification.containerId,
               hostEpoch: preparedForQualification.hostEpoch, imageDigest: preparedForQualification.imageDigest,
@@ -494,13 +593,14 @@ export function executionSandboxService(db: Db, options: {
           : undefined,
         selected.evidenceKind === "protected_host_report" && initial.boundaryPolicy.credentials.mode === "brokered"
           ? async ({ test, target }) => {
-              return createToolGatewayService(db, { operatorUserIds: options.operatorUserIds }).issueSandboxQualificationCredentialProbe({
+              return createToolGatewayService(db, { operatorUserIds: options.operatorUserIds, qualificationBrokerOrigin: options.credentialBrokerOrigin ?? undefined }).issueSandboxQualificationCredentialProbe({
                 actor, scope: identity(initial), bindingVersion: initial.version, operationKey: qualificationOperationKey,
                 target, caseId: test.caseId as SandboxQualificationCredentialClaim["caseId"],
                 commandId: randomUUID(),
               });
             }
-          : undefined);
+          : undefined,
+        provisioningIntent ? qualificationExpiry : undefined);
       if (preparedForQualification) {
         await selected.stopWorkload({
           ...identity(initial),
@@ -678,42 +778,8 @@ export function executionSandboxService(db: Db, options: {
         const observation = await selected.inspectWorkload(scope);
         stopConfirmed = observation.state === "stopped" && observation.generation === scope.cellGeneration && observation.imageDigest === initial.row.capabilitySnapshot?.sandboxImageDigest;
         if (!stopConfirmed) throw conflict("Sandbox Stop did not independently confirm the exact workload stopped");
-        const stoppedBinding = await withV7ActivityTransaction(db, async (tx, publications) => {
-          await tx.select({ id: runtimeCells.id }).from(runtimeCells).where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, scope.cellId))).for("update");
-          const [current] = await tx.select().from(runtimeSandboxBindings).where(and(
-            eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, id),
-            eq(runtimeSandboxBindings.cellGeneration, scope.cellGeneration),
-            inArray(runtimeSandboxBindings.status, ["admitting", "running", "stopping", "quarantined"]),
-          )).for("update");
-          if (!current) throw conflict("Sandbox changed while Stop was completing");
-          await assertV7Authorization(tx, actor, companyId, "runtime:manage");
-          if (!options.recordRuntimeWorkloadState || typeof initial.executionManifestId !== "string" || typeof initial.executionManifestHash !== "string" || typeof initial.policyHash !== "string")
-            throw conflict("Original runtime state owner or exact admission claim is unavailable");
-          await options.recordRuntimeWorkloadState(tx, {
-            action: "stop", companyId, cellId: scope.cellId, bindingId: id,
-            generation: scope.cellGeneration, hostCommandId: operationId!,
-            claimKey: initial.claimKey, policySnapshotId: initial.policySnapshotId,
-            executionManifestId: initial.executionManifestId,
-            executionManifestHash: initial.executionManifestHash,
-            policyHash: initial.policyHash, userId: v7HumanActorId(actor),
-            idempotencyKey,
-          });
-          const [updated] = await tx.update(runtimeSandboxBindings).set({ status: "stopped", version: current.version + 1, updatedAt: new Date() }).where(and(
-            eq(runtimeSandboxBindings.id, id), eq(runtimeSandboxBindings.version, current.version),
-          )).returning();
-          if (!updated) throw conflict("Sandbox changed while recording Stop");
-          await tx.update(runtimePolicySnapshots).set({ status: "revoked" }).where(and(
-            eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, id),
-            inArray(runtimePolicySnapshots.status, ["draft", "qualified"]),
-          ));
-          await logActivity(tx, {
-            companyId, actorType: "user", actorId: v7HumanActorId(actor),
-            action: "sandbox.workload_stopped", entityType: "runtime_sandbox", entityId: id,
-            details: { cellId: scope.cellId, generation: scope.cellGeneration, policySnapshotId: initial.policySnapshotId, claimKey: initial.claimKey, idempotencyKey, operationId, stopConfirmed: true },
-          }, publications);
-          return updated!;
-        });
-        return { binding: stoppedBinding, operationId, stopConfirmed: true as const };
+        const stoppedBinding = await finishStop(actor, companyId, id, initial, scope, operationId!, idempotencyKey);
+        return { binding: stoppedBinding.binding, operationId, stopConfirmed: true as const };
       } catch (error) {
         const fenced = await fenceSandboxAdmissionOutcome(db, {
           companyId, bindingId: id, cellId: scope.cellId, generation: scope.cellGeneration,

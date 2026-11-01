@@ -16,8 +16,9 @@ import { NATIVE_COMPLETION_CONTRACT_SCHEMA } from "./completion-contracts.js";
 import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopIntent } from "../acknowledged-native-stop.js";
 import { stoppedCodexTurnIsTextOnly } from "./stopped-codex-turn.js";
 import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
+import { assertNativePaidTransportAdmitted } from "./paid-transport-admission.js";
 import { readNativeLocalProcessStop, PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
-import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
+import { REMOTE_NATIVE_ERASER_ENV, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
   REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
   REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
   REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT } from "./remote-runner-identity.js";
@@ -65,7 +66,7 @@ import type {
   AdapterExecutionResult,
   AdapterRuntimeEvent,
 } from "../../adapters/index.js";
-import { conversationModelBindingSchema, nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
+import { conversationModelBindingSchema, nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, unionNativePayloadSourceInputs,
   type NativeFinalizationResult, type NativePayloadSourceInput, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import type { NativeBootstrapSourceClosure, NativeConsumedSourceComponent, NativeModelOutputCapture, NativePayloadSourceSet } from "./native-execution-input.js";
 import { exactNativeInteractionSourceInputs } from "./native-execution-input.js";
@@ -165,7 +166,9 @@ import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, ass
   nativeMemoryReviewTransitionStateHash, assertNativeProjectSourceCurrent,
   assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
-import { assertNativeManagedProjectCreateReceiptCurrentInTransaction, type NativeProjectCreateReceipt } from "../native-project-output.js";
+import { assertNativeManagedProjectCreateReceiptCurrentInTransaction, managedNativeProjectArgumentsJsonSchema,
+  managedNativeProjectArgumentsSchema, managedNativeProjectApiBodyJsonSchema, managedNativeProjectApiCallSchema,
+  type NativeProjectCreateReceipt } from "../native-project-output.js";
 import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource,
   type NativeInputToolResultSource, type NativeProjectToolResultSource,
   type NativeManagedProjectCreateCapture } from "./paperclip-runner-tool-authority.js";
@@ -1563,7 +1566,19 @@ class SessionToolAuthorityEpoch {
 
   async execute(call: Parameters<PaperclipRunnerToolAuthority["execute"]>[0] & { turnId?: string }) {
     this.#assertCurrent();
+    const phaseTool = ["self_remember", "read_context"].includes(call.tool) ? call.tool : "other";
+    const phaseEnabled = process.env.PAPERCLIP_NATIVE_CONTEXT_PHASE_DIAGNOSTICS === "1";
+    const phaseStart = phaseEnabled ? performance.now() : 0;
+    let phasePrevious = phaseStart;
+    const markPhase = (phase: string) => {
+      if (!phaseEnabled) return;
+      const now = performance.now();
+      console.error("native_tool_source_phase_counts", JSON.stringify({ tool: phaseTool, phase,
+        elapsedMs: now - phasePrevious, totalMs: now - phaseStart }));
+      phasePrevious = now;
+    };
     const execute = async () => {
+      markPhase("queue_wait");
       this.#assertCurrent();
       const toolResultDiagnostics = process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1";
       const reportContextToolFailure = (event: string, error: unknown) => {
@@ -1581,7 +1596,9 @@ class SessionToolAuthorityEpoch {
             typeof diagnostic?.statusCode === "number" ? diagnostic.statusCode : null, frames }));
       };
       const reportCreateTaskFailure = (event: string, error: unknown) => {
-        if (!toolResultDiagnostics || !["create_task", "create_project"].includes(call.tool)) return;
+        const managedProjectApiCall = call.tool === "call_api" && projectCreateCapture?.value !== null &&
+          projectCreateCapture?.value !== undefined;
+        if (!toolResultDiagnostics || (!managedProjectApiCall && !["create_task", "create_project"].includes(call.tool))) return;
         const diagnostic = error && typeof error === "object"
           ? error as Error & { code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown; constraint_name?: unknown } } : null;
         const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_:-]{1,100}$/i.test(value) ? value : null;
@@ -1614,6 +1631,7 @@ class SessionToolAuthorityEpoch {
           throw error;
         }
       }
+      markPhase("dispatch_binding");
       const projectReadCapture: { value: NativeProjectToolResultSource | null } = { value: null };
       const projectCreateCapture: { value: NativeManagedProjectCreateCapture | null } = { value: null };
       let result: unknown;
@@ -1633,6 +1651,7 @@ class SessionToolAuthorityEpoch {
         reportCreateTaskFailure("managed_create_task_authority_failure_test_facts", error);
         throw error;
       }
+      markPhase("authority_effect");
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" ||
         call.tool === "create_task" || call.tool === "self_remember" || call.tool === "read_context" ||
         call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment" || call.tool === "query_business_metric")) {
@@ -1647,9 +1666,16 @@ class SessionToolAuthorityEpoch {
           throw error;
         }
       }
-      if (call.turnId && call.tool === "call_api" && projectReadCapture.value?.source)
-        await this.onManagedOpenCodeToolResult?.({ tool: "call_api", callId: call.callId, turnId: call.turnId,
-          argumentsHash, result, projectRead: projectReadCapture.value });
+      if (call.turnId && call.tool === "call_api" && (projectReadCapture.value?.source || projectCreateCapture.value))
+        try {
+          await this.onManagedOpenCodeToolResult?.({ tool: "call_api", callId: call.callId, turnId: call.turnId,
+            argumentsHash, result,
+            ...(projectReadCapture.value?.source ? { projectRead: projectReadCapture.value } : {}),
+            ...(projectCreateCapture.value ? { projectCreate: projectCreateCapture.value } : {}) });
+        } catch (error) {
+          reportCreateTaskFailure("managed_project_api_result_callback_failure_test_facts", error);
+          throw error;
+        }
       if (call.turnId && call.tool === "create_project" && projectCreateCapture.value)
         try {
           await this.onManagedOpenCodeToolResult?.({ tool: "create_project", callId: call.callId, turnId: call.turnId,
@@ -1660,9 +1686,13 @@ class SessionToolAuthorityEpoch {
         }
       else if (call.turnId && call.tool === "create_project" && this.onManagedOpenCodeToolResult)
         throw new Error("managed_opencode_tool_result_binding_invalid");
+      markPhase("result_capture");
       return result;
     };
-    const run = async () => this.toolTrace ? this.toolTrace.execute(call, execute) : execute();
+    const run = async () => {
+      try { return await (this.toolTrace ? this.toolTrace.execute(call, execute) : execute()); }
+      finally { markPhase("trace_and_return"); }
+    };
     let result: unknown;
     if (this.onManagedOpenCodeToolResult) {
       // OpenCode may dispatch parallel tool calls from one assistant message.
@@ -8281,30 +8311,47 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
   projectCreate?: NativeManagedProjectCreateCapture;
   outputCapture?: NativeModelOutputCapture | null;
 }): Promise<void> {
-  let diagnosticPhase: "capture_binding" | "transaction_locks" | "run_receipt" | "provider_dispatch" |
-    "project_source" | "memory_source" | "context_source" | "document_task_source" | "receipt_build" | "receipt_persist" | "lease_renew" = "capture_binding";
+  type CapturePhase = "capture_binding" | "transaction_locks" | "run_receipt" | "provider_dispatch" |
+    "project_source" | "memory_source" | "context_source" | "document_task_source" | "receipt_build" | "receipt_persist" | "lease_renew";
+  let diagnosticPhase: CapturePhase = "capture_binding";
+  let phaseStarted = process.env.PAPERCLIP_NATIVE_CONTEXT_PHASE_DIAGNOSTICS === "1" ? performance.now() : null;
+  const markResultPhase = (next: CapturePhase) => {
+    if (phaseStarted !== null) {
+      const now = performance.now();
+      console.error("native_tool_capture_phase_counts", JSON.stringify({
+        tool: ["self_remember", "read_context"].includes(input.tool) ? input.tool : "other",
+        phase: diagnosticPhase, elapsedMs: now - phaseStarted }));
+      phaseStarted = now;
+    }
+    diagnosticPhase = next;
+  };
   const projectRead = input.tool === "call_api" ? input.projectRead : undefined;
-  const projectCreate = input.tool === "create_project" ? input.projectCreate : undefined;
-  if (input.tool === "create_project" && (!projectCreate || projectCreate.receipt.tool !== "create_project" ||
+  const projectCreate = input.tool === "create_project" ||
+    (input.tool === "call_api" && input.projectCreate?.receipt.tool === "call_api") ? input.projectCreate : undefined;
+  const projectOutput = input.tool === "call_api" ? record(input.result).data : input.result;
+  if ((input.tool === "create_project" || projectCreate) && (!projectCreate ||
+    projectCreate.receipt.tool !== (input.tool === "call_api" ? "call_api" : "create_project") ||
     projectCreate.receipt.callId !== input.callId || projectCreate.receipt.argumentsHash !== input.argumentsHash ||
-    projectCreate.receipt.resultDigest !== nativeSha256(input.result) || !isDeepStrictEqual(projectCreate.project, input.result) ||
+    projectCreate.receipt.resultDigest !== nativeSha256(projectOutput) || !isDeepStrictEqual(projectCreate.project, projectOutput) ||
     !isDeepStrictEqual(projectCreate.sourceSet, projectCreate.outputCapture.sourceSet) ||
     projectCreate.outputCapture.managedOpenCodeToolUse?.callId !== input.callId ||
-    projectCreate.outputCapture.managedOpenCodeToolUse?.toolName !== "create_project" ||
+    projectCreate.outputCapture.managedOpenCodeToolUse?.toolName !== projectCreate.receipt.tool ||
     projectCreate.outputCapture.managedOpenCodeToolUse?.argumentsHash !== input.argumentsHash))
     throw new Error("managed_opencode_tool_result_binding_invalid");
-  if (input.tool === "call_api" && (!projectRead?.source || projectRead.tool !== "call_api" ||
+  if (input.tool === "call_api" && !projectCreate && (!projectRead?.source || projectRead.tool !== "call_api" ||
     projectRead.operationId !== "GET /api/projects/{id}" || projectRead.callId !== input.callId ||
     projectRead.turnId !== input.turnId || !/^[0-9a-f]{64}$/.test(projectRead.requestHash) ||
     !/^[0-9a-f]{64}$/.test(projectRead.resultDigest))) throw new Error("managed_opencode_tool_result_binding_invalid");
-  const digest = projectRead?.resultDigest ?? nativeSha256(input.result);
+  const digest = projectRead?.resultDigest ?? (projectCreate && input.tool === "call_api"
+    ? nativeSha256({ ok: true, operationId: "call_api", callId: input.callId, result: input.result })
+    : nativeSha256(input.result));
   try {
     await input.db.transaction(async tx => {
-      diagnosticPhase = "transaction_locks";
+      markResultPhase("transaction_locks");
       await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
       await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
       await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
-      diagnosticPhase = "run_receipt";
+      markResultPhase("run_receipt");
       const [run] = await tx.select().from(heartbeatRuns).where(and(
         eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
         eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
@@ -8319,6 +8366,15 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       const call = Array.isArray(associations) ? associations.map(record).filter(value =>
         value.callId === input.callId && value.turnId === input.turnId && value.tool === input.tool &&
         value.argumentsHash === input.argumentsHash) : [];
+      if (projectCreate && input.tool === "call_api") {
+        const effect = projectCreate.apiEffect;
+        if (!effect || effect.operationId !== "POST /api/companies/{companyId}/projects" || effect.method !== "POST" ||
+          effect.pathAndQuery !== `/api/companies/${input.companyId}/projects` || effect.turnId !== input.turnId ||
+          effect.dispatchId !== call[0]?.dispatchId || effect.eventSeq !== call[0]?.eventSeq ||
+          effect.attempt !== call[0]?.attempt || !/^[0-9a-f]{64}$/.test(effect.apiReceiptDigest) ||
+          !/^[0-9a-f]{64}$/.test(effect.bodyHash))
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+      }
       const invocationToolName = input.tool === "self_remember" ? "paperclip-self:remember" : input.tool;
       const nativeReadResultTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
         input.tool === "read_chat_attachment" || input.tool === "query_business_metric";
@@ -8410,7 +8466,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         parsed.data.binding.runId !== input.runId || parsed.data.binding.agentId !== input.agentId ||
         parsed.data.binding.responsibleUserId !== run.responsibleUserId)
         throw new Error("managed_opencode_tool_result_binding_invalid");
-      diagnosticPhase = "provider_dispatch";
+      markResultPhase("provider_dispatch");
       const matchingModelCalls = Array.isArray(profile.nativeAwModelWireIntents)
         ? profile.nativeAwModelWireIntents.map(record).filter(intent => {
             const uses = Array.isArray(intent.responseToolUses) ? intent.responseToolUses.map(record) : [];
@@ -8441,8 +8497,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       let createdProjectSource: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
       let createdProjectWorkspaceSources: Extract<NativePayloadSourceInput, { kind: "project_workspace" }>[] = [];
       let projectCreateSourceSet: NativePayloadSourceSet | null = null;
-      if (input.tool === "call_api") {
-        diagnosticPhase = "project_source";
+      if (input.tool === "call_api" && projectRead) {
+        markResultPhase("project_source");
         const source = projectRead?.source;
         const response = record(input.result);
         const { apiOperationId: _apiOperationId, ...responseBody } = response;
@@ -8483,8 +8539,33 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           actor: projectActor, source: projectSource.data });
         returnedProjectSource = projectSource.data;
       }
-      if (input.tool === "create_project") {
-        diagnosticPhase = "project_source";
+      if (input.tool === "call_api" && projectCreate) {
+        markResultPhase("project_source");
+        const response = record(input.result);
+        const { apiOperationId, ...providerResponse } = response;
+        const expectedApiResult = { ...providerResponse,
+          operationId: "POST /api/companies/{companyId}/projects" };
+        const apiReceipts = record(record(run.resultJson).apiToolReceipts);
+        const apiReceipt = record(apiReceipts[createHash("sha256").update(input.callId).digest("hex")]);
+        const matchingAssociation = Array.isArray(profile.nativeToolCallDispatchAssociations)
+          ? profile.nativeToolCallDispatchAssociations.map(record).filter(value => value.callId === input.callId &&
+            value.turnId === input.turnId && value.tool === "call_api" && value.argumentsHash === input.argumentsHash &&
+            value.dispatchId === call[0]!.dispatchId && value.eventSeq === call[0]!.eventSeq && value.attempt === call[0]!.attempt)
+          : [];
+        if (apiOperationId !== "POST /api/companies/{companyId}/projects" || response.ok !== true || response.status !== 201 ||
+          !isDeepStrictEqual(response.data, projectCreate.project) || matchingAssociation.length !== 1 ||
+          apiReceipt.callId !== input.callId || apiReceipt.turnId !== input.turnId ||
+          apiReceipt.eventSeq !== call[0]!.eventSeq || apiReceipt.attempt !== call[0]!.attempt ||
+          apiReceipt.operationId !== "POST /api/companies/{companyId}/projects" || apiReceipt.method !== "POST" ||
+          apiReceipt.pathAndQuery !== `/api/companies/${input.companyId}/projects` ||
+          apiReceipt.argumentsHash !== input.argumentsHash || apiReceipt.state !== "completed" ||
+          !/^[0-9a-f]{64}$/.test(String(apiReceipt.digest)) || !isDeepStrictEqual(apiReceipt.result, expectedApiResult) ||
+          apiReceipt.providerResultDigest !== nativeSha256({ ok: true, operationId: "call_api", callId: input.callId,
+            result: response }))
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+      }
+      if (input.tool === "create_project" || (input.tool === "call_api" && projectCreate)) {
+        markResultPhase("project_source");
         const created = projectCreate!;
         const sourcePolicyParse = nativePayloadSourcePolicySchema.safeParse(created.sourceSet.policy);
         const sourceInputsParse = nativePayloadSourceInputSchema.array().safeParse(created.sourceSet.inputs);
@@ -8500,7 +8581,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           issueId: input.issueId, runId: input.runId,
           actor: { type: "agent", source: "none", companyId: input.companyId, agentId: input.agentId,
             runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined },
-          receipt: created.receipt, sourceSet: sourceSetParse.data, outputCapture: created.outputCapture, result: input.result });
+          receipt: created.receipt, sourceSet: sourceSetParse.data, outputCapture: created.outputCapture, result: projectOutput });
         createdProjectSource = projectSourceParse.data;
         createdProjectWorkspaceSources = workspaceSourcesParse.data as Extract<NativePayloadSourceInput, { kind: "project_workspace" }>[];
         projectCreateSourceSet = sourceSetParse.data;
@@ -8514,7 +8595,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         : null;
       let returnedMemorySource: Extract<NativePayloadSourceInput, { kind: "memory" }> | null = null;
       if (input.tool === "self_remember") {
-        diagnosticPhase = "memory_source";
+        markResultPhase("memory_source");
         const resultData = record(record(input.result).data);
         const resultMemory = record(resultData.record);
         const memoryId = resultMemory.id;
@@ -8544,16 +8625,19 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       }
       let contextReadCapture: Record<string, unknown> | null = null;
       if (input.tool === "read_context") {
-        diagnosticPhase = "context_source";
+        markResultPhase("context_source");
         const visible = record(input.result);
         const context = input.contextRead;
         const contextInputs = context?.sourceSet.inputs.filter(source => source.kind === "context") ?? [];
+        const currentManifestId = context?.manifestIds[0]?.contextManifestId;
+        const currentContextInputs = contextInputs.filter(source => source.kind === "context" && source.manifestId === currentManifestId);
         const contextSourceReferenceCount = context
           ? context.sourceSet.inputs.length + Object.values(context.sourceSet.policy).reduce((sum, ids) => sum + ids.length, 0)
           : Number.POSITIVE_INFINITY;
         if (!context || typeof visible.markdown !== "string" || visible.markdown !== context.markdown ||
-          Object.keys(visible).length !== 1 || contextInputs.length !== 1 || contextSourceReferenceCount > 256 ||
-          context.manifestIds.length !== 1 || context.manifestIds[0]?.contextManifestId !== contextInputs[0]?.manifestId ||
+          Object.keys(visible).length !== 1 || contextInputs.length === 0 || contextInputs.length > 64 ||
+          new Set(contextInputs.map(source => source.manifestId)).size !== contextInputs.length || currentContextInputs.length !== 1 ||
+          contextSourceReferenceCount > 256 || context.manifestIds.length !== 1 ||
           context.manifestIds[0]?.companyId !== input.companyId || context.markdown.length > 64_000)
           throw new Error("managed_opencode_tool_result_binding_invalid");
         await assertNativeContextReadSourceSetCurrent(tx as unknown as Db, { companyId: input.companyId,
@@ -8565,7 +8649,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       }
       let returnedDocumentSource: Extract<NativePayloadSourceInput, { kind: "document_revision" }> | null = null;
       if (input.tool === "read_document") {
-        diagnosticPhase = "document_task_source";
+        markResultPhase("document_task_source");
         const readCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
           ? profile.nativeToolResultSourceCaptures.map(record).filter(value => value.managedOpenCode !== true &&
               value.callId === input.callId && value.tool === input.tool && value.resultDigest === digest)
@@ -8715,7 +8799,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         ...(returnedProjectSource ? { projectSource: returnedProjectSource } : {}),
         ...(projectCreateSourceSet ? { projectCreate: { receipt: projectCreate!.receipt,
           sourceSet: projectCreateSourceSet, workspaceSources: createdProjectWorkspaceSources,
-          outputCapture: projectCreate!.outputCapture } } : {}),
+          outputCapture: projectCreate!.outputCapture,
+          ...(projectCreate!.apiEffect ? { apiEffect: projectCreate!.apiEffect } : {}) } } : {}),
         taskRef: createdTask ? { issueId: createdTask.id } : null,
         ...(contextReadCapture ? { contextRead: contextReadCapture } : {}), managedOpenCode: true }];
       const { digest: _receiptDigest, ...body } = parsed.data;
@@ -8729,7 +8814,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           responsibleUserId: run.responsibleUserId,
           ...(projectCreateSourceSet && createdProjectSource && createdProjectPolicy ? {
             policy: createdProjectPolicy,
-            inputs: [inputSource, ...projectCreateSourceSet.inputs, createdProjectSource, ...createdProjectWorkspaceSources],
+            inputs: unionNativePayloadSourceInputs([[inputSource], projectCreateSourceSet.inputs,
+              [createdProjectSource, ...createdProjectWorkspaceSources]]),
           } : input.tool === "read_context" && input.contextRead ? {
             policy: input.contextRead.sourceSet.policy,
             inputs: [inputSource, ...input.contextRead.sourceSet.inputs],
@@ -8745,7 +8831,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
               ...(returnedProjectSource ? [returnedProjectSource] : [])],
           }),
         }] };
-      diagnosticPhase = "receipt_build";
+      markResultPhase("receipt_build");
       const receipt = { ...updatedReceiptBody, digest: await postgresJsonbSha256(tx, updatedReceiptBody) };
       if (!nativeRunInputSourceReceiptSchema.safeParse(receipt).success || Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024)
         throw new Error("managed_opencode_tool_result_budget_exceeded");
@@ -8753,12 +8839,12 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         ...profile, nativeInputSourceReceipt: receipt, nativeToolResultSourceCaptures: nextCaptures,
       }, updatedAt: new Date() }).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.status, "running")))
         .returning({ profile: heartbeatRuns.runnerProfileJson });
-      diagnosticPhase = "receipt_persist";
+      markResultPhase("receipt_persist");
       const retained = record(stored?.profile);
       if (!nativeRunInputSourceReceiptSchema.safeParse(retained.nativeInputSourceReceipt).success ||
         !Array.isArray(retained.nativeToolResultSourceCaptures) || nativeSha256(retained.nativeToolResultSourceCaptures) !== nativeSha256(nextCaptures))
         throw new Error("managed_opencode_tool_result_persistence_failed");
-      diagnosticPhase = "lease_renew";
+      markResultPhase("lease_renew");
       await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
     });
   } catch (error: unknown) {
@@ -8785,7 +8871,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       "managed_opencode_tool_result_binding_invalid", "managed_opencode_tool_result_budget_exceeded",
       "managed_opencode_tool_result_duplicate", "managed_opencode_tool_result_persistence_failed"].includes(message)
       ? message : "managed_opencode_tool_result_persistence_failed");
-  }
+  } finally { markResultPhase(diagnosticPhase); }
 }
 
 async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
@@ -8827,22 +8913,14 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
     const args = record(input.arguments), pathParams = record(args.pathParams);
     const uuid = typeof pathParams.id === "string" &&
       /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(pathParams.id) && pathParams.id === pathParams.id.toLowerCase();
-    if (!isDeepStrictEqual(Object.keys(args).sort(), ["operationId", "pathParams"]) ||
-      args.operationId !== "GET /api/projects/{id}" ||
-      !isDeepStrictEqual(Object.keys(pathParams), ["id"]) || !uuid)
+    const projectRead = isDeepStrictEqual(Object.keys(args).sort(), ["operationId", "pathParams"]) &&
+      args.operationId === "GET /api/projects/{id}" && isDeepStrictEqual(Object.keys(pathParams), ["id"]) && uuid;
+    const projectCreate = managedNativeProjectApiCallSchema.safeParse(input.arguments);
+    if (!projectRead && (!projectCreate.success || projectCreate.data.pathParams.companyId !== input.companyId))
       throw new Error("managed_opencode_project_api_operation_not_supported");
   }
   if (input.tool === "create_project") {
-    const args = record(input.arguments);
-    const workspace = args.workspace === undefined ? undefined : record(args.workspace);
-    const allowed = ["description", "idempotencyKey", "name", "workspace"];
-    if (Object.keys(args).some(key => !allowed.includes(key)) ||
-      typeof args.name !== "string" || args.name.trim().length < 1 || args.name.length > 200 ||
-      typeof args.idempotencyKey !== "string" || args.idempotencyKey.trim().length < 1 || args.idempotencyKey.length > 255 ||
-      workspace === undefined ||
-      (args.description !== undefined && (typeof args.description !== "string" || args.description.length > 4_000)) ||
-      (workspace !== undefined && (Object.keys(workspace).length !== 1 || typeof workspace.name !== "string" ||
-        workspace.name.trim().length < 1 || workspace.name.length > 200)))
+    if (!managedNativeProjectArgumentsSchema.safeParse(input.arguments).success)
       throw new Error("managed_opencode_project_create_arguments_not_supported");
   }
   const matchedIntent = matchingCallId[0]!.intent;
@@ -9384,6 +9462,17 @@ export async function executePaperclipNativeSession(input: {
     },
   ) => Promise<unknown>;
 }): Promise<AdapterExecutionResult> {
+  assertNativePaidTransportAdmitted({
+    provider: input.execution.provider.kind,
+    adapterType: input.adapterType,
+    companyId: input.execution.binding.companyId,
+    agentId: input.execution.binding.agentId,
+    serverOwnedDraft:
+      input.execution.provider.kind === "aw_text_only" && input.backend !== undefined && input.useRunnerd !== true,
+    useRunnerd: input.useRunnerd,
+    backendDriverKind: input.execution.session.driverKind,
+    executionTarget: input.runnerExecutionTarget,
+  });
   const runId = input.execution.binding.runId;
   if (nativeSessionStartups.has(runId)) {
     throw new Error("native_session_supervisor_busy");
@@ -10493,26 +10582,32 @@ async function executePaperclipNativeSessionWithinScope(
                 leaseOwner, attempt, controller });
             },
             onNativeToolCall: async call => {
-              if (managedOpenCodeOutputCaptureRef) {
-                managedOpenCodeOutputCaptureRef.value = null;
-                if (managedContextReadCaptureRef) managedContextReadCaptureRef.value = null;
-                if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
-                await assertManagedOpenCodeToolCallCurrent({ db: input.db, runId, companyId: input.execution.binding.companyId,
-                  issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
-                  leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call });
-              }
-              await recordNativeToolCallDispatchAssociation({
-                db: input.db, runId, companyId: input.execution.binding.companyId,
-                issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
-                leaseOwner, attempt, controller, ...call,
-              });
-              if (managedOpenCodeOutputCaptureRef && ["write_document", "create_task", "create_project", "self_remember"].includes(call.tool)) {
-                if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
-                managedOpenCodeOutputCaptureRef.value = await prepareManagedOpenCodeOutputCapture({
+              try {
+                if (managedOpenCodeOutputCaptureRef) {
+                  managedOpenCodeOutputCaptureRef.value = null;
+                  if (managedContextReadCaptureRef) managedContextReadCaptureRef.value = null;
+                  if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
+                  await assertManagedOpenCodeToolCallCurrent({ db: input.db, runId, companyId: input.execution.binding.companyId,
+                    issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                    leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call });
+                }
+                const associationRecorded = await recordNativeToolCallDispatchAssociation({
                   db: input.db, runId, companyId: input.execution.binding.companyId,
                   issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
-                  leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call,
+                  leaseOwner, attempt, controller, ...call,
                 });
+                const managedProjectApiCreate = call.tool === "call_api" &&
+                  managedNativeProjectApiCallSchema.safeParse(call.arguments).success;
+                if (managedOpenCodeOutputCaptureRef && (["write_document", "create_task", "create_project", "self_remember"].includes(call.tool) || managedProjectApiCreate)) {
+                  if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
+                  managedOpenCodeOutputCaptureRef.value = await prepareManagedOpenCodeOutputCapture({
+                    db: input.db, runId, companyId: input.execution.binding.companyId,
+                    issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                    leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call,
+                  });
+                }
+              } catch (error) {
+                throw error;
               }
             },
             ...(input.execution.provider.kind === "opencode" && (input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()
@@ -12030,7 +12125,7 @@ export async function stageRemoteRunnerFile(input: {
   forceRelayChunking?: boolean;
 }): Promise<void> {
   const runner = input.runner;
-  if (input.forceRelayChunking && input.nativePreparationPurpose === "provider_artifact") {
+  if ((input.forceRelayChunking || input.target.transport === "sandbox") && input.nativePreparationPurpose === "provider_artifact") {
     const bytes = readFileSync(input.sourcePath);
     await stageRemoteArtifactBytesInChunks({
       runner,
@@ -12740,6 +12835,8 @@ export function createRemoteRunnerProcessLauncher(input: {
   runner: CommandManagedRuntimeRunner;
   /** Exact server-selected conversation OpenCode startup phase, never user supplied. */
   nativeSessionStart?: boolean;
+  /** Server-selected managed OpenCode session provider lifecycle, never user supplied. */
+  managedModelSession?: boolean;
   /** Exact read-only Runner state owner; never user or model supplied. */
   nativeHarnessState?: boolean;
   remoteBinary: string;
@@ -12872,6 +12969,7 @@ export function createRemoteRunnerProcessLauncher(input: {
         timeoutMs: 20_000,
         bypassSession: true,
         ...(input.nativeSessionStart ? { nativePreparationPurpose: "native_session_start" as const } : {}),
+        ...(input.managedModelSession ? { modelBrokerSessionPhase: "start" as const } : {}),
         onLog: input.onLog,
       });
       if (launchResult.exitCode !== 0 || launchResult.timedOut) {
@@ -12948,6 +13046,7 @@ export function createRemoteRunnerProcessLauncher(input: {
             bypassSession: true,
             timeoutMs: 10_000,
             ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+            ...(input.managedModelSession ? { modelBrokerSessionPhase: "refresh" as const } : {}),
           });
         } catch (error) {
           if (!input.nativeHarnessState || !(error instanceof Error) ||
@@ -12965,6 +13064,19 @@ export function createRemoteRunnerProcessLauncher(input: {
         }
         child.exitCode = null;
         const identityMismatch = observed.exitCode === 4;
+        if (input.managedModelSession && !identityMismatch) {
+          const stopped = await runner.execute({
+            command: "sh",
+            args: ["-c", REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, "paperclip-runner-monitor", input.processIdentityPath,
+              identityNonce, input.runnerInstanceId, String(identity.pid)],
+            bypassSession: true,
+            timeoutMs: 10_000,
+            ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+            modelBrokerSessionPhase: "stop",
+          });
+          if (stopped.exitCode === 0 || stopped.timedOut)
+            throw new Error("runner_model_provider_session_stop_unconfirmed");
+        }
         const diagnostic = await runner
           .execute({
             command: "sh",
@@ -13423,37 +13535,32 @@ async function createRunnerdBackendWithinSessionClaim(
       if (name === "create_project" && !input.nativeModelOutputCapture) return [];
       const schema = structuredClone(raw);
       if (name === "call_api") {
-        // The managed source contract currently qualifies only the existing
-        // authenticated Project GET. Pin this exact operation into the
-        // provider-visible schema; the ordinary Native API authority remains
-        // responsible for every call and does not gain an alternate route.
-        schema.description = "Read one current Project through the existing authenticated API route. This managed provider profile supports only GET /api/projects/{id}.";
+        // Keep the existing Project GET and add only the exact existing Project
+        // POST whose server owner verifies the managed call capture, signed
+        // Native effect claim, current task source, and Human-bound Project
+        // receipt. No other API operation becomes provider-visible.
+        schema.description = "Read one current Project, or create one private internal Project, through the existing authenticated API routes. Supported operations are exactly GET /api/projects/{id} and POST /api/companies/{companyId}/projects.";
         schema.inputSchema = {
-          type: "object", additionalProperties: false,
+          type: "object",
+          additionalProperties: false,
           properties: {
-            operationId: { type: "string", enum: ["GET /api/projects/{id}"] },
+            operationId: { type: "string", enum: [
+              "GET /api/projects/{id}", "POST /api/companies/{companyId}/projects",
+            ] },
             pathParams: { type: "object", additionalProperties: false,
-              properties: { id: { type: "string", format: "uuid" } }, required: ["id"] },
+              properties: { id: { type: "string", format: "uuid" }, companyId: { type: "string", format: "uuid" } } },
+            body: managedNativeProjectApiBodyJsonSchema(),
           },
           required: ["operationId", "pathParams"],
         };
       }
       if (name === "create_project") {
         // Managed OpenCode may create only an internal private Project from a
-        // minimal name/description/workspace label. Repository attachment,
-        // environment, publication, and policy fields remain unavailable.
-        schema.description = "Create one private internal Project from the current governed task context with a required server-managed local workspace name. This managed profile supports only name, optional description, that workspace label, and an idempotency key; it cannot attach repositories or configure execution policy.";
-        schema.inputSchema = {
-          type: "object", additionalProperties: false,
-          properties: {
-            name: { type: "string", minLength: 1, maxLength: 200 },
-            description: { type: "string", maxLength: 4000 },
-            workspace: { type: "object", additionalProperties: false,
-              properties: { name: { type: "string", minLength: 1, maxLength: 200 } }, required: ["name"] },
-            idempotencyKey: { type: "string", minLength: 1, maxLength: 255 },
-          },
-          required: ["name", "workspace", "idempotencyKey"],
-        };
+        // minimal name/description/local-workspace label and optional explicit
+        // GitHub repository URLs. Repo IDs, fetches, credentials, publication,
+        // environment, and execution policy remain unavailable.
+        schema.description = "Create one private internal Project from the current governed task context with a required server-managed local workspace name. Optionally register HTTPS GitHub owner/repository URLs as additional workspaces; URLs are normalized and duplicates collapse. This does not select repository IDs, fetch repositories, provide credentials, or configure execution policy.";
+        schema.inputSchema = managedNativeProjectArgumentsJsonSchema();
       }
       return [{ ...schema, name }];
     });
@@ -13686,10 +13793,11 @@ async function createRunnerdBackendWithinSessionClaim(
       throw new Error("Managed OpenCode provider data erasure is not qualified for remote runner storage");
     const probeNonce = randomUUID();
     const probe = await remoteCommandRunner.execute({
-      command: "sh",
+      command: "/bin/sh",
       args: ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT,
         "paperclip-native-asset-erasure-probe", remoteTarget.remoteCwd, remoteSessionDigest,
         input.execution.binding.runId, probeNonce],
+      env: { ...REMOTE_NATIVE_ERASER_ENV },
       cwd: remoteTarget.remoteCwd,
       timeoutMs: 15_000,
       bypassSession: true,
@@ -15162,8 +15270,9 @@ async function createRunnerdBackendWithinSessionClaim(
           target: remoteTarget,
           runner: remoteCommandRunner,
           nativeHarnessState: nativeConversationHarnessState,
-          nativeSessionStart: input.conversationMode === true &&
-            remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
+          nativeSessionStart: remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
+            input.execution.session.driverKind === "opencode_server",
+          managedModelSession: remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
             input.execution.session.driverKind === "opencode_server",
           remoteBinary,
           processIdentityPath: posix.join(

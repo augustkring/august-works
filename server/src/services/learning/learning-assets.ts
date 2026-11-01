@@ -45,7 +45,11 @@ export async function retainLearnedAssetsInContext(db:Db,companyId:string,actor:
   sources.forEach(source=>manifests.add(source.id));
  }
  budget();if(pins.size>32||manifests.size>26200)throw conflict("The learned Context exceeds its complete-source retention budget");
- await withNativeAnalyticalReader(db,companyId,actor,()=>retainAnalyticalContextResult(db,companyId,actor,contextId,{result:{assets},sourceManifestIds:[...manifests],authorityPins:[...pins.values()],retentionUntil:new Date(expiresAt)}),"task");
+ const retain=()=>retainAnalyticalContextResult(db,companyId,actor,contextId,{result:{assets},sourceManifestIds:[...manifests],authorityPins:[...pins.values()],retentionUntil:new Date(expiresAt)});
+ if(actor.type==="agent"&&actor.source==="none"){
+  const {withNativeAnalyticalSourceReader}=await import("../analytical-reader.js");
+  await withNativeAnalyticalSourceReader(db,companyId,actor,retain,"task");
+ }else await withNativeAnalyticalReader(db,companyId,actor,retain,"task");
 }
 
 /** Generated Skill copies require the actual immutable native pin, current
@@ -89,6 +93,119 @@ export async function assertRuntimeSkillSourceRetained(db:Db,companyId:string,ac
  for(const cycle of source.cycles){
   const [coverage]=await db.execute<{covered:number}>(sql`select count(distinct d.source_manifest_id)::int as covered from learning_analytical_dependencies d where d.company_id=${companyId}::uuid and d.cycle_id=${cycle.id}::uuid and exists(select 1 from analytical_context_dependencies a join context_manifest_memory_roots r on r.company_id=a.company_id and r.memory_record_id=a.memory_record_id where a.company_id=d.company_id and a.source_manifest_id=d.source_manifest_id and r.manifest_id=${pin.context_id}::uuid)`);
   if(coverage?.covered!==cycle.analyticalSourceCount)throw forbidden("The complete pinned Skill Source was not retained",{code:"analytical_source_access_lost"});
+ }
+ return selected;
+}
+
+export type RetainedRuntimeSkillSourcePin = Omit<Extract<import("@paperclipai/shared").NativePayloadSourceInput,
+ {kind:"runtime_skill"}>,"versionId"> & {versionId:string};
+const retainedSkillRecord=(value:unknown):Record<string,unknown>=>value && typeof value==="object" && !Array.isArray(value)
+ ? value as Record<string,unknown> : {};
+const retainedSkillLost=()=>forbidden("The retained runtime Skill producer is unavailable");
+
+/** Authenticate the persisted producer without borrowing its identity or
+ * requiring its historical Run to be live. Current reader policy is separate. */
+export async function assertRetainedRuntimeSkillProducer(db:Db,companyId:string,producerRunId:string,
+ source:RetainedRuntimeSkillSourcePin){
+ const {heartbeatRuns,companySkills,companySkillVersions,agentExecutionManifests,agentExecutionManifestItems,contextManifests}=await import("@paperclipai/db");
+ const {nativePayloadSourceInputSchema,nativeRunInputSourceReceiptSchema,agentExecutionManifestSchema,platformSkillIdentitySchema}=await import("@paperclipai/shared");
+ const parsedSource=nativePayloadSourceInputSchema.safeParse(source);
+ if(!parsedSource.success || parsedSource.data.kind!=="runtime_skill" || !parsedSource.data.versionId)throw retainedSkillLost();
+ source=parsedSource.data as RetainedRuntimeSkillSourcePin;
+ const {hashContextPolicySnapshot}=await import("../context/context-manifest.js");
+ const {nativeRuntimeAssetsRoot}=await import("../native-runtime/runtime-asset-retention.js");
+ const {readNativeRuntimeAssetText}=await import("../native-runtime/runtime-context.js");
+ const path=await import("node:path");
+ const [run]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,producerRunId))).for("share");
+ if(!run || run.runtimeMode!=="native" || run.nativeInputSourceProtocolVersion!==1 || !run.responsibleUserId)throw retainedSkillLost();
+ const profile=retainedSkillRecord(run.runnerProfileJson);
+ const {parseNativeExecutionInput}=await import("../../vendor/paperclip-runner/index.js");
+ let execution:ReturnType<typeof parseNativeExecutionInput>;
+ try{execution=parseNativeExecutionInput(profile.nativeExecutionInput);}catch{throw retainedSkillLost();}
+ if(execution.binding.companyId!==companyId || execution.binding.runId!==producerRunId || execution.binding.agentId!==run.agentId || !run.nativeIssueId || execution.binding.issueId!==run.nativeIssueId)
+  throw retainedSkillLost();
+ const runtime=retainedSkillRecord("runtimeContext" in execution ? execution.runtimeContext : null);
+ const skills=Array.isArray(runtime.skills)?runtime.skills.map(retainedSkillRecord):[];
+ const selected=skills.filter(skill=>skill.key===source.key && skill.versionId===source.versionId &&
+  retainedSkillRecord(skill.bundle).digest===source.bundleDigest && retainedSkillRecord(skill.bundle).manifestDigest===source.manifestDigest);
+ if(selected.length!==1)throw retainedSkillLost();
+ const bundle=selected[0]!.bundle as Parameters<typeof readNativeRuntimeAssetText>[0];
+ if(bundle.rootPath!==path.join(nativeRuntimeAssetsRoot({companyId,runId:producerRunId}),"bundles",source.bundleDigest))throw retainedSkillLost();
+ const receipt=nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+ if(!receipt.success || receipt.data.binding.companyId!==companyId || receipt.data.binding.runId!==producerRunId ||
+  receipt.data.binding.agentId!==run.agentId || receipt.data.binding.responsibleUserId!==run.responsibleUserId || receipt.data.binding.issueId!==run.nativeIssueId ||
+  !receipt.data.bootstrap.inputs.some(pin=>pin.kind==="runtime_skill" && pin.key===source.key && pin.versionId===source.versionId &&
+    pin.bundleDigest===source.bundleDigest && pin.manifestDigest===source.manifestDigest))throw retainedSkillLost();
+ const {digest:_receiptDigest,...receiptBody}=receipt.data;
+ const [receiptHash]=await db.execute<{digest:string;execution_digest:string}>(sql`select encode(sha256(convert_to((${JSON.stringify(receiptBody)}::jsonb)::text,'UTF8')),'hex') as digest, encode(sha256(convert_to((${JSON.stringify(profile.nativeExecutionInput)}::jsonb)::text,'UTF8')),'hex') as execution_digest`);
+ if(receiptHash?.digest!==receipt.data.digest || receiptHash.execution_digest!==receipt.data.bootstrap.executionInputDigest)throw retainedSkillLost();
+ const [version]=await db.select({skill:companySkills,version:companySkillVersions}).from(companySkillVersions)
+  .innerJoin(companySkills,and(eq(companySkills.companyId,companySkillVersions.companyId),eq(companySkills.id,companySkillVersions.companySkillId)))
+  .where(and(eq(companySkillVersions.companyId,companyId),eq(companySkillVersions.id,source.versionId),eq(companySkills.key,source.key))).for("share");
+ if(!version)throw retainedSkillLost();
+ const [manifestRow]=await db.select().from(agentExecutionManifests).where(and(
+  eq(agentExecutionManifests.companyId,companyId),eq(agentExecutionManifests.runId,producerRunId),eq(agentExecutionManifests.agentId,run.agentId))).for("share");
+ const originalManifestId=retainedSkillRecord(run.contextSnapshot).v5ExecutionManifestId;
+ if(originalManifestId!==undefined && originalManifestId!==null &&
+  (typeof originalManifestId!=="string" || !manifestRow || manifestRow.id!==originalManifestId))throw retainedSkillLost();
+ let contextId:string|null=null;
+ if(manifestRow){
+  const parsed=agentExecutionManifestSchema.safeParse(manifestRow.manifest);
+  if(!parsed.success || manifestRow.hash!==hashContextPolicySnapshot(parsed.data) ||
+   parsed.data.companyId!==companyId || parsed.data.runId!==producerRunId || parsed.data.agentId!==run.agentId ||
+   parsed.data.agentIdentityId!==manifestRow.agentIdentityId || parsed.data.responsibleUserId!==run.responsibleUserId ||
+   parsed.data.executionPolicy.policySnapshotHash!==manifestRow.policySnapshotHash ||
+   !parsed.data.contextManifests.some(ref=>ref.companyId===companyId && ref.contextManifestId===manifestRow.contextManifestId) ||
+   !parsed.data.skills.some(pin=>pin.skillId===version.skill.id && pin.versionId===source.versionId && pin.key===source.key))throw retainedSkillLost();
+  const [item]=await db.select({id:agentExecutionManifestItems.id}).from(agentExecutionManifestItems).where(and(
+   eq(agentExecutionManifestItems.companyId,companyId),eq(agentExecutionManifestItems.manifestId,manifestRow.id),
+   eq(agentExecutionManifestItems.type,"skill"),eq(agentExecutionManifestItems.ref,version.skill.id),eq(agentExecutionManifestItems.versionRef,source.versionId))).limit(1);
+  if(!item)throw retainedSkillLost();
+  const [context]=await db.select().from(contextManifests).where(and(eq(contextManifests.companyId,companyId),
+   eq(contextManifests.id,manifestRow.contextManifestId))).for("share");
+  if(!context || context.runId!==producerRunId || context.agentId!==run.agentId || context.issueId!==run.nativeIssueId)
+   throw retainedSkillLost();
+  contextId=manifestRow.contextManifestId;
+ }
+ if(source.key==="blentera-platform"){
+  const admission=retainedSkillRecord(profile.platformSkillAdmission);
+  const identity=platformSkillIdentitySchema.safeParse(admission.platformSkill);
+  const {buildInventoryContentHash}=await import("../company-skills.js");
+  const {createHash}=await import("node:crypto");
+  const inventory=version.version.fileInventory;
+  if(!identity.success || admission.schemaVersion!==1 || admission.runtimeAdapter!=="paperclip_runner" ||
+   !/^[a-f0-9]{64}$/.test(String(admission.operationManifestHash)) || !/^[a-f0-9]{64}$/.test(String(admission.toolCatalogContractHash)) ||
+   version.skill.metadata?.sourceKind!=="paperclip_bundled" || version.version.releaseId!==identity.data.version ||
+   !Array.isArray(inventory) || inventory.some(file=>typeof file.path!=="string" || typeof file.content!=="string") ||
+   buildInventoryContentHash(inventory.map(file=>({path:file.path,sha256:createHash("sha256").update(file.content).digest("hex")})))!==identity.data.digest ||
+   (manifestRow && hashContextPolicySnapshot(manifestRow.manifest.platformSkill)!==hashContextPolicySnapshot(identity.data)))throw retainedSkillLost();
+ }else if(!manifestRow)throw retainedSkillLost();
+ // The exact owned bundle is checked once by this shared retained-copy owner.
+ // Live materialization continues to use assertRuntimeSkillSourceRetained.
+ await readNativeRuntimeAssetText(bundle,256000,{companyId,runId:producerRunId});
+ return {skillId:version.skill.id,contextId,platform:source.key==="blentera-platform"};
+}
+
+/** Current readers retain their own company/Skill/Memory/analytical authority.
+ * The completed producer supplies evidence, never an impersonated agent grant. */
+export async function assertRetainedRuntimeSkillSourceCurrent(db:Db,input:{companyId:string;actor:AuthorizationActor;
+ producerRunId:string;source:RetainedRuntimeSkillSourcePin}){
+ const {skillResolverService}=await import("../skill-resolver.js");
+ const selected=await skillResolverService(db).authorizedRetainedRuntimeVersion(input.actor,input.companyId,input.producerRunId,input.source);
+ const source=await assertLearnedAssetAnalyticalSources(db,input.companyId,"skill_version",input.source.versionId,input.actor,"task");
+ const roots=await learningAssetRoots(db,input.companyId,"skill_version",input.source.versionId,undefined,input.actor,"task");
+ if(selected.producer.platform){
+  if(source.cycles.length || roots.length)
+   throw forbidden("The required platform procedure cannot contain customer-derived source dependencies");
+ }else {
+  for(const root of roots){
+   const [coverage]=await db.execute<{covered:boolean}>(sql`select exists(select 1 from context_manifest_memory_roots r where r.company_id=${input.companyId}::uuid and r.manifest_id=${selected.producer.contextId}::uuid and r.memory_record_id=${root.id}::uuid and r.source_version=${root.expectedVersion}) as covered`);
+   if(!coverage?.covered)throw forbidden("The complete pinned Skill Source was not retained",{code:"analytical_source_access_lost"});
+  }
+  for(const cycle of source.cycles){
+  const [coverage]=await db.execute<{covered:number}>(sql`select count(distinct d.source_manifest_id)::int as covered from learning_analytical_dependencies d where d.company_id=${input.companyId}::uuid and d.cycle_id=${cycle.id}::uuid and exists(select 1 from analytical_context_dependencies a join context_manifest_memory_roots r on r.company_id=a.company_id and r.memory_record_id=a.memory_record_id where a.company_id=d.company_id and a.source_manifest_id=d.source_manifest_id and r.manifest_id=${selected.producer.contextId}::uuid)`);
+  if(coverage?.covered!==cycle.analyticalSourceCount)throw forbidden("The complete pinned Skill Source was not retained",{code:"analytical_source_access_lost"});
+  }
  }
  return selected;
 }

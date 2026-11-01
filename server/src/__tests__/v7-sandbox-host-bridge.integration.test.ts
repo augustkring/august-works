@@ -1,3 +1,9 @@
+import { RAILWAY_API_URL, RAILWAY_MCP_URL, RAILWAY_QUERIES, RAILWAY_TOOLS } from "../services/railway.js";
+import { createRemoteRuntimeAssetLocator, remoteRuntimeAssetLocatorDigest } from "../services/native-runtime/runtime-asset-retention.js";
+import { verifyRunLeaseCleanupReceipt, verifyNativeCleanupRuntimeState } from "../services/execution-sandbox/run-lease-cleanup.js";
+import { appendHeartbeatRunEvent } from "../services/heartbeat-run-events.js";
+import { PROCESS_START_REQUESTED } from "../services/native-local-process-stop.js";
+import { remoteExecutionHasStopped, recordNativeRemoteWorkloadStopped } from "../services/remote-execution-termination.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { constants, createHash, generateKeyPairSync, privateDecrypt, randomBytes, randomUUID, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -21,8 +27,10 @@ import {
   connectionGrants,
   createDb,
   environmentLeases,
+  environments,
   runtimeCells,
   runtimeOperations,
+  usageEvents,
   heartbeatRuns,
   issueRecoveryActions,
   assets,
@@ -41,7 +49,7 @@ import {
   toolProfileBindings,
   toolProfiles,
 } from "@paperclipai/db";
-import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostReplySchema, type SandboxCapabilitySnapshot, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
+import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostReplySchema, sandboxHostRequestSchema, type SandboxCapabilitySnapshot, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -75,6 +83,24 @@ import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
 const qualificationPolicyGolden = JSON.parse(readFileSync(new URL("./fixtures/openshell-qualification-policy-golden.json", import.meta.url), "utf8")) as { fixture: SandboxQualificationProbeFixture; document: unknown };
 
 describe("sandbox qualification mechanism pins", () => {
+  it("accepts cleanup target attenuation only on stop and inspect and validates returned identities", () => {
+    const expectedTarget = { sandboxId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", containerId: "a".repeat(64) };
+    const request = {
+      version: 1 as const,
+      scope: { companyId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", bindingId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        cellId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", cellGeneration: "3", sandboxRef: "aw-v7-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+      hostEpoch: 9, imageDigest: `fixture.invalid/sandbox@sha256:${"b".repeat(64)}`, requesterUserId: "fixture-owner",
+    };
+    for (const action of ["stop", "inspect"] as const)
+      expect(sandboxHostRequestSchema.parse({ ...request, action, expectedTarget })).toMatchObject({ action, expectedTarget });
+    expect(() => sandboxHostRequestSchema.parse({ ...request, action: "capabilities", expectedTarget })).toThrow();
+    expect(() => sandboxHostRequestSchema.parse({ ...request, action: "stop", expectedTarget: { ...expectedTarget, extra: true } })).toThrow();
+    expect(() => sandboxHostRequestSchema.parse({ ...request, action: "inspect", expectedTarget: { ...expectedTarget, sandboxId: "replacement" } })).toThrow();
+    expect(sandboxHostReplySchema.parse({ action: "stop", stopped: true, ...expectedTarget })).toMatchObject(expectedTarget);
+    expect(sandboxHostReplySchema.parse({ action: "inspect", state: "stopped", ...expectedTarget,
+      policyHash: null, imageDigest: request.imageDigest, generation: "3", controlsHealthy: false })).toMatchObject(expectedTarget);
+    expect(() => sandboxHostReplySchema.parse({ action: "stop", stopped: true, ...expectedTarget, unexpected: true })).toThrow();
+  });
   it("accepts a typed no-recreate prepare decision only without an active container claim", () => {
     const receipt = {
       action: "prepare" as const, backendVersion: "0.1.2" as const,
@@ -118,7 +144,7 @@ describe("sandbox qualification mechanism pins", () => {
       qualificationTarget: { ...target, targetHash: nativeSha256(target) }, qualificationProbeFixture: probeFixture, qualificationCredentialFixture: credentialFixture,
     }) as SandboxCapabilitySnapshot;
   };
-  it.each(["runtimeBinarySha256", "openshellCliSha256", "dockerEngineIdHash", "hostEpoch", "probeFixtureHash"])(
+  it.each(["runtimeBinarySha256", "openshellCliSha256", "dockerEngineIdHash", "hostEpoch", "policyVersion", "probeFixtureHash"])(
     "does not let an admission target borrow qualification after %s changes", field => {
       const qualified = base(), changed = structuredClone(qualified);
       const target = changed.qualificationTarget! as unknown as Record<string, unknown>;
@@ -129,7 +155,8 @@ describe("sandbox qualification mechanism pins", () => {
   it("ignores active provisioning IDs and target policy hashes while preserving the qualification sample", () => {
     const qualified = base(), changed = structuredClone(qualified);
     Object.assign(changed.qualificationTarget!, { sandboxId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", containerId: "9".repeat(64),
-      provisioningHash: "8".repeat(64), policyHash: "7".repeat(64), probePolicyHash: "6".repeat(64), phase: "Ready" });
+      provisioningHash: "8".repeat(64), policyHash: "7".repeat(64), probePolicyHash: "6".repeat(64),
+      configRevision: "revision-after-apply", phase: "Ready" });
     expect(nativeSha256(sandboxCapabilityFacts(changed))).toBe(nativeSha256(sandboxCapabilityFacts(qualified)));
   });
   it("keeps the exact operator fixture identity in the stable mechanism pin", () => {
@@ -170,6 +197,8 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v7-sandbox-host-");
       db = createDb(database.connectionString);
+      const forward = readFileSync(new URL("../../../packages/db/src/migrations/0569_native_remote_workload_stop_projection.sql", import.meta.url), "utf8");
+      for (const statement of forward.split("--> statement-breakpoint")) if (statement.trim()) await db.execute(sql.raw(statement));
       await instanceSettingsService(db).getExperimental();
       await db.insert(runtimeVersionCatalog).values({
         imageDigest: image,
@@ -522,10 +551,10 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
               return { action, verdict, observationHash: nativeSha256(observation), contractHash: command.probe.contractHash,
                 targetQualificationHash: testTargets.get(command.scope.bindingId)?.targetHash };
             })()
-          : action === "inspect" ? { action, ...common, state: testWorkloadStates.get(command.scope.cellId) ?? "stopped", policyHash: testWorkloadPolicies.get(command.scope.cellId) ?? null, controlsHealthy: true }
+          : action === "inspect" ? { action, ...common, state: testWorkloadStates.get(command.scope.cellId) ?? "stopped", ...(command.expectedTarget ? command.expectedTarget : {}), policyHash: testWorkloadPolicies.get(command.scope.cellId) ?? null, controlsHealthy: true }
           : action === "apply" ? (testWorkloadStates.set(command.scope.cellId, "ready"), testWorkloadPolicies.set(command.scope.cellId, command.admission.policyHash), { action, applied: true, requiresRecreate: false, policyHash: command.admission.policyHash, effectivePolicyHash: command.admission.policyHash })
           : action === "start" ? (testWorkloadStates.set(command.scope.cellId, "running"), testWorkloadPolicies.set(command.scope.cellId, command.start.policyHash), { action, started: true, operationId: claim.id, sandboxId: command.scope.bindingId, containerId: "b".repeat(64), imageDigest: command.imageDigest, policyHash: command.start.policyHash, effectivePolicyHash: command.start.policyHash })
-          : action === "stop" ? (testWorkloadStates.set(command.scope.cellId, "stopped"), { action, stopped: true })
+          : action === "stop" ? (testWorkloadStates.set(command.scope.cellId, "stopped"), { action, stopped: true, ...(command.expectedTarget ? command.expectedTarget : {}) })
           : action === "revoke_providers" ? { action, revoked: true }
           : action === "destroy" ? { action, destroyed: true }
           : { action, document: projectOpenShellPolicy(supportedPolicy()).document };
@@ -539,6 +568,204 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       if ("error" in output) throw output.error;
       return output.value;
     }
+    // Historical start/launch rows represent earlier verified signed effects.
+    // The new cleanup commands exercise the real durable queue/claim/complete owner.
+    async function seededCleanupLease(retain = false) {
+      const agentId = randomUUID(), runId = randomUUID(), leaseId = randomUUID(), issueId = randomUUID();
+      const normalizedSessionId = randomUUID(), runnerInstanceId = randomUUID();
+      await db.insert(agents).values({ id: agentId, companyId: f.home, name: "Cleanup owner", status: "running", adapterType: "paperclip_runner" });
+      await db.insert(issues).values({ id:issueId,companyId:f.home,title:"Original cleanup task",assigneeAgentId:agentId,responsibleUserId:f.userId });
+      const [environment] = await db.insert(environments).values({ name: `cleanup-${runId}`, driver: "sandbox",
+        config: { provider: "fake", image: "ubuntu:24.04", reuseLease: false } }).returning();
+      const locator = createRemoteRuntimeAssetLocator({ companyId: f.home, runId, environmentId: environment!.id,
+        environmentLeaseId: leaseId, provider: "fake", providerLeaseId: `provider-${runId}`,
+        runnerInstanceId, normalizedSessionId, remoteCwd: "/work" });
+      await db.insert(heartbeatRuns).values({ id: runId, companyId: f.home, agentId, status: "running",
+        runtimeMode: "native", runtimeModeResolvedAt: new Date(), driverKind: "opencode_server",
+        issueId, nativeIssueId:issueId, scopeKind:"issue",
+        nativeSessionId: normalizedSessionId, runnerInstanceId, responsibleUserId: f.userId,
+        runnerProfileJson: { nativeRemoteRuntimeAssetLocator: locator } });
+      const [lease] = await db.insert(environmentLeases).values({ id: leaseId, companyId: f.home,
+        heartbeatRunId: runId, issueId, environmentId: environment!.id, provider: "fake", providerLeaseId: locator.providerLeaseId,
+        status: "active", leasePolicy: retain ? "retain_on_failure" : "ephemeral", metadata: { remoteCwd: "/work" },
+        expiresAt: new Date(Date.now()-1000) }).returning();
+      const policyHash = "a".repeat(64), policySnapshotId = randomUUID(), manifestId = randomUUID();
+      const expectedVersion = 2, claimVersion = expectedVersion + 1;
+      const startKey = `v7-sandbox-start:${scope.bindingId}:1:${claimVersion}:${policySnapshotId}`;
+      const claimKey = `v7-sandbox-admission:${scope.bindingId}:1:${expectedVersion}:${policySnapshotId}`;
+      await db.insert(activityLog).values({ companyId: f.home, actorType: "user", actorId: f.userId,
+        action: "sandbox.admission_claimed", entityType: "runtime_sandbox", entityId: scope.bindingId,
+        details: { claimKey, expectedVersion, claimVersion, generation: "1", policySnapshotId,
+          executionManifestId: manifestId, executionManifestHash: "c".repeat(64), policyHash } });
+      await appendHeartbeatRunEvent(db, { companyId: f.home, runId, agentId, eventType: PROCESS_START_REQUESTED,
+        payload: { driverKind: "opencode_server" } });
+      const [clock] = await db.execute(sql`select clock_timestamp() as now`);
+      const launchAt = new Date(String(clock!.now));
+      const [start] = await db.insert(runtimeHostCommands).values({ companyId: f.home, runtimeHostId: host.id,
+        runtimeCellId: cell.id, cellGeneration: 1n, commandType: SANDBOX_HOST_COMMAND,
+        status: "SUCCEEDED", attempt: 1, idempotencyKey: `historical-${startKey}`,
+        createdAt: new Date(Date.now()-60_000), completedAt: new Date(Date.now()-50_000), deadlineAt: new Date(Date.now()-40_000),
+        payload: { version: 1, scope, action: "start", hostEpoch: 1, imageDigest: image, requesterUserId: f.userId,
+          start: { policyHash, expiresAt: new Date(Date.now()-40_000).toISOString(), idempotencyKey: startKey } },
+        safeResult: { action: "start", started: true, operationId: startKey, sandboxId: scope.bindingId,
+          containerId: "b".repeat(64), imageDigest: image, policyHash, effectivePolicyHash: policyHash } }).returning();
+      const binding = { schema: "paperclip.remote-native-session-start-binding.v1", locatorDigest: remoteRuntimeAssetLocatorDigest(locator),
+        runnerInstanceId, environmentLeaseId: leaseId, provider: "fake", providerLeaseId: locator.providerLeaseId,
+        normalizedSessionIdDigest: locator.normalizedSessionIdDigest, hostId: host.id, hostEpoch: 1,
+        cellId: cell.id, cellGeneration: "1", bindingId: scope.bindingId, manifestId, manifestHash: "c".repeat(64),
+        policySnapshotId, policyHash };
+      const requestId = randomUUID();
+      await db.insert(runtimeHostCommands).values({ companyId: f.home, runtimeHostId: host.id, runtimeCellId: cell.id,
+        cellGeneration: 1n, commandType: "sandbox_exec", status: "SUCCEEDED", attempt: 1,
+        idempotencyKey: requestId, createdAt: launchAt, completedAt: launchAt,
+        deadlineAt: new Date(Date.now()-10_000), payload: { ...binding, requestId, runId, leaseId,
+          generation: "1", nativePreparationPurpose: "native_session_start", remoteNativeSessionStartBinding: binding },
+        safeResult: { exitCode: 0, timedOut: false } });
+      await db.update(runtimeCells).set({ status: "HEALTHY", activeSince: new Date(Date.now() - 10000),
+        meteredThrough: new Date(Date.now() - 10000) }).where(eq(runtimeCells.id, cell.id));
+      testWorkloadStates.set(cell.id, "running");testWorkloadPolicies.set(cell.id, policyHash);
+      return { companyId: f.home, runId, leaseId, agentId, lease: lease!, start: start!, policyHash };
+    }
+    it.each([false, true])("cleans the original expired signed workload with revoked Human=%s", async revoked => {
+      const input = await seededCleanupLease();
+      if (revoked) await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      const actions: string[] = [];
+      const receipt = await driveHost(transportForTest.stopRunLeaseForCleanup(input), cell.id, command => {
+        actions.push(command.action);
+        expect(command.expectedTarget).toEqual({ sandboxId: scope.bindingId, containerId: "b".repeat(64) });
+        expect(command.__runLeaseCleanup).toBeUndefined();expect(command.requesterUserId).toBe(f.userId);
+      });
+      expect(actions).toEqual(["stop", "inspect"]);
+      expect(await verifyRunLeaseCleanupReceipt(db, input, receipt)).toEqual(receipt);
+      const logs = await db.select().from(activityLog).where(eq(activityLog.action, "sandbox.run_cleanup_queued"));
+      expect(logs.filter(log=>log.companyId===f.home)).toHaveLength(2);
+      expect(logs.every(log=>log.actorType==="system")).toBe(true);
+    });
+    it.each(["wrong_lease", "wrong_run", "wrong_provider", "wrong_generation", "wrong_host", "wrong_container", "legacy_void", "changed_policy", "late_failed_start", "late_failed_apply", "late_expired_prepare", "late_failed_foreign_exec", "late_expired_foreign_exec", "older_claimed_foreign_exec", "older_failed_foreign_exec", "older_pending_prepare", "after_receipt_restart"])("fences an unqualified cleanup proof: %s", async kind => {
+      const input = await seededCleanupLease();
+      if (kind.startsWith("late_") || kind.startsWith("older_")) {
+        const action=kind==="late_failed_start"?"start":kind==="late_failed_apply"?"apply":"prepare";
+        const foreignExec=kind.endsWith("foreign_exec");
+        await db.insert(runtimeHostCommands).values({ companyId:f.home,runtimeHostId:host.id,runtimeCellId:cell.id,
+          cellGeneration:1n,commandType:foreignExec?"sandbox_exec":SANDBOX_HOST_COMMAND,
+          status:kind.includes("expired")?"EXPIRED":kind.includes("claimed")?"CLAIMED":kind.includes("pending")?"PENDING":"FAILED",
+          attempt:kind.includes("pending")?0:1,idempotencyKey:randomUUID(),
+          ...(kind.startsWith("older_")?{createdAt:new Date(input.start.createdAt.getTime()-1000)}:{}),
+          deadlineAt:new Date(Date.now()-1),payload:foreignExec?{bindingId:scope.bindingId,runId:randomUUID()}:{scope,action} });
+        await expect(transportForTest.stopRunLeaseForCleanup(input)).rejects.toMatchObject({status:409});return;
+      }
+      if(kind==="changed_policy") {
+        testWorkloadPolicies.set(cell.id,"d".repeat(64));
+        await expect(driveHost(transportForTest.stopRunLeaseForCleanup(input),cell.id)).rejects.toMatchObject({status:409});return;
+      }
+      const receipt = await driveHost(transportForTest.stopRunLeaseForCleanup(input), cell.id);
+      if(kind==="after_receipt_restart") {
+        await db.insert(runtimeHostCommands).values({companyId:f.home,runtimeHostId:host.id,runtimeCellId:cell.id,
+          cellGeneration:1n,commandType:SANDBOX_HOST_COMMAND,status:"SUCCEEDED",attempt:1,
+          idempotencyKey:randomUUID(),deadlineAt:new Date(Date.now()+1000),completedAt:new Date(),
+          payload:input.start.payload,safeResult:input.start.safeResult});
+      }
+      const bad = structuredClone(receipt) as any;
+      if(kind==="wrong_lease")bad.leaseId=randomUUID();
+      if(kind==="wrong_run")bad.runId=randomUUID();
+      if(kind==="wrong_provider")bad.provider="foreign";
+      if(kind==="wrong_generation")bad.sandboxStop.cellGeneration="2";
+      if(kind==="wrong_host")bad.sandboxStop.hostId=randomUUID();
+      if(kind==="wrong_container")bad.sandboxStop.containerId="c".repeat(64);
+      await expect(verifyRunLeaseCleanupReceipt(db,input,kind==="legacy_void"?undefined:bad)).rejects.toMatchObject({status:409});
+    });
+    it.each([false, true])("persists canonical runtime state and signed release after revoked Human=%s",async revoked=>{
+      const input=await seededCleanupLease();const errors: unknown[]=[];
+      if (revoked) await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      const control=runtimeControlService(db,{runtime:{suspectSeconds:90,unreachableSeconds:600,relayPort:3102}} as SaasPlatformConfig);
+      const runtime=environmentRuntimeService(db,{stopSandboxRunLease:scope=>driveHost(control.stopSandboxRunLeaseForCleanup(scope),cell.id)});
+      const released=await runtime.releaseRunLeases(input.runId,"released",error=>{errors.push(error);});
+      expect(errors).toEqual([]);expect(released.some(record=>record.lease.id===input.leaseId&&record.lease.status==="released")).toBe(true);
+      expect(await remoteExecutionHasStopped(db,input.companyId,input.runId)).toBe(true);
+      const [row]=await db.select().from(environmentLeases).where(eq(environmentLeases.id,input.leaseId));
+      expect(row.metadata?.remoteExecutionTermination).toMatchObject({runId:input.runId,leaseId:input.leaseId,state:"stopped"});
+      const settled = await verifyNativeCleanupRuntimeState(db, input, row.metadata?.remoteExecutionTermination);
+      const repeated = await driveHost(control.stopSandboxRunLeaseForCleanup(input), cell.id);
+      expect(repeated).toEqual(settled);
+      const [operation] = await db.select().from(runtimeOperations).where(eq(runtimeOperations.id, settled.sandboxStop.runtimeOperationId));
+      expect(operation).toMatchObject({ requestedByType: "system", requestedById: "native-run-cleanup", status: "SUCCEEDED" });
+      const [stoppedCell] = await db.select().from(runtimeCells).where(eq(runtimeCells.id, cell.id));
+      expect(stoppedCell).toMatchObject({ status: "STOPPED", activeSince: null });
+      const meter = await db.select().from(usageEvents).where(and(eq(usageEvents.companyId, input.companyId),
+        eq(usageEvents.resourceId, cell.id), eq(usageEvents.meterKey, "runtime.shared_millisecond")));
+      expect(meter).toHaveLength(1); expect(BigInt(meter[0]!.quantity)).toBeGreaterThan(0n);
+      await control.relay.stop();
+    });
+    it("converges concurrent canonical Stop completions without duplicate meter events", async () => {
+      const input = await seededCleanupLease();
+      const physical = await driveHost(transportForTest.stopRunLeaseForCleanup(input), cell.id);
+      const control = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig);
+      try {
+        const service = executionSandboxService(db, { recordRuntimeWorkloadState: control.recordSandboxWorkloadState });
+        const receipts = await Promise.all([service.recordNativeCleanupStop(input, physical), service.recordNativeCleanupStop(input, physical)]);
+        expect(receipts[0]).toEqual(receipts[1]);
+        await verifyNativeCleanupRuntimeState(db, input, receipts[0]);
+        const operations = await db.select().from(runtimeOperations).where(and(eq(runtimeOperations.companyId, input.companyId),
+          eq(runtimeOperations.runtimeCellId, cell.id), eq(runtimeOperations.operationType, "stop")));
+        expect(operations).toHaveLength(1);
+        const meter = await db.select().from(usageEvents).where(and(eq(usageEvents.companyId, input.companyId), eq(usageEvents.resourceId, cell.id)));
+        expect(meter).toHaveLength(1);
+      } finally { await control.relay.stop(); }
+    });
+    it.each(["missing_owner", "physical_only", "foreign_operation"])("does not settle runtime billing from a false cleanup callback: %s", async kind => {
+      const input = await seededCleanupLease();
+      const runtime = environmentRuntimeService(db, kind === "missing_owner" ? {} : {
+        stopSandboxRunLease: async scope => {
+          const receipt = await driveHost(transportForTest.stopRunLeaseForCleanup(scope), cell.id);
+          return kind === "physical_only" ? receipt : { ...receipt,
+            sandboxStop: { ...receipt.sandboxStop, runtimeOperationId: randomUUID() } };
+        },
+      });
+      await runtime.releaseRunLeases(input.runId, "released");
+      const [lease] = await db.select().from(environmentLeases).where(eq(environmentLeases.id, input.leaseId));
+      expect(lease).toMatchObject({ status: "pending_cleanup", cleanupStatus: "failed" });
+      expect(await remoteExecutionHasStopped(db, input.companyId, input.runId)).toBe(false);
+    });
+    it("does not grant final stopped reads or resource projection from physical-only cleanup", async () => {
+      const input = await seededCleanupLease();
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, input.runId));
+      const physical = await driveHost(transportForTest.stopRunLeaseForCleanup(input), cell.id);
+      await environmentService(db).releaseLease(input.leaseId, "released", { cleanupStatus: "success", remoteExecutionTermination: physical });
+      expect(await remoteExecutionHasStopped(db, input.companyId, input.runId)).toBe(false);
+      expect(await recordNativeRemoteWorkloadStopped(db, input)).toBe(false);
+      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId)))[0]?.nativeProcessCleanupPending).toBe(true);
+    });
+    it("projects only an explicit verified remote Stop and re-fences a later original intent", async () => {
+      const input = await seededCleanupLease();
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date(), processPid: 123456789, processGroupId: 123456788 }).where(eq(heartbeatRuns.id, input.runId));
+      const occupancy = async () => {
+        const [row] = await db.execute<{ count: string }>(sql`select public.aw_v10_resource_durable_occupancy(${input.companyId}::uuid)::text as count`);
+        return Number(row!.count);
+      };
+      expect(await occupancy()).toBe(1);
+      const control = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig);
+      const receipt = await driveHost(control.stopSandboxRunLeaseForCleanup(input), cell.id);
+      await control.relay.stop();
+      await environmentService(db).releaseLease(input.leaseId, "released", { cleanupStatus: "success", remoteExecutionTermination: receipt });
+      expect(await remoteExecutionHasStopped(db, input.companyId, input.runId)).toBe(true);
+      expect(await occupancy()).toBe(1); // The read predicate has no projection side effect.
+      expect(await recordNativeRemoteWorkloadStopped(db, input)).toBe(true);
+      expect(await occupancy()).toBe(0);
+      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, input.runId)))[0]).toMatchObject({ processPid: 123456789, processGroupId: 123456788 });
+      await appendHeartbeatRunEvent(db, { companyId: input.companyId, runId: input.runId, agentId: input.agentId,
+        eventType: PROCESS_START_REQUESTED, payload: { driverKind: "opencode_server" } });
+      expect(await occupancy()).toBe(1);
+      expect(await remoteExecutionHasStopped(db, input.companyId, input.runId)).toBe(false);
+      expect(await recordNativeRemoteWorkloadStopped(db, input)).toBe(false);
+    });
+    it("keeps unknown physical cleanup pending even for retain-on-failure", async () => {
+      const input=await seededCleanupLease(true);
+      const runtime=environmentRuntimeService(db,{stopSandboxRunLease:async()=>undefined});
+      await runtime.releaseRunLeases(input.runId,"failed");
+      const [lease]=await db.select().from(environmentLeases).where(eq(environmentLeases.id,input.leaseId));
+      expect(lease).toMatchObject({status:"pending_cleanup",cleanupStatus:"failed"});
+      expect(await remoteExecutionHasStopped(db,input.companyId,input.runId)).toBe(false);
+    });
     let qualificationProtocolApp: any = null;
     const qualificationToolResponses: Array<{ caseId: string; status: number; reasonCode: string | null; marker: string | null }> = [];
     const testWorkloadStates = new Map<string, "stopped" | "ready" | "running">();
@@ -572,7 +799,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       if (!snapshot) {
         const preflight = Boolean(scope && !target);
         const probeFixture = preflight ? qualificationProbeFixtureForTest : undefined;
-        snapshot = { ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, !preflight])), backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "fixture-kernel", sandboxImageDigest: digest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: !preflight, policyProverBoundaryCheck: !preflight, policyProverCoverage: preflight ? [] : [...SANDBOX_CONTROLS], credentialBindingDimensions: preflight ? [] : ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], credentialBrokerProviderProfile: { id: "paperclip-broker", hash: "d".repeat(64) }, testedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString(), qualificationHash: probeFixture?.fixtureHash ?? "a".repeat(64), evidenceKind: "protected_host_report",
+        snapshot = { ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, !preflight])), backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "fixture-kernel", sandboxImageDigest: digest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: !preflight, policyProverBoundaryCheck: !preflight, policyProverCoverage: preflight ? [] : [...SANDBOX_CONTROLS], credentialBindingDimensions: preflight ? [] : ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], credentialBrokerProviderProfile: { id: "paperclip-broker", hash: "d".repeat(64), origin: "https://paperclip.example.test" }, testedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString(), qualificationHash: probeFixture?.fixtureHash ?? "a".repeat(64), evidenceKind: "protected_host_report",
           ...(probeFixture ? { qualificationProbeFixture: probeFixture, qualificationCredentialFixture: probeFixture.credential } : {}) };
         testCapabilitySnapshots.set(cacheKey, snapshot);
       }
@@ -1041,6 +1268,8 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         policyHash: provisioning.policyHash,
         document: provisioning.document,
         resourceLimits: provisioning.resourceLimits,
+        qualificationProbeFixture: provisioning.qualificationProbeFixture,
+        probeFixtureHash: provisioning.probeFixtureHash,
       }));
       await expect(transport.bridge(f.actor).prepare(scope, {
         purpose: provisioning.purpose,
@@ -1061,7 +1290,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       });
       expect(retained.qualifications[0]?.results).toHaveLength(19);
     }, 20000);
-    it("admits a qualified native Task through the HTTP route and meters only the signed host start/stop receipts (CI transport simulation)", async () => {
+    it("admits a signed Sandbox Task with fixed non-model connector and all qualification fault checks (CI transport simulation)", async () => {
       await instanceSettingsService(db).updateExperimental({
         agent_identities_v5: true,
         agent_provider_bindings_v5: true,
@@ -1121,8 +1350,8 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       const [application] = await db.insert(toolApplications).values({ companyId: f.home, applicationKey, name: "Brokered provider fixture", type: "mcp_http", status: "active" }).returning();
       const [connection] = await db.insert(toolConnections).values({
         companyId: f.home, applicationId: application!.id, name: "Brokered provider fixture", uid: `fixture/${randomUUID()}`,
-        transport: "mcp_remote", status: "active", enabled: true, healthStatus: "ok",
-        config: { url: "https://provider.example.test/mcp" }, transportConfig: { url: "https://provider.example.test/mcp" },
+        transport: "mcp_remote", authKind:"oauth",credentialSource:"paperclip_vault",status: "active", enabled: true, healthStatus: "ok",
+        config: { url: RAILWAY_MCP_URL,sourceTemplateKey:"railway",connectionMethodKey:"mcp-oauth",railwayApiStatus:"available" }, transportConfig: { url: RAILWAY_MCP_URL,sourceTemplateKey:"railway",connectionMethodKey:"mcp-oauth",railwayApiStatus:"available" },
         credentialRefs: [{ name: "credentials.authorization", secretId: providerSecret.id, version: "latest", placement: "header", key: "Authorization", prefix: "Bearer " }],
         credentialSecretRefs: [{ secretId: providerSecret.id, versionSelector: "latest", configPath: "credentials.authorization", required: true, label: "Brokered provider token" }],
       }).returning();
@@ -1146,7 +1375,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       const qualificationToolAccess = toolAccessService(db, {
         remoteHttpEndpointLookup: async () => [{ address: "8.8.8.8", family: 4 }],
         remoteHttpRequest: async (url, init) => {
-          expect(url).toBe("https://example.com/mcp");
+          expect(url).toBe("https://paperclip.example.test/mcp/qualification/credential-echo");
           const request = JSON.parse(String(init.body)) as { id: string; method: string };
           expect(request.method).toBe("tools/list");
           return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { tools: [{
@@ -1159,7 +1388,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       });
       const qualificationConnection = await qualificationToolAccess.createConnection(f.home, {
         applicationId: qualificationApplication!.id, name: "Operator qualification canary", transport: "mcp_remote",
-        status: "active", enabled: true, config: { url: "https://example.com/mcp" }, transportConfig: { url: "https://example.com/mcp" },
+        status: "active", enabled: true, config: { url: "https://paperclip.example.test/mcp/qualification/credential-echo" }, transportConfig: { url: "https://paperclip.example.test/mcp/qualification/credential-echo" },
         credentialRefs: qualificationCredentialRefs, credentialSecretRefs: qualificationSecretRefs,
       }, { actorType: "user", actorId: f.userId });
       let qualificationGrant: typeof connectionGrants.$inferSelect | undefined;
@@ -1174,8 +1403,8 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       });
       await db.insert(toolCatalogEntries).values({
         companyId: f.home, applicationId: application!.id, connectionId: connection!.id, entryKind: "tool",
-        name: `read_record-${randomUUID()}`, toolName: "read_record", title: "Read record", description: "Read a fixture record",
-        inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false },
+        name: `read_record-${randomUUID()}`, toolName: "paperclip-railway-list-projects", title: "Read record", description: "Read a fixture record",
+        inputSchema: RAILWAY_TOOLS.find(tool=>tool.name==="paperclip-railway-list-projects")!.inputSchema,
         annotations: { readOnlyHint: true }, riskLevel: "read", isReadOnly: true, isWrite: false, isDestructive: false,
         status: "active", versionHash: randomUUID(), quarantinedAt: null,
       });
@@ -1190,13 +1419,15 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       expect(qualificationGrant).toMatchObject({ kind: "organization", status: "active", isDefault: true });
       const [agentToolProfile] = await db.insert(toolProfiles).values({ companyId: f.home, profileKey: `broker-agent-${randomUUID()}`, name: "Brokered agent tool profile", defaultAction: "deny" }).returning();
       await db.insert(toolProfileBindings).values({ companyId: f.home, profileId: agentToolProfile!.id, targetType: "agent", targetId: presence.id });
-      const expectedBrokerToolName = `mcp.${applicationKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}-${connection!.id.replace(/-/g, "").slice(0, 8)}:read-record`;
+      const expectedBrokerToolName = `mcp.${applicationKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}-${connection!.id.replace(/-/g, "").slice(0, 8)}:paperclip-railway-list-projects`;
       await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: agentToolProfile!.id, selectorType: "tool_name", effect: "include", toolName: expectedBrokerToolName });
       const [gatewayProfile] = await db.insert(toolProfiles).values({ companyId: f.home, profileKey: `broker-gateway-${randomUUID()}`, name: "Brokered gateway profile", defaultAction: "deny" }).returning();
       await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id, selectorType: "connection", effect: "include", connectionId: connection!.id });
       await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id, selectorType: "connection", effect: "include", connectionId: qualificationConnection.id });
       const dispatchedBrokerCalls: Array<{ url: string; body: string | null; authorization: string | null }> = [];
       let qualificationProviderMarkerOverride: string | null = null;
+      let qualificationProviderError = false;
+      let qualificationEchoOwnerError = false;
       let nextProviderBarrier: { started: () => void; wait: Promise<void> } | null = null;
       const deferNextProviderResponse = () => {
         let markStarted!: () => void, release!: () => void;
@@ -1205,8 +1436,10 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         nextProviderBarrier = { started: markStarted, wait };
         return { started, release };
       };
+      let concurrentEchoChecked = false;
       const gatewayOptions: Parameters<typeof createToolGatewayService>[1] = {
         operatorUserIds: [f.userId],
+        qualificationBrokerOrigin: "https://paperclip.example.test",
         toolActionSigningSecret: "v7-sandbox-broker-fixture",
         remoteHttpRequest: async (url, init) => {
           const body = typeof init.body === "string" ? init.body : null;
@@ -1214,13 +1447,35 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           dispatchedBrokerCalls.push({ url, body, authorization });
           const barrier = nextProviderBarrier;
           if (barrier) { nextProviderBarrier = null; barrier.started(); await barrier.wait; }
-          const requestId = body ? (JSON.parse(body) as { id?: unknown }).id ?? "broker-fixture" : "broker-fixture";
-          const parsedBody = body ? JSON.parse(body) as { params?: { arguments?: { caseId?: unknown } } } : null;
-          const structuredContent = typeof parsedBody?.params?.arguments?.caseId === "string" && parsedBody.params.arguments.caseId.startsWith("credential_")
-            ? { marker: qualificationProviderMarkerOverride ?? credentialFixtureForTest?.marker,
-                providerDebugSentinel: "qualification-provider-output-sentinel", echoedAuthorization: authorization }
-            : { ok: true };
-          return new Response(JSON.stringify({ jsonrpc: "2.0", id: requestId, result: { content: [{ type: "text", text: "read ok" }], structuredContent } }), { status: 200, headers: { "content-type": "application/json" } });
+          if(qualificationProviderError) throw new Error(`private-provider-error:${qualificationSecretValueForTest}`);
+          if(url===RAILWAY_API_URL) {
+            expect(authorization).toBe(`Bearer ${providerSecretValue}`);
+            const payload=JSON.parse(String(init.body));
+            expect(payload.query).toBe(RAILWAY_QUERIES.projects);
+            expect(payload.variables.workspaceId).toBe("11111111-1111-4111-8111-111111111111");
+            return Response.json({data:{projects:{edges:[{node:{id:"22222222-2222-4222-8222-222222222222",name:"read ok",workspaceId:payload.variables.workspaceId}}]}}});
+          }
+          expect(url).toBe("https://paperclip.example.test/mcp/qualification/credential-echo");
+          expect(init.method).toBe("POST"); expect(init.redirect).toBe("manual");
+          expect(authorization).toBe(`Bearer ${qualificationSecretValueForTest}`);
+          const send = (wrongAuthorization = false) => {
+            const http = request(qualificationProtocolApp).post(new URL(url).pathname);
+            new Headers(init.headers).forEach((value, key) => http.set(key, value));
+            if (wrongAuthorization) http.set("authorization", "Bearer wrong-canary-value");
+            return http.send(JSON.parse(String(init.body)));
+          };
+          if (!concurrentEchoChecked) expect((await send(true)).status).toBe(403);
+          const responses = await (concurrentEchoChecked ? Promise.all([send()]) : Promise.all([send(), send()]));
+          if (!concurrentEchoChecked) {
+            expect(responses.map(response=>response.status).sort()).toEqual([200,409]);
+            concurrentEchoChecked = true;
+          }
+          const response = responses.find(response => response.status === 200) ?? responses[0]!;
+          let returned = response.body;
+          if (qualificationProviderMarkerOverride && response.status === 200)
+            returned = { ...returned, result: { ...returned.result, structuredContent: { marker: qualificationProviderMarkerOverride } } };
+          expect(JSON.stringify(returned)).not.toContain(qualificationSecretValueForTest);
+          return Response.json(returned, {status:response.status});
         },
       };
       const gateway = createToolGatewayService(db, gatewayOptions);
@@ -1232,17 +1487,17 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         binaries: ["/usr/bin/curl"] as ["/usr/bin/curl"], wrongBinaryPath: "/usr/bin/wget" as const,
         origin: "https://paperclip.example.test", port: 443, method: "POST" as const,
         gatewayPublicId: namedGateway.gatewayPublicId, toolName: expectedQualificationToolName, wrongToolName: "wrong_scope_canary",
-        argumentTemplateHash, marker: "qualification-fixture-ok",
+        argumentTemplateHash, marker: "paperclip-qualification-credential-ok-v1",
       };
       credentialFixtureForTest = { ...credentialFixtureBase, fixtureHash: nativeSha256(credentialFixtureBase) };
       const { fixtureHash: _goldenHash, ...goldenFixtureBody } = qualificationPolicyGolden.fixture;
       const probeFixtureBody = { ...goldenFixtureBody, credential: credentialFixtureForTest };
       qualificationProbeFixtureForTest = { ...probeFixtureBody, fixtureHash: nativeSha256(probeFixtureBody) };
       const qualificationCanary = {
-        argumentTemplateHash, endpointOrigin: "https://example.com", endpointPath: "/mcp",
+        argumentTemplateHash, endpointOrigin: "https://paperclip.example.test", endpointPath: "/mcp/qualification/credential-echo",
         fixtureHash: credentialFixtureForTest.fixtureHash, fixtureId: credentialFixtureForTest.fixtureId,
         gatewayPublicId: namedGateway.gatewayPublicId, grantId: qualificationGrant!.id,
-        kind: "operator_owned_local_readonly_canary", marker: credentialFixtureForTest.marker,
+        kind: "platform_owned_qualification_echo", marker: credentialFixtureForTest.marker,
         noSideEffects: true, purpose: "sandbox_qualification", readOnly: true, setupOnly: true,
         toolName: expectedQualificationToolName, version: 1, wrongToolName: "wrong_scope_canary",
       };
@@ -1251,10 +1506,24 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       });
       qualificationProtocolApp = express();
       qualificationProtocolApp.use(express.json());
+      const actualQualificationEntry = gateway.executeSandboxQualificationCredentialTool.bind(gateway);
+      gateway.executeSandboxQualificationCredentialTool = async (...args) => {
+        if(qualificationEchoOwnerError && args[1] !== undefined) throw new Error(`private-owner-error:${qualificationSecretValueForTest}`);
+        return actualQualificationEntry(...args);
+      };
       qualificationProtocolApp.use(mcpGatewayProtocolRoutes(gateway));
+      const fixedMetadata = await request(qualificationProtocolApp).post("/mcp/qualification/credential-echo")
+        .send({jsonrpc:"2.0",id:"catalogue-health",method:"tools/list"});
+      expect(fixedMetadata.status).toBe(200);
+      expect(fixedMetadata.body.result.tools.map((tool: {name:string})=>tool.name)).toEqual(["read_canary"]);
+      const noCapability = await request(qualificationProtocolApp).post("/mcp/qualification/credential-echo")
+        .set("authorization",`Bearer ${qualificationSecretValueForTest}`)
+        .send({jsonrpc:"2.0",id:randomUUID(),method:"tools/call",params:{name:expectedQualificationToolName,arguments:{fixtureId:"unknown",caseId:"credential_allow",nonce:"unknown"}}});
+      expect(noCapability.status).toBe(401);
+      expect(noCapability.body.reasonCode).toBe("sandbox_qualification_credential_required");
       const initialBrokerBinding = {
-        connectionId: connection!.id, grantVersionHash: "0".repeat(64), hostname: "provider.example.test", port: 443,
-        methods: ["POST"] as const, pathPrefixes: ["/mcp"], binary: null, ttlSeconds: 120,
+        connectionId: connection!.id, grantVersionHash: "0".repeat(64), hostname: new URL(RAILWAY_MCP_URL).hostname, port: 443,
+        methods: ["POST"] as const, pathPrefixes: [new URL(RAILWAY_MCP_URL).pathname], binary: null, ttlSeconds: 120,
       };
       const initialBrokerResolution = await gateway.resolveSandboxCredentialBrokerPolicyBindings({
         companyId: f.home, agentId: presence.id, runId: run!.id, responsibleUserId: f.userId,
@@ -1279,6 +1548,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         throw new Error(`CI-only qualification did not pass: ${JSON.stringify({ report: retained.qualifications[0], probes: probeReceipts.filter(row => (row.payload as Record<string, any>).action === "probe").map(row => ({ test: (row.payload as any).probe, status: row.status, errorCode: row.errorCode, safeResult: row.safeResult })) })}`);
       }
       expect(qualification).toMatchObject({ status: "ready", version: 2 });
+      expect(concurrentEchoChecked).toBe(true);
       const [revokedQualificationGrant] = await db.select({ status: connectionGrants.status }).from(connectionGrants)
         .where(eq(connectionGrants.id, qualificationGrant!.id)).limit(1);
       const [activeRuntimeGrant] = await db.select({ status: connectionGrants.status }).from(connectionGrants)
@@ -1331,6 +1601,21 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       expect(qualificationToolResponses.at(-1)).toMatchObject({
         caseId: "credential_allow", status: 502, reasonCode: "sandbox_qualification_result_invalid", marker: null,
       });
+      for(const direction of ["broker", "echo"] as const) {
+        const failureCommandId=randomUUID();
+        const failureCapability=await gateway.issueSandboxQualificationCredentialProbe({actor:f.actor,scope:sandboxIdentity,
+          bindingVersion:currentQualificationBinding!.version,operationKey:`qualification-private-error:${direction}:${randomUUID()}`,
+          target:raceTarget as NonNullable<SandboxCapabilitySnapshot["qualificationTarget"]>,caseId:"credential_allow",commandId:failureCommandId});
+        expect(failureCapability).toBeTruthy();
+        qualificationProviderError = direction === "broker";
+        qualificationEchoOwnerError = direction === "echo";
+        try {
+          await driveHost(transportForTest.bridge(f.actor).probe({...sandboxIdentity,test:{...allowProbe,
+            qualificationCredentialCapability:failureCapability!.capabilityToken,qualificationCredentialNonce:failureCapability!.nonce,
+            qualificationCommandId:failureCommandId}}),admissionCell!.id);
+        } finally { qualificationProviderError=false;qualificationEchoOwnerError=false; }
+        expect(qualificationToolResponses.at(-1)).toMatchObject({caseId:"credential_allow",status:502,reasonCode:"sandbox_qualification_probe_failed",marker:null});
+      }
       const inFlightCommandId = randomUUID();
       const inFlightCapability = await gateway.issueSandboxQualificationCredentialProbe({
         actor: f.actor, scope: sandboxIdentity, bindingVersion: currentQualificationBinding!.version,
@@ -1356,13 +1641,13 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       const candidatePolicy = structuredClone(boundary);
       candidatePolicy.riskClass = "C3";
       candidatePolicy.resources.wallClockSeconds = Math.max(1, Math.floor(boundary.resources.wallClockSeconds / 2));
-      let compiled = await executionSandboxService(db, serviceOptions).compile(f.actor, f.home, sandboxBinding.id, { expectedVersion: 2, executionManifestId: manifest!.record.id, candidatePolicy });
-      expect(compiled.status, JSON.stringify({ proverResult: compiled.compilation.proverResult, failedBoundaries: compiled.compilation.failedBoundaries, unsupportedFeatures: compiled.compilation.unsupportedFeatures })).toBe("qualified");
-      const firstPolicySnapshotId = compiled.id;
       const runtime = runtimeControlService(db, {
         runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 },
       } as SaasPlatformConfig, undefined, { credentialBrokerOrigin: "https://paperclip.example.test/" });
-      gateway.setSandboxBrokerAuthority(runtime.authorizeSandboxBrokerCapability);
+      gateway.setSandboxBrokerAuthority(runtime.authorizeSandboxBrokerCapability, "https://paperclip.example.test/");
+      let compiled = await executionSandboxService(db, serviceOptions).compile(f.actor, f.home, sandboxBinding.id, { expectedVersion: 2, executionManifestId: manifest!.record.id, candidatePolicy });
+      expect(compiled.status, JSON.stringify({ proverResult: compiled.compilation.proverResult, failedBoundaries: compiled.compilation.failedBoundaries, unsupportedFeatures: compiled.compilation.unsupportedFeatures })).toBe("qualified");
+      const firstPolicySnapshotId = compiled.id;
       const brokerApp = express();
       brokerApp.use(express.json());
       brokerApp.use(mcpGatewayProtocolRoutes(gateway));
@@ -1602,7 +1887,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           .post(`/mcp/gateways/${gatewayPublicId}`)
           .set("authorization", `Bearer ${token}`)
           .send({ jsonrpc: "2.0", id: operationId, method: "tools/call", params: {
-            name: expectedBrokerToolName, arguments: { id: "fixture-record" }, _meta: { "paperclip/operationId": operationId },
+            name: expectedBrokerToolName, arguments: { workspaceId:"11111111-1111-4111-8111-111111111111" }, _meta: { "paperclip/operationId": operationId },
           } });
         const dispatchedBeforeDeniedCalls = dispatchedBrokerCalls.length;
         await brokerOperation(brokerToken!, `${namedGateway.gatewayPublicId}-wrong`).expect(403);
@@ -1631,8 +1916,8 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         await brokerOperation(brokerToken!, namedGateway.gatewayPublicId).expect(409);
         expect(dispatchedBrokerCalls).toHaveLength(dispatchedBeforeDeniedCalls + 1);
         await db.update(toolConnections).set({
-          config: { url: "https://provider.example.test/mcp" },
-          transportConfig: { url: "https://provider.example.test/mcp" },
+          config: connection!.config,
+          transportConfig: connection!.transportConfig,
         }).where(eq(toolConnections.id, connection!.id));
         await db.update(connectionGrants).set({ status: "revoked", revokedAt: new Date() }).where(eq(connectionGrants.connectionId, connection!.id));
         await brokerOperation(brokerToken!, namedGateway.gatewayPublicId).expect(409);

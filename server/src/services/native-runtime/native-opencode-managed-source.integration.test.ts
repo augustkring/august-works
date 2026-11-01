@@ -147,9 +147,9 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     }
   }, 30_000);
 
-  it("qualifies the actual Runnerd descendant process at the first managed provider request", async () => {
+  it("denies unsupported local Native transport before any model request or process starts", async () => {
     const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
-      root, instanceId, processProbeOnly: true, steps: [
+      root, instanceId, sandboxRelay: false, processProbeOnly: true, steps: [
         { tool: "write_document", id: "managed-e2e-process-probe-write", input: {
           idempotencyKey: randomUUID(), key: "managed-process-probe", title: "Process probe", body: "Not dispatched.",
           baseRevisionId: null,
@@ -157,13 +157,14 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         { tool: "paperclip_finish", id: "managed-e2e-process-probe-finish" },
       ] });
     if (!("processProbeOnly" in result)) throw new Error("managed_opencode_process_probe_result_missing");
-    expect(result.responseCount).toBe(1);
-    expect(result.modelCallCount).toBe(1);
+    expect(result.responseCount).toBe(0);
+    expect(result.modelCallCount).toBe(0);
+    expect(result.executionFailure).toEqual({ name: "NativePaidTransportAdmissionError", code: "configuration_incomplete" });
     if (!("processFacts" in result) || !Array.isArray(result.processFacts))
       throw new Error("managed_opencode_process_probe_facts_missing");
-    expect(result.processFacts.some(fact => fact.shaMatchesQualifiedBinary &&
-      fact.managedEnvironment.dataHomeMatchesManagedRun),
-    `actual OpenCode process was not qualified: ${JSON.stringify(result)}`).toBe(true);
+    expect(result.processFacts).toEqual([]);
+    // Actual binary/proc/environment mechanics remain covered by the opt-in
+    // paperclip-runner qualify-opencode-runtime.test.mjs localhost-only test.
   }, 45_000);
 
   it("executes same-run Memory and Context outputs through the real managed OpenCode Messages route", async () => {
@@ -173,7 +174,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const contextReadId = "managed-e2e-read-context";
     const memoryBId = "managed-e2e-memory-b";
     const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
-      root, instanceId,
+      root, instanceId, fixtureDeadlineAt: new Date(Date.now() + 240_000),
       steps: [
         { tool: "write_document", id: documentAId, input: {
           idempotencyKey: randomUUID(), key: "managed-source-a", title: "Public-prefix document A",
@@ -360,7 +361,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const operationKey = randomUUID();
     let exercised = false;
     const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
-      root, instanceId,
+      root, instanceId, fixtureDeadlineAt: new Date(Date.now() + 240_000),
       steps: [
         { tool: "self_remember", id: callId, input: { scope: "company", memoryType: "outcome",
           title: "Scoped replay output", content: "A real managed Memory output used to test cached replay.",
@@ -419,8 +420,12 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
   it("binds a managed Project GET result to the exact current public Project projection", async () => {
     const callId = "managed-e2e-project-read";
     const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
-      root, instanceId, steps: [
+      root, instanceId, fixtureDeadlineAt: new Date(Date.now() + 180_000), steps: [
         { tool: "call_api", id: callId, input: { operationId: "GET /api/projects/{id}", pathParams: { id: "fixture-project" } } },
+        { tool: "write_document", id: "managed-e2e-project-read-summary", input: {
+          idempotencyKey: randomUUID(), key: "managed-project-read", title: "Project read summary",
+          body: "The managed Project read completed with its current workspace.", baseRevisionId: null,
+        } },
         { tool: "paperclip_finish", id: "managed-e2e-project-finish" },
       ] });
     if (!("runId" in result) || !result.projectApiReadEvidence)
@@ -438,8 +443,12 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
   it("refuses the next managed request after the captured Project workspace changes", async () => {
     const callId = "managed-e2e-project-stale-read";
     const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
-      root, instanceId, steps: [
+      root, instanceId, fixtureDeadlineAt: new Date(Date.now() + 180_000), steps: [
         { tool: "call_api", id: callId, input: { operationId: "GET /api/projects/{id}", pathParams: { id: "fixture-project" } } },
+        { tool: "write_document", id: "managed-e2e-project-stale-read-summary", input: {
+          idempotencyKey: randomUUID(), key: "managed-project-stale", title: "Project read summary",
+          body: "The managed Project read completed with its current workspace.", baseRevisionId: null,
+        } },
         { tool: "paperclip_finish", id: "managed-e2e-project-stale-finish" },
       ], humanActions: [{ afterModelToolCallId: callId, action: "edit_project_workspace" }],
       expectProjectWorkspaceSourceDenial: true });

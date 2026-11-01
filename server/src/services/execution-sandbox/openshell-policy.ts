@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { SandboxPolicy, SandboxPolicyCompilation, SandboxQualificationProbeFixture } from "@paperclipai/shared";
-import { sandboxPolicySchema } from "@paperclipai/shared";
+import { sandboxPolicySchema, sandboxNetworkCallerBinariesSchema } from "@paperclipai/shared";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 
 // Authored policy representation verified against OpenShell v0.1.2's
@@ -17,7 +17,7 @@ export interface OpenShellPolicyDocument {
   }>;
 }
 function within(path: string, root: string) { return root === "/" || path === root || path.startsWith(root + "/"); }
-export function projectOpenShellPolicy(raw: SandboxPolicy, modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"]) {
+export function projectOpenShellPolicy(raw: SandboxPolicy, modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"], credentialBrokerEndpoints: SandboxPolicyCompilation["credentialBrokerEndpoints"] = []) {
   const policy = sandboxPolicySchema.parse(raw), unsupported: string[] = [];
   const modelRoute = modelBrokerEndpoint?.path === "/runtime-tools/model/v1/messages" &&
     Number.isInteger(modelBrokerEndpoint.port) && modelBrokerEndpoint.port > 0 && modelBrokerEndpoint.port <= 65535 &&
@@ -33,7 +33,7 @@ export function projectOpenShellPolicy(raw: SandboxPolicy, modelBrokerEndpoint?:
   if (policy.credentials.mode === "legacy_injected") unsupported.push("raw_credential_exposure");
   if (policy.credentials.mode === "brokered" && !policy.credentials.bindings.length) unsupported.push("credential_broker_binding_missing");
   if (policy.credentials.mode === "none" && policy.credentials.bindings.length) unsupported.push("credential_mode_inconsistent");
-  if (policy.network.destinations.length && !policy.process.allowedBinaries.length) unsupported.push("network_calling_binary_missing");
+
   const document: OpenShellPolicyDocument = {
     version: 1, filesystem_policy: { include_workdir: false, read_only: [...policy.filesystem.readPaths].sort(), read_write: [...policy.filesystem.writePaths].sort() },
     landlock: { compatibility: "hard_requirement" }, process: { run_as_user: String(policy.process.uid), run_as_group: String(policy.process.uid) }, network_policies: {},
@@ -41,15 +41,32 @@ export function projectOpenShellPolicy(raw: SandboxPolicy, modelBrokerEndpoint?:
   const destinations = [...policy.network.destinations];
   if (modelRoute && !destinations.some(destination => destination.hostname === modelBrokerEndpoint.hostname && destination.port === modelBrokerEndpoint.port && destination.methods.length === 1 && destination.methods[0] === "POST" && destination.pathPrefixes.length === 1 && destination.pathPrefixes[0] === modelBrokerEndpoint.path))
     destinations.push({ hostname: modelBrokerEndpoint.hostname, port: modelBrokerEndpoint.port, methods: ["POST"], pathPrefixes: [modelBrokerEndpoint.path] });
+  const appEndpoints = credentialBrokerEndpoints.filter(endpoint =>
+    /^[a-z0-9.-]+$/.test(endpoint.hostname) && Number.isInteger(endpoint.port) && endpoint.port > 0 && endpoint.port <= 65535 &&
+    /^\/mcp\/gateways\/[A-Za-z0-9_-]{1,128}$/.test(endpoint.path) &&
+    sandboxNetworkCallerBinariesSchema.safeParse([endpoint.binary]).success && policy.credentials.mode === "brokered" &&
+    policy.credentials.bindings.some(binding => binding.connectionId === endpoint.connectionId && binding.binary === endpoint.binary));
+  if (appEndpoints.length !== credentialBrokerEndpoints.length) unsupported.push("credential_broker_caller_route_invalid");
+  for (const endpoint of appEndpoints) {
+    if (!destinations.some(destination => destination.hostname === endpoint.hostname && destination.port === endpoint.port &&
+      destination.methods.length === 1 && destination.methods[0] === "POST" && destination.pathPrefixes.length === 1 && destination.pathPrefixes[0] === endpoint.path))
+      destinations.push({ hostname: endpoint.hostname, port: endpoint.port, methods: ["POST"], pathPrefixes: [endpoint.path] });
+  }
+  destinations.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   destinations.forEach((destination, index) => {
-    const rules = destination.methods.flatMap(method => destination.pathPrefixes.flatMap(path => {
-      const exactBrokerGatewayRoute = policy.credentials.mode === "brokered" && /^\/mcp\/gateways\/[A-Za-z0-9_-]{1,128}$/.test(path);
-      const exactModelBrokerRoute = Boolean(modelRoute && method === "POST" && destination.hostname === modelBrokerEndpoint!.hostname && destination.port === modelBrokerEndpoint!.port && path === modelBrokerEndpoint!.path);
-      return path === "/" ? [{ allow: { method, path: "/**" } }]
-        : exactBrokerGatewayRoute || exactModelBrokerRoute ? [{ allow: { method, path } }]
-          : [{ allow: { method, path } }, { allow: { method, path: `${path}/**` } }];
-    }));
-    document.network_policies[`aw_${index}`] = { name: `aw_${index}`, binaries: policy.process.allowedBinaries.map(path => ({ path })), endpoints: [{ host: destination.hostname, port: destination.port, protocol: "rest", enforcement: "enforce", rules }] };
+    const exactModelRoute = Boolean(modelRoute && destination.hostname === modelBrokerEndpoint!.hostname &&
+      destination.port === modelBrokerEndpoint!.port && destination.methods.length === 1 && destination.methods[0] === "POST" &&
+      destination.pathPrefixes.length === 1 && destination.pathPrefixes[0] === modelBrokerEndpoint!.path);
+    const exactAppRoutes = appEndpoints.filter(endpoint => destination.hostname === endpoint.hostname && destination.port === endpoint.port &&
+      destination.methods.length === 1 && destination.methods[0] === "POST" && destination.pathPrefixes.length === 1 && destination.pathPrefixes[0] === endpoint.path);
+    const binaries = exactModelRoute ? modelBrokerEndpoint?.binaries : [...new Set(exactAppRoutes.map(endpoint => endpoint.binary))].sort();
+    if (!sandboxNetworkCallerBinariesSchema.safeParse(binaries).success) {
+      unsupported.push("network_calling_binary_missing");
+      return;
+    }
+    const rules = destination.methods.flatMap(method => destination.pathPrefixes.map(path => ({ allow: { method, path } })));
+    document.network_policies[`aw_${index}`] = { name: `aw_${index}`, binaries: binaries!.map(path => ({ path })),
+      endpoints: [{ host: destination.hostname, port: destination.port, protocol: "rest", enforcement: "enforce", rules }] };
   });
   return { document, documentHash: nativeSha256(document), unsupportedFeatures: unsupported };
 }

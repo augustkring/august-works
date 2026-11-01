@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { heartbeatRuns, projectWorkspaces, projects, type Db } from "@paperclipai/db";
-import { nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput,
+import { activityLog, heartbeatRuns, projectWorkspaces, projects, type Db } from "@paperclipai/db";
+import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput,
   type NativePayloadSourceSnapshot } from "@paperclipai/shared";
-import { conflict, forbidden } from "../errors.js";
+import { conflict, forbidden, unprocessable } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { canActorReadProjectPrivacy } from "./authorization.js";
 import { assertNativeManagedConsumedSourceSetCurrent, assertNativeModelOutputCaptureCurrent,
@@ -14,31 +14,126 @@ import { publicNativePayloadRow } from "./native-payload-public.js";
 import { persistActivity, publishActivity } from "./activity-log.js";
 import { lockIssuePrivacyTree } from "./issues.js";
 import { ensureProjectAccessMember, pinProjectMutationHuman, projectService } from "./projects.js";
+import { normalizeProjectRepositoryUrl } from "./project-repositories.js";
 import { projectToolContext } from "./project-tool-context.js";
 import type { NativeModelOutputCapture, NativePayloadSourceSet } from "./native-runtime/native-execution-input.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { resolveManagedProjectWorkspaceDir } from "../home-paths.js";
+import { toolAccessService } from "./tool-access.js";
+import { resolveProjectRepositorySelection } from "./project-repositories.js";
+import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type ProjectSource = Extract<NativePayloadSourceInput, { kind: "project" }>;
 type WorkspaceSource = Extract<NativePayloadSourceInput, { kind: "project_workspace" }>;
-const managedProjectArgumentsSchema = z.object({
+const nativePayloadSourceSetSchema = z.object({ policy: nativePayloadSourcePolicySchema,
+  inputs: nativePayloadSourceInputSchema.array() }).strict();
+export const managedNativeProjectArgumentsSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().max(4_000).nullable().optional(),
   idempotencyKey: z.string().trim().min(1).max(255),
-  // Every managed Project result carries an exact Workspace owner pin. Keep
-  // this required at the original constructor too, so malformed/internal
-  // callers cannot create a Project that has no qualifiable result closure.
-  workspace: z.object({ name: z.string().trim().min(1).max(200) }).strict(),
+  // The owner creates a local primary Workspace named after the Project when
+  // the caller selects repositories instead of an explicit Workspace.
+  workspace: z.object({ name: z.string().trim().min(1).max(200) }).strict().optional(),
+  repositoryIds: z.array(z.string().regex(/^\d+$/)).max(100).optional(),
+  repositoryUrls: z.array(z.string().url().max(2_000)).max(100).optional(),
+}).strict().superRefine((value, ctx) => {
+  if (value.workspace && (value.repositoryIds?.length || value.repositoryUrls?.length))
+    ctx.addIssue({ code: "custom", path: ["workspace"], message: "Workspace cannot be combined with repository selections" });
+});
+export type ManagedNativeProjectArguments = z.infer<typeof managedNativeProjectArgumentsSchema>;
+export function managedNativeProjectArgumentsJsonSchema() {
+  return z.toJSONSchema(managedNativeProjectArgumentsSchema);
+}
+export const managedNativeProjectApiBodySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().max(4_000).nullable().optional(),
+  idempotencyKey: z.string().trim().min(1).max(255),
+  repositoryIds: z.array(z.string().regex(/^\d+$/)).max(100).optional(),
+  repositoryUrls: z.array(z.string().url().max(2_000)).max(100).optional(),
+  workspace: z.object({ name: z.string().trim().min(1).max(200) }).strict().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (value.workspace && (value.repositoryIds?.length || value.repositoryUrls?.length))
+    ctx.addIssue({ code: "custom", path: ["workspace"], message: "Workspace cannot be combined with repository selections" });
+});
+export function managedNativeProjectApiBodyJsonSchema() {
+  const schema = z.toJSONSchema(managedNativeProjectApiBodySchema) as Record<string, unknown>;
+  // `$schema` is meaningful only at a JSON Schema document root; this schema
+  // is embedded as the `body` property of the runner API tool input.
+  delete schema.$schema;
+  return schema;
+}
+export const managedNativeProjectApiCallSchema = z.object({
+  operationId: z.literal("POST /api/companies/{companyId}/projects"),
+  pathParams: z.object({ companyId: z.string().uuid() }).strict(),
+  body: managedNativeProjectApiBodySchema,
 }).strict();
+
+/** Resolve the server-owned, per-dispatch API capture after auth middleware
+ * consumed its exact signed POST claim. No route or request body can mint it. */
+export async function consumeManagedNativeProjectApiCapture(db: Db, input: {
+  actor: AuthorizationActor;
+  claim: NativeToolEffectClaim;
+  companyId: string;
+  issueId: string;
+  rawBody: unknown;
+}): Promise<{ capture: NativeModelOutputCapture; body: z.infer<typeof managedNativeProjectApiBodySchema> } | null> {
+  const { actor, claim, companyId, issueId } = input;
+  if (actor.type !== "agent" || actor.source !== "agent_jwt" || actor.companyId !== companyId ||
+    actor.agentId === undefined || !actor.runId || claim.tool !== "call_api" ||
+    claim.operationId !== "POST /api/companies/{companyId}/projects" || claim.method !== "POST" ||
+    claim.pathAndQuery !== `/api/companies/${companyId}/projects`)
+    throw forbidden("Managed Project API capture does not match the consumed POST claim");
+  const callKey = createHash("sha256").update(claim.callId, "utf8").digest("hex");
+  return db.transaction(async tx => {
+    const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+      eq(heartbeatRuns.id, actor.runId!), eq(heartbeatRuns.agentId, actor.agentId!),
+      eq(heartbeatRuns.nativeIssueId, issueId), eq(heartbeatRuns.status, "running"))).for("update");
+    const resultJson = record(run?.resultJson);
+    const apiReceipts = record(resultJson.apiToolReceipts);
+    const apiReceipt = record(apiReceipts[callKey]);
+    const captures = record(resultJson.nativeManagedProjectApiCaptures);
+    if (!Object.hasOwn(captures, callKey)) return null;
+    const entry = record(captures[callKey]);
+    const capture = entry.capture as NativeModelOutputCapture | undefined;
+    const use = capture?.managedOpenCodeToolUse;
+    const associations = record(run?.runnerProfileJson).nativeToolCallDispatchAssociations;
+    const matching = Array.isArray(associations) ? associations.map(record).filter(value => value.callId === claim.callId &&
+      value.turnId === claim.turnId && value.tool === "call_api" && value.dispatchId === claim.dispatchId &&
+      value.eventSeq === claim.eventSeq && value.attempt === claim.attempt && value.argumentsHash === use?.argumentsHash) : [];
+    if (!run || run.responsibleUserId !== actor.onBehalfOfUserId || apiReceipt.digest !== claim.apiReceiptDigest ||
+      apiReceipt.operationId !== claim.operationId || apiReceipt.state !== "pending" ||
+      apiReceipt.nativeEffectClaimConsumed !== true || apiReceipt.callId !== claim.callId ||
+      apiReceipt.turnId !== claim.turnId || apiReceipt.dispatchId !== claim.dispatchId ||
+      apiReceipt.eventSeq !== claim.eventSeq || apiReceipt.attempt !== claim.attempt ||
+      apiReceipt.method !== claim.method || apiReceipt.pathAndQuery !== claim.pathAndQuery ||
+      apiReceipt.bodyHash !== claim.bodyHash || use?.toolName !== "call_api" || use.callId !== claim.callId ||
+      !capture || capture.runId !== run.id || matching.length !== 1 ||
+      entry.apiReceiptDigest !== claim.apiReceiptDigest || entry.operationId !== claim.operationId)
+      throw forbidden("Managed Project API capture is stale or unavailable");
+    const parsedBody = managedNativeProjectApiBodySchema.safeParse(input.rawBody);
+    if (!parsedBody.success) throw unprocessable("Managed Project API body is invalid");
+    delete captures[callKey];
+    await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, nativeManagedProjectApiCaptures: captures } })
+      .where(eq(heartbeatRuns.id, run.id));
+    return { capture, body: parsedBody.data };
+  });
+}
 
 export type NativeProjectCreateReceipt = {
   callId: string;
-  tool: "create_project";
+  tool: "create_project" | "call_api";
   argumentsHash: string;
+  commandKeyHash: string;
+  commandFingerprint: string;
+  /** Canonical digest of the returned Project DTO, separate from API and provider envelopes. */
   resultDigest: string;
   projectId: string;
   responsibleUserId: string;
+  /** The source closure sealed when the Project was first created. A retry
+   * may carry a newer model prefix but must preserve this original closure. */
+  projectSourceSet: NativePayloadSourceSet;
+  projectSourceSetHash: string;
   sourceSetHash: string;
   projectSource: ProjectSource;
   workspaceSources: WorkspaceSource[];
@@ -53,23 +148,62 @@ export async function createManagedNativeProjectOutput(input: {
   companyId: string;
   issueId: string;
   callId: string;
-  arguments: z.infer<typeof managedProjectArgumentsSchema>;
+  tool?: "create_project" | "call_api";
+  arguments: Record<string, unknown>;
   capture: NativeModelOutputCapture;
 }): Promise<{ project: Record<string, unknown>; receipt: NativeProjectCreateReceipt; sourceSet: NativePayloadSourceSet }> {
   const { db, actor, companyId, issueId, capture } = input;
   const callId = input.callId;
-  const argumentsHash = nativeSha256(input.arguments);
-  const args = managedProjectArgumentsSchema.parse(input.arguments);
+  const outputTool = input.tool ?? "create_project";
+  // Bind dedicated-tool retries to exact provider JSON. The API arm instead
+  // uses the original call_api hash sealed in its provider capture.
+  const directArgumentsHash = nativeSha256(input.arguments);
+  const args = outputTool === "create_project"
+    ? managedNativeProjectArgumentsSchema.parse(input.arguments)
+    : (() => {
+        const body = managedNativeProjectApiBodySchema.parse(input.arguments);
+        return { ...body, workspace: body.workspace ?? { name: body.name } };
+      })();
+  const effectiveWorkspace = args.workspace ?? { name: args.name };
+  const repositories = new Map<string, { id: string; fullName: string; url: string; metadata: { githubRepositoryId: string } | null }>();
+  let repositoryAuthorizationWitnesses: Array<{ repositoryId: string; connectionId: string; grantId: string | null }> = [];
+  if (args.repositoryIds?.length) {
+    const context = await projectToolContext(db, actor as never, true);
+    if (!context.userId || context.localTrusted) throw forbidden("Managed Project repository selection requires the current accountable Human");
+    const available = await toolAccessService(db).listProjectRepositories(companyId, context.userId, false, true);
+    const selected = resolveProjectRepositorySelection(args.repositoryIds, available.repositories);
+    repositoryAuthorizationWitnesses = selected.flatMap(repository =>
+      available.repositoryAuthorizationWitnesses?.[repository.id] ?? []);
+    if (selected.some(repository => !repositoryAuthorizationWitnesses.some(witness =>
+      witness.repositoryId === repository.id)))
+      throw forbidden("A selected repository has no accountable Human authorization witness");
+    for (const repository of selected) repositories.set(repository.url.toLowerCase(), {
+      id: repository.id, fullName: repository.fullName, url: repository.url,
+      metadata: { githubRepositoryId: repository.id },
+    });
+  }
+  for (const repositoryUrl of args.repositoryUrls ?? []) {
+    const normalized = normalizeProjectRepositoryUrl(repositoryUrl);
+    const dedupeKey = normalized.url.toLowerCase();
+    if (!repositories.has(dedupeKey)) repositories.set(dedupeKey, { ...normalized, id: normalized.url, metadata: null });
+  }
+  const normalizedRepositories = [...repositories.values()];
   const use = capture.managedOpenCodeToolUse;
+  const argumentsHash = use?.argumentsHash;
   if (actor.type !== "agent" || actor.source !== "agent_jwt" || actor.companyId !== companyId ||
     !actor.agentId || !actor.runId || capture.runId !== actor.runId || !use || use.callId !== callId ||
-    use.toolName !== "create_project" || use.argumentsHash !== argumentsHash ||
+    use.toolName !== outputTool || (outputTool === "create_project" && use.argumentsHash !== directArgumentsHash) ||
+    typeof argumentsHash !== "string" || !/^[0-9a-f]{64}$/.test(argumentsHash) ||
     !/^[\x21-\x7e]{1,240}$/.test(callId))
     throw forbidden("Managed Project creation requires the exact current provider tool use");
 
   const sourceSet: NativePayloadSourceSet = { policy: capture.sourceSet.policy, inputs: capture.sourceSet.inputs };
   const sourceSetHash = nativeSha256(sourceSet);
-  const key = createHash("sha256").update(callId, "utf8").digest("hex");
+  const callReceiptKey = createHash("sha256").update(callId, "utf8").digest("hex");
+  const commandIdempotencyKey = `project:${companyId}:${actor.agentId}:${issueId}:${args.idempotencyKey}`;
+  const commandKeyHash = nativeSha256(commandIdempotencyKey);
+  const commandFingerprint = nativeSha256({ name: args.name, description: args.description ?? null,
+    workspace: effectiveWorkspace, repositories: normalizedRepositories.map(({ id, fullName, url }) => ({ id, fullName, url })) });
   let publication: Awaited<ReturnType<typeof persistActivity>>["publication"] | null = null;
   let result: { project: Record<string, unknown>; receipt: NativeProjectCreateReceipt; sourceSet: NativePayloadSourceSet } | null = null;
 
@@ -78,14 +212,16 @@ export async function createManagedNativeProjectOutput(input: {
     // Validate all consumed owner roots before the mutation. The validator pins
     // the source privacy tree and checks the settled response, dispatch, call,
     // arguments and accountable Human through the same transaction.
-    await assertNativeModelOutputCaptureCurrent(tx, companyId, issueId, capture, "create_project", actor);
+    await assertNativeModelOutputCaptureCurrent(tx, companyId, issueId, capture, outputTool, actor);
     await lockIssuePrivacyTree(rawTx, companyId);
     const current = await projectToolContext(tx, actor as never, true);
     if (current.issue.id !== issueId || !current.userId || current.localTrusted ||
       (actor.onBehalfOfUserId ?? null) !== current.userId || current.run.status !== "running")
       throw forbidden("Managed Project creation requires the current accountable Human");
     await pinProjectMutationHuman(rawTx, actor, companyId);
-    await rawTx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`native-project-create:${capture.runId}:${callId}`},0))`);
+    // Share the authenticated Projects API receipt lock so a direct API create
+    // and a managed Native retry with the same scoped key cannot race.
+    await rawTx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${commandIdempotencyKey},0))`);
     const [run] = await rawTx.select().from(heartbeatRuns).where(and(
       eq(heartbeatRuns.id, capture.runId), eq(heartbeatRuns.companyId, companyId),
       eq(heartbeatRuns.agentId, actor.agentId!), eq(heartbeatRuns.nativeIssueId, issueId),
@@ -95,13 +231,17 @@ export async function createManagedNativeProjectOutput(input: {
 
     // A lock/identity wait may have occurred above. Recheck the complete
     // provider capture and all source owners immediately before creating rows.
-    await assertNativeModelOutputCaptureCurrent(tx, companyId, issueId, capture, "create_project", actor);
+    await assertNativeModelOutputCaptureCurrent(tx, companyId, issueId, capture, outputTool, actor);
+    if (args.repositoryIds?.length)
+      await toolAccessService(tx).assertProjectRepositoryAuthorizationWitnessesCurrent({ companyId,
+        userId: current.userId, repositoryIds: args.repositoryIds, witnesses: repositoryAuthorizationWitnesses });
     const resultJson = record(run.resultJson);
     const receipts = record(resultJson.nativeProjectCreateReceipts);
-    const existing = record(receipts[key]);
+    const existing = record(receipts[callReceiptKey]);
     if (Object.keys(existing).length) {
-      if (existing.callId !== callId || existing.tool !== "create_project" ||
+      if (existing.callId !== callId || existing.tool !== outputTool ||
         existing.argumentsHash !== argumentsHash || existing.sourceSetHash !== sourceSetHash ||
+        existing.commandKeyHash !== commandKeyHash || existing.commandFingerprint !== commandFingerprint ||
         typeof existing.projectId !== "string") throw conflict("Managed Project call was replayed with different inputs");
       const project = await projectService(tx).getById(existing.projectId as string);
       if (!project || !(await canActorReadProjectPrivacy(tx, actor, project))) throw forbidden("Managed Project result is unavailable");
@@ -119,6 +259,56 @@ export async function createManagedNativeProjectOutput(input: {
           existing.workspaceSources)) throw conflict("Managed Project source receipt changed");
       await assertNativeProjectSourceCurrent(tx, { companyId, actor, source: existing.projectSource });
       result = { project: dto, receipt: existing as unknown as NativeProjectCreateReceipt, sourceSet };
+      return;
+    }
+
+    // Provider call IDs change across retries. The explicit command key binds
+    // the logical create across those IDs, while the fingerprint prevents a
+    // reused key from silently selecting a different Project or source set.
+    const [priorActivity] = await rawTx.select({ entityId: activityLog.entityId, details: activityLog.details })
+      .from(activityLog).where(and(eq(activityLog.companyId, companyId), eq(activityLog.action, "project.created"),
+        eq(activityLog.entityType, "project"), eq(activityLog.actorType, "agent"), eq(activityLog.actorId, actor.agentId!),
+        sql`${activityLog.details}->>'idempotencyKey' = ${commandIdempotencyKey}`)).limit(1);
+    if (priorActivity) {
+      const priorDetails = record(priorActivity.details);
+      if (priorDetails.source !== "managed_native_create_project" ||
+        priorDetails.nativeCommandFingerprint !== commandFingerprint)
+        throw conflict("Managed Project idempotency key was used with different inputs");
+      const project = await projectService(tx).getById(priorActivity.entityId);
+      if (!project || !(await canActorReadProjectPrivacy(tx, actor, project))) throw forbidden("Managed Project result is unavailable");
+      const dto = managedNativeProjectResultDto(project);
+      const snapshot = nativePayloadSourceSnapshotSchema.safeParse(project.payloadSourceSnapshot);
+      const projectSource: ProjectSource = { kind: "project", projectId: project.id,
+        sourceVersion: project.updatedAt.toISOString(),
+        contentHash: createHash("sha256").update(JSON.stringify(dto), "utf8").digest("hex") };
+      const workspaceSources = snapshot.success ? snapshot.data.inputs.filter((value): value is WorkspaceSource =>
+        value.kind === "project_workspace" && value.projectId === project.id) : [];
+      const projectSourceSet: NativePayloadSourceSet | null = snapshot.success ? {
+        policy: snapshot.data.policy,
+        inputs: snapshot.data.inputs.filter(value => !(value.kind === "project_workspace" && value.projectId === project.id)),
+      } : null;
+      const originalIssueIds = projectSourceSet ? [...new Set([issueId, ...projectSourceSet.policy.issueIds])].sort() : [];
+      const originalProjectIds = projectSourceSet ? [...new Set(projectSourceSet.policy.projectIds)].sort() : [];
+      if (!snapshot.success || project.visibility !== "private" || project.privacyOwnerUserId !== current.userId ||
+        project.sourceProvenanceQualified !== true || !Array.isArray(project.sourceIssueIds) ||
+        !isDeepStrictEqual([...project.sourceIssueIds].sort(), originalIssueIds) ||
+        !Array.isArray(project.sourceProjectIds) || !isDeepStrictEqual([...project.sourceProjectIds].sort(), originalProjectIds) ||
+        snapshot.data.digest !== priorDetails.sourceSnapshotDigest ||
+        !projectSourceSet ||
+        !isDeepStrictEqual(snapshot.data.inputs, [...projectSourceSet.inputs, ...workspaceSources]))
+        throw conflict("Managed Project idempotency result changed after creation");
+      await assertNativeProjectSourceCurrent(tx, { companyId, actor, source: projectSource });
+      await assertNativeManagedConsumedSourceSetCurrent(tx, { companyId, issueId, runId: capture.runId,
+        actor, components: capture.consumedSourceComponents ?? [], sourceSet });
+      const receipt: NativeProjectCreateReceipt = { callId, tool: outputTool, argumentsHash,
+        commandKeyHash, commandFingerprint, resultDigest: nativeSha256(dto), projectId: project.id,
+        responsibleUserId: current.userId, projectSourceSet, projectSourceSetHash: nativeSha256(projectSourceSet),
+        sourceSetHash, projectSource, workspaceSources,
+        sourceSnapshotDigest: snapshot.data.digest };
+      receipts[callReceiptKey] = receipt;
+      await rawTx.update(heartbeatRuns).set({ resultJson: { ...resultJson, nativeProjectCreateReceipts: receipts } })
+        .where(eq(heartbeatRuns.id, run.id));
+      result = { project: dto, receipt, sourceSet };
       return;
     }
 
@@ -154,9 +344,17 @@ export async function createManagedNativeProjectOutput(input: {
     if (!(await canActorReadProjectPrivacy(tx, actor, project))) throw forbidden("Managed Project result is unavailable");
 
     const cwd = resolveManagedProjectWorkspaceDir({ companyId, projectId: project.id });
-    const workspace = await service.createWorkspace(project.id, { name: args.workspace.name,
+    const workspace = await service.createWorkspace(project.id, { name: effectiveWorkspace.name,
       sourceType: "local_path", cwd, isPrimary: true });
     if (!workspace) throw forbidden("Managed Project workspace could not be created");
+    const repositoryWorkspaces = [];
+    for (const repository of normalizedRepositories) {
+      const repositoryWorkspace = await service.createWorkspace(project.id, {
+        name: repository.fullName, repoUrl: repository.url, metadata: repository.metadata ?? undefined,
+      });
+      if (!repositoryWorkspace) throw forbidden("Managed Project repository workspace could not be created");
+      repositoryWorkspaces.push({ workspace: repositoryWorkspace, repository });
+    }
 
     // Workspace insertion uses a nested owner lock. Recheck the full consumed
     // graph after that wait while the original owner privacy locks remain held.
@@ -197,17 +395,22 @@ export async function createManagedNativeProjectOutput(input: {
     await assertNativeProjectSourceCurrent(tx, { companyId, actor, source: projectSource });
     await assertNativeManagedConsumedSourceSetCurrent(tx, { companyId, issueId, runId: capture.runId,
       actor, components: capture.consumedSourceComponents ?? [], sourceSet });
-    const receipt: NativeProjectCreateReceipt = { callId, tool: "create_project", argumentsHash,
+    const receipt: NativeProjectCreateReceipt = { callId, tool: outputTool, argumentsHash,
+      commandKeyHash, commandFingerprint,
       resultDigest: nativeSha256(dto), projectId: project.id, responsibleUserId: current.userId,
-      sourceSetHash, projectSource, workspaceSources, sourceSnapshotDigest: snapshot.digest };
-    receipts[key] = receipt;
+      projectSourceSet: sourceSet, projectSourceSetHash: nativeSha256(sourceSet), sourceSetHash,
+      projectSource, workspaceSources, sourceSnapshotDigest: snapshot.digest };
+    receipts[callReceiptKey] = receipt;
     await rawTx.update(heartbeatRuns).set({ resultJson: { ...resultJson, nativeProjectCreateReceipts: receipts } })
       .where(eq(heartbeatRuns.id, run.id));
     const activity = await persistActivity(tx, { companyId, actorType: "agent", actorId: actor.agentId!,
       agentId: actor.agentId!, runId: run.id, issueId, action: "project.created", entityType: "project",
       entityId: project.id, details: { name: project.name, description: project.description,
         icon: project.icon, status: project.status, sourceIssueId: issueId,
-        repositories: [], workspaceId: workspace.id, envKeys: [],
+        idempotencyKey: commandIdempotencyKey, nativeCommandFingerprint: commandFingerprint,
+        repositories: repositoryWorkspaces.map(({ repository }) => ({
+          id: repository.id, name: repository.fullName, url: repository.url,
+        })), workspaceId: workspace.id, envKeys: [],
         source: "managed_native_create_project", sourceSnapshotDigest: snapshot.digest,
         workspaceIds: workspaceSources.map(value => value.workspaceId) } });
     publication = activity.publication;
@@ -252,7 +455,7 @@ export async function assertNativeManagedProjectCreateReceiptCurrentInTransactio
   const projectSourceResult = nativePayloadSourceInputSchema.safeParse(receipt.projectSource);
   const workspaceSourcesResult = nativePayloadSourceInputSchema.array().safeParse(receipt.workspaceSources);
   const resultRecord = record(input.result);
-  if (receipt.tool !== "create_project" || receipt.callId !== outputCapture.managedOpenCodeToolUse?.callId ||
+  if (receipt.tool !== outputCapture.managedOpenCodeToolUse?.toolName || receipt.callId !== outputCapture.managedOpenCodeToolUse?.callId ||
     receipt.argumentsHash !== outputCapture.managedOpenCodeToolUse?.argumentsHash ||
     receipt.resultDigest !== nativeSha256(input.result) || !isDeepStrictEqual(input.result, resultRecord) ||
     receipt.sourceSetHash !== nativeSha256(sourceSet) || !isDeepStrictEqual(sourceSet, outputCapture.sourceSet) ||
@@ -261,10 +464,10 @@ export async function assertNativeManagedProjectCreateReceiptCurrentInTransactio
     workspaceSourcesResult.data.some(value => value.kind !== "project_workspace" ||
       (value as WorkspaceSource).projectId !== receipt.projectId) ||
     outputCapture.runId !== runId || outputCapture.dispatch.runId !== runId ||
-    outputCapture.managedOpenCodeToolUse?.toolName !== "create_project")
+    !["create_project", "call_api"].includes(outputCapture.managedOpenCodeToolUse?.toolName ?? ""))
     throw forbidden("Managed Project result receipt is malformed");
 
-  await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, companyId, issueId, outputCapture, "create_project", actor,
+  await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, companyId, issueId, outputCapture, receipt.tool, actor,
     input.allowSucceededRun ? "settled" : "live");
   const [run] = await tx.select().from(heartbeatRuns).where(and(
       eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId),
@@ -279,9 +482,12 @@ export async function assertNativeManagedProjectCreateReceiptCurrentInTransactio
   if (!isDeepStrictEqual(receipts[key], receipt)) throw forbidden("Managed Project creation receipt is unavailable");
 
   const project = await projectService(tx as unknown as Db).getById(receipt.projectId);
-  const expectedSourceIssueIds = [...new Set([issueId, ...sourceSet.policy.issueIds])].sort();
-  const expectedSourceProjectIds = [...new Set(sourceSet.policy.projectIds)].sort();
+  const projectSourceSet = nativePayloadSourceSetSchema.safeParse(receipt.projectSourceSet);
+  const expectedSourceIssueIds = projectSourceSet.success
+    ? [...new Set([issueId, ...projectSourceSet.data.policy.issueIds])].sort() : [];
+  const expectedSourceProjectIds = projectSourceSet.success ? [...new Set(projectSourceSet.data.policy.projectIds)].sort() : [];
   if (!project || project.visibility !== "private" || project.privacyOwnerUserId !== run.responsibleUserId ||
+    !projectSourceSet.success || receipt.projectSourceSetHash !== nativeSha256(projectSourceSet.data) ||
     project.sourceProvenanceQualified !== true || !Array.isArray(project.sourceIssueIds) ||
     !isDeepStrictEqual([...project.sourceIssueIds].sort(), expectedSourceIssueIds) ||
     !Array.isArray(project.sourceProjectIds) ||
@@ -293,9 +499,11 @@ export async function assertNativeManagedProjectCreateReceiptCurrentInTransactio
     sourceVersion: project.updatedAt.toISOString(),
     contentHash: createHash("sha256").update(JSON.stringify(dto), "utf8").digest("hex") };
   const snapshot = nativePayloadSourceSnapshotSchema.safeParse(project.payloadSourceSnapshot);
-  const expectedInputs = [...sourceSet.inputs, ...workspaceSourcesResult.data];
+  const expectedInputs = projectSourceSet.success
+    ? [...projectSourceSet.data.inputs, ...workspaceSourcesResult.data] : [];
   if (!snapshot.success || snapshot.data.digest !== receipt.sourceSnapshotDigest ||
-    !isDeepStrictEqual(snapshot.data.policy, sourceSet.policy) || !isDeepStrictEqual(snapshot.data.inputs, expectedInputs) ||
+    !projectSourceSet.success || receipt.projectSourceSetHash !== nativeSha256(projectSourceSet.data) ||
+    !isDeepStrictEqual(snapshot.data.policy, projectSourceSet.data.policy) || !isDeepStrictEqual(snapshot.data.inputs, expectedInputs) ||
     !isDeepStrictEqual(exactProjectSource, projectSourceResult.data) ||
     !isDeepStrictEqual(dto, input.result) || receipt.resultDigest !== nativeSha256(dto))
     throw forbidden("Managed Project snapshot no longer matches its output capture");

@@ -288,7 +288,9 @@ async function assertManifestReferences(db: Db, input: CreateContextManifestInpu
       .then((rows) => rows[0] ?? null),
     input.runId
       ? db
-          .select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId, responsibleUserId:heartbeatRuns.responsibleUserId,issueId:heartbeatRuns.issueId })
+      .select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId, responsibleUserId:heartbeatRuns.responsibleUserId,
+        issueId:heartbeatRuns.issueId, status: heartbeatRuns.status, runtimeMode: heartbeatRuns.runtimeMode,
+        nativeIssueId: heartbeatRuns.nativeIssueId })
           .from(heartbeatRuns)
           .where(
             and(
@@ -532,11 +534,12 @@ export function contextManifestService(db: Db) {
           throw contextDeadlineError();
       };
       assertActive();
-      const diagnosticStartedAt = Date.now();
-      let diagnosticStage = "transaction_start";
       let statementDeadlineAt: number | null = null;
       try {
-      return await db.transaction(async (tx) => {
+      const result = await db.transaction(async (tx) => {
+        let previousPlannerMode: string | undefined;
+        let operationFailed = false;
+        try {
         const refreshStatementTimeout = async () => {
           assertActive();
           if (options.deadlineAt === undefined) return;
@@ -551,7 +554,6 @@ export function contextManifestService(db: Db) {
         };
         await refreshStatementTimeout();
         const sourceDb = tx as unknown as Db;
-        diagnosticStage = "manifest_references";
         const delegated = input.delegatedExecution;
         if (delegated && (input.runId || input.companyId !== delegated.guestCompanyId || input.agentId !== delegated.guestAgentId ||
           input.responsibleUserId !== delegated.responsibleUserId || input.issueId || input.projectId))
@@ -610,6 +612,34 @@ export function contextManifestService(db: Db) {
             (sourceActor.source !== "agent_jwt" && sourceActor.source !== "none"))
             throw forbidden("Context actor does not match its actual accountable run");
         }
+        // Native bootstrap may publish new immutable Context rows under shared
+        // source fences only when it captures the exact primary Task and raw
+        // Memory records. Other provider classes can retain mutable lineage or
+        // copied Task edges, so they keep the exclusive privacy transaction.
+        const nativeAppendOnlyCapture = Boolean(nativeBootstrap && !delegated && input.runId && issueId &&
+          input.issueId === issueId && run?.id === input.runId && run.status === "running" &&
+          run.runtimeMode === "native" && (run.nativeIssueId ?? run.issueId) === issueId &&
+          input.selected.every(({ decision }) => {
+            const evidence = decision.evidence;
+            if (evidence.sourceProvider === "august_works_tasks")
+              return evidence.sourceClass === "task" && evidence.sourceType === "issue" && evidence.sourceRef === `issue://${issueId}`;
+            return evidence.sourceProvider === "august_works_memory" &&
+              (evidence.sourceClass === "accepted_memory" || evidence.sourceClass === "private_memory") &&
+              evidence.sourceType === "memory_record" &&
+              /^memory:\/\/record\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(evidence.sourceRef) &&
+              evidence.sourceRef === evidence.sourceRef.toLowerCase();
+          }));
+        // Legacy Memory roots can reach the large Task privacy predicate before
+        // a Native owner helper applies this transaction-local SQL setting.
+        if (nativeAppendOnlyCapture) {
+          await sourceDb.execute(sql`set local jit='off'`);
+          const [setting] = await sourceDb.execute<{ mode: string }>(sql`select current_setting('plan_cache_mode') as mode`);
+          if (!setting || !["auto", "force_custom_plan", "force_generic_plan"].includes(setting.mode))
+            throw new Error("Native privacy planner setting is unavailable");
+          previousPlannerMode = setting.mode;
+          if (previousPlannerMode !== "force_generic_plan")
+            await sourceDb.execute(sql`set local plan_cache_mode=force_generic_plan`);
+        }
         const assertCompanyAdmission = async () => {
           const admission = await authorizationService(sourceDb).decide({actor:sourceActor,action:"company_scope:read",
             resource:{type:"company",companyId:input.companyId},enforceResponsibleUserIntersection:true});
@@ -666,8 +696,7 @@ export function contextManifestService(db: Db) {
         // the privacy tree is locked.
         if (delegated) await assertScopePrivacy();
         await refreshStatementTimeout();
-        diagnosticStage = "privacy_tree_lock";
-        await lockIssuePrivacyTree(tx,input.companyId);
+        await lockIssuePrivacyTree(tx,input.companyId,nativeAppendOnlyCapture ? "read" : "write");
         if (delegated) {
           await refreshStatementTimeout();
           await assertScopePrivacy();
@@ -676,7 +705,6 @@ export function contextManifestService(db: Db) {
         const selectedPayloadSnapshots = new Map<string, typeof issues.$inferSelect["payloadSourceSnapshot"]>();
         const sourceKey = (provider: string, ref: string) => `${provider}:${ref.toLowerCase()}`;
         await refreshStatementTimeout();
-        diagnosticStage = "selected_task_currentness";
         for (const {decision} of input.selected) {
           const evidence = decision.evidence;
           if (evidence.sourceProvider !== "august_works_tasks") continue;
@@ -700,7 +728,6 @@ export function contextManifestService(db: Db) {
               throw forbidden("Context source access is unavailable");
         }
         await refreshStatementTimeout();
-        diagnosticStage = "manifest_insert";
         const [manifest] = await tx
           .insert(contextManifests)
           .values({
@@ -717,6 +744,8 @@ export function contextManifestService(db: Db) {
         // Context selection. Effect-time output snapshots choose which
         // manifest roots are actually retained by the resulting Task.
         const copiedTaskIds = selectedTaskIds.filter(id => id !== issueId);
+        if (nativeAppendOnlyCapture && copiedTaskIds.length)
+          throw forbidden("Native append-only Context cannot retain copied Task sources");
         if (issueId && copiedTaskIds.length) await tx.insert(issuePrivacySources).values(copiedTaskIds.map(sourceId => ({
           companyId: input.companyId, issueId, sourceKind: "issue" as const, sourceId, contextManifestId: manifest!.id,
         }))).onConflictDoNothing();
@@ -742,7 +771,6 @@ export function contextManifestService(db: Db) {
 
         const learnedRoots = new Map<string, string>();
         const learnedAssets:{type:string;id:string}[]=[];
-        diagnosticStage = "learned_source_lineage";
         const purpose = input.policySnapshot && typeof input.policySnapshot === "object" && "intent" in input.policySnapshot && typeof input.policySnapshot.intent === "string" ? input.policySnapshot.intent : "general_work";
         for (const { decision } of input.selected) {
           const evidence = decision.evidence;
@@ -755,6 +783,8 @@ export function contextManifestService(db: Db) {
             learnedRoots.set(root.id, root.expectedVersion);
           }
         }
+        if (nativeAppendOnlyCapture && learnedAssets.length)
+          throw forbidden("Native append-only Context cannot retain learned assets");
         // Native references and lineage owners define the complete source set.
         // Provider metadata is descriptive; it cannot shrink retained roots.
         const expectedRoots=new Map(learnedRoots);
@@ -795,7 +825,6 @@ export function contextManifestService(db: Db) {
         if(rootIds.length>256)throw forbidden("Complete Context Memory roots exceed their source budget");
         if (rootIds.length) {
           await refreshStatementTimeout();
-          diagnosticStage = "memory_roots_currentness";
           const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt,scopeType:memoryRecords.scopeType,ownerAgentId:memoryRecords.ownerAgentId,payloadSourceSnapshot:memoryRecords.payloadSourceSnapshot }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible())).for("share");
           if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary");
           for(const root of roots){
@@ -816,15 +845,14 @@ export function contextManifestService(db: Db) {
             memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(), payloadSourceSnapshot: root.payloadSourceSnapshot }))).returning();
         }
 
-        diagnosticStage = "learned_asset_retention";
-        await retainLearnedAssetsInContext(tx as unknown as Db,input.companyId,sourceActor,manifest!.id,learnedAssets);
+        if (!nativeAppendOnlyCapture)
+          await retainLearnedAssetsInContext(tx as unknown as Db,input.companyId,sourceActor,manifest!.id,learnedAssets);
 
         // Insert immutable items after the selected Task and Memory bodies
         // have been pinned. Caller evidence metadata never supplies snapshots.
         let items: typeof contextManifestItems.$inferSelect[] = [];
         if (values.length > 0) {
           await refreshStatementTimeout();
-          diagnosticStage = "manifest_item_insert";
           items = await tx.insert(contextManifestItems).values(values.map(value => ({ ...value,
             payloadSourceSnapshot: selectedPayloadSnapshots.get(sourceKey(value.sourceProvider,value.sourceRef)) ?? null,
           }))).returning();
@@ -846,14 +874,8 @@ export function contextManifestService(db: Db) {
           });
         }
 
-        diagnosticStage = "final_memory_acl";
-        const finalMemoryAclStartedAt = Date.now();
         const finalMemoryAclCurrent = !rootIds.length || await canActorReadMemorySourceSet(sourceDb, input.companyId, sourceActor, rootIds);
-        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
-          console.warn("native_context_manifest_memory_acl_profile", JSON.stringify({ elapsedMs: Date.now() - finalMemoryAclStartedAt,
-            rootCount: rootIds.length }));
         if (!finalMemoryAclCurrent) throw forbidden("Context Memory source access changed during assembly");
-        diagnosticStage = "final_task_acl";
         for (const id of selectedTaskIds) {
           // `assertScopePrivacy` below rechecks this exact primary Task after
           // all source ACL waits. Keep it on that final owner check; copied
@@ -865,7 +887,6 @@ export function contextManifestService(db: Db) {
         // Recheck accountable Run, primary Task, Human authority and project
         // after the source ACL work above; this is the last awaited owner proof
         // before the manifest result escapes its transaction.
-        diagnosticStage = "final_scope_privacy";
         await assertScopePrivacy();
         assertActive();
 
@@ -879,17 +900,29 @@ export function contextManifestService(db: Db) {
           if (capturedWitness) nativeBootstrapWitness = capturedWitness;
         }
         return { manifest: manifest!, items, roots: retainedMemoryRoots, ...(nativeBootstrapWitness ? { nativeBootstrapWitness } : {}) };
+        } catch (error) { operationFailed = true; throw error; }
+        finally {
+          if (previousPlannerMode !== undefined && previousPlannerMode !== "force_generic_plan") {
+            try { await tx.execute(sql`select set_config('plan_cache_mode', ${previousPlannerMode}, true)`); }
+            catch (error) {
+              const code = error && typeof error === "object" && "cause" in error
+                ? (error.cause as { code?: string } | undefined)?.code : (error as { code?: string } | null)?.code;
+              // An aborted owned transaction/savepoint restores SET LOCAL on
+              // its mandatory rollback. Preserve the original SQL failure.
+              if (!operationFailed || code !== "25P02") throw error;
+            }
+          }
+          if (!operationFailed) assertActive();
+        }
       });
+      assertActive();
+      return result;
       } catch (error) {
         const cause = error && typeof error === "object" && "cause" in error ? error.cause : null;
         const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
           ? error.code
           : cause && typeof cause === "object" && "code" in cause && typeof cause.code === "string"
             ? cause.code : null;
-        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
-          console.warn("native_context_manifest_failure_stage", JSON.stringify({ stage: diagnosticStage,
-            elapsedMs: Math.max(0, Date.now() - diagnosticStartedAt), deadlineExpired: options.deadlineAt !== undefined && options.deadlineAt <= Date.now(),
-            statementCanceled: code === "57014" }));
         if (options.signal?.aborted) throw options.signal.reason ?? error;
         if (code === "57014" && statementDeadlineAt !== null && Date.now() >= statementDeadlineAt)
           throw contextDeadlineError();

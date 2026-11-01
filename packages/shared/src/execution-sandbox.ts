@@ -54,6 +54,14 @@ const qualificationTargetSchema = z.object({
   phase: z.enum(["Ready", "Stopped"]), mechanism: z.literal("openshell_create_sandbox_v0.1.2"), probePolicyHash: hash, probeFixtureHash: hash, targetHash: hash,
 }).strict();
 const controlSchema = z.object(Object.fromEntries(SANDBOX_CONTROLS.map(key => [key, z.boolean()])) as Record<typeof SANDBOX_CONTROLS[number], z.ZodBoolean>).strict();
+const runtimeBrokerOriginSchema = z.string().max(2048).refine(value => {
+  try { const url=new URL(value); return url.protocol === "https:" && value === url.origin &&
+    !url.username && !url.password && url.pathname === "/" && !url.search && !url.hash; }
+  catch { return false; }
+}, "An exact HTTPS origin is required");
+// These are endpoint caller selectors, never a process-execution allowlist.
+export const sandboxNetworkCallerBinariesSchema = z.array(qualificationFixturePath.refine(value => value !== "/" && !/[\x00-\x1f\x7f\[\]{}]/.test(value), "A caller must name an executable path"))
+  .min(1).max(32).refine(values => values.every((value, index) => index === 0 || values[index - 1]! < value), "Use distinct sorted caller paths");
 export const sandboxCapabilitySnapshotSchema = controlSchema.extend({
   backend: sandboxBackendSchema, backendVersion: z.string().trim().min(1).max(100), hostKernelVersion: z.string().trim().min(1).max(200).nullable(), sandboxImageDigest: digest,
   filesystemEnforcementMode: z.enum(["hard_requirement", "best_effort", "unknown"]), staticPolicyRequiresRecreate: z.boolean(), dynamicNetworkPolicy: z.boolean(),
@@ -65,10 +73,10 @@ export const sandboxCapabilitySnapshotSchema = controlSchema.extend({
    * qualification-only CreateSandbox policy. It carries no authority by itself. */
   qualificationProbeFixture: qualificationProbeFixtureSchema.optional(),
   qualificationCredentialFixture: qualificationCredentialFixtureSchema.optional(),
-  credentialBrokerProviderProfile: z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/), hash }).strict().optional(),
+  credentialBrokerProviderProfile: z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/), hash, origin: runtimeBrokerOriginSchema.optional(), binaries: sandboxNetworkCallerBinariesSchema.optional() }).strict().optional(),
   /** Separately qualified OpenShell auth-injection profile for the managed
    * worker-model endpoint. It is never interchangeable with ToolGateway. */
-  modelBrokerProviderProfile: z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/), hash }).strict().optional(),
+  modelBrokerProviderProfile: z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/), hash, origin: runtimeBrokerOriginSchema.optional(), binaries: sandboxNetworkCallerBinariesSchema.optional() }).strict().optional(),
   testedAt: z.iso.datetime(), expiresAt: z.iso.datetime(), qualificationHash: hash, evidenceKind: z.enum(["local_fixture", "protected_host_report"]),
 }).strict().superRefine((value, ctx) => {
   if (value.evidenceKind !== "protected_host_report" && value.qualificationProbeFixture)
@@ -123,5 +131,6 @@ export interface SandboxPolicyCompilation {
   schemaVersion: 1; compilerVersion: "aw-v7.2"; boundaryPolicyHash: string; candidatePolicyHash: string; staticPolicyFingerprint: string;
   proverResult: "pass" | "fail" | "unsupported"; unsupportedFeatures: string[]; failedBoundaries: string[];
   enforcementProfile: SandboxPolicy["profile"]; sourcePolicyRefs: string[]; compiledPolicy: SandboxPolicy;
-  modelBrokerEndpoint?: { hostname: string; port: number; path: "/runtime-tools/model/v1/messages" };
+  modelBrokerEndpoint?: { hostname: string; port: number; path: "/runtime-tools/model/v1/messages"; binaries?: string[] };
+  credentialBrokerEndpoints?: Array<{ connectionId: string; hostname: string; port: number; path: string; binary: string }>;
 }

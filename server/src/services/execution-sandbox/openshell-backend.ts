@@ -1,3 +1,5 @@
+import type { Db } from "@paperclipai/db";
+import { getAssignedMcpGateway } from "../native-runtime/assigned-mcp-tools.js";
 import { qualificationProbeFixtureSchema, sandboxCapabilitySnapshotSchema, type SandboxCapabilitySnapshot, type SandboxPolicy, type SandboxPolicyCompilation, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
 import { conflict, forbidden } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
@@ -30,11 +32,40 @@ export interface OpenShellHostBridge {
   probe(scope: SandboxIdentity & { test: SandboxProbeCase }): Promise<SandboxProbeResult>;
 }
 
+/** Compose distinct enforced owners; raw Host metadata cannot assert server
+ * identity, lifetime or revocation enforcement. No credentials are resolved. */
+export function composeOpenShellBrokerCapabilities(snapshot: SandboxCapabilitySnapshot, options: {
+  credentialBrokerDatabase?: Db; credentialBrokerOrigin?: string | null;
+  resolveCredentialBrokerBindings?: (policy: SandboxPolicyCompilation) => Promise<{ authorizedConnectionGrantHashes: Record<string,string>; bindings: ResolvedSandboxBrokerBinding[] }>;
+}): SandboxCapabilitySnapshot {
+  const hostDimensions = [...new Set(snapshot.credentialBindingDimensions.filter(dimension =>
+    ["host","port","method","path","binary"].includes(dimension)))];
+  const result = { ...snapshot, credentialBindingDimensions: hostDimensions };
+  let origin: string | null=null;
+  try { const url=new URL(options.credentialBrokerOrigin ?? "");
+    if(url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash && url.pathname === "/") origin=url.origin;
+  } catch { /* Incomplete current server configuration. */ }
+  // Older snapshots without observed origins cannot authorize either profile.
+  if(snapshot.evidenceKind !== "protected_host_report" || !origin || result.credentialBrokerProviderProfile?.origin !== origin) delete result.credentialBrokerProviderProfile;
+  if(snapshot.evidenceKind !== "protected_host_report" || !origin || result.modelBrokerProviderProfile?.origin !== origin) delete result.modelBrokerProviderProfile;
+  if(snapshot.evidenceKind !== "protected_host_report" || !result.credentialBrokerProviderProfile ||
+      !["host","port","method","path"].every(dimension => hostDimensions.includes(dimension as typeof hostDimensions[number])) ||
+      !options.credentialBrokerDatabase || typeof options.resolveCredentialBrokerBindings !== "function" || !origin) return result;
+  try {
+    const gateway=getAssignedMcpGateway(options.credentialBrokerDatabase);
+    const enforcement=gateway.describeSandboxBrokerEnforcement(origin);
+    if(enforcement?.protocol === "sandbox_exec_v1" && enforcement.origin === origin)
+      result.credentialBindingDimensions=[...hostDimensions,...enforcement.dimensions];
+  } catch { /* Missing canonical registered owner remains unsupported. */ }
+  return result;
+}
+
 export function openShellBackend(options: {
   identity: SandboxIdentity; boundary: SandboxPolicy; bridge: OpenShellHostBridge;
   evidenceKind?: SandboxCapabilitySnapshot["evidenceKind"];
   prover: { executable: string; executableSha256: string };
   credentialBrokerOrigin?: string | null;
+  credentialBrokerDatabase?: Db;
   resolveCredentialBrokerBindings?: (policy: SandboxPolicyCompilation) => Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: ResolvedSandboxBrokerBinding[] }>;
 }): ExecutionSandboxBackend {
   const { bridge, identity } = options;
@@ -50,7 +81,7 @@ export function openShellBackend(options: {
     if (!parsed.success) return null;
     const snapshot = parsed.data;
     if (snapshot.evidenceKind !== (options.evidenceKind ?? "local_fixture") || snapshot.backend !== "openshell" || snapshot.backendVersion !== "0.1.2" || new Date(snapshot.expiresAt) <= new Date() || new Date(snapshot.testedAt) > new Date()) return null;
-    return snapshot;
+    return composeOpenShellBrokerCapabilities(snapshot, options);
   }
   async function observed(input: SandboxIdentity) {
     scoped(input); const result = await bridge.inspect(identity), caps = await capabilities();
@@ -88,7 +119,7 @@ export function openShellBackend(options: {
       const compilation = input.policy;
       if (!compilation || compilation.proverResult !== "pass" || compilation.boundaryPolicyHash !== nativeSha256(options.boundary))
         throw forbidden("Admission provisioning requires the exact passing controller compilation");
-      const projected = projectOpenShellPolicy(compilation.compiledPolicy, compilation.modelBrokerEndpoint);
+      const projected = projectOpenShellPolicy(compilation.compiledPolicy, compilation.modelBrokerEndpoint, compilation.credentialBrokerEndpoints);
       if (projected.unsupportedFeatures.length) throw forbidden("OpenShell cannot enforce the compiled admission policy");
       document = projected.document;
       policyHash = nativeSha256(compilation);
@@ -102,8 +133,8 @@ export function openShellBackend(options: {
     return { purpose: input.purpose, operationKey: input.operationKey, bindingVersion: input.bindingVersion, expiresAt: input.expiresAt, policyHash, document, resourceLimits,
       ...(qualificationProbeFixture ? { probeFixtureHash: qualificationProbeFixture.fixtureHash, qualificationProbeFixture } : {}) };
   }
-  async function boundaryProof(candidate: OpenShellPolicyDocument, modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"]) {
-    const boundary = projectOpenShellPolicy(options.boundary, modelBrokerEndpoint);
+  async function boundaryProof(candidate: OpenShellPolicyDocument, modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"], credentialBrokerEndpoints?: SandboxPolicyCompilation["credentialBrokerEndpoints"]) {
+    const boundary = projectOpenShellPolicy(options.boundary, modelBrokerEndpoint, credentialBrokerEndpoints);
     if (boundary.unsupportedFeatures.length) throw conflict("OpenShell alone cannot enforce the configured maximum boundary", { code: "sandbox_projection_unsupported", unsupportedFeatures: boundary.unsupportedFeatures });
     const effective = await bridge.effectivePolicy(identity);
     const proof = await checkOpenShellBoundary({ ...options.prover, candidate: effective, boundary: boundary.document });
@@ -161,13 +192,13 @@ export function openShellBackend(options: {
       const currentCaps = await capabilities();
       const broker = input.policy.compiledPolicy.credentials.mode === "brokered" ? await options.resolveCredentialBrokerBindings?.(input.policy) : undefined;
       const freshCompilation = compileSandboxPolicy({ boundary: options.boundary, candidate: input.policy.compiledPolicy, capabilities: currentCaps, authorizedConnectionGrantHashes: broker?.authorizedConnectionGrantHashes ?? {}, credentialBrokerOrigin: options.credentialBrokerOrigin, credentialBrokerBindings: broker?.bindings, sourcePolicyRefs: input.policy.sourcePolicyRefs });
-      if (freshCompilation.proverResult !== "pass" || nativeSha256(freshCompilation.modelBrokerEndpoint ?? null) !== nativeSha256(input.policy.modelBrokerEndpoint ?? null) || freshCompilation.staticPolicyFingerprint !== input.policy.staticPolicyFingerprint) throw conflict("OpenShell enforcement qualification changed", { code: "sandbox_current_controls_required" });
-      const projection = projectOpenShellPolicy(input.policy.compiledPolicy, input.policy.modelBrokerEndpoint);
+      if (freshCompilation.proverResult !== "pass" || nativeSha256(freshCompilation.modelBrokerEndpoint ?? null) !== nativeSha256(input.policy.modelBrokerEndpoint ?? null) || nativeSha256(freshCompilation.credentialBrokerEndpoints ?? null) !== nativeSha256(input.policy.credentialBrokerEndpoints ?? null) || freshCompilation.staticPolicyFingerprint !== input.policy.staticPolicyFingerprint) throw conflict("OpenShell enforcement qualification changed", { code: "sandbox_current_controls_required" });
+      const projection = projectOpenShellPolicy(input.policy.compiledPolicy, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints);
       if (projection.unsupportedFeatures.length) return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: projection.unsupportedFeatures };
       const current = await observed(input);
       if (input.currentStaticFingerprint && input.currentStaticFingerprint !== input.policy.staticPolicyFingerprint) return { applied: false, requiresRecreate: true, observedPolicyHash: null, unsupportedFeatures: [] };
       if (current.state === "running") throw conflict("Stop the workload before its first policy application");
-      const boundary = projectOpenShellPolicy(options.boundary, input.policy.modelBrokerEndpoint);
+      const boundary = projectOpenShellPolicy(options.boundary, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints);
       if (boundary.unsupportedFeatures.length) return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: boundary.unsupportedFeatures };
       const requestedProof = await checkOpenShellBoundary({ ...options.prover, candidate: projection.document, boundary: boundary.document });
       if (requestedProof.result !== "within_boundary") return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: [`boundary:${requestedProof.result}`] };
@@ -177,7 +208,7 @@ export function openShellBackend(options: {
         new Set(brokerBinaries).size === 1;
       const credentialProviderProfile = exactCredentialBinary && currentCaps?.credentialBrokerProviderProfile
         ? { id: currentCaps.credentialBrokerProviderProfile.id, hash: currentCaps.credentialBrokerProviderProfile.hash,
-            binaries: [...new Set(brokerBinaries as string[])].sort() }
+            binaries: [...(currentCaps.credentialBrokerProviderProfile.binaries ?? [])] }
         : undefined;
       const receipt = await bridge.apply({ ...identity, document: projection.document, policyHash, expiresAt: input.expiresAt,
         idempotencyKey: input.idempotencyKey,
@@ -189,7 +220,7 @@ export function openShellBackend(options: {
       if (receipt.requiresRecreate) return { applied: false, requiresRecreate: true, observedPolicyHash: null, unsupportedFeatures: [] };
       if (!receipt.applied || receipt.policyHash !== policyHash) throw conflict("OpenShell did not observe the exact requested policy");
       try {
-        await boundaryProof(projection.document, input.policy.modelBrokerEndpoint);
+        await boundaryProof(projection.document, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints);
         const after = await observed(input);
         if (!after.controlsHealthy || after.policyHash !== policyHash) throw conflict("OpenShell policy application has not been physically observed");
       } catch (error) { await contain(policyHash); throw error; }
@@ -201,12 +232,12 @@ export function openShellBackend(options: {
       const currentCaps = await capabilities();
       const broker = input.policy.compiledPolicy.credentials.mode === "brokered" ? await options.resolveCredentialBrokerBindings?.(input.policy) : undefined;
       const freshCompilation = compileSandboxPolicy({ boundary: options.boundary, candidate: input.policy.compiledPolicy, capabilities: currentCaps, authorizedConnectionGrantHashes: broker?.authorizedConnectionGrantHashes ?? {}, credentialBrokerOrigin: options.credentialBrokerOrigin, credentialBrokerBindings: broker?.bindings, sourcePolicyRefs: input.policy.sourcePolicyRefs });
-      if (freshCompilation.proverResult !== "pass" || nativeSha256(freshCompilation.modelBrokerEndpoint ?? null) !== nativeSha256(input.policy.modelBrokerEndpoint ?? null) || freshCompilation.staticPolicyFingerprint !== input.policy.staticPolicyFingerprint) throw conflict("OpenShell enforcement qualification changed", { code: "sandbox_current_controls_required" });
-      const projection = projectOpenShellPolicy(input.policy.compiledPolicy, input.policy.modelBrokerEndpoint);
+      if (freshCompilation.proverResult !== "pass" || nativeSha256(freshCompilation.modelBrokerEndpoint ?? null) !== nativeSha256(input.policy.modelBrokerEndpoint ?? null) || nativeSha256(freshCompilation.credentialBrokerEndpoints ?? null) !== nativeSha256(input.policy.credentialBrokerEndpoints ?? null) || freshCompilation.staticPolicyFingerprint !== input.policy.staticPolicyFingerprint) throw conflict("OpenShell enforcement qualification changed", { code: "sandbox_current_controls_required" });
+      const projection = projectOpenShellPolicy(input.policy.compiledPolicy, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints);
       if (projection.unsupportedFeatures.length) throw forbidden("OpenShell cannot enforce every requested control");
       const current = await observed(input), policyHash = nativeSha256(input.policy);
       if (!current.controlsHealthy || current.policyHash !== policyHash || !["ready", "stopped", "running"].includes(current.state)) throw conflict("Current observed policy is required before workload admission");
-      try { await boundaryProof(projection.document, input.policy.modelBrokerEndpoint); } catch (error) { await contain(policyHash); throw error; }
+      try { await boundaryProof(projection.document, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints); } catch (error) { await contain(policyHash); throw error; }
       return bridge.start({ ...identity, expiresAt: input.expiresAt, policyHash, idempotencyKey: input.idempotencyKey });
     },
     inspectWorkload: observed,

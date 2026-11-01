@@ -632,7 +632,7 @@ describe.sequential("plugin tool and bridge authz", () => {
     }
   });
 
-  it("allows tool execution when agent, run, and project all belong to runContext.companyId", async () => {
+  it("refuses unqualified opaque tool even when agent, run and project belong to the company", async () => {
     const executeTool = vi.fn().mockResolvedValue({ content: "ok" });
     const { app } = await createApp(boardActor(), {}, {
       db: createSelectQueueDb([
@@ -662,39 +662,9 @@ describe.sequential("plugin tool and bridge authz", () => {
         },
       });
 
-    expect(res.status).toBe(200);
-    expect(executeTool).toHaveBeenCalledWith(
-      "paperclip.example:search",
-      { q: "test" },
-      {
-        agentId: agentA,
-        runId: runA,
-        companyId: companyA,
-        projectId: projectA,
-      },
-    );
-  });
-
-  it.each([
-    ["legacy data", "post", `/api/plugins/${pluginId}/bridge/data`, { key: "health" }],
-    ["legacy action", "post", `/api/plugins/${pluginId}/bridge/action`, { key: "sync" }],
-    ["url data", "post", `/api/plugins/${pluginId}/data/health`, {}],
-    ["url action", "post", `/api/plugins/${pluginId}/actions/sync`, {}],
-  ] as const)("rejects %s bridge calls without companyId for non-admin users", async (_name, _method, path, body) => {
-    readyPlugin();
-    const call = vi.fn();
-    const { app } = await createApp(boardActor(), {}, {
-      bridgeDeps: {
-        workerManager: { call },
-      },
-    });
-
-    const res = await request(app)
-      .post(path)
-      .send(body);
-
-    expect(res.status).toBe(403);
-    expect(call).not.toHaveBeenCalled();
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("configuration_incomplete");
+    expect(executeTool).not.toHaveBeenCalled();
   });
 
   it("forwards authorized bridge company scope to the plugin worker", async () => {
@@ -811,70 +781,13 @@ describe.sequential("plugin tool and bridge authz", () => {
     }));
   });
 
-  it("allows agent-scoped plugin actions with authenticated actor context", async () => {
-    readyPlugin();
-    const call = vi.fn().mockResolvedValue({ ok: true });
-    const { app } = await createApp(agentActor(), {}, {
-      bridgeDeps: {
-        workerManager: { call },
-      },
-    });
-
-    const res = await request(app)
-      .post(`/api/plugins/${pluginId}/actions/sync`)
-      .send({
-        companyId: companyA,
-        params: {
-          companyId: companyB,
-          reviewerAgentId: "spoofed-agent",
-        },
-      });
-
-    expect(res.status).toBe(200);
-    expect(call).toHaveBeenCalledWith(pluginId, "performAction", {
-      key: "sync",
-      params: {
-        companyId: companyA,
-        reviewerAgentId: "spoofed-agent",
-      },
-      actorContext: {
-        type: "agent",
-        userId: null,
-        agentId: agentA,
-        runId: runA,
-        companyId: companyA,
-      },
-      renderEnvironment: null,
-    });
-
-    call.mockClear();
-    const legacyRes = await request(app)
-      .post(`/api/plugins/${pluginId}/bridge/action`)
-      .send({
-        key: "sync",
-        companyId: companyA,
-        params: {
-          companyId: companyB,
-          reviewerAgentId: "spoofed-agent",
-        },
-      });
-
-    expect(legacyRes.status).toBe(200);
-    expect(call).toHaveBeenCalledWith(pluginId, "performAction", {
-      key: "sync",
-      params: {
-        companyId: companyA,
-        reviewerAgentId: "spoofed-agent",
-      },
-      actorContext: {
-        type: "agent",
-        userId: null,
-        agentId: agentA,
-        runId: runA,
-        companyId: companyA,
-      },
-      renderEnvironment: null,
-    });
+  it("refuses both agent action aliases before opaque worker even with spoofed company params", async () => {
+    readyPlugin(); const call=vi.fn(); const { app }=await createApp(agentActor(),{}, {bridgeDeps:{workerManager:{call}}});
+    for(const endpoint of ["actions/sync","bridge/action"]) {
+      const res=await request(app).post(`/api/plugins/${pluginId}/${endpoint}`).send({key:"sync",companyId:companyA,params:{companyId:companyB}});
+      expect(res.status).toBe(409);expect(res.body.code).toBe("configuration_incomplete");
+    }
+    expect(call).not.toHaveBeenCalled();
   });
 
   it("rejects agent plugin actions outside the authenticated company scope", async () => {
@@ -890,7 +803,8 @@ describe.sequential("plugin tool and bridge authz", () => {
       .post(`/api/plugins/${pluginId}/actions/sync`)
       .send({ companyId: companyB });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("configuration_incomplete");
     expect(call).not.toHaveBeenCalled();
   });
 
@@ -1007,7 +921,7 @@ describe.sequential("plugin tool and bridge authz", () => {
     expect(listToolsForAgent).toHaveBeenCalled();
   });
 
-  it("allows agent JWT to execute a tool within its company scope", async () => {
+  it("refuses unqualified agent tool execution within its company scope", async () => {
     const executeTool = vi.fn().mockResolvedValue({ content: "ok" });
     const { app } = await createApp(
       agentActor(),
@@ -1036,12 +950,9 @@ describe.sequential("plugin tool and bridge authz", () => {
         runContext: { agentId: agentA, runId: runA, companyId: companyA, projectId: projectA },
       });
 
-    expect(res.status).toBe(200);
-    expect(executeTool).toHaveBeenCalledWith(
-      "paperclip.example:search",
-      { q: "test" },
-      { agentId: agentA, runId: runA, companyId: companyA, projectId: projectA },
-    );
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: "configuration_incomplete", reasonCode: "tool_model_effect_unqualified" });
+    expect(executeTool).not.toHaveBeenCalled();
   });
 
   it("rejects agent JWT when runContext.companyId is outside the agent's company scope", async () => {

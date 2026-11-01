@@ -615,7 +615,7 @@ function sha256Buffer(value: Buffer | string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function buildInventoryContentHash(entries: Array<{ path: string; sha256: string }>) {
+export function buildInventoryContentHash(entries: Array<{ path: string; sha256: string }>) {
   const hashInput = entries
     .map((entry) => ({ path: normalizePortablePath(entry.path), sha256: entry.sha256 }))
     .sort((left, right) => {

@@ -31,6 +31,7 @@ import {
   workerModelResultSchema,
   nativeRunInputSourceReceiptSchema,
   nativePayloadSourceInputSchema,
+  unionNativePayloadSourceInputs,
   nativePayloadSourcePolicySchema,
   type WorkerModelBinding,
   type ConversationModelBinding,
@@ -97,18 +98,17 @@ type ManagedSourceComponent = NativeConsumedSourceComponent;
 function mergeManagedSourceComponents(components: ManagedSourceComponent[], bootstrap: { policy: unknown; inputs: unknown[] }) {
   const ids = { issueIds: new Set<string>(), projectIds: new Set<string>(), runIds: new Set<string>(),
     memoryIds: new Set<string>(), foundationRevisionIds: new Set<string>() };
-  const inputs: unknown[] = [];
+  const inputGroups: unknown[][] = [];
   for (const component of components) {
     const sourceSet = component.kind === "bootstrap" ? bootstrap : component;
     const policy = managedRecord(sourceSet.policy);
     for (const key of Object.keys(ids) as Array<keyof typeof ids>)
       for (const value of Array.isArray(policy[key]) ? policy[key] as unknown[] : [])
         if (typeof value === "string") ids[key].add(value);
-    for (const value of Array.isArray(sourceSet.inputs) ? sourceSet.inputs : [])
-      if (!inputs.some(existing => isDeepStrictEqual(existing, value))) inputs.push(value);
+    inputGroups.push(Array.isArray(sourceSet.inputs) ? sourceSet.inputs : []);
   }
   const policy = Object.fromEntries(Object.entries(ids).map(([key, values]) => [key, [...values].sort()])) as Record<string, string[]>;
-  return { policy, inputs };
+  return { policy, inputs: unionNativePayloadSourceInputs(inputGroups) };
 }
 
 /** Resolve one retained assistant message to the exact persisted request prefix
@@ -716,15 +716,110 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         const contentHash = nativeSha256(result);
         const returnedResultDigest = createHash("sha256").update(JSON.stringify(result), "utf8").digest("hex");
         const invocationId = source.invocationId;
-        const sourceResultDigest = toolName === "call_api" ? returnedResultDigest : contentHash;
+        const projectReadSource = nativePayloadSourceInputSchema.safeParse(capture.projectSource);
+        const apiEnvelope = managedRecord(result);
+        const apiEnvelopeKeys = Object.keys(apiEnvelope).sort();
+        const apiEnvelopeIdentity = toolName !== "call_api" || (apiEnvelopeKeys.length === 4 &&
+          apiEnvelopeKeys.join(",") === "callId,ok,operationId,result" && apiEnvelope.callId === block.tool_use_id &&
+          apiEnvelope.ok === true && apiEnvelope.operationId === "call_api" && matchingAssociations.length === 1 &&
+          capture.callId === block.tool_use_id && capture.turnId === matchingAssociations[0]!.turnId &&
+          capture.eventSeq === matchingAssociations[0]!.eventSeq && capture.attempt === matchingAssociations[0]!.attempt);
+        const sourceResultDigest = contentHash;
         if (sourceResultDigest !== capture.resultDigest)
           throw forbidden("managed_opencode_tool_result_capture_digest_mismatch");
+        if (toolName === "call_api" && !apiEnvelopeIdentity)
+          throw forbidden("Managed OpenCode call_api result has no exact runner envelope");
         if (source.kind !== "tool_result" || source.contentHash !== sourceResultDigest)
           throw forbidden("managed_opencode_tool_result_source_digest_mismatch");
         const sourceToolName = managedToolSourceName(toolName);
         if (source.callId !== block.tool_use_id || source.toolName !== sourceToolName)
           throw forbidden("managed_opencode_tool_result_identity_mismatch");
+        // Only inspect the nested HTTP result after the exact provider envelope,
+        // receipt digest, and current dispatch identity have all matched.
+        const apiResult = toolName === "call_api" ? apiEnvelope.result : result;
         if (toolName === "call_api") {
+          const createCapture = managedRecord(capture.projectCreate);
+          const createReceipt = managedRecord(createCapture.receipt);
+          if (createReceipt.tool === "call_api") {
+            const outputCapture = managedRecord(createCapture.outputCapture);
+            const sourceSetValue = managedRecord(createCapture.sourceSet);
+            const projectSourceResult = nativePayloadSourceInputSchema.safeParse(createReceipt.projectSource);
+            const workspaceSourcesResult = nativePayloadSourceInputSchema.array().safeParse(createReceipt.workspaceSources);
+            const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue.policy);
+            const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue.inputs);
+            const apiEffect = managedRecord(createCapture.apiEffect);
+            const outputUse = managedRecord(outputCapture.managedOpenCodeToolUse);
+            const projectSource = projectSourceResult.success && projectSourceResult.data.kind === "project"
+              ? projectSourceResult.data : null;
+            const workspaceSources = workspaceSourcesResult.success && workspaceSourcesResult.data.every(value =>
+              value.kind === "project_workspace") ? workspaceSourcesResult.data : null;
+            const resultRecord = managedRecord(apiResult);
+            const projectDto = managedRecord(resultRecord.data);
+            const expectedApiResult = { ...resultRecord,
+              operationId: "POST /api/companies/{companyId}/projects" };
+            delete (expectedApiResult as Record<string, unknown>).apiOperationId;
+            const apiReceipts = managedRecord(managedRecord(run.resultJson).apiToolReceipts);
+            const apiReceipt = managedRecord(apiReceipts[createHash("sha256").update(block.tool_use_id, "utf8").digest("hex")]);
+            const createReceipts = managedRecord(managedRecord(run.resultJson).nativeProjectCreateReceipts);
+            const persistedCreateReceipt = managedRecord(createReceipts[createHash("sha256").update(block.tool_use_id, "utf8").digest("hex")]);
+            const expectedPolicy = projectSource && sourcePolicy.success ? { ...sourcePolicy.data,
+              projectIds: [...new Set([...sourcePolicy.data.projectIds, projectSource.projectId])].sort() } : null;
+            const createEntries = expectedPolicy && sourceInputs.success && projectSource && workspaceSources
+              ? receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === claims.responsible_user_id &&
+                isDeepStrictEqual(entry.policy, expectedPolicy) && isDeepStrictEqual(entry.inputs,
+                  unionNativePayloadSourceInputs([[source], sourceInputs.data, [projectSource, ...workspaceSources]]))) : [];
+            const expectedCreateReceipt = createReceipt as unknown as NativeProjectCreateReceipt;
+            const expectedOutputCapture = createCapture.outputCapture as unknown as NativeModelOutputCapture;
+            const projectCreateChecks = {
+              managedToolAndReceipt: capture.managedOpenCode === true && createReceipt.tool === "call_api",
+              callAndArguments: createReceipt.callId === block.tool_use_id && createReceipt.argumentsHash === providerUse.argumentsHash,
+              projectIdentityAndDigest: createReceipt.projectId === projectDto.id && createReceipt.resultDigest === nativeSha256(projectDto),
+              projectSourceIdentity: projectSource !== null && projectSource.projectId === projectDto.id,
+              projectSourceVersion: projectSource !== null && projectDto.updatedAt === projectSource.sourceVersion,
+              // The bridge may reserialize nested DTO key order. Bind the returned value to the canonical
+              // create-receipt digest here; the current-source check below validates the exact owner hash.
+              projectSourceHash: projectSource !== null && projectSource.projectId === createReceipt.projectId &&
+                /^[0-9a-f]{64}$/.test(projectSource.contentHash) && nativeSha256(projectDto) === createReceipt.resultDigest,
+              workspaceSources: workspaceSources !== null,
+              sourceSetSchema: sourcePolicy.success && sourceInputs.success,
+              sourceSetCapture: isDeepStrictEqual(createCapture.sourceSet, outputCapture.sourceSet),
+              outputUseIdentity: outputUse.callId === block.tool_use_id && outputUse.toolName === "call_api" &&
+                outputUse.argumentsHash === providerUse.argumentsHash,
+              durableProjectReceipt: isDeepStrictEqual(persistedCreateReceipt, createReceipt),
+              effectOperation: apiEffect.operationId === "POST /api/companies/{companyId}/projects" && apiEffect.method === "POST",
+              effectPath: apiEffect.pathAndQuery === `/api/companies/${claims.company_id}/projects`,
+              effectReceiptDigest: apiEffect.apiReceiptDigest === apiReceipt.digest && apiEffect.bodyHash === apiReceipt.bodyHash,
+              effectDispatch: apiEffect.turnId === apiReceipt.turnId && apiEffect.dispatchId === apiReceipt.dispatchId &&
+                apiEffect.eventSeq === apiReceipt.eventSeq && apiEffect.attempt === apiReceipt.attempt,
+              associationDispatch: apiReceipt.dispatchId === matchingAssociations[0]!.dispatchId,
+              apiReceiptIdentity: apiReceipt.callId === block.tool_use_id && apiReceipt.turnId === capture.turnId &&
+                apiReceipt.eventSeq === capture.eventSeq && apiReceipt.attempt === capture.attempt,
+              apiReceiptOperation: apiReceipt.operationId === "POST /api/companies/{companyId}/projects" && apiReceipt.method === "POST" &&
+                apiReceipt.pathAndQuery === `/api/companies/${claims.company_id}/projects`,
+              apiReceiptArguments: apiReceipt.argumentsHash === providerUse.argumentsHash,
+              apiReceiptState: apiReceipt.state === "completed",
+              apiReceiptResult: isDeepStrictEqual(apiReceipt.result, expectedApiResult) &&
+                nativeSha256(apiReceipt.result) === nativeSha256(expectedApiResult),
+              apiReceiptProviderDigest: apiReceipt.providerResultDigest === nativeSha256({ ok: true,
+                operationId: "call_api", callId: block.tool_use_id, result: apiResult }),
+              responseStatus: apiEnvelopeIdentity && resultRecord.ok === true && resultRecord.status === 201 &&
+                resultRecord.apiOperationId === "POST /api/companies/{companyId}/projects",
+              exactProviderJson: content === JSON.stringify(result),
+              exactReceiptPrefix: createEntries.length === 1,
+            };
+            const projectCreateValid = Object.values(projectCreateChecks).every(Boolean);
+            if (!projectCreateValid || !expectedPolicy || !sourcePolicy.success || !sourceInputs.success ||
+              !projectSource || !workspaceSources)
+              throw forbidden("Managed OpenCode Project API result is not its exact create receipt");
+            await assertNativeManagedProjectCreateReceiptCurrent(db, { companyId: claims.company_id,
+              issueId: run.nativeIssueId!, runId: claims.run_id, actor: sourceActor,
+              receipt: expectedCreateReceipt, sourceSet: { policy: sourcePolicy.data, inputs: sourceInputs.data },
+              outputCapture: expectedOutputCapture, result: projectDto });
+            const createEntry = createEntries[0]!;
+            consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: createEntry.responsibleUserId,
+              policy: createEntry.policy, inputs: createEntry.inputs });
+            continue;
+          }
           const projectSourceResult = nativePayloadSourceInputSchema.safeParse(capture.projectSource);
           const projectReadCaptures = captures.filter((item) => item.managedOpenCode !== true &&
             item.callId === block.tool_use_id && item.turnId === capture.turnId && item.tool === "call_api" &&
@@ -737,7 +832,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           const projectSource = projectSourceResult.data;
           const projectRead = projectReadCaptures[0]!;
           const projectReadSource = nativePayloadSourceInputSchema.safeParse(projectRead.source);
-          const resultRecord = managedRecord(result);
+          const resultRecord = managedRecord(apiResult);
           const projectResult = managedRecord(resultRecord.data);
           const apiReceipts = managedRecord(managedRecord(run.resultJson).apiToolReceipts);
           const apiReceipt = managedRecord(apiReceipts[createHash("sha256").update(block.tool_use_id, "utf8").digest("hex")]);
@@ -753,7 +848,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           if (!projectReadSource.success || projectReadSource.data.kind !== "project" ||
             !isDeepStrictEqual(projectReadSource.data, projectSource) ||
             projectRead.projectId !== projectSource.projectId || projectRead.requestHash !== apiReceipt.requestHash ||
-            resultRecord.ok !== true || resultRecord.status !== 200 ||
+            !apiEnvelopeIdentity || resultRecord.ok !== true || resultRecord.status !== 200 ||
             resultRecord.apiOperationId !== "GET /api/projects/{id}" ||
             projectResult.id !== projectSource.projectId || projectResult.updatedAt !== projectSource.sourceVersion ||
             createHash("sha256").update(JSON.stringify(projectResult), "utf8").digest("hex") !== projectSource.contentHash ||
@@ -789,12 +884,12 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           const projectDto = managedRecord(result);
           const expectedPolicy = projectSource && sourcePolicy.success ? { ...sourcePolicy.data,
             projectIds: [...new Set([...sourcePolicy.data.projectIds, projectSource.projectId])].sort() } : null;
+          // Later exact request prefixes may carry this same parsed tuple in their consumed source set.
+          // Require one exact Project receipt entry and reject any conflicting tuple below.
           const createEntries = expectedPolicy && sourceInputs.success && projectSource && workspaceSources
             ? receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === claims.responsible_user_id &&
                 isDeepStrictEqual(entry.policy, expectedPolicy) && isDeepStrictEqual(entry.inputs,
-                  [source, ...sourceInputs.data, projectSource, ...workspaceSources])) : [];
-          const exactProjectResultCopies = receipt.data.additionalInputs.reduce((count, entry) => count +
-            entry.inputs.filter(value => value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
+                  unionNativePayloadSourceInputs([[source], sourceInputs.data, [projectSource, ...workspaceSources]]))) : [];
           const conflictingProjectResults = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>
             value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
           const createProjectChecks = {
@@ -828,16 +923,11 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             durableWorkspaceSources: Boolean(workspaceSources && isDeepStrictEqual(apiReceipt.workspaceSources, workspaceSources)),
             durableSnapshotDigest: apiReceipt.sourceSnapshotDigest === createReceipt.sourceSnapshotDigest,
             exactReceiptPrefix: createEntries.length === 1,
-            singleResultCopy: exactProjectResultCopies === 1,
             noConflictingResult: !conflictingProjectResults,
             exactProviderVisibleJson: content === JSON.stringify(result),
           };
-          const failedCreateChecks = Object.entries(createProjectChecks).filter(([, passed]) => !passed).map(([name]) => name);
-          if (failedCreateChecks.length) {
-            if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
-              console.error("managed-native-create-project-result-checks", JSON.stringify(failedCreateChecks));
+          if (Object.values(createProjectChecks).some(passed => !passed))
             throw forbidden("Managed OpenCode create_project result is not an exact private Project source receipt");
-          }
           if (!sourcePolicy.success || !sourceInputs.success)
             throw forbidden("Managed OpenCode create_project source set is malformed");
           await assertNativeManagedProjectCreateReceiptCurrent(db, { companyId: claims.company_id,

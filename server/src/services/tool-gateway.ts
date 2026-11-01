@@ -1,3 +1,5 @@
+import { readSandboxBrokerAuthorityEnforcement } from "./runtime/control.js";
+import { ToolModelEffectAdmissionError } from "./native-runtime/paid-transport-admission.js";
 import { currentResourcePolicy } from "./resource-governance.js";
 import { assertPackageExecution } from "./agent-packages/execution-gate.js";
 import { assertExecutionGovernance } from "./ai-governance/execution-gate.js";
@@ -49,7 +51,7 @@ import { extractRemoteMcpPending } from "./remote-mcp-pending.js";
 import { logger } from "../middleware/logger.js";
 import { createSandboxQualificationCredentialJwt, verifySandboxBrokerJwt, verifySandboxQualificationCredentialJwt, type SandboxBrokerCapabilityClaim, type SandboxQualificationCredentialClaim } from "../agent-auth-jwt.js";
 import { spawn } from "node:child_process";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import {
   and,
   asc,
@@ -159,7 +161,7 @@ import type {
 } from "./plugin-tool-dispatcher.js";
 import { logActivity, type LogActivityInput } from "./activity-log.js";
 import { secretService } from "./secrets.js";
-import { railwayCommandBudgetMs, createRailwayClient, isRailwayConnection, isRailwayEndpoint, isRailwayToolBlocked, normalizeRailwayToolName, RAILWAY_API_URL, RAILWAY_TOOL_PREFIX, RailwayError } from "./railway.js";
+import { railwayCommandBudgetMs, createRailwayClient, isRailwayConnection, isRailwayEndpoint, isRailwayToolBlocked, normalizeRailwayToolName, RAILWAY_TOOLS, RAILWAY_API_URL, RAILWAY_TOOL_PREFIX, RailwayError } from "./railway.js";
 import { RAILWAY_SSH_SECRET_PATH, runRailwaySshCommand } from "./railway-ssh.js";
 import {
   MCP_PROTOCOL_VERSION,
@@ -1667,6 +1669,8 @@ export function createToolGatewayService(
   db: Db,
   options: {
     operatorUserIds?: readonly string[];
+    /** Server-owned application origin for the fixed inert qualification endpoint. */
+    qualificationBrokerOrigin?: string;
     supportCaseDataPolicy?: ReturnType<typeof readSupportCaseDataPolicy>;
     serviceHealthReader?: ReturnType<typeof managedServiceHealthFromEnvironment>;
     pluginToolDispatcher?: PluginToolDispatcher;
@@ -1825,6 +1829,7 @@ export function createToolGatewayService(
     Promise<typeof connectionGrants.$inferSelect>
   >();
   let sandboxBrokerAuthority: SandboxBrokerAuthority | null = null;
+  let sandboxBrokerAuthorityOrigin: string | null = null;
   const vercelConnect =
     options.vercelConnectClient === undefined
       ? createVercelConnectClient()
@@ -1931,11 +1936,47 @@ export function createToolGatewayService(
     };
   }
 
+  async function assertExternalMcpModelEffects(session: ToolGatewaySession): Promise<void> {
+    // A company-purpose/manual call is still a platform-initiated invocation.
+    await assertToolInternalInferenceAdmitted(session);
+  }
+
+  function serverOwnedNonModelRemoteTool(connection: typeof toolConnections.$inferSelect, toolName: string): boolean {
+    // This exact branch executes our strict schemas/fixed GraphQL documents at
+    // RAILWAY_API_URL, not arbitrary MCP implementation or caller URL/body.
+    return isRailwayConnection(connection) && connection.config.railwayApiStatus === "available" &&
+      RAILWAY_TOOLS.some(tool => tool.name === toolName) &&
+      toolName !== `${RAILWAY_TOOL_PREFIX}run-command` && !isRailwayToolBlocked(toolName);
+  }
+
+  async function assertConnectedToolModelEffects(session: ToolGatewaySession, tool: ToolGatewayDescriptor): Promise<void> {
+    if (tool.providerType === "mcp_remote_http") {
+      const { entry, connection } = await resolveConnectedRemoteTool(session, tool);
+      if (!serverOwnedNonModelRemoteTool(connection, entry.toolName)) await assertExternalMcpModelEffects(session);
+    } else if (tool.providerType === "mcp_local_stdio") {
+      const { entry, connection } = await resolveConnectedLocalStdioTool(session, tool);
+      const template = await resolveLocalStdioRuntimeTemplate(connection);
+      if (!(template.templateId === "paperclip.cognee-cloud" && entry.toolName === "forget"))
+        await assertExternalMcpModelEffects(session);
+    }
+  }
+
+  async function assertToolInternalInferenceAdmitted(session: ToolGatewaySession): Promise<void> {
+    // Opaque plugin workers and model-backed memory operations have no forced
+    // nested reservation/whole-invocation liability contract in this profile.
+    const error = new ToolModelEffectAdmissionError("tool_internal_inference", {
+      companyId: session.companyId, agentId: session.agentId,
+    });
+    throw new ToolGatewayHttpError(409, error.message, "tool_model_effect_unqualified", {
+      code: "configuration_incomplete", ...error.resultJson,
+    });
+  }
+
   async function eligibleStaticToolsForSession(
     session: ToolGatewaySession,
   ): Promise<ToolGatewayDescriptor[]> {
     assertBlenteraSelfToolCatalogComplete();
-    const tools = allTools();
+    const tools = allTools().filter(tool => tool.providerType !== "paperclip_plugin");
     if (!session.agentId) {
       return tools.filter((tool) => tool.providerType !== "paperclip_self");
     }
@@ -3446,6 +3487,12 @@ export function createToolGatewayService(
     toolName: string,
   ): Promise<ToolGatewayDescriptor> {
     const connectedTools = await connectedMcpToolsForCompany(session.companyId);
+    // Classify the stored requested descriptor before identity selection can
+    // refresh OAuth or open a vault credential. This catalogue projection is
+    // secret-free, shared by direct, approved and virtual invocation entries.
+    const requestedConnected = agentNativeOperationForToolName(toolName) ? null
+      : connectedTools.find(candidate => candidate.name === toolName);
+    if (requestedConnected) await assertConnectedToolModelEffects(session, requestedConnected);
     const hasOnDemandTargets = connectedTools.some(isOnDemandRemoteTool);
     const virtualTools = hasOnDemandTargets ? VIRTUAL_TOOLS : [];
     const githubBotTools = await githubBotToolsForSession(db, session);
@@ -6563,6 +6610,9 @@ export function createToolGatewayService(
     params: Record<string, unknown>;
     callerHeaders?: Record<string, string | string[] | undefined>;
   }): Promise<unknown> {
+    if (!["tools/list", "resources/list", "prompts/list"].includes(input.method)) {
+      await assertExternalMcpModelEffects(input.session);
+    }
     const grant = await resolveConnectionGrant(input.session, input.connection);
     const endpoint = await resolvedRemoteEndpoint(
       input.session,
@@ -6676,6 +6726,9 @@ export function createToolGatewayService(
         "Assigned MCP connection transport is unsupported",
         "mcp_transport_unsupported",
       );
+    }
+    if (!["tools/list", "resources/list", "prompts/list"].includes(input.method)) {
+      await assertExternalMcpModelEffects(input.session);
     }
     const template = await resolveLocalStdioRuntimeTemplate(input.connection);
     const grant = await resolveConnectionGrant(input.session, input.connection);
@@ -6860,6 +6913,7 @@ export function createToolGatewayService(
     tool: ToolGatewayDescriptor,
     options: { requireResolvedCredentials?: boolean } = {},
   ): Promise<Record<string, unknown> | null> {
+    await assertConnectedToolModelEffects(session, tool);
     if (tool.providerType === "paperclip_slack_chat") {
       if (!session.agentId || !session.runId || !session.issueId) throw new ToolGatewayHttpError(403, "Slack task binding required", "slack_task_required");
       const authority = await resolveSlackTaskAuthority(db, { companyId: session.companyId, agentId: session.agentId, runId: session.runId, issueId: session.issueId, endpointId: String(asRecord(tool.providerMetadata)?.endpointId ?? ""), identityContextId: session.identityContextId, approvedInvocationId: session.approvedSlackInvocationId });
@@ -7234,6 +7288,7 @@ export function createToolGatewayService(
       session,
       tool,
     );
+    if (!serverOwnedNonModelRemoteTool(connection, entry.toolName)) await assertExternalMcpModelEffects(session);
     // Recheck immediately before dispatch, including previously approved calls
     // and connections whose stored grant/catalog predates scope reduction.
     assertGoogleChatToolArgumentsSupported(connection, entry.toolName, parameters);
@@ -7738,8 +7793,14 @@ export function createToolGatewayService(
       session,
       tool,
     );
-    const grant = await resolveConnectionGrant(session, connection);
     const template = await resolveLocalStdioRuntimeTemplate(connection);
+    if (!(template.templateId === "paperclip.cognee-cloud" && entry.toolName === "forget")) {
+      await assertExternalMcpModelEffects(session);
+    }
+    if (template.templateId === "paperclip.cognee-cloud" && ["remember", "recall"].includes(entry.toolName)) {
+      await assertToolInternalInferenceAdmitted(session);
+    }
+    const grant = await resolveConnectionGrant(session, connection);
     const env = await localStdioEnvironment(
       session,
       connection,
@@ -10101,9 +10162,32 @@ export function createToolGatewayService(
     return { authorizedConnectionGrantHashes, bindings: resolved };
   }
 
+  const qualificationEchoPath = "/mcp/qualification/credential-echo";
+  const qualificationEchoMarker = "paperclip-qualification-credential-ok-v1";
+  const qualificationEchoEndpoint = (() => {
+    try {
+      const origin = new URL(options.qualificationBrokerOrigin ?? "");
+      if (origin.protocol !== "https:" || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== "/") return null;
+      return `${origin.origin}${qualificationEchoPath}`;
+    } catch { return null; }
+  })();
+
   const service = {
-    setSandboxBrokerAuthority(authority: SandboxBrokerAuthority) {
+    setSandboxBrokerAuthority(authority: SandboxBrokerAuthority, endpointOrigin?: string) {
       sandboxBrokerAuthority = authority;
+      sandboxBrokerAuthorityOrigin = null;
+      const owned=readSandboxBrokerAuthorityEnforcement(authority);
+      if(owned) try {
+        const url=new URL(endpointOrigin ?? owned.origin);
+        if(url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash && url.pathname === "/" && url.origin === owned.origin)
+          sandboxBrokerAuthorityOrigin=owned.origin;
+      } catch { /* Unknown/mismatched origin earns no capability claim. */ }
+    },
+    describeSandboxBrokerEnforcement(endpointOrigin: string) {
+      if(!sandboxBrokerAuthority || sandboxBrokerAuthorityOrigin !== endpointOrigin ||
+          service.resolveSandboxCredentialBrokerPolicyBindings !== canonicalSandboxBrokerResolver) return null;
+      return { protocol: "sandbox_exec_v1" as const, origin:sandboxBrokerAuthorityOrigin,
+        dimensions: ["company","presence","expiry","revocation"] as const };
     },
     isSandboxBrokerToken(token: string) {
       return verifySandboxBrokerJwt(token) !== null;
@@ -10123,7 +10207,7 @@ export function createToolGatewayService(
         .where(and(eq(toolMcpGateways.id, gateway.id), eq(toolConnections.status, "active"), eq(toolConnections.enabled, true)));
       return connections.some(row => {
         const fixture = row.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
-        return fixture?.kind === "operator_owned_local_readonly_canary" &&
+        return fixture?.kind === "platform_owned_qualification_echo" &&
           fixture.purpose === "sandbox_qualification" && fixture.setupOnly === true &&
           (fixture.toolName === input.tool || fixture.wrongToolName === input.tool);
       });
@@ -10138,6 +10222,8 @@ export function createToolGatewayService(
       commandId: string;
     }): Promise<{ commandId: string; capabilityToken: string; nonce: string } | null> {
       const fixture = input.target.qualificationCredentialFixture;
+      if (!qualificationEchoEndpoint || fixture?.profileId !== "paperclip-qualification" ||
+          fixture.origin !== new URL(qualificationEchoEndpoint).origin) return null;
       const caseIds = new Set<SandboxQualificationCredentialClaim["caseId"]>([
         "credential_allow", "credential_raw_read_deny", "credential_wrong_destination_deny",
         "credential_wrong_binary_deny", "credential_revoke_deny",
@@ -10185,7 +10271,7 @@ export function createToolGatewayService(
       ));
       const fixtureConnections = companyConnections.filter(row => {
         const candidate = row.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
-        return row.createdByUserId === operatorId && candidate?.kind === "operator_owned_local_readonly_canary" && candidate.purpose === "sandbox_qualification" &&
+        return row.createdByUserId === operatorId && candidate?.kind === "platform_owned_qualification_echo" && candidate.purpose === "sandbox_qualification" &&
           candidate.setupOnly === true && candidate.fixtureId === fixture.fixtureId;
       });
       const connection = fixtureConnections.length === 1 ? fixtureConnections[0] : undefined;
@@ -10195,13 +10281,13 @@ export function createToolGatewayService(
       const canaryConfig = canary as Record<string, unknown>;
       const canaryKeys = ["argumentTemplateHash", "endpointOrigin", "endpointPath", "fixtureHash", "fixtureId", "gatewayPublicId", "grantId", "kind", "marker", "noSideEffects", "purpose", "readOnly", "setupOnly", "toolName", "version", "wrongToolName"].sort();
       if (Object.keys(canaryConfig).sort().join(",") !== canaryKeys.join(",") ||
-        canaryConfig.kind !== "operator_owned_local_readonly_canary" || canaryConfig.version !== 1 ||
+        canaryConfig.kind !== "platform_owned_qualification_echo" || canaryConfig.version !== 1 ||
         canaryConfig.purpose !== "sandbox_qualification" || canaryConfig.setupOnly !== true ||
         canaryConfig.fixtureId !== fixture.fixtureId || canaryConfig.fixtureHash !== fixture.fixtureHash ||
         canaryConfig.gatewayPublicId !== fixture.gatewayPublicId || canaryConfig.toolName !== fixture.toolName ||
         canaryConfig.wrongToolName !== fixture.wrongToolName || canaryConfig.argumentTemplateHash !== fixture.argumentTemplateHash ||
         canaryConfig.marker !== fixture.marker || canaryConfig.readOnly !== true || canaryConfig.noSideEffects !== true ||
-        typeof canaryConfig.endpointOrigin !== "string") return null;
+        typeof canaryConfig.endpointOrigin !== "string" || canaryConfig.marker !== qualificationEchoMarker) return null;
       const session: ToolGatewaySession = {
         id: `qualification:${input.commandId}`, token: "qualification-host-probe", companyId: input.scope.companyId,
         agentId: null, runId: null, issueId: null, projectId: null, gatewayId: gateway.id,
@@ -10213,11 +10299,11 @@ export function createToolGatewayService(
       try { grant = await resolveConnectionGrant(session, connection); } catch { return null; }
       if (grant.id !== canaryConfig.grantId || grant.status !== "active") return null;
       const endpoint = new URL(await resolvedRemoteEndpoint(session, connection, grant));
-      if (endpoint.protocol !== "https:" || endpoint.origin !== canaryConfig.endpointOrigin || endpoint.pathname !== canaryConfig.endpointPath ||
+      if (endpoint.href !== qualificationEchoEndpoint || endpoint.protocol !== "https:" || endpoint.origin !== canaryConfig.endpointOrigin || endpoint.pathname !== canaryConfig.endpointPath ||
         endpoint.username || endpoint.password || endpoint.search || endpoint.hash) return null;
       const snapshots = await connectedCredentialVersionSnapshots(connection, grant, { requireResolved: true });
       const secretVersionHash = nativeSha256(snapshots);
-      const tool = await findToolForSession(session, fixture.toolName).catch(() => null);
+      const tool = (await connectedMcpToolsForConnection(session.companyId, connection.id)).find(candidate => candidate.name === fixture.toolName) ?? null;
       if (!tool || tool.connectionId !== connection.id || tool.providerType !== "mcp_remote_http" || tool.risk !== "read") return null;
       const sourceBindingHash = await qualificationCanarySourceBindingHash({ session, connection, grant, gateway, tool, fixtureConfig: canaryConfig });
       const nonce = randomBytes(16).toString("hex"), expiresAt = new Date(Date.now() + 20_000).toISOString();
@@ -10248,11 +10334,13 @@ export function createToolGatewayService(
     },
     async executeSandboxQualificationCredentialTool(input: {
       capabilityToken: string; gatewayPublicId: string; commandId: string; tool: string; parameters: unknown;
-    }) {
+    }, observedAuthorization?: string): Promise<{ invocationId: string; result: { content: string; structuredContent: { marker: string } } }> {
       const verified = verifySandboxQualificationCredentialJwt(input.capabilityToken);
       const claim = verified?.qualification_credential;
       if (!claim) throw new ToolGatewayHttpError(401, "Qualification credential capability is required", "sandbox_qualification_credential_required");
-      if (input.commandId !== claim.commandId || input.gatewayPublicId !== claim.gatewayPublicId ||
+      if (!qualificationEchoEndpoint || claim.profileId !== "paperclip-qualification" || claim.origin !== new URL(qualificationEchoEndpoint).origin)
+        throw new ToolGatewayHttpError(409, "Platform qualification endpoint is unavailable", "sandbox_qualification_fixture_changed");
+      if (input.commandId !== claim.commandId || (observedAuthorization === undefined ? input.gatewayPublicId !== claim.gatewayPublicId : input.gatewayPublicId !== "") ||
         !input.parameters || typeof input.parameters !== "object" || Array.isArray(input.parameters))
         throw new ToolGatewayHttpError(403, "Qualification request scope changed", "sandbox_qualification_tool_mismatch");
       const args = input.parameters as Record<string, unknown>;
@@ -10292,6 +10380,18 @@ export function createToolGatewayService(
       await assertConfiguredOperatorAuthentication(db, actor, options.operatorUserIds ?? []);
       await assertV7Authorization(db, actor, claim.scope.companyId, "runtime:manage");
       const [hostUse] = await db.transaction(async tx => {
+        if (observedAuthorization !== undefined) {
+          const [existing] = await tx.select().from(runtimeHostCommands).where(and(
+            eq(runtimeHostCommands.runtimeHostId, host.id), eq(runtimeHostCommands.companyId, claim.scope.companyId),
+            eq(runtimeHostCommands.runtimeCellId, claim.scope.cellId), eq(runtimeHostCommands.cellGeneration, BigInt(claim.scope.generation)),
+            eq(runtimeHostCommands.commandType, "sandbox_qualification_credential_probe"),
+            eq(runtimeHostCommands.idempotencyKey, `sandbox-qualification-credential:${claim.jti}`),
+            eq(runtimeHostCommands.status, "CLAIMED"), gt(runtimeHostCommands.deadlineAt, now),
+          )).limit(1);
+          if (!existing || existing.payload.operationBodyHash !== claim.requestBodyHash || existing.safeResult !== null)
+            throw new ToolGatewayHttpError(409, "Qualification observation is not current", "sandbox_qualification_capability_replayed");
+          return [existing];
+        }
         await assertConfiguredOperatorAuthentication(tx as unknown as Db, actor, options.operatorUserIds ?? []);
         const [inserted] = await tx.insert(runtimeHostCommands).values({
           runtimeHostId: host.id, companyId: claim.scope.companyId, runtimeCellId: claim.scope.cellId,
@@ -10304,7 +10404,6 @@ export function createToolGatewayService(
         if (!inserted) throw new ToolGatewayHttpError(409, "Qualification capability was already consumed", "sandbox_qualification_capability_replayed");
         return [inserted];
       });
-      const operationKey = `sandbox-qualification-tool:${claim.jti}`;
       const session: ToolGatewaySession = {
         id: `qualification:${claim.jti}`, token: input.capabilityToken, companyId: claim.scope.companyId,
         agentId: null, runId: null, issueId: null, projectId: gateway.projectId ?? null, gatewayId: gateway.id,
@@ -10327,7 +10426,14 @@ export function createToolGatewayService(
           eq(runtimeHosts.id, host.id), eq(runtimeHosts.credentialVersion, claim.hostEpoch), eq(runtimeHosts.status, "READY"),
           isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.retiredAt),
         )).limit(1);
-        if (!currentBinding || !currentCell || !currentHost || Date.parse(claim.expiresAt) <= Date.now())
+        const [currentChallenge] = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+          eq(runtimeHostCommands.id, claim.commandId), eq(runtimeHostCommands.runtimeHostId, host.id),
+          eq(runtimeHostCommands.companyId, claim.scope.companyId), eq(runtimeHostCommands.runtimeCellId, claim.scope.cellId),
+          eq(runtimeHostCommands.cellGeneration, BigInt(claim.scope.generation)),
+          eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "CLAIMED"),
+          gt(runtimeHostCommands.deadlineAt, new Date()),
+        )).limit(1);
+        if (!currentBinding || !currentCell || !currentHost || !currentChallenge || Date.parse(claim.expiresAt) <= Date.now())
           throw new ToolGatewayHttpError(409, "Qualification target changed during probe", "sandbox_qualification_target_changed");
         const [currentConnection] = await db.select().from(toolConnections).where(and(
           eq(toolConnections.companyId, claim.scope.companyId), eq(toolConnections.id, claim.connectionId),
@@ -10339,7 +10445,7 @@ export function createToolGatewayService(
         ));
         const sameFixture = activeFixtureConnections.filter(row => {
           const candidate = row.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
-          return row.createdByUserId === claim.operatorUserId && candidate?.kind === "operator_owned_local_readonly_canary" && candidate.purpose === "sandbox_qualification" &&
+          return row.createdByUserId === claim.operatorUserId && candidate?.kind === "platform_owned_qualification_echo" && candidate.purpose === "sandbox_qualification" &&
             candidate.setupOnly === true && candidate.fixtureId === claim.fixtureId;
         });
         const [currentGateway] = await db.select().from(toolMcpGateways).where(and(
@@ -10351,10 +10457,10 @@ export function createToolGatewayService(
         if (sameFixture.length !== 1 || sameFixture[0]?.id !== claim.connectionId)
           throw new ToolGatewayHttpError(409, "Qualification fixture identity changed", "sandbox_qualification_fixture_changed");
         const canaryConfig = currentConnection.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
-        if (!canaryConfig || canaryConfig.kind !== "operator_owned_local_readonly_canary" || canaryConfig.purpose !== "sandbox_qualification" ||
+        if (!canaryConfig || canaryConfig.kind !== "platform_owned_qualification_echo" || canaryConfig.purpose !== "sandbox_qualification" ||
           canaryConfig.setupOnly !== true || canaryConfig.fixtureId !== claim.fixtureId ||
           canaryConfig.fixtureHash !== claim.fixtureHash || canaryConfig.toolName !== claim.toolName || canaryConfig.gatewayPublicId !== claim.gatewayPublicId ||
-          typeof canaryConfig.marker !== "string" || canaryConfig.marker.length < 1 || canaryConfig.marker.length > 200)
+          canaryConfig.marker !== qualificationEchoMarker)
           throw new ToolGatewayHttpError(409, "Qualification canary fixture changed", "sandbox_qualification_fixture_changed");
         if (currentBinding.boundaryPolicy.credentials.bindings.some(candidate => candidate.connectionId === claim.connectionId))
           throw new ToolGatewayHttpError(409, "Qualification fixture grant cannot overlap runtime credentials", "sandbox_qualification_fixture_changed");
@@ -10364,13 +10470,13 @@ export function createToolGatewayService(
         if (currentGateway.id !== session.gatewayId || currentGateway.profileId !== session.gatewayProfileId || currentGrant.id !== canaryConfig.grantId)
           throw new ToolGatewayHttpError(409, "Qualification gateway authority changed", "sandbox_qualification_fixture_changed");
         const endpoint = new URL(await resolvedRemoteEndpoint(session, currentConnection, currentGrant));
-        if (endpoint.protocol !== "https:" || endpoint.origin !== canaryConfig.endpointOrigin || endpoint.pathname !== canaryConfig.endpointPath ||
+        if (endpoint.href !== qualificationEchoEndpoint || endpoint.protocol !== "https:" || endpoint.origin !== canaryConfig.endpointOrigin || endpoint.pathname !== canaryConfig.endpointPath ||
           endpoint.username || endpoint.password || endpoint.search || endpoint.hash)
           throw new ToolGatewayHttpError(409, "Qualification canary destination changed", "sandbox_qualification_fixture_changed");
         const versions = await connectedCredentialVersionSnapshots(currentConnection, currentGrant, { requireResolved: true }).catch(() => null);
         if (!versions || nativeSha256(versions) !== claim.secretVersionHash)
           throw new ToolGatewayHttpError(409, "Qualification credential version changed", "sandbox_qualification_grant_revoked");
-        const currentTool = await findToolForSession(session, claim.toolName).catch(() => null);
+        const currentTool = (await connectedMcpToolsForConnection(session.companyId, currentConnection.id)).find(candidate => candidate.name === claim.toolName) ?? null;
         if (!currentTool || currentTool.connectionId !== claim.connectionId || currentTool.providerType !== "mcp_remote_http" || currentTool.risk !== "read" ||
           await qualificationCanarySourceBindingHash({ session, connection: currentConnection, grant: currentGrant,
             gateway: currentGateway, tool: currentTool, fixtureConfig: canaryConfig }) !== claim.sourceBindingHash)
@@ -10383,32 +10489,55 @@ export function createToolGatewayService(
         if (input.tool !== claim.toolName) throw new ToolGatewayHttpError(403, "Qualification tool is outside the one-use fixture", "sandbox_qualification_tool_mismatch");
         if (nativeSha256(body) !== claim.requestBodyHash) throw new ToolGatewayHttpError(403, "Qualification request body changed", "sandbox_qualification_tool_mismatch");
         await assertCurrent();
-        const result = await service.executeTool({ sessionToken: input.capabilityToken, tool: claim.toolName,
-          parameters: expectedArgs, idempotencyKey: operationKey }, undefined, { session, assertCurrent: async () => { await assertCurrent(); } }).catch(error => {
-          if (error instanceof ToolGatewayHttpError && error.reasonCode.startsWith("sandbox_qualification_")) throw error;
-          throw new ToolGatewayHttpError(502, "Qualification canary probe failed", "sandbox_qualification_probe_failed");
-        });
-        const expectedMarkerValue = await assertCurrent();
-        if (typeof expectedMarkerValue !== "string" || expectedMarkerValue.length < 1 || expectedMarkerValue.length > 200)
-          throw new ToolGatewayHttpError(409, "Qualification canary fixture changed", "sandbox_qualification_fixture_changed");
-        const expectedMarker = expectedMarkerValue;
-        const resultRecord = asRecord(result.result);
-        const resultData = asRecord(resultRecord?.data);
-        const structuredContent = asRecord(resultData?.structuredContent ?? resultRecord?.structuredContent);
-        if (resultData?.isError === true || !expectedMarker || structuredContent?.marker !== expectedMarker)
-          throw new ToolGatewayHttpError(502, "Qualification canary response did not match its fixed marker", "sandbox_qualification_result_invalid");
-        // Only the exact current fixture marker may leave this server-owned
-        // one-use route. Provider text, structured fields, headers and errors
-        // are deliberately discarded before serialization or host receipts.
-        const safeResult = { ...result, result: { content: expectedMarker, structuredContent: { marker: expectedMarker } } };
-        const safeResultHash = nativeSha256(safeResult.result);
-        await db.update(runtimeHostCommands).set({ status: "SUCCEEDED", completedAt: new Date(), safeResult: {
-          invocationId: result.invocationId, resultHash: safeResultHash,
-        } }).where(and(eq(runtimeHostCommands.id, hostUse.id), eq(runtimeHostCommands.status, "CLAIMED")));
+        if (!qualificationEchoEndpoint) throw new ToolGatewayHttpError(409, "Platform qualification endpoint is unavailable", "sandbox_qualification_fixture_changed");
+        const [connection] = await db.select().from(toolConnections).where(and(
+          eq(toolConnections.id, claim.connectionId), eq(toolConnections.companyId, claim.scope.companyId),
+        )).limit(1);
+        if (!connection) throw new ToolGatewayHttpError(409, "Qualification connection changed", "sandbox_qualification_grant_revoked");
+        const grant = await resolveConnectionGrant(session, connection);
+        const headers = await resolveCredentialHeaders(session, connection, grant);
+        await assertCurrent(); // credential refresh is asynchronous and cannot extend authority
+        const authorization = headers.Authorization ?? headers.authorization;
+        if (Object.keys(headers).length !== 1 || typeof authorization !== "string" || !authorization.startsWith("Bearer "))
+          throw new ToolGatewayHttpError(409, "Qualification requires its dedicated bearer credential", "sandbox_qualification_fixture_changed");
+        const observation = { version: 1, commandId: claim.commandId, requestBodyHash: claim.requestBodyHash,
+          sourceBindingHash: claim.sourceBindingHash, secretVersionHash: claim.secretVersionHash, marker: qualificationEchoMarker };
+        const safeResult = { invocationId: hostUse.id, result: { content: qualificationEchoMarker, structuredContent: { marker: qualificationEchoMarker } } };
+        if (observedAuthorization !== undefined) {
+          const observed = Buffer.from(observedAuthorization), expected = Buffer.from(authorization);
+          if (observed.length !== expected.length || !timingSafeEqual(observed, expected))
+            throw new ToolGatewayHttpError(403, "Qualification credential was not observed", "sandbox_qualification_credential_required");
+          await assertCurrent();
+          const [recorded] = await db.update(runtimeHostCommands).set({ safeResult: observation }).where(and(
+            eq(runtimeHostCommands.id, hostUse.id), eq(runtimeHostCommands.status, "CLAIMED"),
+            isNull(runtimeHostCommands.safeResult), gt(runtimeHostCommands.deadlineAt, new Date()),
+          )).returning({ id: runtimeHostCommands.id });
+          if (!recorded) throw new ToolGatewayHttpError(409, "Qualification capability was already observed", "sandbox_qualification_capability_replayed");
+          return safeResult;
+        }
+        const init: RequestInit = { method: "POST", redirect: "manual", signal: AbortSignal.timeout(10_000),
+          headers: { "content-type": "application/json", Authorization: authorization,
+            "x-paperclip-qualification-capability": input.capabilityToken }, body: JSON.stringify(body) };
+        await assertCurrent();
+        const response = options.remoteHttpRequest ? await options.remoteHttpRequest(qualificationEchoEndpoint, init)
+          : await guardedRemoteHttpFetch(qualificationEchoEndpoint, init, { ...remoteHttpFetchOptions(), responseTimeoutMs: 10_000 });
+        await assertCurrent();
+        if (!response.ok || response.redirected)
+          throw new ToolGatewayHttpError(502, "Qualification echo did not succeed", "sandbox_qualification_probe_failed");
+        const echoed = asRecord(await response.json());
+        await assertCurrent();
+        if (nativeSha256(echoed) !== nativeSha256(safeResult))
+          throw new ToolGatewayHttpError(502, "Qualification echo result changed", "sandbox_qualification_result_invalid");
+        const [completed] = await db.update(runtimeHostCommands).set({ status: "SUCCEEDED", completedAt: new Date(),
+          safeResult: { ...observation, invocationId: hostUse.id, resultHash: nativeSha256(safeResult.result) },
+        }).where(and(eq(runtimeHostCommands.id, hostUse.id), eq(runtimeHostCommands.status, "CLAIMED"),
+          eq(runtimeHostCommands.safeResult, observation), gt(runtimeHostCommands.deadlineAt, new Date()),
+        )).returning({ id: runtimeHostCommands.id });
+        if (!completed) throw new ToolGatewayHttpError(409, "Qualification observation changed", "sandbox_qualification_capability_replayed");
         return safeResult;
       } catch (error) {
         const code = error instanceof ToolGatewayHttpError ? error.reasonCode : "sandbox_qualification_probe_failed";
-        await db.update(runtimeHostCommands).set({ status: "FAILED", completedAt: new Date(), errorCode: code })
+        if (observedAuthorization === undefined) await db.update(runtimeHostCommands).set({ status: "FAILED", completedAt: new Date(), errorCode: code })
           .where(and(eq(runtimeHostCommands.id, hostUse.id), eq(runtimeHostCommands.status, "CLAIMED")));
         throw error;
       }
@@ -11342,6 +11471,7 @@ export function createToolGatewayService(
         );
       }
 
+      await assertConnectedToolModelEffects(session, tool);
       const requestedParameters = await governedToolArguments(
         session,
         tool,
@@ -12050,6 +12180,9 @@ export function createToolGatewayService(
         callerHeaders: input.callerHeaders,
       });
       await assertGatewayTokenAction(session, "tools/call");
+      if (allTools().some(tool => tool.name === input.tool && tool.providerType === "paperclip_plugin")) {
+        await assertToolInternalInferenceAdmitted(session);
+      }
       let invocationId = String(randomUUID());
       const startedAt = Date.now();
 
@@ -12125,6 +12258,7 @@ export function createToolGatewayService(
         input = { ...input, tool: bound.name };
       }
       let tool = await findToolForSession(session, input.tool);
+      await assertConnectedToolModelEffects(session, tool);
       const scopedMemoryCapture = nativeMemoryOutputCapture(scopedContext);
       if (scopedMemoryCapture) {
         const capture = scopedMemoryCapture;
@@ -12928,6 +13062,7 @@ export function createToolGatewayService(
             "agent_context_required",
           );
         }
+        if (tool.providerType === "paperclip_plugin") await assertToolInternalInferenceAdmitted(session);
         const connectedMcpExecution =
           tool.providerType === "mcp_remote_http"
             ? await executeRemoteHttpTool(
@@ -13287,6 +13422,7 @@ export function createToolGatewayService(
       };
 
       const tool = findStaticTool(input.tool);
+      if (tool.providerType === "paperclip_plugin") await assertToolInternalInferenceAdmitted(sessionLike);
 
       if (tool.providerType !== "paperclip_plugin") {
         throw new ToolGatewayHttpError(
@@ -13656,6 +13792,7 @@ export function createToolGatewayService(
       }
     },
   };
+  const canonicalSandboxBrokerResolver=service.resolveSandboxCredentialBrokerPolicyBindings;
   return service;
 }
 

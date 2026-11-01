@@ -8,6 +8,7 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
 import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { documentService } from "../services/documents.js";
 import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
@@ -37,6 +38,64 @@ describe("Native saved tasks inherit their actual originating source erasure", (
         title: "PRIVATE derived task", description: "PRIVATE derived task body", initialPlan: "PRIVATE derived plan" } }) as { task: { id: string } };
     taskId = receipt.task.id;
   });
+  it("serializes actual tool identity capture against acknowledgement Run-to-Task lock overlap", async () => {
+    // Exercise the actual tool/capture owner against acknowledgement's existing
+    // PostgreSQL lock shape. This does not fabricate an acknowledged source receipt.
+    let sourcePid = 0, toolPid = 0;
+    let sourceLocked!: () => void, allowTaskRead!: () => void, toolStarted!: () => void;
+    const ready = new Promise<void>(resolve => { sourceLocked = resolve; });
+    const readTask = new Promise<void>(resolve => { allowTaskRead = resolve; });
+    const started = new Promise<void>(resolve => { toolStarted = resolve; });
+    const beginSource = () => db.transaction(async tx => {
+      await lockAnalyticalCompany(tx as unknown as typeof db, f.home);
+      await lockMemoryPrivacy(tx as unknown as typeof db, f.home);
+      await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).for("update");
+      const [pid] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      sourcePid = Number(pid!.pid); sourceLocked();
+      await readTask;
+      await tx.execute(sql`set local lock_timeout = '200ms'`);
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, conversationId)).for("share");
+    }).then(() => null, error => ({ code: error?.cause?.code ?? error?.code ?? null }));
+    let source: ReturnType<typeof beginSource> | undefined;
+    let transactionNumber = 0;
+    const wrapped = new Proxy(db, {
+      get(target, key) {
+        if (key === "transaction") return async (callback: (tx: unknown) => Promise<unknown>) => {
+          const currentTransaction = ++transactionNumber;
+          const result = await target.transaction(async tx => {
+            if (currentTransaction === 2) {
+              const [pid] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+              toolPid = Number(pid!.pid); toolStarted();
+            }
+            return await callback(tx);
+          });
+          if (currentTransaction === 1) {
+            // Let the real initial source read commit, then overlap only the
+            // following identity capture, matching the first-tool race.
+            source = beginSource();
+            await ready;
+          }
+          return result;
+        };
+        const value = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const tool = new PaperclipRunnerToolAuthority(wrapped, { companyId: f.home, agentId: f.presence.id, runId, issueId: conversationId })
+      .execute({ tool: "create_task", callId: "identity-lock-overlap", arguments: { idempotencyKey: randomUUID(),
+        title: "Concurrent authorized draft", status: "backlog" } });
+    try {
+      await started;
+      await expect.poll(async () => {
+        const [row] = await db.execute<{ blocked: boolean }>(sql`select ${sourcePid}::int = any(pg_blocking_pids(${toolPid}::int)) as blocked`);
+        return row!.blocked;
+      }, { timeout: 5000, interval: 10 }).toBe(true);
+    } finally { allowTaskRead(); }
+    const sourceFailure = await source!;
+    const result = await tool as { task: { id: string; status: string } };
+    expect(sourceFailure, "The actual identity owner must not hold Task while waiting on acknowledgement's Run lock").toBeNull();
+    expect(result.task).toMatchObject({ id: expect.any(String), status: "backlog" });
+  }, 30000);
   const markSource = () => db.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source", key: `memory-run-source-erasure:v1:${runId}` });
   async function nextTask(parentId: string) {
     const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,

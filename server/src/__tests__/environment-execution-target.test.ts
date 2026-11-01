@@ -648,9 +648,35 @@ describe("resolveEnvironmentExecutionTarget", () => {
     return (target as { runner?: {
       execute(input: { command: string; args?: string[]; bypassSession?: boolean; useSession?: boolean;
         nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" |
-          "native_workspace_prepare" | "native_runtime_context_prepare" }): Promise<unknown>;
+          "native_workspace_prepare" | "native_runtime_context_prepare";
+        modelBrokerSessionPhase?: "start" | "refresh" | "stop" }): Promise<unknown>;
     } }).runner!;
   }
+
+  it.each(["start", "refresh", "stop"] as const)(
+    "forwards managed model session %s through the environment execution target",
+    async (phase) => {
+      const execute = vi.fn(async () => ({ exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "" }));
+      const { tracer } = createRecordingTrace();
+      const runner = await runnerWithExecute({ provider: "daytona", tracer, execute });
+
+      await runner.execute({ command: "sh", bypassSession: true, modelBrokerSessionPhase: phase });
+
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(execute.mock.calls[0]?.[0]).toMatchObject({ modelBrokerSessionPhase: phase });
+    },
+  );
+
+  it("leaves ordinary environment executions without a managed model session phase", async () => {
+    const execute = vi.fn(async () => ({ exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "" }));
+    const { tracer } = createRecordingTrace();
+    const runner = await runnerWithExecute({ provider: "daytona", tracer, execute });
+
+    await runner.execute({ command: "echo" });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect((execute.mock.calls[0]?.[0] as { modelBrokerSessionPhase?: unknown }).modelBrokerSessionPhase).toBeUndefined();
+  });
 
   // Run the sandbox runner's execute with an incremental log sink and collect
   // the ordered deliveries. The runner's execute accepts an `onLog`, so this

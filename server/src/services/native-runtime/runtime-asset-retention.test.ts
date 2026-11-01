@@ -106,6 +106,28 @@ describe("remote Native runtime asset erasure binding", () => {
       target: { ...receipt.target, cellGeneration: "0" } }, locator)).toBe(false);
   });
 
+  it("accepts the closed Sandbox workload Stop proof without inventing a process identity", () => {
+    const {locator,receipt}=fixture();
+    const stopProof={schema:"paperclip.native-sandbox-workload-stop.v1",runId:locator.runId,
+      normalizedSessionIdDigest:locator.normalizedSessionIdDigest,runnerInstanceId:locator.runnerInstanceId,
+      environmentLeaseId:locator.environmentLeaseId,providerLeaseId:locator.providerLeaseId,
+      startCommandId:randomUUID(),stopCommandId:randomUUID(),inspectCommandId:randomUUID(),runtimeOperationId:randomUUID(),
+      startBindingDigest:"c".repeat(64),sandboxId:randomUUID(),containerId:"d".repeat(64),
+      receiptDigest:"e".repeat(64),stoppedAt:"2026-10-28T12:01:00.000Z"};
+    expect(isRemoteRuntimeAssetRemovalReceipt({...receipt,stopProof},locator)).toBe(true);
+    for(const key of ["startCommandId","stopCommandId","inspectCommandId","runtimeOperationId","startBindingDigest",
+      "sandboxId","containerId","receiptDigest","stoppedAt"]){
+      const missing:Record<string,unknown>={...stopProof};delete missing[key];
+      expect(isRemoteRuntimeAssetRemovalReceipt({...receipt,stopProof:missing},locator),key).toBe(false);
+    }
+    expect(isRemoteRuntimeAssetRemovalReceipt({...receipt,stopProof:{...stopProof,environmentLeaseId:randomUUID()}},locator)).toBe(false);
+    expect(isRemoteRuntimeAssetRemovalReceipt({...receipt,stopProof:{...stopProof,normalizedSessionIdDigest:"f".repeat(64)}},locator)).toBe(false);
+    expect(isRemoteRuntimeAssetRemovalReceipt({...receipt,stopProof:{...stopProof,pid:12345}},locator)).toBe(false);
+    expect(isRemoteRuntimeAssetRemovalReceipt({...receipt,stopProof:{...stopProof,runtimeOperationId:"unverified"}},locator)).toBe(false);
+    // Shape parsing alone is not ledger qualification; readiness still joins
+    // the current canonical Stop and actual Host erasure command/checkpoint.
+  });
+
   it("releases its owned session fence after each successful physical-erasure probe", async () => {
     const root = await mkdtemp(join(tmpdir(), "native-erasure-probe-fence-"));
     const taskRoot = join(root, "task");

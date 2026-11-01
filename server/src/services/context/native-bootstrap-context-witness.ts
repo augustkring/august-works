@@ -20,6 +20,12 @@ const sha256 = (value: string) => createHash("sha256").update(value, "utf8").dig
 /** Called only by the Context manifest owner while its source-verification transaction is active. */
 export function captureNativeBootstrapContextWitness(input: { companyId: string; runId: string; agentId: string; issueId: string;
   actor: AuthorizationActor; renderedMarkdown: string; manifest: Manifest; items: Item[]; roots: Root[] }): NativeBootstrapContextWitness | null {
+  let diagnosticStage = "identity_binding";
+  const reject = (reason: string): null => {
+    if (process.env.PAPERCLIP_NATIVE_CONTEXT_WITNESS_DIAGNOSTICS === "1")
+      console.warn("native_context_bootstrap_witness_rejected", JSON.stringify({ reason }));
+    return null;
+  };
   try {
   const { manifest } = input;
   if (!uuid.test(input.companyId) || !uuid.test(input.runId) || !uuid.test(input.agentId) || !uuid.test(input.issueId) ||
@@ -30,8 +36,9 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
     !input.actor.onBehalfOfUserId || input.items.length === 0 || input.items.length > 256 || input.roots.length > 256 ||
     input.items.some(item => item.companyId !== input.companyId || item.manifestId !== manifest.id) ||
     input.roots.some(root => root.companyId !== input.companyId || root.manifestId !== manifest.id))
-    return null;
+    return reject("identity_or_shape");
 
+  diagnosticStage = "selected_item_projection";
   const policy = emptyPolicy();
   if (manifest.projectId) policy.projectIds.push(manifest.projectId);
   const inputs: NativePayloadSourceInput[] = [];
@@ -44,7 +51,6 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
     for (const key of Object.keys(policy) as Array<keyof NativePayloadSourcePolicy>)
       policy[key] = [...new Set([...policy[key], ...parsed.data.policy[key]])].sort();
     for (const source of parsed.data.inputs) {
-      if (source.kind === "context") throw new Error("Nested Context source closure is unavailable");
       if (!inputs.some(existing => JSON.stringify(existing) === JSON.stringify(source))) inputs.push(source);
     }
   };
@@ -55,29 +61,36 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
     if (item.sourceProvider === "august_works_tasks") {
       const match = /^issue:\/\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.exec(item.sourceRef);
       if (!match) throw new Error("Native bootstrap Task Context reference is invalid");
+      diagnosticStage = "task_snapshot";
       policy.issueIds = [...new Set([...policy.issueIds, match[1]!])].sort();
       appendSnapshot(item.payloadSourceSnapshot, "issue", match[1]!);
     } else if (item.sourceProvider === "august_works_foundation") {
       const match = /^foundation:\/\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?:\/(?:whole|\d+))?$/i.exec(item.sourceRef);
       if (!match || item.sourceVersion !== match[2]) throw new Error("Native bootstrap Foundation Context reference is invalid");
+      diagnosticStage = "foundation_snapshot";
       policy.foundationRevisionIds = [...new Set([...policy.foundationRevisionIds, match[2]!])].sort();
     } else if (item.sourceProvider === "august_works_memory") {
       const match = /^memory:\/\/record\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.exec(item.sourceRef);
       if (!match || !input.roots.some(root => root.memoryRecordId === match[1] && root.sourceVersion === item.sourceVersion))
         throw new Error("Native bootstrap Memory Context root is unavailable");
+      diagnosticStage = "memory_snapshot";
       policy.memoryIds = [...new Set([...policy.memoryIds, match[1]!])].sort();
     } else if (item.sourceProvider !== "august_works_derived_memory") {
       throw new Error("Native bootstrap Context provider is unsupported");
     }
   }
+  diagnosticStage = "memory_root_snapshot";
   for (const root of input.roots) {
     if (!uuid.test(root.memoryRecordId) || !root.sourceVersion) throw new Error("Native bootstrap Memory root is incomplete");
     policy.memoryIds = [...new Set([...policy.memoryIds, root.memoryRecordId])].sort();
     appendSnapshot(root.payloadSourceSnapshot, "memory_record", root.memoryRecordId);
   }
+  if (inputs.filter(value => value.kind === "context").length > 63)
+    return reject("nested_context_bound");
   if (inputs.length + Object.values(policy).reduce((sum, values) => sum + values.length, 0) > 256)
-    throw new Error("Native bootstrap Context source set exceeds its bound");
+    return reject("source_set_bound");
 
+  diagnosticStage = "content_projection";
   const renderedMarkdownDigest = sha256(input.renderedMarkdown);
   // `contentHash` is the retained Context owner fingerprint. The rendered
   // markdown has a separate private witness (`renderedMarkdownDigest`) and is
@@ -101,6 +114,8 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
     policySnapshotHash: manifest.policySnapshotHash, contentHash, actor: structuredClone(input.actor), policy, inputs });
   return witness;
   } catch {
+    if (process.env.PAPERCLIP_NATIVE_CONTEXT_WITNESS_DIAGNOSTICS === "1")
+      console.warn("native_context_bootstrap_witness_rejected", JSON.stringify({ reason: `invalid_${diagnosticStage}` }));
     return null;
   }
 }

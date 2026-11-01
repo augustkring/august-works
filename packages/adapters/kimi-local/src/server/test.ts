@@ -1,3 +1,4 @@
+import { admitPaidModelProbe } from "@paperclipai/adapter-utils/paid-model-probe";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -250,7 +251,7 @@ export async function testEnvironment(
     });
   }
 
-  if (canRunProbe) {
+  if (canRunProbe && admitPaidModelProbe(checks)) {
     if (!commandLooksLike(command, "kimi")) {
       checks.push({
         code: "kimi_hello_probe_skipped_custom_command",

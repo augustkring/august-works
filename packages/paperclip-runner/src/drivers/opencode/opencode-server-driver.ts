@@ -2016,9 +2016,13 @@ async function startRuntime(input: {
     throw error;
   }
   const managedModel = Boolean((input.options.environment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim());
+  // The retained-source Native journey measures up to 54s across fresh owner
+  // checks. Keep a finite internal envelope; assigned MCP keeps its own default.
+  const internalToolTimeoutMs = managedModel ? 90_000 : 30_000;
   const bridge = await startOpenCodeMcpBridge({
     tools: input.options.dynamicTools,
     requireNativeToolCallObservation: managedModel,
+    timeoutMs: internalToolTimeoutMs,
     handler: input.dispatch,
   }).catch(async (error) => {
     await rm(isolatedHome, { recursive: true, force: true }).catch(
@@ -2091,7 +2095,7 @@ async function startRuntime(input: {
         enabled: true,
         oauth: false,
         headers: { Authorization: `Bearer ${bridge.secret}` },
-        timeout: 30_000,
+        timeout: internalToolTimeoutMs,
       },
       ...(assignedMcp
         ? {

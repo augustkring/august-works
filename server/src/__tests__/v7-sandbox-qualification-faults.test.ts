@@ -87,6 +87,47 @@ describe("sandbox qualification under compound host/probe faults (local fixtures
     expect(report.capabilities?.expiresAt).toBe(f.snapshot.expiresAt);
     expect(report.capabilities?.evidenceKind).toBe("local_fixture");
   });
+  it("accepts a Host report tested after asynchronous preparation without extending the original expiry", async () => {
+    const f = fixture();
+    const originalExpiry = new Date(now.getTime() + 60000);
+    const preparationElapsed = 5000;
+    const observedAt = new Date(now.getTime() + preparationElapsed);
+    f.snapshot.testedAt = observedAt.toISOString();
+    f.snapshot.expiresAt = originalExpiry.toISOString();
+    const report = await runSandboxQualification(f.backend, identity, observedAt, "0".repeat(64), SANDBOX_CONTROLS,
+      undefined, undefined, originalExpiry);
+    expect(report.status).toBe("passed");
+    expect(report.capabilities?.testedAt).toBe(observedAt.toISOString());
+    expect(report.capabilities?.expiresAt).toBe(originalExpiry.toISOString());
+    expect(f.probes()).toBe(19);
+  });
+  it("does not qualify when preparation finishes after the original Host expiry", async () => {
+    const f = fixture();
+    const originalExpiry = new Date(now.getTime() + 60000);
+    const observedAt = new Date(now.getTime() + 61000);
+    f.snapshot.testedAt = observedAt.toISOString();
+    f.snapshot.expiresAt = originalExpiry.toISOString();
+    const report = await runSandboxQualification(f.backend, identity, observedAt, "0".repeat(64), SANDBOX_CONTROLS,
+      undefined, undefined, originalExpiry);
+    expect(report.status).toBe("inconclusive");
+    expect(report.capabilities).toBeNull();
+    expect(report.exceptions).toContain("capability_snapshot_changed_or_expired");
+    expect(f.probes()).toBe(0);
+  });
+  it("rejects a fresh-looking Host report that renews beyond the original pre-prepare expiry", async () => {
+    const f = fixture();
+    const originalExpiry = new Date(now.getTime() + 60000);
+    const preparationElapsed = 61000;
+    const observedAt = new Date(now.getTime() + preparationElapsed);
+    f.snapshot.testedAt = observedAt.toISOString();
+    f.snapshot.expiresAt = new Date(now.getTime() + 120000).toISOString();
+    const report = await runSandboxQualification(f.backend, identity, observedAt, "0".repeat(64), SANDBOX_CONTROLS,
+      undefined, undefined, originalExpiry);
+    expect(report.status).toBe("inconclusive");
+    expect(report.capabilities).toBeNull();
+    expect(report.exceptions).toContain("qualification_original_expiry_exceeded");
+    expect(f.probes()).toBe(0);
+  });
   it("accepts fresh report timestamps for unchanged target evidence without renewing expiry", async () => {
     const f = fixture();
     let reports = 0;

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createServer, type Server, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 import { WebSocket, WebSocketServer } from "ws";
-import { runtimeRelayMessageSchema, runtimeSandboxExecRelayRequestSchema, type RuntimeSandboxExecRelayRequest } from "@paperclipai/shared";
+import { runtimeRelayMessageSchema, runtimeSandboxExecRelayRequestSchema, type RuntimeSandboxExecRelayRequest, type RuntimeModelBrokerSessionReceipt } from "@paperclipai/shared";
 import { forbidden } from "../../errors.js";
 
 type Host = { id: string; credentialVersion: number };
@@ -35,7 +35,7 @@ type ExecChannel = {
   scope: CellScope;
   timer: ReturnType<typeof setTimeout>;
   onOutput(stream: "stdout" | "stderr", chunk: Buffer): void | Promise<void>;
-  resolve(value: { exitCode: number; timedOut: boolean }): void;
+  resolve(value: { exitCode: number; timedOut: boolean; modelBrokerSessionReceipt?: RuntimeModelBrokerSessionReceipt }): void;
   reject(error: Error): void;
   signal?: AbortSignal;
   abort?: () => void;
@@ -176,7 +176,8 @@ export function runtimeGatewayRelay(deps: Dependencies) {
                 finishExec(message.channelId, error instanceof Error ? error : new Error("sandbox_output_rejected"));
               }
             } else if (message.type === "exec_exit") {
-              finishExec(message.channelId, undefined, { exitCode: message.exitCode, timedOut: message.timedOut });
+              finishExec(message.channelId, undefined, { exitCode: message.exitCode, timedOut: message.timedOut,
+                ...(message.modelBrokerSessionReceipt ? { modelBrokerSessionReceipt: message.modelBrokerSessionReceipt } : {}) });
             } else finishExec(message.channelId, new Error(message.code));
             return;
           }
@@ -224,7 +225,7 @@ export function runtimeGatewayRelay(deps: Dependencies) {
       }
     });
   });
-  function finishExec(id: string, error?: Error, result?: { exitCode: number; timedOut: boolean }) {
+  function finishExec(id: string, error?: Error, result?: { exitCode: number; timedOut: boolean; modelBrokerSessionReceipt?: RuntimeModelBrokerSessionReceipt }) {
     const channel = execChannels.get(id);
     if (!channel) return;
     clearTimeout(channel.timer);
@@ -250,7 +251,7 @@ export function runtimeGatewayRelay(deps: Dependencies) {
       scope.companyId === "" || !(await deps.hostCurrent(connection.host)) || !(await deps.cellCurrent(input.cellId, scope)) ||
       !Number.isFinite(deadlineAt) || deadlineAt <= Date.now()) throw forbidden("Sandbox execution scope is stale");
     const channelId = randomUUID();
-    return await new Promise<{ exitCode: number; timedOut: boolean }>((resolve, reject) => {
+    return await new Promise<{ exitCode: number; timedOut: boolean; modelBrokerSessionReceipt?: RuntimeModelBrokerSessionReceipt }>((resolve, reject) => {
       const delay = Math.max(1, Math.min(60_000, deadlineAt - Date.now()));
       const channel: ExecChannel = {
         cellId: input.cellId,

@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { companies, companyMemberships, companySecrets, connectionGrants, connectionGrantMembers, toolApplications, toolConnections, createDb, projects as projectTable } from "@paperclipai/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { toolAccessService } from "../services/tool-access.js";
 import { projectService } from "../services/projects.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -15,6 +15,11 @@ const support = await getEmbeddedPostgresTestSupport();
   let db: ReturnType<typeof createDb>;
   let companyId: string;
   const repo = (id: string) => ({ id, fullName: `org/repo-${id}`, url: `https://github.com/org/repo-${id}`, connections: [] });
+  function deferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    const promise = new Promise<T>(done => { resolve = done; });
+    return { promise, resolve };
+  }
   beforeAll(async () => {
     temp = await startEmbeddedPostgresTestDatabase("paperclip-repositories-");
     db = createDb(temp.connectionString);
@@ -105,6 +110,97 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(revokedMembership).toHaveLength(1);
     expect((await toolAccessService(db).listProjectRepositories(companyId, "alice")).repositories).toEqual([]);
     expect(request).toHaveBeenCalledTimes(3);
+  });
+
+  it("rechecks each selected repository's original grant path and serializes revocation without provider I/O", async () => {
+    const [tenant] = await db.insert(companies).values({ name: "Repository grant race", issuePrefix: `R${Date.now()}` }).returning();
+    const userId = `human-${tenant.id}`;
+    await db.insert(companyMemberships).values({ companyId: tenant.id, principalType: "user", principalId: userId,
+      membershipRole: "admin", status: "active" });
+    const tokenRepos = new Map<string, Array<{ id: number; full_name: string }>>();
+    async function connection(name: string, kind: "user" | "organization", owner: string | null,
+      repositories: Array<{ id: number; full_name: string }>) {
+      const [app] = await db.insert(toolApplications).values({ companyId: tenant.id, name, type: "mcp_http" }).returning();
+      const [secret] = await db.insert(companySecrets).values({ companyId: tenant.id, name, key: name }).returning();
+      const [conn] = await db.insert(toolConnections).values({ companyId: tenant.id, applicationId: app.id, name, uid: name,
+        status: "active", enabled: true, transport: "mcp_remote", authKind: "api_key",
+        credentialPolicy: kind === "user" ? "per_user" : "shared", config: { sourceTemplateKey: "github" } }).returning();
+      const [grant] = await db.insert(connectionGrants).values({ companyId: tenant.id, connectionId: conn.id, kind,
+        subjectUserId: owner, credentialSecretRefs: [{ secretId: secret.id, configPath: "credentials.authorization", versionSelector: "latest" }] }).returning();
+      tokenRepos.set(secret.id, repositories);
+      return { connectionId: conn.id, grantId: grant.id };
+    }
+    const personal = await connection("witness-personal", "user", userId, [
+      { id: 40, full_name: "org/shared-repo" }, { id: 41, full_name: "org/personal-only" },
+    ]);
+    await connection("witness-organization", "organization", null, [
+      { id: 40, full_name: "org/shared-repo" },
+    ]);
+    const request = vi.fn<typeof fetch>(async (_url, init) => {
+      const token = new Headers(init?.headers).get("authorization")?.replace("Bearer ", "") ?? "";
+      return Response.json(tokenRepos.get(token) ?? []);
+    });
+    vi.stubGlobal("fetch", request);
+    const listing = await toolAccessService(db).listProjectRepositories(tenant.id, userId, false, true);
+    const witnesses = listing.repositoryAuthorizationWitnesses;
+    expect(witnesses?.["40"]).toEqual(expect.arrayContaining([
+      { repositoryId: "40", connectionId: personal.connectionId, grantId: personal.grantId },
+    ]));
+    expect(witnesses?.["41"]).toEqual([
+      { repositoryId: "41", connectionId: personal.connectionId, grantId: personal.grantId },
+    ]);
+    expect(witnesses?.["40"]).toHaveLength(2);
+    const personalOnly = witnesses?.["41"] ?? [];
+    const locked = deferred<number>();
+    const release = deferred<void>();
+    const ownerTransaction = db.transaction(async (tx) => {
+      await toolAccessService(tx as unknown as typeof db).assertProjectRepositoryAuthorizationWitnessesCurrent({
+        companyId: tenant.id, userId, repositoryIds: ["41"], witnesses: personalOnly,
+      });
+      const [pid] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      locked.resolve(Number(pid!.pid));
+      await release.promise;
+    });
+    const ownerOutcome = ownerTransaction.then(() => null, error => error);
+    let revoker: Promise<unknown> | null = null;
+    let revokePid: number | null = null;
+    try {
+      const ownerPid = await Promise.race([locked.promise, ownerOutcome.then(error => {
+        throw error ?? new Error("repository witness transaction completed before it acquired the grant lock");
+      })]);
+      revoker = db.transaction(async (tx) => {
+        const [pid] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+        revokePid = Number(pid!.pid);
+        await tx.update(connectionGrants).set({ status: "revoked", revokedAt: new Date() })
+          .where(eq(connectionGrants.id, personal.grantId));
+      });
+      let waiting = false;
+      for (let attempt = 0; attempt < 300; attempt++) {
+        if (revokePid !== null) {
+          const [row] = await db.execute<{ waiting: number }>(sql`select count(*)::int as waiting
+            from pg_stat_activity a where a.datname=current_database() and a.pid=${revokePid}::int
+              and a.wait_event_type='Lock' and ${ownerPid}::int = any(pg_blocking_pids(a.pid))`);
+          if ((row?.waiting ?? 0) > 0) { waiting = true; break; }
+        }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(waiting, "grant revocation must wait while the source-qualified Project owner holds the exact grant").toBe(true);
+    } finally {
+      release.resolve();
+    }
+    expect(await ownerOutcome).toBeNull();
+    await revoker;
+    expect(request).toHaveBeenCalledTimes(2);
+    await expect(db.transaction(tx => toolAccessService(tx as unknown as typeof db)
+      .assertProjectRepositoryAuthorizationWitnessesCurrent({ companyId: tenant.id, userId,
+        repositoryIds: ["40"], witnesses: witnesses?.["40"] ?? [] }))).resolves.toBeUndefined();
+    await expect(db.transaction(tx => toolAccessService(tx as unknown as typeof db)
+      .assertProjectRepositoryAuthorizationWitnessesCurrent({ companyId: tenant.id, userId,
+        repositoryIds: ["41"], witnesses: personalOnly }))).rejects.toThrow("authorization changed");
+    await expect(db.transaction(tx => toolAccessService(tx as unknown as typeof db)
+      .assertProjectRepositoryAuthorizationWitnessesCurrent({ companyId: tenant.id, userId,
+        repositoryIds: ["40", "41"], witnesses: [...(witnesses?.["40"] ?? []), ...personalOnly] })))
+      .rejects.toThrow("authorization changed");
   });
 
   it("rolls back the project if a later repository insert fails", async () => {

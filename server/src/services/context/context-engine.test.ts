@@ -96,18 +96,19 @@ describe("Context total deadline policy", () => {
 });
 
 describe("Context provider deadline policy", () => {
-  it("keeps generic Context at 1.5s and bounds Native bootstraps at 4s", async () => {
+  it("keeps generic Context at 1.5s and bounds Native bootstraps at 8s", async () => {
     expect(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS).toBe(1_500);
-    expect(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS).toBe(4_000);
+    expect(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS).toBe(8_000);
     expect(contextTotalDeadlineMs()).toBe(1_500);
-    expect(contextTotalDeadlineMs(undefined, true)).toBe(4_000);
+    expect(contextTotalDeadlineMs(undefined, true)).toBe(8_000);
     expect(contextTotalDeadlineMs(3_000)).toBe(3_000);
-    expect(contextTotalDeadlineMs(30_000, true)).toBe(4_000);
+    expect(contextTotalDeadlineMs(30_000, true)).toBe(8_000);
+    expect(contextTotalDeadlineMs(400, true)).toBe(400);
     expect(DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS).toBe(900);
     expect(contextMemoryProviderTimeoutMs(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS)).toBe(1_150);
-    expect(contextMemoryProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS)).toBe(3_650);
+    expect(contextMemoryProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS)).toBe(7_650);
     expect(contextTaskProviderTimeoutMs(DEFAULT_CONTEXT_TOTAL_DEADLINE_MS)).toBe(900);
-    expect(contextTaskProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS, true)).toBe(3_650);
+    expect(contextTaskProviderTimeoutMs(NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS, true)).toBe(7_650);
     expect(contextTaskProviderTimeoutMs(400, true)).toBe(50);
 
     let capturedSignal: AbortSignal | undefined;
@@ -164,7 +165,7 @@ describe("Context provider deadline policy", () => {
         retrieve: async () => { firstActive = true; await new Promise(resolve => setTimeout(resolve, 15)); firstActive = false; return { evidence: [] }; } },
       { key: "second", requirement: "optional", timeoutMs: 100,
         retrieve: async () => { secondOverlapped = firstActive; return { evidence: [] }; } },
-    ], { ...request, authorizationActor: { type: "agent", source: "agent_jwt" } }, Date.now() + 200, undefined, true);
+    ], { ...request, authorizationActor: { type: "agent", source: "agent_jwt" } }, Date.now() + 200, true);
     expect(secondOverlapped).toBe(false);
   });
 

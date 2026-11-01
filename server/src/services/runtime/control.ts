@@ -55,6 +55,7 @@ import {
   nativePayloadSourceSnapshotSchema,
   nativePayloadSourceInputSchema,
   sandboxCapabilitySnapshotSchema,
+  runtimeModelBrokerSessionReceiptSchema,
 } from "@paperclipai/shared";
 import type { z } from "zod";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
@@ -74,7 +75,7 @@ import { createSandboxBrokerJwt, createSandboxExecJwt, verifySandboxBrokerJwt, v
 import { assertAgentRunWriteAllowed, agentRunWritesRevoked } from "../../agent-run-cancellation.js";
 import { assertV7Authorization } from "../v7-authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { executionSandboxService } from "../execution-sandbox/sandbox-service.js";
+import { executionSandboxService, sandboxCapabilityFacts } from "../execution-sandbox/sandbox-service.js";
 import { getAssignedMcpGateway } from "../native-runtime/assigned-mcp-tools.js";
 import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
 import { REDACTED_EVENT_VALUE } from "../../redaction.js";
@@ -86,14 +87,17 @@ import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
-import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
+import { REMOTE_NATIVE_ERASER_ENV, nativeRuntimeErasureEnvironmentExact, nativeRuntimeErasurePolicyIsolated, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROFILE_HASH, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
   REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
   REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
   REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT } from "../native-runtime/remote-runner-identity.js";
-import { sandboxProbeCases } from "../execution-sandbox/backend.js";
+import { sandboxProbeCases, nativeRuntimeCleanupProbeCases } from "../execution-sandbox/backend.js";
+import { SANDBOX_CONTROLS, NATIVE_RUNTIME_CLEANUP_PURPOSE, NATIVE_RUNTIME_CLEANUP_PROFILE } from "@paperclipai/shared";
 import { nativeSandboxHostTransport, type RemoteRuntimeCleanupAttestation } from "../execution-sandbox/native-host-bridge.js";
+import { readRunLeaseCleanup, verifyRunLeaseCleanupReceipt, verifyNativeCleanupRuntimeState } from "../execution-sandbox/run-lease-cleanup.js";
 import {
   assertRemoteRuntimeAssetErasureReady,
+  assertRemoteRuntimeAssetErasureClaimCurrent,
   isRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetRemovalReceipt,
   readRemoteRuntimeAssetLocator,
@@ -125,8 +129,15 @@ const CELL_ACTION_STATUS: Record<string, string> = {
   migrate: "MIGRATING",
   rotate_gateway: "CONFIGURING",
 };
+// Ephemeral provenance for the exact live enforcing closure. This holds no
+// grant, policy, token or durable authority and cannot bless wrapped callbacks.
+const sandboxBrokerAuthorityOwners = new WeakMap<Function, Readonly<{protocol:"sandbox_exec_v1";origin:string}>>();
+export function readSandboxBrokerAuthorityEnforcement(authority: unknown): Readonly<{protocol:"sandbox_exec_v1";origin:string}> | null {
+  return typeof authority === "function" ? sandboxBrokerAuthorityOwners.get(authority) ?? null : null;
+}
 function configuredPaperclipEndpointOrigin(raw: string | undefined): string | null {
-  raw = raw?.trim();
+  if(typeof raw !== "string") return null;
+  raw = raw.trim();
   if (!raw) return null;
   try {
     const url = new URL(raw);
@@ -229,13 +240,13 @@ export function exactNativeRuntimeAssetErasureCommand(input: {
 }): boolean {
   const { request, locator, remoteCwd, expectedProcessPid, expectedProcessStartedAt } = input;
   const argv = request.argv;
-  const expected = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+  const expected = ["/bin/sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
     "paperclip-native-asset-erasure", remoteCwd, locator.normalizedSessionIdDigest,
     locator.runId, locator.runnerInstanceId, locator.environmentLeaseId, locator.providerLeaseId,
     locator.normalizedSessionIdDigest, String(expectedProcessPid), expectedProcessStartedAt,
     REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
     REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
-  return request.cwd === remoteCwd && request.stdinBase64 === "" && Object.keys(request.env).length === 0 &&
+  return request.cwd === remoteCwd && request.stdinBase64 === "" && nativeRuntimeErasureEnvironmentExact(request.env) &&
     argv.length === expected.length && expected.every((value, index) => argv[index] === value) &&
     request.brokerCredential === undefined && request.modelBrokerCredential === undefined;
 }
@@ -248,17 +259,12 @@ export function exactNativeRuntimeAssetErasureProbeCommand(input: {
 }): boolean {
   const { request } = input;
   const argv = request.argv;
-  const expectedPrefix = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT,
+  const expectedPrefix = ["/bin/sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT,
     "paperclip-native-asset-erasure-probe", input.taskRoot, input.sessionDigest, input.runId];
   return request.cwd === input.taskRoot && request.stdinBase64 === "" &&
     argv.length === expectedPrefix.length + 1 && expectedPrefix.every((value, index) => argv[index] === value) &&
     /^[a-f0-9-]{36}$/i.test(argv.at(-1) ?? "") && request.brokerCredential === undefined &&
-    request.modelBrokerCredential === undefined && !Object.keys(request.env).some(name => [
-      "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_SANDBOX_BROKER_TOKEN",
-      "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
-      "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
-      "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
-    ].includes(name));
+    request.modelBrokerCredential === undefined && nativeRuntimeErasureEnvironmentExact(request.env);
 }
 
 export function exactNativeRunnerMonitorStatusCommand(input: {
@@ -314,7 +320,7 @@ export function nativeRelayClaimFailureStatus(
 }
 
 function exactNativeSessionLaunchCommand(input: {
-  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  request: Pick<import("@paperclipai/shared").RuntimeSandboxExecRelayRequest, "argv" | "cwd" | "stdinBase64">;
   taskRoot: string;
   execution: ReturnType<typeof parseNativeExecutionInput>;
 }): boolean {
@@ -669,8 +675,23 @@ export function runtimeControlService(
     action: "start" | "stop"; companyId: string; cellId: string; bindingId: string; generation: string;
     hostCommandId: string; claimKey: string; policySnapshotId: string; executionManifestId: string;
     executionManifestHash: string; policyHash: string; userId: string; idempotencyKey?: string; now?: Date;
+    nativeCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; originalRequesterUserId: string };
   }) {
     const now = input.now ?? new Date();
+    const cleanup = input.nativeCleanup;
+    const physical = cleanup ? await verifyRunLeaseCleanupReceipt(tx, cleanup, cleanup.receipt) : null;
+    if (cleanup && (input.action !== "stop" || cleanup.companyId !== input.companyId ||
+      cleanup.originalRequesterUserId !== input.userId || physical?.sandboxStop.stopCommandId !== input.hostCommandId))
+      throw conflict("Native cleanup state requires the exact original signed Stop");
+    if (cleanup) {
+      const owner = await readRunLeaseCleanup(tx, cleanup);
+      if (owner.scope.cellId !== input.cellId || owner.scope.bindingId !== input.bindingId ||
+        owner.scope.cellGeneration !== input.generation || owner.claimKey !== input.claimKey ||
+        owner.session.policySnapshotId !== input.policySnapshotId || owner.session.manifestId !== input.executionManifestId ||
+        owner.session.manifestHash !== input.executionManifestHash || owner.session.policyHash !== input.policyHash ||
+        owner.startRequest.requesterUserId !== cleanup.originalRequesterUserId)
+        throw conflict("Native cleanup state lost its original admission scope");
+    }
     const [cell] = await tx.select().from(runtimeCells).where(and(
       eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, input.cellId),
       eq(runtimeCells.generation, BigInt(input.generation)), isNull(runtimeCells.deletedAt),
@@ -681,7 +702,7 @@ export function runtimeControlService(
       eq(runtimeHostCommands.runtimeCellId, input.cellId), eq(runtimeHostCommands.cellGeneration, BigInt(input.generation)),
       eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
     )).limit(1).for("share");
-    if (!cell || !binding || String(binding.status) !== (input.action === "start" ? "admitting" : "stopping") || String(binding.cell_generation) !== input.generation || !command)
+    if (!cell || !binding || !(cleanup ? ["admitting", "running", "stopping", "quarantined", "stopped"].includes(String(binding.status)) : String(binding.status) === (input.action === "start" ? "admitting" : "stopping")) || String(binding.cell_generation) !== input.generation || !command)
       throw conflict("Signed sandbox workload receipt is no longer current");
     const payload = command.payload as Record<string, any>;
     const reply = command.safeResult as Record<string, any> | null;
@@ -707,16 +728,19 @@ export function runtimeControlService(
       !Number.isSafeInteger(expectedVersion) || claimVersion !== expectedVersion + 1 ||
       payload.start?.idempotencyKey !== `v7-sandbox-start:${input.bindingId}:${input.generation}:${claimVersion}:${input.policySnapshotId}`))
       throw conflict("Sandbox Start receipt is not bound to the current admission epoch");
+    if (cleanup && !["HEALTHY", "STOPPED"].includes(cell.status))
+      throw conflict("Native cleanup cannot settle an ambiguous runtime meter state");
     const operationId = randomUUID();
     const requestHash = input.action === "stop" && input.idempotencyKey
       ? sha256(JSON.stringify({ cellId: input.cellId, action: "stop", idempotencyKey: input.idempotencyKey }))
       : sha256(JSON.stringify({ sandboxBindingId: input.bindingId, generation: input.generation, hostCommandId: input.hostCommandId, claimKey: input.claimKey, policySnapshotId: input.policySnapshotId, action: input.action }));
     const [operation] = await tx.insert(runtimeOperations).values({
       id: operationId, companyId: input.companyId, runtimeCellId: input.cellId,
-      operationType: input.action, status: "SUCCEEDED", requestedByType: "user", requestedById: input.userId,
+      operationType: input.action, status: "SUCCEEDED", requestedByType: cleanup ? "system" : "user", requestedById: cleanup ? "native-run-cleanup" : input.userId,
       idempotencyKey: input.idempotencyKey ?? `sandbox-${input.action}:${input.bindingId}:${input.generation}:${input.hostCommandId}`,
       requestHash,
-      desiredState: { sandboxAdmission: true, sandboxBindingId: input.bindingId, generation: input.generation, sandboxHostCommandId: input.hostCommandId, claimKey: input.claimKey, policySnapshotId: input.policySnapshotId, executionManifestId: input.executionManifestId, executionManifestHash: input.executionManifestHash, policyHash: input.policyHash },
+      desiredState: { sandboxAdmission: true, sandboxBindingId: input.bindingId, generation: input.generation, sandboxHostCommandId: input.hostCommandId, claimKey: input.claimKey, policySnapshotId: input.policySnapshotId, executionManifestId: input.executionManifestId, executionManifestHash: input.executionManifestHash, policyHash: input.policyHash,
+        ...(cleanup ? { nativeCleanup: { companyId: cleanup.companyId, runId: cleanup.runId, leaseId: cleanup.leaseId, physicalReceiptDigest: nativeSha256(physical), originalRequesterUserId: cleanup.originalRequesterUserId } } : {}) },
       deadlineAt: now, completedAt: now,
     }).returning();
     if (!operation) throw conflict("Runtime workload operation receipt could not be recorded");
@@ -738,10 +762,10 @@ export function runtimeControlService(
       ));
     }
     await tx.insert(activityLog).values({
-      companyId: input.companyId, actorType: "user", actorId: input.userId,
+      companyId: input.companyId, actorType: cleanup ? "system" : "user", actorId: cleanup ? "native-run-cleanup" : input.userId,
       action: input.action === "start" ? "runtime.sandbox_workload_started" : "runtime.sandbox_workload_stopped",
       entityType: "runtime_cell", entityId: input.cellId,
-      details: { operationId: operation.id, sandboxBindingId: input.bindingId, sandboxHostCommandId: input.hostCommandId, generation: input.generation },
+      details: { operationId: operation.id, sandboxBindingId: input.bindingId, sandboxHostCommandId: input.hostCommandId, generation: input.generation, ...(cleanup ? { originalRequesterUserId: cleanup.originalRequesterUserId } : {}) },
     });
     return operation!;
   }
@@ -2658,11 +2682,13 @@ export function runtimeControlService(
   function readCleanupAttestation(value: unknown): RemoteRuntimeCleanupAttestation | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) return null;
     const candidate = value as Record<string, unknown>;
-    const keys = ["schema", "jobId", "jobKey", "attemptNumber", "executionOwnerId", "locatorDigest",
+    const keys = ["schema", "purpose", "executionProfile", "executionProfileHash", "jobId", "jobKey", "attemptNumber", "executionOwnerId", "locatorDigest",
       "companyPurgeOperationId", "startBindingDigest", "capabilityCommandId", "capabilities", "probes",
       "completedAt", "expiresAt"];
     if (Object.keys(candidate).length !== keys.length || keys.some(key => !Object.hasOwn(candidate, key)) ||
-      candidate.schema !== "paperclip.remote-runtime-cleanup-attestation.v1" ||
+      candidate.schema !== "paperclip.remote-runtime-cleanup-attestation.v2" ||
+      candidate.purpose !== NATIVE_RUNTIME_CLEANUP_PURPOSE || candidate.executionProfile !== NATIVE_RUNTIME_CLEANUP_PROFILE ||
+      candidate.executionProfileHash !== REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROFILE_HASH ||
       typeof candidate.jobId !== "string" || !/^[0-9a-f-]{36}$/i.test(candidate.jobId) ||
       typeof candidate.jobKey !== "string" || !candidate.jobKey ||
       !Number.isSafeInteger(candidate.attemptNumber) || (candidate.attemptNumber as number) < 1 ||
@@ -2817,8 +2843,7 @@ export function runtimeControlService(
       ["execution_authorization_present", Boolean(authorization)],
       ["policy_manifest_matches", Boolean(policy && manifest && policy.sourcePolicyRefs.includes(`manifest:${manifest.id}:${manifest.hash}`))],
       ["policy_capability_matches", Boolean(policy && binding && policy.capabilitySnapshotHash === binding.capabilitySnapshotHash)],
-      ["policy_has_no_credentials", Boolean(policy && policy.compilation.compiledPolicy.credentials.mode === "none" &&
-        policy.compilation.compiledPolicy.credentials.bindings.length === 0)],
+      ["fixed_local_eraser_policy_isolated", Boolean(policy && nativeRuntimeErasurePolicyIsolated(policy.compilation.compiledPolicy))],
     ];
     if (targetChecks.some(([, passes]) => !passes) || !cell || !host || !binding || !manifest || !agent || !policy ||
       !capability?.success)
@@ -2829,8 +2854,11 @@ export function runtimeControlService(
     let cleanupAuthorityDeadlineAt = new Date(Date.now() + 60_000);
     if (cleanup?.attestation) {
       const attestation = cleanup.attestation;
-      const expectedCases = sandboxProbeCases(binding.boundaryPolicyHash, binding.boundaryPolicy.requiredControls);
-      if (attestation.schema !== "paperclip.remote-runtime-cleanup-attestation.v1" ||
+      const expectedCases = nativeRuntimeCleanupProbeCases(binding.boundaryPolicyHash, binding.boundaryPolicy.requiredControls);
+      if (attestation.schema !== "paperclip.remote-runtime-cleanup-attestation.v2" ||
+        attestation.purpose !== NATIVE_RUNTIME_CLEANUP_PURPOSE || attestation.executionProfile !== NATIVE_RUNTIME_CLEANUP_PROFILE ||
+        attestation.executionProfileHash !== REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROFILE_HASH ||
+        nativeSha256(sandboxCapabilityFacts(attestation.capabilities)) !== nativeSha256(sandboxCapabilityFacts(capability.data)) ||
         attestation.locatorDigest !== remoteRuntimeAssetLocatorDigest(locator) ||
         attestation.companyPurgeOperationId !== (companyPurgeOperationId ?? null) ||
         attestation.startBindingDigest !== nativeSha256(startBinding) ||
@@ -2849,7 +2877,7 @@ export function runtimeControlService(
         attestation.capabilities.backend !== "openshell" || attestation.capabilities.sandboxImageDigest !== expectedImageDigest ||
         Date.parse(attestation.capabilities.testedAt) > Date.now() ||
         Date.parse(attestation.capabilities.expiresAt) <= Date.now() ||
-        binding.boundaryPolicy.requiredControls.some(control =>
+        SANDBOX_CONTROLS.some(control =>
           !attestation.capabilities[control as keyof typeof attestation.capabilities]))
         throw conflict("Managed remote OpenCode erasure lacks a fresh complete signed host attestation", {
           code: REMOTE_ASSET_ERASURE_ERRORS.target, failedChecks: ["cleanup_attestation_invalid"],
@@ -2865,7 +2893,8 @@ export function runtimeControlService(
         throw conflict("Managed remote OpenCode erasure host attestation command receipts are incomplete", {
           code: REMOTE_ASSET_ERASURE_ERRORS.target, failedChecks: ["cleanup_attestation_receipts_missing"],
         });
-      const cleanupProof = { version: 1, jobId: attestation.jobId, jobKey: attestation.jobKey,
+      const cleanupProof = { version: 2, purpose: NATIVE_RUNTIME_CLEANUP_PURPOSE, executionProfile: NATIVE_RUNTIME_CLEANUP_PROFILE,
+        executionProfileHash: REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROFILE_HASH, jobId: attestation.jobId, jobKey: attestation.jobKey,
         attemptNumber: attestation.attemptNumber, executionOwnerId: attestation.executionOwnerId,
         locatorDigest: attestation.locatorDigest, companyPurgeOperationId: attestation.companyPurgeOperationId,
         startBindingDigest: attestation.startBindingDigest };
@@ -2913,15 +2942,125 @@ export function runtimeControlService(
     return { run, lease, remoteCwd, cell, host, binding, manifest, agent, policy,
       startBinding, cleanupAuthorityDeadlineAt };
   }
+  async function stopSandboxRunLeaseForCleanup(input: { companyId: string; runId: string; leaseId: string }) {
+    const physical = await nativeSandboxHostTransport(db).stopRunLeaseForCleanup(input);
+    return await executionSandboxService(db, { recordRuntimeWorkloadState: recordSandboxWorkloadState })
+      .recordNativeCleanupStop(input, physical);
+  }
+  async function eraseStoppedNativeRuntimeAsset(locator: RemoteRuntimeAssetLocator,
+    input: { jobId: string; jobKey: string; jobAttemptNumber: number; executionOwnerId: string; companyPurgeOperationId?: string }): Promise<RemoteRuntimeAssetRemovalReceipt> {
+    const claimed = await assertRemoteRuntimeAssetErasureClaimCurrent(db, locator, input.companyPurgeOperationId);
+    if (claimed.id !== input.jobId || claimed.jobKey !== input.jobKey || claimed.attemptNumber !== input.jobAttemptNumber ||
+      claimed.executionOwnerId !== input.executionOwnerId)
+      throw conflict("Stopped Native erasure does not own its current job");
+    // A due privacy job may terminate an expired business lease. This invokes
+    // the existing release owner; it never renews execution or substitutes a Human.
+    const [initialLease] = await db.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, locator.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
+      eq(environmentLeases.heartbeatRunId, locator.runId)));
+    if (!initialLease) throw conflict("Stopped Native erasure lease unavailable");
+    if (initialLease.status === "active") {
+      const { environmentRuntimeService } = await import("../environment-runtime.js");
+      let releaseFailed = false;
+      await environmentRuntimeService(db, { executeSandboxTask, stopSandboxRunLease: stopSandboxRunLeaseForCleanup })
+        .releaseRunLeases(locator.runId, "released", () => { releaseFailed = true; });
+      if (releaseFailed) throw conflict("Stopped Native erasure could not settle its exact provider release");
+    }
+    const ready = await assertRemoteRuntimeAssetErasureReady(db, locator, input.companyPurgeOperationId);
+    // A prior worker may have completed the physical erase and checkpointed its
+    // exact receipt before losing its job lease. Readiness verifies that ledger
+    // proof against this current claim and Stop; never repeat the remote effect.
+    if (ready.removalReceipt?.stopProof.schema === "paperclip.native-sandbox-workload-stop.v1")
+      return ready.removalReceipt;
+    const owner = await readRunLeaseCleanup(db, { companyId: locator.companyId, runId: locator.runId,
+      leaseId: locator.environmentLeaseId });
+    const combined = await verifyNativeCleanupRuntimeState(db, owner.proof, owner.lease.metadata?.remoteExecutionTermination);
+    const taskRoot = typeof owner.lease.metadata?.remoteCwd === "string" ? owner.lease.metadata.remoteCwd.trim() : "";
+    const capability = sandboxCapabilitySnapshotSchema.safeParse(owner.binding.capabilitySnapshot);
+    const target = capability.success ? capability.data.qualificationTarget : undefined;
+    const [policy] = await db.select().from(runtimePolicySnapshots).where(and(
+      eq(runtimePolicySnapshots.companyId, locator.companyId), eq(runtimePolicySnapshots.id, owner.session.policySnapshotId),
+      eq(runtimePolicySnapshots.bindingId, owner.scope.bindingId)));
+    const launches = await db.select({ payload: runtimeHostCommands.payload }).from(runtimeHostCommands).where(and(
+      eq(runtimeHostCommands.companyId, locator.companyId), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+      eq(runtimeHostCommands.status, "SUCCEEDED"), eq(runtimeHostCommands.runtimeHostId, owner.session.hostId),
+      eq(runtimeHostCommands.runtimeCellId, owner.session.cellId),
+      eq(runtimeHostCommands.cellGeneration, BigInt(owner.session.cellGeneration)),
+      sql`${runtimeHostCommands.payload}->>'runId' = ${locator.runId}`,
+      sql`${runtimeHostCommands.payload}->>'leaseId' = ${locator.environmentLeaseId}`,
+      sql`${runtimeHostCommands.payload}->>'nativePreparationPurpose' = 'native_session_start'`));
+    const sessions = launches.flatMap(row => {
+      const payload = row.payload as Record<string, unknown>;
+      const session = payload.modelBrokerSession as Record<string, unknown> | undefined;
+      return nativeSha256(payload.remoteNativeSessionStartBinding ?? null) === nativeSha256(owner.session) &&
+        session?.phase === "start" && session.startBindingDigest === owner.proof.startBindingDigest &&
+        typeof session.sessionKey === "string" && /^[a-f0-9]{64}$/.test(session.sessionKey) ? [session] : [];
+    });
+    if (sessions.length !== 1 || !target || !policy || !taskRoot || sha256(taskRoot) !== locator.remoteCwdDigest ||
+      policy.policyHash !== owner.session.policyHash || policy.capabilitySnapshotHash !== owner.binding.capabilitySnapshotHash)
+      throw conflict("Stopped Native erasure lacks its exact original Host session tombstone");
+    const descriptor = { schema: "paperclip.remote-native-session-erasure.v1" as const,
+      startBindingDigest: owner.proof.startBindingDigest, sessionKey: sessions[0]!.sessionKey as string,
+      leaseId: locator.environmentLeaseId, taskRoot, sessionDigest: locator.normalizedSessionIdDigest,
+      policyHash: owner.session.policyHash, sandboxId: owner.proof.sandboxId, containerId: owner.proof.containerId,
+      imageDigest: owner.imageDigest, dockerEngineIdHash: target.dockerEngineIdHash,
+      cellGeneration: owner.session.cellGeneration, runId: locator.runId, runnerInstanceId: locator.runnerInstanceId };
+    const result = await nativeSandboxHostTransport(db).eraseStoppedNativeSession({ locator, ...input, descriptor });
+    const receipt: RemoteRuntimeAssetRemovalReceipt = {
+      schema: "paperclip.remote-runtime-asset-removal.v1", locatorDigest: remoteRuntimeAssetLocatorDigest(locator),
+      commandRequestId: result.command.id, purpose: "native_provider_data_erasure",
+      target: { hostId: owner.session.hostId, cellId: owner.session.cellId,
+        cellGeneration: owner.session.cellGeneration, bindingId: owner.session.bindingId },
+      relativePath: locator.relativePath, pathDigest: locator.pathDigest,
+      stopProof: { schema: "paperclip.native-sandbox-workload-stop.v1", runId: locator.runId,
+        normalizedSessionIdDigest: locator.normalizedSessionIdDigest, runnerInstanceId: locator.runnerInstanceId,
+        environmentLeaseId: locator.environmentLeaseId, providerLeaseId: locator.providerLeaseId,
+        startCommandId: combined.sandboxStop.startCommandId, stopCommandId: combined.sandboxStop.stopCommandId,
+        inspectCommandId: combined.sandboxStop.inspectCommandId, runtimeOperationId: combined.sandboxStop.runtimeOperationId,
+        startBindingDigest: combined.sandboxStop.startBindingDigest, sandboxId: combined.sandboxStop.sandboxId,
+        containerId: combined.sandboxStop.containerId, receiptDigest: nativeSha256(combined), stoppedAt: combined.confirmedAt },
+      stopProofBeforeDelete: true, exitCode: 0, timedOut: false, postDeleteAbsent: true };
+    await db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      const currentJob = await assertRemoteRuntimeAssetErasureClaimCurrent(tx, locator, input.companyPurgeOperationId);
+      await assertRemoteRuntimeAssetErasureReady(tx, locator, input.companyPurgeOperationId);
+      const current = await readRunLeaseCleanup(tx, owner.proof);
+      const currentStop = await verifyNativeCleanupRuntimeState(tx, owner.proof, current.lease.metadata?.remoteExecutionTermination);
+      if (currentJob.id !== claimed.id || currentJob.attemptNumber !== claimed.attemptNumber ||
+        currentJob.executionOwnerId !== claimed.executionOwnerId || nativeSha256(currentStop) !== nativeSha256(combined))
+        throw conflict("Stopped Native erasure changed before receipt checkpoint");
+      const [saved] = await tx.update(memoryJobs).set({ resultJson: {
+        ...(currentJob.resultJson ?? {}), remoteRuntimeAssetRemovalReceipt: receipt } }).where(and(
+        eq(memoryJobs.companyId, locator.companyId), eq(memoryJobs.id, currentJob.id), eq(memoryJobs.status, "running"),
+        eq(memoryJobs.attemptNumber, claimed.attemptNumber), eq(memoryJobs.executionOwnerId, claimed.executionOwnerId!),
+        gt(memoryJobs.leaseExpiresAt, new Date()))).returning({ id: memoryJobs.id });
+      if (!saved) throw conflict("Stopped Native erasure job claim expired before checkpoint");
+    });
+    return receipt;
+  }
   async function eraseRemoteNativeRuntimeAsset(
     locator: RemoteRuntimeAssetLocator,
-    input: { jobId: string; jobKey: string; companyPurgeOperationId?: string },
+    input: { jobId: string; jobKey: string; jobAttemptNumber: number; executionOwnerId: string; companyPurgeOperationId?: string },
   ): Promise<RemoteRuntimeAssetRemovalReceipt> {
     if (!isRemoteRuntimeAssetLocator(locator) || !/^[0-9a-f-]{36}$/i.test(input.jobId) ||
       input.jobKey !== `runtime-asset-erasure:v1:${locator.runId}`)
       throw conflict("Managed remote OpenCode erasure locator or MemoryJob identity is invalid", {
         code: REMOTE_ASSET_ERASURE_ERRORS.locator,
       });
+    const expectedClaim = await assertRemoteRuntimeAssetErasureClaimCurrent(db, locator, input.companyPurgeOperationId);
+    if (expectedClaim.id !== input.jobId || expectedClaim.jobKey !== input.jobKey ||
+      expectedClaim.attemptNumber !== input.jobAttemptNumber || expectedClaim.executionOwnerId !== input.executionOwnerId)
+      throw conflict("Remote Native erasure caller no longer owns its exact job attempt");
+    const [selectedLease] = await db.select({ provider: environmentLeases.provider, status: environmentLeases.status, expiresAt: environmentLeases.expiresAt }).from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, locator.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
+      eq(environmentLeases.heartbeatRunId, locator.runId)));
+    const selectedStart = selectedLease ? await readRemoteNativeSessionStartBinding(db, locator) : null;
+    const [selectedBinding] = selectedStart ? await db.select({ backend: runtimeSandboxBindings.backend,
+      status: runtimeSandboxBindings.status }).from(runtimeSandboxBindings).where(and(
+      eq(runtimeSandboxBindings.companyId, locator.companyId), eq(runtimeSandboxBindings.id, selectedStart.bindingId))) : [];
+    if (selectedBinding?.backend === "openshell" && (selectedBinding.status === "stopped" || selectedLease?.status !== "active" ||
+      (selectedLease?.expiresAt !== null && selectedLease?.expiresAt !== undefined && selectedLease.expiresAt <= new Date())))
+      return eraseStoppedNativeRuntimeAsset(locator, input);
     await remoteRuntimeAssetDispatchContext(locator, input.companyPurgeOperationId, { refreshing: true });
     const cleanupAttestation = await nativeSandboxHostTransport(db).refreshRemoteRuntimeCleanupAttestation({
       locator, jobId: input.jobId, jobKey: input.jobKey, companyPurgeOperationId: input.companyPurgeOperationId,
@@ -2949,7 +3088,7 @@ export function runtimeControlService(
         const receipt = result.remoteRuntimeAssetRemovalReceipt;
         if (erasure.jobKey !== input.jobKey || (erasure.companyPurgeOperationId ?? null) !== (input.companyPurgeOperationId ?? null) ||
           typeof erasure.expectedProcessPid !== "number" || !Number.isSafeInteger(erasure.expectedProcessPid) ||
-          typeof erasure.expectedProcessStartedAt !== "string" || !isRemoteRuntimeAssetRemovalReceipt(receipt, locator) ||
+          typeof erasure.expectedProcessStartedAt !== "string" || !isRemoteRuntimeAssetRemovalReceipt(receipt, locator) || receipt.stopProof.schema !== "paperclip.native-remote-process-stop.v1" ||
           receipt.commandRequestId !== payload.requestId || receipt.stopProof.pid !== erasure.expectedProcessPid ||
           receipt.stopProof.startedAt !== erasure.expectedProcessStartedAt) return null;
         return { pid: erasure.expectedProcessPid, startedAt: erasure.expectedProcessStartedAt };
@@ -2966,15 +3105,16 @@ export function runtimeControlService(
     if (deadlineAt <= new Date()) throw conflict("Managed remote OpenCode erasure lease expired before dispatch", {
       code: REMOTE_ASSET_ERASURE_ERRORS.relay, upstreamStatus: null,
     });
-    const command = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+    const command = ["/bin/sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
       "paperclip-native-asset-erasure", source.remoteCwd, locator.normalizedSessionIdDigest,
       locator.runId, locator.runnerInstanceId, locator.environmentLeaseId, locator.providerLeaseId,
       locator.normalizedSessionIdDigest, String(expectedProcessPid), expectedProcessStartedAt,
       REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
       REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
-    const env: Record<string, string> = {};
+    const env: Record<string, string> = { ...REMOTE_NATIVE_ERASER_ENV };
     const commandDigest = nativeSha256({ argv: command, cwd: source.remoteCwd, env, stdinHash: sha256(""),
-      timeoutDeadline: deadlineAt.toISOString(), nativePreparationPurpose: "native_provider_data_erasure" });
+      timeoutDeadline: deadlineAt.toISOString(), brokerCapabilityHash: null, brokerProviderProfile: null,
+      modelBrokerCapabilityHash: null, modelBrokerProviderProfile: null, modelBrokerSession: null });
     const attempt = Math.max(1, source.run.continuationAttempt + 1);
     const idempotencyKey = `managed-native-asset-erasure:v1:${nativeSha256({ companyId: locator.companyId,
       jobKey: input.jobKey, locatorDigest, purpose: "native_provider_data_erasure",
@@ -3051,7 +3191,7 @@ export function runtimeControlService(
           const completedErasure = completedPayload.remoteRuntimeAssetErasure && typeof completedPayload.remoteRuntimeAssetErasure === "object" &&
             !Array.isArray(completedPayload.remoteRuntimeAssetErasure)
             ? completedPayload.remoteRuntimeAssetErasure as Record<string, unknown> : {};
-      if (!isRemoteRuntimeAssetRemovalReceipt(receipt, locator) || receipt.commandRequestId !== completedPayload.requestId ||
+      if (!isRemoteRuntimeAssetRemovalReceipt(receipt, locator) || receipt.stopProof.schema !== "paperclip.native-remote-process-stop.v1" || receipt.commandRequestId !== completedPayload.requestId ||
             completedErasure.expectedProcessPid !== receipt.stopProof.pid ||
             completedErasure.expectedProcessStartedAt !== receipt.stopProof.startedAt ||
             resultBinding.locatorDigest !== locatorDigest || resultBinding.jobKey !== input.jobKey ||
@@ -3279,7 +3419,8 @@ export function runtimeControlService(
         expected.runId !== request.runId || expected.attemptId !== request.attemptId || expected.attempt !== request.attempt ||
         expected.manifestId !== request.manifestId || expected.manifestHash !== request.manifestHash ||
         expected.policySnapshotId !== request.policySnapshotId || expected.policyHash !== request.policyHash ||
-        expected.commandDigest !== request.commandDigest || expected.deadlineAt !== request.deadlineAt)
+        expected.commandDigest !== request.commandDigest || expected.deadlineAt !== request.deadlineAt ||
+        nativeSha256(expected.modelBrokerSession ?? null) !== nativeSha256(request.modelBrokerSession ?? null))
         throw forbidden("Sandbox execution claim is missing, expired, or already consumed");
       if (expected.nativePreparationPurpose === "native_provider_data_erasure") {
         const rawErasure = expected.remoteRuntimeAssetErasure && typeof expected.remoteRuntimeAssetErasure === "object" &&
@@ -3347,6 +3488,84 @@ export function runtimeControlService(
         source.manifest.hash !== request.manifestHash || source.policy.id !== request.policySnapshotId ||
         source.policy.policyHash !== request.policyHash || source.deadlineAt.toISOString() < request.deadlineAt)
         throw forbidden("Sandbox execution source changed before host dispatch");
+      const sessionDescriptor = request.modelBrokerSession;
+      if (sessionDescriptor) {
+        const profile = source.run.runnerProfileJson && typeof source.run.runnerProfileJson === "object" &&
+          !Array.isArray(source.run.runnerProfileJson) ? source.run.runnerProfileJson as Record<string, unknown> : {};
+        let sessionExecution: ReturnType<typeof parseNativeExecutionInput> | null = null;
+        try { sessionExecution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { /* invalid below */ }
+        const nativeSessionId = source.run.nativeSessionId;
+        const runnerInstanceId = source.run.runnerInstanceId;
+        const sessionKey = nativeSha256({ companyId: claims.company_id, runId: source.run.id,
+          attemptId: source.attempt?.id ?? null, attempt: request.attempt,
+          nativeSessionIdDigest: sha256(nativeSessionId ?? ""), runnerInstanceId,
+          leaseId: source.lease.id, bindingId: source.sandboxBinding.id, cellId: source.cell.id,
+          generation: source.cell.generation.toString(), hostEpoch: source.host.credentialVersion,
+          manifestId: source.manifest.id, manifestHash: source.manifest.hash,
+          policySnapshotId: source.policy.id, policyHash: source.policy.policyHash });
+        const currentCeiling = new Date(Math.min(source.deadlineAt.getTime(),
+          (source.run.executionControlDeadlineAt ?? source.deadlineAt).getTime(), source.lease.expiresAt?.getTime() ?? 0));
+        const exactRunSession = source.run.status === "running" && source.run.runtimeMode === "native" && nativeSessionId &&
+          runnerInstanceId && sessionExecution?.provider.kind === "opencode" && sessionExecution.session.driverKind === "opencode_server" &&
+          sessionExecution.session.normalizedSessionId === nativeSessionId && sessionExecution.binding.companyId === claims.company_id &&
+          sessionExecution.binding.runId === source.run.id && sessionExecution.binding.agentId === source.run.agentId &&
+          resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)?.provider === "opencode" &&
+          sessionDescriptor.sessionKey === sessionKey && sessionDescriptor.nativeSessionIdDigest === sha256(nativeSessionId) &&
+          sessionDescriptor.runnerInstanceId === runnerInstanceId && sessionDescriptor.leaseId === source.lease.id;
+        let originalSession: Record<string, unknown> | null = null;
+        if (exactRunSession && sessionDescriptor.phase !== "start") {
+          const [start] = await tx.select({ payload: runtimeHostCommands.payload }).from(runtimeHostCommands).where(and(
+            eq(runtimeHostCommands.companyId, claims.company_id), eq(runtimeHostCommands.runtimeCellId, source.cell.id),
+            eq(runtimeHostCommands.cellGeneration, source.cell.generation), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+            eq(runtimeHostCommands.status, "SUCCEEDED"),
+            sql`${runtimeHostCommands.payload}->'modelBrokerSession'->>'sessionKey' = ${sessionDescriptor.sessionKey}`,
+            sql`${runtimeHostCommands.payload}->'modelBrokerSession'->>'phase' = 'start'`)).orderBy(runtimeHostCommands.createdAt).limit(1).for("update");
+          const payload = start?.payload && typeof start.payload === "object" && !Array.isArray(start.payload)
+            ? start.payload as Record<string, unknown> : null;
+          originalSession = payload?.modelBrokerSession && typeof payload.modelBrokerSession === "object" &&
+            !Array.isArray(payload.modelBrokerSession) ? payload.modelBrokerSession as Record<string, unknown> : null;
+        }
+        const descriptorShape = exactRunSession && (sessionDescriptor.phase === "start"
+          ? sessionDescriptor.sessionDeadlineAt === currentCeiling.toISOString() && sessionDescriptor.expectedCapabilityHash === undefined
+          : originalSession?.sessionDeadlineAt === sessionDescriptor.sessionDeadlineAt &&
+            Date.parse(sessionDescriptor.sessionDeadlineAt) <= currentCeiling.getTime());
+        const leaseMetadata = source.lease.metadata && typeof source.lease.metadata === "object" && !Array.isArray(source.lease.metadata)
+          ? source.lease.metadata as Record<string, unknown> : {};
+        const sessionCwd = typeof leaseMetadata.remoteCwd === "string" ? leaseMetadata.remoteCwd.trim() : "";
+        const exactSessionCommand = sessionExecution && (sessionDescriptor.phase === "start"
+          ? !!sessionCwd && path.resolve(request.cwd) === path.resolve(sessionCwd) &&
+            exactNativeSessionLaunchCommand({ request, taskRoot: sessionCwd, execution: sessionExecution })
+          : !!sessionCwd && path.resolve(request.cwd) === path.resolve(sessionCwd) &&
+            exactNativeRunnerMonitorStatusCommand({ request, taskRoot: sessionCwd, execution: sessionExecution, runId: source.run.id }));
+        if (!descriptorShape || !exactSessionCommand ||
+          (sessionDescriptor.phase !== "start" && !/^[a-f0-9]{64}$/.test(sessionDescriptor.expectedCapabilityHash ?? "")))
+          throw forbidden("Managed model provider session is outside its exact current Native runner lifecycle");
+        if (sessionDescriptor.phase === "start") {
+          const [prior] = await tx.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+            eq(runtimeHostCommands.companyId, claims.company_id), eq(runtimeHostCommands.runtimeCellId, source.cell.id),
+            eq(runtimeHostCommands.cellGeneration, source.cell.generation), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+            sql`${runtimeHostCommands.payload}->'modelBrokerSession'->>'sessionKey' = ${sessionDescriptor.sessionKey}`,
+            sql`${runtimeHostCommands.payload}->>'requestId' IS DISTINCT FROM ${claims.jti}`)).limit(1).for("update");
+          if (prior) throw forbidden("Managed model provider session start cannot be replayed");
+        } else {
+          const [latest] = await tx.select({ safeResult: runtimeHostCommands.safeResult, payload: runtimeHostCommands.payload })
+            .from(runtimeHostCommands).where(and(eq(runtimeHostCommands.companyId, claims.company_id),
+              eq(runtimeHostCommands.runtimeCellId, source.cell.id), eq(runtimeHostCommands.cellGeneration, source.cell.generation),
+              eq(runtimeHostCommands.commandType, "sandbox_exec"), eq(runtimeHostCommands.status, "SUCCEEDED"),
+              sql`${runtimeHostCommands.payload}->'modelBrokerSession'->>'sessionKey' = ${sessionDescriptor.sessionKey}`))
+            .orderBy(desc(runtimeHostCommands.createdAt)).limit(1).for("update");
+          const safe = latest?.safeResult && typeof latest.safeResult === "object" && !Array.isArray(latest.safeResult)
+            ? latest.safeResult as Record<string, unknown> : null;
+          const receipt = runtimeModelBrokerSessionReceiptSchema.safeParse(safe?.modelBrokerSessionReceipt);
+          const latestPayload = latest?.payload && typeof latest.payload === "object" && !Array.isArray(latest.payload)
+            ? latest.payload as Record<string, unknown> : null;
+          const latestSession = latestPayload?.modelBrokerSession && typeof latestPayload.modelBrokerSession === "object" &&
+            !Array.isArray(latestPayload.modelBrokerSession) ? latestPayload.modelBrokerSession as Record<string, unknown> : null;
+          if (!receipt.success || receipt.data.capabilityHash !== sessionDescriptor.expectedCapabilityHash ||
+            latestSession?.phase === "stop" || !latestSession || latestSession.sessionDeadlineAt !== sessionDescriptor.sessionDeadlineAt)
+            throw forbidden("Managed model provider session receipt changed before refresh or stop");
+        }
+      }
       const credentials = source.policy.compilation.compiledPolicy.credentials;
       const brokerCredential = request.brokerCredential;
       const nativePreparationPurpose = expected.nativePreparationPurpose;
@@ -3362,6 +3581,8 @@ export function runtimeControlService(
       const nativeWorkspacePrepare = nativePreparationPurpose === "native_workspace_prepare";
       const nativeRuntimeContextPrepare = nativePreparationPurpose === "native_runtime_context_prepare";
       const nativeRuntimeAssetErasureProbe = nativePreparationPurpose === "native_provider_data_erasure_probe";
+      const sessionModelRefresh = nativeHarnessState && request.modelBrokerSession?.phase === "refresh" &&
+        request.modelBrokerCredential !== undefined;
       let nativeSessionStartValid = false;
       let nativeHarnessStateValid = false;
       if (providerArtifactPreparation) {
@@ -3382,7 +3603,13 @@ export function runtimeControlService(
         const filesystem = source.policy.compilation.compiledPolicy.filesystem;
         const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
         const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
-        const noCredentialEnvironment = !Object.keys(request.env ?? {}).some(key => [
+        const noCredentialEnvironment = sessionModelRefresh
+          ? Object.keys(request.env ?? {}).every(key => ["PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+            "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND", "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS"].includes(key)) &&
+            request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === managedModelBrokerOrigin &&
+            request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === String(request.modelBrokerCredential?.inputTokensUpperBound) &&
+            request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === String(request.modelBrokerCredential?.maxOutputTokens)
+          : !Object.keys(request.env ?? {}).some(key => [
           "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_SANDBOX_BROKER_TOKEN",
           "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
           "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
@@ -3416,7 +3643,54 @@ export function runtimeControlService(
           !exactNativeProviderArtifactChunkCommand({ request, taskRoot: expectedTaskRoot }))
           throw forbidden("Provider artifact relay chunk is outside its exact private Task target");
       }
-      if (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
+      const workerNativeSessionStart = nativeSessionStart && source.source.task.conversationAgentId === null &&
+        source.source.task.conversationUserId === null;
+      const workerModelSessionRefresh = !nativePreparationPurpose && request.modelBrokerSession?.phase === "refresh" &&
+        source.source.task.conversationAgentId === null && source.source.task.conversationUserId === null;
+      if (workerModelSessionRefresh) {
+        const profile = source.run.runnerProfileJson && typeof source.run.runnerProfileJson === "object" &&
+          !Array.isArray(source.run.runnerProfileJson) ? source.run.runnerProfileJson as Record<string, unknown> : {};
+        let execution: ReturnType<typeof parseNativeExecutionInput> | null = null;
+        try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { execution = null; }
+        const taskRoot = execution?.workspace.cwd;
+        if (source.run.status !== "running" || source.run.runtimeMode !== "native" || !source.run.agentId ||
+          !source.run.responsibleUserId || !source.run.nativeSessionId || !source.run.runnerInstanceId ||
+          !source.attempt || source.attempt.runId !== source.run.id || source.attempt.status !== "running" ||
+          !execution || execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
+          execution.session.normalizedSessionId !== source.run.nativeSessionId || execution.binding.companyId !== claims.company_id ||
+          execution.binding.runId !== source.run.id || execution.binding.agentId !== source.run.agentId ||
+          !taskRoot || request.cwd !== taskRoot || !exactNativeRunnerMonitorStatusCommand({ request, taskRoot, execution,
+            runId: source.run.id }) || !request.modelBrokerCredential)
+          throw forbidden("Native worker session refresh is outside the exact active runner status probe");
+      }
+      if (workerNativeSessionStart) {
+        const task = source.source.task;
+        const profile = source.run.runnerProfileJson && typeof source.run.runnerProfileJson === "object" &&
+          !Array.isArray(source.run.runnerProfileJson) ? source.run.runnerProfileJson as Record<string, unknown> : {};
+        let execution: ReturnType<typeof parseNativeExecutionInput> | null = null;
+        try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { execution = null; }
+        const taskRoot = execution?.workspace.cwd;
+        const filesystem = source.policy.compilation.compiledPolicy.filesystem;
+        const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
+        const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
+        const exactWorkerRun = source.run.status === "running" && source.run.runtimeMode === "native" &&
+          source.run.agentId && source.run.responsibleUserId && source.run.nativeIssueId === task.id &&
+          source.run.runnerInstanceId && source.run.nativeSessionId && source.attempt?.runId === source.run.id &&
+          source.attempt.status === "running" && source.manifest.runId === source.run.id &&
+          source.manifest.agentId === source.run.agentId &&
+          source.manifest.manifest.responsibleUserId === source.run.responsibleUserId &&
+          source.run.scopeKind === "issue" && task.assigneeAgentId === source.run.agentId;
+        if (!exactWorkerRun || !execution || execution.provider.kind !== "opencode" ||
+          execution.session.driverKind !== "opencode_server" || execution.session.normalizedSessionId !== source.run.nativeSessionId ||
+          execution.binding.companyId !== claims.company_id || execution.binding.runId !== source.run.id ||
+          execution.binding.agentId !== source.run.agentId || execution.binding.issueId !== task.id ||
+          !taskRoot || !path.isAbsolute(taskRoot) || request.cwd !== taskRoot ||
+          !readRoots.some(root => typeof root === "string" && path.resolve(root) === path.resolve(taskRoot)) ||
+          !writeRoots.some(root => typeof root === "string" && path.resolve(root) === path.resolve(taskRoot)) ||
+          request.modelBrokerSession?.phase !== "start" || !request.modelBrokerCredential ||
+          !exactNativeSessionLaunchCommand({ request, taskRoot, execution }))
+          throw forbidden("Native worker session start is outside the exact current run, attempt, manifest and launch command");
+      } else if (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
         const task = source.source.task;
         const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
         const [taskOwnerVersion] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` })
@@ -3543,10 +3817,13 @@ export function runtimeControlService(
               : nativeRuntimeAssetErasureProbe
                 ? exactErasureProbe
               : execution !== null && expectedTaskRoot !== null &&
-              exactNativeHarnessStateCommand({ request, taskRoot: expectedTaskRoot, execution, runId: source.run.id });
+              (sessionModelRefresh
+                ? exactNativeRunnerMonitorStatusCommand({ request, taskRoot: expectedTaskRoot, execution, runId: source.run.id })
+                : exactNativeHarnessStateCommand({ request, taskRoot: expectedTaskRoot, execution, runId: source.run.id }));
         const exactCredentialShape = nativeSessionStart
           ? request.modelBrokerCredential !== undefined
-          : request.modelBrokerCredential === undefined && Object.keys(request.env).every(key => ![
+          : sessionModelRefresh ? request.modelBrokerCredential !== undefined
+            : request.modelBrokerCredential === undefined && Object.keys(request.env).every(key => ![
             "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PAPERCLIP_SANDBOX_BROKER_TOKEN",
             "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
             "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
@@ -3645,13 +3922,21 @@ export function runtimeControlService(
       const nativeProvider = source.source.agent.adapterType === "paperclip_runner"
         ? resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)
         : null;
+      const nativeHarnessModelRefresh = nativeHarnessState && request.modelBrokerSession?.phase === "refresh";
+      const modelSessionStop = request.modelBrokerSession?.phase === "stop";
       if (providerArtifactPreparation) {
         // The server-stored preparation purpose is the only path that may run
         // a Native artifact command without either credential family.
         if (modelCredential !== undefined) throw forbidden("Provider-artifact preparation cannot receive a model credential");
-      } else if (nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
+      } else if ((nativeHarnessState && !nativeHarnessModelRefresh) || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
         if (modelCredential !== undefined || credentials.mode !== "none" || credentials.bindings.length !== 0 || brokerCredential !== undefined)
           throw forbidden("Native harness state commands cannot receive workload credentials");
+      } else if (modelSessionStop) {
+        if (modelCredential !== undefined || brokerCredential !== undefined ||
+          Object.keys(request.env).some(key => ["ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+            "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+            "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS", "PAPERCLIP_SANDBOX_BROKER_TOKEN"].includes(key)))
+          throw forbidden("Stopped managed model session cleanup cannot carry credentials");
       } else if (nativeProvider?.provider === "opencode") {
         const exactProfileAndEnvironment = !!modelCredential && !!source.capability.modelBrokerProviderProfile &&
           modelCredential.profileId === source.capability.modelBrokerProviderProfile.id &&
@@ -3665,8 +3950,9 @@ export function runtimeControlService(
           modelCredential.maxOutputTokens <= 8192 &&
           request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === String(modelCredential.inputTokensUpperBound) &&
           request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === String(modelCredential.maxOutputTokens) &&
-          Date.parse(modelCredential.expiresAt) <= Date.parse(request.deadlineAt);
-        const workerCredentialValid = !!modelCredential && !!modelClaims?.worker_model && !!modelBinding &&
+          Date.parse(modelCredential.expiresAt) > Date.now() &&
+          Date.parse(modelCredential.expiresAt) <= Date.parse(request.modelBrokerSession?.sessionDeadlineAt ?? request.deadlineAt);
+        const workerCredentialValid = !!modelCredential && !!modelClaims?.worker_model && !conversationModelClaims?.conversation_model && !!modelBinding &&
           modelClaims.company_id === claims.company_id && modelClaims.sub === source.run.agentId &&
           modelClaims.run_id === source.run.id && modelClaims.responsible_user_id === source.run.responsibleUserId &&
           modelClaims.exp * 1000 >= Date.now() && Date.parse(modelCredential.expiresAt) <= modelClaims.exp * 1000 &&
@@ -3832,13 +4118,16 @@ export function runtimeControlService(
     stdin?: string;
     timeoutMs?: number;
     nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+    modelBrokerSessionPhase?: "start" | "refresh" | "stop";
     signal?: AbortSignal;
     onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
-  }): Promise<{ exitCode: number | null; signal: null; timedOut: boolean; stdout: string; stderr: string } | null> {
+  }): Promise<{ exitCode: number | null; signal: null; timedOut: boolean; stdout: string; stderr: string;
+    modelBrokerSessionReceipt?: import("@paperclipai/shared").RuntimeModelBrokerSessionReceipt } | null> {
     if (!input.runId) return null;
     const command = input.command, argv = [command, ...(input.args ?? [])];
     const cwd = input.cwd;
     const requestedNativePreparationPurpose = input.nativePreparationPurpose;
+    const modelBrokerSessionPhase = input.modelBrokerSessionPhase;
     if (requestedNativePreparationPurpose !== undefined && requestedNativePreparationPurpose !== "provider_artifact" &&
       requestedNativePreparationPurpose !== "native_session_start" && requestedNativePreparationPurpose !== "native_harness_state" &&
       requestedNativePreparationPurpose !== "native_workspace_prepare" &&
@@ -3868,6 +4157,7 @@ export function runtimeControlService(
       });
     });
     if (!initialSource) return null;
+    const attempt = initialSource.attempt?.attempt ?? Math.max(1, initialSource.run.continuationAttempt + 1);
     const conversationTask = initialSource.source.task;
     const hasConversationIdentity = conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null;
     let conversationTaskRoot: string | null = null;
@@ -3878,8 +4168,6 @@ export function runtimeControlService(
     // The shared remote artifact helpers also serve ordinary Worker runs. Only
     // a route-created conversation Task can use this pre-receipt setup lane;
     // Workers retain their existing typed model/MCP credential path.
-    if (requestedNativePreparationPurpose === "native_session_start" && !hasConversationIdentity)
-      throw conflict("Native session start requires an authenticated conversation Task");
     if (requestedNativePreparationPurpose === "native_harness_state" && !hasConversationIdentity)
       throw conflict("Native harness state requires an authenticated conversation Task");
     if (requestedNativePreparationPurpose === "native_workspace_prepare" && !hasConversationIdentity)
@@ -3888,14 +4176,105 @@ export function runtimeControlService(
       throw conflict("Native runtime-context preparation requires an authenticated conversation Task");
     if (requestedNativePreparationPurpose === "native_provider_data_erasure_probe" && !hasConversationIdentity)
       throw conflict("Native remote erasure storage probe requires an authenticated conversation Task");
-    const nativePreparationPurpose = requestedNativePreparationPurpose && hasConversationIdentity
+    const nativePreparationPurpose = requestedNativePreparationPurpose &&
+      (hasConversationIdentity || requestedNativePreparationPurpose === "native_session_start")
       ? requestedNativePreparationPurpose : undefined;
+    const workerModelSessionRefresh = modelBrokerSessionPhase === "refresh" && !hasConversationIdentity &&
+      requestedNativePreparationPurpose === undefined;
+    if (workerModelSessionRefresh) {
+      const execution = conversationExecution;
+      const taskRoot = execution?.workspace.cwd;
+      if (!execution || execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
+        execution.session.normalizedSessionId !== initialSource.run.nativeSessionId ||
+        execution.binding.companyId !== input.companyId || execution.binding.runId !== initialSource.run.id ||
+        execution.binding.agentId !== initialSource.run.agentId || !taskRoot || !path.isAbsolute(taskRoot) ||
+        !exactNativeRunnerMonitorStatusCommand({ request: { argv, cwd, stdinBase64: stdinBytes.toString("base64") },
+          taskRoot, execution, runId: initialSource.run.id }))
+        throw conflict("Native worker model-session refresh must use the exact current runner status probe");
+    }
     const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
     const nativeSessionStart = nativePreparationPurpose === "native_session_start";
     const nativeHarnessState = nativePreparationPurpose === "native_harness_state";
     const nativeWorkspacePrepare = nativePreparationPurpose === "native_workspace_prepare";
     const nativeRuntimeContextPrepare = nativePreparationPurpose === "native_runtime_context_prepare";
     const nativeRuntimeAssetErasureProbe = nativePreparationPurpose === "native_provider_data_erasure_probe";
+    if (modelBrokerSessionPhase !== undefined && modelBrokerSessionPhase !== "start" &&
+      modelBrokerSessionPhase !== "refresh" && modelBrokerSessionPhase !== "stop")
+      throw conflict("Managed model session lifecycle phase is unsupported");
+    let modelBrokerSession: {
+      phase: "start" | "refresh" | "stop";
+      sessionKey: string;
+      nativeSessionIdDigest: string;
+      runnerInstanceId: string;
+      leaseId: string;
+      sessionDeadlineAt: string;
+      expectedCapabilityHash?: string;
+      startBindingDigest?: string;
+    } | undefined;
+    if (modelBrokerSessionPhase) {
+      const execution = conversationExecution;
+      const nativeSessionId = initialSource.run.nativeSessionId;
+      const runnerInstanceId = initialSource.run.runnerInstanceId;
+      const sessionLeaseExpiresAt = initialSource.lease.expiresAt;
+      const sessionIdentityValid = initialSource.run.status === "running" && initialSource.run.runtimeMode === "native" &&
+        initialSource.run.agentId && initialSource.run.responsibleUserId && nativeSessionId && runnerInstanceId &&
+        execution?.provider.kind === "opencode" && execution.session.driverKind === "opencode_server" &&
+        execution.binding.companyId === input.companyId && execution.binding.runId === initialSource.run.id &&
+        execution.binding.agentId === initialSource.run.agentId && execution.session.normalizedSessionId === nativeSessionId &&
+        resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)?.provider === "opencode" &&
+        initialSource.sandboxBinding.backend === "openshell" && sessionLeaseExpiresAt !== null;
+      if (!sessionIdentityValid) throw conflict("Managed model session is not bound to the current Native OpenCode Run and sandbox lease");
+      const nativeSessionIdDigest = sha256(nativeSessionId);
+      const sessionKey = nativeSha256({ companyId: input.companyId, runId: initialSource.run.id,
+        attemptId: initialSource.attempt?.id ?? null, attempt, nativeSessionIdDigest, runnerInstanceId,
+        leaseId: initialSource.lease.id, bindingId: initialSource.sandboxBinding.id, cellId: initialSource.cell.id,
+        generation: initialSource.cell.generation.toString(),
+        hostEpoch: initialSource.host.credentialVersion, manifestId: initialSource.manifest.id,
+        manifestHash: initialSource.manifest.hash, policySnapshotId: initialSource.policy.id,
+        policyHash: initialSource.policy.policyHash });
+      const [startRecord] = modelBrokerSessionPhase === "start" ? [] : await db.select({ payload: runtimeHostCommands.payload })
+        .from(runtimeHostCommands).where(and(eq(runtimeHostCommands.companyId, input.companyId),
+          eq(runtimeHostCommands.runtimeCellId, initialSource.cell.id),
+          eq(runtimeHostCommands.cellGeneration, initialSource.cell.generation),
+          eq(runtimeHostCommands.commandType, "sandbox_exec"),
+          eq(runtimeHostCommands.status, "SUCCEEDED"),
+          sql`${runtimeHostCommands.payload}->'modelBrokerSession'->>'sessionKey' = ${sessionKey}`,
+          sql`${runtimeHostCommands.payload}->'modelBrokerSession'->>'phase' = 'start'`))
+        .orderBy(runtimeHostCommands.createdAt).limit(1);
+      const startPayload = startRecord?.payload && typeof startRecord.payload === "object" && !Array.isArray(startRecord.payload)
+        ? startRecord.payload as Record<string, unknown> : null;
+      const priorSession = startPayload?.modelBrokerSession && typeof startPayload.modelBrokerSession === "object" &&
+        !Array.isArray(startPayload.modelBrokerSession) ? startPayload.modelBrokerSession as Record<string, unknown> : null;
+      const sessionCeilingAt = modelBrokerSessionPhase === "start"
+        ? new Date(Math.min(initialSource.deadlineAt.getTime(),
+          (initialSource.run.executionControlDeadlineAt ?? initialSource.deadlineAt).getTime(), sessionLeaseExpiresAt!.getTime()))
+        : priorSession && typeof priorSession.sessionDeadlineAt === "string" && Number.isFinite(Date.parse(priorSession.sessionDeadlineAt))
+          ? new Date(priorSession.sessionDeadlineAt) : null;
+      if (!sessionCeilingAt || sessionCeilingAt <= now || (modelBrokerSessionPhase !== "start" &&
+        (!priorSession || priorSession.sessionKey !== sessionKey || priorSession.nativeSessionIdDigest !== nativeSessionIdDigest ||
+         priorSession.runnerInstanceId !== runnerInstanceId || priorSession.leaseId !== initialSource.lease.id ||
+         Date.parse(sessionCeilingAt.toISOString()) > sessionLeaseExpiresAt!.getTime() ||
+         sessionCeilingAt.getTime() > (initialSource.run.executionControlDeadlineAt ?? initialSource.deadlineAt).getTime())))
+        throw conflict("Managed model session has no exact active start record or its original ceiling expired");
+      let expectedCapabilityHash: string | undefined;
+      if (modelBrokerSessionPhase !== "start") {
+        const [latest] = await db.select({ safeResult: runtimeHostCommands.safeResult }).from(runtimeHostCommands)
+          .where(and(eq(runtimeHostCommands.companyId, input.companyId), eq(runtimeHostCommands.runtimeCellId, initialSource.cell.id),
+            eq(runtimeHostCommands.cellGeneration, initialSource.cell.generation), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+            eq(runtimeHostCommands.status, "SUCCEEDED"),
+            sql`${runtimeHostCommands.payload}->'modelBrokerSession'->>'sessionKey' = ${sessionKey}`))
+          .orderBy(desc(runtimeHostCommands.createdAt)).limit(1);
+        const result = latest?.safeResult && typeof latest.safeResult === "object" && !Array.isArray(latest.safeResult)
+          ? latest.safeResult as Record<string, unknown> : null;
+        const receipt = runtimeModelBrokerSessionReceiptSchema.safeParse(result?.modelBrokerSessionReceipt);
+        if (!receipt.success || receipt.data.sessionKey !== sessionKey || Date.parse(receipt.data.expiresAt) <= now.getTime())
+          throw conflict("Managed model session has no current observed provider receipt");
+        expectedCapabilityHash = receipt.data.capabilityHash;
+      }
+      modelBrokerSession = { phase: modelBrokerSessionPhase, sessionKey, nativeSessionIdDigest,
+        runnerInstanceId, leaseId: initialSource.lease.id, sessionDeadlineAt: sessionCeilingAt.toISOString(),
+        ...(expectedCapabilityHash ? { expectedCapabilityHash } : {}) };
+    }
     if (conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null) {
       const contextSnapshot = initialSource.run.contextSnapshot &&
         typeof initialSource.run.contextSnapshot === "object"
@@ -3948,7 +4327,30 @@ export function runtimeControlService(
     const runnerProfile = initialSource.source.agent.adapterType === "paperclip_runner"
       ? resolvePaperclipRunnerProviderProfile(initialSource.source.agent.adapterConfig)
       : null;
-    if (providerArtifactPreparation || nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
+    if (nativeSessionStart && !hasConversationIdentity) {
+      const execution = conversationExecution;
+      const taskRoot = execution?.workspace.cwd;
+      const filesystem = initialSource.policy.compilation.compiledPolicy.filesystem;
+      const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
+      const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
+      if (runnerProfile?.provider !== "opencode" || initialSource.run.status !== "running" ||
+        initialSource.run.runtimeMode !== "native" || !initialSource.run.agentId || !initialSource.run.responsibleUserId ||
+        !initialSource.run.nativeSessionId || !initialSource.run.runnerInstanceId || !initialSource.attempt ||
+        initialSource.attempt.runId !== initialSource.run.id || initialSource.attempt.status !== "running" ||
+        initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
+        initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId ||
+        !execution || execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
+        execution.session.normalizedSessionId !== initialSource.run.nativeSessionId || execution.binding.companyId !== input.companyId ||
+        execution.binding.runId !== initialSource.run.id || execution.binding.agentId !== initialSource.run.agentId ||
+        !taskRoot || !path.isAbsolute(taskRoot) || path.resolve(cwd) !== path.resolve(taskRoot) ||
+        !readRoots.some(root => typeof root === "string" && path.resolve(root) === path.resolve(taskRoot)) ||
+        !writeRoots.some(root => typeof root === "string" && path.resolve(root) === path.resolve(taskRoot)) ||
+        modelBrokerSessionPhase !== "start" || managedModelPlaceholder ||
+        Object.keys(env).some(key => ["PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN",
+          "PAPERCLIP_SANDBOX_BROKER_SESSION_ID"].includes(key)) ||
+        !exactNativeSessionLaunchCommand({ request: { argv, cwd, stdinBase64: stdinBytes.toString("base64") }, taskRoot, execution }))
+        throw conflict("Native worker model-session start is outside its current signed launch and source scope");
+    } else if (providerArtifactPreparation || nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
       const task = initialSource.source.task;
       const contextSnapshot = initialSource.run.contextSnapshot && typeof initialSource.run.contextSnapshot === "object"
         ? initialSource.run.contextSnapshot as Record<string, unknown> : {};
@@ -3965,7 +4367,8 @@ export function runtimeControlService(
         (credentials.mode !== "none" || credentials.bindings.length !== 0 || managedModelPlaceholder))
         throw conflict("Provider artifact preparation cannot receive workload credentials");
     }
-    if (runnerProfile?.provider === "opencode" && (!nativePreparationPurpose || nativeSessionStart)) {
+    if (runnerProfile?.provider === "opencode" && modelBrokerSessionPhase !== "stop" &&
+      (!nativePreparationPurpose || nativeSessionStart || (nativeHarnessState && modelBrokerSessionPhase === "refresh"))) {
       const profile = initialSource.capability.modelBrokerProviderProfile;
       if (!options.workerModels || !profile || !credentialBrokerOrigin || !managedModelBrokerOrigin)
         throw conflict("Qualified managed model broker is unavailable");
@@ -3986,10 +4389,11 @@ export function runtimeControlService(
       // A conversation token is only a capability to reach the local broker.
       // The gateway still requires the persisted initial Native input receipt,
       // current source ACLs, and the current Human before it reserves or sends.
-      const minted = hasConversationIdentity
+      const minted = hasConversationIdentity && !initialSource.attempt
         ? await options.workerModels.issueForConversationRun(mintInput)
         : await options.workerModels.issueForRun(mintInput);
-      const expiresAt = new Date(Math.min(Date.parse(minted.expiresAt), deadlineAt.getTime(), initialSource.lease.expiresAt!.getTime()));
+      const credentialCeiling = modelBrokerSession ? Date.parse(modelBrokerSession.sessionDeadlineAt) : deadlineAt.getTime();
+      const expiresAt = new Date(Math.min(Date.parse(minted.expiresAt), credentialCeiling, initialSource.lease.expiresAt!.getTime()));
       if (expiresAt <= now) throw conflict("Managed model broker capability expired before sandbox dispatch");
       modelBrokerCredential = { capabilityToken: minted.token, profileId: profile.id, profileHash: profile.hash,
         expiresAt: expiresAt.toISOString(), inputTokensUpperBound: minted.inputTokensUpperBound,
@@ -4093,14 +4497,19 @@ export function runtimeControlService(
         };
       }
     }
+    if (modelBrokerSession?.phase === "start" && nativeSessionStart) {
+      if (!remoteNativeSessionStartBinding)
+        throw conflict("Managed Native session Start has no exact original retained start binding");
+      // Bind the original server-owned object, not the session-key domain or
+      // any caller-supplied field. The descriptor is included in commandDigest.
+      modelBrokerSession.startBindingDigest = nativeSha256(remoteNativeSessionStartBinding);
+    }
     const commandDigest = nativeSha256({ argv, cwd, env, stdinHash: sha256(stdinBytes), timeoutDeadline: deadlineAt.toISOString(),
       brokerCapabilityHash: brokerCapabilityToken ? sha256(brokerCapabilityToken) : null,
       brokerProviderProfile: brokerProviderProfile ? { id: brokerProviderProfile.id, hash: brokerProviderProfile.hash } : null,
       modelBrokerCapabilityHash: modelBrokerCredential ? sha256(modelBrokerCredential.capabilityToken) : null,
       modelBrokerProviderProfile: modelBrokerCredential ? { id: modelBrokerCredential.profileId, hash: modelBrokerCredential.profileHash } : null,
-      nativePreparationPurpose: nativePreparationPurpose ?? null,
-      remoteNativeSessionStartBinding: remoteNativeSessionStartBinding ?? null });
-    const attempt = initialSource.attempt?.attempt ?? Math.max(1, initialSource.run.continuationAttempt + 1);
+      modelBrokerSession: modelBrokerSession ?? null });
     const prepared = await db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
       const source = await executionSandboxService(tx, { runtimeSuspectSeconds: config.runtime.suspectSeconds }).assertTaskExecutionContext(tx, {
@@ -4120,6 +4529,33 @@ export function runtimeControlService(
         sql`${runtimeHostCommands.payload}->>'attempt' = ${String(attempt)}`,
       )).for("update");
       if (unresolvedExec) throw conflict("A previous sandbox execution on this Task attempt has an unknown outcome");
+      if (modelBrokerSession) {
+        const matchingSessionCommands = await tx.select({ safeResult: runtimeHostCommands.safeResult,
+          payload: runtimeHostCommands.payload }).from(runtimeHostCommands).where(and(
+          eq(runtimeHostCommands.companyId, input.companyId), eq(runtimeHostCommands.runtimeCellId, source.cell.id),
+          eq(runtimeHostCommands.cellGeneration, source.cell.generation), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+          sql`${runtimeHostCommands.payload}->'modelBrokerSession'->>'sessionKey' = ${modelBrokerSession.sessionKey}`,
+          ...(modelBrokerSession.phase === "start" ? [] : [eq(runtimeHostCommands.status, "SUCCEEDED")]),
+        )).orderBy(desc(runtimeHostCommands.createdAt)).limit(1).for("update");
+        const prior = matchingSessionCommands[0];
+        if (modelBrokerSession.phase === "start") {
+          if (prior) throw conflict("Managed model provider session already has a start command");
+        } else {
+          const safe = prior?.safeResult && typeof prior.safeResult === "object" && !Array.isArray(prior.safeResult)
+            ? prior.safeResult as Record<string, unknown> : null;
+          const receipt = runtimeModelBrokerSessionReceiptSchema.safeParse(safe?.modelBrokerSessionReceipt);
+          const priorPayload = prior?.payload && typeof prior.payload === "object" && !Array.isArray(prior.payload)
+            ? prior.payload as Record<string, unknown> : null;
+          const priorSession = priorPayload?.modelBrokerSession && typeof priorPayload.modelBrokerSession === "object" &&
+            !Array.isArray(priorPayload.modelBrokerSession) ? priorPayload.modelBrokerSession as Record<string, unknown> : null;
+          if (!receipt.success || receipt.data.sessionKey !== modelBrokerSession.sessionKey ||
+            receipt.data.capabilityHash !== modelBrokerSession.expectedCapabilityHash || !priorSession ||
+            priorSession.sessionDeadlineAt !== modelBrokerSession.sessionDeadlineAt ||
+            (modelBrokerSession.phase === "refresh" && priorSession.phase === "stop") ||
+            (modelBrokerSession.phase === "stop" && priorSession.phase !== "stop" && priorSession.phase !== "refresh" && priorSession.phase !== "start"))
+            throw conflict("Managed model session changed before its provider transition claim");
+        }
+      }
       let currentRemoteNativeSessionStartBinding: Record<string, unknown> | undefined;
       if (nativeSessionStart) {
         const locator = await readRemoteRuntimeAssetLocator(tx, source.run);
@@ -4158,6 +4594,7 @@ export function runtimeControlService(
         policySnapshotId: source.policy.id, policyHash: source.policy.policyHash,
         commandDigest, deadlineAt: deadlineAt.toISOString(),
         ...(nativePreparationPurpose ? { nativePreparationPurpose } : {}),
+        ...(modelBrokerSession ? { modelBrokerSession } : {}),
         ...(currentRemoteNativeSessionStartBinding ? { remoteNativeSessionStartBinding: currentRemoteNativeSessionStartBinding } : {}),
       };
       const [claim] = await tx.insert(runtimeHostCommands).values({
@@ -4202,6 +4639,7 @@ export function runtimeControlService(
         profileHash: brokerProviderProfile.hash, expiresAt: brokerCapability.expiresAt,
       } } : {}),
       ...(modelBrokerCredential ? { modelBrokerCredential } : {}),
+      ...(modelBrokerSession ? { modelBrokerSession } : {}),
       stdinBase64: prepared.stdinBytes.toString("base64"),
     };
     const capabilityToken = createSandboxExecJwt({
@@ -4291,6 +4729,21 @@ export function runtimeControlService(
           await deliverOutput(stream, chunk.toString("utf8"));
         },
       });
+      let modelBrokerSessionReceipt: import("@paperclipai/shared").RuntimeModelBrokerSessionReceipt | undefined;
+      if (modelBrokerSession) {
+        const receipt = runtimeModelBrokerSessionReceiptSchema.safeParse(result.modelBrokerSessionReceipt);
+        const latestHash = modelBrokerSession.phase === "start" ? sha256(modelBrokerCredential?.capabilityToken ?? "") :
+          modelBrokerSession.expectedCapabilityHash;
+        const nextHash = modelBrokerCredential ? sha256(modelBrokerCredential.capabilityToken) : null;
+        if (!receipt.success || receipt.data.sessionKey !== modelBrokerSession.sessionKey ||
+          (modelBrokerSession.phase === "start" && receipt.data.capabilityHash !== nextHash) ||
+          (modelBrokerSession.phase === "refresh" && receipt.data.capabilityHash !== latestHash && receipt.data.capabilityHash !== nextHash) ||
+          (modelBrokerSession.phase === "stop" && receipt.data.capabilityHash !== latestHash) ||
+          Date.parse(receipt.data.expiresAt) > Date.parse(modelBrokerSession.sessionDeadlineAt) ||
+          (modelBrokerSession.phase !== "stop" && Date.parse(receipt.data.expiresAt) <= Date.now()))
+          throw conflict("Managed model provider session receipt did not match its signed transition");
+        modelBrokerSessionReceipt = receipt.data;
+      }
       await deliverOutput("stdout", "", true);
       await deliverOutput("stderr", "", true);
       const redacted = await createRunSecretRedactionRegistry(db).redactForRun(input.companyId, source.run.id, {
@@ -4307,12 +4760,14 @@ export function runtimeControlService(
           current.policy.id !== source.policy.id || current.policy.policyHash !== source.policy.policyHash ||
           current.deadlineAt < new Date()) throw conflict("Sandbox execution authority changed before result delivery");
         const [completed] = await tx.update(runtimeHostCommands).set({
-          status: "SUCCEEDED", completedAt: new Date(), safeResult: { exitCode: result.exitCode, timedOut: result.timedOut },
+          status: "SUCCEEDED", completedAt: new Date(), safeResult: { exitCode: result.exitCode, timedOut: result.timedOut,
+            ...(modelBrokerSessionReceipt ? { modelBrokerSessionReceipt } : {}) },
         }).where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED"))).returning({ id: runtimeHostCommands.id });
         return completed ?? null;
       });
       if (!returned) throw conflict("Sandbox execution claim was fenced before result delivery");
-      return { exitCode: result.exitCode, signal: null, timedOut: result.timedOut, stdout: redacted.stdout, stderr: redacted.stderr };
+      return { exitCode: result.exitCode, signal: null, timedOut: result.timedOut, stdout: redacted.stdout, stderr: redacted.stderr,
+        ...(modelBrokerSessionReceipt ? { modelBrokerSessionReceipt } : {}) };
     } catch (error) {
       const code = error instanceof Error && ["exec_timeout", "exec_unknown", "runtime_unavailable", "policy_changed", "exec_rejected"].includes(error.message)
         ? error.message : "exec_unknown";
@@ -4328,6 +4783,19 @@ export function runtimeControlService(
       throw error;
     }
   }
+  // A broken broker setting must not disable non-paid control/Stop. Only an
+  // explicit canonical HTTPS origin can earn an enforcement-owner brand.
+  try {
+    const raw=options.credentialBrokerOrigin;
+    const origin=new URL(raw ?? "");
+    if(origin.protocol === "https:" && !origin.username && !origin.password && !origin.search && !origin.hash &&
+        origin.pathname === "/" && (raw === origin.origin || raw === `${origin.origin}/`) &&
+        credentialBrokerOrigin === `${origin.origin}/`) {
+      sandboxBrokerAuthorityOwners.set(authorizeSandboxBrokerCapability,Object.freeze({
+        protocol:"sandbox_exec_v1",origin:origin.origin,
+      }));
+    }
+  } catch { /* Invalid or unknown broker settings earn no authority metadata. */ }
   return {
     auth,
     backups,
@@ -4340,6 +4808,7 @@ export function runtimeControlService(
     request,
     assertSandboxStartAdmission,
     recordSandboxWorkloadState,
+    stopSandboxRunLeaseForCleanup,
     dispatchOne,
     claim,
     renew,

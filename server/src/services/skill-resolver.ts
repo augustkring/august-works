@@ -76,7 +76,23 @@ export function skillResolverService(db: Db) {
     if (!pin) throw forbidden("The superseded Skill version is outside the current immutable execution manifest");
     return authorizedVersionInternal(actor, companyId, skillId, versionId, false, readScope, true);
   }
+  // A retained copy authenticates its original producer separately from the
+  // current reader. It never turns a completed producer into a live actor.
+  async function authorizedRetainedRuntimeVersion(actor: AuthorizationActor, companyId: string,
+    producerRunId: string, source: import("./learning/learning-assets.js").RetainedRuntimeSkillSourcePin) {
+    const { assertRetainedRuntimeSkillProducer } = await import("./learning/learning-assets.js");
+    const [pin] = await db.select({ skillId: companySkills.id }).from(companySkills)
+      .innerJoin(companySkillVersions, and(eq(companySkillVersions.companyId, companyId),
+        eq(companySkillVersions.companySkillId, companySkills.id), eq(companySkillVersions.id, source.versionId)))
+      .where(and(eq(companySkills.companyId, companyId), eq(companySkills.key, source.key))).limit(1);
+    if (!pin) throw notFound("Skill version not found");
+    const selected = await authorizedVersionInternal(actor, companyId, pin.skillId, source.versionId, false, "task", true);
+    const producer = await assertRetainedRuntimeSkillProducer(db, companyId, producerRunId, source);
+    if (producer.skillId !== pin.skillId) throw forbidden("The retained Skill producer changed");
+    return { ...selected, producer };
+  }
   return {
+    authorizedRetainedRuntimeVersion,
     authorizedVersion,
     authorizedCurrentManifestVersion,
     suggestionCandidates: async (actor: AuthorizationActor, companyId: string, requirements: readonly RolePackItem[], readScope?: NativeReadScope) => {

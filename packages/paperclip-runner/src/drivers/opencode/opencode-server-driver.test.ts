@@ -159,6 +159,7 @@ describe("OpenCodeServerDriver", () => {
     const config = JSON.parse(await readFile(join(root, "managed-source", "config", "opencode", "opencode.json"), "utf8"));
     const pluginPath = join(root, "managed-source", "config", "opencode", "plugins", "paperclip-source-witness.js");
     const plugin = await readFile(pluginPath, "utf8");
+    expect(config.mcp.paperclip.timeout).toBe(90_000);
     expect(config.tools).toEqual({ "*": false, "paperclip_*": true });
     expect(config.permission).toMatchObject({ "*": "deny", "paperclip_*": "allow", "external_directory": "deny" });
     expect(plugin).toContain("CANONICAL_FROZEN_SOURCE_PROMPT");
@@ -998,10 +999,11 @@ describe("OpenCodeServerDriver", () => {
         external_directory: { "*": "deny", [`${instructionRoot}/**`]: "allow" },
       },
       mcp: {
-        paperclip: { enabled: true },
+        paperclip: { enabled: true, timeout: 30_000 },
         "paperclip-assigned": {
           url: "https://paperclip.example/mcp",
           enabled: true,
+          timeout: 30_000,
         },
       },
     });

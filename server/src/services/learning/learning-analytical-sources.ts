@@ -39,8 +39,10 @@ export async function assertLearningAnalyticalSources(db:Db,actor:AuthorizationA
  };
  try {
   if(actor.type==="agent" && cycle.analyticalSourceCount){
-   const {withNativeAnalyticalReader}=await import("../analytical-reader.js");
-   return await withNativeAnalyticalReader(db,cycle.companyId,actor,inspect,readScope);
+   const {withNativeAnalyticalReader,withNativeAnalyticalSourceReader}=await import("../analytical-reader.js");
+   return actor.source==="none"
+    ? await withNativeAnalyticalSourceReader(db,cycle.companyId,actor,inspect,readScope??"task")
+    : await withNativeAnalyticalReader(db,cycle.companyId,actor,inspect,readScope);
   }else return await inspect();
  }catch(error){if(error instanceof HttpError&&[403,404,409,422].includes(error.status))throw lost();throw error;}
 }

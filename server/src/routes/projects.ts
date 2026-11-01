@@ -56,6 +56,7 @@ import { lockIssuePrivacyTree } from "../services/issues.js";
 import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
 import { assertDirectInputSessionCurrent, directHumanPayloadSnapshotSql } from "../services/native-direct-input.js";
 import { logger } from "../middleware/logger.js";
+import { consumeManagedNativeProjectApiCapture, createManagedNativeProjectOutput } from "../services/native-project-output.js";
 
 const WORKSPACE_CONTROL_OUTPUT_MAX_CHARS = 256 * 1024;
 const SHARED_WORKSPACE_STOP_AND_RESTART_ACTIONS = new Set(["stop", "restart"]);
@@ -79,8 +80,11 @@ export function projectRoutes(db: Db) {
     if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
     if (req.body?.visibility === "private") throw unprocessable("Private projects are not available");
     if (req.actor.type === "agent") {
+      const effect = req.actor.nativeToolEffect;
+      const exactManagedCreate = effect?.tool === "call_api" && effect.operationId === "POST /api/companies/{companyId}/projects" &&
+        effect.method === "POST" && effect.pathAndQuery === `/api/companies/${req.params.companyId}/projects`;
       const context = await projectToolContext(db, req.actor);
-      if (!context.issue || !(await canActorReadIssuePrivacy(db, { type: "none" }, context.issue))) {
+      if ((!context.issue || !(await canActorReadIssuePrivacy(db, { type: "none" }, context.issue))) && !exactManagedCreate) {
         throw unprocessable("Private projects are not available");
       }
     }
@@ -343,7 +347,28 @@ export function projectRoutes(db: Db) {
     res.json(experienceProjectReceiptSchema.parse(project));
   });
 
-  router.post("/companies/:companyId/projects", validate(createProjectSchema), async (req, res) => {
+  router.post("/companies/:companyId/projects", async (req, res, next) => {
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    const effect = req.actor.type === "agent" ? req.actor.nativeToolEffect : undefined;
+    if (effect?.tool === "call_api" && effect.operationId === "POST /api/companies/{companyId}/projects" &&
+      effect.method === "POST" && effect.pathAndQuery === `/api/companies/${companyId}/projects`) {
+      const nativeContext = await projectToolContext(db, req.actor, true);
+      if (!nativeContext.issue) throw forbidden("Managed Project API source Task is unavailable");
+      const managedCapture = await consumeManagedNativeProjectApiCapture(db, {
+        actor: req.actor, claim: effect, companyId, issueId: nativeContext.issue.id, rawBody: req.body,
+      });
+      if (managedCapture) {
+        const { body, capture } = managedCapture;
+        const result = await createManagedNativeProjectOutput({ db, actor: req.actor, companyId,
+          issueId: nativeContext.issue.id, callId: effect.callId,
+          tool: "call_api", arguments: body, capture });
+        res.status(201).json(result.project);
+        return;
+      }
+    }
+    next();
+  }, validate(createProjectSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
     type CreateProjectPayload = Parameters<typeof svc.create>[1] & {

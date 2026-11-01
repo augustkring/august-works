@@ -66,6 +66,45 @@ it("accepts only the exact nonsecret managed-model bounds tied to the typed brok
   }).success).toBe(false);
 });
 
+it("accepts start binding digests only on a valid Native model-session start", () => {
+  const modelBrokerCredential = {
+    capabilityToken: "typed-capability-token",
+    profileId: "managed-model",
+    profileHash: "e".repeat(64),
+    expiresAt: new Date(Date.now() + 30_000).toISOString(),
+    inputTokensUpperBound: 100_000,
+    maxOutputTokens: 1024,
+  };
+  const env = {
+    PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+    PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "100000",
+    PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+  };
+  const session = {
+    sessionKey: "a".repeat(64), nativeSessionIdDigest: "b".repeat(64),
+    runnerInstanceId: "99999999-9999-4999-8999-999999999999",
+    leaseId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    sessionDeadlineAt: new Date(Date.now() + 30_000).toISOString(),
+  };
+  const start = { ...execRequest(), env, modelBrokerCredential,
+    modelBrokerSession: { ...session, phase: "start" as const, startBindingDigest: "c".repeat(64) } };
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse(start).success).toBe(true);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...start, modelBrokerSession: { ...start.modelBrokerSession, startBindingDigest: "bad" },
+  }).success).toBe(false);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...start, modelBrokerSession: { ...session, phase: "refresh" as const,
+      expectedCapabilityHash: "d".repeat(64), startBindingDigest: "c".repeat(64) },
+  }).success).toBe(false);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...execRequest(), modelBrokerSession: { ...session, phase: "stop" as const,
+      expectedCapabilityHash: "d".repeat(64), startBindingDigest: "c".repeat(64) },
+  }).success).toBe(false);
+  expect(runtimeSandboxExecRelayRequestSchema.safeParse({
+    ...start, modelBrokerSession: { ...session, phase: "start" as const },
+  }).success).toBe(true, "the optional field keeps legacy starts compatible");
+});
+
 it("rejects oversized relay stdin before running the base64 validator", () => {
   expect(() => runtimeSandboxExecRelayRequestSchema.safeParse({
     ...execRequest(),

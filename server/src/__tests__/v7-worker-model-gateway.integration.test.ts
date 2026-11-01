@@ -1745,6 +1745,18 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         )[0]?.toolActionsUsed,
       ).toBe(0);
     });
+    it("binds dispatch-time Worker issuance to the current accountable attempt and rejects stale ownership", async () => {
+      const input = { companyId: f.home, agentId: f.presence.id, runId: run.id, responsibleUserId: f.userId };
+      const minted = await gateway().issueForRun(input);
+      expect(verifyRuntimeToolsToken(minted.token, "worker_model")?.worker_model).toMatchObject(binding);
+      expect(verifyRuntimeToolsToken(minted.token, "conversation_model")).toBeNull();
+      await db.update(orchestrationWorkerAttempts).set({ status: "cancelled", finishedAt: new Date() })
+        .where(eq(orchestrationWorkerAttempts.id, binding.workerAttemptId));
+      await expect(gateway().issueForRun(input)).rejects.toMatchObject({ status: 403 });
+      expect(calls).toBe(0);
+      expect(await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, plan.id))).toHaveLength(0);
+    });
     it.each([
       "pause",
       "membership",

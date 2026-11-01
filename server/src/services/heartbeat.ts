@@ -25,7 +25,8 @@ import { PROCESS_IDENTITY_RECORDED, recordNativeLocalProcessStop, recordNativeLo
 import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopIntent, isAcknowledgedNativeStop, acknowledgedNativeStopExecutionHasStopped } from "./acknowledged-native-stop.js";
 import { legacyControllerBootId, legacyControllerClaim, renewLegacyControllerLease, hasLiveLegacyController, revokeExpiredLegacyController, watchLegacyControllerLease } from "./legacy-controller-lease.js";
 import { completeTerminatedRemoteNativeSessionCleanup } from "../vendor/paperclip-runner/index.js";
-import { hasRemoteTerminationReceipt, remoteExecutionHasStopped, remoteTerminationReceipt, stoppedRemoteCleanupScopes } from "./remote-execution-termination.js";
+import { hasNativeLocalProcessStop } from "./native-local-process-stop.js";
+import { hasRemoteTerminationReceipt, remoteExecutionHasStopped, currentRemoteTerminationReceipt, recordNativeRemoteWorkloadStopped, stoppedRemoteCleanupScopes } from "./remote-execution-termination.js";
 import { prepareRetainedConnectorSkills, prepareConnectorSkillDelivery } from "./connector-runtime.js";
 import { admitExplicitNativeContinuation, undeliveredLegacyUserCommentIds } from "./explicit-native-continuation.js";
 import { connectionIntentService } from "./connection-intents.js";
@@ -171,6 +172,9 @@ import {
   issues,
   issueWorkProducts,
   nativeRunFinalizations,
+  nativeRunResults,
+  workAssessments,
+  statusDecisions,
   projects,
   projectWorkspaces,
   routineRevisions,
@@ -265,8 +269,16 @@ import {
 import {
   assertAgentCoreProfileRecoveryBinding,
   assertManagedProfileRecoveryBinding,
+  resolvePaperclipRunnerProviderProfile,
   resolvePaperclipRunnerNativeProviderInput,
 } from "./native-runtime/provider-profile.js";
+import {
+  assertNativePaidTransportCandidate,
+  withLegacyPaidTransportAdmission,
+  NativePaidTransportAdmissionError,
+  NATIVE_PAID_ADMISSION_OWNER,
+  NATIVE_PAID_ADMISSION_REASON,
+} from "./native-runtime/paid-transport-admission.js";
 import {
   buildNativeHeartbeatPreparationSpans,
   buildNativeWakeIngressSpan,
@@ -2815,7 +2827,8 @@ function fingerprintFinalizeWorkspaceBranchValidation(input: {
 function isConfigurationIncompleteFailure(
   error: unknown,
 ): error is ConfigurationIncompleteFailure {
-  return error instanceof ConfigurationIncompleteFailure;
+  return error instanceof ConfigurationIncompleteFailure ||
+    error instanceof NativePaidTransportAdmissionError;
 }
 
 export function isConfigurationIncompleteFailedRun(
@@ -9422,6 +9435,7 @@ export interface HeartbeatServiceOptions {
   }) => Promise<void>;
   pluginWorkerManager?: PluginWorkerManager;
   sandboxExec?: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["executeSandboxTask"];
+  sandboxStop?: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["stopSandboxRunLease"];
   environmentRuntime?: HeartbeatEnvironmentRuntime;
   runtimeEnv?: Record<string, string | undefined>;
   /**
@@ -9651,6 +9665,7 @@ export function heartbeatService(
     environmentRuntimeService(db, {
       pluginWorkerManager: options.pluginWorkerManager,
       executeSandboxTask: options.sandboxExec,
+      stopSandboxRunLease: options.sandboxStop,
     });
   const envOrchestrator = environmentRunOrchestrator(db, {
     pluginWorkerManager: options.pluginWorkerManager,
@@ -10693,8 +10708,8 @@ export function heartbeatService(
     return unsafeTextProjectionPromise;
   }
 
-  async function getAgent(agentId: string) {
-    return db
+  async function getAgent(agentId: string, ownerDb: Db = db) {
+    return ownerDb
       .select()
       .from(agents)
       .where(eq(agents.id, agentId))
@@ -17003,8 +17018,8 @@ export function heartbeatService(
     return issuesSvc.listDependencyReadiness(companyId, issueIds);
   }
 
-  async function countRunningRunsForAgent(agentId: string) {
-    const [{ count }] = await db
+  async function countRunningRunsForAgent(agentId: string, ownerDb: Db = db) {
+    const [{ count }] = await ownerDb
       .select({ count: sql<number>`count(*)` })
       .from(heartbeatRuns)
       .where(
@@ -18046,13 +18061,106 @@ export function heartbeatService(
     return trimmed.length > 500 ? `${trimmed.slice(0, 499)}…` : trimmed;
   }
 
+  /** Internal completion repair. This never grants execution or changes a Task. */
+  async function reconcileCommittedNativeAgentRun(input: {
+    companyId: string; agentId: string; runId: string; issueId: string; responsibleUserId: string;
+  }): Promise<boolean> {
+    const publications: Array<() => void> = [];
+    return withAgentStartLock(input.agentId, async () => {
+      const reconciled = await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db;
+        let run: typeof heartbeatRuns.$inferSelect;
+        try {
+          run = await lockNativeRuntimeSelectionRows(tx, input);
+        } catch (error) {
+          if (error instanceof Error && ["native_runtime_issue_missing", "native_runtime_run_missing", "native_runtime_issue_binding_changed"].includes(error.message)) return false;
+          throw error;
+        }
+        if (run.agentId !== input.agentId || run.responsibleUserId !== input.responsibleUserId ||
+            run.runtimeMode !== "native" || run.status !== "succeeded" || !run.finishedAt ||
+            run.nativeIssueId !== input.issueId || !run.completionContractId || !run.completionContractSha256 ||
+            run.nativePhase !== "committed" || run.nativeProcessCleanupPending !== false ||
+            parseObject(run.resultJson).finalizationPhase !== "committed" ||
+            activeRunExecutions.has(run.id) || liveRunExecutions.has(run.id) ||
+            runningProcesses.has(run.id) || adapterExecutionControls.has(run.id)) return false;
+        const [coordinator] = await tx.select().from(nativeRunFinalizations).where(and(
+          eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.runId, input.runId),
+          eq(nativeRunFinalizations.issueId, input.issueId))).for("update");
+        if (!coordinator || coordinator.phase !== "committed" || coordinator.leaseOwner ||
+            !coordinator.resultId || !coordinator.assessmentId || !coordinator.decisionId) return false;
+        const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId, input.companyId),
+          eq(agents.id, input.agentId))).for("update");
+        if (!agent || agent.status !== "running") return false;
+        const [issue] = await tx.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)));
+        if (!issue || issue.assigneeAgentId !== input.agentId ||
+            (issue.executionRunId !== null && issue.executionRunId !== run.id) ||
+            (issue.checkoutRunId !== null && issue.checkoutRunId !== run.id)) return false;
+        const [contract] = await tx.select({ canonicalSha256: completionContracts.canonicalSha256 }).from(completionContracts).where(and(
+          eq(completionContracts.companyId, input.companyId), eq(completionContracts.issueId, input.issueId),
+          eq(completionContracts.id, run.completionContractId)));
+        if (!contract || contract.canonicalSha256 !== run.completionContractSha256) return false;
+        const [accepted] = await tx.select({ id: nativeRunResults.id }).from(nativeRunResults).where(and(
+          eq(nativeRunResults.companyId, input.companyId), eq(nativeRunResults.issueId, input.issueId),
+          eq(nativeRunResults.runId, run.id), eq(nativeRunResults.id, coordinator.resultId),
+          eq(nativeRunResults.completionContractId, run.completionContractId), eq(nativeRunResults.schemaStatus, "accepted")));
+        const [assessment] = await tx.select({ id: workAssessments.id, priorDecisionId: workAssessments.priorDecisionId,
+          priorStatusVersion: workAssessments.priorStatusVersion, priorIssueStatus: workAssessments.priorIssueStatus }).from(workAssessments).where(and(
+          eq(workAssessments.companyId, input.companyId), eq(workAssessments.issueId, input.issueId),
+          eq(workAssessments.runId, run.id), eq(workAssessments.id, coordinator.assessmentId),
+          eq(workAssessments.resultId, coordinator.resultId), eq(workAssessments.contractId, run.completionContractId)));
+        const [decision] = await tx.select().from(statusDecisions).where(and(
+          eq(statusDecisions.companyId, input.companyId), eq(statusDecisions.issueId, input.issueId),
+          eq(statusDecisions.runId, run.id), eq(statusDecisions.id, coordinator.decisionId),
+          eq(statusDecisions.assessmentId, coordinator.assessmentId), eq(statusDecisions.applicationState, "applied")));
+        const decisionProof = parseObject(decision?.decisionJson);
+        const projectedStatusVersion = decisionProof.projectedStatusVersion;
+        const priorStatusVersion = decisionProof.priorStatusVersion;
+        if (!accepted || !assessment || !decision || !decision.appliedAt ||
+            decision.toStatus !== issue.status || typeof projectedStatusVersion !== "number" ||
+            !Number.isSafeInteger(projectedStatusVersion) || projectedStatusVersion < 0 ||
+            projectedStatusVersion !== issue.statusVersion || typeof priorStatusVersion !== "number" ||
+            !Number.isSafeInteger(priorStatusVersion) || priorStatusVersion < 0 ||
+            priorStatusVersion !== assessment.priorStatusVersion ||
+            parseObject(run.resultJson).assessmentId !== coordinator.assessmentId ||
+            parseObject(run.resultJson).decisionId !== coordinator.decisionId) return false;
+        if (decisionProof.statusAction === "preserve") {
+          if (issue.lastStatusDecisionId !== assessment.priorDecisionId ||
+              priorStatusVersion !== projectedStatusVersion ||
+              assessment.priorIssueStatus !== issue.status || decision.fromStatus !== issue.status) return false;
+        } else if (decisionProof.statusAction !== decision.toStatus ||
+            issue.lastStatusDecisionId !== decision.id || projectedStatusVersion !== priorStatusVersion + 1 ||
+            decision.fromStatus !== assessment.priorIssueStatus) return false;
+        const [successor] = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId),
+          ne(heartbeatRuns.id, run.id), or(inArray(heartbeatRuns.status, ["queued", "running", "retry_wait"]),
+            gte(heartbeatRuns.createdAt, run.createdAt)))).limit(1);
+        const [claim] = await tx.select({ id: agentWakeupRequests.id }).from(agentWakeupRequests).where(and(
+          eq(agentWakeupRequests.companyId, input.companyId), eq(agentWakeupRequests.agentId, input.agentId),
+          inArray(agentWakeupRequests.status, ["queued", "claimed", "deferred", "deferred_issue_execution"]))).limit(1);
+        if (successor || claim || await hasPendingRunCleanup(tx, input.companyId, run.id)) return false;
+        const leases = await tx.select({ provider: environmentLeases.provider }).from(environmentLeases).where(and(
+          eq(environmentLeases.companyId, input.companyId), eq(environmentLeases.heartbeatRunId, run.id)));
+        if (!leases.length || leases.some(lease => !lease.provider)) return false;
+        const remote = leases.some(lease => lease.provider !== "local");
+        if (remote ? !await remoteExecutionHasStopped(tx, input.companyId, run.id)
+          : !await hasNativeLocalProcessStop(tx, input.companyId, run.id)) return false;
+        const updated = await finalizeAgentStatus(input.agentId, "succeeded", null, undefined, tx, publications);
+        return updated?.status === "idle";
+      });
+      if (reconciled) for (const publish of publications) publish();
+      return reconciled;
+    });
+  }
+
   async function finalizeAgentStatus(
     agentId: string,
     outcome: "succeeded" | "interrupted" | "failed" | "cancelled" | "timed_out",
     failureReason?: string | null,
     options?: { keepIdleOnFailure?: boolean; wasFirstHeartbeat?: boolean },
+    ownerDb: Db = db,
+    afterCommit?: Array<() => void>,
   ) {
-    const existing = await getAgent(agentId);
+    const existing = await getAgent(agentId, ownerDb);
     if (!existing) return;
 
     if (existing.status === "paused" || existing.status === "terminated") {
@@ -18062,7 +18170,7 @@ export function heartbeatService(
     const isFirstHeartbeat =
       options?.wasFirstHeartbeat ?? !existing.lastHeartbeatAt;
 
-    const runningCount = await countRunningRunsForAgent(agentId);
+    const runningCount = await countRunningRunsForAgent(agentId, ownerDb);
     const nextStatus =
       runningCount > 0
         ? "running"
@@ -18073,7 +18181,7 @@ export function heartbeatService(
           ? "idle"
           : "error";
 
-    const updated = await db
+    const updated = await ownerDb
       .update(agents)
       .set({
         status: nextStatus,
@@ -18091,29 +18199,34 @@ export function heartbeatService(
       .returning()
       .then((rows) => rows[0] ?? null);
 
-    if (isFirstHeartbeat && updated) {
-      const tc = getTelemetryClient();
-      if (tc)
-        trackAgentFirstHeartbeat(tc, {
-          agentRole: updated.role,
-          agentId: updated.id,
-        });
-    }
+    const publish = () => {
+      if (isFirstHeartbeat && updated) {
+        const tc = getTelemetryClient();
+        if (tc)
+          trackAgentFirstHeartbeat(tc, {
+            agentRole: updated.role,
+            agentId: updated.id,
+          });
+      }
 
-    if (updated) {
-      publishLiveEvent({
-        companyId: updated.companyId,
-        type: "agent.status",
-        payload: {
-          agentId: updated.id,
-          status: updated.status,
-          lastHeartbeatAt: updated.lastHeartbeatAt
-            ? new Date(updated.lastHeartbeatAt).toISOString()
-            : null,
-          outcome,
-        },
-      });
-    }
+      if (updated) {
+        publishLiveEvent({
+          companyId: updated.companyId,
+          type: "agent.status",
+          payload: {
+            agentId: updated.id,
+            status: updated.status,
+            lastHeartbeatAt: updated.lastHeartbeatAt
+              ? new Date(updated.lastHeartbeatAt).toISOString()
+              : null,
+            outcome,
+          },
+        });
+      }
+    };
+    if (afterCommit) afterCommit.push(publish);
+    else publish();
+    return updated;
   }
 
   function mergeRunStopMetadataForAgent(
@@ -18753,9 +18866,12 @@ export function heartbeatService(
             expectedPendingCleanupAttemptId: claimed,
             cleanupStatus: "success",
             failureReason: "pending_cleanup_retry",
-            remoteExecutionTermination: remoteTerminationReceipt(lease, receipt),
+            remoteExecutionTermination: await currentRemoteTerminationReceipt(db, lease, receipt),
           });
-          if (released) destroyed += 1;
+          if (released) {
+            if (lease.heartbeatRunId) await recordNativeRemoteWorkloadStopped(db, { companyId: lease.companyId, runId: lease.heartbeatRunId });
+            destroyed += 1;
+          }
         } else if (environment) {
           const result = await environmentRuntime.destroyRunLease({
             environment,
@@ -21519,8 +21635,45 @@ export function heartbeatService(
       if (internalTextDraft && agent.runtimeConfig?.aiConnection)
         throw forbidden("Internal drafts use the installed private controller grant, not a CLI AI binding");
       const aiBinding = !internalTextDraft && agent.runtimeConfig?.aiConnection ? aiConnectionBindingSchema.parse(agent.runtimeConfig.aiConnection) : undefined;
+      if (agent.adapterType === "paperclip_runner") {
+        const provider = String(parseObject(agent.adapterConfig).provider ?? "codex");
+        try {
+          const providerProfile = resolvePaperclipRunnerProviderProfile(agent.adapterConfig);
+          assertNativePaidTransportCandidate({
+            provider: providerProfile.provider,
+            serverOwnedDraft: providerProfile.provider === "aw_text_only" && internalTextDraft,
+            aiConnectionBound: Boolean(aiBinding),
+          });
+        } catch (error) {
+          const message = error instanceof NativePaidTransportAdmissionError
+            ? error.message
+            : `Paid Native provider “${provider}” is not set up for a managed model route. Configure a managed model connection in Runtime settings.`;
+          throw new ConfigurationIncompleteFailure(message, {
+            configurationIncomplete: {
+              reason: NATIVE_PAID_ADMISSION_REASON,
+              owner: NATIVE_PAID_ADMISSION_OWNER,
+              provider,
+              companyId: agent.companyId,
+              agentId: agent.id,
+              actionUrl: `/agents/${agent.id}/runtime`,
+            },
+          });
+        }
+      }
+      // A runtime/payer/environment label cannot qualify opaque provider-local
+      // model calls. No legacy whole-invocation liability contract is installed.
+      const guardLegacyModelDispatch = async <T>(dispatch: () => Promise<T>): Promise<T> => {
+        try {
+          return await withLegacyPaidTransportAdmission({ adapterType: agent.adapterType,
+            companyId: agent.companyId, agentId: agent.id, operation: "model_dispatch" }, dispatch);
+        } catch (error) {
+          if (error instanceof NativePaidTransportAdmissionError)
+            throw new ConfigurationIncompleteFailure(error.message, error.resultJson);
+          throw error;
+        }
+      };
       const { resolvedConfig, secretKeys, secretManifest } =
-        await resolveExecutionRunAdapterConfig({
+        await guardLegacyModelDispatch(() => resolveExecutionRunAdapterConfig({
           managedAiCredentials: Boolean(aiBinding),
           managedGitHubCredentials: !useHostGitHub,
           companyId: agent.companyId,
@@ -21539,7 +21692,7 @@ export function heartbeatService(
           routineEnv: aiBinding ? stripAiAuthBindings(routineEnvContext.env) : routineEnvContext.env,
           secretsSvc,
           trustPreset,
-        });
+        }));
       if (aiBinding) {
         try {
           managedAiRuntime = await prepareManagedAiRuntime(db, { companyId: agent.companyId, agentId: agent.id, responsibleUserId, adapterType: agent.adapterType, binding: aiBinding, config: resolvedConfig });
@@ -21587,6 +21740,10 @@ export function heartbeatService(
         responsibleUserId: run.responsibleUserId, issueId: issueRef?.id ?? null,
         query: [safeWakeCommentContext?.body, issueRef?.title, issueRef?.description].filter(Boolean).join("\n").slice(0, 500),
         scopeRequestId: readNonEmptyString(parseObject(context.paperclipWake).v5ScopeRequestId) ?? readNonEmptyString(context.v5ScopeRequestId),
+      }).catch(error => {
+        if (error instanceof NativePaidTransportAdmissionError)
+          throw new ConfigurationIncompleteFailure(error.message, error.resultJson);
+        throw error;
       });
       if (v5Fabric) {
         context.v5ExecutionManifestId = v5Fabric.record.id;
@@ -25101,8 +25258,10 @@ export function heartbeatService(
             const guardedDispatch =
               await dispatchResolvedInteractionContinuationWithAtomicGate(
                 (markDispatchStarted) => {
-                  legacyAdapterEntered = true;
-                  return adapter.execute({
+                  return guardLegacyModelDispatch(
+                    async () => {
+                      legacyAdapterEntered = true;
+                      return adapter.execute({
                     runId: run.id,
                     agent,
                     runtime: runtimeForAdapter,
@@ -25183,6 +25342,7 @@ export function heartbeatService(
                     },
                     authToken: authToken ?? undefined,
                   });
+                    });
                 },
               );
             if (!guardedDispatch.dispatched) return;
@@ -30238,6 +30398,7 @@ export function heartbeatService(
   }
 
   return {
+    reconcileCommittedNativeAgentRun,
     waitForRunExecutionDrain: async (
       runId: string,
       options: { timeoutMs?: number; intervalMs?: number } = {},

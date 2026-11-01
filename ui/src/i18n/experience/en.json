@@ -19,20 +19,20 @@
     "noneStated": "No limitations are stated in this note."
   },
   "costPricing": {
-      "unknown_one": "Price unknown for {{count}} usage event",
-      "unknown_other": "Price unknown for {{count}} usage events",
-      "partial_one": "{{amount}} + {{count}} unpriced usage event",
-      "partial_other": "{{amount}} + {{count}} unpriced usage events",
-      "recordedPeriodSpend": "Recorded period spend: {{amount}}",
-      "recordedWeekSpend": "This week: {{amount}}",
-      "budgetComparisonUnavailable": "Budget comparison is unavailable while some prices are unknown.",
-      "recordedProviderEventsPerSuccessfulRun": "Recorded provider event cost per successful run",
-      "providerCostPerSuccessfulRunScope": "Recorded provider cost events attached to successful runs only. Event capture completeness is not established. Excludes failed runs and runtime, storage, network, tools, analytics, and support costs; this is not total cost to serve.",
-      "providerCostPerSuccessfulRunReportedEvents": "Recorded provider events across {{count}} successful runs; event capture completeness is not established.",
-      "providerCostPerSuccessfulRunEstimatedEvents": "Includes estimated recorded provider events across {{count}} successful runs; event capture completeness is not established.",
-      "providerCostPerSuccessfulRunIncomplete": "Unavailable",
-      "providerCostPerSuccessfulRunUnavailable": "No successful runs in this period",
-      "providerCostPerSuccessfulRunMissing": "{{missing}} successful runs have no linked cost event; {{unpriced}} linked events have no price."
+    "unknown_one": "Price unknown for {{count}} usage event",
+    "unknown_other": "Price unknown for {{count}} usage events",
+    "partial_one": "{{amount}} + {{count}} unpriced usage event",
+    "partial_other": "{{amount}} + {{count}} unpriced usage events",
+    "recordedPeriodSpend": "Recorded period spend: {{amount}}",
+    "recordedWeekSpend": "This week: {{amount}}",
+    "budgetComparisonUnavailable": "Budget comparison is unavailable while some prices are unknown.",
+    "recordedProviderEventsPerSuccessfulRun": "Recorded provider event cost per successful run",
+    "providerCostPerSuccessfulRunScope": "Recorded provider cost events attached to successful runs only. Event capture completeness is not established. Excludes failed runs and runtime, storage, network, tools, analytics, and support costs; this is not total cost to serve.",
+    "providerCostPerSuccessfulRunReportedEvents": "Recorded provider events across {{count}} successful runs; event capture completeness is not established.",
+    "providerCostPerSuccessfulRunEstimatedEvents": "Includes estimated recorded provider events across {{count}} successful runs; event capture completeness is not established.",
+    "providerCostPerSuccessfulRunIncomplete": "Unavailable",
+    "providerCostPerSuccessfulRunUnavailable": "No successful runs in this period",
+    "providerCostPerSuccessfulRunMissing": "{{missing}} successful runs have no linked cost event; {{unpriced}} linked events have no price."
   },
   "slackConnection": {
     "requestedUserScopes": "Slack will request these user permissions. The Slack bot app for chat is separate:",
@@ -130,7 +130,11 @@
     "searchHelp": "Try another name or role.",
     "clearSearch": "Clear search",
     "noPreference": "Ask me to choose each time",
-    "status": { "paused": "Paused", "terminated": "Terminated", "pendingApproval": "Awaiting approval" }
+    "status": {
+      "paused": "Paused",
+      "terminated": "Terminated",
+      "pendingApproval": "Awaiting approval"
+    }
   },
   "needsYou": "Needs You",
   "inProgress": "In Progress",
@@ -277,9 +281,21 @@
       "disclosure": "These two ratings are stored with this feedback and shown to you and authorized product operators. They are optional, are not combined into a score, and follow this feedback's retention and erasure controls. You can withdraw them later from My feedback.",
       "choose": "Choose a rating",
       "satisfaction": "How satisfied were you with the outcome you were trying to achieve?",
-      "satisfactionOptions": { "very_dissatisfied": "Very dissatisfied", "dissatisfied": "Dissatisfied", "neither": "Neither satisfied nor dissatisfied", "satisfied": "Satisfied", "very_satisfied": "Very satisfied" },
+      "satisfactionOptions": {
+        "very_dissatisfied": "Very dissatisfied",
+        "dissatisfied": "Dissatisfied",
+        "neither": "Neither satisfied nor dissatisfied",
+        "satisfied": "Satisfied",
+        "very_satisfied": "Very satisfied"
+      },
       "effort": "How easy or difficult was it to achieve that outcome?",
-      "effortOptions": { "very_difficult": "Very difficult", "difficult": "Difficult", "neither": "Neither easy nor difficult", "easy": "Easy", "very_easy": "Very easy" },
+      "effortOptions": {
+        "very_difficult": "Very difficult",
+        "difficult": "Difficult",
+        "neither": "Neither easy nor difficult",
+        "easy": "Easy",
+        "very_easy": "Very easy"
+      },
       "withdrawNotice": "You previously shared optional experience ratings with this feedback.",
       "withdraw": "Withdraw optional ratings",
       "withdrawing": "Withdrawing…",
@@ -316,7 +332,12 @@
       "product_outcome": "Product outcome",
       "other": "Other"
     },
-    "problemImpacts": { "blocked": "Blocked", "limited": "Limited", "question": "Question", "unknown": "Unknown" },
+    "problemImpacts": {
+      "blocked": "Blocked",
+      "limited": "Limited",
+      "question": "Question",
+      "unknown": "Unknown"
+    },
     "omitName": "Don't include my name in this feedback",
     "nameNotice": "Company and technical context may still be included. A separate protected account link lets you view your feedback; security logs follow their own purpose.",
     "imagesUnavailable": "Image attachments are temporarily unavailable.",
@@ -3735,7 +3756,11 @@
       "placementNone": "No dedicated placement",
       "placementGateway": "Dedicated gateway",
       "placementVm": "Dedicated virtual machine",
-      "placementValues": { "none": "No dedicated placement", "dedicated_gateway": "Dedicated gateway", "dedicated_vm": "Dedicated virtual machine" },
+      "placementValues": {
+        "none": "No dedicated placement",
+        "dedicated_gateway": "Dedicated gateway",
+        "dedicated_vm": "Dedicated virtual machine"
+      },
       "retention": "Current retention policy description",
       "contractEvidence": "Reviewed contract evidence (optional)",
       "contractEvidenceHelp": "Add the exact reviewed HTTPS document and SHA-256, or leave both blank when no current evidence is recorded.",
@@ -3754,13 +3779,38 @@
       "placementRequired": "Choose the company's current placement.",
       "factsInvalid": "Some operating facts are missing or invalid. Check the retention description, contract evidence fields, provider records and at least one current limitation."
     },
-    "statuses": { "draft": "Draft", "qualified": "Qualified", "suspended": "Suspended", "retired": "Retired" },
-    "responsibilities": { "aw_subprocessor": "Blentera subprocessor", "customer_selected": "Customer-selected provider" },
+    "statuses": {
+      "draft": "Draft",
+      "qualified": "Qualified",
+      "suspended": "Suspended",
+      "retired": "Retired"
+    },
+    "responsibilities": {
+      "aw_subprocessor": "Blentera subprocessor",
+      "customer_selected": "Customer-selected provider"
+    },
     "dpaStatus": "DPA status",
-    "dpaStatuses": { "unknown": "Unknown", "pending": "Pending", "reviewed": "Reviewed", "customer_selected_responsibility": "Customer-selected responsibility" },
-    "criticalities": { "low": "Low", "material": "Material", "high": "High" },
-    "providerStatuses": { "unknown": "Unknown", "active": "Active", "withdrawn": "Withdrawn" },
-    "bindingStatuses": { "active": "Active", "withdrawn": "Withdrawn", "suspended": "Suspended" }
+    "dpaStatuses": {
+      "unknown": "Unknown",
+      "pending": "Pending",
+      "reviewed": "Reviewed",
+      "customer_selected_responsibility": "Customer-selected responsibility"
+    },
+    "criticalities": {
+      "low": "Low",
+      "material": "Material",
+      "high": "High"
+    },
+    "providerStatuses": {
+      "unknown": "Unknown",
+      "active": "Active",
+      "withdrawn": "Withdrawn"
+    },
+    "bindingStatuses": {
+      "active": "Active",
+      "withdrawn": "Withdrawn",
+      "suspended": "Suspended"
+    }
   },
   "aiGovernance": {
     "title": "AI Governance",
@@ -3854,8 +3904,18 @@
         "social_scoring": "Social scoring",
         "sensitive_trait_inference": "Inference of sensitive traits"
       },
-      "criticality": { "low": "Low", "medium": "Medium", "high": "High", "critical": "Critical" },
-      "framework": { "eu_ai_act": "EU AI Act", "gdpr": "GDPR", "company_policy": "Company policy", "sector_overlay": "Sector-specific framework" },
+      "criticality": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "critical": "Critical"
+      },
+      "framework": {
+        "eu_ai_act": "EU AI Act",
+        "gdpr": "GDPR",
+        "company_policy": "Company policy",
+        "sector_overlay": "Sector-specific framework"
+      },
       "classification": {
         "uncertain": "Uncertain",
         "reviewed": "Reviewed",
@@ -3864,7 +3924,12 @@
         "high_risk": "High risk",
         "prohibited": "Prohibited"
       },
-      "friaApplicability": { "yes": "Yes", "no": "No", "uncertain": "Uncertain", "review_required": "Review required" },
+      "friaApplicability": {
+        "yes": "Yes",
+        "no": "No",
+        "uncertain": "Uncertain",
+        "review_required": "Review required"
+      },
       "oversightMode": {
         "monitor_only": "Monitor only",
         "review_before_material_action": "Review before material action",
@@ -3928,7 +3993,10 @@
           "applicable": "Applicable",
           "not_applicable": "Not applicable"
         },
-        "analyticalStatus": { "approved": "Approved after Human review", "suspended": "Suspended" },
+        "analyticalStatus": {
+          "approved": "Approved after Human review",
+          "suspended": "Suspended"
+        },
         "analyticalPurpose": {
           "management_intelligence": "Management intelligence",
           "process_intelligence": "Process intelligence"
@@ -3945,7 +4013,10 @@
           "planning": "Planning",
           "reviews": "Reviews"
         },
-        "sensitivity": { "internal": "Internal", "confidential": "Confidential" }
+        "sensitivity": {
+          "internal": "Internal",
+          "confidential": "Confidential"
+        }
       }
     }
   },
@@ -4111,5 +4182,11 @@
     "registryTitle": "Capability lifecycle registry",
     "registryDescription": "Full record from the shared capability catalog. Blank or unqualified fields have not been qualified; they do not mean a capability or its data is absent.",
     "internalNewUse": "Internal — not offered for customer use. This setting does not delete existing data or cancel recovery work owned by existing services."
+  },
+  "taskChatSystemNotice": {
+    "runtimeUnavailableTitle": "Task paused — runtime unavailable",
+    "runtimeUnavailableDetail": "This runtime is not available for managed model calls. Choose an available runtime in Runtime settings.",
+    "toolUnavailableTitle": "Task paused — tool unavailable",
+    "toolUnavailableDetail": "This tool is not available for managed work. Choose an available tool or contact your company administrator."
   }
 }

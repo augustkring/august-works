@@ -82,7 +82,8 @@ export function hostGatewayRelay({
                   }
                 }, controller.signal);
                 if (ws === tunnel && ws.readyState === 1)
-                  send({ type: "exec_exit", channelId: message.channelId, exitCode: result.exitCode, timedOut: result.timedOut });
+                  send({ type: "exec_exit", channelId: message.channelId, exitCode: result.exitCode, timedOut: result.timedOut,
+                    ...(result.modelBrokerSessionReceipt ? { modelBrokerSessionReceipt: result.modelBrokerSessionReceipt } : {}) });
               } catch (error) {
                 const code = ["policy_changed", "exec_rejected", "exec_timeout"].includes(error?.message)
                   ? error.message

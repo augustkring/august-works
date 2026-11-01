@@ -7,6 +7,7 @@ import { completionContracts, heartbeatRuns } from "@paperclipai/db";
 
 import { ensureNativeCompletionContract, nativeCompletionContractInput } from "./completion-contracts.js";
 import { NATIVE_RUNTIME_RESOLVER_VERSION } from "./runtime-mode.js";
+import { QUALIFIED_OPENCODE_RUNNER_VERSION, resolvePaperclipRunnerProviderProfile } from "./provider-profile.js";
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -56,10 +57,18 @@ export async function prepareNativeHeartbeatRun(input: {
     reviewPolicy?: string | null;
   };
   environmentLeaseId: string;
+  provider?: "codex" | "opencode";
+  model?: string;
 }) {
   if (input.run.runtimeModeResolvedAt && input.run.runtimeMode !== "native") {
     throw new Error("native_runtime_mode_conflict");
   }
+  const selectedProfile = resolvePaperclipRunnerProviderProfile({ provider: input.provider ?? "codex", model: input.model });
+  const provider = selectedProfile.provider;
+  if (provider !== "codex" && provider !== "opencode") throw new Error("native_runtime_provider_invalid");
+  // Preserve the original Codex fixture representation; OpenCode uses the canonical selected backend.
+  const driverKind = provider === "opencode" ? selectedProfile.backend : "codex";
+  const driverVersion = provider === "opencode" ? QUALIFIED_OPENCODE_RUNNER_VERSION : "codex-app-server-v1";
   const runnerInstanceId = input.run.runnerInstanceId ?? randomUUID();
   const normalizedSessionId = input.run.nativeSessionId ?? randomUUID();
 
@@ -112,6 +121,12 @@ export async function prepareNativeHeartbeatRun(input: {
       throw new Error("native_runtime_binding_conflict");
     }
     const lockedProfile = record(locked.runnerProfileJson);
+    if (
+      (lockedProfile.provider !== undefined && lockedProfile.provider !== provider) ||
+      (locked.driverKind !== null && locked.driverKind !== driverKind &&
+        !(provider === "codex" && locked.driverKind === selectedProfile.backend)) ||
+      (provider === "opencode" && locked.driverVersion !== null && locked.driverVersion !== driverVersion)
+    ) throw new Error("native_runtime_provider_binding_conflict");
     const turnId = typeof lockedProfile.turnId === "string" ? lockedProfile.turnId : randomUUID();
     const itemId = typeof lockedProfile.itemId === "string" ? lockedProfile.itemId : randomUUID();
     const environmentLeaseId = typeof lockedProfile.environmentLeaseId === "string"
@@ -127,7 +142,7 @@ export async function prepareNativeHeartbeatRun(input: {
         runnerProfileJson: {
           ...lockedProfile,
           schema: "paperclip.runner.profile.v1",
-          provider: "codex",
+          provider,
           turnId,
           itemId,
           environmentLeaseId,
@@ -135,8 +150,8 @@ export async function prepareNativeHeartbeatRun(input: {
         runnerInstanceId,
         nativeSessionId: normalizedSessionId,
         nativeIssueId: input.issue.id,
-        driverKind: "codex",
-        driverVersion: "codex-app-server-v1",
+        driverKind: locked.driverKind ?? driverKind,
+        driverVersion: locked.driverVersion ?? driverVersion,
         completionContractId: completion.row.id,
         completionContractSha256: completion.row.canonicalSha256,
         nativePhase: "provider_running",

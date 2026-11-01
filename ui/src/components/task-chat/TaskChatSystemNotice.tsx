@@ -16,9 +16,10 @@ import {
   SystemNoticeMetadataSections,
   type SystemNoticeTone,
 } from "@/components/SystemNotice";
-import { humanizeSystemNotice } from "@/lib/system-notice-humanizer";
+import { humanizeSystemNotice, NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE, TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE } from "@/lib/system-notice-humanizer";
 import { mapCommentMetadataToSystemNoticeSections } from "@/lib/system-notice-comment";
 import { timeAgo } from "@/lib/timeAgo";
+import { useTranslation } from "react-i18next";
 import type { TaskChatMessageItem } from "./task-chat-model";
 
 const TONE_ICON: Record<SystemNoticeTone, LucideIcon> = {
@@ -56,12 +57,27 @@ export function TaskChatSystemNotice({
   tryAgainNoLiveExecutionPathPending?: boolean;
 }) {
   const recoverySnapshot = useDispositionRecoverySnapshot(item.metadata);
+  const { t } = useTranslation("experience");
+  const runtimeUnavailableCopy = {
+    title: t("taskChatSystemNotice.runtimeUnavailableTitle"),
+    detail: t("taskChatSystemNotice.runtimeUnavailableDetail"),
+  };
+  const toolUnavailableCopy = {
+    title: t("taskChatSystemNotice.toolUnavailableTitle"), detail: t("taskChatSystemNotice.toolUnavailableDetail"),
+  };
+  const displayText = item.text.includes(TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE)
+    ? item.text.replace(TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE, toolUnavailableCopy.detail)
+    : item.text.includes(NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE)
+    ? item.text.replace(NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE, runtimeUnavailableCopy.detail)
+    : item.text;
   const streamlined = useStreamlinedTaskChatPresentation();
   const [open, setOpen] = useState(Boolean(item.presentation?.detailsDefaultOpen));
   const detailsId = useId();
   const { title, tone, detail } = humanizeSystemNotice({
     body: item.text,
     presentation: item.presentation,
+    runtimeUnavailableCopy,
+    toolUnavailableCopy,
   });
   const sections = mapCommentMetadataToSystemNoticeSections(item.metadata, {
     runAgentId: item.runAgentId,
@@ -139,7 +155,7 @@ export function TaskChatSystemNotice({
           {showBody ? (
             <div className="px-3 py-2.5 text-foreground/90">
               <MarkdownBody softBreaks linkIssueReferences>
-                {item.text}
+                {displayText}
               </MarkdownBody>
             </div>
           ) : null}

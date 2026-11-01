@@ -42,6 +42,7 @@ export async function runSandboxQualification(
     test: SandboxProbeCase;
     target: NonNullable<SandboxCapabilitySnapshot["qualificationTarget"]>;
   }) => Promise<{ commandId: string; capabilityToken: string; nonce: string } | null>,
+  originalExpiry?: Date,
 ) {
   const started = performance.now();
   const clock = () => new Date(now.getTime() + performance.now() - started);
@@ -52,6 +53,10 @@ export async function runSandboxQualification(
     if (!parsed.success) return null;
     const value = parsed.data,
       current = clock();
+    if (readOriginalExpiry !== undefined && Date.parse(value.expiresAt) > readOriginalExpiry) {
+      originalExpiryExceeded = true;
+      return null;
+    }
     if (
       value.backend !== backend.backend ||
       value.evidenceKind !== backend.evidenceKind ||
@@ -81,6 +86,8 @@ export async function runSandboxQualification(
     }
     return value;
   };
+  let originalExpiryExceeded = false;
+  const readOriginalExpiry = originalExpiry?.getTime();
   const declared = await readCapabilities();
   const results: Array<{
     caseId: string;
@@ -92,6 +99,11 @@ export async function runSandboxQualification(
   }> = [];
   const probeCases = sandboxProbeCases(boundaryPolicyHash, requiredControls);
   for (const test of probeCases) {
+    if (!declared) {
+      results.push({ caseId: test.caseId, control: test.control, verdict: "unsupported", observationHash: null,
+        contractHash: test.contractHash, targetQualificationHash: null });
+      continue;
+    }
     try {
       let probe = test;
       if (test.control === "credentialBrokering" && backend.evidenceKind === "protected_host_report") {
@@ -147,6 +159,7 @@ export async function runSandboxQualification(
     .filter((r) => r.verdict !== "pass")
     .map((r) => `${r.caseId}:${r.verdict}`);
   if (!unchanged) exceptions.push("capability_snapshot_changed_or_expired");
+  if (originalExpiryExceeded) exceptions.push("qualification_original_expiry_exceeded");
   if (backend.evidenceKind === "protected_host_report" && !declared?.qualificationTarget)
     exceptions.push("protected_qualification_target_missing");
   if (declared)

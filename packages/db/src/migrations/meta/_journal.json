@@ -3970,6 +3970,13 @@
       "when": 1793523397368,
       "tag": "0568_sandbox_recompile_stopped_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 569,
+      "version": "7",
+      "when": 1793563799608,
+      "tag": "0569_native_remote_workload_stop_projection",
+      "breakpoints": true
     }
   ]
 }

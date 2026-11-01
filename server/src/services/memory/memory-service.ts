@@ -546,7 +546,6 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string, budg
 
 type MemoryReadBudget = { signal?: AbortSignal; deadlineAt?: number;
   structuralProofMemoStore?: MemoryPageStructuralProofMemoStore };
-let memoryVisiblePageProfileCount = 0;
 function assertMemoryReadActive(budget: MemoryReadBudget = {}) {
   if (budget.signal?.aborted) throw budget.signal.reason ?? new Error("Memory retrieval was cancelled");
   if (budget.deadlineAt !== undefined && budget.deadlineAt <= Date.now())
@@ -584,26 +583,13 @@ async function visibleMemoryPage<T>(db:Db,companyId:string,actor:MemoryMutationA
   page:(db:Db,offset:number)=>Promise<(typeof memoryRecords.$inferSelect)[]>, budget: MemoryReadBudget = {},
   candidateFilter?: (record: typeof memoryRecords.$inferSelect) => boolean,
   finalize?: VisibleMemoryPageFinalize<T>): Promise<T | (typeof memoryRecords.$inferSelect)[]> {
-  const profile = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
-  const profileStartedAt = profile ? performance.now() : 0;
-  const profileStats = { stage: "transaction", pageQueries: 0, scannedRows: 0, candidateRows: 0, initiallyVisibleRows: 0,
-    firstReviewMs: 0, secondReviewMs: 0, detailFinalizeMs: 0, pageQueryMs: 0, transactionOrdinal: null as number | null };
-  let profileResult = "error";
-  let profileFailure: { errorName: string; status: number | null; code: string | null; referenceName?: string;
-    frames: string[] } | null = null;
-  try { return await db.transaction(async rawTx=>{
+  return db.transaction(async rawTx=>{
     const tx=rawTx as unknown as Db;
+    // A legacy root can reach the large privacy predicate before any Native
+    // owner helper. Disable LLVM work on this bounded read page's actual Tx.
+    await tx.execute(sql`set local jit='off'`);
     const pageBudget: MemoryReadBudget = { ...budget,
       structuralProofMemoStore: { transaction: tx as object, proofsByOwnerPrefix: new Map() } };
-    if (profile) {
-      const globals = globalThis as unknown as Record<PropertyKey, unknown>;
-      const ordinals = globals[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")];
-      if (ordinals instanceof WeakMap) {
-        const ordinal = ordinals.get(tx);
-        if (typeof ordinal === "number") profileStats.transactionOrdinal = ordinal;
-      }
-    }
-    profileStats.stage = "privacy_fences";
     await setMemoryReadStatementBudget(tx, pageBudget);
     await lockAnalyticalCompany(tx,companyId,"read"); await lockMemoryPrivacy(tx,companyId,"read");
     markAnalyticalPrivacyReadLocked(tx);
@@ -613,14 +599,7 @@ async function visibleMemoryPage<T>(db:Db,companyId:string,actor:MemoryMutationA
     const visible:(typeof memoryRecords.$inferSelect)[]=[];
     for(let offset=0;;offset+=100){
       await setMemoryReadStatementBudget(tx, pageBudget);
-      profileStats.stage = "candidate_page_query";
-      const pageStartedAt = profile ? performance.now() : 0;
       const rows=await page(tx,offset);
-      if (profile) {
-        profileStats.pageQueries += 1;
-        profileStats.scannedRows += rows.length;
-        profileStats.pageQueryMs += performance.now() - pageStartedAt;
-      }
       const candidates=candidateFilter ? rows.filter(candidateFilter) : rows;
       // A short first page is the complete candidate universe. For internal
       // detail retrieval, materialize/rank that bounded set before source
@@ -628,67 +607,27 @@ async function visibleMemoryPage<T>(db:Db,companyId:string,actor:MemoryMutationA
       // after the evidence waits. The public row limit still applies, while a
       // paginated or truncated candidate set keeps the original pre-review.
       if (finalize && offset === 0 && rows.length < 100 && limit >= rows.length) {
-        profileStats.candidateRows += candidates.length;
-        profileStats.stage = "candidate_detail_materialization";
         const revalidate: VisibleMemoryPageRevalidate = selected => visibleMemorySources(tx,companyId,selected,actor,pageBudget);
-        const finalizeStartedAt = profile ? performance.now() : 0;
         const result = await finalize(tx, candidates, pageBudget, revalidate);
-        if (profile) profileStats.detailFinalizeMs += performance.now() - finalizeStartedAt;
         if (performance.now() > deadline) throw conflict("Complete Memory source review exceeded its budget");
-        profileResult = "ok";
         return result;
       }
-      profileStats.stage = "candidate_source_review";
-      const firstReviewStartedAt = profile ? performance.now() : 0;
       const checked = await visibleMemorySources(tx,companyId,candidates,actor,pageBudget);
-      if (profile) {
-        profileStats.candidateRows += candidates.length;
-        profileStats.firstReviewMs += performance.now() - firstReviewStartedAt;
-      }
       visible.push(...checked);
-      if (profile) profileStats.initiallyVisibleRows = visible.length;
       if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
       if(visible.length>=limit || rows.length<100){
         const revalidate: VisibleMemoryPageRevalidate = candidates => visibleMemorySources(tx,companyId,candidates,actor,pageBudget);
         if (finalize) {
-          profileStats.stage = "candidate_detail_materialization";
-          profileResult = "ok";
-          const finalizeStartedAt = profile ? performance.now() : 0;
           const result = await finalize(tx, visible.slice(0, limit), pageBudget, revalidate);
-          if (profile) profileStats.detailFinalizeMs += performance.now() - finalizeStartedAt;
           return result;
         }
         // A later source may wait while an earlier reader grant is withdrawn.
-        profileStats.stage = "candidate_source_revalidation";
-        const secondReviewStartedAt = profile ? performance.now() : 0;
         const current=await revalidate(visible.slice(0,limit));
-        if (profile) profileStats.secondReviewMs += performance.now() - secondReviewStartedAt;
         if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
-        profileResult = "ok";
         return current;
       }
     }
-  }); } catch (error) {
-    const facts = error && typeof error === "object"
-      ? error as { name?: unknown; status?: unknown; code?: unknown; message?: unknown; stack?: unknown } : {};
-    const referenceName = facts.name === "ReferenceError" && typeof facts.message === "string"
-      ? /^([A-Za-z_$][A-Za-z0-9_$]*) is not defined$/.exec(facts.message)?.[1] : undefined;
-    const frames = typeof facts.stack === "string" ? facts.stack.split("\n").flatMap(line => {
-      const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
-      return match ? [`${match[1]}:${match[2]}`] : [];
-    }).slice(0, 5) : [];
-    profileFailure = { errorName: typeof facts.name === "string" ? facts.name : "unknown",
-      status: typeof facts.status === "number" ? facts.status : null,
-      code: typeof facts.code === "string" ? facts.code : null,
-      ...(referenceName ? { referenceName } : {}), frames };
-    throw error;
-  } finally {
-    if (profile && memoryVisiblePageProfileCount < 32) {
-      memoryVisiblePageProfileCount += 1;
-      console.error("native_memory_visible_page_profile", JSON.stringify({ ...profileStats,
-        elapsedMs: Math.round(performance.now() - profileStartedAt), result: profileResult, ...(profileFailure ? { failure: profileFailure } : {}) }));
-    }
-  }
+  });
 }
 type EligibleMemoryListInput = {
   scopeType?: "company" | "agent" | "project" | "subject";

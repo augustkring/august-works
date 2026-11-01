@@ -46,15 +46,16 @@ export async function makeConversationFixtureTreeWritable(path: string): Promise
 }
 
 /** Actual route→heartbeat→Native executor→pinned OpenCode→conversation broker proof.
- * The default focused mode supplies the original issuer token through a local
- * HTTPS proxy. With sandboxRelay enabled, the configured V7 software host runs
- * the actual signed RuntimeControl relay and uses that same PRP endpoint. */
+ * Paid positive fixtures use the actual signed RuntimeControl Sandbox relay
+ * and its current attached provider credential. Explicit local mode remains
+ * available only for unsupported-transport denial checks. */
 export async function runManagedNativeConversationFrame(input: {
   db: ReturnType<typeof createDb>;
   root: string;
   opencodeBinary: string;
   /** Use a policy-valid DNS name that resolves to loopback for the signed host relay case. */
   sandboxRelay?: boolean;
+  sandboxRelayDnsLookup?: (hostname: string, options: { all: true }) => Promise<Array<{ address: string; family: number }>>;
   /** Bounded run timeout for relay roundtrips; defaults to the normal 180s fixture limit. */
   timeoutSec?: number;
   conversationWorkMode?: "standard" | "planning" | "ask";
@@ -109,6 +110,7 @@ export async function runManagedNativeConversationFrame(input: {
     beforeNativeExecution?: (args: Parameters<NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testNativeRunnerEnvironment"]>>[0]) => Promise<Record<string, string>>;
     close?: () => Promise<void>;
     facts?: () => Record<string, unknown>;
+    modelRequest?: (body: unknown, signal: AbortSignal) => ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
   }>;
   beforeProviderResponse?: (facts: {
     db: ReturnType<typeof createDb>;
@@ -147,6 +149,11 @@ export async function runManagedNativeConversationFrame(input: {
     providerStubFailure: { stage: string; code: string } | null;
   }) => Promise<void>;
 }) {
+  input = { ...input, sandboxRelay: input.sandboxRelay ?? true,
+    configureHeartbeat: input.configureHeartbeat ?? (async context => {
+      const { configureManagedConversationSandboxHost } = await import("./managed-native-conversation-sandbox-host.js");
+      return configureManagedConversationSandboxHost({ ...context, root: context.runHome });
+    }) };
   const { db } = input;
   const opencodeBytes = await import("node:fs/promises").then(fs => fs.readFile(input.opencodeBinary));
   if (createHash("sha256").update(opencodeBytes).digest("hex") !== OPENCODE_SHA256)
@@ -165,7 +172,9 @@ export async function runManagedNativeConversationFrame(input: {
   // The relay policy keeps its public-DNS-shaped exact broker origin; the
   // normal fixture keeps its reserved test hostname.
   if (input.sandboxRelay) {
-    const brokerAddresses = await lookup(brokerHostname, { all: true });
+    const brokerAddresses = input.sandboxRelayDnsLookup
+      ? await input.sandboxRelayDnsLookup(brokerHostname, { all: true })
+      : await lookup(brokerHostname, { all: true });
     if (brokerAddresses.length === 0 || brokerAddresses.some(value => !["127.0.0.1", "::1"].includes(value.address)))
       throw new Error("conversation_fixture_broker_dns_not_loopback");
   }
@@ -322,6 +331,7 @@ export async function runManagedNativeConversationFrame(input: {
   registerAssignedMcpGateway(db, assignedToolGateway);
   brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
   const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();
+  let sandboxHeartbeat: Awaited<ReturnType<NonNullable<typeof input.configureHeartbeat>>> | undefined;
   brokerApp.use((req, res, next) => {
     if (req.method === "POST" && req.path === "/runtime-tools/model/v1/messages") {
       const requestHash = createHash("sha256").update(JSON.stringify(req.body ?? null)).digest("hex");
@@ -338,8 +348,19 @@ export async function runManagedNativeConversationFrame(input: {
     }
     next();
   });
+  brokerApp.use((req, res, next) => {
+    if (!input.sandboxRelay || req.method !== "POST" || req.path !== "/runtime-tools/model/v1/messages") { next(); return; }
+    if (!sandboxHeartbeat?.modelRequest) { next(new Error("conversation_fixture_host_model_request_unavailable")); return; }
+    const controller = new AbortController();
+    const cancel = () => { if (!res.writableEnded) controller.abort(); };
+    req.once("aborted", cancel); res.once("close", cancel);
+    void sandboxHeartbeat.modelRequest(req.body, controller.signal).then(result => {
+      if (!res.writableEnded) res.status(200).set("Cache-Control", "no-store").set("X-Accel-Buffering", "no")
+        .type("text/event-stream").send(result.sse);
+    }).catch(next).finally(() => { req.off("aborted", cancel); res.off("close", cancel); });
+  });
   brokerApp.use((req, _res, next) => {
-    if (req.headers["x-api-key"] === "paperclip-managed-model-broker" && activeToken)
+    if (!input.sandboxRelay && req.headers["x-api-key"] === "paperclip-managed-model-broker" && activeToken)
       req.headers.authorization = `Bearer ${activeToken}`;
     next();
   });
@@ -472,7 +493,7 @@ export async function runManagedNativeConversationFrame(input: {
     runnerPublicUrl.protocol = "wss:";
     process.env.PAPERCLIP_RUNNER_PUBLIC_URL = runnerPublicUrl.origin;
   }
-  const sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
+  sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
     providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
     brokerOrigin: origin, brokerProxyOrigin, certBundlePath, setBrokerToken: token => { activeToken = token; } });
   const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
@@ -507,7 +528,7 @@ export async function runManagedNativeConversationFrame(input: {
     }
     const claims = verifyRuntimeToolsToken(minted.token, "conversation_model");
     if (!claims?.conversation_model) throw new Error("conversation_fixture_issuer_scope_missing");
-    activeToken = minted.token;
+    if (!input.sandboxRelay) activeToken = minted.token;
     issuerFacts.push({ scope: claims.scope, runId: claims.run_id, issueId: claims.conversation_model.issueId,
       generation: claims.conversation_model.conversationSessionGeneration,
       manifestId: claims.conversation_model.executionManifestId, manifestHash: claims.conversation_model.executionManifestHash });
@@ -581,6 +602,10 @@ export async function runManagedNativeConversationFrame(input: {
       closeConversationApp = composed.close;
       if (!conversationOrigin || !/^https?:\/\//.test(conversationOrigin))
         throw new Error("conversation_fixture_browser_origin_invalid");
+      // In the composed full-app fixture the Native run must call the same
+      // authenticated HTTP API that the browser opened. The broker origin is
+      // only the model/PRP transport and does not own product API routes.
+      process.env.PAPERCLIP_API_URL = conversationOrigin;
     } else {
       app = express();
       app.use(express.json());

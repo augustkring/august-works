@@ -1,25 +1,32 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { companyMemberships, contextManifestItems, createDb, documents, documentRevisions,
-  heartbeatRuns, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations } from "@paperclipai/db";
-import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
-import { activeMemoryTemporalContexts, canActorReadIssuePrivacy, withReadPinnedNativeTaskSnapshot } from "../services/authorization.js";
+import { and, eq, sql } from "drizzle-orm";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { companyMemberships, completionContracts, contextManifestItems, createDb, documents, documentRevisions,
+  heartbeatRuns, issueComments, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations, orchestrationModelReservations, orchestrationWorkerAttempts, issuePrivacySources } from "@paperclipai/db";
+import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { activeMemoryTemporalContexts, canActorReadIssuePrivacy, withReadMemoryTemporalSources,
+  withReadPinnedNativeTaskSnapshot, type MemoryPageStructuralProofMemoStore } from "../services/authorization.js";
+import * as authorizationChecks from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess, assertNativeMemoryOutputSnapshotCurrent,
-  nativeSourceMemoDiagnosticsForTest, resetNativeSourceMemoDiagnosticsForTest } from "../services/native-direct-input.js";
+  assertNativePayloadSourceSetCurrent, withNativeMemoryOutputSnapshotCurrent,
+  addNativeFrozenTaskDescendantClosure, nativeFrozenTaskMemoWouldIntersectActiveAncestry, nativeSourceMemoDiagnosticsForTest,
+  assertNativeModelOutputCaptureCurrent, assertNativeManagedConsumedSourceSetCurrent, nativeConsumedSourceComponentsContainCycle,
+  resetNativeSourceMemoDiagnosticsForTest } from "../services/native-direct-input.js";
+import { nativeCommentProjectionHash, nativeSha256 } from "../services/native-runtime/canonical.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
-import { canActorReadMemorySources, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
+import { canActorReadMemorySourceSet, canActorReadMemorySources, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
 import { assertScopedNativeMemoryReplayReceiptCurrent } from "../services/tool-gateway.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
-import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "./helpers/managed-native-opencode-e2e-fixture.js";
+import { configureManagedConversationSandboxHost } from "./helpers/managed-native-conversation-sandbox-host.js";
+import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture, type ManagedWorkerSandboxHost } from "./helpers/managed-native-opencode-e2e-fixture.js";
 
 function hasPinnedOpenCodeProfile(): boolean {
   if (process.platform !== "linux") return false;
@@ -30,12 +37,28 @@ function hasPinnedOpenCodeProfile(): boolean {
 
 const nativeOpenCodeTemporalDescribe = describe.skipIf(!hasPinnedOpenCodeProfile());
 
+describe("Native consumed-source component graph", () => {
+  it("allows prefix back-references and rejects self or mutual cycles", () => {
+    expect(nativeConsumedSourceComponentsContainCycle([[1], []])).toBe(false);
+    expect(nativeConsumedSourceComponentsContainCycle([[1], [0]])).toBe(true);
+    expect(nativeConsumedSourceComponentsContainCycle([[0]])).toBe(true);
+  });
+});
+
 nativeOpenCodeTemporalDescribe("Native model outputs retain only the source closure consumed at creation", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   let root = "";
   let instanceId = "";
   let preserveDebugArtifacts = false;
+  let preserveDatabaseFailure = false;
+  let fixtureStage = "initializing";
+  let fixtureDeadlineAt: Date | null = null;
+  let fixtureCheckpoint: Record<string, unknown> = {};
+  const stage = (value: string) => {
+    fixtureStage = value;
+    console.info("native_temporal_setup_stage", JSON.stringify({ stage: value }));
+  };
   let temporal: Awaited<ReturnType<typeof buildTemporalFixture>>;
 
   async function buildTemporalFixture() {
@@ -53,7 +76,26 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       taskB: `temporal-task-b-${randomUUID()}`,
       memoryB: `temporal-memory-b-${randomUUID()}`,
     };
-    const first = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
+    if (!fixtureDeadlineAt) throw new Error("native_temporal_fixture_deadline_missing");
+    const sandboxOptions = {
+      fixtureDeadlineAt,
+      sandboxRelay: true,
+      configureSandboxHost: async (context: Parameters<typeof configureManagedConversationSandboxHost>[0]) => {
+        const host = await configureManagedConversationSandboxHost(context);
+        if (typeof host.modelRequest !== "function") throw new Error("native_temporal_host_provider_bridge_missing");
+        return host as ManagedWorkerSandboxHost;
+      },
+      beforeProviderResponse: async (context: { companyId: string; runId: string }) => {
+        const [attempt] = await db.select().from(orchestrationWorkerAttempts).where(and(
+          eq(orchestrationWorkerAttempts.companyId, context.companyId), eq(orchestrationWorkerAttempts.runId, context.runId)));
+        expect(attempt?.status).toBe("running");
+        const reservations = await db.select().from(orchestrationModelReservations).where(and(
+          eq(orchestrationModelReservations.companyId, context.companyId), eq(orchestrationModelReservations.workerAttemptId, attempt!.id)));
+        expect(reservations.some(row => row.purpose === "worker_model" && row.status === "dispatched")).toBe(true);
+      },
+    };
+    stage("first_journey");
+    const first = await runManagedNativeOpenCodeFixture({ ...sandboxOptions, db, connectionString: database.connectionString,
       root, instanceId, onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; },
       steps: [
         { tool: "write_document", id: ids.documentA, input: { idempotencyKey: randomUUID(), key: documentKey,
@@ -78,6 +120,12 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
         { afterModelToolCallId: ids.memoryA, action: "create_private_context_root" },
       ],
     });
+    expect(first.sandbox?.brokerTokenSubstitutionCount).toBe(0);
+    expect(first.sandbox?.facts.relayAuthenticated).toBe(true);
+    stage("first_journey_returned");
+    fixtureCheckpoint = { companyId: first.companyId, aliceActor: first.aliceActor,
+      aliceMemoryActor: first.aliceMemoryActor, bobMemoryActor: first.bobMemoryActor,
+      bobUserId: first.bobUserId, aliceUserId: first.aliceUserId };
     expect(first.contextResultConsumers).toContainEqual({ callId: ids.contextR, consumed: true });
     const firstToolResult = (callId: string) => first.toolResults.find(value => value.callId === callId);
     const capturedTaskId = (callId: string) => {
@@ -102,13 +150,16 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       throw new Error(`The managed Native producer omitted an output ID: ${JSON.stringify(missingOutputs)}`);
 
     const memories = memoryService(db);
+    fixtureCheckpoint = { ...fixtureCheckpoint, taskAId, taskBId, memoryAId, memoryBId, privateRootId };
+    stage("review_memory_b");
     await memories.reviewCandidate(first.companyId, memoryBId, { decision: "accept" }, first.aliceMemoryActor);
     const [taskA] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskAId)));
     const [taskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
     if (!taskA || !taskB) throw new Error("The managed Native Task outputs disappeared");
     if (!taskB) throw new Error("The Native Task B disappeared");
 
-    const second = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
+    stage("second_journey");
+    const second = await runManagedNativeOpenCodeFixture({ ...sandboxOptions, db, connectionString: database.connectionString,
       root, instanceId, reuseIdentity: first.reuseIdentity, existingTaskId: taskBId,
       onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; },
       taskTitle: `Temporal follow-up ${randomUUID()}`,
@@ -121,6 +172,13 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
           key: `temporal-c-${randomUUID()}`, title: "Fresh-context follow-up", body: "A valid completed output after fresh Context.", baseRevisionId: null } },
         { tool: "paperclip_finish", id: `temporal-finish-second-${randomUUID()}` },
       ] });
+    expect(second.sandbox?.brokerTokenSubstitutionCount).toBe(0);
+    expect(second.sandbox?.facts.relayAuthenticated).toBe(true);
+    expect(second.issueId).toBe(taskBId);
+    stage("second_journey_returned");
+    await writeFile(join(root, "native-source-checkpoint.json"), JSON.stringify({ ...fixtureCheckpoint,
+      dataDir: database.dataDir, instanceId, stage: fixtureStage,
+      secondAliceActor: second.aliceActor, secondAliceMemoryActor: second.aliceMemoryActor }, null, 2), { mode: 0o600 });
     const firstContextCapture = first.contextReadCaptures.find(value => value.callId === ids.contextR)?.contextRead as {
       manifestIds?: Array<{ contextManifestId: string }>;
       sourceSet?: { policy?: { memoryIds?: string[]; issueIds?: string[] }; inputs?: Array<{ kind?: string; memoryId?: string }> };
@@ -136,8 +194,11 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     // Reusing the existing Human credential preserves its current authority;
     // the first and second run actors are the same reader for this private
     // owner, so both reads must follow the same live membership decision.
+    stage("private_root_first_alice");
     expect((await memories.get(first.companyId, privateRootId!, first.aliceMemoryActor))?.record.id).toBe(privateRootId);
+    stage("private_root_second_alice");
     expect((await memories.get(first.companyId, privateRootId!, second.aliceMemoryActor))?.record.id).toBe(privateRootId);
+    stage("private_root_second_bob");
     expect(await memories.get(first.companyId, privateRootId!, second.bobMemoryActor)).toBeNull();
 
     const contextCapture = second.contextReadCaptures[0]?.contextRead as {
@@ -150,9 +211,13 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       eq(contextManifestItems.companyId, first.companyId), eq(contextManifestItems.manifestId, manifestId)));
     const memoryCId = second.toolResults.find(value => value.toolName === "paperclip-self:remember")?.memoryId;
     if (!memoryCId) throw new Error("The second managed run omitted Memory C");
+    fixtureCheckpoint = { ...fixtureCheckpoint, memoryCId };
+    stage("review_memory_c");
     await memories.reviewCandidate(first.companyId, memoryCId, { decision: "accept" }, second.aliceMemoryActor);
+    stage("assign_task_b_to_bob");
     await issueService(db).update(taskBId, { assigneeAgentId: null, assigneeUserId: first.bobUserId,
       actorUserId: first.aliceUserId, privacyActor: second.aliceActor });
+    stage("assignment_returned");
     const [assignedTaskB] = await db.select().from(issues).where(and(eq(issues.companyId, first.companyId), eq(issues.id, taskBId)));
     if (!assignedTaskB || assignedTaskB.assigneeUserId !== first.bobUserId)
       throw new Error("The Native Task B assignee transfer was not persisted");
@@ -161,16 +226,43 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
   }
 
   beforeAll(async () => {
+    fixtureDeadlineAt = new Date(Date.now() + 900_000);
     root = await mkdtemp(join(tmpdir(), "native-payload-temporal-"));
     await chmod(root, 0o700);
     vi.stubEnv("PAPERCLIP_HOME", root);
     instanceId = `native-payload-temporal-${randomUUID()}`;
     vi.stubEnv("PAPERCLIP_INSTANCE_ID", instanceId);
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `native-payload-temporal-${randomUUID()}-${randomUUID()}`);
-    database = await startEmbeddedPostgresTestDatabase("v10-native-payload-temporal-");
+    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS", "1");
+    resetNativeSourceMemoDiagnosticsForTest();
+    database = await startEmbeddedPostgresTestDatabase("v10-native-payload-temporal-", {
+      preserveDataOnFailure: () => preserveDatabaseFailure,
+    });
     db = createDb(database.connectionString);
-    temporal = await buildTemporalFixture();
-  }, 600_000);
+    try { temporal = await buildTemporalFixture(); }
+    catch (error) {
+      preserveDatabaseFailure = true;
+      preserveDebugArtifacts = true;
+      await writeFile(join(root, "native-source-failure-checkpoint.json"), JSON.stringify({
+        ...fixtureCheckpoint, stage: fixtureStage, dataDir: database.dataDir, instanceId,
+        runs: await db.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId,
+          companyId: heartbeatRuns.companyId, responsibleUserId: heartbeatRuns.responsibleUserId,
+          status: heartbeatRuns.status }).from(heartbeatRuns),
+      }, null, 2), { mode: 0o600 });
+      console.info("native_temporal_checkpoint_retained", JSON.stringify({ stage: fixtureStage, root, dataDir: database.dataDir }));
+      throw error;
+    }
+  }, 900_000);
+
+  afterEach(async context => {
+    if (context.task.result?.state !== "fail") return;
+    preserveDatabaseFailure = true;
+    preserveDebugArtifacts = true;
+    await writeFile(join(root, "native-source-test-failure-checkpoint.json"), JSON.stringify({
+      ...fixtureCheckpoint, stage: fixtureStage, testName: context.task.name,
+      dataDir: database.dataDir, instanceId,
+    }, null, 2), { mode: 0o600 });
+  });
 
   afterAll(async () => {
     await database?.cleanup();
@@ -182,6 +274,12 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
   }, 30_000);
 
   it("keeps earlier shared Memory A readable after the same run later reads private Context, while narrowing Memory B", async () => {
+    expect(nativeSourceMemoDiagnosticsForTest().siblingToolSourceProofHits).toBeGreaterThan(0);
+    expect(nativeSourceMemoDiagnosticsForTest().documentNodeHits).toBeGreaterThan(0);
+    expect(nativeSourceMemoDiagnosticsForTest().uncheckedTaskReplays).toBeGreaterThan(0);
+    console.info("native_valid_journey_capacity", JSON.stringify({
+      maxValidationWork: nativeSourceMemoDiagnosticsForTest().maxValidationWork }));
+    expect(nativeSourceMemoDiagnosticsForTest().maxValidationWork).toBeLessThanOrEqual(2048);
     const { first, second, memoryAId, memoryBId } = temporal;
     const memories = memoryService(db);
     const [legacyPrivateRoot] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
@@ -227,11 +325,22 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
   });
 
   it("reuses frozen Task structure only inside the same Memory owner prefix and transaction", async () => {
+    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS", "1");
+    resetNativeSourceMemoDiagnosticsForTest();
     const { first, second, memoryAId, memoryCId, privateRootId } = temporal;
+    let pageProofStore: { transaction: object; proofsByOwnerPrefix: Map<string, Map<string, Set<string>>> } | undefined;
     await db.transaction(async rawTx => {
       const tx = rawTx as unknown as typeof db;
-      const store = { transaction: tx as object, proofsByOwnerPrefix: new Map<string, Set<string>>() };
-      resetNativeSourceMemoDiagnosticsForTest();
+      const ancestorVisit = `frozen-task-snapshot:${first.companyId}:${temporal.taskBId}:snapshot-digest`;
+      expect(nativeFrozenTaskMemoWouldIntersectActiveAncestry(new Set([ancestorVisit]), new Set([ancestorVisit]))).toBe(true);
+      expect(nativeFrozenTaskMemoWouldIntersectActiveAncestry(new Set([ancestorVisit]), new Set([`${ancestorVisit}:other`]))).toBe(false);
+      const parentDescendants = new Set<string>();
+      const warmedChildDescendants = new Set([ancestorVisit]);
+      addNativeFrozenTaskDescendantClosure(parentDescendants, "frozen-task-snapshot:warmed-child", warmedChildDescendants);
+      expect(parentDescendants).toEqual(new Set(["frozen-task-snapshot:warmed-child", ancestorVisit]));
+      expect(nativeFrozenTaskMemoWouldIntersectActiveAncestry(new Set([ancestorVisit]), parentDescendants)).toBe(true);
+      const store = pageProofStore = { transaction: tx as object,
+        proofsByOwnerPrefix: new Map<string, Map<string, Set<string>>>() };
       expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryAId!,
         { structuralProofMemoStore: store })).toBe(true);
       const firstPrefix = [...store.proofsByOwnerPrefix.entries()][0];
@@ -263,8 +372,356 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
         expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryCId!,
           { structuralProofMemoStore: store })).toBe(true);
       }
+      // A completed Alice structural proof must not become an allow result for
+      // Bob, even when the same exact Memory owner is checked in this physical
+      // transaction. Owner/current-reader ACL evaluation still runs per actor.
+      expect(await canActorReadMemorySources(tx, first.companyId, second.bobActor, memoryCId!,
+        { structuralProofMemoStore: store })).toBe(false);
       expect(await canActorReadMemorySources(tx, first.companyId, second.bobActor, privateRootId!,
         { structuralProofMemoStore: store })).toBe(false);
+      // The sealed union revisits earlier Memory through C's inherited Task.
+      // Carried structural pins must retain the nested private owner restriction.
+      expect(await canActorReadMemorySourceSet(tx, first.companyId, second.aliceActor,
+        [memoryAId!, memoryCId!], undefined, store)).toBe(true);
+      expect(await canActorReadMemorySourceSet(tx, first.companyId, second.bobActor,
+        [memoryAId!, memoryCId!], undefined, store)).toBe(false);
+      // A warm child Task-prefix obligation is a current-owner witness, not
+      // an allow result. Editing that retained Task in this same transaction
+      // must invalidate the Memory reader, while rollback restores its prefix.
+      await tx.execute(sql`savepoint native_scoped_task_owner_mutation`);
+      try {
+        await tx.update(issues).set({ description: sql`coalesce(${issues.description},'') || ${" Scoped Task owner changed"}` })
+          .where(and(eq(issues.companyId, first.companyId), eq(issues.id, temporal.taskBId!)));
+        expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryCId!,
+          { structuralProofMemoStore: store })).toBe(false);
+      } finally {
+        await tx.execute(sql`rollback to savepoint native_scoped_task_owner_mutation`);
+        await tx.execute(sql`release savepoint native_scoped_task_owner_mutation`);
+      }
+      expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryCId!,
+        { structuralProofMemoStore: store })).toBe(true);
+      expect(await canActorReadMemorySources(tx, first.companyId, second.bobActor, memoryCId!,
+        { structuralProofMemoStore: store })).toBe(false);
+      expect(await canActorReadMemorySources(tx, first.companyId, second.bobActor, memoryAId!,
+        { structuralProofMemoStore: store })).toBe(true);
+    });
+    const exactTaskHits = nativeSourceMemoDiagnosticsForTest().frozenTaskMemoByKind.task?.hits ?? 0;
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      expect(await canActorReadMemorySources(tx, first.companyId, second.aliceActor, memoryAId!,
+        { structuralProofMemoStore: pageProofStore })).toBe(true);
+    });
+    expect(nativeSourceMemoDiagnosticsForTest().frozenTaskMemoByKind.task?.hits ?? 0).toBe(exactTaskHits);
+  });
+
+  it("keeps repeated Native output proofs scoped to their exact actor and Memory prefix", async () => {
+    const { first, second, memoryAId } = temporal;
+    const [run] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
+    const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object"
+      ? run.runnerProfileJson as Record<string, unknown> : {};
+    const receipt = nativeRunInputSourceReceiptSchema.parse(profile.nativeInputSourceReceipt);
+    const records = (value: unknown) => Array.isArray(value) ? value.filter((entry): entry is Record<string, unknown> =>
+      entry !== null && typeof entry === "object" && !Array.isArray(entry)) : [];
+    const captures = records(profile.nativeToolResultSourceCaptures);
+    const memoryACallId = first.toolResults.find(value => value.memoryId === memoryAId)?.callId;
+    if (!memoryACallId) throw new Error("The first Native Memory output has no provider call identity");
+    const associations = records(profile.nativeToolCallDispatchAssociations);
+    const intents = records(profile.nativeAwModelWireIntents);
+    const selected = receipt.dispatches.flatMap(prefix => prefix.inputs.flatMap(source => {
+      if (source.kind !== "worker_model_dispatch" && source.kind !== "conversation_model_dispatch") return [];
+      const intent = intents.find(value => value.reservationId === source.reservationId &&
+        Array.isArray(value.responseToolUses) && (value.responseToolUses as unknown[]).some(use =>
+          use && typeof use === "object" && (use as Record<string, unknown>).id === memoryACallId));
+      const use = intent && (intent.responseToolUses as Array<Record<string, unknown>>)
+        .find(value => value.id === memoryACallId && captures.some(entry => entry.callId === value.id && typeof entry.tool === "string" &&
+          (entry.source as Record<string, unknown> | undefined)?.kind === "tool_result" &&
+          (entry.source as Record<string, unknown>).invocationId));
+      const result = use && captures.find(entry => entry.callId === memoryACallId && entry.callId === use.id && typeof entry.tool === "string" &&
+        (entry.source as Record<string, unknown> | undefined)?.kind === "tool_result" &&
+        (entry.source as Record<string, unknown>).invocationId);
+      const association = result && associations.find(value => value.callId === result.callId && value.tool === result.tool);
+      const consumed = intent?.consumedSourceSet && typeof intent.consumedSourceSet === "object"
+        ? intent.consumedSourceSet as Record<string, unknown> : null;
+      if (!intent || !result || !association || !consumed || !Array.isArray(consumed.inputs) ||
+        !consumed.policy || typeof consumed.policy !== "object" || !Array.isArray(intent.consumedSourceComponents)) return [];
+      return [{ dispatch: source, result, intent, association, consumed }];
+    })).at(-1);
+    if (!selected) throw new Error("The first Native run has no invocation-bound output capture");
+    const capture = { runId: first.runId,
+      sourceSet: { policy: selected.consumed.policy, inputs: selected.consumed.inputs },
+      consumedSourceComponents: selected.intent.consumedSourceComponents,
+      dispatch: selected.dispatch,
+      managedOpenCodeToolUse: { callId: selected.result.callId, toolName: selected.result.tool,
+        argumentsHash: selected.association.argumentsHash,
+        responseContentHash: selected.intent.responseContentHash } } as Parameters<typeof assertNativeModelOutputCaptureCurrent>[3];
+    const documentSource = capture.sourceSet.inputs.find((source): source is Extract<(typeof capture.sourceSet.inputs)[number],
+      { kind: "document_revision" }> => source.kind === "document_revision");
+    if (!documentSource?.issueId) throw new Error("The Memory A capture has no document-backed source owner");
+    const [documentRevision] = await db.select({ payloadSourceSnapshot: documentRevisions.payloadSourceSnapshot })
+      .from(documentRevisions).where(and(eq(documentRevisions.companyId, first.companyId),
+        eq(documentRevisions.id, documentSource.revisionId)));
+    const documentSnapshot = nativePayloadSourceSnapshotSchema.parse(documentRevision?.payloadSourceSnapshot);
+    const invocationSource = documentSnapshot.inputs.find((source): source is Extract<typeof source, { kind: "tool_result" }> =>
+      source.kind === "tool_result" && typeof source.invocationId === "string" &&
+      capture.sourceSet.inputs.some(candidate => JSON.stringify(candidate) === JSON.stringify(source)));
+    if (!invocationSource || typeof invocationSource.invocationId !== "string")
+      throw new Error("The captured document does not bind a prior invocation in the Native output source prefix");
+    const invocationId = invocationSource.invocationId;
+    const contractSource = capture.sourceSet.inputs.find((source): source is Extract<typeof source, { kind: "completion_contract" }> =>
+      source.kind === "completion_contract");
+    if (!contractSource) throw new Error("The real Memory A capture has no completion contract dependency");
+    const [contract] = await db.select().from(completionContracts).where(and(
+      eq(completionContracts.companyId, first.companyId), eq(completionContracts.id, contractSource.contractId)));
+    if (!contract) throw new Error("The captured Native completion contract disappeared");
+     const aliceMembershipFilter = and(eq(companyMemberships.companyId, first.companyId),
+      eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, first.aliceUserId));
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      const memoryARead = await withReadMemoryTemporalSources(tx, second.aliceActor, first.companyId, memoryAId!,
+        async sourceDb => {
+        await assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+          selected.result.tool as string, second.aliceActor, "settled");
+
+        // Removing one exact nested owner from the live cover cannot borrow
+        // the warmed structural proof for a different or incomplete closure.
+        const incompleteCapture = { ...capture, sourceSet: { ...capture.sourceSet,
+          inputs: capture.sourceSet.inputs.filter(value => JSON.stringify(value) !== JSON.stringify(invocationSource)) } };
+        await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, incompleteCapture,
+          selected.result.tool as string, second.aliceActor, "settled")).rejects.toMatchObject({ status: 403 });
+
+        // The exact proof is warm in this same Native scope and physical
+        // transaction. A changed current invocation must still deny the hit.
+        await sourceDb.update(toolInvocations).set({ status: "failed" }).where(and(
+          eq(toolInvocations.companyId, first.companyId), eq(toolInvocations.id, invocationId)));
+        await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+          selected.result.tool as string, second.aliceActor, "settled")).rejects.toMatchObject({ status: 403 });
+        await sourceDb.update(toolInvocations).set({ status: "succeeded" }).where(and(
+          eq(toolInvocations.companyId, first.companyId), eq(toolInvocations.id, invocationId)));
+        await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+          selected.result.tool as string, second.aliceActor, "settled")).resolves.toBeUndefined();
+
+        // A completed Task proof must also recheck its exact contract owner.
+        try {
+          await sourceDb.update(completionContracts).set({ revision: contract.revision + 1 }).where(and(
+            eq(completionContracts.companyId, first.companyId), eq(completionContracts.id, contract.id)));
+          await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+            selected.result.tool as string, second.aliceActor, "settled")).rejects.toMatchObject({ status: 403 });
+        } finally {
+          await sourceDb.update(completionContracts).set({ revision: contract.revision }).where(and(
+            eq(completionContracts.companyId, first.companyId), eq(completionContracts.id, contract.id)));
+        }
+        await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+          selected.result.tool as string, second.aliceActor, "settled")).resolves.toBeUndefined();
+
+        // A producer receipt can also change inside this transaction. A
+        // warmed proof must reload the exact current run before it is reused.
+        await sourceDb.update(heartbeatRuns).set({ runnerProfileJson: {
+          ...profile, nativeInputSourceReceipt: null,
+        } }).where(and(eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
+        await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+          selected.result.tool as string, second.aliceActor, "settled")).rejects.toMatchObject({ status: 403 });
+        await sourceDb.update(heartbeatRuns).set({ runnerProfileJson: profile }).where(and(
+          eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
+
+        // Revoking Alice inside the same transaction cannot reuse her warmed
+        // output proof; the live reader check must reject before it is returned.
+        await sourceDb.update(companyMemberships).set({ status: "suspended" }).where(aliceMembershipFilter);
+        await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+          selected.result.tool as string, second.aliceActor, "settled")).rejects.toMatchObject({ status: 403 });
+        await sourceDb.update(companyMemberships).set({ status: "active" }).where(aliceMembershipFilter);
+      });
+      expect(memoryARead).not.toBe(false);
+      // A different persisted Memory owner prefix in this physical transaction
+      // receives an independent scope and cannot reuse Memory A's proof.
+      const memoryBRead = await withReadMemoryTemporalSources(tx, second.aliceActor, first.companyId, temporal.memoryBId!,
+        async sourceDb => assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+          selected.result.tool as string, second.aliceActor, "settled"));
+      expect(memoryBRead).not.toBe(false);
+    });
+    // Timestamp-only owner changes must invalidate private structural row
+    // fingerprints even though the canonical contract revision/hash is stable.
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      const store: MemoryPageStructuralProofMemoStore = { transaction: tx as object, proofsByOwnerPrefix: new Map() };
+      const contractDigests = () => {
+        const digests = new Map<string, string>();
+        for (const [owner, proofs] of store.mutableSourceProofsByOwnerPrefix ?? []) for (const [key, proof] of proofs) {
+          const dependency = proof.rows.get(`contract:${first.companyId}:${contract.id}`);
+          if (dependency) digests.set(`${owner}:${key}`, dependency.digest);
+        }
+        return digests;
+      };
+      expect(await withReadMemoryTemporalSources(tx, second.aliceActor, first.companyId, memoryAId!, async sourceDb => {
+        await assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+          selected.result.tool as string, second.aliceActor, "settled");
+        const before = contractDigests();
+        expect(before.size).toBeGreaterThan(0);
+        let changedProof: string | undefined;
+        try {
+          await sourceDb.update(completionContracts).set({ createdAt: new Date(contract.createdAt.getTime() + 1_000) })
+            .where(and(eq(completionContracts.companyId, first.companyId), eq(completionContracts.id, contract.id)));
+          await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+            selected.result.tool as string, second.aliceActor, "settled")).resolves.toBeUndefined();
+          changedProof = [...contractDigests()].find(([key, digest]) => before.has(key) && before.get(key) !== digest)?.[0];
+          expect(changedProof).toBeDefined();
+        } finally {
+          await sourceDb.update(completionContracts).set({ createdAt: contract.createdAt })
+            .where(and(eq(completionContracts.companyId, first.companyId), eq(completionContracts.id, contract.id)));
+        }
+        await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, first.issueId, capture,
+          selected.result.tool as string, second.aliceActor, "settled")).resolves.toBeUndefined();
+        if (!changedProof) throw new Error("The timestamp-only contract fingerprint did not change");
+        expect(contractDigests().get(changedProof)).toBe(before.get(changedProof));
+      }, undefined, store)).not.toBe(false);
+    });
+    // A private pending Task reader must finish before an external callback
+    // can perform an effect. Revoke the real represented Human immediately at
+    // its actual deferred Task ACL query, then run the original SQL checker.
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      const [memory] = await tx.select({ snapshot: memoryRecords.payloadSourceSnapshot }).from(memoryRecords)
+        .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryAId!)));
+      const snapshot = nativePayloadSourceSnapshotSchema.parse(memory?.snapshot);
+      const actualTaskReader = authorizationChecks.canActorReadPinnedIssuePrivacyBatch;
+      let revoked = false;
+      let callbackRan = false;
+      let foreignProbeEntered = false;
+      let foreignCallbackRan = false;
+      const adoptions = nativeSourceMemoDiagnosticsForTest().pendingTaskAdoptions;
+      const taskReader = vi.spyOn(authorizationChecks, "canActorReadPinnedIssuePrivacyBatch")
+        .mockImplementation(async (...args) => {
+          const actor = args[1];
+          const representedAlice = actor.userId === first.aliceUserId || actor.onBehalfOfUserId === first.aliceUserId;
+          if (!revoked && !foreignProbeEntered && representedAlice && args[2] === first.companyId &&
+              args[3].some(task => task.issueId === temporal.taskAId)) {
+            expect(args[0]).toBe(tx);
+            if (!foreignProbeEntered) {
+              foreignProbeEntered = true;
+              await rawTx.transaction(async foreignTx => {
+                expect(foreignTx).not.toBe(rawTx);
+                await expect(withNativeMemoryOutputSnapshotCurrent(foreignTx as unknown as typeof db,
+                  { companyId: first.companyId, recordId: memoryAId!, snapshot, actor: second.aliceActor },
+                  async sourceDb => {
+                    expect(sourceDb).toBe(foreignTx);
+                    foreignCallbackRan = true;
+                  })).rejects.toMatchObject({ status: 403,
+                    message: "The Native pending Task check cannot enter an effect" });
+              });
+            }
+            revoked = true;
+            await tx.update(companyMemberships).set({ status: "suspended" }).where(aliceMembershipFilter);
+          }
+          return actualTaskReader(...args);
+        });
+      try {
+        await expect(withNativeMemoryOutputSnapshotCurrent(tx, { companyId: first.companyId,
+          recordId: memoryAId!, snapshot, actor: second.aliceActor }, async sourceDb => {
+          expect(sourceDb).toBe(tx);
+          callbackRan = true;
+        })).rejects.toMatchObject({ status: 403 });
+        expect(revoked).toBe(true);
+        expect(foreignProbeEntered).toBe(true);
+        expect(foreignCallbackRan).toBe(false);
+        expect(callbackRan).toBe(false);
+        expect(nativeSourceMemoDiagnosticsForTest().pendingTaskAdoptions).toBeGreaterThan(adoptions);
+      } finally {
+        taskReader.mockRestore();
+        await tx.update(companyMemberships).set({ status: "active" }).where(aliceMembershipFilter);
+      }
+      await expect(withNativeMemoryOutputSnapshotCurrent(tx, { companyId: first.companyId,
+        recordId: memoryAId!, snapshot, actor: second.aliceActor }, async sourceDb => {
+        expect(sourceDb).toBe(tx);
+        callbackRan = true;
+      })).resolves.toBeUndefined();
+      expect(callbackRan).toBe(true);
+    });
+
+    // An external callback can write owner families outside the four receipt
+    // dependencies. Warm a real Comment prefix, edit it in this same physical
+    // transaction, and require the original rendition to be rejected.
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      const [memory] = await tx.select().from(memoryRecords).where(and(
+        eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryAId!)));
+      const snapshot = nativePayloadSourceSnapshotSchema.parse(memory?.payloadSourceSnapshot);
+      await withNativeMemoryOutputSnapshotCurrent(tx, { companyId: first.companyId, recordId: memoryAId!,
+        snapshot, actor: second.aliceActor }, async sourceDb => {
+        const comment = await issueService(sourceDb as typeof db).addComment(first.issueId, "Callback owner before edit",
+          { userId: first.aliceUserId }, { manualInputActor: first.aliceActor });
+        const [stored] = await sourceDb.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` })
+          .from(issueComments).where(eq(issueComments.id, comment.id));
+        if (!stored) throw new Error("The callback Comment owner disappeared");
+        const source = { kind: "comment" as const, issueId: first.issueId, commentId: comment.id,
+          sourceVersion: stored.sourceVersion, contentHash: nativeCommentProjectionHash(comment) };
+        const policy = { issueIds: [first.issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+        const augmented = { ...receipt, additionalInputs: [...receipt.additionalInputs,
+          { policy, inputs: [source], responsibleUserId: first.aliceUserId }] };
+        const { digest: _digest, ...receiptBody } = augmented;
+        const updatedProfile = { ...profile, nativeInputSourceReceipt: { ...receiptBody, digest: nativeSha256(receiptBody) } };
+        await sourceDb.update(heartbeatRuns).set({ runnerProfileJson: updatedProfile }).where(and(
+          eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
+        const validate = () => assertNativePayloadSourceSetCurrent(sourceDb, { companyId: first.companyId,
+          issueId: first.issueId, runId: first.runId, actor: second.aliceActor, policy, inputs: [source] });
+        try {
+          await expect(validate()).resolves.toBeUndefined();
+          // Entering a callback-free nested reviewer cannot revive checkpoints
+          // disabled by this outer effect-capable callback.
+          expect(await canActorReadMemorySourceSet(sourceDb as typeof db, first.companyId,
+            second.aliceActor, [memoryAId!])).toBe(true);
+          await expect(validate()).resolves.toBeUndefined();
+          await sourceDb.execute(sql`savepoint native_callback_comment_mutation`);
+          try {
+            await sourceDb.update(issueComments).set({ body: "Callback owner after edit" }).where(eq(issueComments.id, comment.id));
+            await expect(validate()).rejects.toMatchObject({ status: 403 });
+          } finally {
+            await sourceDb.execute(sql`rollback to savepoint native_callback_comment_mutation`);
+            await sourceDb.execute(sql`release savepoint native_callback_comment_mutation`);
+          }
+          await expect(validate()).resolves.toBeUndefined();
+        } finally {
+          await sourceDb.update(heartbeatRuns).set({ runnerProfileJson: profile }).where(and(
+            eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
+        }
+      });
+    });
+    // Memory C inherited Task B's earlier producer. A fresh public validation
+    // in this same physical transaction must reload that historical receipt.
+    const [followupRun] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, second.runId)));
+    const followupProfile = followupRun?.runnerProfileJson as Record<string, unknown>;
+    const followupReceipt = nativeRunInputSourceReceiptSchema.parse(followupProfile.nativeInputSourceReceipt);
+    const memoryCCallId = second.toolResults.find(value => value.memoryId === temporal.memoryCId)?.callId;
+    const followupResult = records(followupProfile.nativeToolResultSourceCaptures).find(value => value.callId === memoryCCallId);
+    const followupAssociation = records(followupProfile.nativeToolCallDispatchAssociations).find(value => value.callId === memoryCCallId);
+    const followupIntent = records(followupProfile.nativeAwModelWireIntents).find(value =>
+      records(value.responseToolUses).some(use => use.id === memoryCCallId));
+    const followupDispatch = followupReceipt.dispatches.flatMap(prefix => prefix.inputs).find(source =>
+      (source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch") &&
+      source.reservationId === followupIntent?.reservationId);
+    if (!followupResult || !followupAssociation || !followupIntent || !followupDispatch)
+      throw new Error("The real Memory C output lacks its settled follow-up producer capture");
+    const followupCapture = { runId: second.runId, dispatch: followupDispatch,
+      sourceSet: followupIntent.consumedSourceSet, consumedSourceComponents: followupIntent.consumedSourceComponents,
+      managedOpenCodeToolUse: { callId: memoryCCallId, toolName: followupResult.tool,
+        argumentsHash: followupAssociation.argumentsHash, responseContentHash: followupIntent.responseContentHash } } as Parameters<typeof assertNativeModelOutputCaptureCurrent>[3];
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      expect(await withReadMemoryTemporalSources(tx, second.aliceActor, first.companyId, temporal.memoryCId!, async sourceDb => {
+        await assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, second.issueId, followupCapture,
+          followupResult.tool as string, second.aliceActor, "settled");
+        try {
+          await sourceDb.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeInputSourceReceipt: null } })
+            .where(and(eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
+          await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, second.issueId, followupCapture,
+            followupResult.tool as string, second.aliceActor, "settled")).rejects.toMatchObject({ status: 403 });
+        } finally {
+          await sourceDb.update(heartbeatRuns).set({ runnerProfileJson: profile })
+            .where(and(eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
+        }
+        await expect(assertNativeModelOutputCaptureCurrent(sourceDb, first.companyId, second.issueId, followupCapture,
+          followupResult.tool as string, second.aliceActor, "settled")).resolves.toBeUndefined();
+      })).not.toBe(false);
     });
   });
 
@@ -288,7 +745,69 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     expect(await canActorReadIssuePrivacy(db, second.aliceActor, taskB!)).toBe(true);
     expect(assignedTaskB.assigneeUserId).toBe(first.bobUserId);
     expect(await canActorReadIssuePrivacy(db, second.bobActor, assignedTaskB)).toBe(false);
-  });
+
+    // This trusted fixture copies a real retained Task closure; every clone
+    // still binds its own actual SQL owner hash and canonical snapshot digest.
+    // One copy must work before a finite, otherwise-valid graph hits the work
+    // envelope. Neither input cardinality nor component/depth limits mask it.
+    const rollback = new Error("rollback Native capacity fixture");
+    await expect(db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      const sourceSnapshot = nativePayloadSourceSnapshotSchema.parse(taskB!.payloadSourceSnapshot);
+      const copies = await tx.insert(issues).values(Array.from({ length: 64 }, () => ({
+        ...taskB!, id: randomUUID(), identifier: null, issueNumber: null,
+        checkoutRunId: null, executionRunId: null,
+        payloadSourceSnapshot: null,
+      }))).returning({ id: issues.id });
+      const originalEdges = await tx.select().from(issuePrivacySources).where(and(
+        eq(issuePrivacySources.companyId, first.companyId), eq(issuePrivacySources.issueId, taskB!.id)));
+      expect(originalEdges.length).toBeGreaterThan(0);
+      for (const copy of copies) await tx.insert(issuePrivacySources).values(originalEdges.map(edge => ({
+        ...edge, id: randomUUID(), issueId: copy.id,
+      }))).onConflictDoNothing();
+      const sources: Extract<NativePayloadSourceInput, { kind: "task" }>[] = [];
+      for (const copy of copies) {
+        const { digest: _digest, ...body } = sourceSnapshot;
+        const snapshot = { ...body, owner: { ...body.owner, id: copy.id } };
+        const [sealed] = await tx.update(issues).set({ payloadSourceSnapshot: sql`(select value || jsonb_build_object(
+          'digest',encode(sha256(convert_to(value::text,'UTF8')),'hex'))
+          from (select ${JSON.stringify(snapshot)}::jsonb as value) supplied)` }).where(eq(issues.id, copy.id))
+          .returning({ sourceVersion: issues.updatedAt });
+        expect(sealed).toBeDefined();
+        sources.push({ kind: "task", issueId: copy.id, sourceVersion: sealed!.sourceVersion.toISOString(),
+          contentHash: sourceSnapshot.owner.contentHash });
+      }
+      const components = sources.map(source => ({ kind: "additional_input" as const,
+        responsibleUserId: first.aliceUserId,
+        policy: { issueIds: [source.issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
+        inputs: [source],
+      }));
+      const receipt = nativeRunInputSourceReceiptSchema.parse(profile.nativeInputSourceReceipt);
+      const { digest: _digest, ...receiptBody } = { ...receipt,
+        additionalInputs: [...receipt.additionalInputs, ...components.map(({ kind: _kind, ...set }) => set)] };
+      expect(receiptBody.additionalInputs.length).toBeLessThanOrEqual(256);
+      const [sealedReceipt] = await tx.execute<{ receipt: unknown }>(sql`select value || jsonb_build_object(
+        'digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) as receipt
+        from (select ${JSON.stringify(receiptBody)}::jsonb as value) supplied`);
+      const augmentedReceipt = nativeRunInputSourceReceiptSchema.parse(sealedReceipt!.receipt);
+      await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile,
+        nativeInputSourceReceipt: augmentedReceipt } })
+        .where(and(eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, first.runId)));
+      const validate = (selected: typeof components) => assertNativeManagedConsumedSourceSetCurrent(tx, {
+        companyId: first.companyId, issueId: first.issueId, runId: first.runId, actor: second.aliceActor,
+        components: selected,
+        sourceSet: { policy: { issueIds: selected.map(value => value.inputs[0]!.issueId).sort(),
+          projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
+          inputs: selected.flatMap(value => value.inputs) },
+      });
+      await expect(validate(components.slice(0, 1))).resolves.toBeUndefined();
+      expect(components).toHaveLength(64);
+      expect(components.flatMap(value => value.inputs)).toHaveLength(64);
+      await expect(validate(components)).rejects.toMatchObject({ status: 403,
+        message: "The Native source graph exceeds its total-work bound" });
+      throw rollback;
+    })).rejects.toBe(rollback);
+  }, 120_000);
 
   it("keeps document A independent while document B carries the later private Context source", async () => {
     const { first, second, documentKey, documentKeyB, privateRootId } = temporal;
@@ -312,6 +831,62 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
       issueId: first.issueId, revisionId: revisionA.id, actor: second.bobActor, requireLatest: true })).resolves.toBeUndefined();
     await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
       issueId: first.issueId, revisionId: revisionB.id, actor: second.bobActor, requireLatest: true })).rejects.toMatchObject({ status: 403 });
+
+    // A later Run's document retains earlier dispatches while its exact
+    // constructor-appended marker and revision writer identify one producer.
+    const followupCapture = (second.toolResultSourceCaptures as Array<Record<string, unknown>>).find(value =>
+      value.tool === "write_document" && value.documentRevision && typeof value.documentRevision === "object");
+    const documentC = followupCapture?.documentRevision as { revisionId: string; issueId: string } | undefined;
+    if (!documentC) throw new Error("The follow-up Run has no actual document capture");
+    const [revisionC] = await db.select().from(documentRevisions).where(and(
+      eq(documentRevisions.companyId, first.companyId), eq(documentRevisions.id, documentC.revisionId)));
+    if (!revisionC) throw new Error("The follow-up Native document revision disappeared");
+    const snapshotC = nativePayloadSourceSnapshotSchema.parse(revisionC.payloadSourceSnapshot);
+    const dispatches = snapshotC.inputs.filter(source =>
+      source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch");
+    expect(new Set(dispatches.map(source => source.runId))).toEqual(new Set([first.runId, second.runId]));
+    expect(snapshotC.inputs.at(-1)).toMatchObject({ runId: second.runId });
+    expect(revisionC.createdByRunId).toBe(second.runId);
+    const validateC = (sourceDb: typeof db) => assertNativeDocumentRevisionCurrentSourceAccess(sourceDb,
+      { companyId: first.companyId, issueId: documentC.issueId, revisionId: revisionC.id, actor: second.aliceActor });
+    await expect(validateC(db)).resolves.toBeUndefined();
+    await expect(assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: first.companyId,
+      issueId: documentC.issueId, revisionId: revisionC.id, actor: second.bobActor })).rejects.toMatchObject({ status: 403 });
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      await tx.execute(sql`savepoint native_document_wrong_writer`);
+      try {
+        const earlier = nativeRunInputSourceReceiptSchema.parse(first.sourceReceipt).dispatches
+          .flatMap(prefix => prefix.inputs).find(source =>
+            (source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch") &&
+            source.runId === first.runId && !snapshotC.inputs.some(value => nativeSha256(value) === nativeSha256(source)));
+        expect(earlier).toBeDefined();
+        const { digest: _digest, ...body } = snapshotC;
+        const wrongFinalWriter = { ...body, inputs: [...snapshotC.inputs, earlier!] };
+        expect(nativePayloadSourceSnapshotSchema.safeParse({ ...wrongFinalWriter, digest: snapshotC.digest }).success).toBe(true);
+        await tx.update(documentRevisions).set({ payloadSourceSnapshot: sql`(select value || jsonb_build_object(
+          'digest',encode(sha256(convert_to(value::text,'UTF8')),'hex'))
+          from (select ${JSON.stringify(wrongFinalWriter)}::jsonb as value) supplied)` }).where(eq(documentRevisions.id, revisionC.id));
+        await expect(validateC(tx)).rejects.toMatchObject({ status: 403,
+          message: "The Native document source has ambiguous model dispatches" });
+      } finally {
+        await tx.execute(sql`rollback to savepoint native_document_wrong_writer`);
+        await tx.execute(sql`release savepoint native_document_wrong_writer`);
+      }
+      await expect(validateC(tx)).resolves.toBeUndefined();
+      const [run] = await tx.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, first.companyId), eq(heartbeatRuns.id, second.runId)));
+      const profile = run?.profile as Record<string, unknown>;
+      const captures = profile.nativeToolResultSourceCaptures as Array<Record<string, unknown>>;
+      try {
+        await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile,
+          nativeToolResultSourceCaptures: [...captures, followupCapture] } }).where(eq(heartbeatRuns.id, second.runId));
+        await expect(validateC(tx)).rejects.toMatchObject({ status: 403 });
+      } finally {
+        await tx.update(heartbeatRuns).set({ runnerProfileJson: profile }).where(eq(heartbeatRuns.id, second.runId));
+      }
+      await expect(validateC(tx)).resolves.toBeUndefined();
+    });
   });
 
   it("carries private Context lineage into fresh Context and Memory C without a direct root Memory item", async () => {

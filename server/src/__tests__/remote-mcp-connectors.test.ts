@@ -114,7 +114,7 @@ describe("remote connector lifecycle", () => {
     expect(removed.enabled).toBe(false);
     expect(removed.status).toBe("archived");
   });
-  it("renews expired discovery sessions and requires an explicit retry after an expired execution session", async () => {
+  it("renews expired discovery sessions while refusing opaque invocation before session initialization", async () => {
     const org = await company();
     const [agent] = await db.insert(agents).values({ companyId: org.id, name: "Session tester", role: "engineer", adapterType: "process", adapterConfig: {}, runtimeConfig: {} }).returning();
     let initialized = 0;
@@ -138,15 +138,12 @@ describe("remote connector lifecycle", () => {
     await service.finishGalleryAppConnection(org.id, connected.connectionId, { enabledCatalogEntryIds: connected.catalog.map((entry) => entry.id), askFirstCatalogEntryIds: [], access: "all_agents" }, actor);
     const gateway = createToolGatewayService(db, { deploymentMode: "local_trusted", deploymentExposure: "private", remoteHttpRequest: send });
     const call = () => gateway.executeTestCall({ companyId: org.id, connectionId: connected.connectionId, agentId: agent.id, userId: actor.actorId, toolName: "read", parameters: {} });
-    expect(await call()).toMatchObject({ decision: "allowed", result: { data: { isError: false } } });
-    const executionSession = calls[0];
-    expired.add(executionSession);
-    const failed = await call();
-    expect(failed).toMatchObject({ error: { reasonCode: "mcp_remote_status" } });
-    expect(calls).toEqual([executionSession, executionSession]);
-    expect(await call()).toMatchObject({ decision: "allowed", result: { data: { isError: false } } });
-    expect(calls).toHaveLength(3);
-    expect(calls[2]).not.toBe(executionSession);
+    const beforeExecution = initialized;
+    await expect(call()).rejects.toMatchObject({reasonCode:"tool_model_effect_unqualified"});
+    expired.add(`session-${initialized}`);
+    await expect(call()).rejects.toMatchObject({reasonCode:"tool_model_effect_unqualified"});
+    expect(calls).toEqual([]);
+    expect(initialized).toBe(beforeExecution);
   });
   it("saves a vaulted draft without contacting the provider and resumes with custom headers", async () => {
     const org = await company(); const remote = remoteFixture();
@@ -187,7 +184,7 @@ describe("remote connector lifecycle", () => {
     await callback();
     expect((await service.listConnectionInstalls(connected.connectionId))).toHaveLength(0);
   });
-  it("enforces agent and action permissions before dispatch, and preserves provider resume after Paperclip approval", async () => {
+  it("retains connection access configuration but refuses opaque execute/resume before provider work", async () => {
     const org = await company();
     const [allowed, denied] = await db.insert(agents).values(["Allowed", "Denied"].map((name) => ({ companyId: org.id, name, role: "engineer", adapterType: "process", adapterConfig: {}, runtimeConfig: {} }))).returning();
     const calls: { name: string; arguments: unknown; session: string | null }[] = [];
@@ -207,47 +204,22 @@ describe("remote connector lifecycle", () => {
     await service.finishGalleryAppConnection(org.id, connection.connectionId, { enabledCatalogEntryIds: [ids.execute, ids.resume], askFirstCatalogEntryIds: [ids.execute], access: { agentIds: [allowed.id] } }, actor);
     const gateway = createToolGatewayService(db, { deploymentMode: "local_trusted", deploymentExposure: "private", remoteHttpRequest: send, toolActionSigningSecret: "fixture-signing-key" });
     const call = (agentId: string, toolName: string, parameters: Record<string, unknown> = {}) => gateway.executeTestCall({ companyId: org.id, connectionId: connection.connectionId, agentId, userId: actor.actorId, toolName, parameters });
-    expect((await call(denied.id, "execute")).decision).toBe("off");
-    expect((await call(allowed.id, "off")).decision).toBe("off");
+    for (const [agentId, toolName] of [[denied.id,"execute"],[allowed.id,"off"],[allowed.id,"execute"],[allowed.id,"resume"]])
+      await expect(call(agentId!,toolName!)).rejects.toMatchObject({reasonCode:"tool_model_effect_unqualified"});
     expect(calls).toHaveLength(0);
-    const asked = await call(allowed.id, "execute");
-    expect(asked.decision).toBe("ask_first");
-    expect(calls).toHaveLength(0);
-    if (!("actionRequestId" in asked)) throw new Error("Missing approval request");
-    await gateway.approveActionRequest({ companyId: org.id, actionRequestId: asked.actionRequestId!, actor: { userId: actor.actorId } });
-    const status = await gateway.getTestCallStatus({ companyId: org.id, connectionId: connection.connectionId, actionRequestId: asked.actionRequestId! });
-    expect(status.phase).toBe("done");
-    expect(status.upstreamPending).toMatchObject({ executionId: "fixture-execution", resumeTool: "resume" });
-    const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, asked.invocationId));
-    expect(invocation.resultSummary?.summary).toContain("fixture-execution");
-    const resumed = await call(allowed.id, "resume", { executionId: status.upstreamPending!.executionId, action: "accept", content: "{}" });
-    expect(resumed.decision).toBe("allowed");
-    expect(calls.map((call) => call.name)).toEqual(["execute", "resume"]);
-    expect(calls.every((call) => call.session === "execution-session")).toBe(true);
-    const [issue] = await db.insert(issues).values({ companyId: org.id, title: "Provider approval", status: "in_progress", assigneeAgentId: allowed.id }).returning();
-    const [run] = await db.insert(heartbeatRuns).values({ companyId: org.id, agentId: allowed.id, invocationSource: "assignment", status: "running", contextSnapshot: { issueId: issue.id } }).returning();
-    const session = await gateway.createSession({ companyId: org.id, agentId: allowed.id, runId: run.id });
-    const execute = (await gateway.listToolsForSession(session.token)).find((entry) => entry.upstreamToolName === "execute")!;
+    expect(await db.select().from(toolInvocations).where(eq(toolInvocations.companyId,org.id))).toHaveLength(0);
+    const [issue] = await db.insert(issues).values({companyId:org.id,title:"Opaque provider unavailable",status:"in_progress",assigneeAgentId:allowed.id}).returning();
+    const [run] = await db.insert(heartbeatRuns).values({companyId:org.id,agentId:allowed.id,invocationSource:"assignment",status:"running",contextSnapshot:{issueId:issue.id}}).returning();
+    const session=await gateway.createSession({companyId:org.id,agentId:allowed.id,runId:run.id});
+    const execute=(await gateway.listToolsForSession(session.token)).find(entry=>entry.upstreamToolName==="execute")!;
     expect(execute).toBeDefined();
-    let approvalId = "";
-    try { await gateway.executeTool({ sessionToken: session.token, tool: execute.name, parameters: {} }); }
-    catch (error) {
-      expect(error).toMatchObject({ reasonCode: "approval_required" });
-      approvalId = (error as { details: { actionRequestId: string } }).details.actionRequestId;
-    }
-    expect(approvalId).not.toBe("");
-    await gateway.approveActionRequest({ companyId: org.id, actionRequestId: approvalId, actor: { userId: actor.actorId } });
-    await expect(gateway.executeTool({ sessionToken: session.token, tool: execute.name, parameters: {} })).rejects.toMatchObject({
-      reasonCode: "provider_interaction_required", details: { upstreamPending: { executionId: "fixture-execution" } },
-    });
-    expect(calls).toHaveLength(3); // Retrying the approved action did not start another execution.
-    await service.finishGalleryAppConnection(org.id, connection.connectionId, { enabledCatalogEntryIds: [ids.execute, ids.resume], askFirstCatalogEntryIds: [ids.execute], access: { agentIds: [] } }, actor);
-    expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, connection.connectionId))).toHaveLength(0);
-    expect((await call(allowed.id, "execute")).decision).toBe("off");
-    expect((await gateway.listToolsForSession(session.token)).filter((entry) => entry.connectionId === connection.connectionId)).toHaveLength(0);
-    await service.archiveConnection(connection.connectionId, org.id, actor);
-    await expect(call(allowed.id, "resume")).rejects.toThrow("not found");
-    expect(calls).toHaveLength(3);
+    await expect(gateway.executeTool({sessionToken:session.token,tool:execute.name,parameters:{}})).rejects.toMatchObject({reasonCode:"tool_model_effect_unqualified"});
+    await service.finishGalleryAppConnection(org.id,connection.connectionId,{enabledCatalogEntryIds:[ids.execute,ids.resume],askFirstCatalogEntryIds:[ids.execute],access:{agentIds:[]}},actor);
+    expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId,connection.connectionId))).toHaveLength(0);
+    expect((await gateway.listToolsForSession(session.token)).filter(entry=>entry.connectionId===connection.connectionId)).toHaveLength(0);
+    await service.archiveConnection(connection.connectionId,org.id,actor);
+    await expect(call(allowed.id,"resume")).rejects.toThrow("not found");
+    expect(calls).toHaveLength(0);
   });
 
 });

@@ -107,6 +107,28 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     };
   }
 
+  it("withholds a committed Context when the caller aborts while the owned transaction settles", async () => {
+    const seeded = await seedCompanyAndAgent("Late caller cancellation");
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId,
+      agentId: seeded.agent.id, responsibleUserId: seeded.userId, status: "running" }).returning();
+    const controller = new AbortController(), reason = new Error("fixture_late_abort");
+    const observedDb = new Proxy(db, { get(target, key, receiver) {
+      if (key === "transaction") return async (...args: Parameters<typeof db.transaction>) => {
+        const result = await target.transaction(...args);
+        controller.abort(reason);
+        return result;
+      };
+      return Reflect.get(target, key, receiver);
+    } });
+    await expect(contextManifestService(observedDb).create({ companyId: seeded.companyId,
+      runId: run!.id, agentId: seeded.agent.id, query: "Settled transaction cancellation",
+      policySnapshot: {}, selected: [] }, undefined, { signal: controller.signal })).rejects.toBe(reason);
+    expect(controller.signal.aborted).toBe(true);
+    // The transaction really committed. Cancellation withholds its return;
+    // it cannot pretend an already durable append-only outcome rolled back.
+    expect((await db.select().from(contextManifests).where(eq(contextManifests.runId, run!.id))).length).toBe(1);
+  });
+
   it("persists only hashes and provenance, not raw query or evidence content", async () => {
     const seeded = await seedCompanyAndAgent("Alpha");
     const [run] = await db.insert(heartbeatRuns).values({

@@ -4,7 +4,7 @@ import { PgTransaction } from "drizzle-orm/pg-core";
 import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,memoryRecords,agentExecutionManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,companyMemberships,authUsers,agents,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
-import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadHeartbeatRunPrivacyBatch,isCurrentTaskPrivacyPrincipal,canActorReadIssuePrivacy,canActorReadIssuePrivacyBatch,issueReadSqlCondition,type AuthorizationActor} from "./authorization.js";
+import {activeMemoryPageStructuralProofMemoStore,authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadHeartbeatRunPrivacyBatch,isCurrentTaskPrivacyPrincipal,canActorReadIssuePrivacy,canActorReadIssuePrivacyBatch,issueReadSqlCondition,type AuthorizationActor,type MemoryPageStructuralProofMemoStore} from "./authorization.js";
 import type {NativeReadScope} from "./analytical-reader.js";
 import {HttpError,conflict,forbidden,unprocessable} from "../errors.js";
 
@@ -30,12 +30,30 @@ export async function assertAnalyticalRetentionRootOwnerCurrent(db:Db,companyId:
 
 const pinsSchema=z.array(analyticalContextAuthorityPinSchema).min(1).max(32);
 type AnalyticalPayloadScope={issueId:string}|{runId:string};
+type AnalyticalContextReadBudget={signal?:AbortSignal;deadlineAt?:number};
 type AnalyticalPayloadWorklist={
  directSources:Map<string,AnalyticalPayloadScope>;
  sharedSources:Map<string,AnalyticalPayloadScope>;
  finalChecks:Array<()=>Promise<void>>;
  workflowRunIds:Set<string>;
 };
+function assertAnalyticalContextReadActive(budget:AnalyticalContextReadBudget={}) {
+ if(budget.signal?.aborted)throw budget.signal.reason??new HttpError(503,"Context provider deadline exceeded",{code:"source_unavailable",reason:"context_deadline"});
+ if(budget.deadlineAt!==undefined&&budget.deadlineAt<=Date.now())
+  throw new HttpError(503,"Context provider deadline exceeded",{code:"source_unavailable",reason:"context_deadline"});
+}
+async function applyAnalyticalContextStatementBudget(db:Db,budget:AnalyticalContextReadBudget={}) {
+ assertAnalyticalContextReadActive(budget);
+ const remaining=budget.deadlineAt===undefined?8_000:Math.min(8_000,budget.deadlineAt-Date.now());
+ if(remaining<=0)assertAnalyticalContextReadActive({...budget,deadlineAt:Date.now()});
+ const timeoutMs=Math.max(1,Math.floor(remaining));
+ // Never widen an existing statement budget: nested source-owner checks may
+ // inherit a shorter Memory or Context deadline on this same transaction.
+ await db.execute(sql`select set_config('statement_timeout',
+  case when current_setting('statement_timeout')='0' then ${timeoutMs}::text||'ms'
+   else least(${timeoutMs}::numeric,extract(epoch from current_setting('statement_timeout')::interval)*1000)::bigint::text||'ms' end,true)`);
+ assertAnalyticalContextReadActive(budget);
+}
 /** Exact native source owners reauthorize retained identities. No copied fact,
  * historical requester or feature flag supplies a current reader privilege. */
 export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:AuthorizationActor,raw:AnalyticalContextAuthorityPin[],deadline=performance.now()+30000,historicalQualification=true,learningCycleScope?:{cycleId:string|null;purpose:string}) {
@@ -149,13 +167,14 @@ export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,
  });
 }
 
-export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,options:{privacyLockMode?:"read"|"write"}={}):Promise<void> {
+export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,options:{privacyLockMode?:"read"|"write"}&AnalyticalContextReadBudget={}):Promise<void> {
  if("issueId" in scope){
-  await assertAnalyticalContextPayloadAccessBatch(db,companyId,actor,[scope.issueId],readScope,{privacyLockMode:options.privacyLockMode});
+  await assertAnalyticalContextPayloadAccessBatch(db,companyId,actor,[scope.issueId],readScope,options);
   return;
  }
  if(options.privacyLockMode==="read"){
   if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccess(tx as unknown as Db,companyId,actor,scope,readScope,options));
+  if(options.deadlineAt!==undefined||options.signal)await applyAnalyticalContextStatementBudget(db,options);
   const {lockAnalyticalCompany,markAnalyticalPrivacyReadLocked}=await import("./analytical-privacy.js");
   const {lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
   await lockAnalyticalCompany(db,companyId,"read");await lockMemoryPrivacy(db,companyId,"read");
@@ -297,13 +316,14 @@ async function nativeTaskPayloadSourceShape(db:Db,companyId:string,ids:string[],
 }
 
 export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:string,actor:AuthorizationActor|undefined,
- issueIds:string[],readScope?:NativeReadScope,options:{fastPathOnly?:boolean;runId?:string;directRunIds?:string[];privacyLockMode?:"read"|"write"}={}):Promise<void|boolean> {
+ issueIds:string[],readScope?:NativeReadScope,options:{fastPathOnly?:boolean;runId?:string;directRunIds?:string[];privacyLockMode?:"read"|"write";structuralProofMemoStore?:MemoryPageStructuralProofMemoStore}&AnalyticalContextReadBudget={}):Promise<void|boolean> {
  const ids=[...new Set(issueIds)];
  const directRunIds=[...new Set(options.directRunIds??[])];
  if(ids.length+directRunIds.length>256||[...ids,...directRunIds].some(id=>!z.string().uuid().safeParse(id).success))
   throw new HttpError(403,"The complete analytical Task population is unavailable",{code:"analytical_source_access_lost"});
  if(!ids.length&&!directRunIds.length)return;
  if(!is(db,PgTransaction))return db.transaction(tx=>assertAnalyticalContextPayloadAccessBatch(tx as unknown as Db,companyId,actor,ids,readScope,options));
+ if(options.deadlineAt!==undefined||options.signal)await applyAnalyticalContextStatementBudget(db,options);
  const {lockAnalyticalCompany,markAnalyticalPrivacyReadLocked}=await import("./analytical-privacy.js");
  const {lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
  const lockMode=options.privacyLockMode??(options.fastPathOnly===true||directRunIds.length>0?"read":"write");
@@ -415,8 +435,11 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
  }
  const finalize=async()=>{
   const directScopes=new Map([...worklist.directSources,...worklist.sharedSources]);
-  await db.execute(sql`set local statement_timeout='8s'`);
-  for(const source of directScopes.values())await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,source,readScope,true,"issueId"in source||directRunIds.length>0);
+  await applyAnalyticalContextStatementBudget(db,options);
+  for(const source of directScopes.values()){
+   assertAnalyticalContextReadActive(options);
+   await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,source,readScope,true,"issueId"in source||directRunIds.length>0,options,options.structuralProofMemoStore);
+  }
   for(const check of worklist.finalChecks)await check();
   // Recheck all Task readers after every source-owner wait, under this exact
   // transaction and source-lock phase. The result cannot escape this callback.
@@ -452,8 +475,10 @@ export async function assertAnalyticalContextPayloadAccessBatch(db:Db,companyId:
  * owner locks and final reader checks as the Task batch while admitting direct
  * run scopes into that worklist. */
 export async function assertAnalyticalContextPayloadOwnersAccessBatch(db:Db,companyId:string,actor:AuthorizationActor|undefined,
- owners:{issueIds:string[];runIds:string[]},readScope?:NativeReadScope):Promise<void> {
- await assertAnalyticalContextPayloadAccessBatch(db,companyId,actor,owners.issueIds,readScope,{directRunIds:owners.runIds});
+ owners:{issueIds:string[];runIds:string[]},readScope?:NativeReadScope,
+ structuralProofMemoStore?:MemoryPageStructuralProofMemoStore):Promise<void> {
+ await assertAnalyticalContextPayloadAccessBatch(db,companyId,actor,owners.issueIds,readScope,
+  {directRunIds:owners.runIds,structuralProofMemoStore});
 }
 
 async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:string,actor:AuthorizationActor|undefined,
@@ -547,7 +572,7 @@ async function assertAnalyticalContextPayloadAccessInternal(db:Db,companyId:stri
  return inspect();
 }
 
-async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,companyLocksHeld=false,deferReaderAcl=false) {
+async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope,companyLocksHeld=false,deferReaderAcl=false,budget:AnalyticalContextReadBudget={},structuralProofMemoStore?:MemoryPageStructuralProofMemoStore) {
  // Ordinary conversation prose has source privacy even without analytical
  // retention roots. Every actual ancestor goes through this same narrowing.
  let diagnosticStage="task_reader_acl";
@@ -579,7 +604,7 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   // Keep a transaction only for standalone callers.
   if(!companyLocksHeld){
    diagnosticStage="retained_context_privacy_locks";
-   await tx.execute(sql`set local statement_timeout='8s'`);
+   await applyAnalyticalContextStatementBudget(tx,budget);
    if(!analyticalPrivacyReadLocked(tx as object)){
     await lockAnalyticalCompany(tx,companyId,"read");await lockMemoryPrivacy(tx,companyId,"read");
     markAnalyticalPrivacyReadLocked(tx as object);
@@ -636,7 +661,8 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
    }
   }
   if(ordinaryMemoryRoots.length && (performance.now()>deadline ||
-   !await canActorReadMemorySourceSet(tx,companyId,currentActor,ordinaryMemoryRoots.map(root=>root.id))))
+  !await canActorReadMemorySourceSet(tx,companyId,currentActor,ordinaryMemoryRoots.map(root=>root.id),undefined,
+    structuralProofMemoStore?.transaction === (tx as object) ? structuralProofMemoStore : undefined)))
    throw forbidden("Retained Context source access is unavailable");
   const foundation=await tx.selectDistinct({ref:contextManifestItems.sourceRef}).from(contextManifests)
    .innerJoin(contextManifestItems,and(eq(contextManifestItems.companyId,contextManifests.companyId),eq(contextManifestItems.manifestId,contextManifests.id)))
@@ -696,6 +722,8 @@ export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:str
  const [run]=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,runId))).limit(1);
  if(!run)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
  const actor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId,agentId:run.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
+ const structuralProofMemoStore=activeMemoryPageStructuralProofMemoStore(db,actor) ??
+  {transaction:db as object,proofsByOwnerPrefix:new Map<string,Map<string,Set<string>>>()};
  // Persisted conversation runs use the original full mixed-source reviewer.
  // The marker only chooses the conservative route; it grants no source access.
  const generation=run.contextSnapshot?.conversationSessionGeneration;
@@ -719,7 +747,7 @@ export async function assertNativeAnalyticalRunPayloadAccess(db:Db,companyId:str
   }
  }
  await assertAnalyticalContextPayloadOwnersAccessBatch(db,companyId,actor,
-  {issueIds:run.nativeIssueId?[run.nativeIssueId]:[],runIds:[run.id]},"task");
+  {issueIds:run.nativeIssueId?[run.nativeIssueId]:[],runIds:[run.id]},"task",structuralProofMemoStore);
  const [current]=await db.select({agentId:heartbeatRuns.agentId,responsibleUserId:heartbeatRuns.responsibleUserId,nativeIssueId:heartbeatRuns.nativeIssueId})
   .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,run.id))).for("share").limit(1);
  if(!current||current.agentId!==run.agentId||current.responsibleUserId!==run.responsibleUserId||current.nativeIssueId!==run.nativeIssueId)

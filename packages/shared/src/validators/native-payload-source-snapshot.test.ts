@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "./native-payload-source-snapshot.js";
+import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, unionNativePayloadSourceInputs,
+  type NativePayloadSourceInput } from "./native-payload-source-snapshot.js";
 
 const hash = "a".repeat(64);
 function snapshot(inputs: NativePayloadSourceInput[] = []) {
@@ -10,6 +11,17 @@ function snapshot(inputs: NativePayloadSourceInput[] = []) {
 }
 
 describe("Native payload source snapshot structural boundary", () => {
+  it("unions exact canonical captures and preserves conflicting versions for the source owner", () => {
+    const issueId = randomUUID();
+    const capture = { kind: "task" as const, issueId, sourceVersion: "version-1", contentHash: hash };
+    const reorderedCapture = { contentHash: hash, sourceVersion: "version-1", issueId, kind: "task" as const };
+    expect(unionNativePayloadSourceInputs([[capture], [reorderedCapture]])).toEqual([capture]);
+    const changedVersion = { ...capture, sourceVersion: "version-2", contentHash: "b".repeat(64) };
+    const changedHash = { ...capture, contentHash: "c".repeat(64) };
+    expect(unionNativePayloadSourceInputs([[capture], [changedVersion]])).toEqual([capture, changedVersion]);
+    expect(unionNativePayloadSourceInputs([[capture], [changedHash]])).toEqual([capture, changedHash]);
+  });
+
   it("retains distinct body captures and actual opaque runtime identifiers without granting source truth", () => {
     const issueId = randomUUID();
     const value = snapshot([

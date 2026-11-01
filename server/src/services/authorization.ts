@@ -6,6 +6,7 @@ import { and, eq, inArray, is, isNull, sql, type SQL, type SQLWrapper } from "dr
 import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
+import type { NativeSourceGraphObligationHandle } from "./native-direct-input.js";
 import {
   executePrivacyIdSelect,
   agents,
@@ -44,7 +45,7 @@ import {
   contextManifestItems,
 } from "@paperclipai/db";
 import { agentExecutionScopeSchema, nativePayloadSourceSnapshotSchema, pluginOperationIssueOriginKind,
-  routineRevisionSnapshotV1Schema, type AgentExecutionScope } from "@paperclipai/shared";
+  routineRevisionSnapshotV1Schema, type AgentExecutionScope, type NativePayloadSourceInput, type NativePayloadSourcePolicy } from "@paperclipai/shared";
 import type {
   AgentApiKeyScope,
   InboxAgentPolicyMode,
@@ -656,142 +657,7 @@ export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: Auth
   return taskSourcePrivacySqlCondition(_db, "issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
 }
 
-let nativeIssuePrivacyDiagnosticStatements = 0;
 let nativeTaskReaderScopeDiagnostics = 0;
-const nativeIssuePrivacyDiagnosticPlans = new Set<string>();
-const nativeIssuePrivacyDiagnosticObservedSettings = new Set<string>();
-const nativeIssuePrivacyDiagnosticGroups = new Map<string, { stage: string; actorType: string; actorSource: string;
-  caller: string; count: number; totalMs: number; maxMs: number }>();
-type NativeIssuePrivacyQueryProfile = Map<string, { stage: string; actorType: string; actorSource: string;
-  caller: string; count: number; totalMs: number; maxMs: number }>;
-const nativeIssuePrivacyQueryProfiles = new AsyncLocalStorage<NativeIssuePrivacyQueryProfile>();
-export async function withNativeIssuePrivacyQueryProfile<T>(read: () => Promise<T>,
-  onComplete: (counts: Array<{ stage: string; actorType: string; actorSource: string; caller: string;
-    count: number; totalMs: number; maxMs: number }>) => void): Promise<T> {
-  const profile: NativeIssuePrivacyQueryProfile = new Map();
-  return nativeIssuePrivacyQueryProfiles.run(profile, async () => {
-    try { return await read(); }
-    finally { onComplete([...profile.values()].map(value => ({ ...value,
-      totalMs: Math.round(value.totalMs), maxMs: Math.round(value.maxMs) }))
-      .sort((left, right) => right.totalMs - left.totalMs)); }
-  });
-}
-async function nativeIssuePrivacyDiagnosticQuery<T>(db: Db | DbTransaction, actor: AuthorizationActor,
-  stage: "retained_source_graph" | "effective_acl", query: SQLWrapper, execute: () => Promise<T>): Promise<T> {
-  const queryProfile = nativeIssuePrivacyQueryProfiles.getStore();
-  if (process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS !== "1" && !queryProfile) return execute();
-  const startedAt = performance.now();
-  let succeeded = false;
-  let failureCode: string | null = null;
-  try {
-    const result = await execute();
-    succeeded = true;
-    return result;
-  } catch (error) {
-    const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
-    failureCode = typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? code : null;
-    throw error;
-  } finally {
-    const elapsedMs = Math.max(0, performance.now() - startedAt);
-    const frames = new Error().stack?.split("\n").flatMap(line => {
-        const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
-        return match && match[1] !== "authorization.ts" ? [`${match[1]}:${match[2]}`] : [];
-      }).slice(0, 4) ?? [];
-    const relevant = actor.type === "agent" && frames.some(frame =>
-      /native-direct-input|worker-model-gateway|native-session-executor|analytical-context-authority/.test(frame));
-    const caller = frames.find(frame => /native-direct-input|worker-model-gateway|native-session-executor|analytical-context-authority/.test(frame)) ?? "native:unknown";
-    const actorSource = actor.source ?? "unknown";
-    if (queryProfile) {
-      const key = `${stage}:${actor.type}:${actorSource}:${caller}`;
-      const group = queryProfile.get(key) ?? { stage, actorType: actor.type, actorSource, caller,
-        count: 0, totalMs: 0, maxMs: 0 };
-      group.count += 1;
-      group.totalMs += elapsedMs;
-      group.maxMs = Math.max(group.maxMs, elapsedMs);
-      queryProfile.set(key, group);
-    }
-    if (relevant) {
-      const key = `${stage}:${actor.type}:${actorSource}:${caller}`;
-      const group = nativeIssuePrivacyDiagnosticGroups.get(key) ?? { stage, actorType: actor.type,
-        actorSource, caller, count: 0, totalMs: 0, maxMs: 0 };
-      group.count = Math.min(1_000_000, group.count + 1);
-      group.totalMs = Math.min(1_000_000_000, group.totalMs + elapsedMs);
-      group.maxMs = Math.max(group.maxMs, elapsedMs);
-      nativeIssuePrivacyDiagnosticGroups.set(key, group);
-      const totalCount = [...nativeIssuePrivacyDiagnosticGroups.values()].reduce((sum, value) => sum + value.count, 0);
-      if (totalCount % 16 === 0) console.error("native_issue_privacy_query_summary", JSON.stringify(
-        [...nativeIssuePrivacyDiagnosticGroups.values()].sort((left, right) => right.totalMs - left.totalMs)
-          .slice(0, 16).map(value => ({ ...value, totalMs: Math.round(value.totalMs), maxMs: Math.round(value.maxMs) }))));
-    }
-    if (relevant && elapsedMs >= 100 && nativeIssuePrivacyDiagnosticStatements < 48) {
-      nativeIssuePrivacyDiagnosticStatements += 1;
-      let plan: Record<string, unknown> | null = null;
-      let observedSettings: Record<string, unknown> | null = null;
-      const explainDiagnosticsEnabled = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_EXPLAIN_DIAGNOSTICS === "1";
-      if (explainDiagnosticsEnabled && stage === "effective_acl" && nativeIssuePrivacyDiagnosticObservedSettings.size < 32 &&
-          !nativeIssuePrivacyDiagnosticObservedSettings.has(`${actorSource}:${caller}`)) {
-        nativeIssuePrivacyDiagnosticObservedSettings.add(`${actorSource}:${caller}`);
-        try {
-          const [settings] = await db.execute<{ jit: string; jitAboveCost: string }>(sql`
-            select current_setting('jit') as jit, current_setting('jit_above_cost') as "jitAboveCost"
-          `);
-          observedSettings = { jit: settings?.jit === "on", jitAboveCost: settings?.jitAboveCost ?? null };
-        } catch {
-          observedSettings = { unavailable: true };
-        }
-      }
-      const planKey = `${stage}:${actorSource}:${caller}`;
-      if (explainDiagnosticsEnabled && succeeded && elapsedMs >= 100 && nativeIssuePrivacyDiagnosticPlans.size < 8 &&
-          !nativeIssuePrivacyDiagnosticPlans.has(planKey)) {
-        nativeIssuePrivacyDiagnosticPlans.add(planKey);
-        try {
-          const [row] = await db.execute<{ "QUERY PLAN": unknown }>(sql`explain (format json) ${query}`);
-          const raw = row?.["QUERY PLAN"];
-          const rootValue = Array.isArray(raw) ? raw[0] : raw;
-          const explainRoot = rootValue && typeof rootValue === "object" && !Array.isArray(rootValue)
-            ? rootValue as Record<string, unknown> : null;
-          const planRoot = explainRoot?.Plan && typeof explainRoot.Plan === "object" && !Array.isArray(explainRoot.Plan)
-            ? explainRoot.Plan as Record<string, unknown> : null;
-          const nodes: string[] = [];
-          const indexes: string[] = [];
-          const visit = (node: Record<string, unknown>, depth: number) => {
-            if (depth > 64 || nodes.length >= 512) return;
-            if (typeof node["Node Type"] === "string") nodes.push(node["Node Type"] as string);
-            if (typeof node["Index Name"] === "string") indexes.push(node["Index Name"] as string);
-            const children = Array.isArray(node.Plans) ? node.Plans : [];
-            for (const child of children) if (child && typeof child === "object" && !Array.isArray(child))
-              visit(child as Record<string, unknown>, depth + 1);
-          };
-          if (planRoot) visit(planRoot, 0);
-          const [settings] = await db.execute<{ jit: string; jitAboveCost: string;
-            jitInlineAboveCost: string; jitOptimizeAboveCost: string; planCacheMode: string;
-            statementTimeout: string; lockTimeout: string }>(sql`
-            select current_setting('jit') as jit, current_setting('jit_above_cost') as "jitAboveCost",
-              current_setting('jit_inline_above_cost') as "jitInlineAboveCost",
-              current_setting('jit_optimize_above_cost') as "jitOptimizeAboveCost",
-              current_setting('plan_cache_mode') as "planCacheMode",
-              current_setting('statement_timeout') as "statementTimeout",
-              current_setting('lock_timeout') as "lockTimeout"
-          `);
-          plan = { totalCost: typeof planRoot?.["Total Cost"] === "number" ? planRoot["Total Cost"] : null,
-            startupCost: typeof planRoot?.["Startup Cost"] === "number" ? planRoot["Startup Cost"] : null,
-            nodes: nodes.slice(0, 64), indexes: [...new Set(indexes)].slice(0, 64),
-            jit: settings?.jit === "on", jitAboveCost: settings?.jitAboveCost ?? null,
-            jitInlineAboveCost: settings?.jitInlineAboveCost ?? null,
-            jitOptimizeAboveCost: settings?.jitOptimizeAboveCost ?? null,
-            planCacheMode: settings?.planCacheMode ?? null,
-            statementTimeout: settings?.statementTimeout ?? null, lockTimeout: settings?.lockTimeout ?? null };
-        } catch {
-          plan = { unavailable: true };
-        }
-      }
-      console.error("native_issue_privacy_query_diagnostic", JSON.stringify({ stage,
-        elapsedMs: Math.round(elapsedMs), actorType: actor.type, actorSource,
-        succeeded, failureCode, frames, ...(observedSettings ? { observedSettings } : {}), ...(plan ? { plan } : {}) }));
-    }
-  }
-}
-
 type NativeIssueSnapshotDiagnostic = { valid?: SQL<boolean>; corrupt?: SQL<boolean>; graphDenials?: SQL<string[]>;
   projectFacts?: SQL<string> };
 async function issueReadSqlConditionInMemoryScope(db: Db | DbTransaction, actor: AuthorizationActor, issueId: string,
@@ -1676,8 +1542,7 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
       select coalesce(array_agg(id::text) filter(where id is not null),array[]::text[]) as ids,
         ((select count(*) from bounded_nodes)>256 or (select count(*) from bounded)>256) as overflow from bounded
     `;
-    const [sourceRows] = await nativeIssuePrivacyDiagnosticQuery(db, actor, "retained_source_graph", sourceGraphQuery,
-      () => db.execute<{ ids: string[]; overflow: boolean }>(sourceGraphQuery));
+    const [sourceRows] = await db.execute<{ ids: string[]; overflow: boolean }>(sourceGraphQuery);
     const routineIds = sourceRows?.ids ?? [];
     if (sourceRows?.overflow) return false;
     if (routineIds.length) {
@@ -1696,8 +1561,7 @@ export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: Au
   const readCondition = await issueReadSqlConditionInMemoryScope(db, actor, issue.id);
   const readQuery = db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
     readCondition)).limit(1);
-  const readable = (await nativeIssuePrivacyDiagnosticQuery(db, actor, "effective_acl", readQuery,
-    () => executePrivacyIdSelect(db, readQuery))).length > 0;
+  const readable = (await executePrivacyIdSelect(db, readQuery)).length > 0;
   if (!readable && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" &&
       temporalScope?.active && temporalScope.companyId === issue.companyId &&
       nativeTaskReaderScopeDiagnostics < 16) {
@@ -2026,38 +1890,37 @@ type MemoryTemporalReadScope = {
   readonly issueIds: ReadonlySet<string>;
   readonly runIds: ReadonlySet<string>;
   readonly contextIds: readonly string[];
+  readonly structuralProofMemoStore?: MemoryPageStructuralProofMemoStore;
+  readonly nativeSourceRows?: MemoryNativeSourceRowsScope;
   active: boolean;
 };
+export interface MemoryNativeSourceRowsScope {
+  readonly transaction: object;
+  readonly byActor: Map<string, unknown>;
+}
+export type NativeMutableSourceRowFamily = "run" | "reservation" | "invocation" | "contract";
+export interface NativeMutableSourceRowDependency { family: NativeMutableSourceRowFamily; companyId: string; id: string; digest: string }
+export interface NativeMutableSourceDependencies { rows: Map<string, NativeMutableSourceRowDependency>; compatible: boolean;
+  readerProof?: {
+    readerSets: ReadonlyMap<string, { companyId: string; actor: AuthorizationActor; runId: string;
+      policy: NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[] }>;
+    readerObligations: NativeSourceGraphObligationHandle;
+  };
+}
 export interface MemoryPageStructuralProofMemoStore {
   readonly transaction: object;
-  readonly proofsByOwnerPrefix: Map<string, Set<string>>;
+  readonly proofsByOwnerPrefix: Map<string, Map<string, Set<string>>>;
+  mutableSourceProofsByOwnerPrefix?: Map<string, Map<string, NativeMutableSourceDependencies>>;
 }
 const memoryTemporalReadScopes = new AsyncLocalStorage<MemoryTemporalReadScope>();
-let nativeMemoryTemporalDiagnostics = 0;
 
 /** Bind a no-live-future-Context read to one existing immutable Memory output.
  * This is callable only by the Memory source owner, never from request fields. */
 export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, actor: AuthorizationActor,
   companyId: string, recordId: string, read: (sourceDb: Db | DbTransaction) => Promise<T>, expected?: { sourceVersion: string; snapshot: unknown;
     issueIds: string[]; projectIds: string[]; runIds: string[]; memoryIds: string[]; foundationRevisionIds: string[] },
-  structuralProofMemoStore?: MemoryPageStructuralProofMemoStore): Promise<T | false> {
-  const diagnosticStartedAt = performance.now();
-  let diagnosticDb = db as object;
-  const diagnostic = (stage: "source_snapshot" | "source_body_hash" | "output_snapshot_currentness" |
-    "context_inputs_currentness" | "callback_reader",
-    facts: Record<string, boolean | number | string | null> = {}) => {
-    if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1" && nativeMemoryTemporalDiagnostics < 8) {
-      nativeMemoryTemporalDiagnostics += 1;
-      const map = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1"
-        ? (globalThis as unknown as Record<PropertyKey, unknown>)[Symbol.for("paperclip.nativeSourceMemoDiagnosticTxOrdinals.v1")]
-        : undefined;
-      const transactionOrdinal = map instanceof WeakMap ? map.get(diagnosticDb) ?? null : null;
-      console.error("native_memory_temporal_reader_test_denial", JSON.stringify({ stage,
-        elapsedMs: Math.round(performance.now() - diagnosticStartedAt), transactionOrdinal, ...facts }));
-    }
-  };
+  structuralProofMemoStore?: MemoryPageStructuralProofMemoStore, nativeSourceRows?: MemoryNativeSourceRowsScope): Promise<T | false> {
   const readInTransaction = async (sourceDb: Db | DbTransaction): Promise<T | false> => {
-    diagnosticDb = sourceDb as object;
     const [{ lockAnalyticalCompany, markAnalyticalPrivacyReadLocked }, { lockMemoryPrivacy }] = await Promise.all([
       import("./analytical-privacy.js"), import("./memory/memory-privacy.js"),
     ]);
@@ -2088,13 +1951,6 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
       || !isDeepStrictEqual(snapshot.data.policy.memoryIds, [...row.sourceMemoryIds].sort())
       || !isDeepStrictEqual(snapshot.data.policy.foundationRevisionIds, [...row.sourceFoundationRevisionIds].sort()))
       {
-        diagnostic("source_snapshot", { rowPresent: Boolean(row), expectedPresent: Boolean(expected), snapshotValid: Boolean(snapshot?.success),
-          sourceQualified: row?.sourceProvenanceQualified === true, protocolOne: row?.payloadSourceProtocolVersion === 1,
-          snapshotNotInvalidated: row?.payloadSourceSnapshotInvalidated === false,
-          ownerBound: Boolean(snapshot?.success && row && snapshot.data.owner.kind === "memory_record" &&
-            snapshot.data.owner.companyId === companyId && snapshot.data.owner.id === recordId),
-          expectedMatches: Boolean(row && expected && row.updatedAt.toISOString() === expected.sourceVersion &&
-            isDeepStrictEqual(row.payloadSourceSnapshot, expected.snapshot)) });
         return false;
       }
     const [binding] = await sourceDb.execute<{ valid: boolean }>(sql`select
@@ -2102,15 +1958,16 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
         and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid
       from ${memoryRecords} m where m.company_id=${companyId} and m.id=${recordId}
         and m.payload_source_snapshot is not null and m.payload_source_snapshot_invalidated=false`);
-    if (!binding?.valid) { diagnostic("source_body_hash", { bodyAndSnapshotDigestValid: binding?.valid === true }); return false; }
+    if (!binding?.valid) return false;
     const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
     const { withNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
     const scope: MemoryTemporalReadScope = { db: sourceDb as object, companyId, recordId, actorKey: routineActorKey(actor),
       issueIds: new Set(row.sourceIssueIds), runIds: new Set(capturedRunIds),
-      contextIds: contextInputs.map(input => input.manifestId).sort(), active: true };
-    let currentnessStage: "output_snapshot_currentness" | "context_inputs_currentness" = "output_snapshot_currentness";
+      contextIds: contextInputs.map(input => input.manifestId).sort(),
+      ...(structuralProofMemoStore?.transaction === (sourceDb as object) ? { structuralProofMemoStore } : {}),
+      ...(nativeSourceRows?.transaction === (sourceDb as object) ? { nativeSourceRows } : {}), active: true };
     let structuralProofMemo: { transaction: object; actorKey: string; memoryTemporalIdentity: string;
-      frozenTaskSnapshots: Set<string> } | undefined;
+      frozenTaskSnapshots: Map<string, Set<string>>; structuralProofMemoStore: MemoryPageStructuralProofMemoStore } | undefined;
     const memoActorKey = nativeSha256(actor);
     try {
       const result = await memoryTemporalReadScopes.run(scope, async () => {
@@ -2128,55 +1985,31 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
             (structuralProofMemoStore.proofsByOwnerPrefix.has(memoKey) || structuralProofMemoStore.proofsByOwnerPrefix.size < 128)) {
             let frozenTaskSnapshots = structuralProofMemoStore.proofsByOwnerPrefix.get(memoKey);
             if (!frozenTaskSnapshots) {
-              frozenTaskSnapshots = new Set();
+              frozenTaskSnapshots = new Map();
               structuralProofMemoStore.proofsByOwnerPrefix.set(memoKey, frozenTaskSnapshots);
             }
             structuralProofMemo = { transaction: sourceDb as object, actorKey: memoActorKey, memoryTemporalIdentity,
-              frozenTaskSnapshots };
+              frozenTaskSnapshots, structuralProofMemoStore };
           }
-          const temporalProfile = process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1";
-          let contextInputsCurrentnessMs = 0;
-          let callbackReaderMs = 0;
           // The exact frozen Context prefix must govern the Memory owner proof
           // itself, not only the final caller. Otherwise validating an older
           // Memory can consult a later Context manifest before its ALS scope is
           // installed and retroactively taint the earlier output.
           const readWithCurrentContext = async (currentDb: Db | DbTransaction) => {
-            currentnessStage = "context_inputs_currentness";
-            const contextStartedAt = temporalProfile ? performance.now() : 0;
             await assertNativeTemporalContextInputsCurrent(currentDb as Db, companyId, contextInputs);
-            const callbackStartedAt = temporalProfile ? performance.now() : 0;
-            const result = await read(currentDb);
-            if (temporalProfile) {
-              contextInputsCurrentnessMs = callbackStartedAt - contextStartedAt;
-              callbackReaderMs = performance.now() - callbackStartedAt;
-            }
-            return result;
+            return read(currentDb);
           };
-          const outputStartedAt = temporalProfile ? performance.now() : 0;
-          const result = dispatch ? await withNativeMemoryOutputSnapshotCurrent(sourceDb, {
+          return dispatch ? withNativeMemoryOutputSnapshotCurrent(sourceDb, {
             companyId, recordId, snapshot: snapshot.data, actor,
             ...(structuralProofMemo ? { structuralProofMemo } : {}),
-          }, readWithCurrentContext) : await readWithCurrentContext(sourceDb);
-          if (temporalProfile) console.error("native_memory_temporal_owner_stage", JSON.stringify({
-            outputSnapshotProofMs: Math.max(0, Math.round(performance.now() - outputStartedAt - contextInputsCurrentnessMs - callbackReaderMs)),
-            contextInputsCurrentnessMs: Math.round(contextInputsCurrentnessMs), callbackReaderMs: Math.round(callbackReaderMs),
-          }));
-          return result;
+          }, readWithCurrentContext) : readWithCurrentContext(sourceDb);
         } catch (error) {
           if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) {
-            const frames = (typeof error.stack === "string" ? error.stack : "").split("\n").flatMap(line => {
-              const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
-              return match ? [`${match[1]}:${match[2]}`] : [];
-            }).slice(0, 5);
-            diagnostic(currentnessStage, { status: error.status,
-              errorName: ["HttpError", "Error"].includes(error.name) ? error.name : "other", frames: frames.join(",") });
             return false;
           }
           throw error;
         }
       });
-      if (result === false) diagnostic("callback_reader", { callbackReturnedFalse: true });
       return result;
     }
     finally { scope.active = false; }
@@ -2255,6 +2088,21 @@ export function activeMemoryTemporalReadScopeIdentity(db: Db | DbTransaction, ac
   return createHash("sha256").update(JSON.stringify({ companyId: scope.companyId, recordId: scope.recordId,
     actorKey: scope.actorKey, issueIds: [...scope.issueIds].sort(), runIds: [...scope.runIds].sort(),
     contextIds: [...scope.contextIds].sort() }), "utf8").digest("hex");
+}
+
+/** Return the already-owned page proof map only inside its exact active
+ * transaction and actor scope. Callers still perform every live ACL check. */
+export function activeMemoryPageStructuralProofMemoStore(db: Db | DbTransaction,
+  actor: AuthorizationActor): MemoryPageStructuralProofMemoStore | undefined {
+  const scope = memoryTemporalReadScopes.getStore();
+  return scope?.active && scope.db === (db as object) && scope.actorKey === routineActorKey(actor) &&
+    scope.structuralProofMemoStore?.transaction === (db as object) ? scope.structuralProofMemoStore : undefined;
+}
+export function activeMemoryNativeSourceRowsScope(db: Db | DbTransaction,
+  actor: AuthorizationActor): MemoryNativeSourceRowsScope | undefined {
+  const scope = memoryTemporalReadScopes.getStore();
+  return scope?.active && scope.db === (db as object) && scope.actorKey === routineActorKey(actor) &&
+    scope.nativeSourceRows?.transaction === (db as object) ? scope.nativeSourceRows : undefined;
 }
 
 export function authorizationService(db: Db | DbTransaction) {
