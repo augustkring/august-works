@@ -1,0 +1,190 @@
+{
+  "baseHead": "c1db24de796c28ef935c46661470535ddfd1248c",
+  "qualifiedComponent": "HEAD-based R2; exact component source hashes are staged",
+  "files": [
+    {
+      "path": "server/src/services/orchestration/worker-model-gateway.ts",
+      "mode": 384,
+      "headParentSha256": "4e6fcf566a58b504cf3d181292606a5bf104f0b972c9b89e35a3fb458b33d5c6",
+      "worktreeParentSha256": "3fdaf29a5d6a1bffc20c06b5ab9979873284e737d85258b5f8f1973977b04692",
+      "stagedSha256": "496472810420ef6e18e2f90fdd02fa3be62af54d5c5d0800adf2a50b7ff16ad5",
+      "worktreeResultSha256": "d4f81969a366d48c715ba503274018fbfea153978adda3796ab132685662f076"
+    },
+    {
+      "path": "server/src/services/orchestration/read-only-model-transport.ts",
+      "mode": 384,
+      "headParentSha256": "1db2bc7895df0532dab4a3b779c5af022c742982c35ba80be4640394406b006c",
+      "worktreeParentSha256": "1db2bc7895df0532dab4a3b779c5af022c742982c35ba80be4640394406b006c",
+      "stagedSha256": "972fd7159e0c85db796f4a26a0d4d9b065354002a922e12c01f1db2218c7c51a",
+      "worktreeResultSha256": "972fd7159e0c85db796f4a26a0d4d9b065354002a922e12c01f1db2218c7c51a"
+    },
+    {
+      "path": "server/src/__tests__/v7-read-only-model-transport.test.ts",
+      "mode": 384,
+      "headParentSha256": "cd33f68e3540b7cdac8c9b1812db03df5c49d6b2ca5d730e44f5b2b0bcc193d1",
+      "worktreeParentSha256": "cd33f68e3540b7cdac8c9b1812db03df5c49d6b2ca5d730e44f5b2b0bcc193d1",
+      "stagedSha256": "d8383896159364708d2969a6e0227c714162b6798dc35a843bee8681bf74b94b",
+      "worktreeResultSha256": "d8383896159364708d2969a6e0227c714162b6798dc35a843bee8681bf74b94b"
+    },
+    {
+      "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+      "mode": 384,
+      "headParentSha256": "0558c0464a9dbab8f2fd0a27e6ea58f5c29fb1cb868b2744d350d1655cd3a7d3",
+      "worktreeParentSha256": "0558c0464a9dbab8f2fd0a27e6ea58f5c29fb1cb868b2744d350d1655cd3a7d3",
+      "stagedSha256": "285e57a1c1e8877455947dc774b4e3c7b6939a17534cc125b2f37d3a9c4ccb54",
+      "worktreeResultSha256": "285e57a1c1e8877455947dc774b4e3c7b6939a17534cc125b2f37d3a9c4ccb54"
+    }
+  ],
+  "unrelatedDirtyFilesPreserved": {
+    "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/README.md": {
+      "sha256": "32e91d963d28221916c09b4f2f5140cd98ff964885fb46cf2682faa64edd38df",
+      "mode": 384
+    },
+    "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/SHA256SUMS": {
+      "sha256": "1f879c30a83f8e19a7bd02fa4143de9b078a7a6af0a07b265b440c3720f8b7b4",
+      "mode": 384
+    },
+    "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/phase-matrix.json": {
+      "sha256": "e6beb820c72c1deb3680889fd608bc1198f1e514caaaf081dbe4c7818d821ccb",
+      "mode": 384
+    },
+    "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/stage-list.txt": {
+      "sha256": "81a3189ae34a45c5d364d9cc45fec1bb2266ea3d77ecbf2efe9f99c7835be885",
+      "mode": 384
+    },
+    "doc/operations/v10-safe-change-graph.source.json": {
+      "sha256": "0bcd53b6098331f9545bb7d605be290d6f34de58870addbabed58709f377f919",
+      "mode": 384
+    },
+    "packages/shared/src/validators/native-payload-source-snapshot.test.ts": {
+      "sha256": "c8e7f99147ff88557e09cae238e29c313644c1b80d802fa107f9ac79fe0ac98b",
+      "mode": 384
+    },
+    "packages/shared/src/validators/native-payload-source-snapshot.ts": {
+      "sha256": "3e902784b9aa967e2c69569915034922ae8be5f2051b7536fa91bc4abd8b2baa",
+      "mode": 384
+    },
+    "scripts/check-v10-safe-change-graph.mjs": {
+      "sha256": "eccee6a01c5b798d2a384ecfcc64cfd175e3dbf59e3b486d901824fcbcc24551",
+      "mode": 384
+    },
+    "scripts/generate-v10-safe-change-graph.mjs": {
+      "sha256": "fcc82aade2409a5b8b173fd3d3c5d045edc6fc146f871ab890246dff432ca966",
+      "mode": 384
+    },
+    "scripts/v10-product-artifacts.test.mjs": {
+      "sha256": "396bf3a39a5c6c24d2bf2fe14766cbd1dd5b8c796375fd0a99b67c85757c3baa",
+      "mode": 384
+    },
+    "server/src/__tests__/helpers/managed-native-conversation-frame.ts": {
+      "sha256": "d8e06ca2bbcbfd5bfb33814b7754482df7af2de5db904ec07541faf721e7676a",
+      "mode": 384
+    },
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": {
+      "sha256": "82823e883175b1d09bb2d4cd9a003a02d29d75f9e8bb1bf73c9bf685aacab9e2",
+      "mode": 384
+    },
+    "server/src/__tests__/memory-native-capture-purpose.integration.test.ts": {
+      "sha256": "7ef9d19a285be4c0d70a2da9d71d88eb41925828f492dde738864c4e38138d45",
+      "mode": 384
+    },
+    "server/src/__tests__/native-payload-temporal-sources.integration.test.ts": {
+      "sha256": "d160e306df24de01f1efc3d7d0b2323d29c296cf1e32bd900b524affdf0166cf",
+      "mode": 384
+    },
+    "server/src/__tests__/project-repositories-persistence.test.ts": {
+      "sha256": "9bc6c5171c47c23f312b8577d0dbc8b34cecd03ebe9577149ff6cae6ac23c122",
+      "mode": 384
+    },
+    "server/src/__tests__/v7-learning.integration.test.ts": {
+      "sha256": "37e4e71e1eaf0d9cfc9dae5f24076fdc3d3bf592a5b775d5edf0c50b2ca6a673",
+      "mode": 384
+    },
+    "server/src/routes/projects.ts": {
+      "sha256": "738a0e9f5a9a45f832340786307cde830f2a3392eb9549a5056190014c20d2fa",
+      "mode": 384
+    },
+    "server/src/services/agent-runtime-fabric.ts": {
+      "sha256": "d14589f7088a7bc2ae71ddc119bffbddb22d90eed758706dcfa4efe00e5a282b",
+      "mode": 384
+    },
+    "server/src/services/analytical-context-authority.ts": {
+      "sha256": "56fd410c688fec6e2b9ac91601ee52b4b211f6008c332194cb094c1da61de026",
+      "mode": 384
+    },
+    "server/src/services/authorization.ts": {
+      "sha256": "b76992bbb74b44962cacb2e011ad6372ecf092d836541aa7d1dafb071994ce8a",
+      "mode": 384
+    },
+    "server/src/services/context/context-engine-integration.test.ts": {
+      "sha256": "02d26054d8a0710329181533365a137ed79e9207f59213349426971cf4fd944d",
+      "mode": 384
+    },
+    "server/src/services/context/context-engine.test.ts": {
+      "sha256": "87b8bdbea2186fae5487d0c8da6534746d9c03dd01689a8a9199f45d3a64bdb4",
+      "mode": 384
+    },
+    "server/src/services/context/context-engine.ts": {
+      "sha256": "3435648706ecd376030200a3a666df719eeff8d38dab93c8db5eeceb0ac22035",
+      "mode": 384
+    },
+    "server/src/services/context/context-manifest.ts": {
+      "sha256": "0123cfcc7475f45fc9e6819e8faaa41c905957b6dd88ee8eb418d6f5cfc3babf",
+      "mode": 384
+    },
+    "server/src/services/context/native-bootstrap-context-witness.ts": {
+      "sha256": "e27e1735459b8e19fe67078e008a69957555aceeb9e0b275a4112d7a554f40a2",
+      "mode": 384
+    },
+    "server/src/services/learning/learning-analytical-sources.ts": {
+      "sha256": "e81c995a080b8abdf2660f652118a175b0d9cc9bf43537f51f122f0986ff76a3",
+      "mode": 384
+    },
+    "server/src/services/learning/learning-assets.ts": {
+      "sha256": "289037471d475510aa06909a9f9a20f02d0ba06e87eb74d3b3752fbafa254e0b",
+      "mode": 384
+    },
+    "server/src/services/memory/memory-privacy.ts": {
+      "sha256": "6ff81e0c91dcef901d6572be507ef308cacd6056d3aca609cf780fe1b95d317d",
+      "mode": 384
+    },
+    "server/src/services/memory/memory-service.ts": {
+      "sha256": "3ce39db7256780a86a89b3663e8e9163d18908c230b39c8afba7f61db179861c",
+      "mode": 384
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "d839fb6249f11a9c91ff883fc2a1865b0b5e5999a5ed0dbe6284d21268be86a1",
+      "mode": 384
+    },
+    "server/src/services/native-project-output.ts": {
+      "sha256": "2db1f94a8c915934f58e831f284d1065aa9be4e985c9b7ad14fe7b186e94b370",
+      "mode": 384
+    },
+    "server/src/services/native-runtime/canonical.ts": {
+      "sha256": "17b838cba01c11defd3d611661db3d9811ac724c59f0b43aa0bdc7ebcbf46393",
+      "mode": 384
+    },
+    "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts": {
+      "sha256": "f96d93af838b949a1598c1589e364f068d4b10c40be5878905aa384b974520ae",
+      "mode": 384
+    },
+    "server/src/services/native-runtime/native-session-executor.ts": {
+      "sha256": "e231b09adcebe4d5cc3481e611403f24bcd865c9dab18818a199361d0ad5072e",
+      "mode": 384
+    },
+    "server/src/services/native-runtime/paperclip-runner-tool-authority.ts": {
+      "sha256": "f33550530ce8edee95549f84aff6d4d9bf04c31155da70d7bb48f7e6b731c925",
+      "mode": 384
+    },
+    "server/src/services/orchestration/native-tool-boundary.ts": {
+      "sha256": "7c827384fa4829372c069896b07450c8ecf4f68588265c5d06d8bcff2a6df22f",
+      "mode": 384
+    },
+    "server/src/services/tool-access.ts": {
+      "sha256": "a2841ff3c8a57df361d49c95c7262c09a328139398123fe5eea3df0617519ad9",
+      "mode": 384
+    }
+  },
+  "gatewayPreservation": "The pre-existing Project receipt delta remains uncommitted in the working tree. Its exact patch applied to the staged component reconstructs the resulting working file.",
+  "qualificationBoundary": "Component source overlay against the pinned worktree/dependency snapshot. Not a final unchanged-head, complete Native, Relay or release qualification."
+}

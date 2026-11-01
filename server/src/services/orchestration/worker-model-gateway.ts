@@ -1993,6 +1993,7 @@ export function workerModelGateway(db: Db, options: Options) {
       const assertCurrent = async () => {
         controller.signal.throwIfAborted();
         const fresh = await current(db, bound);
+        controller.signal.throwIfAborted();
         if (fresh.authorityHash !== state.authorityHash)
           throw forbidden("Worker source authority changed during dispatch");
         return fresh;
@@ -2246,15 +2247,17 @@ export function workerModelGateway(db: Db, options: Options) {
       if (bound) await reservations.claimForDispatch(state.actor, claims.company_id, reservation.id);
       else await reservations.claimConversationForDispatch(state.actor, claims.company_id, reservation.id);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), Math.min(
-        30000, reservation.expiresAt.getTime() - Date.now(), claims.exp * 1000 - Date.now(),
-      ));
+      // Source/wire-receipt and settlement checks retain the original fixed
+      // reservation/capability deadline. The transport owns its 30s wire clock.
+      const operationBudgetMs = Math.min(reservation.expiresAt.getTime() - Date.now(), claims.exp * 1000 - Date.now());
+      const timeout = setTimeout(() => controller.abort(), operationBudgetMs);
       const cancel = () => controller.abort();
       callerSignal?.addEventListener("abort", cancel, { once: true });
       let checking: Promise<void> | null = null;
       const assertCurrent = async () => {
         controller.signal.throwIfAborted();
         const fresh = bound ? await current(db, bound) : await currentConversation(db, conversation!);
+        controller.signal.throwIfAborted();
         if (fresh.authorityHash !== state.authorityHash)
           throw forbidden("Managed source authority changed during dispatch");
         return fresh;

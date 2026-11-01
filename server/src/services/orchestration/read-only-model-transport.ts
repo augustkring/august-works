@@ -356,6 +356,12 @@ export async function anthropicManagedMessagesCall(
     endpoint: "https://api.anthropic.com/v1/messages",
     bodySha256: createHash("sha256").update(body, "utf8").digest("hex"),
   });
+  // A source-admission callback is not provider network time. Keep a separate
+  // dispatch/read deadline without aborting the caller's authority controller.
+  const wireController = new AbortController();
+  signal = AbortSignal.any([signal, wireController.signal]);
+  const wireTimeout = setTimeout(() => wireController.abort(), 30_000);
+  try {
   let response: Response;
   try {
     signal.throwIfAborted();
@@ -498,5 +504,8 @@ export async function anthropicManagedMessagesCall(
     signal.removeEventListener("abort", abort);
     await reader.cancel().catch(() => {});
     reader.releaseLock();
+  }
+  } finally {
+    clearTimeout(wireTimeout);
   }
 }

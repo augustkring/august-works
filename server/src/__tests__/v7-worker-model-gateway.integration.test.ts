@@ -2056,6 +2056,50 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         }
       },
     );
+    it("withholds a known response when caller cancellation arrives during the final current-authority read", async () => {
+      const originalCheck = agentRunCancellation.assertAgentRunWriteAllowed;
+      const originalInterval = globalThis.setInterval;
+      const caller = new AbortController();
+      let releaseRead!: () => void, readEntered!: () => void;
+      const released = new Promise<void>(resolve => { releaseRead = resolve; });
+      const entered = new Promise<void>(resolve => { readEntered = resolve; });
+      let held = false;
+      const intervalSpy = vi.spyOn(globalThis, "setInterval").mockImplementation((callback, delay, ...args) => {
+        const timer = originalInterval(callback, delay, ...args);
+        if (delay === 1000) clearInterval(timer);
+        return timer;
+      });
+      const checkSpy = vi.spyOn(agentRunCancellation, "assertAgentRunWriteAllowed")
+        .mockImplementation(async (...args) => {
+          if (!held && (await ledger())[0]?.status === "completed") {
+            held = true;
+            readEntered();
+            await released;
+          }
+          await originalCheck(...args);
+        });
+      const response = gateway().call(claims, input(), caller.signal).then(
+        value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+      try {
+        await Promise.race([entered, response.then(() => {
+          throw new Error("The model call ended before its final current-authority read");
+        })]);
+        expect((await ledger())[0]?.status).toBe("completed");
+        caller.abort();
+        releaseRead();
+        const result = await response;
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error).toMatchObject({ status: 409, details: { code: "worker_model_result_withheld" } });
+        expect(calls).toBe(1);
+        expect((await ledger())[0]).toMatchObject({ status: "completed", usage: { inputTokens, outputTokens: 20 } });
+        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]?.status).toBe("paused");
+      } finally {
+        releaseRead();
+        await response;
+        checkSpy.mockRestore();
+        intervalSpy.mockRestore();
+      }
+    });
     it("reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification", async () => {
       const beforeDispatch = (await db.select({ status: issues.status }).from(issues).where(eq(issues.id, task.id)))[0]!;
       expect(beforeDispatch.status).toBe("in_progress");

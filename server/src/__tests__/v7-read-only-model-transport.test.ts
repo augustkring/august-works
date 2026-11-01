@@ -231,6 +231,54 @@ describe("managed Anthropic Messages broker transport", () => {
     stop_reason: "tool_use",
     usage: { input_tokens: 20, output_tokens: 10 },
   };
+  it("starts its wire deadline after source admission and clears it after the complete response", async () => {
+    vi.useFakeTimers();
+    try {
+      const caller = new AbortController();
+      let admit!: () => void;
+      const admission = new Promise<void>((resolve) => { admit = resolve; });
+      const fetch = vi.fn(async () => json(toolResponse));
+      const pending = anthropicManagedMessagesCall(managedRequest, {
+        model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+      }, key, caller.signal, { fetch, onWireDispatch: () => admission });
+      await vi.advanceTimersByTimeAsync(31_000);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+      admit();
+      expect((await pending).usage).toEqual({ inputTokens: 20, outputTokens: 10 });
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(31_000);
+      expect(caller.signal.aborted).toBe(false);
+    } finally { vi.useRealTimers(); }
+  });
+  it("bounds a stalled wire independently and preserves caller cancellation during source admission", async () => {
+    vi.useFakeTimers();
+    try {
+      const caller = new AbortController();
+      const fetch = vi.fn(async (_url: unknown, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init.signal!.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      }));
+      const pending = anthropicManagedMessagesCall(managedRequest, {
+        model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+      }, key, caller.signal, { fetch });
+      const rejected = expect(pending).rejects.toThrow("provider_unavailable");
+      await vi.advanceTimersByTimeAsync(30_000);
+      await rejected;
+      expect(caller.signal.aborted).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+      let admit!: () => void;
+      const admission = new Promise<void>((resolve) => { admit = resolve; });
+      const unusedFetch = vi.fn(async () => json(toolResponse));
+      const cancelled = anthropicManagedMessagesCall(managedRequest, {
+        model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+      }, key, caller.signal, { fetch: unusedFetch, onWireDispatch: () => admission });
+      caller.abort();
+      admit();
+      await expect(cancelled).rejects.toThrow();
+      expect(unusedFetch).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
   it("pins the exact request to one fixed provider call and returns validated tool-use SSE only after complete usage", async () => {
     const onWireDispatch = vi.fn();
     const fetch = vi.fn(async () => json(toolResponse));

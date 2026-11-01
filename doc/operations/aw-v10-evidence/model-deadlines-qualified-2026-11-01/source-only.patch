@@ -1,0 +1,165 @@
+--- a/server/src/services/orchestration/worker-model-gateway.ts
++++ b/server/src/services/orchestration/worker-model-gateway.ts
+@@ -1993,6 +1993,7 @@
+       const assertCurrent = async () => {
+         controller.signal.throwIfAborted();
+         const fresh = await current(db, bound);
++        controller.signal.throwIfAborted();
+         if (fresh.authorityHash !== state.authorityHash)
+           throw forbidden("Worker source authority changed during dispatch");
+         return fresh;
+@@ -2246,15 +2247,17 @@
+       if (bound) await reservations.claimForDispatch(state.actor, claims.company_id, reservation.id);
+       else await reservations.claimConversationForDispatch(state.actor, claims.company_id, reservation.id);
+       const controller = new AbortController();
+-      const timeout = setTimeout(() => controller.abort(), Math.min(
+-        30000, reservation.expiresAt.getTime() - Date.now(), claims.exp * 1000 - Date.now(),
+-      ));
++      // Source/wire-receipt and settlement checks retain the original fixed
++      // reservation/capability deadline. The transport owns its 30s wire clock.
++      const operationBudgetMs = Math.min(reservation.expiresAt.getTime() - Date.now(), claims.exp * 1000 - Date.now());
++      const timeout = setTimeout(() => controller.abort(), operationBudgetMs);
+       const cancel = () => controller.abort();
+       callerSignal?.addEventListener("abort", cancel, { once: true });
+       let checking: Promise<void> | null = null;
+       const assertCurrent = async () => {
+         controller.signal.throwIfAborted();
+         const fresh = bound ? await current(db, bound) : await currentConversation(db, conversation!);
++        controller.signal.throwIfAborted();
+         if (fresh.authorityHash !== state.authorityHash)
+           throw forbidden("Managed source authority changed during dispatch");
+         return fresh;
+--- a/server/src/services/orchestration/read-only-model-transport.ts
++++ b/server/src/services/orchestration/read-only-model-transport.ts
+@@ -356,6 +356,12 @@
+     endpoint: "https://api.anthropic.com/v1/messages",
+     bodySha256: createHash("sha256").update(body, "utf8").digest("hex"),
+   });
++  // A source-admission callback is not provider network time. Keep a separate
++  // dispatch/read deadline without aborting the caller's authority controller.
++  const wireController = new AbortController();
++  signal = AbortSignal.any([signal, wireController.signal]);
++  const wireTimeout = setTimeout(() => wireController.abort(), 30_000);
++  try {
+   let response: Response;
+   try {
+     signal.throwIfAborted();
+@@ -499,4 +505,7 @@
+     await reader.cancel().catch(() => {});
+     reader.releaseLock();
+   }
+-}
++  } finally {
++    clearTimeout(wireTimeout);
++  }
++}
+--- a/server/src/__tests__/v7-read-only-model-transport.test.ts
++++ b/server/src/__tests__/v7-read-only-model-transport.test.ts
+@@ -231,6 +231,54 @@
+     stop_reason: "tool_use",
+     usage: { input_tokens: 20, output_tokens: 10 },
+   };
++  it("starts its wire deadline after source admission and clears it after the complete response", async () => {
++    vi.useFakeTimers();
++    try {
++      const caller = new AbortController();
++      let admit!: () => void;
++      const admission = new Promise<void>((resolve) => { admit = resolve; });
++      const fetch = vi.fn(async () => json(toolResponse));
++      const pending = anthropicManagedMessagesCall(managedRequest, {
++        model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
++      }, key, caller.signal, { fetch, onWireDispatch: () => admission });
++      await vi.advanceTimersByTimeAsync(31_000);
++      expect(fetch).not.toHaveBeenCalled();
++      expect(vi.getTimerCount()).toBe(0);
++      admit();
++      expect((await pending).usage).toEqual({ inputTokens: 20, outputTokens: 10 });
++      expect(vi.getTimerCount()).toBe(0);
++      await vi.advanceTimersByTimeAsync(31_000);
++      expect(caller.signal.aborted).toBe(false);
++    } finally { vi.useRealTimers(); }
++  });
++  it("bounds a stalled wire independently and preserves caller cancellation during source admission", async () => {
++    vi.useFakeTimers();
++    try {
++      const caller = new AbortController();
++      const fetch = vi.fn(async (_url: unknown, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
++        init.signal!.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
++      }));
++      const pending = anthropicManagedMessagesCall(managedRequest, {
++        model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
++      }, key, caller.signal, { fetch });
++      const rejected = expect(pending).rejects.toThrow("provider_unavailable");
++      await vi.advanceTimersByTimeAsync(30_000);
++      await rejected;
++      expect(caller.signal.aborted).toBe(false);
++      expect(vi.getTimerCount()).toBe(0);
++      let admit!: () => void;
++      const admission = new Promise<void>((resolve) => { admit = resolve; });
++      const unusedFetch = vi.fn(async () => json(toolResponse));
++      const cancelled = anthropicManagedMessagesCall(managedRequest, {
++        model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
++      }, key, caller.signal, { fetch: unusedFetch, onWireDispatch: () => admission });
++      caller.abort();
++      admit();
++      await expect(cancelled).rejects.toThrow();
++      expect(unusedFetch).not.toHaveBeenCalled();
++      expect(vi.getTimerCount()).toBe(0);
++    } finally { vi.useRealTimers(); }
++  });
+   it("pins the exact request to one fixed provider call and returns validated tool-use SSE only after complete usage", async () => {
+     const onWireDispatch = vi.fn();
+     const fetch = vi.fn(async () => json(toolResponse));
+--- a/server/src/__tests__/v7-worker-model-gateway.integration.test.ts
++++ b/server/src/__tests__/v7-worker-model-gateway.integration.test.ts
+@@ -2056,6 +2056,50 @@
+         }
+       },
+     );
++    it("withholds a known response when caller cancellation arrives during the final current-authority read", async () => {
++      const originalCheck = agentRunCancellation.assertAgentRunWriteAllowed;
++      const originalInterval = globalThis.setInterval;
++      const caller = new AbortController();
++      let releaseRead!: () => void, readEntered!: () => void;
++      const released = new Promise<void>(resolve => { releaseRead = resolve; });
++      const entered = new Promise<void>(resolve => { readEntered = resolve; });
++      let held = false;
++      const intervalSpy = vi.spyOn(globalThis, "setInterval").mockImplementation((callback, delay, ...args) => {
++        const timer = originalInterval(callback, delay, ...args);
++        if (delay === 1000) clearInterval(timer);
++        return timer;
++      });
++      const checkSpy = vi.spyOn(agentRunCancellation, "assertAgentRunWriteAllowed")
++        .mockImplementation(async (...args) => {
++          if (!held && (await ledger())[0]?.status === "completed") {
++            held = true;
++            readEntered();
++            await released;
++          }
++          await originalCheck(...args);
++        });
++      const response = gateway().call(claims, input(), caller.signal).then(
++        value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
++      try {
++        await Promise.race([entered, response.then(() => {
++          throw new Error("The model call ended before its final current-authority read");
++        })]);
++        expect((await ledger())[0]?.status).toBe("completed");
++        caller.abort();
++        releaseRead();
++        const result = await response;
++        expect(result.ok).toBe(false);
++        if (!result.ok) expect(result.error).toMatchObject({ status: 409, details: { code: "worker_model_result_withheld" } });
++        expect(calls).toBe(1);
++        expect((await ledger())[0]).toMatchObject({ status: "completed", usage: { inputTokens, outputTokens: 20 } });
++        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]?.status).toBe("paused");
++      } finally {
++        releaseRead();
++        await response;
++        checkSpy.mockRestore();
++        intervalSpy.mockRestore();
++      }
++    });
+     it("reserves before actual transport, keeps the encrypted key private and leaves completion to Native verification", async () => {
+       const beforeDispatch = (await db.select({ status: issues.status }).from(issues).where(eq(issues.id, task.id)))[0]!;
+       expect(beforeDispatch.status).toBe("in_progress");
