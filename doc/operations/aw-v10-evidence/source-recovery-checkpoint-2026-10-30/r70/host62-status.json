@@ -1,0 +1,12 @@
+{
+  "scope": "Host62 focused candidate runner; compact status, not a broad qualification receipt",
+  "phaseExitCodes": {
+    "db-build.exit": 0,
+    "shared-build.exit": 0,
+    "source-oxc.exit": 0,
+    "targeted-worker-vitest.exit": 1
+  },
+  "restore": "pinned sources restored to pre-snapshot source bytes and modes; compiled outputs and tsbuildinfo restored byte-for-byte",
+  "resultBeforeRestorePresent": false,
+  "summary": "Runner summary output was malformed; actual Worker failed at comment_source before provider-pack qualification. Do not infer a broad pass."
+}

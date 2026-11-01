@@ -1,0 +1,53 @@
+{
+  "capturePlan": "Small R70 recovery delta from R69 Host61 to frozen Host63; changed/new sources only, Host63 pins/freeze/runner/patch, Host62 focused pins/runner and compact closed statuses for Host61/62, R113 local-only proof, final Code source patch/pins and scoped actual-PostgreSQL 36/36 receipt, current root note/aggregate, HELP-FIND recovery receipt only. Host63 active qualification outputs, R69 bundle, private HELP-FIND archive/admin, PG data/dependencies/provider packs are excluded.",
+  "baseR69ArchiveSha256": "239412180fba2b71d8dd9abf181f1703027e519eccc08460912908f75dc629dd",
+  "baseHost61PinsSha256": "ba86bef12c35883826529b8164812de1ea6f06b8942074ff32215b9fd4a8dcc8",
+  "candidateHost63PinsSha256": "cff18656ce91a19a93a407eb1f9c0b898cb364919bb60e9006dcd7e6a3a9f707",
+  "changedPaths": [
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts"
+  ],
+  "addedPaths": [],
+  "deletedPaths": [],
+  "inputs": {
+    "help-find-recovery/SHA256SUMS": "/workspace/v10-preparation/help-find-worktree-recovery-20261101/SHA256SUMS",
+    "help-find-recovery/post-removal-verification.json": "/workspace/v10-preparation/help-find-worktree-recovery-20261101/post-removal-verification.json",
+    "help-find-recovery/receipt.json": "/workspace/v10-preparation/help-find-worktree-recovery-20261101/receipt.json",
+    "host61-closed/restore.log": "/workspace/v10-preparation/v10-149-r14.38.4.61-selected-opencode-worker-provider-private/qualification-r14.38.4.61-selected-opencode-worker-provider/restore.log",
+    "host61-closed/result-before-restore.json": "/workspace/v10-preparation/v10-149-r14.38.4.61-selected-opencode-worker-provider-private/qualification-r14.38.4.61-selected-opencode-worker-provider/result-before-restore.json",
+    "host62-closed/db-build.exit": "/workspace/v10-preparation/v10-149-r14.38.4.62-worker-provider-pack-option-private/qualification-r14.38.4.62-worker-provider-pack-option/db-build.exit",
+    "host62-closed/restore.log": "/workspace/v10-preparation/v10-149-r14.38.4.62-worker-provider-pack-option-private/qualification-r14.38.4.62-worker-provider-pack-option/restore.log",
+    "host62-closed/shared-build.exit": "/workspace/v10-preparation/v10-149-r14.38.4.62-worker-provider-pack-option-private/qualification-r14.38.4.62-worker-provider-pack-option/shared-build.exit",
+    "host62-closed/source-oxc.exit": "/workspace/v10-preparation/v10-149-r14.38.4.62-worker-provider-pack-option-private/qualification-r14.38.4.62-worker-provider-pack-option/source-oxc.exit",
+    "host62-closed/targeted-worker-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.62-worker-provider-pack-option-private/qualification-r14.38.4.62-worker-provider-pack-option/targeted-worker-vitest.exit",
+    "host62/qualify-r14.38.4.62-worker-provider-pack-option-focused.sh": "/workspace/v10-preparation/v10-149-r14.38.4.62-worker-provider-pack-option-private/qualify-r14.38.4.62-worker-provider-pack-option-focused.sh",
+    "host62/source-pins.json": "/workspace/v10-preparation/v10-149-r14.38.4.62-worker-provider-pack-option-private/source-pins.json",
+    "host63-delta/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "/workspace/v10-preparation/v10-149-r14.38.4.63-conversation-comment-capture-private/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+    "host63/freeze.json": "/workspace/v10-preparation/v10-149-r14.38.4.63-conversation-comment-capture-private/freeze.json",
+    "host63/native-conversation-bootstrap-comment.patch": "/workspace/v10-preparation/v10-149-r14.38.4.63-conversation-comment-capture-private/native-conversation-bootstrap-comment.patch",
+    "host63/qualify-r14.38.4.63-conversation-comment-capture.sh": "/workspace/v10-preparation/v10-149-r14.38.4.63-conversation-comment-capture-private/qualify-r14.38.4.63-conversation-comment-capture.sh",
+    "host63/runner.sha256": "/workspace/v10-preparation/v10-149-r14.38.4.63-conversation-comment-capture-private/runner.sha256",
+    "host63/source-pins.json": "/workspace/v10-preparation/v10-149-r14.38.4.63-conversation-comment-capture-private/source-pins.json",
+    "native-agent-final/README.md": "/workspace/v10-preparation/committed-native-agent-final-nov01/README.md",
+    "native-agent-final/committed-native-agent-final.patch": "/workspace/v10-preparation/committed-native-agent-final-nov01/committed-native-agent-final.patch",
+    "native-agent-final/component.exit": "/workspace/v10-preparation/committed-native-agent-final-nov01/component.exit",
+    "native-agent-final/component.log": "/workspace/v10-preparation/committed-native-agent-final-nov01/component.log",
+    "native-agent-final/files/server/src/__tests__/committed-native-agent-reconcile.integration.test.ts": "/workspace/v10-preparation/committed-native-agent-final-nov01/files/server/src/__tests__/committed-native-agent-reconcile.integration.test.ts",
+    "native-agent-final/files/server/src/services/heartbeat.ts": "/workspace/v10-preparation/committed-native-agent-final-nov01/files/server/src/services/heartbeat.ts",
+    "native-agent-final/qualification-receipt.json": "/workspace/v10-preparation/committed-native-agent-final-nov01/qualification-receipt.json",
+    "native-agent-final/source-pins.json": "/workspace/v10-preparation/committed-native-agent-final-nov01/source-pins.json",
+    "native-r113/local-validation.json": "/workspace/v10-preparation/native-conversation-bootstrap-comment-r113/local-validation.json",
+    "native-r113/native-conversation-bootstrap-comment.patch": "/workspace/v10-preparation/native-conversation-bootstrap-comment-r113/native-conversation-bootstrap-comment.patch",
+    "native-r113/qualification-receipt.json": "/workspace/v10-preparation/native-conversation-bootstrap-comment-r113/qualification-receipt.json",
+    "native-r113/source-pins.json": "/workspace/v10-preparation/native-conversation-bootstrap-comment-r113/source-pins.json",
+    "root/root-continuation-20261101-current.md": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+    "root/run-final-workspace-aggregate-20261101.sh": "/workspace/v10-preparation/run-final-workspace-aggregate-20261101.sh"
+  },
+  "excluded": [
+    "active Host63 qualification output",
+    "unchanged Host63 source files",
+    "R69 full source bundle",
+    "HELP-FIND private archive/admin/ignored state",
+    "PG data/dependency/provider packs",
+    "MAIN/MIRROR/Git mutations"
+  ]
+}
