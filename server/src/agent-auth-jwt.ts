@@ -17,9 +17,10 @@ export interface LocalAgentJwtClaims {
   /** Server-minted, one HTTP effect binding for an authenticated native tool call. */
   native_tool_effect?: NativeToolEffectClaim;
   /** Dedicated non-API capability audiences. */
-  purpose?: "sandbox_exec" | "sandbox_broker";
+  purpose?: "sandbox_exec" | "sandbox_broker" | "sandbox_qualification_broker";
   sandbox_exec?: SandboxExecCapabilityClaim;
   sandbox_broker?: SandboxBrokerCapabilityClaim;
+  qualification_credential?: SandboxQualificationCredentialClaim;
   iat: number;
   exp: number;
   iss?: string;
@@ -79,6 +80,47 @@ export interface SandboxBrokerBindingClaim {
     method: "POST";
     path: string;
   };
+}
+
+/** One-use, operator-authorized capability for a single protected sandbox
+ * qualification credential probe. It is not a Run, task, or ordinary broker
+ * capability and is accepted only by the qualification host-probe route. */
+export interface SandboxQualificationCredentialClaim {
+  version: 1;
+  purpose: "qualification_credential_probe";
+  aud: "paperclip-sandbox-qualification";
+  jti: string;
+  commandId: string;
+  caseId: "credential_allow" | "credential_raw_read_deny" | "credential_wrong_destination_deny" | "credential_revoke_deny" | "credential_wrong_binary_deny";
+  fixtureId: string;
+  fixtureHash: string;
+  hostEpoch: number;
+  scope: { companyId: string; bindingId: string; cellId: string; generation: string; sandboxRef: string };
+  bindingVersion: number;
+  sandboxId: string;
+  containerId: string;
+  provisioningHash: string;
+  targetQualificationHash: string;
+  connectionId: string;
+  grantId: string;
+  secretVersionHash: string;
+  sourceBindingHash: string;
+  operatorUserId: string;
+  operatorSessionId: string;
+  profileId: string;
+  profileHash: string;
+  binaries: string[];
+  gatewayPublicId: string;
+  toolName: string;
+  argumentTemplateHash: string;
+  argumentsHash: string;
+  requestBodyHash: string;
+  nonce: string;
+  origin: string;
+  method: "POST";
+  path: string;
+  expiresAt: string;
+  maxUses: 1;
 }
 
 export interface NativeToolEffectClaim {
@@ -352,6 +394,38 @@ export function createSandboxBrokerJwt(input: {
   return `${signingInput}.${signPayload(deriveCompanySigningKey(config.secret, input.companyId, config.instanceId), signingInput)}`;
 }
 
+export function createSandboxQualificationCredentialJwt(input: {
+  companyId: string;
+  operatorUserId: string;
+  bindingId: string;
+  claim: SandboxQualificationCredentialClaim;
+}) {
+  const config = jwtConfig();
+  if (!config || !parseSandboxQualificationCredentialClaim(input.claim) ||
+    input.claim.scope.companyId !== input.companyId || input.claim.scope.bindingId !== input.bindingId ||
+    input.claim.operatorUserId !== input.operatorUserId) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const exp = Math.floor(Date.parse(input.claim.expiresAt) / 1000);
+  if (exp <= now || exp > now + 60) return null;
+  const claims = {
+    sub: input.operatorUserId,
+    company_id: input.companyId,
+    adapter_type: "sandbox_qualification",
+    run_id: input.bindingId,
+    responsible_user_id: input.operatorUserId,
+    purpose: "sandbox_qualification_broker" as const,
+    qualification_credential: input.claim,
+    iat: now,
+    exp,
+    iss: config.issuer,
+    aud: "paperclip-sandbox-qualification",
+    instance_id: config.instanceId,
+    jti: input.claim.jti,
+  };
+  const signingInput = `${base64UrlEncode(JSON.stringify({ alg: JWT_ALGORITHM, typ: "JWT" }))}.${base64UrlEncode(JSON.stringify(claims))}`;
+  return `${signingInput}.${signPayload(deriveCompanySigningKey(config.secret, input.companyId, config.instanceId), signingInput)}`;
+}
+
 function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   if (!token) return null;
   const config = jwtConfig();
@@ -368,17 +442,23 @@ function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   if (!claims) return null;
   const hasSandboxExec = Object.hasOwn(claims, "sandbox_exec");
   const hasSandboxBroker = Object.hasOwn(claims, "sandbox_broker");
-  if ((Object.hasOwn(claims, "purpose") && !["sandbox_exec", "sandbox_broker"].includes(String(claims.purpose))) ||
-    (hasSandboxExec && (claims.purpose !== "sandbox_exec" || hasSandboxBroker)) ||
-    (hasSandboxBroker && (claims.purpose !== "sandbox_broker" || hasSandboxExec)) ||
+  const hasQualificationCredential = Object.hasOwn(claims, "qualification_credential");
+  if ((Object.hasOwn(claims, "purpose") && !["sandbox_exec", "sandbox_broker", "sandbox_qualification_broker"].includes(String(claims.purpose))) ||
+    (hasSandboxExec && (claims.purpose !== "sandbox_exec" || hasSandboxBroker || hasQualificationCredential)) ||
+    (hasSandboxBroker && (claims.purpose !== "sandbox_broker" || hasSandboxExec || hasQualificationCredential)) ||
+    (hasQualificationCredential && (claims.purpose !== "sandbox_qualification_broker" || hasSandboxExec || hasSandboxBroker)) ||
     (claims.purpose === "sandbox_exec" && !hasSandboxExec) ||
-    (claims.purpose === "sandbox_broker" && !hasSandboxBroker)) return null;
+    (claims.purpose === "sandbox_broker" && !hasSandboxBroker) ||
+    (claims.purpose === "sandbox_qualification_broker" && !hasQualificationCredential)) return null;
 
   const claimedCompanyId = typeof claims.company_id === "string" ? claims.company_id : null;
   if (!claimedCompanyId) return null;
-  const dedicatedPurpose = claims.purpose === "sandbox_exec" || claims.purpose === "sandbox_broker";
+  const dedicatedPurpose = claims.purpose === "sandbox_exec" || claims.purpose === "sandbox_broker" || claims.purpose === "sandbox_qualification_broker";
+  const expectedAudience = claims.purpose === "sandbox_exec" ? "paperclip-sandbox-exec" :
+    claims.purpose === "sandbox_broker" ? "paperclip-sandbox-broker" :
+      claims.purpose === "sandbox_qualification_broker" ? "paperclip-sandbox-qualification" : null;
   if (dedicatedPurpose && (claims.iss !== config.issuer || claims.instance_id !== config.instanceId ||
-    claims.aud !== (claims.purpose === "sandbox_exec" ? "paperclip-sandbox-exec" : "paperclip-sandbox-broker") ||
+    claims.aud !== expectedAudience ||
     !Number.isSafeInteger(claims.iat) || !Number.isSafeInteger(claims.exp) ||
     (claims.exp as number) <= (claims.iat as number) || (claims.exp as number) - (claims.iat as number) > 60)) return null;
 
@@ -436,7 +516,8 @@ function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   if (issuer && issuer !== config.issuer) return null;
   if (audience && audience !== config.audience &&
     !(claims.purpose === "sandbox_exec" && audience === "paperclip-sandbox-exec") &&
-    !(claims.purpose === "sandbox_broker" && audience === "paperclip-sandbox-broker")) return null;
+    !(claims.purpose === "sandbox_broker" && audience === "paperclip-sandbox-broker") &&
+    !(claims.purpose === "sandbox_qualification_broker" && audience === "paperclip-sandbox-qualification")) return null;
 
   // Enforce the minting instance when the claim is present. The instance-scoped
   // signing key above is the real cryptographic boundary; this claim check is
@@ -457,8 +538,10 @@ function verifySignedLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
     ...(nativeToolEffect ? { native_tool_effect: nativeToolEffect } : {}),
     ...(claims.purpose === "sandbox_exec" ? { purpose: "sandbox_exec" as const } : {}),
     ...(claims.purpose === "sandbox_broker" ? { purpose: "sandbox_broker" as const } : {}),
+    ...(claims.purpose === "sandbox_qualification_broker" ? { purpose: "sandbox_qualification_broker" as const } : {}),
     ...(hasSandboxExec ? { sandbox_exec: parseSandboxExecCapabilityClaim(claims.sandbox_exec) ?? undefined } : {}),
     ...(hasSandboxBroker ? { sandbox_broker: parseSandboxBrokerCapabilityClaim(claims.sandbox_broker) ?? undefined } : {}),
+    ...(hasQualificationCredential ? { qualification_credential: parseSandboxQualificationCredentialClaim(claims.qualification_credential) ?? undefined } : {}),
     iat,
     exp,
     ...(issuer ? { iss: issuer } : {}),
@@ -479,7 +562,7 @@ export function verifySandboxExecJwt(token: string): LocalAgentJwtClaims & {
   sandbox_exec: SandboxExecCapabilityClaim;
 } | null {
   const claims = verifySignedLocalAgentJwt(token);
-  if (!claims || claims.purpose !== "sandbox_exec" || !claims.sandbox_exec || claims.sandbox_broker || claims.aud !== "paperclip-sandbox-exec") return null;
+  if (!claims || claims.purpose !== "sandbox_exec" || !claims.sandbox_exec || claims.sandbox_broker || claims.qualification_credential || claims.aud !== "paperclip-sandbox-exec") return null;
   return claims as LocalAgentJwtClaims & { purpose: "sandbox_exec"; sandbox_exec: SandboxExecCapabilityClaim };
 }
 
@@ -488,8 +571,18 @@ export function verifySandboxBrokerJwt(token: string): LocalAgentJwtClaims & {
   sandbox_broker: SandboxBrokerCapabilityClaim;
 } | null {
   const claims = verifySignedLocalAgentJwt(token);
-  if (!claims || claims.purpose !== "sandbox_broker" || !claims.sandbox_broker || claims.sandbox_exec || claims.aud !== "paperclip-sandbox-broker") return null;
+  if (!claims || claims.purpose !== "sandbox_broker" || !claims.sandbox_broker || claims.sandbox_exec || claims.qualification_credential || claims.aud !== "paperclip-sandbox-broker") return null;
   return claims as LocalAgentJwtClaims & { purpose: "sandbox_broker"; sandbox_broker: SandboxBrokerCapabilityClaim };
+}
+
+export function verifySandboxQualificationCredentialJwt(token: string): (LocalAgentJwtClaims & {
+  purpose: "sandbox_qualification_broker";
+  qualification_credential: SandboxQualificationCredentialClaim;
+}) | null {
+  const claims = verifySignedLocalAgentJwt(token);
+  if (!claims || claims.purpose !== "sandbox_qualification_broker" || !claims.qualification_credential ||
+    claims.sandbox_exec || claims.sandbox_broker || claims.aud !== "paperclip-sandbox-qualification") return null;
+  return claims as LocalAgentJwtClaims & { purpose: "sandbox_qualification_broker"; qualification_credential: SandboxQualificationCredentialClaim };
 }
 
 function parseSandboxExecCapabilityClaim(value: unknown): SandboxExecCapabilityClaim | null {
@@ -550,6 +643,58 @@ function parseSandboxBrokerCapabilityClaim(value: unknown): SandboxBrokerCapabil
     !bindingsValid ||
     typeof claim.expiresAt !== "string" || !Number.isFinite(Date.parse(claim.expiresAt))) return null;
   return claim as unknown as SandboxBrokerCapabilityClaim;
+}
+
+function parseSandboxQualificationCredentialClaim(value: unknown): SandboxQualificationCredentialClaim | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const claim = value as Record<string, unknown>;
+  const keys = ["version", "purpose", "aud", "jti", "commandId", "caseId", "fixtureId", "fixtureHash", "hostEpoch", "scope",
+    "bindingVersion", "sandboxId", "containerId", "provisioningHash", "targetQualificationHash", "connectionId", "grantId", "secretVersionHash", "sourceBindingHash",
+    "operatorUserId", "operatorSessionId", "profileId", "profileHash", "binaries", "gatewayPublicId", "toolName", "argumentTemplateHash", "argumentsHash", "requestBodyHash", "nonce", "origin", "method", "path", "expiresAt", "maxUses"];
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+  const digest = /^[a-f0-9]{64}$/;
+  const scope = claim.scope && typeof claim.scope === "object" && !Array.isArray(claim.scope)
+    ? claim.scope as Record<string, unknown> : null;
+  const scopeKeys = ["companyId", "bindingId", "cellId", "generation", "sandboxRef"];
+  let endpoint: URL | null = null;
+  try { endpoint = new URL(String(claim.origin)); } catch { /* closed below */ }
+  const binaries = Array.isArray(claim.binaries) ? claim.binaries : [];
+  const safePath = typeof claim.path === "string" && claim.path.startsWith("/") && claim.path.length <= 2048 &&
+    !claim.path.includes("\\") && !claim.path.includes("\0") && !claim.path.includes("?") && !claim.path.includes("#") &&
+    !claim.path.split("/").some(part => part === "." || part === "..") && !/\r|\n/.test(claim.path);
+  if (Object.keys(claim).length !== keys.length || keys.some(key => !Object.hasOwn(claim, key)) ||
+    claim.version !== 1 || claim.purpose !== "qualification_credential_probe" || claim.aud !== "paperclip-sandbox-qualification" ||
+    !uuid.test(String(claim.jti)) || !uuid.test(String(claim.commandId)) ||
+    !["credential_allow", "credential_raw_read_deny", "credential_wrong_destination_deny", "credential_revoke_deny", "credential_wrong_binary_deny"].includes(String(claim.caseId)) ||
+    typeof claim.fixtureId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(claim.fixtureId) ||
+    typeof claim.fixtureHash !== "string" || !digest.test(claim.fixtureHash) ||
+    !Number.isSafeInteger(claim.hostEpoch) || (claim.hostEpoch as number) < 1 ||
+    !scope || Object.keys(scope).length !== scopeKeys.length || scopeKeys.some(key => !Object.hasOwn(scope, key)) ||
+    typeof scope.companyId !== "string" || !uuid.test(scope.companyId) || typeof scope.bindingId !== "string" || !uuid.test(scope.bindingId) ||
+    typeof scope.cellId !== "string" || !uuid.test(scope.cellId) || typeof scope.generation !== "string" || !/^[1-9]\d{0,18}$/.test(scope.generation) ||
+    typeof scope.sandboxRef !== "string" || !/^aw-v7-[a-f0-9-]{36}$/.test(scope.sandboxRef) ||
+    !Number.isSafeInteger(claim.bindingVersion) || (claim.bindingVersion as number) < 1 ||
+    typeof claim.sandboxId !== "string" || !uuid.test(claim.sandboxId) || typeof claim.containerId !== "string" || !/^[a-f0-9]{64}$/.test(claim.containerId) ||
+    typeof claim.provisioningHash !== "string" || !digest.test(claim.provisioningHash) ||
+    typeof claim.targetQualificationHash !== "string" || !digest.test(claim.targetQualificationHash) ||
+    typeof claim.connectionId !== "string" || !uuid.test(claim.connectionId) || typeof claim.grantId !== "string" || !uuid.test(claim.grantId) ||
+    typeof claim.secretVersionHash !== "string" || !digest.test(claim.secretVersionHash) ||
+    typeof claim.sourceBindingHash !== "string" || !digest.test(claim.sourceBindingHash) ||
+    typeof claim.operatorUserId !== "string" || claim.operatorUserId.length < 1 || claim.operatorUserId.length > 200 ||
+    typeof claim.operatorSessionId !== "string" || claim.operatorSessionId.length < 1 || claim.operatorSessionId.length > 200 ||
+    typeof claim.profileId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(claim.profileId) ||
+    typeof claim.profileHash !== "string" || !digest.test(claim.profileHash) ||
+    binaries.length !== 1 || binaries[0] !== "/usr/bin/curl" || binaries.some(binary => typeof binary !== "string" || !binary.startsWith("/") || binary.length > 1000 ||
+      binary.includes("\\") || binary.includes("\0") || binary.split("/").some(part => part === "." || part === "..") || /[\r\n*?]/.test(binary)) ||
+    new Set(binaries).size !== binaries.length || !endpoint || endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.pathname !== "/" || endpoint.search || endpoint.hash ||
+    typeof claim.origin !== "string" || claim.origin.length > 512 || endpoint.origin !== claim.origin ||
+    typeof claim.gatewayPublicId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(claim.gatewayPublicId) ||
+    typeof claim.toolName !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(claim.toolName) ||
+    !["argumentTemplateHash", "argumentsHash", "requestBodyHash"].every(key => typeof claim[key] === "string" && digest.test(claim[key] as string)) ||
+    typeof claim.nonce !== "string" || !/^[a-f0-9]{32}$/.test(claim.nonce) ||
+    claim.method !== "POST" || claim.path !== `/mcp/gateways/${claim.gatewayPublicId}` || !safePath || typeof claim.expiresAt !== "string" || !Number.isFinite(Date.parse(claim.expiresAt)) || claim.maxUses !== 1)
+    return null;
+  return claim as unknown as SandboxQualificationCredentialClaim;
 }
 
 function parseNativeToolEffectClaim(value: unknown): NativeToolEffectClaim | null {

@@ -36,7 +36,7 @@ import { PaperclipRunnerToolAuthority } from "./native-runtime/paperclip-runner-
 import { claimSlackRateLimitRetry } from "./connectors/slack-retry.js";
 import { assertPlatformSkillAdmission } from "./platform-skill-admission.js";
 import { resolveSlackTaskAuthority } from "./connectors/slack-authority.js";
-import { SLACK_TOOLS } from "@paperclipai/shared";
+import { SLACK_TOOLS, SANDBOX_HOST_COMMAND } from "@paperclipai/shared";
 import { slackToolsForSession } from "./connectors/slack-catalog.js";
 import { executeSlackTool } from "./connectors/slack.js";
 import { githubGuestBotConnectionForSession, githubBotToolsForSession } from "./chat-github-tools.js";
@@ -47,7 +47,7 @@ import { emitConnectionInvoked } from "./connector-telemetry.js";
 import { resolveManagedGitHubIdentitySelection } from "./git-credentials.js";
 import { extractRemoteMcpPending } from "./remote-mcp-pending.js";
 import { logger } from "../middleware/logger.js";
-import { verifySandboxBrokerJwt, type SandboxBrokerCapabilityClaim } from "../agent-auth-jwt.js";
+import { createSandboxQualificationCredentialJwt, verifySandboxBrokerJwt, verifySandboxQualificationCredentialJwt, type SandboxBrokerCapabilityClaim, type SandboxQualificationCredentialClaim } from "../agent-auth-jwt.js";
 import { spawn } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
@@ -103,6 +103,9 @@ import {
   runtimeHostCommands,
   runtimePolicySnapshots,
 } from "@paperclipai/db";
+import { authSessions, runtimeCells, runtimeHosts, runtimeSandboxBindings } from "@paperclipai/db";
+import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
+import { assertV7Authorization } from "./v7-authorization.js";
 
 let nativeRememberFailureDiagnostics = 0;
 import type { ToolRunContext } from "@paperclipai/plugin-sdk";
@@ -127,6 +130,7 @@ import type {
   ToolMcpGatewayWithTokens,
   UpdateToolMcpGateway,
   SandboxPolicy,
+  SandboxCapabilitySnapshot,
 } from "@paperclipai/shared";
 import {
   memoryAgentRememberInputSchema,
@@ -172,6 +176,7 @@ import {
   projectedConnectionHeaders,
   projectedConnectionToolArguments,
   projectedConnectionToolInputSchema,
+  toolAccessService,
 } from "./tool-access.js";
 import { assertGoogleChatToolArgumentsSupported, googleChatToolDescription } from "./google-chat-tool-policy.js";
 import { parseRemoteHttpEndpoint } from "./remote-http-endpoint-guard.js";
@@ -1661,6 +1666,7 @@ function isWorkflowAuthoringSelfToolName(name: string): boolean {
 export function createToolGatewayService(
   db: Db,
   options: {
+    operatorUserIds?: readonly string[];
     supportCaseDataPolicy?: ReturnType<typeof readSupportCaseDataPolicy>;
     serviceHealthReader?: ReturnType<typeof managedServiceHealthFromEnvironment>;
     pluginToolDispatcher?: PluginToolDispatcher;
@@ -5984,6 +5990,45 @@ export function createToolGatewayService(
     return findOrganizationGrant();
   }
 
+  async function qualificationCanarySourceBindingHash(input: {
+    session: ToolGatewaySession;
+    connection: typeof toolConnections.$inferSelect;
+    grant: typeof connectionGrants.$inferSelect;
+    gateway: typeof toolMcpGateways.$inferSelect;
+    tool: ToolGatewayDescriptor;
+    fixtureConfig: Record<string, unknown>;
+  }) {
+    const endpoint = new URL(await resolvedRemoteEndpoint(input.session, input.connection, input.grant));
+    const profileEntries = await db.select().from(toolProfileEntries).where(and(
+      eq(toolProfileEntries.companyId, input.gateway.companyId), eq(toolProfileEntries.profileId, input.gateway.profileId),
+    ));
+    return nativeSha256({
+      connection: {
+        id: input.connection.id, applicationId: input.connection.applicationId, transport: input.connection.transport,
+        status: input.connection.status, enabled: input.connection.enabled, authKind: input.connection.authKind,
+        credentialSource: input.connection.credentialSource, credentialPolicy: input.connection.credentialPolicy,
+        credentialRefs: input.connection.credentialRefs, credentialSecretRefs: input.connection.credentialSecretRefs,
+        config: input.connection.config, transportConfig: input.connection.transportConfig,
+      },
+      grant: {
+        id: input.grant.id, kind: input.grant.kind, subjectUserId: input.grant.subjectUserId,
+        status: input.grant.status, revokedAt: input.grant.revokedAt,
+        credentialSecretRefs: input.grant.credentialSecretRefs, externalCredential: input.grant.externalCredential,
+      },
+      endpoint: { protocol: endpoint.protocol, hostname: endpoint.hostname, port: endpoint.port, pathname: endpoint.pathname },
+      gateway: { id: input.gateway.id, publicId: input.gateway.gatewayPublicId, status: input.gateway.status,
+        profileId: input.gateway.profileId, profileEntries: profileEntries.map(entry => ({
+          selectorType: entry.selectorType, effect: entry.effect, connectionId: entry.connectionId,
+          applicationId: entry.applicationId, catalogEntryId: entry.catalogEntryId, toolName: entry.toolName,
+          riskLevel: entry.riskLevel, conditions: entry.conditions,
+        })).sort((a, b) => stableHash(a).localeCompare(stableHash(b))) },
+      tool: { name: input.tool.name, upstreamToolName: input.tool.upstreamToolName,
+        catalogEntryId: input.tool.catalogEntryId, parametersSchema: input.tool.parametersSchema,
+        description: input.tool.description, risk: input.tool.risk },
+      fixtureConfig: input.fixtureConfig,
+    });
+  }
+
   async function resolveConnectedRemoteTool(
     session: ToolGatewaySession,
     tool: ToolGatewayDescriptor,
@@ -10062,6 +10107,311 @@ export function createToolGatewayService(
     },
     isSandboxBrokerToken(token: string) {
       return verifySandboxBrokerJwt(token) !== null;
+    },
+    isSandboxQualificationCredentialToken(token: string) {
+      return verifySandboxQualificationCredentialJwt(token) !== null;
+    },
+    async isSandboxQualificationCanaryCall(input: { gatewayPublicId: string; tool: string }) {
+      const [gateway] = await db.select({ id: toolMcpGateways.id }).from(toolMcpGateways).where(and(
+        eq(toolMcpGateways.gatewayPublicId, input.gatewayPublicId), eq(toolMcpGateways.status, "active"),
+        isNull(toolMcpGateways.archivedAt),
+      )).limit(1);
+      if (!gateway) return false;
+      const connections = await db.select({ config: toolConnections.config }).from(toolMcpGateways)
+        .innerJoin(toolProfileEntries, and(eq(toolProfileEntries.companyId, toolMcpGateways.companyId), eq(toolProfileEntries.profileId, toolMcpGateways.profileId)))
+        .innerJoin(toolConnections, eq(toolConnections.id, toolProfileEntries.connectionId))
+        .where(and(eq(toolMcpGateways.id, gateway.id), eq(toolConnections.status, "active"), eq(toolConnections.enabled, true)));
+      return connections.some(row => {
+        const fixture = row.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
+        return fixture?.kind === "operator_owned_local_readonly_canary" &&
+          fixture.purpose === "sandbox_qualification" && fixture.setupOnly === true &&
+          (fixture.toolName === input.tool || fixture.wrongToolName === input.tool);
+      });
+    },
+    async issueSandboxQualificationCredentialProbe(input: {
+      actor: AuthorizationActor;
+      scope: { companyId: string; bindingId: string; cellId: string; cellGeneration: string; sandboxRef: string };
+      bindingVersion: number;
+      operationKey: string;
+      target: NonNullable<SandboxCapabilitySnapshot["qualificationTarget"]>;
+      caseId: SandboxQualificationCredentialClaim["caseId"];
+      commandId: string;
+    }): Promise<{ commandId: string; capabilityToken: string; nonce: string } | null> {
+      const fixture = input.target.qualificationCredentialFixture;
+      const caseIds = new Set<SandboxQualificationCredentialClaim["caseId"]>([
+        "credential_allow", "credential_raw_read_deny", "credential_wrong_destination_deny",
+        "credential_wrong_binary_deny", "credential_revoke_deny",
+      ]);
+      if (!fixture || !caseIds.has(input.caseId) || fixture.argumentTemplateHash !== nativeSha256({
+        caseId: "<caseId>", fixtureId: "<fixtureId>", nonce: "<nonce>",
+      })) return null;
+      const operatorId = input.actor.type === "board" && input.actor.source === "session" ? input.actor.userId : null;
+      const sessionId = input.actor.type === "board" && input.actor.source === "session" ? input.actor.sessionId : null;
+      if (!operatorId || !sessionId || !options.operatorUserIds?.includes(operatorId)) return null;
+      await assertConfiguredOperatorAuthentication(db, input.actor, options.operatorUserIds ?? []);
+      await assertV7Authorization(db, input.actor, input.scope.companyId, "runtime:manage");
+      const [binding] = await db.select().from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, input.scope.companyId), eq(runtimeSandboxBindings.id, input.scope.bindingId),
+        eq(runtimeSandboxBindings.runtimeCellId, input.scope.cellId), eq(runtimeSandboxBindings.cellGeneration, input.scope.cellGeneration),
+      )).limit(1);
+      const [cell] = await db.select().from(runtimeCells).where(and(
+        eq(runtimeCells.companyId, input.scope.companyId), eq(runtimeCells.id, input.scope.cellId),
+        eq(runtimeCells.generation, BigInt(input.scope.cellGeneration)), eq(runtimeCells.status, "STOPPED"), isNull(runtimeCells.deletedAt),
+      )).limit(1);
+      const [host] = cell?.runtimeHostId ? await db.select().from(runtimeHosts).where(and(
+        eq(runtimeHosts.id, cell.runtimeHostId), eq(runtimeHosts.credentialVersion, input.target.hostEpoch),
+        eq(runtimeHosts.status, "READY"), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.retiredAt),
+      )).limit(1) : [];
+      if (!binding || !cell || !host || binding.version !== input.bindingVersion ||
+        !["requested", "ready", "failed"].includes(binding.status) || binding.backend !== "openshell" ||
+        (binding.sandboxRef ?? `aw-v7-${binding.id}`) !== input.scope.sandboxRef ||
+        input.target.companyId !== input.scope.companyId || input.target.bindingId !== input.scope.bindingId ||
+        input.target.cellId !== input.scope.cellId || input.target.cellGeneration !== input.scope.cellGeneration ||
+        input.target.sandboxRef !== input.scope.sandboxRef || input.target.bindingVersion !== input.bindingVersion ||
+        input.target.phase !== "Ready" || input.target.hostEpoch !== host.credentialVersion ||
+        !binding.boundaryPolicy.credentials || binding.boundaryPolicy.credentials.mode !== "brokered")
+        return null;
+      const [operatorSession] = await db.select().from(authSessions).where(and(
+        eq(authSessions.id, sessionId), eq(authSessions.userId, operatorId), gt(authSessions.expiresAt, new Date()),
+      )).limit(1);
+      if (!operatorSession) return null;
+      const [gateway] = await db.select().from(toolMcpGateways).where(and(
+        eq(toolMcpGateways.companyId, input.scope.companyId), eq(toolMcpGateways.gatewayPublicId, fixture.gatewayPublicId),
+        eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+      )).limit(1);
+      const companyConnections = await db.select().from(toolConnections).where(and(
+        eq(toolConnections.companyId, input.scope.companyId), eq(toolConnections.status, "active"),
+        eq(toolConnections.enabled, true), eq(toolConnections.transport, "mcp_remote"),
+      ));
+      const fixtureConnections = companyConnections.filter(row => {
+        const candidate = row.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
+        return row.createdByUserId === operatorId && candidate?.kind === "operator_owned_local_readonly_canary" && candidate.purpose === "sandbox_qualification" &&
+          candidate.setupOnly === true && candidate.fixtureId === fixture.fixtureId;
+      });
+      const connection = fixtureConnections.length === 1 ? fixtureConnections[0] : undefined;
+      if (!gateway || !connection || binding.boundaryPolicy.credentials.bindings.some(candidate => candidate.connectionId === connection.id)) return null;
+      const canary = connection.config?.sandboxQualificationCanary;
+      if (!canary || typeof canary !== "object" || Array.isArray(canary)) return null;
+      const canaryConfig = canary as Record<string, unknown>;
+      const canaryKeys = ["argumentTemplateHash", "endpointOrigin", "endpointPath", "fixtureHash", "fixtureId", "gatewayPublicId", "grantId", "kind", "marker", "noSideEffects", "purpose", "readOnly", "setupOnly", "toolName", "version", "wrongToolName"].sort();
+      if (Object.keys(canaryConfig).sort().join(",") !== canaryKeys.join(",") ||
+        canaryConfig.kind !== "operator_owned_local_readonly_canary" || canaryConfig.version !== 1 ||
+        canaryConfig.purpose !== "sandbox_qualification" || canaryConfig.setupOnly !== true ||
+        canaryConfig.fixtureId !== fixture.fixtureId || canaryConfig.fixtureHash !== fixture.fixtureHash ||
+        canaryConfig.gatewayPublicId !== fixture.gatewayPublicId || canaryConfig.toolName !== fixture.toolName ||
+        canaryConfig.wrongToolName !== fixture.wrongToolName || canaryConfig.argumentTemplateHash !== fixture.argumentTemplateHash ||
+        canaryConfig.marker !== fixture.marker || canaryConfig.readOnly !== true || canaryConfig.noSideEffects !== true ||
+        typeof canaryConfig.endpointOrigin !== "string") return null;
+      const session: ToolGatewaySession = {
+        id: `qualification:${input.commandId}`, token: "qualification-host-probe", companyId: input.scope.companyId,
+        agentId: null, runId: null, issueId: null, projectId: null, gatewayId: gateway.id,
+        gatewayPublicId: gateway.gatewayPublicId, gatewayName: gateway.name, gatewayProfileId: gateway.profileId,
+        gatewayTokenAllowedActions: ["tools/call"], actorType: "user", actorId: operatorId, responsibleUserId: operatorId,
+        createdAt: operatorSession.createdAt, expiresAt: operatorSession.expiresAt,
+      };
+      let grant: typeof connectionGrants.$inferSelect;
+      try { grant = await resolveConnectionGrant(session, connection); } catch { return null; }
+      if (grant.id !== canaryConfig.grantId || grant.status !== "active") return null;
+      const endpoint = new URL(await resolvedRemoteEndpoint(session, connection, grant));
+      if (endpoint.protocol !== "https:" || endpoint.origin !== canaryConfig.endpointOrigin || endpoint.pathname !== canaryConfig.endpointPath ||
+        endpoint.username || endpoint.password || endpoint.search || endpoint.hash) return null;
+      const snapshots = await connectedCredentialVersionSnapshots(connection, grant, { requireResolved: true });
+      const secretVersionHash = nativeSha256(snapshots);
+      const tool = await findToolForSession(session, fixture.toolName).catch(() => null);
+      if (!tool || tool.connectionId !== connection.id || tool.providerType !== "mcp_remote_http" || tool.risk !== "read") return null;
+      const sourceBindingHash = await qualificationCanarySourceBindingHash({ session, connection, grant, gateway, tool, fixtureConfig: canaryConfig });
+      const nonce = randomBytes(16).toString("hex"), expiresAt = new Date(Date.now() + 20_000).toISOString();
+      const argumentsValue = { fixtureId: fixture.fixtureId, caseId: input.caseId, nonce };
+      const positiveBody = { jsonrpc: "2.0", id: input.commandId, method: "tools/call", params: { name: fixture.toolName, arguments: argumentsValue } };
+      const claim: SandboxQualificationCredentialClaim = {
+        version: 1, purpose: "qualification_credential_probe", aud: "paperclip-sandbox-qualification",
+        jti: randomUUID(), commandId: input.commandId, caseId: input.caseId, fixtureId: fixture.fixtureId,
+        fixtureHash: fixture.fixtureHash, hostEpoch: input.target.hostEpoch, scope: {
+          companyId: input.scope.companyId, bindingId: input.scope.bindingId, cellId: input.scope.cellId,
+          generation: input.scope.cellGeneration, sandboxRef: input.scope.sandboxRef,
+        }, bindingVersion: input.bindingVersion, sandboxId: input.target.sandboxId, containerId: input.target.containerId,
+        provisioningHash: input.target.provisioningHash, targetQualificationHash: input.target.targetHash,
+        connectionId: connection.id, grantId: grant.id,
+        secretVersionHash, sourceBindingHash, operatorUserId: operatorId, operatorSessionId: sessionId, profileId: fixture.profileId,
+        profileHash: fixture.profileHash, binaries: [...fixture.binaries], gatewayPublicId: fixture.gatewayPublicId,
+        toolName: fixture.toolName, argumentTemplateHash: fixture.argumentTemplateHash, argumentsHash: nativeSha256(argumentsValue),
+        requestBodyHash: nativeSha256(positiveBody), nonce, origin: fixture.origin, method: "POST",
+        path: `/mcp/gateways/${fixture.gatewayPublicId}`, expiresAt, maxUses: 1,
+      };
+      const capabilityToken = createSandboxQualificationCredentialJwt({ companyId: input.scope.companyId,
+        bindingId: input.scope.bindingId, operatorUserId: operatorId, claim });
+      if (!capabilityToken) return null;
+      if (input.caseId === "credential_revoke_deny") {
+        await toolAccessService(db).revokeConnectionGrant(connection.id, grant.id, { actorType: "user", actorId: operatorId });
+      }
+      return { commandId: input.commandId, capabilityToken, nonce };
+    },
+    async executeSandboxQualificationCredentialTool(input: {
+      capabilityToken: string; gatewayPublicId: string; commandId: string; tool: string; parameters: unknown;
+    }) {
+      const verified = verifySandboxQualificationCredentialJwt(input.capabilityToken);
+      const claim = verified?.qualification_credential;
+      if (!claim) throw new ToolGatewayHttpError(401, "Qualification credential capability is required", "sandbox_qualification_credential_required");
+      if (input.commandId !== claim.commandId || input.gatewayPublicId !== claim.gatewayPublicId ||
+        !input.parameters || typeof input.parameters !== "object" || Array.isArray(input.parameters))
+        throw new ToolGatewayHttpError(403, "Qualification request scope changed", "sandbox_qualification_tool_mismatch");
+      const args = input.parameters as Record<string, unknown>;
+      const expectedArgs = { fixtureId: claim.fixtureId, caseId: claim.caseId, nonce: claim.nonce };
+      const body = { jsonrpc: "2.0", id: claim.commandId, method: "tools/call", params: { name: claim.toolName, arguments: expectedArgs } };
+      if (Object.keys(args).length !== 3 || args.fixtureId !== claim.fixtureId || args.caseId !== claim.caseId || args.nonce !== claim.nonce ||
+        nativeSha256(args) !== claim.argumentsHash || nativeSha256({ caseId: "<caseId>", fixtureId: "<fixtureId>", nonce: "<nonce>" }) !== claim.argumentTemplateHash)
+        throw new ToolGatewayHttpError(403, "Qualification request body changed", "sandbox_qualification_tool_mismatch");
+      const actor: AuthorizationActor = { type: "board", source: "session", userId: claim.operatorUserId, sessionId: claim.operatorSessionId };
+      const now = new Date();
+      const [cell] = await db.select().from(runtimeCells).where(and(
+        eq(runtimeCells.companyId, claim.scope.companyId), eq(runtimeCells.id, claim.scope.cellId),
+        eq(runtimeCells.generation, BigInt(claim.scope.generation)), eq(runtimeCells.status, "STOPPED"), isNull(runtimeCells.deletedAt),
+      )).limit(1);
+      const [binding] = await db.select().from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, claim.scope.companyId), eq(runtimeSandboxBindings.id, claim.scope.bindingId),
+        eq(runtimeSandboxBindings.runtimeCellId, claim.scope.cellId), eq(runtimeSandboxBindings.cellGeneration, claim.scope.generation),
+        eq(runtimeSandboxBindings.version, claim.bindingVersion),
+      )).limit(1);
+      const [host] = cell?.runtimeHostId ? await db.select().from(runtimeHosts).where(and(
+        eq(runtimeHosts.id, cell.runtimeHostId), eq(runtimeHosts.credentialVersion, claim.hostEpoch), eq(runtimeHosts.status, "READY"),
+        isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.retiredAt),
+      )).limit(1) : [];
+      const [gateway] = await db.select().from(toolMcpGateways).where(and(
+        eq(toolMcpGateways.companyId, claim.scope.companyId), eq(toolMcpGateways.gatewayPublicId, claim.gatewayPublicId),
+        eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+      )).limit(1);
+      const [hostCommand] = await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.id, claim.commandId), eq(runtimeHostCommands.runtimeHostId, host?.id ?? "00000000-0000-4000-8000-000000000000"),
+        eq(runtimeHostCommands.companyId, claim.scope.companyId), eq(runtimeHostCommands.runtimeCellId, claim.scope.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(claim.scope.generation)), eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND),
+        eq(runtimeHostCommands.status, "CLAIMED"), gt(runtimeHostCommands.deadlineAt, now),
+      )).limit(1);
+      if (!cell || !binding || !host || !gateway || !hostCommand || !["requested", "ready", "failed"].includes(binding.status) ||
+        (binding.sandboxRef ?? `aw-v7-${binding.id}`) !== claim.scope.sandboxRef || Date.parse(claim.expiresAt) <= now.getTime())
+        throw new ToolGatewayHttpError(409, "Qualification target is no longer current", "sandbox_qualification_target_changed");
+      await assertConfiguredOperatorAuthentication(db, actor, options.operatorUserIds ?? []);
+      await assertV7Authorization(db, actor, claim.scope.companyId, "runtime:manage");
+      const [hostUse] = await db.transaction(async tx => {
+        await assertConfiguredOperatorAuthentication(tx as unknown as Db, actor, options.operatorUserIds ?? []);
+        const [inserted] = await tx.insert(runtimeHostCommands).values({
+          runtimeHostId: host.id, companyId: claim.scope.companyId, runtimeCellId: claim.scope.cellId,
+          cellGeneration: BigInt(claim.scope.generation), commandType: "sandbox_qualification_credential_probe",
+          idempotencyKey: `sandbox-qualification-credential:${claim.jti}`,
+          payload: { jtiHash: nativeSha256(claim.jti), commandId: claim.commandId, caseId: claim.caseId,
+            gatewayPublicId: claim.gatewayPublicId, connectionId: claim.connectionId, operationBodyHash: claim.requestBodyHash },
+          status: "CLAIMED", attempt: 1, deadlineAt: new Date(Math.min(Date.parse(claim.expiresAt), hostCommand.deadlineAt.getTime())),
+        }).onConflictDoNothing().returning();
+        if (!inserted) throw new ToolGatewayHttpError(409, "Qualification capability was already consumed", "sandbox_qualification_capability_replayed");
+        return [inserted];
+      });
+      const operationKey = `sandbox-qualification-tool:${claim.jti}`;
+      const session: ToolGatewaySession = {
+        id: `qualification:${claim.jti}`, token: input.capabilityToken, companyId: claim.scope.companyId,
+        agentId: null, runId: null, issueId: null, projectId: gateway.projectId ?? null, gatewayId: gateway.id,
+        gatewayPublicId: claim.gatewayPublicId, gatewayName: gateway.name, gatewayProfileId: gateway.profileId,
+        gatewayTokenAllowedActions: ["tools/call"], actorType: "user", actorId: claim.operatorUserId,
+        responsibleUserId: claim.operatorUserId, createdAt: now, expiresAt: new Date(Date.parse(claim.expiresAt)),
+      };
+      const assertCurrent = async (tool?: ToolGatewayDescriptor) => {
+        await assertConfiguredOperatorAuthentication(db, actor, options.operatorUserIds ?? []);
+        await assertV7Authorization(db, actor, claim.scope.companyId, "runtime:manage");
+        const [currentBinding] = await db.select().from(runtimeSandboxBindings).where(and(
+          eq(runtimeSandboxBindings.companyId, claim.scope.companyId), eq(runtimeSandboxBindings.id, claim.scope.bindingId),
+          eq(runtimeSandboxBindings.version, claim.bindingVersion), eq(runtimeSandboxBindings.status, binding.status),
+        )).limit(1);
+        const [currentCell] = await db.select({ status: runtimeCells.status }).from(runtimeCells).where(and(
+          eq(runtimeCells.companyId, claim.scope.companyId), eq(runtimeCells.id, claim.scope.cellId),
+          eq(runtimeCells.generation, BigInt(claim.scope.generation)), eq(runtimeCells.status, "STOPPED"), isNull(runtimeCells.deletedAt),
+        )).limit(1);
+        const [currentHost] = await db.select({ credentialVersion: runtimeHosts.credentialVersion }).from(runtimeHosts).where(and(
+          eq(runtimeHosts.id, host.id), eq(runtimeHosts.credentialVersion, claim.hostEpoch), eq(runtimeHosts.status, "READY"),
+          isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.retiredAt),
+        )).limit(1);
+        if (!currentBinding || !currentCell || !currentHost || Date.parse(claim.expiresAt) <= Date.now())
+          throw new ToolGatewayHttpError(409, "Qualification target changed during probe", "sandbox_qualification_target_changed");
+        const [currentConnection] = await db.select().from(toolConnections).where(and(
+          eq(toolConnections.companyId, claim.scope.companyId), eq(toolConnections.id, claim.connectionId),
+          eq(toolConnections.status, "active"), eq(toolConnections.enabled, true),
+        )).limit(1);
+        const activeFixtureConnections = await db.select({ id: toolConnections.id, config: toolConnections.config, createdByUserId: toolConnections.createdByUserId }).from(toolConnections).where(and(
+          eq(toolConnections.companyId, claim.scope.companyId), eq(toolConnections.status, "active"),
+          eq(toolConnections.enabled, true), eq(toolConnections.transport, "mcp_remote"),
+        ));
+        const sameFixture = activeFixtureConnections.filter(row => {
+          const candidate = row.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
+          return row.createdByUserId === claim.operatorUserId && candidate?.kind === "operator_owned_local_readonly_canary" && candidate.purpose === "sandbox_qualification" &&
+            candidate.setupOnly === true && candidate.fixtureId === claim.fixtureId;
+        });
+        const [currentGateway] = await db.select().from(toolMcpGateways).where(and(
+          eq(toolMcpGateways.companyId, claim.scope.companyId), eq(toolMcpGateways.gatewayPublicId, claim.gatewayPublicId),
+          eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+        )).limit(1);
+        if (!currentConnection || currentConnection.createdByUserId !== claim.operatorUserId || !currentGateway)
+          throw new ToolGatewayHttpError(409, "Qualification gateway grant was revoked", "sandbox_qualification_grant_revoked");
+        if (sameFixture.length !== 1 || sameFixture[0]?.id !== claim.connectionId)
+          throw new ToolGatewayHttpError(409, "Qualification fixture identity changed", "sandbox_qualification_fixture_changed");
+        const canaryConfig = currentConnection.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
+        if (!canaryConfig || canaryConfig.kind !== "operator_owned_local_readonly_canary" || canaryConfig.purpose !== "sandbox_qualification" ||
+          canaryConfig.setupOnly !== true || canaryConfig.fixtureId !== claim.fixtureId ||
+          canaryConfig.fixtureHash !== claim.fixtureHash || canaryConfig.toolName !== claim.toolName || canaryConfig.gatewayPublicId !== claim.gatewayPublicId ||
+          typeof canaryConfig.marker !== "string" || canaryConfig.marker.length < 1 || canaryConfig.marker.length > 200)
+          throw new ToolGatewayHttpError(409, "Qualification canary fixture changed", "sandbox_qualification_fixture_changed");
+        if (currentBinding.boundaryPolicy.credentials.bindings.some(candidate => candidate.connectionId === claim.connectionId))
+          throw new ToolGatewayHttpError(409, "Qualification fixture grant cannot overlap runtime credentials", "sandbox_qualification_fixture_changed");
+        const currentGrant = await resolveConnectionGrant(session, currentConnection).catch(() => null);
+        if (!currentGrant || currentGrant.id !== claim.grantId || currentGrant.status !== "active")
+          throw new ToolGatewayHttpError(403, "Qualification credential grant was revoked", "sandbox_qualification_grant_revoked");
+        if (currentGateway.id !== session.gatewayId || currentGateway.profileId !== session.gatewayProfileId || currentGrant.id !== canaryConfig.grantId)
+          throw new ToolGatewayHttpError(409, "Qualification gateway authority changed", "sandbox_qualification_fixture_changed");
+        const endpoint = new URL(await resolvedRemoteEndpoint(session, currentConnection, currentGrant));
+        if (endpoint.protocol !== "https:" || endpoint.origin !== canaryConfig.endpointOrigin || endpoint.pathname !== canaryConfig.endpointPath ||
+          endpoint.username || endpoint.password || endpoint.search || endpoint.hash)
+          throw new ToolGatewayHttpError(409, "Qualification canary destination changed", "sandbox_qualification_fixture_changed");
+        const versions = await connectedCredentialVersionSnapshots(currentConnection, currentGrant, { requireResolved: true }).catch(() => null);
+        if (!versions || nativeSha256(versions) !== claim.secretVersionHash)
+          throw new ToolGatewayHttpError(409, "Qualification credential version changed", "sandbox_qualification_grant_revoked");
+        const currentTool = await findToolForSession(session, claim.toolName).catch(() => null);
+        if (!currentTool || currentTool.connectionId !== claim.connectionId || currentTool.providerType !== "mcp_remote_http" || currentTool.risk !== "read" ||
+          await qualificationCanarySourceBindingHash({ session, connection: currentConnection, grant: currentGrant,
+            gateway: currentGateway, tool: currentTool, fixtureConfig: canaryConfig }) !== claim.sourceBindingHash)
+          throw new ToolGatewayHttpError(409, "Qualification canary source binding changed", "sandbox_qualification_fixture_changed");
+        if (tool && (tool.name !== claim.toolName || tool.connectionId !== claim.connectionId || tool.providerType !== "mcp_remote_http" || tool.risk !== "read"))
+          throw new ToolGatewayHttpError(403, "Qualification tool is outside the one-use fixture", "sandbox_qualification_tool_mismatch");
+        return canaryConfig.marker;
+      };
+      try {
+        if (input.tool !== claim.toolName) throw new ToolGatewayHttpError(403, "Qualification tool is outside the one-use fixture", "sandbox_qualification_tool_mismatch");
+        if (nativeSha256(body) !== claim.requestBodyHash) throw new ToolGatewayHttpError(403, "Qualification request body changed", "sandbox_qualification_tool_mismatch");
+        await assertCurrent();
+        const result = await service.executeTool({ sessionToken: input.capabilityToken, tool: claim.toolName,
+          parameters: expectedArgs, idempotencyKey: operationKey }, undefined, { session, assertCurrent: async () => { await assertCurrent(); } }).catch(error => {
+          if (error instanceof ToolGatewayHttpError && error.reasonCode.startsWith("sandbox_qualification_")) throw error;
+          throw new ToolGatewayHttpError(502, "Qualification canary probe failed", "sandbox_qualification_probe_failed");
+        });
+        const expectedMarkerValue = await assertCurrent();
+        if (typeof expectedMarkerValue !== "string" || expectedMarkerValue.length < 1 || expectedMarkerValue.length > 200)
+          throw new ToolGatewayHttpError(409, "Qualification canary fixture changed", "sandbox_qualification_fixture_changed");
+        const expectedMarker = expectedMarkerValue;
+        const resultRecord = asRecord(result.result);
+        const resultData = asRecord(resultRecord?.data);
+        const structuredContent = asRecord(resultData?.structuredContent ?? resultRecord?.structuredContent);
+        if (resultData?.isError === true || !expectedMarker || structuredContent?.marker !== expectedMarker)
+          throw new ToolGatewayHttpError(502, "Qualification canary response did not match its fixed marker", "sandbox_qualification_result_invalid");
+        // Only the exact current fixture marker may leave this server-owned
+        // one-use route. Provider text, structured fields, headers and errors
+        // are deliberately discarded before serialization or host receipts.
+        const safeResult = { ...result, result: { content: expectedMarker, structuredContent: { marker: expectedMarker } } };
+        const safeResultHash = nativeSha256(safeResult.result);
+        await db.update(runtimeHostCommands).set({ status: "SUCCEEDED", completedAt: new Date(), safeResult: {
+          invocationId: result.invocationId, resultHash: safeResultHash,
+        } }).where(and(eq(runtimeHostCommands.id, hostUse.id), eq(runtimeHostCommands.status, "CLAIMED")));
+        return safeResult;
+      } catch (error) {
+        const code = error instanceof ToolGatewayHttpError ? error.reasonCode : "sandbox_qualification_probe_failed";
+        await db.update(runtimeHostCommands).set({ status: "FAILED", completedAt: new Date(), errorCode: code })
+          .where(and(eq(runtimeHostCommands.id, hostUse.id), eq(runtimeHostCommands.status, "CLAIMED")));
+        throw error;
+      }
     },
     async executeSandboxBrokerTool(input: {
       capabilityToken: string;

@@ -77,13 +77,13 @@ describe("sandbox qualification under compound host/probe faults (local fixtures
     expect(first.map(({ caseId }) => caseId)).toEqual(["filesystem_allow", "filesystem_deny", "filesystem_escape"]);
     expect(first).toEqual(sandboxProbeCases("a".repeat(64), ["filesystemPolicy"]));
     expect(first[0]?.contractHash).not.toBe(sandboxProbeCases("b".repeat(64), ["filesystemPolicy"])[0]?.contractHash);
-    expect(sandboxProbeCases("a".repeat(64), [])).toHaveLength(18);
+    expect(sandboxProbeCases("a".repeat(64), [])).toHaveLength(19);
   });
-  it("keeps the original expiry despite all eighteen passing observations", async () => {
+  it("keeps the original expiry despite all nineteen passing observations", async () => {
     const f = fixture();
     const report = await runSandboxQualification(f.backend, identity, now);
     expect(report.status).toBe("passed");
-    expect(f.probes()).toBe(18);
+    expect(f.probes()).toBe(19);
     expect(report.capabilities?.expiresAt).toBe(f.snapshot.expiresAt);
     expect(report.capabilities?.evidenceKind).toBe("local_fixture");
   });
@@ -99,7 +99,7 @@ describe("sandbox qualification under compound host/probe faults (local fixtures
     const report = await runSandboxQualification(f.backend, identity, now);
     expect(report.status).toBe("passed");
     expect(report.capabilities?.expiresAt).toBe(f.snapshot.expiresAt);
-    expect(f.probes()).toBe(18);
+    expect(f.probes()).toBe(19);
   });
   it("cannot replace an expired original attestation with a fresh report", async () => {
     const f = fixture();

@@ -1039,6 +1039,7 @@ export async function createApp(
   });
   const toolActionDeliveries = toolActionDeliveryService(db, connectionIntentHeartbeat);
   const toolGateway = createToolGatewayService(db, {
+    operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
     supportCaseDataPolicy: readSupportCaseDataPolicy(process.env),
     onToolActionSettled: (id) => toolActionDeliveries.deliver(id),
     pluginToolDispatcher: toolDispatcher,
@@ -1074,6 +1075,7 @@ export async function createApp(
     // through the configured root service above.
     deploymentMode: opts.deploymentMode,
     deploymentExposure: opts.deploymentExposure,
+    operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
     trustedLocalStdioRuntimeHost,
   }));
   app.locals.toolActionDeliveries = toolActionDeliveries;

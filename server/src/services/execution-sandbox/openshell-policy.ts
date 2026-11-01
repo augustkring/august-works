@@ -1,4 +1,5 @@
-import type { SandboxPolicy, SandboxPolicyCompilation } from "@paperclipai/shared";
+import path from "node:path";
+import type { SandboxPolicy, SandboxPolicyCompilation, SandboxQualificationProbeFixture } from "@paperclipai/shared";
 import { sandboxPolicySchema } from "@paperclipai/shared";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 
@@ -51,4 +52,95 @@ export function projectOpenShellPolicy(raw: SandboxPolicy, modelBrokerEndpoint?:
     document.network_policies[`aw_${index}`] = { name: `aw_${index}`, binaries: policy.process.allowedBinaries.map(path => ({ path })), endpoints: [{ host: destination.hostname, port: destination.port, protocol: "rest", enforcement: "enforce", rules }] };
   });
   return { document, documentHash: nativeSha256(document), unsupportedFeatures: unsupported };
+}
+
+/** Build the one-purpose, initial CreateSandbox policy used only for the
+ * bounded qualification probes. Every permission comes from the protected
+ * operator-owned fixture; no user execution policy or request endpoint is
+ * accepted here. */
+export function projectOpenShellQualificationProbePolicy(fixture: SandboxQualificationProbeFixture) {
+  const fs = fixture.filesystem;
+  const readOnly = [...new Set([
+    "/.openshell/runtime", "/bin", "/etc", "/usr/bin", "/proc",
+    "/proc/self/status", "/proc/sys/net/ipv4/ip_unprivileged_port_start",
+    "/proc/sys/kernel/cap_last_cap", "/sys/fs/cgroup",
+    fs.allowedReadPath, fs.escapeViaRoot,
+  ])].sort();
+  const readWrite = [fs.workdirPath];
+  const withinRoot = (target: string, root: string) => root === "/" || target === root || target.startsWith(`${root}/`);
+  const forbiddenFixtureTarget = [fs.deniedReadPath, fs.escapeTargetPath].some(target =>
+    [...readOnly, ...readWrite].some(root => withinRoot(target, root)));
+  const workdirOverlap = [...readOnly].some(root => withinRoot(root, fs.workdirPath) || withinRoot(fs.workdirPath, root));
+  if (path.posix.resolve(fs.escapeOperand) !== fs.escapeTargetPath ||
+      forbiddenFixtureTarget || workdirOverlap || fixture.runAsUser === "0" || fixture.runAsGroup === "0")
+    return { document: null, documentHash: null, unsupportedFeatures: ["qualification_fixture_paths_or_identity_overlap"] as string[] };
+
+  const byDestination = new Map<string, { host: string; port: number; rules: Array<{ allow: { method: string; path: string } }> }>();
+  const addEndpoint = (rawUrl: string, method: string, nonceTemplate: boolean, includeRule = true) => {
+    let url: URL;
+    let path: string;
+    try {
+      if (nonceTemplate) {
+        if (rawUrl.split("{nonce}").length !== 2) return false;
+        const nonce = "a".repeat(32);
+        url = new URL(rawUrl.replace("{nonce}", nonce));
+        if (url.pathname.split("/").filter(segment => segment === nonce).length !== 1) return false;
+        path = url.pathname.split("/").map(segment => segment === nonce ? "?".repeat(32) : segment).join("/");
+      } else {
+        url = new URL(rawUrl);
+        path = url.pathname;
+      }
+    } catch { return false; }
+    // OpenShell REST paths are globs. Operator fixtures are literals except
+    // for the single controlled nonce segment; reject any other glob or URL
+    // encoding syntax rather than silently widening a probe rule.
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password || url.search || url.hash ||
+        /[%*?\[\]]/.test(url.pathname) ||
+        !["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method) || !path.startsWith("/")) return false;
+    const host = url.hostname.toLowerCase(), port = Number(url.port || 443), key = `${host}:${port}`;
+    const value = byDestination.get(key) ?? { host, port, rules: [] };
+    const rule = { allow: { method, path } };
+    if (includeRule && !value.rules.some(existing => JSON.stringify(existing) === JSON.stringify(rule))) value.rules.push(rule);
+    byDestination.set(key, value);
+    return true;
+  };
+  if (!addEndpoint(fixture.network.allow.urlTemplate, fixture.network.allow.method, true) ||
+      !addEndpoint(fixture.network.redirectDeny.urlTemplate, fixture.network.redirectDeny.method, true) ||
+      !addEndpoint(fixture.network.dnsRedirectDeny.urlTemplate, fixture.network.dnsRedirectDeny.method, true) ||
+      !addEndpoint(fixture.network.l7Allow.urlTemplate, fixture.network.l7Allow.method, true) ||
+      !addEndpoint(fixture.network.l7Deny.urlTemplate, fixture.network.l7Deny.method, true, false))
+    return { document: null, documentHash: null, unsupportedFeatures: ["qualification_network_template_invalid"] as string[] };
+  {
+    let deniedL7Url: URL;
+    try { deniedL7Url = new URL(fixture.network.l7Deny.urlTemplate.replace("{nonce}", "a".repeat(32))); }
+    catch { return { document: null, documentHash: null, unsupportedFeatures: ["qualification_l7_sentinel_invalid"] as string[] }; }
+    const deniedL7Port = Number(deniedL7Url.port || 443), key = `${deniedL7Url.hostname.toLowerCase()}:${deniedL7Port}`;
+    const endpoint = byDestination.get(key) ?? { host: deniedL7Url.hostname.toLowerCase(), port: deniedL7Port, rules: [] };
+    const sentinelMethod = fixture.network.l7Deny.method === "GET" ? "POST" : "GET";
+    const sentinelRule = { allow: { method: sentinelMethod, path: "/__aw_qualification_l7_sentinel__" } };
+    if (!endpoint.rules.some(existing => JSON.stringify(existing) === JSON.stringify(sentinelRule))) endpoint.rules.push(sentinelRule);
+    byDestination.set(key, endpoint);
+  }
+  if (fixture.credential) {
+    const credentialUrl = new URL(fixture.credential.origin);
+    if (!addEndpoint(`${credentialUrl.origin}/mcp/gateways/${fixture.credential.gatewayPublicId}`,
+      fixture.credential.method, false))
+      return { document: null, documentHash: null, unsupportedFeatures: ["qualification_credential_endpoint_invalid"] as string[] };
+  }
+  const network_policies: OpenShellPolicyDocument["network_policies"] = {};
+  [...byDestination.values()].sort((a, b) => a.host < b.host ? -1 : a.host > b.host ? 1 : a.port - b.port).forEach((destination, index) => {
+    const policyName = `aw_probe_${index}`;
+    network_policies[policyName] = { name: policyName, binaries: [{ path: "/usr/bin/curl" }], endpoints: [{
+      host: destination.host, port: destination.port, protocol: "rest", enforcement: "enforce",
+      rules: destination.rules.sort((a, b) => JSON.stringify(a.allow).localeCompare(JSON.stringify(b.allow))),
+    }] };
+  });
+  const document: OpenShellPolicyDocument = {
+    version: 1,
+    filesystem_policy: { include_workdir: false, read_only: readOnly, read_write: readWrite },
+    landlock: { compatibility: "hard_requirement" },
+    process: { run_as_user: fixture.runAsUser, run_as_group: fixture.runAsGroup },
+    network_policies,
+  };
+  return { document, documentHash: nativeSha256(document), unsupportedFeatures: [] as string[] };
 }

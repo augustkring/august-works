@@ -1,13 +1,19 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, stat, realpath, writeFile, unlink } from "node:fs/promises";
+import { readFile, stat, lstat, realpath, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
+import { isIP } from "node:net";
 import { atomicJson } from "./journal.mjs";
 
 const runFile = promisify(execFile);
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+const DISK_CHANNEL_MOUNT = "/.openshell/channel";
+const DISK_CA_TMPFS_MOUNT = "/run/openshell-supervisor-ca/material";
+const MIN_DISK_BYTES = 1_048_576;
+const MAX_DISK_BYTES = 1_099_511_627_776;
+const QUALIFICATION_CREDENTIAL_ENV = "PAPERCLIP_SANDBOX_QUALIFICATION_TOKEN";
 const probeContracts = Object.freeze({
   filesystem_allow: ["filesystemPolicy", "allow"],
   filesystem_deny: ["filesystemPolicy", "deny"],
@@ -24,6 +30,7 @@ const probeContracts = Object.freeze({
   credential_allow: ["credentialBrokering", "allow"],
   credential_raw_read_deny: ["credentialBrokering", "deny"],
   credential_wrong_destination_deny: ["credentialBrokering", "deny"],
+  credential_wrong_binary_deny: ["credentialBrokering", "deny"],
   credential_revoke_deny: ["credentialBrokering", "deny"],
   resource_exhaustion_contained: ["resourceLimits", "deny"],
   force_stop: ["forceStop", "observe"],
@@ -79,6 +86,58 @@ export function openShellHostEngine({
   }
   function sameDocument(left, right) {
     return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+  }
+  function deterministicUuidFromHash(digest) {
+    if (!/^[a-f0-9]{64}$/.test(digest ?? "")) throw new Error("sandbox_scope_changed");
+    const bytes = Buffer.from(digest.slice(0, 32), "hex");
+    bytes[6] = (bytes[6] & 0x0f) | 0x50;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const value = bytes.toString("hex");
+    return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+  }
+  function validOpenShellDocument(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).sort().join(",") !== "filesystem_policy,landlock,network_policies,process,version" ||
+      value.version !== 1) return false;
+    const fs = value.filesystem_policy;
+    if (!fs || typeof fs !== "object" || Array.isArray(fs) ||
+      Object.keys(fs).sort().join(",") !== "include_workdir,read_only,read_write" ||
+      fs.include_workdir !== false || !Array.isArray(fs.read_only) || fs.read_only.length > 64 ||
+      !Array.isArray(fs.read_write) || fs.read_write.length > 32 ||
+      [...fs.read_only, ...fs.read_write].some(item => !canonicalFixturePath(item))) return false;
+    const landlock = value.landlock;
+    if (!landlock || typeof landlock !== "object" || Array.isArray(landlock) ||
+      Object.keys(landlock).sort().join(",") !== "compatibility" ||
+      landlock.compatibility !== "hard_requirement") return false;
+    const process = value.process;
+    if (!process || typeof process !== "object" || Array.isArray(process) ||
+      Object.keys(process).sort().join(",") !== "run_as_group,run_as_user" ||
+      !/^[1-9][0-9]{0,8}$/.test(process.run_as_user ?? "") ||
+      !/^[0-9]{1,9}$/.test(process.run_as_group ?? "")) return false;
+    const network = value.network_policies;
+    if (!network || typeof network !== "object" || Array.isArray(network) || Object.keys(network).length > 64) return false;
+    for (const [key, entry] of Object.entries(network)) {
+      if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(key) || !entry || typeof entry !== "object" ||
+        Array.isArray(entry) || Object.keys(entry).sort().join(",") !== "binaries,endpoints,name" ||
+        typeof entry.name !== "string" || entry.name.length > 100 || !Array.isArray(entry.binaries) ||
+        entry.binaries.length > 32 || !Array.isArray(entry.endpoints) || entry.endpoints.length > 64) return false;
+      if (entry.binaries.some(binary => !binary || typeof binary !== "object" || Array.isArray(binary) ||
+        Object.keys(binary).join(",") !== "path" || !canonicalFixturePath(binary.path))) return false;
+      for (const endpoint of entry.endpoints) {
+        if (!endpoint || typeof endpoint !== "object" || Array.isArray(endpoint) ||
+          Object.keys(endpoint).sort().join(",") !== "enforcement,host,port,protocol,rules" ||
+          typeof endpoint.host !== "string" || endpoint.host.length < 1 || endpoint.host.length > 253 ||
+          /[\r\n\0]/.test(endpoint.host) || !Number.isInteger(endpoint.port) || endpoint.port < 1 || endpoint.port > 65535 ||
+          endpoint.protocol !== "rest" || endpoint.enforcement !== "enforce" ||
+          !Array.isArray(endpoint.rules) || endpoint.rules.length > 224 ||
+          endpoint.rules.some(rule => !rule || typeof rule !== "object" || Array.isArray(rule) ||
+            Object.keys(rule).join(",") !== "allow" || !rule.allow || typeof rule.allow !== "object" ||
+            Array.isArray(rule.allow) || Object.keys(rule.allow).sort().join(",") !== "method,path" ||
+            typeof rule.allow.method !== "string" || rule.allow.method.length > 10 ||
+            typeof rule.allow.path !== "string" || rule.allow.path.length > 1100)) return false;
+      }
+    }
+    return true;
   }
   async function privateConfiguration() {
     if (
@@ -201,7 +260,8 @@ export function openShellHostEngine({
     await cli(["provider", "create", "--name", providerName, "--type", broker.profileId, "--credential", providerCredentialEnv], deadlineAt, false, providerEnv);
     await cli(["provider", "update", providerName, "--credential-expires-at", `${providerCredentialEnv}=${broker.expiresAt}`], deadlineAt, false);
     const waitSeconds = Math.max(1, Math.min(15, Math.floor((Date.parse(deadlineAt) - Date.now()) / 1000)));
-    await cli(["sandbox", "provider", "attach", scope.sandboxRef, providerName, "--wait", "--timeout", String(waitSeconds), "--output", "json"], deadlineAt, true, {}, 18_000);
+    const target = await observed(scope, deadlineAt);
+    await cli(["sandbox", "provider", "attach", scope.sandboxRef, providerName, "--expected-sandbox-id", target.id, "--wait", "--timeout", String(waitSeconds), "--output", "json"], deadlineAt, true, {}, 18_000);
     const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
     if (!Array.isArray(attached.providers) || !attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "")
       throw new Error("sandbox_observation_unavailable");
@@ -221,12 +281,14 @@ export function openShellHostEngine({
     await cli(["provider", "create", "--name", providerName, "--type", broker.profileId, "--credential", credentialEnv], deadlineAt, false, { [credentialEnv]: broker.capabilityToken });
     await cli(["provider", "update", providerName, "--credential-expires-at", `${credentialEnv}=${broker.expiresAt}`], deadlineAt, false);
     const waitSeconds = Math.max(1, Math.min(15, Math.floor((Date.parse(deadlineAt) - Date.now()) / 1000)));
-    await cli(["sandbox", "provider", "attach", scope.sandboxRef, providerName, "--wait", "--timeout", String(waitSeconds), "--output", "json"], deadlineAt, true, {}, 18_000);
+    const target = await observed(scope, deadlineAt);
+    await cli(["sandbox", "provider", "attach", scope.sandboxRef, providerName, "--expected-sandbox-id", target.id, "--wait", "--timeout", String(waitSeconds), "--output", "json"], deadlineAt, true, {}, 18_000);
     const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
     if (!Array.isArray(attached.providers) || !attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "") throw new Error("sandbox_observation_unavailable");
   }
   async function detachAndDeleteBrokerProvider(scope, deadlineAt, providerName) {
-    await cli(["sandbox", "provider", "detach", scope.sandboxRef, providerName, "--wait", "--timeout", "15", "--output", "json"], deadlineAt, true, {}, 18_000);
+    const target = await observed(scope, deadlineAt);
+    await cli(["sandbox", "provider", "detach", scope.sandboxRef, providerName, "--expected-sandbox-id", target.id, "--wait", "--timeout", "15", "--output", "json"], deadlineAt, true, {}, 18_000);
     const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
     if (!Array.isArray(attached.providers) || attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "")
       throw new Error("sandbox_observation_unavailable");
@@ -239,12 +301,42 @@ export function openShellHostEngine({
     });
     const names = [...new Set(pending)].slice(0, 32);
     for (const name of names) await cli(["provider", "delete", name], deadlineAt, false);
+    const qualificationProviders = Object.values(journal.commands).flatMap(command =>
+      command?.qualificationCredentialProvider ? [command.qualificationCredentialProvider] : [])
+      .filter(provider => provider && validScope(provider.scope) && sameDocument(provider.scope, scope) &&
+        /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name ?? "") && uuid.test(provider.sandboxId ?? ""))
+      .slice(0, 32);
+    for (const provider of qualificationProviders) {
+      const current = await observed(scope, deadlineAt);
+      if (current.id !== provider.sandboxId) throw new Error("sandbox_scope_changed");
+      await cli(["sandbox", "provider", "detach", scope.sandboxRef, provider.name,
+        "--expected-sandbox-id", provider.sandboxId, "--wait", "--timeout", "10", "--output", "json"],
+      deadlineAt, true, {}, 12_000);
+      const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef,
+        "--page-size", "16", "--output", "json"], deadlineAt);
+      if (!Array.isArray(attached.providers) || attached.providers.some(value => value?.name === provider.name) ||
+        attached.next_page_token !== "") throw new Error("sandbox_observation_unavailable");
+      await cli(["provider", "delete", provider.name], deadlineAt, false);
+    }
     if (names.length) await serial(async () => {
       for (const command of Object.values(journal.commands)) {
         if (command?.brokerProvider && names.includes(command.brokerProvider.name) && validScope(command.brokerProvider.scope) && sameDocument(command.brokerProvider.scope, scope))
           delete command.brokerProvider;
         if (command?.modelBrokerProvider && names.includes(command.modelBrokerProvider.name) && validScope(command.modelBrokerProvider.scope) && sameDocument(command.modelBrokerProvider.scope, scope))
           delete command.modelBrokerProvider;
+      }
+      for (const command of Object.values(journal.commands)) {
+        if (command?.qualificationCredentialProvider && qualificationProviders.some(provider =>
+          provider.name === command.qualificationCredentialProvider.name && sameDocument(provider.scope, scope)))
+          delete command.qualificationCredentialProvider;
+      }
+      await atomicJson(journalFile, journal);
+    });
+    else if (qualificationProviders.length) await serial(async () => {
+      for (const command of Object.values(journal.commands)) {
+        if (command?.qualificationCredentialProvider && qualificationProviders.some(provider =>
+          provider.name === command.qualificationCredentialProvider.name && sameDocument(provider.scope, scope)))
+          delete command.qualificationCredentialProvider;
       }
       await atomicJson(journalFile, journal);
     });
@@ -267,15 +359,620 @@ export function openShellHostEngine({
     });
     return json ? JSON.parse(stdout) : stdout;
   }
+  async function observedRuntimeBinarySha256(containerId, deadlineAt) {
+    if (!/^[a-f0-9]{64}$/.test(containerId ?? "")) return null;
+    const privateConfig = await privateConfiguration();
+    const destination = path.join(privateConfig.stateHome, `runtime-binary-${randomUUID()}`);
+    try {
+      await docker(["cp", `${containerId}:/.openshell/runtime/openshell-sandbox`, destination], deadlineAt, false);
+      const [info, resolved] = await Promise.all([lstat(destination), realpath(destination)]);
+      if (!info.isFile() || info.isSymbolicLink() || resolved !== destination ||
+        info.size < 1 || info.size > 100 * 1024 * 1024) return null;
+      return hash(await readFile(destination));
+    } catch { return null; }
+    finally { await unlink(destination).catch(() => {}); }
+  }
   function validResourceLimits(value) {
     return value && Number.isSafeInteger(value.cpuMillis) && value.cpuMillis >= 100 && value.cpuMillis <= 64000 &&
       Number.isSafeInteger(value.memoryBytes) && value.memoryBytes >= 67108864 && value.memoryBytes <= 137438953472 &&
+      Number.isSafeInteger(value.diskBytes) && value.diskBytes >= MIN_DISK_BYTES && value.diskBytes <= MAX_DISK_BYTES &&
       Number.isSafeInteger(value.pidsLimit) && value.pidsLimit >= 16 && value.pidsLimit <= 16384;
   }
-  function resourceHostConfigMatches(container, limits) {
+  function validateProvisioning(request) {
+    const value = request?.provisioning;
+    const baseKeys = "bindingVersion,document,expiresAt,idleUntilUnixSeconds,operationKey,policyHash,provisioningHash,purpose,resourceLimits";
+    const qualificationKeys = "bindingVersion,document,expiresAt,idleUntilUnixSeconds,operationKey,policyHash,probeFixtureHash,provisioningHash,purpose,qualificationProbeFixture,resourceLimits";
+    if (!value || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).sort().join(",") !== (value.purpose === "qualification" ? qualificationKeys : baseKeys) ||
+      !["qualification", "admission"].includes(value.purpose) ||
+      !Number.isSafeInteger(value.bindingVersion) || value.bindingVersion < 1 ||
+      typeof value.operationKey !== "string" || value.operationKey.length < 1 || value.operationKey.length > 300 ||
+      /[\r\n\0]/.test(value.operationKey) || typeof value.expiresAt !== "string" ||
+      !Number.isFinite(Date.parse(value.expiresAt)) || new Date(value.expiresAt).toISOString() !== value.expiresAt ||
+      !Number.isSafeInteger(value.idleUntilUnixSeconds) || value.idleUntilUnixSeconds < 1 ||
+      value.idleUntilUnixSeconds !== Math.floor(Date.parse(value.expiresAt) / 1000) ||
+      Date.parse(value.expiresAt) - Date.now() > 86_400_000 ||
+      !/^[a-f0-9]{64}$/.test(value.policyHash ?? "") || !/^[a-f0-9]{64}$/.test(value.provisioningHash ?? "") ||
+      !validResourceLimits(value.resourceLimits) || !validOpenShellDocument(value.document))
+      throw new Error("sandbox_scope_changed");
+    let configuredProbeFixture = null;
+    if (value.purpose === "qualification") {
+      const configured = qualificationProbeFixture();
+      const expectedDocument = configured && qualificationProbePolicyDocument(configured);
+      if (!configured || !expectedDocument || value.probeFixtureHash !== configured.fixtureHash ||
+        !sameDocument(value.qualificationProbeFixture, configured) ||
+        !sameDocument(value.document, expectedDocument) ||
+        value.policyHash !== hash(JSON.stringify(canonical(expectedDocument))))
+        throw new Error("sandbox_scope_changed");
+      configuredProbeFixture = configured;
+    }
+    const envelope = {
+      scope: { companyId: request.scope.companyId, bindingId: request.scope.bindingId,
+        cellId: request.scope.cellId, cellGeneration: request.scope.cellGeneration,
+        sandboxRef: request.scope.sandboxRef },
+      hostEpoch: epoch,
+      imageDigest: request.imageDigest,
+      purpose: value.purpose,
+      operationKey: value.operationKey,
+      bindingVersion: value.bindingVersion,
+      expiresAt: value.expiresAt,
+      idleUntilUnixSeconds: value.idleUntilUnixSeconds,
+      policyHash: value.policyHash,
+      document: canonical(value.document),
+      resourceLimits: canonical(value.resourceLimits),
+      ...(configuredProbeFixture ? { qualificationProbeFixture: canonical(configuredProbeFixture),
+        probeFixtureHash: configuredProbeFixture.fixtureHash } : {}),
+    };
+    const provisioningHash = hash(JSON.stringify(canonical(envelope)));
+    if (provisioningHash !== value.provisioningHash) throw new Error("sandbox_scope_changed");
+    return { envelope, provisioningHash, requestId: deterministicUuidFromHash(provisioningHash),
+      expired: Date.parse(value.expiresAt) <= Date.now() };
+  }
+  function dockerDiskStorageOptionMatches(container, limits) {
+    const storageOpt = container?.HostConfig?.StorageOpt;
+    return Number.isSafeInteger(limits?.diskBytes) &&
+      storageOpt && Object.keys(storageOpt).length === 1 &&
+      storageOpt.size === `${limits.diskBytes}B`;
+  }
+  function pathContains(parent, child) {
+    if (typeof parent !== "string" || typeof child !== "string" ||
+      !parent.startsWith("/") || !child.startsWith("/")) return false;
+    const normalizedParent = path.posix.normalize(parent), normalizedChild = path.posix.normalize(child);
+    return normalizedParent === "/" || normalizedChild === normalizedParent ||
+      normalizedChild.startsWith(`${normalizedParent}/`);
+  }
+  function readOnlyPathAllows(document, target) {
+    const paths = document?.filesystem_policy?.read_only;
+    return Array.isArray(paths) && paths.some(value => pathContains(value, target));
+  }
+  function filesystemPathAllowed(document, target) {
+    const paths = [...(document?.filesystem_policy?.read_only ?? []),
+      ...(document?.filesystem_policy?.read_write ?? [])];
+    return paths.some(value => pathContains(value, target));
+  }
+  function canonicalFixturePath(value, allowTraversal = false) {
+    return typeof value === "string" && value.length > 0 && value.length <= 512 &&
+      value.startsWith("/") && !/[\r\n\0]/.test(value) &&
+      value.split("/").every(part => part !== "." && (allowTraversal || part !== "..")) &&
+      (allowTraversal || path.posix.normalize(value) === value);
+  }
+  function filesystemProbeFixture() {
+    const value = config?.qualificationFixtures?.filesystem;
+    if (!value || Object.keys(value).sort().join(",") !==
+      "allowedReadMarker,allowedReadPath,deniedReadMarker,deniedReadPath,escapeOperand,escapeReadMarker,escapeTargetPath,escapeViaRoot,workdirPath" ||
+      !canonicalFixturePath(value.allowedReadPath) || !canonicalFixturePath(value.deniedReadPath) ||
+      !canonicalFixturePath(value.escapeViaRoot) || !canonicalFixturePath(value.escapeTargetPath) ||
+      !canonicalFixturePath(value.workdirPath) ||
+      !canonicalFixturePath(value.escapeOperand, true) || !value.escapeOperand.split("/").includes("..") ||
+      path.posix.resolve(value.escapeOperand) !== value.escapeTargetPath ||
+      !pathContains(value.escapeViaRoot, value.escapeOperand.split("/").slice(0, value.escapeOperand.split("/").indexOf(".." )).join("/")) ||
+      !/^[A-Za-z0-9]$/.test(value.allowedReadMarker ?? "") ||
+      !/^[A-Za-z0-9]$/.test(value.deniedReadMarker ?? "") ||
+      !/^[A-Za-z0-9]$/.test(value.escapeReadMarker ?? "") ||
+      value.allowedReadPath === value.deniedReadPath || value.deniedReadPath === value.escapeTargetPath ||
+      value.workdirPath === "/" ||
+      pathContains(value.workdirPath, value.escapeTargetPath) || pathContains(value.escapeTargetPath, value.workdirPath) ||
+      pathContains(value.workdirPath, value.deniedReadPath) || pathContains(value.deniedReadPath, value.workdirPath) ||
+      pathContains(value.workdirPath, value.escapeViaRoot) || pathContains(value.escapeViaRoot, value.workdirPath))
+      return null;
+    return value;
+  }
+  function noncePolicyPath(item) {
+    let target;
+    try { target = new URL(item.urlTemplate.replace("{nonce}", "AWQUALIFICATIONNONCE")); }
+    catch { return null; }
+    const segments = target.pathname.split("/");
+    if (item.urlTemplate.split("{nonce}").length !== 2 || target.search || target.hash ||
+      segments.filter(value => value === "AWQUALIFICATIONNONCE").length !== 1) return null;
+    return segments.map(value => value === "AWQUALIFICATIONNONCE" ? "?".repeat(32) : value).join("/");
+  }
+  function networkProbeFixture() {
+    const value = config?.qualificationFixtures?.network;
+    const cases = ["allow", "hostPortDeny", "wrongHostDeny", "redirectDeny", "dnsRedirectDeny", "l7Allow", "l7Deny"];
+    if (!value || Object.keys(value).sort().join(",") !== ["version", ...cases].sort().join(",") || value.version !== 1)
+      return null;
+    for (const key of cases) {
+      const item = value[key];
+      const expectedKeys = key === "dnsRedirectDeny"
+        ? "marker,method,resolveIp,urlTemplate"
+        : "marker,method,urlTemplate";
+      if (!item || Object.keys(item).sort().join(",") !== expectedKeys ||
+        typeof item.urlTemplate !== "string" || item.urlTemplate.length > 1024 ||
+        item.urlTemplate.split("{nonce}").length !== 2 ||
+        !/^[A-Za-z0-9_-]{8,128}$/.test(item.marker ?? "") ||
+        !["GET", "POST", "PUT", "PATCH", "DELETE"].includes(item.method)) return null;
+      const rawUrl = item.urlTemplate.replace("{nonce}", "qualification-attempt");
+      let url;
+      try { url = new URL(rawUrl); } catch { return null; }
+      if (url.protocol !== "https:" || !url.hostname || url.username || url.password ||
+        url.search || url.hash || url.pathname.includes("..") ||
+        !url.pathname.startsWith("/") || !noncePolicyPath(item) || /[%*?\[\]]/.test(url.pathname) ||
+        /[\r\n\0]/.test(item.urlTemplate)) return null;
+      if (key === "dnsRedirectDeny") {
+        const ip = item.resolveIp.toLowerCase();
+        if (isIP(ip) === 0 || ip === "::" || ip === "::1" || ip.startsWith("fe80:") ||
+          ip.startsWith("ff") || ip.startsWith("127.") || ip.startsWith("169.254.") || ip === "0.0.0.0")
+          return null;
+      }
+    }
+    return value;
+  }
+  function networkEndpoint(document, value, { l7 = false } = {}) {
+    let target;
+    try { target = new URL(value.urlTemplate.replace("{nonce}", "qualification-attempt")); }
+    catch { return null; }
+    const host = target.hostname.toLowerCase();
+    const port = Number(target.port || 443);
+    const policies = document?.network_policies;
+    if (!policies || typeof policies !== "object" || Array.isArray(policies)) return null;
+    for (const rule of Object.values(policies)) {
+      if (!rule || !Array.isArray(rule.binaries) || !rule.binaries.some(binary => binary?.path === "/usr/bin/curl") ||
+        !Array.isArray(rule.endpoints)) continue;
+      for (const endpoint of rule.endpoints) {
+        if (!endpoint || typeof endpoint.host !== "string" || endpoint.host.toLowerCase() !== host) continue;
+        const ports = Array.isArray(endpoint.ports) && endpoint.ports.length
+          ? endpoint.ports : [endpoint.port || 443];
+        if (!ports.includes(port)) continue;
+        if (l7 && (endpoint.protocol !== "rest" || endpoint.enforcement !== "enforce")) continue;
+        return { host, port, endpoint };
+      }
+    }
+    return null;
+  }
+  function networkProbeAvailability(document, fixture) {
+    if (!fixture) return { destination: false, l7: false };
+    const allow = networkEndpoint(document, fixture.allow);
+    const l7Allow = networkEndpoint(document, fixture.l7Allow, { l7: true });
+    const l7Deny = networkEndpoint(document, fixture.l7Deny, { l7: true });
+    const deniedPort = networkEndpoint(document, fixture.hostPortDeny);
+    const deniedHost = networkEndpoint(document, fixture.wrongHostDeny);
+    const redirect = networkEndpoint(document, fixture.redirectDeny);
+    const dnsRedirect = networkEndpoint(document, fixture.dnsRedirectDeny);
+    return {
+      destination: Boolean(allow && !deniedPort && !deniedHost && redirect && dnsRedirect),
+      l7: Boolean(l7Allow && l7Deny),
+    };
+  }
+  async function directCanaryHttp(workload, uid, gid, item, nonce, deadlineAt, options = {}) {
+    const command = canaryHttpArgs(item, nonce, { direct: true, ...options });
+    try {
+      const output = await docker(["exec", "--user", `${uid}:${gid}`, workload.Id, ...command], deadlineAt, false);
+      const split = output.lastIndexOf("\n");
+      if (split < 0 || !/^\d{3}$/.test(output.slice(split + 1))) return null;
+      return { body: output.slice(0, split), status: Number(output.slice(split + 1)) };
+    } catch { return null; }
+  }
+  async function sandboxCanaryHttp(scope, sandboxId, item, nonce, deadlineAt, options = {}) {
+    const command = canaryHttpArgs(item, nonce, options);
+    return sandboxExec(scope, sandboxId, command, deadlineAt);
+  }
+  function canaryHttpArgs(item, nonce, { direct = false, resolve = false, follow = false } = {}) {
+    const url = item.urlTemplate.replace("{nonce}", nonce);
+    const parsed = new URL(url);
+    const args = ["/usr/bin/curl", "--silent", "--show-error", "--connect-timeout", "2",
+      "--max-time", "3", "--max-filesize", "512", "--output", "-",
+      "--write-out", "\\n%{http_code}", "--request", item.method];
+    if (direct) args.push("--noproxy", "*");
+    if (resolve) args.push("--resolve", `${parsed.hostname}:${parsed.port || 443}:${item.resolveIp}`);
+    if (follow) args.push("--location", "--max-redirs", "1");
+    args.push("--", url);
+    return args;
+  }
+  function parseCanaryHttp(result) {
+    if (!result || result.exitCode !== 0 || typeof result.stdout !== "string") return null;
+    const split = result.stdout.lastIndexOf("\n");
+    if (split < 0 || !/^\d{3}$/.test(result.stdout.slice(split + 1))) return null;
+    return { body: result.stdout.slice(0, split), status: Number(result.stdout.slice(split + 1)) };
+  }
+  function qualificationFixtureHash() {
+    return qualificationProbeFixture()?.fixtureHash ?? null;
+  }
+  function qualificationCredentialFixture() {
+    const value = config?.qualificationFixtures?.credential;
+    const keys = "argumentTemplateHash,binaries,fixtureHash,fixtureId,gatewayPublicId,marker,method,origin,port,profileHash,profileId,toolName,version,wrongBinaryPath,wrongToolName";
+    if (!value || Object.keys(value).sort().join(",") !== keys || value.version !== 1 ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,99}$/.test(value.fixtureId ?? "") ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(value.profileId ?? "") ||
+      !/^[a-f0-9]{64}$/.test(value.profileHash ?? "") ||
+      !/^[a-f0-9]{64}$/.test(value.argumentTemplateHash ?? "") ||
+      !/^[A-Za-z0-9_-]{8,128}$/.test(value.marker ?? "") || value.method !== "POST" ||
+      !Number.isSafeInteger(value.port) || value.port < 1 || value.port > 65535 ||
+      !Array.isArray(value.binaries) || value.binaries.length !== 1 ||
+      value.binaries[0] !== "/usr/bin/curl" || value.wrongBinaryPath !== "/usr/bin/wget" ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,100}$/.test(value.gatewayPublicId ?? "") ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(value.toolName ?? "") ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(value.wrongToolName ?? "") ||
+      value.toolName === value.wrongToolName) return null;
+    let origin;
+    try { origin = new URL(value.origin); } catch { return null; }
+    if (origin.protocol !== "https:" || origin.origin !== value.origin || origin.username || origin.password ||
+      origin.pathname !== "/" || origin.search || origin.hash || Number(origin.port || 443) !== value.port) return null;
+    const base = { version: value.version, fixtureId: value.fixtureId, profileId: value.profileId,
+      profileHash: value.profileHash, binaries: value.binaries, origin: value.origin, port: value.port,
+      method: value.method, gatewayPublicId: value.gatewayPublicId, toolName: value.toolName,
+      wrongToolName: value.wrongToolName, wrongBinaryPath: value.wrongBinaryPath,
+      argumentTemplateHash: value.argumentTemplateHash, marker: value.marker };
+    const fixtureHash = hash(JSON.stringify(canonical(base)));
+    return value.fixtureHash === fixtureHash ? { ...base, fixtureHash } : null;
+  }
+  function qualificationProbeFixture() {
+    const filesystem = filesystemProbeFixture(), network = networkProbeFixture();
+    const runAsUser = config?.qualificationFixtures?.runAsUser;
+    const runAsGroup = config?.qualificationFixtures?.runAsGroup;
+    if (!filesystem || !network || !/^[1-9][0-9]{0,8}$/.test(runAsUser ?? "") ||
+      !/^[0-9]{1,9}$/.test(runAsGroup ?? "") || runAsGroup === "0") return null;
+    const credential = qualificationCredentialFixture();
+    const base = { version: 1, runAsUser, runAsGroup, filesystem, network,
+      ...(credential ? { credential } : {}) };
+    return { ...base, fixtureHash: hash(JSON.stringify(canonical(base))) };
+  }
+  function qualificationProbePolicyDocument(fixture = qualificationProbeFixture()) {
+    if (!fixture || fixture.version !== 1 || fixture.fixtureHash !== hash(JSON.stringify(canonical({
+      version: fixture.version, runAsUser: fixture.runAsUser, runAsGroup: fixture.runAsGroup,
+      filesystem: fixture.filesystem, network: fixture.network,
+      ...(fixture.credential ? { credential: fixture.credential } : {}),
+    })))) return null;
+    const filesystem = fixture.filesystem;
+    const readOnly = ["/.openshell/runtime", "/bin", "/etc", "/usr/bin", "/proc",
+      "/proc/self/status", "/proc/sys/net/ipv4/ip_unprivileged_port_start",
+      "/proc/sys/kernel/cap_last_cap", "/sys/fs/cgroup", filesystem.allowedReadPath,
+      filesystem.escapeViaRoot];
+    const endpoints = new Map();
+    const addEndpoint = (item, rule) => {
+      let target;
+      try { target = new URL(item.urlTemplate.replace("{nonce}", "a".repeat(32))); }
+      catch { return false; }
+      const port = Number(target.port || 443), key = `${target.hostname.toLowerCase()}\0${port}`;
+      const entry = endpoints.get(key) ?? { host: target.hostname.toLowerCase(), port,
+        protocol: "rest", enforcement: "enforce", rules: [] };
+      if (rule && !entry.rules.some(value => sameDocument(value, rule))) entry.rules.push(rule);
+      endpoints.set(key, entry);
+      return true;
+    };
+    for (const key of ["allow", "redirectDeny", "dnsRedirectDeny", "l7Allow"]) {
+      const item = fixture.network[key], pathValue = noncePolicyPath(item);
+      if (!pathValue || !addEndpoint(item, { allow: { method: item.method, path: pathValue } })) return null;
+    }
+    {
+      let deniedL7Url;
+      try { deniedL7Url = new URL(fixture.network.l7Deny.urlTemplate.replace("{nonce}", "a".repeat(32))); }
+      catch { return null; }
+      const port = Number(deniedL7Url.port || 443), key = `${deniedL7Url.hostname.toLowerCase()}\0${port}`;
+      const endpoint = endpoints.get(key) ?? { host: deniedL7Url.hostname.toLowerCase(), port,
+        protocol: "rest", enforcement: "enforce", rules: [] };
+      const method = fixture.network.l7Deny.method === "GET" ? "POST" : "GET";
+      const sentinel = { allow: { method, path: "/__aw_qualification_l7_sentinel__" } };
+      if (!endpoint.rules.some(value => sameDocument(value, sentinel))) endpoint.rules.push(sentinel);
+      endpoints.set(key, endpoint);
+    }
+    if (fixture.credential) {
+      const credential = fixture.credential;
+      if (!addEndpoint({ urlTemplate: `${credential.origin.replace(/\/$/, "")}/mcp/gateways/${credential.gatewayPublicId}` },
+        { allow: { method: "POST", path: `/mcp/gateways/${credential.gatewayPublicId}` } })) return null;
+    }
+    const networkPolicies = {};
+    const sortedEndpoints = [...endpoints.values()].sort((a, b) =>
+      (a.host < b.host ? -1 : a.host > b.host ? 1 : a.port - b.port));
+    sortedEndpoints
+      .forEach((endpoint, index) => {
+        endpoint.rules.sort((a, b) => JSON.stringify(canonical(a.allow)).localeCompare(JSON.stringify(canonical(b.allow))));
+        networkPolicies[`aw_probe_${index}`] = { name: `aw_probe_${index}`,
+          binaries: [{ path: "/usr/bin/curl" }], endpoints: [endpoint] };
+      });
+    const canonicalReadOnly = [...new Set(readOnly)].sort();
+    if (canonicalReadOnly.some(root => pathContains(root, filesystem.workdirPath) ||
+      pathContains(filesystem.workdirPath, root)) ||
+      canonicalReadOnly.some(root => pathContains(root, filesystem.deniedReadPath) ||
+        pathContains(root, filesystem.escapeTargetPath))) return null;
+    return {
+      version: 1,
+      filesystem_policy: { include_workdir: false, read_only: canonicalReadOnly,
+        read_write: [filesystem.workdirPath] },
+      landlock: { compatibility: "hard_requirement" },
+      process: { run_as_user: fixture.runAsUser, run_as_group: fixture.runAsGroup },
+      network_policies: networkPolicies,
+    };
+  }
+  function qualificationCredentialClaim(request, commandId, fixture, provisioning, deadlineAt, targetQualificationHash) {
+    const token = request?.probe?.qualificationCredentialCapability;
+    const nonce = request?.probe?.qualificationCredentialNonce;
+    if (typeof token !== "string" || token.length < 32 || token.length > 8192 ||
+      !/^[A-Za-z0-9_-]{16,128}$/.test(nonce ?? "") || !uuid.test(commandId ?? "")) return null;
+    let decoded;
+    try { decoded = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8")); }
+    catch { return null; }
+    const claim = decoded?.qualification_credential;
+    const keys = ["argumentTemplateHash", "argumentsHash", "aud", "bindingVersion", "binaries", "caseId",
+      "commandId", "connectionId", "containerId", "expiresAt", "fixtureHash", "fixtureId", "gatewayPublicId",
+      "grantId", "hostEpoch", "jti", "maxUses", "method", "nonce", "operatorSessionId", "operatorUserId",
+      "origin", "path", "profileHash", "profileId", "provisioningHash", "purpose", "requestBodyHash",
+      "sandboxId", "scope", "secretVersionHash", "sourceBindingHash", "targetQualificationHash", "toolName", "version"];
+    const args = { caseId: request.probe.caseId, fixtureId: fixture.fixtureId, nonce };
+    const body = { jsonrpc: "2.0", id: commandId, method: "tools/call",
+      params: { name: fixture.toolName, arguments: args } };
+    const exactScope = {
+      companyId: request.scope.companyId, bindingId: request.scope.bindingId, cellId: request.scope.cellId,
+      generation: request.scope.cellGeneration, sandboxRef: request.scope.sandboxRef,
+    };
+    const expiresAt = Date.parse(claim?.expiresAt ?? "");
+    if (!claim || Object.keys(claim).sort().join(",") !== keys.sort().join(",") ||
+      decoded.purpose !== "sandbox_qualification_broker" || decoded.aud !== "paperclip-sandbox-qualification" ||
+      claim.version !== 1 || claim.purpose !== "qualification_credential_probe" || claim.aud !== "paperclip-sandbox-qualification" ||
+      typeof claim.jti !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(claim.jti) || decoded.jti !== claim.jti ||
+      !Number.isSafeInteger(decoded.exp) || decoded.exp !== Math.floor(expiresAt / 1000) ||
+      !Number.isFinite(expiresAt) || expiresAt <= Date.now() || expiresAt > Date.parse(deadlineAt) ||
+      expiresAt - Date.now() > 60_000 || claim.commandId !== commandId || claim.caseId !== request.probe.caseId ||
+      claim.fixtureId !== fixture.fixtureId || claim.fixtureHash !== fixture.fixtureHash ||
+      claim.hostEpoch !== epoch || !Number.isSafeInteger(claim.bindingVersion) ||
+      claim.bindingVersion !== provisioning.bindingVersion || claim.sandboxId !== provisioning.sandboxId ||
+      !/^[a-f0-9]{64}$/.test(claim.containerId ?? "") || claim.containerId !== provisioning.containerId ||
+      claim.provisioningHash !== provisioning.provisioningHash ||
+      claim.profileId !== fixture.profileId || claim.profileHash !== fixture.profileHash ||
+      JSON.stringify(claim.binaries) !== JSON.stringify(fixture.binaries) ||
+      claim.gatewayPublicId !== fixture.gatewayPublicId || claim.toolName !== fixture.toolName ||
+      claim.argumentTemplateHash !== fixture.argumentTemplateHash ||
+      claim.argumentsHash !== hash(JSON.stringify(canonical(args))) ||
+      claim.requestBodyHash !== hash(JSON.stringify(canonical(body))) || claim.nonce !== nonce ||
+      claim.targetQualificationHash !== targetQualificationHash ||
+      claim.origin !== fixture.origin || claim.method !== "POST" ||
+      claim.path !== `/mcp/gateways/${fixture.gatewayPublicId}` || claim.maxUses !== 1 ||
+      JSON.stringify(canonical(claim.scope)) !== JSON.stringify(canonical(exactScope)) ||
+      !uuid.test(claim.connectionId ?? "") || !uuid.test(claim.grantId ?? "") ||
+      !/^[a-f0-9]{64}$/.test(claim.secretVersionHash ?? "") ||
+      !/^[a-f0-9]{64}$/.test(claim.sourceBindingHash ?? "") ||
+      typeof claim.operatorUserId !== "string" || claim.operatorUserId.length < 1 || claim.operatorUserId.length > 200 ||
+      typeof claim.operatorSessionId !== "string" || claim.operatorSessionId.length < 1 || claim.operatorSessionId.length > 200)
+      return null;
+    return { token, nonce, claim, expiresAt, args, body };
+  }
+  function qualificationCredentialPolicyAvailable(document, fixture) {
+    if (!fixture || !document?.network_policies || typeof document.network_policies !== "object") return false;
+    const path = `/mcp/gateways/${fixture.gatewayPublicId}`;
+    let positive = false;
+    for (const rule of Object.values(document.network_policies)) {
+      if (!Array.isArray(rule?.binaries) || !Array.isArray(rule?.endpoints)) continue;
+      const hasCurl = rule.binaries.some(binary => binary?.path === "/usr/bin/curl");
+      const hasWrongBinary = rule.binaries.some(binary => binary?.path === fixture.wrongBinaryPath);
+      for (const endpoint of rule.endpoints) {
+        if (endpoint?.host !== new URL(fixture.origin).hostname || endpoint?.port !== fixture.port ||
+          endpoint.protocol !== "rest" || endpoint.enforcement !== "enforce") continue;
+        const permitted = (endpoint.rules ?? []).some(item => item?.allow?.method === "POST" && item.allow.path === path);
+        if (permitted && hasCurl && !hasWrongBinary) positive = true;
+        // A broad or wrong-binary match makes the profile non-authoritative.
+        if (permitted && hasWrongBinary) return false;
+      }
+    }
+    return positive;
+  }
+  async function inspectQualificationCredentialProfile(fixture, deadlineAt) {
+    const profile = await cli(["profile", "describe", fixture.profileId, "--output", "json"], deadlineAt);
+    if (!profile || profile.id !== fixture.profileId || hash(JSON.stringify(canonical(profile))) !== fixture.profileHash ||
+      !Array.isArray(profile.credentials) || profile.credentials.length !== 1 ||
+      !Array.isArray(profile.endpoints) || profile.endpoints.length !== 1 ||
+      !Array.isArray(profile.binaries) || profile.binaries.length !== 1 ||
+      profile.binaries[0]?.path !== "/usr/bin/curl" || Object.keys(profile.binaries[0] ?? {}).length !== 1)
+      throw new Error("sandbox_operation_unsupported");
+    const credential = profile.credentials[0];
+    if (credential?.auth_style !== "bearer" || credential.header_name?.toLowerCase() !== "authorization" ||
+      JSON.stringify(credential.env_vars) !== JSON.stringify([QUALIFICATION_CREDENTIAL_ENV]) ||
+      credential.token_grant || credential.refresh)
+      throw new Error("sandbox_operation_unsupported");
+    const endpoint = profile.endpoints[0];
+    const rules = endpoint?.rules;
+    if (endpoint?.host !== new URL(fixture.origin).hostname || endpoint?.port !== fixture.port ||
+      endpoint.protocol !== "rest" || endpoint.enforcement !== "enforce" ||
+      endpoint.allow_uninspected_credentials === true || endpoint.path || !Array.isArray(rules) || rules.length !== 1 ||
+      rules[0]?.allow?.method !== "POST" || rules[0]?.allow?.path !== `/mcp/gateways/${fixture.gatewayPublicId}`)
+      throw new Error("sandbox_operation_unsupported");
+  }
+  async function qualificationCredentialProvider(scope, sandboxId, fixture, credential, commandId, deadlineAt, action) {
+    const providerName = `awqc-${commandId.replaceAll("-", "")}`;
+    const commandRecord = journal.commands[commandId];
+    if (!commandRecord || commandRecord.qualificationCredentialProvider)
+      throw new Error("sandbox_scope_changed");
+    commandRecord.qualificationCredentialProvider = { name: providerName, sandboxId, scope };
+    await atomicJson(journalFile, journal);
+    let attached = false;
+    let completed = false;
+    try {
+      await cli(["provider", "create", "--name", providerName, "--type", fixture.profileId,
+        "--credential", QUALIFICATION_CREDENTIAL_ENV], deadlineAt, false,
+      { [QUALIFICATION_CREDENTIAL_ENV]: credential.token });
+      await cli(["provider", "update", providerName, "--credential-expires-at",
+        `${QUALIFICATION_CREDENTIAL_ENV}=${new Date(credential.expiresAt).toISOString()}`], deadlineAt, false);
+      const target = await observed(scope, deadlineAt);
+      if (target.id !== sandboxId || target.phase !== "Ready") throw new Error("sandbox_scope_changed");
+      const waitSeconds = Math.max(1, Math.min(15, Math.floor((Date.parse(deadlineAt) - Date.now()) / 1000)));
+      await cli(["sandbox", "provider", "attach", scope.sandboxRef, providerName,
+        "--expected-sandbox-id", sandboxId, "--wait", "--timeout", String(waitSeconds), "--output", "json"],
+      deadlineAt, true, {}, 18_000);
+      attached = true;
+      const providers = await cli(["sandbox", "provider", "list", scope.sandboxRef,
+        "--page-size", "16", "--output", "json"], deadlineAt);
+      if (!Array.isArray(providers.providers) || !providers.providers.some(value => value?.name === providerName) ||
+        providers.next_page_token !== "") throw new Error("sandbox_observation_unavailable");
+      const before = await observed(scope, deadlineAt);
+      if (before.id !== sandboxId || before.phase !== "Ready") throw new Error("sandbox_scope_changed");
+      const result = await action();
+      const after = await observed(scope, deadlineAt);
+      if (after.id !== sandboxId || after.phase !== "Ready") throw new Error("sandbox_scope_changed");
+      completed = true;
+      return result;
+    } finally {
+      let cleaned = !attached;
+      if (attached) {
+        const current = await observed(scope, deadlineAt).catch(() => null);
+        if (current?.id === sandboxId) {
+          await cli(["sandbox", "provider", "detach", scope.sandboxRef, providerName,
+            "--expected-sandbox-id", sandboxId, "--wait", "--timeout", "10", "--output", "json"],
+          deadlineAt, true, {}, 12_000).catch(() => {});
+          const providers = await cli(["sandbox", "provider", "list", scope.sandboxRef,
+            "--page-size", "16", "--output", "json"], deadlineAt).catch(() => null);
+          cleaned = Boolean(providers && Array.isArray(providers.providers) &&
+            !providers.providers.some(value => value?.name === providerName) && providers.next_page_token === "");
+        }
+      }
+      await cli(["provider", "delete", providerName], deadlineAt, false).catch(() => {});
+      const latest = await observed(scope, deadlineAt).catch(() => null);
+      if (latest?.id !== sandboxId || !cleaned) completed = false;
+      delete commandRecord.qualificationCredentialProvider;
+      await atomicJson(journalFile, journal);
+      if (!completed) throw new Error("sandbox_observation_unavailable");
+    }
+  }
+  async function reserveQualificationCredentialUse(commandId, claim) {
+    const digest = hash(claim.jti);
+    const command = journal.commands[commandId];
+    if (!command || command.qualificationCredentialJtiHash || Object.entries(journal.commands).some(([id, value]) =>
+      id !== commandId && value?.qualificationCredentialJtiHash === digest))
+      throw new Error("sandbox_scope_changed");
+    command.qualificationCredentialJtiHash = digest;
+    await atomicJson(journalFile, journal);
+  }
+  async function qualificationCredentialCall(scope, sandboxId, fixture, credential, toolName, deadlineAt) {
+    const body = { ...credential.body, params: { ...credential.body.params, name: toolName } };
+    const bodyText = JSON.stringify(canonical(body));
+    const url = `${fixture.origin.replace(/\/$/, "")}/mcp/gateways/${fixture.gatewayPublicId}`;
+    const args = ["/usr/bin/curl", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "4",
+      "--max-filesize", "2048", "--output", "-", "--write-out", "\\n%{http_code}", "--request", "POST",
+      "--header", "Content-Type: application/json", "--data-binary", bodyText, "--", url];
+    if (args.some(value => value.includes(credential.token))) throw new Error("sandbox_scope_changed");
+    const result = await sandboxExec(scope, sandboxId, args, deadlineAt);
+    return parseQualificationMcpResponse(result);
+  }
+  function parseQualificationMcpResponse(result) {
+    if (!result || result.exitCode !== 0 || typeof result.stdout !== "string") return null;
+    const split = result.stdout.lastIndexOf("\n");
+    if (split < 0 || !/^\d{3}$/.test(result.stdout.slice(split + 1))) return null;
+    let body;
+    try { body = JSON.parse(result.stdout.slice(0, split)); } catch { return null; }
+    return { status: Number(result.stdout.slice(split + 1)), body };
+  }
+  async function dockerCanaryRead(workload, uid, gid, target, marker, deadlineAt) {
+    if (!/^[1-9][0-9]{0,8}$/.test(uid ?? "") || !/^[0-9]{1,9}$/.test(gid ?? "") ||
+      !/^[A-Za-z0-9]$/.test(marker ?? "")) return null;
+    try {
+      const prefix = ["exec", "--user", `${uid}:${gid}`, workload.Id];
+      const metadata = await docker([...prefix, "/usr/bin/stat", "-c", "%F:%a", target], deadlineAt, false);
+      const match = metadata.trim().match(/^regular file:([0-7]{3,4})$/);
+      if (!match || (Number.parseInt(match[1], 8) & 0o004) === 0) return null;
+      const bytes = await docker([...prefix, "/usr/bin/head", "-c", "1", target], deadlineAt, false);
+      return bytes === marker ? { marker, mode: match[1] } : null;
+    } catch {
+      return null;
+    }
+  }
+  function dockerDiskMountsMatch(container, policyDocument) {
+    const mounts = container?.Mounts;
+    const labels = container?.Config?.Labels;
+    const workdir = labels?.["openshell.ai/workspace-root"];
+    if (!Array.isArray(mounts) || mounts.length > 32 ||
+      typeof workdir !== "string" || !workdir.startsWith("/") ||
+      path.posix.normalize(workdir) !== workdir || !labels) return false;
+    const normalizedWorkdir = path.posix.normalize(workdir);
+    const expectedChannelName = `openshell-channel-${hash(`${labels["openshell.ai/sandbox-namespace"]}\0${labels["openshell.ai/sandbox-id"]}`).slice(0, 32)}`;
+    const hostTmpfs = container?.HostConfig?.Tmpfs;
+    const caOption = hostTmpfs?.[DISK_CA_TMPFS_MOUNT];
+    if (!hostTmpfs || Object.keys(hostTmpfs).length !== 1 ||
+      typeof caOption !== "string" ||
+      !/^rw,noexec,nosuid,nodev,size=1m,uid=\d+,gid=\d+,mode=0755$/.test(caOption)) return false;
+    let channelCount = 0, caTmpfsCount = 0;
+    for (const mount of mounts) {
+      if (!mount || typeof mount.Destination !== "string" ||
+        !mount.Destination.startsWith("/")) return false;
+      const destination = path.posix.normalize(mount.Destination);
+      if (pathContains(destination, normalizedWorkdir) || pathContains(normalizedWorkdir, destination)) return false;
+      if (mount.RW === false) continue;
+      if (destination === DISK_CHANNEL_MOUNT && mount.Type === "volume" &&
+        mount.Name === expectedChannelName && mount.Driver === "local" && mount.RW === true) {
+        channelCount += 1;
+        continue;
+      }
+      if (destination === DISK_CA_TMPFS_MOUNT && mount.Type === "tmpfs" &&
+        mount.RW === true && typeof mount.Mode === "string" &&
+        (!mount.Mode || mount.Mode === "rw" || mount.Mode.includes("size=1m"))) {
+        caTmpfsCount += 1;
+        continue;
+      }
+      return false;
+    }
+    if (channelCount !== 1 || caTmpfsCount !== 1) return false;
+    const writePaths = policyDocument?.filesystem_policy?.read_write;
+    if (!Array.isArray(writePaths)) return false;
+    for (const writable of writePaths) {
+      if ([DISK_CHANNEL_MOUNT, DISK_CA_TMPFS_MOUNT].some(target =>
+        pathContains(writable, target) || pathContains(target, writable))) return false;
+    }
+    return true;
+  }
+  function dockerPersistentLogsDisabled(container) {
+    const log = container?.HostConfig?.LogConfig;
+    return log?.Type === "none" && log.Config &&
+      typeof log.Config === "object" && !Array.isArray(log.Config) &&
+      Object.keys(log.Config).length === 0;
+  }
+  async function dockerSupervisorLogsDisabled(scope, sandbox, deadlineAt) {
+    const idsOutput = await docker(["ps", "-aq",
+      "--filter", `label=openshell.ai/sandbox-id=${sandbox.id}`,
+      "--filter", "label=openshell.ai/isolation-role=supervisor"], deadlineAt, false);
+    const ids = idsOutput.trim().split(/\s+/).filter(Boolean);
+    if (ids.length !== 1 || !/^[a-f0-9]{64}$/.test(ids[0])) return false;
+    const values = await docker(["inspect", ids[0]], deadlineAt);
+    if (!Array.isArray(values) || values.length !== 1) return false;
+    const supervisor = values[0];
+    const labels = supervisor.Config?.Labels;
+    const namespace = journal.scopes[scope.bindingId]?.namespace;
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(namespace ?? "")) return false;
+    const expected = {
+      "openshell.ai/managed-by": "openshell",
+      "openshell.ai/sandbox-id": sandbox.id,
+      "openshell.ai/sandbox-name": scope.sandboxRef,
+      "openshell.ai/sandbox-namespace": namespace,
+      "openshell.ai/isolation-role": "supervisor",
+    };
+    return supervisor.Id === ids[0] && supervisor.Config?.Image === supervisor.Image &&
+      Object.entries(expected).every(([key, value]) => labels?.[key] === value) &&
+      dockerPersistentLogsDisabled(supervisor);
+  }
+  function resourceHostConfigMatches(container, limits, policyDocument) {
     const host = container?.HostConfig;
+    // The only writable tmpfs exception is the driver's exact 1 MiB CA
+    // mount, accounted by this same policy's Docker memory cgroup limit.
     return validResourceLimits(limits) && host?.NanoCpus === limits.cpuMillis * 1_000_000 &&
-      host?.Memory === limits.memoryBytes && host?.MemorySwap === limits.memoryBytes && host?.PidsLimit === limits.pidsLimit;
+      host?.Memory === limits.memoryBytes && host?.MemorySwap === limits.memoryBytes &&
+      host?.PidsLimit === limits.pidsLimit && dockerDiskStorageOptionMatches(container, limits) &&
+      dockerPersistentLogsDisabled(container) && dockerDiskMountsMatch(container, policyDocument);
+  }
+  async function dockerDiskQuotaBackendSupported(deadlineAt) {
+    const driver = (await docker(["info", "--format", "{{.Driver}}"], deadlineAt, false)).trim();
+    if (driver !== "overlay2") return false;
+    let status;
+    try {
+      status = JSON.parse(await docker(["info", "--format", "{{json .DriverStatus}}"], deadlineAt, false));
+    } catch { return false; }
+    return Array.isArray(status) && status.some(value =>
+      Array.isArray(value) && value[0] === "Backing Filesystem" &&
+      typeof value[1] === "string" && value[1].toLowerCase() === "xfs");
   }
   function dockerResourceUpdateArgs(containerId, limits) {
     if (!/^[a-f0-9]{64}$/.test(containerId ?? "") || !validResourceLimits(limits))
@@ -284,13 +981,13 @@ export function openShellHostEngine({
     return ["update", "--cpus", cpus, "--memory", String(limits.memoryBytes), "--memory-swap", String(limits.memoryBytes),
       "--pids-limit", String(limits.pidsLimit), containerId];
   }
-  async function applyDockerResourceLimits(scope, sandbox, imageDigest, limits, deadlineAt, expectedContainerId) {
+  async function applyDockerResourceLimits(scope, sandbox, imageDigest, limits, deadlineAt, expectedContainerId, policyDocument) {
     const before = await container(scope, sandbox, imageDigest, deadlineAt);
     if (before.Id !== expectedContainerId || before.State.Running)
       throw new Error("sandbox_scope_changed");
     await docker(dockerResourceUpdateArgs(before.Id, limits), deadlineAt, false);
     const after = await container(scope, sandbox, imageDigest, deadlineAt);
-    if (after.Id !== before.Id || !resourceHostConfigMatches(after, limits))
+    if (after.Id !== before.Id || !resourceHostConfigMatches(after, limits, policyDocument))
       throw new Error("sandbox_observation_unavailable");
     return after;
   }
@@ -310,61 +1007,240 @@ export function openShellHostEngine({
       JSON.stringify(actual) !== JSON.stringify(wanted))
       throw new Error("sandbox_operation_unsupported");
   }
-  async function sandboxExec(scope, argv, deadlineAt) {
+  async function sandboxExec(scope, sandboxId, argv, deadlineAt) {
     const remaining = Date.parse(deadlineAt) - Date.now();
     if (!Number.isFinite(remaining) || remaining < 1500) throw new Error("exec_timeout");
     const privateConfig = await privateConfiguration();
     try {
       const { stdout } = await run(
         privateConfig.executable,
-        ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", scope.sandboxRef, "--no-login-shell", "--timeout", String(Math.min(3, Math.floor(remaining / 1000))), "--", ...argv],
+        ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", scope.sandboxRef, "--expected-sandbox-id", sandboxId, "--no-login-shell", "--timeout", String(Math.min(3, Math.floor(remaining / 1000))), "--", ...argv],
         { env: privateConfig.env, timeout: Math.min(4500, remaining), maxBuffer: 8192, windowsHide: true, killSignal: "SIGKILL" },
       );
-      return { exitCode: 0, stdout: String(stdout).slice(0, 256) };
+      return { exitCode: 0, stdout: String(stdout).slice(0, 4096), stderr: "" };
     } catch (error) {
       const status = Number.isInteger(error?.code) ? error.code : Number.isInteger(error?.status) ? error.status : null;
-      return { exitCode: status, stdout: "" };
+      return { exitCode: status, stdout: String(error?.stdout ?? "").slice(0, 4096),
+        stderr: String(error?.stderr ?? "").slice(0, 4096) };
     }
   }
   async function hostCapabilities(request, scope, deadlineAt) {
     const version = await cli(["--version"], deadlineAt, false);
     if (version.trim() !== "openshell 0.1.2") return null;
+    const probeFixture = qualificationProbeFixture();
+    if (!probeFixture) return null;
+    const preflightRecord = journal.scopes[scope.bindingId];
+    const preflightProvisioning = preflightRecord?.provisioning;
+    const qualificationSample = preflightRecord?.qualification;
+    if (!preflightProvisioning ||
+      (!qualificationSample?.sampleTarget && (preflightProvisioning.purpose !== "qualification" ||
+        preflightProvisioning.state !== "ready" || preflightRecord.sandboxId === null))) {
+      const testedAt = new Date().toISOString();
+      return {
+        filesystemPolicy: false, processPrivilegePolicy: false, syscallPolicy: false,
+        networkDestinationPolicy: false, networkLayer7Policy: false, credentialBrokering: false,
+        resourceLimits: false, forceStop: false,
+        backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: null,
+        sandboxImageDigest: request.imageDigest,
+        qualificationProbeFixture: probeFixture,
+        filesystemEnforcementMode: "unknown", staticPolicyRequiresRecreate: true,
+        dynamicNetworkPolicy: false, policyProverBoundaryCheck: false,
+        policyProverCoverage: [], credentialBindingDimensions: [],
+        testedAt, expiresAt: new Date(Math.min(Date.now() + 120_000,
+          Number.isFinite(Date.parse(preflightProvisioning?.expiresAt ?? ""))
+            ? Date.parse(preflightProvisioning.expiresAt) : Date.now() + 120_000)).toISOString(),
+        qualificationHash: probeFixture.fixtureHash, evidenceKind: "protected_host_report",
+      };
+    }
     const detail = await observed(scope, deadlineAt);
     const currentPolicy = await policy(scope, deadlineAt);
     const workload = await container(scope, detail, request.imageDigest, deadlineAt);
     if (!workload || !currentPolicy.policy || !currentPolicy.policy.filesystem_policy || !currentPolicy.policy.landlock || !currentPolicy.policy.process) return null;
     const fs = currentPolicy.policy.filesystem_policy;
     const process = currentPolicy.policy.process;
-    const network = currentPolicy.policy.network_policies;
-    const testedAt = new Date().toISOString();
-    const evidence = {
-      backend: "openshell", backendVersion: "0.1.2", sandboxId: detail.id,
-      containerId: workload.Id, imageDigest: request.imageDigest,
-      policyHash: currentPolicy.hash, policyVersion: currentPolicy.version,
-      configRevision: currentPolicy.config_revision, phase: detail.phase,
+    const targetRecord = journal.scopes[scope.bindingId];
+    const provisioning = targetRecord?.provisioning;
+    let creation = targetRecord?.creation;
+    if (!creation && provisioning?.purpose === "qualification" && provisioning.state === "ready" &&
+      targetRecord.sandboxId === detail.id && targetRecord.containerId === workload.Id &&
+      provisioning.imageDigest === request.imageDigest &&
+      verifyProvisioningMarkerHash(detail, scope, provisioning.requestId, provisioning.provisioningHash,
+        provisioning.operationKeyHash, provisioning.bindingVersion) &&
+      sameDocument(currentPolicy.policy, provisioning.envelope?.document) &&
+      resourceHostConfigMatches(workload, provisioning.resourceLimits, provisioning.envelope?.document) &&
+      await dockerDiskQuotaBackendSupported(deadlineAt) && await dockerSupervisorLogsDisabled(scope, detail, deadlineAt)) {
+      creation = {
+        purpose: "qualification", imageDigest: request.imageDigest,
+        requestId: provisioning.requestId, provisioningHash: provisioning.provisioningHash,
+        operationKeyHash: provisioning.operationKeyHash,
+        bindingVersion: provisioning.bindingVersion,
+        policyHash: provisioning.envelope.policyHash,
+        document: canonical(provisioning.envelope.document),
+        resourceLimits: canonical(provisioning.resourceLimits),
+        expiresAt: provisioning.expiresAt, idleUntilUnixSeconds: provisioning.idleUntilUnixSeconds,
+        sandboxId: detail.id, containerId: workload.Id,
+        workdirPath: workload.Config?.WorkingDir,
+        observedPolicyHash: currentPolicy.hash, policyVersion: currentPolicy.version,
+        configRevision: currentPolicy.config_revision,
+      };
+      targetRecord.creation = creation;
+      await atomicJson(journalFile, journal);
+    }
+    if (!provisioning || !creation || targetRecord.sandboxId !== detail.id || targetRecord.containerId !== workload.Id ||
+      creation.sandboxId !== detail.id || creation.containerId !== workload.Id ||
+      !verifyProvisioningMarkerHash(detail, scope, creation.requestId, creation.provisioningHash,
+        creation.operationKeyHash, creation.bindingVersion)) return null;
+    const hostKernelVersion = (await docker(["info", "--format", "{{.KernelVersion}}"], deadlineAt, false)).trim();
+    if (!hostKernelVersion || hostKernelVersion.length > 200 || /[\r\n\0]/.test(hostKernelVersion)) return null;
+    const runtimeBinarySha256 = await observedRuntimeBinarySha256(workload.Id, deadlineAt);
+    const reobserved = await container(scope, detail, request.imageDigest, deadlineAt);
+    const dockerEngineIdHash = journal.scopes[scope.bindingId]?.dockerEngineId;
+    if (!runtimeBinarySha256 || reobserved.Id !== workload.Id ||
+      reobserved.Config?.Labels?.["openshell.ai/workspace-root"] !== workload.Config?.Labels?.["openshell.ai/workspace-root"] ||
+      !/^[a-f0-9]{64}$/.test(dockerEngineIdHash ?? "")) return null;
+    const credentialFixture = qualificationCredentialFixture();
+    const sampleTarget = qualificationSample?.sampleTarget ?? null;
+    const sampleProbeFixture = qualificationSample?.probeFixture ??
+      (provisioning.purpose === "qualification" ? provisioning.envelope.qualificationProbeFixture : null);
+    if (!probeFixture || !sampleProbeFixture || !sameDocument(sampleProbeFixture, probeFixture) ||
+      (provisioning.purpose === "qualification" && provisioning.envelope.probeFixtureHash !== probeFixture.fixtureHash) ||
+      workload.Config?.Labels?.["openshell.ai/workspace-root"] !== probeFixture.filesystem.workdirPath ||
+      workload.Config?.WorkingDir !== probeFixture.filesystem.workdirPath) return null;
+    let credentialBrokering = false;
+    let credentialProfileFresh = !sampleTarget?.qualificationCredentialFixture;
+    if (credentialFixture) {
+      try {
+        await inspectQualificationCredentialProfile(credentialFixture, deadlineAt);
+        credentialProfileFresh = true;
+        credentialBrokering = qualificationCredentialPolicyAvailable(currentPolicy.policy, credentialFixture);
+      } catch { credentialProfileFresh = false; }
+    }
+    const targetBase = {
+      hostEpoch: epoch,
+      companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId,
+      cellGeneration: scope.cellGeneration, sandboxRef: scope.sandboxRef,
+      sandboxId: detail.id, containerId: workload.Id, imageDigest: request.imageDigest,
+      hostKernelVersion, runtimeBinarySha256, openshellCliSha256: config.executableSha256,
+      dockerEngineIdHash, policyHash: creation.policyHash,
+      provisioningHash: provisioning.provisioningHash,
+      bindingVersion: provisioning.bindingVersion,
+      resourceLimits: creation.resourceLimits,
+      policyVersion: currentPolicy.version, configRevision: currentPolicy.config_revision,
+      phase: detail.phase, mechanism: "openshell_create_sandbox_v0.1.2",
+      probePolicyHash: currentPolicy.hash,
+      probeFixtureHash: sampleTarget?.probeFixtureHash ?? probeFixture.fixtureHash,
+      ...((sampleTarget?.qualificationCredentialFixture ?? credentialFixture)
+        ? { qualificationCredentialFixture: sampleTarget?.qualificationCredentialFixture ?? credentialFixture } : {}),
     };
-    const qualificationHash = hash(JSON.stringify(canonical(evidence)));
-    return {
+    const qualificationTarget = { ...targetBase,
+      targetHash: hash(JSON.stringify(canonical(targetBase))) };
+    const testedAt = new Date().toISOString();
+    const qualificationHash = qualificationTarget.targetHash;
+    const qualificationExpiresAt = qualificationSample?.expiresAt;
+    const failedCapabilityRefresh = () => ({
+      filesystemPolicy: false, processPrivilegePolicy: false, syscallPolicy: false,
+      networkDestinationPolicy: false, networkLayer7Policy: false, credentialBrokering: false,
+      resourceLimits: false, forceStop: false,
+      backend: "openshell", backendVersion: "0.1.2", hostKernelVersion,
+      sandboxImageDigest: request.imageDigest, qualificationProbeFixture: probeFixture,
+      filesystemEnforcementMode: "unknown", staticPolicyRequiresRecreate: true,
+      dynamicNetworkPolicy: false, policyProverBoundaryCheck: false,
+      policyProverCoverage: [], credentialBindingDimensions: [], testedAt,
+      expiresAt: qualificationExpiresAt ?? new Date(Math.min(Date.parse(provisioning.expiresAt), Date.now() + 120_000)).toISOString(),
+      qualificationHash: probeFixture.fixtureHash, evidenceKind: "protected_host_report",
+    });
+    if (sampleTarget && (!validQualificationSample(qualificationSample) ||
+      sampleTarget.hostEpoch !== epoch || sampleTarget.imageDigest !== request.imageDigest ||
+      sampleTarget.hostKernelVersion !== hostKernelVersion || sampleTarget.runtimeBinarySha256 !== runtimeBinarySha256 ||
+      sampleTarget.openshellCliSha256 !== config.executableSha256 || sampleTarget.dockerEngineIdHash !== dockerEngineIdHash ||
+      sampleTarget.policyVersion !== currentPolicy.version || sampleTarget.configRevision !== currentPolicy.config_revision ||
+      sampleTarget.probeFixtureHash !== probeFixture.fixtureHash || !qualificationExpiresAt ||
+      Date.parse(qualificationExpiresAt) <= Date.now() ||
+      (sampleTarget.qualificationCredentialFixture && (!credentialProfileFresh ||
+        !sameDocument(sampleTarget.qualificationCredentialFixture, credentialFixture)))))
+      return failedCapabilityRefresh();
+    const runtimeHelper = "/.openshell/runtime/openshell-sandbox";
+    let syscallObserved = false;
+    if (readOnlyPathAllows(currentPolicy.policy, runtimeHelper) &&
+      !(currentPolicy.policy?.filesystem_policy?.read_write ?? []).some(value =>
+        pathContains(value, runtimeHelper) || pathContains(runtimeHelper, value))) {
+      const result = await sandboxExec(scope, detail.id, [runtimeHelper, "runtime-seccomp-probe"], deadlineAt);
+      if (result.exitCode === 0) {
+        try {
+          const report = JSON.parse(result.stdout);
+          syscallObserved = Object.keys(report).sort().join("\0") ===
+            ["denied_errno", "getpid", "memfd_create", "profile", "version"].join("\0") &&
+            report.version === 1 && report.profile === "openshell-linux-built-in-seccomp-v1" &&
+            report.getpid === "allowed" && report.memfd_create === "denied" && report.denied_errno === "EPERM";
+        } catch {}
+      }
+    }
+    const resourceLimits = provisioning.resourceLimits;
+    let resourceHostObserved = Boolean(resourceHostConfigMatches(workload, resourceLimits, currentPolicy.policy) &&
+      await dockerDiskQuotaBackendSupported(deadlineAt));
+    if (resourceHostObserved) {
+      try {
+        const uid = process.run_as_user, gid = process.run_as_group;
+        const [cpuMax, memoryMax, memorySwap, pidsMax, oomGroup] = await Promise.all([
+          docker(["exec", "--user", `${uid}:${gid}`, workload.Id, "/usr/bin/cat", "/sys/fs/cgroup/cpu.max"], deadlineAt, false),
+          docker(["exec", "--user", `${uid}:${gid}`, workload.Id, "/usr/bin/cat", "/sys/fs/cgroup/memory.max"], deadlineAt, false),
+          docker(["exec", "--user", `${uid}:${gid}`, workload.Id, "/usr/bin/cat", "/sys/fs/cgroup/memory.swap.max"], deadlineAt, false),
+          docker(["exec", "--user", `${uid}:${gid}`, workload.Id, "/usr/bin/cat", "/sys/fs/cgroup/pids.max"], deadlineAt, false),
+          docker(["exec", "--user", `${uid}:${gid}`, workload.Id, "/usr/bin/cat", "/sys/fs/cgroup/memory.oom.group"], deadlineAt, false),
+        ]);
+        const [quota, period] = cpuMax.trim().split(/\s+/).map(Number);
+        resourceHostObserved = Math.round(quota * 1000 / period) === resourceLimits.cpuMillis &&
+          memoryMax.trim() === String(resourceLimits.memoryBytes) &&
+          memorySwap.trim() === String(resourceLimits.memoryBytes) &&
+          pidsMax.trim() === String(resourceLimits.pidsLimit) && oomGroup.trim() === "0";
+      } catch { resourceHostObserved = false; }
+    }
+    if (qualificationSample && qualificationSample.capabilityFacts?.resourceLimits && !resourceHostObserved)
+      return failedCapabilityRefresh();
+    const capabilityFacts = {
       filesystemPolicy: fs.include_workdir === false && currentPolicy.policy.landlock.compatibility === "hard_requirement",
       processPrivilegePolicy: typeof process.run_as_user === "string" && typeof process.run_as_group === "string" && process.run_as_user !== "0",
-      syscallPolicy: false,
-      networkDestinationPolicy: Boolean(network && typeof network === "object" && Object.values(network).every(value => Array.isArray(value?.endpoints))),
-      networkLayer7Policy: Boolean(network && typeof network === "object" && Object.values(network).every(value => (value?.endpoints ?? []).every(endpoint => endpoint?.protocol === "rest" && endpoint?.enforcement === "enforce" && Array.isArray(endpoint.rules)))),
-      credentialBrokering: false,
-      resourceLimits: false,
-      forceStop: detail.phase === "Stopped" && workload.State.Running === false,
-      backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: null,
-      sandboxImageDigest: request.imageDigest,
+      syscallPolicy: syscallObserved,
+      networkDestinationPolicy: networkProbeAvailability(currentPolicy.policy, networkProbeFixture()).destination,
+      networkLayer7Policy: networkProbeAvailability(currentPolicy.policy, networkProbeFixture()).l7,
+      credentialBrokering,
+      resourceLimits: resourceHostObserved,
+      // This is only a declaration that the pinned host can observe a live
+      // target and the expected-ID stop/start path; the final control is earned
+      // by the separate bounded force_stop transition probe.
+      forceStop: detail.phase === "Ready" && workload.State.Running === true,
       filesystemEnforcementMode: currentPolicy.policy.landlock.compatibility === "hard_requirement" ? "hard_requirement" : "unknown",
-      staticPolicyRequiresRecreate: true,
       dynamicNetworkPolicy: true,
       policyProverBoundaryCheck: false,
-      policyProverCoverage: [], credentialBindingDimensions: [],
-      testedAt, expiresAt: new Date(Date.now() + 120_000).toISOString(),
-      qualificationHash, evidenceKind: "protected_host_report",
+      policyProverCoverage: [],
+      credentialBindingDimensions: [],
+    };
+    const reportFacts = qualificationSample?.capabilityFacts ?? capabilityFacts;
+    const reportExpiry = qualificationSample?.expiresAt ?? new Date(Math.min(
+      Date.parse(provisioning.expiresAt), Date.now() + 120_000,
+    )).toISOString();
+    if (!qualificationSample) {
+      targetRecord.qualification = {
+        sampleTarget: qualificationTarget,
+        creation: structuredClone(creation),
+        probeFixture,
+        expiresAt: reportExpiry,
+        capabilityFacts: reportFacts,
+      };
+      await atomicJson(journalFile, journal);
+    }
+    return {
+      ...reportFacts,
+      backend: "openshell", backendVersion: "0.1.2", hostKernelVersion,
+      sandboxImageDigest: request.imageDigest,
+      qualificationProbeFixture: probeFixture,
+      staticPolicyRequiresRecreate: true,
+      testedAt, expiresAt: reportExpiry,
+      qualificationHash, qualificationTarget, evidenceKind: "protected_host_report",
+      ...(credentialFixture ? { qualificationCredentialFixture: credentialFixture } : {}),
     };
   }
-  async function probeBoundary(request, deadlineAt) {
+  async function probeBoundary(request, deadlineAt, commandId) {
     const probe = request.probe;
     const expected = probeContracts[probe.caseId];
     if (!expected || expected[0] !== probe.control || expected[1] !== probe.expected || !/^[a-f0-9]{64}$/.test(probe.contractHash ?? ""))
@@ -373,56 +1249,574 @@ export function openShellHostEngine({
     const effective = await policy(request.scope, deadlineAt);
     if (detail.phase !== "Ready")
       return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
-    if (!["process_nonprivileged", "filesystem_allow", "filesystem_deny"].includes(probe.caseId))
+    const targetRecord = journal.scopes[request.scope.bindingId];
+    if (["resource_exhaustion_contained", "force_stop", "credential_allow", "credential_raw_read_deny",
+      "credential_wrong_destination_deny", "credential_wrong_binary_deny", "credential_revoke_deny"].includes(probe.caseId) &&
+      (!targetRecord?.provisioning || targetRecord.provisioning.purpose !== "qualification" ||
+        targetRecord.provisioning.state !== "ready" || targetRecord.sandboxId !== detail.id ||
+        !targetRecord.containerId || Date.parse(targetRecord.provisioning.expiresAt) <= Date.now()))
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    if (!["process_nonprivileged", "process_privilege_denied", "filesystem_allow", "filesystem_deny", "filesystem_escape", "syscall_allow", "syscall_deny", "network_allow", "network_host_port_deny", "network_dns_redirect_deny", "network_l7_allow", "network_l7_deny", "network_redirect_deny", "credential_allow", "credential_raw_read_deny", "credential_wrong_destination_deny", "credential_wrong_binary_deny", "credential_revoke_deny", "resource_exhaustion_contained", "force_stop"].includes(probe.caseId))
       return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
     const workload = await container(request.scope, detail, request.imageDigest, deadlineAt);
-    const targetQualificationHash = hash(JSON.stringify(canonical({
-      backend: "openshell", backendVersion: "0.1.2", sandboxId: detail.id,
-      containerId: workload.Id, imageDigest: request.imageDigest, policyHash: effective.hash,
-      policyVersion: effective.version, configRevision: effective.config_revision, phase: detail.phase,
-    })));
+    if (!targetRecord?.provisioning || targetRecord.provisioning.purpose !== "qualification" ||
+      targetRecord.provisioning.state !== "ready" || targetRecord.sandboxId !== detail.id ||
+      targetRecord.containerId !== workload.Id || Date.parse(targetRecord.provisioning.expiresAt) <= Date.now())
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    const hostKernelVersion = (await docker(["info", "--format", "{{.KernelVersion}}"], deadlineAt, false)).trim();
+    if (!hostKernelVersion || hostKernelVersion.length > 200 || /[\r\n\0]/.test(hostKernelVersion))
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    const runtimeBinarySha256 = await observedRuntimeBinarySha256(workload.Id, deadlineAt);
+    const reobserved = await container(request.scope, detail, request.imageDigest, deadlineAt);
+    const dockerEngineIdHash = journal.scopes[request.scope.bindingId]?.dockerEngineId;
+    if (!runtimeBinarySha256 || reobserved.Id !== workload.Id || !reobserved.State.Running ||
+      !/^[a-f0-9]{64}$/.test(dockerEngineIdHash ?? ""))
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    const credentialFixture = qualificationCredentialFixture();
+    const probeFixture = qualificationProbeFixture();
+    if (!probeFixture || !targetRecord.provisioning.envelope.qualificationProbeFixture ||
+      !sameDocument(targetRecord.provisioning.envelope.qualificationProbeFixture, probeFixture) ||
+      targetRecord.provisioning.envelope.probeFixtureHash !== probeFixture.fixtureHash ||
+      workload.Config?.Labels?.["openshell.ai/workspace-root"] !== probeFixture.filesystem.workdirPath ||
+      workload.Config?.WorkingDir !== probeFixture.filesystem.workdirPath ||
+      !sameDocument(effective.policy, qualificationProbePolicyDocument(probeFixture)))
+      return { action: "probe", verdict: "unsupported", observationHash: null, contractHash: probe.contractHash };
+    const targetBase = {
+      hostEpoch: epoch,
+      companyId: request.scope.companyId, bindingId: request.scope.bindingId, cellId: request.scope.cellId,
+      cellGeneration: request.scope.cellGeneration, sandboxRef: request.scope.sandboxRef,
+      sandboxId: detail.id, containerId: workload.Id, imageDigest: request.imageDigest,
+      hostKernelVersion, runtimeBinarySha256, openshellCliSha256: config.executableSha256,
+      dockerEngineIdHash, policyHash: targetRecord.provisioning.envelope.policyHash,
+      provisioningHash: targetRecord.provisioning.provisioningHash,
+      bindingVersion: targetRecord.provisioning.bindingVersion,
+      resourceLimits: targetRecord.provisioning.resourceLimits,
+      policyVersion: effective.version, configRevision: effective.config_revision,
+      phase: detail.phase, mechanism: "openshell_create_sandbox_v0.1.2",
+      probePolicyHash: effective.hash, probeFixtureHash: probeFixture.fixtureHash,
+      ...(credentialFixture ? { qualificationCredentialFixture: credentialFixture } : {}),
+    };
+    const targetQualificationHash = hash(JSON.stringify(canonical(targetBase)));
     const probeReply = (verdict, observationHash) => ({ action: "probe", verdict, observationHash,
       contractHash: probe.contractHash, targetQualificationHash });
-    const policyDeniedFor = async (needle) => {
+    if (probe.caseId.startsWith("credential_")) {
+      const fixture = credentialFixture;
+      const provisioning = { ...targetRecord.provisioning, sandboxId: targetRecord.sandboxId,
+        containerId: targetRecord.containerId };
+      if (!fixture || !qualificationCredentialPolicyAvailable(effective.policy, fixture)) return probeReply("unsupported", null);
+      const credential = qualificationCredentialClaim(request, commandId, fixture, provisioning, deadlineAt,
+        targetQualificationHash);
+      if (!credential) return probeReply("unsupported", null);
+      if (probe.caseId === "credential_wrong_binary_deny") {
+        const prior = targetRecord.provisioning.credentialPositiveProof;
+        if (!prior || prior.targetQualificationHash !== targetQualificationHash ||
+          prior.fixtureHash !== fixture.fixtureHash || prior.sandboxId !== detail.id ||
+          prior.containerId !== workload.Id || !Number.isFinite(Date.parse(prior.at)) ||
+          Date.now() - Date.parse(prior.at) < 0 || Date.now() - Date.parse(prior.at) > 60_000)
+          return probeReply("unsupported", null);
+      }
+      try { await inspectQualificationCredentialProfile(fixture, deadlineAt); }
+      catch { return probeReply("unsupported", null); }
+      try { await reserveQualificationCredentialUse(commandId, credential.claim); }
+      catch { return probeReply("fail", null); }
+      const uid = effective.policy?.process?.run_as_user;
+      const gid = effective.policy?.process?.run_as_group;
+      if (!/^[1-9][0-9]{0,8}$/.test(uid ?? "") || !/^[0-9]{1,9}$/.test(gid ?? ""))
+        return probeReply("unsupported", null);
+      // The profile injects the one-use capability into its credential proxy,
+      // never into workload environment or argv. Verify the target itself has
+      // no copied credential environment before exercising the proxy.
+      const configuredEnv = workload.Config?.Env;
+      if (!Array.isArray(configuredEnv) || configuredEnv.some(value =>
+        typeof value !== "string" || value.startsWith(`${QUALIFICATION_CREDENTIAL_ENV}=`) ||
+          value.includes(credential.token))) return probeReply("unsupported", null);
+      if (probe.caseId === "credential_raw_read_deny") {
+        const helper = "/usr/bin/printenv";
+        if (!readOnlyPathAllows(effective.policy, helper) ||
+          (effective.policy?.filesystem_policy?.read_write ?? []).some(value =>
+            pathContains(value, helper) || pathContains(helper, value))) return probeReply("unsupported", null);
+        try {
+          const stat = (await docker(["exec", "--user", `${uid}:${gid}`, workload.Id,
+            "/usr/bin/stat", "-c", "%F:%a", helper], deadlineAt, false)).trim();
+          const match = stat.match(/^regular file:([0-7]{3,4})$/);
+          if (!match || (Number.parseInt(match[1], 8) & 0o111) === 0) return probeReply("unsupported", null);
+        } catch { return probeReply("unsupported", null); }
+        const envProbe = await sandboxExec(request.scope, detail.id, [helper, QUALIFICATION_CREDENTIAL_ENV], deadlineAt);
+        if (envProbe.exitCode !== 1 || envProbe.stdout !== "") return probeReply("fail", null);
+      }
+      const requestResult = await qualificationCredentialProvider(request.scope, detail.id, fixture,
+        credential, commandId, deadlineAt, async () => {
+          if (probe.caseId === "credential_wrong_binary_deny") {
+            try {
+              await docker(["exec", "--user", `${uid}:${gid}`, workload.Id, fixture.wrongBinaryPath, "--version"], deadlineAt, false);
+            } catch { return { unavailable: true }; }
+            const bodyText = JSON.stringify(canonical(credential.body));
+            const url = `${fixture.origin.replace(/\/$/, "")}/mcp/gateways/${fixture.gatewayPublicId}`;
+            const args = [fixture.wrongBinaryPath, "--server-response", "--timeout=4", "--tries=1", "--post-data", bodyText,
+              "--header", "Content-Type: application/json", "--output-document=-", "--content-on-error", "--", url];
+            if (args.some(value => value.includes(credential.token))) throw new Error("sandbox_scope_changed");
+            return sandboxExec(request.scope, detail.id, args, deadlineAt);
+          }
+          const toolName = probe.caseId === "credential_wrong_destination_deny" ? fixture.wrongToolName : fixture.toolName;
+          return qualificationCredentialCall(request.scope, detail.id, fixture, credential, toolName, deadlineAt);
+        });
+      if (requestResult?.unavailable) return probeReply("unsupported", null);
+      let expected = false, status = null, reasonCode = null, markerMatched = false;
+      if (probe.caseId === "credential_wrong_binary_deny") {
+        if (requestResult?.exitCode !== 8 || typeof requestResult.stdout !== "string" ||
+          !/HTTP\/\d(?:\.\d)? 401(?:\s|\r?$)/m.test(requestResult.stderr ?? "")) return probeReply("unsupported", null);
+        try {
+          const body = JSON.parse(requestResult.stdout);
+          status = 401;
+          reasonCode = body?.error?.data?.reasonCode ?? body?.error?.reasonCode ?? null;
+          expected = reasonCode === "sandbox_qualification_credential_required";
+        } catch { return probeReply("fail", null); }
+      } else {
+        const parsed = requestResult;
+        if (!parsed) return probeReply("unsupported", null);
+        status = parsed.status;
+        const error = parsed.body?.error;
+        reasonCode = error?.data?.reasonCode ?? error?.reasonCode ?? null;
+        if (probe.caseId === "credential_allow" || probe.caseId === "credential_raw_read_deny") {
+          const marker = parsed.body?.result?.structuredContent?.marker ??
+            parsed.body?.structuredContent?.marker ?? parsed.body?.structuredContent?.content?.marker;
+          markerMatched = marker === fixture.marker || parsed.body?.result?.content?.some(value =>
+            value?.type === "text" && value.text === fixture.marker);
+          expected = status === 200 && markerMatched && !JSON.stringify(parsed.body).includes(credential.token);
+        } else if (probe.caseId === "credential_wrong_destination_deny") {
+          expected = status === 403 && reasonCode === "sandbox_qualification_tool_mismatch";
+        } else if (probe.caseId === "credential_revoke_deny") {
+          expected = status === 403 && reasonCode === "sandbox_qualification_grant_revoked";
+        }
+      }
+      const observedAfter = await container(request.scope, detail, request.imageDigest, deadlineAt);
+      const policyAfter = await policy(request.scope, deadlineAt);
+      if (observedAfter.Id !== workload.Id || !observedAfter.State.Running ||
+        policyAfter.hash !== effective.hash || policyAfter.version !== effective.version ||
+        policyAfter.config_revision !== effective.config_revision || !sameDocument(policyAfter.policy, effective.policy))
+        return probeReply("fail", null);
+      const observation = hash(JSON.stringify(canonical({ version: 1, caseId: probe.caseId,
+        commandId, fixtureHash: fixture.fixtureHash, profileHash: fixture.profileHash,
+        targetQualificationHash, nonceHash: hash(credential.nonce), status, reasonCode,
+        markerMatched, expected, providerCleaned: true })));
+      if (expected && probe.caseId === "credential_allow") {
+        targetRecord.provisioning.credentialPositiveProof = {
+          targetQualificationHash, fixtureHash: fixture.fixtureHash, sandboxId: detail.id,
+          containerId: workload.Id, at: new Date().toISOString(),
+        };
+        await atomicJson(journalFile, journal);
+      }
+      return probeReply(expected ? "pass" : "fail", observation);
+    }
+    if (probe.caseId === "resource_exhaustion_contained") {
+      const pidsLimit = workload.HostConfig?.PidsLimit;
+      const uid = effective.policy?.process?.run_as_user;
+      const gid = effective.policy?.process?.run_as_group;
+      const helper = "/.openshell/runtime/openshell-sandbox";
+      if (!Number.isSafeInteger(pidsLimit) || pidsLimit < 2 || pidsLimit > 256 ||
+        !/^[1-9][0-9]{0,8}$/.test(uid ?? "") || !/^[0-9]{1,9}$/.test(gid ?? "") ||
+        !readOnlyPathAllows(effective.policy, helper) ||
+        (effective.policy?.filesystem_policy?.read_write ?? []).some(value =>
+          pathContains(value, helper) || pathContains(helper, value)))
+        return probeReply("unsupported", null);
       try {
-        const logs = await cli(["logs", request.scope.sandboxRef, "--since", "1m", "--source", "sandbox"], deadlineAt, false, {}, 4500);
-        return logs.includes("policy_denied") && logs.includes(needle);
-      } catch { return false; }
-    };
+        const beforeLimit = (await docker(["exec", "--user", `${uid}:${gid}`, workload.Id,
+          "/usr/bin/cat", "/sys/fs/cgroup/pids.max"], deadlineAt, false)).trim();
+        if (beforeLimit !== String(pidsLimit)) return probeReply("unsupported", null);
+        const before = await container(request.scope, detail, request.imageDigest, deadlineAt);
+        if (before.Id !== workload.Id || !before.State.Running) throw new Error("sandbox_scope_changed");
+        const result = await sandboxExec(request.scope, detail.id,
+          [helper, "runtime-pids-probe", "--limit", String(pidsLimit)], deadlineAt);
+        if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
+          return probeReply("unsupported", null);
+        const after = await container(request.scope, detail, request.imageDigest, deadlineAt);
+        const afterLimit = (await docker(["exec", "--user", `${uid}:${gid}`, workload.Id,
+          "/usr/bin/cat", "/sys/fs/cgroup/pids.max"], deadlineAt, false)).trim();
+        if (after.Id !== workload.Id || !after.State.Running || afterLimit !== String(pidsLimit))
+          return probeReply("fail", null);
+        if (result.exitCode !== 0) return probeReply("fail", null);
+        let report;
+        try { report = JSON.parse(result.stdout); } catch { return probeReply("fail", null); }
+        const reportKeys = ["attempted", "baseline", "baseline_restored", "denied_errno", "limit", "reaped", "verdict", "version"];
+        if (!report || Object.keys(report).sort().join("\0") !== reportKeys.join("\0") ||
+          report.version !== 1 || report.verdict !== "pass" || report.limit !== pidsLimit ||
+          report.denied_errno !== "EAGAIN" || report.baseline_restored !== true ||
+          !Number.isInteger(report.baseline) || report.baseline < 1 || report.baseline >= pidsLimit ||
+          report.attempted !== pidsLimit - report.baseline + 1 ||
+          report.reaped !== report.attempted - 1)
+          return probeReply("fail", null);
+        const observation = { caseId: probe.caseId, contractHash: probe.contractHash,
+          sandboxId: detail.id, containerId: workload.Id, imageDigest: request.imageDigest,
+          policyHash: effective.hash, policyVersion: effective.version,
+          configRevision: effective.config_revision, pidsLimit,
+          cgroupLimitMatched: true, boundedChildrenReaped: true,
+          excessPidDeniedWithEagain: true, sandboxStayedRunning: true };
+        const hostConfig = workload.HostConfig;
+        const cpuMillis = hostConfig?.NanoCpus / 1_000_000;
+        const memoryBytes = hostConfig?.Memory;
+        const diskBytes = Number(String(hostConfig?.StorageOpt?.size ?? "").replace(/B$/, ""));
+        if (!Number.isSafeInteger(cpuMillis) || cpuMillis < 1 || cpuMillis > 3000 ||
+          !Number.isSafeInteger(memoryBytes) || memoryBytes < 16 * 1024 * 1024 || memoryBytes > 256 * 1024 * 1024 ||
+          hostConfig?.MemorySwap !== memoryBytes || !Number.isSafeInteger(diskBytes) ||
+          diskBytes < 1024 * 1024 || diskBytes > 32 * 1024 * 1024 ||
+          !dockerDiskStorageOptionMatches(workload, { diskBytes }) ||
+          !dockerDiskMountsMatch(workload, effective.policy))
+          return probeReply("unsupported", hash(JSON.stringify(canonical({ ...observation,
+            completeResourceControl: false, missingDimensions: ["cpuMillis", "memoryBytes", "diskBytes"] }))));
+
+        const cpuMax = (await docker(["exec", "--user", `${uid}:${gid}`, workload.Id,
+          "/usr/bin/cat", "/sys/fs/cgroup/cpu.max"], deadlineAt, false)).trim().split(/\s+/);
+        if (cpuMax.length !== 2 || !/^\d+$/.test(cpuMax[0]) || !/^\d+$/.test(cpuMax[1]))
+          return probeReply("unsupported", null);
+        const cpuQuota = Number(cpuMax[0]), cpuPeriod = Number(cpuMax[1]);
+        if (!Number.isSafeInteger(cpuQuota) || !Number.isSafeInteger(cpuPeriod) || cpuPeriod < 1 ||
+          Math.round(cpuQuota * 1000 / cpuPeriod) !== cpuMillis)
+          return probeReply("unsupported", null);
+        const workers = Math.ceil(cpuMillis / 1000) + 1;
+        const cpuResult = await sandboxExec(request.scope, detail.id,
+          [helper, "runtime-cpu-probe", "--workers", String(workers), "--millis", "250"], deadlineAt);
+        if (cpuResult.exitCode !== 0) return probeReply("unsupported", hash(JSON.stringify(canonical({ ...observation, cpuCgroupMatched: true }))));
+        let cpuReport;
+        try { cpuReport = JSON.parse(cpuResult.stdout); } catch { return probeReply("fail", null); }
+        if (!cpuReport || Object.keys(cpuReport).sort().join("\0") !==
+          ["duration_ms", "period_us", "quota_us", "throttled_increased", "verdict", "version", "workers"].join("\0") ||
+          cpuReport.version !== 1 || cpuReport.verdict !== "pass" || cpuReport.quota_us !== cpuQuota ||
+          cpuReport.period_us !== cpuPeriod || cpuReport.workers !== workers || cpuReport.duration_ms !== 250 ||
+          cpuReport.throttled_increased !== true)
+          return probeReply("unsupported", hash(JSON.stringify(canonical({ ...observation, cpuCgroupMatched: true }))));
+
+        const memoryWorkdir = workload.Config?.WorkingDir;
+        const workspaceRoot = workload.Config?.Labels?.["openshell.ai/workspace-root"];
+        const memoryReadWriteRoots = effective.policy?.filesystem_policy?.read_write;
+        if (typeof memoryWorkdir !== "string" || memoryWorkdir !== workspaceRoot ||
+          !Array.isArray(memoryReadWriteRoots) ||
+          !memoryReadWriteRoots.some(value => pathContains(value, memoryWorkdir)))
+          return probeReply("unsupported", null);
+        const memoryCgroup = async () => {
+          const [memoryMax, oomGroup] = await Promise.all([
+            docker(["exec", "--user", `${uid}:${gid}`, workload.Id,
+              "/usr/bin/cat", "/sys/fs/cgroup/memory.max"], deadlineAt, false),
+            docker(["exec", "--user", `${uid}:${gid}`, workload.Id,
+              "/usr/bin/cat", "/sys/fs/cgroup/memory.oom.group"], deadlineAt, false),
+          ]);
+          return { memoryMax: memoryMax.trim(), oomGroup: oomGroup.trim() };
+        };
+        const memoryBeforeCgroup = await memoryCgroup();
+        const memoryBeforeWorkload = await container(request.scope, detail, request.imageDigest, deadlineAt);
+        const memoryBeforeRuntimeSha256 = await observedRuntimeBinarySha256(memoryBeforeWorkload.Id, deadlineAt);
+        if (memoryBeforeCgroup.memoryMax !== String(memoryBytes) || memoryBeforeCgroup.oomGroup !== "0" ||
+          memoryBeforeWorkload.Id !== workload.Id || !memoryBeforeWorkload.State.Running ||
+          memoryBeforeRuntimeSha256 !== runtimeBinarySha256)
+          return probeReply("unsupported", null);
+        // Run only this bounded resource child directly under the validated
+        // container identity. `sandbox exec` adds Landlock and correctly
+        // prevents writes to /proc/self/oom_score_adj; direct docker exec keeps
+        // the same UID, workdir, full container ID, and pinned helper without
+        // weakening the workload's filesystem policy.
+        const memoryResult = await docker(["exec", "--user", `${uid}:${gid}`, "--workdir", memoryWorkdir,
+          workload.Id, helper, "runtime-memory-probe", "--limit-bytes", String(memoryBytes)], deadlineAt, false)
+          .then(stdout => ({ stdout, exitCode: 0 }), () => null);
+        const memoryAfterWorkload = await container(request.scope, detail, request.imageDigest, deadlineAt);
+        const memoryAfterCgroup = await memoryCgroup();
+        const memoryAfterRuntimeSha256 = await observedRuntimeBinarySha256(memoryAfterWorkload.Id, deadlineAt);
+        if (memoryAfterWorkload.Id !== workload.Id || !memoryAfterWorkload.State.Running ||
+          memoryAfterCgroup.memoryMax !== String(memoryBytes) || memoryAfterCgroup.oomGroup !== "0" ||
+          memoryAfterRuntimeSha256 !== runtimeBinarySha256)
+          return probeReply("fail", null);
+        if (!memoryResult || memoryResult.exitCode !== 0) return probeReply("unsupported", hash(JSON.stringify(canonical({
+          ...observation, cpuThrottleObserved: true, memoryCgroupMatched: true }))));
+        let memoryReport;
+        try { memoryReport = JSON.parse(memoryResult.stdout); } catch { return probeReply("fail", null); }
+        if (!memoryReport || Object.keys(memoryReport).sort().join("\0") !==
+          ["child_reaped", "limit_bytes", "oom_group_disabled", "oom_kill_increased", "verdict", "version"].join("\0") ||
+          memoryReport.version !== 1 || memoryReport.verdict !== "pass" ||
+          memoryReport.limit_bytes !== memoryBytes || memoryReport.oom_kill_increased !== true ||
+          memoryReport.child_reaped !== true || memoryReport.oom_group_disabled !== true)
+          return probeReply("unsupported", hash(JSON.stringify(canonical({ ...observation,
+            cpuThrottleObserved: true, memoryCgroupMatched: true }))));
+
+        const workdir = workload.Config?.Labels?.["openshell.ai/workspace-root"];
+        const writableRoots = effective.policy?.filesystem_policy?.read_write;
+        if (typeof workdir !== "string" || !Array.isArray(writableRoots) ||
+          !writableRoots.some(value => pathContains(value, workdir)))
+          return probeReply("unsupported", null);
+        const diskPath = path.posix.join(workdir, `.aw-v7-disk-probe-${randomUUID()}`);
+        const diskResult = await sandboxExec(request.scope, detail.id,
+          [helper, "runtime-disk-probe", "--limit-bytes", String(diskBytes), "--path", diskPath], deadlineAt);
+        if (diskResult.exitCode !== 0) return probeReply("unsupported", hash(JSON.stringify(canonical({
+          ...observation, cpuThrottleObserved: true, memoryOomObserved: true }))));
+        let diskReport;
+        try { diskReport = JSON.parse(diskResult.stdout); } catch { return probeReply("fail", null); }
+        if (!diskReport || Object.keys(diskReport).sort().join("\0") !==
+          ["limit_bytes", "quota_exhaustion_observed", "temporary_file_removed", "verdict", "version"].join("\0") ||
+          diskReport.version !== 1 || diskReport.verdict !== "pass" || diskReport.limit_bytes !== diskBytes ||
+          diskReport.quota_exhaustion_observed !== true || diskReport.temporary_file_removed !== true)
+          return probeReply("unsupported", hash(JSON.stringify(canonical({ ...observation,
+            cpuThrottleObserved: true, memoryOomObserved: true }))));
+        const removed = await docker(["exec", "--user", `${uid}:${gid}`, workload.Id,
+          "/usr/bin/test", "!", "-e", diskPath], deadlineAt, false);
+        const afterDisk = await container(request.scope, detail, request.imageDigest, deadlineAt);
+        if (removed !== "" || afterDisk.Id !== workload.Id || !afterDisk.State.Running)
+          return probeReply("fail", null);
+        return probeReply("pass", hash(JSON.stringify(canonical({ ...observation,
+          cpuThrottleObserved: true, memoryOomObserved: true, diskEnospcObserved: true,
+          temporaryFileRemoved: true, targetUnchangedAfterAllProbes: true }))));
+      } catch {
+        return probeReply("unsupported", null);
+      }
+    }
+    if (probe.caseId === "force_stop") {
+      if (!workload.State.Running || !dockerPersistentLogsDisabled(workload))
+        return probeReply("unsupported", null);
+      const initialPolicy = effective;
+      try {
+        await cli(["sandbox", "stop", request.scope.sandboxRef,
+          "--expected-sandbox-id", detail.id], deadlineAt, false);
+        const stoppedDetail = await observed(request.scope, deadlineAt);
+        const stoppedWorkload = await container(request.scope, stoppedDetail,
+          request.imageDigest, deadlineAt);
+        if (stoppedDetail.id !== detail.id || stoppedDetail.phase !== "Stopped" ||
+          stoppedWorkload.Id !== workload.Id || stoppedWorkload.State.Running)
+          throw new Error("sandbox_stop_observation_failed");
+        await cli(["sandbox", "start", request.scope.sandboxRef,
+          "--expected-sandbox-id", detail.id], deadlineAt, false);
+        const restartedDetail = await observed(request.scope, deadlineAt);
+        const restartedWorkload = await container(request.scope, restartedDetail,
+          request.imageDigest, deadlineAt);
+        const restartedPolicy = await policy(request.scope, deadlineAt);
+        if (restartedDetail.id !== detail.id || restartedDetail.phase !== "Ready" ||
+          restartedWorkload.Id !== workload.Id || !restartedWorkload.State.Running ||
+          restartedPolicy.hash !== initialPolicy.hash ||
+          restartedPolicy.version !== initialPolicy.version ||
+          restartedPolicy.config_revision !== initialPolicy.config_revision ||
+          !sameDocument(restartedPolicy.policy, initialPolicy.policy) ||
+          !dockerPersistentLogsDisabled(restartedWorkload))
+          throw new Error("sandbox_restart_observation_failed");
+        const observation = {
+          caseId: probe.caseId, contractHash: probe.contractHash,
+          sandboxId: detail.id, containerId: workload.Id, imageDigest: request.imageDigest,
+          policyHash: initialPolicy.hash, policyVersion: initialPolicy.version,
+          configRevision: initialPolicy.config_revision,
+          stoppedObserved: true, restartedObserved: true,
+          stopAndStartUsedExpectedSandboxId: true,
+        };
+        return probeReply("pass", hash(JSON.stringify(canonical(observation))));
+      } catch {
+        // A timed-out stop can have an unknown effect, so inspect the exact
+        // UUID even when the CLI did not return. Restart only that same target.
+        try {
+          const current = await observed(request.scope, deadlineAt);
+          if (current.id === detail.id && current.phase === "Stopped")
+            await cli(["sandbox", "start", request.scope.sandboxRef,
+              "--expected-sandbox-id", detail.id], deadlineAt, false);
+        } catch {}
+        return probeReply("unsupported", null);
+      }
+    }
+    if (probe.caseId === "syscall_allow" || probe.caseId === "syscall_deny") {
+      const helperPath = "/.openshell/runtime/openshell-sandbox";
+      if (!readOnlyPathAllows(effective.policy, helperPath) ||
+        (effective.policy?.filesystem_policy?.read_write ?? []).some(value =>
+          pathContains(value, helperPath) || pathContains(helperPath, value)))
+        return probeReply("unsupported", null);
+      const result = await sandboxExec(request.scope, detail.id,
+        [helperPath, "runtime-seccomp-probe"], deadlineAt);
+      if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
+        return probeReply("unsupported", null);
+      if (result.exitCode !== 0) return probeReply("fail", null);
+      let report;
+      try { report = JSON.parse(result.stdout); }
+      catch { return probeReply("fail", null); }
+      const expectedKeys = ["denied_errno", "getpid", "memfd_create", "profile", "version"];
+      if (!report || Object.keys(report).sort().join("\0") !== expectedKeys.join("\0") ||
+        report.version !== 1 || report.profile !== "openshell-linux-built-in-seccomp-v1" ||
+        report.getpid !== "allowed" || report.memfd_create !== "denied" || report.denied_errno !== "EPERM")
+        return probeReply("fail", null);
+      const observation = {
+        caseId: probe.caseId,
+        contractHash: probe.contractHash,
+        sandboxId: detail.id,
+        containerId: workload.Id,
+        imageDigest: request.imageDigest,
+        policyHash: effective.hash,
+        policyVersion: effective.version,
+        configRevision: effective.config_revision,
+        profile: report.profile,
+        assertion: probe.caseId === "syscall_allow" ? "getpid_allowed" : "memfd_create_denied_eperm",
+      };
+      return probeReply("pass", hash(JSON.stringify(canonical(observation))));
+    }
     let observation;
     if (probe.caseId === "process_nonprivileged") {
       const user = effective.policy?.process?.run_as_user;
       if (!/^[1-9][0-9]{0,8}$/.test(user ?? ""))
         return probeReply("unsupported", null);
-      const result = await sandboxExec(request.scope, ["/usr/bin/id", "-u"], deadlineAt);
+      const result = await sandboxExec(request.scope, detail.id, ["/usr/bin/id", "-u"], deadlineAt);
       if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
         return probeReply("unsupported", null);
       if (result.exitCode !== 0 || result.stdout.trim() !== user)
         return probeReply("fail", null);
       observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, observedUid: Number(user) };
-    } else if (probe.caseId === "filesystem_allow") {
-      const allowed = effective.policy?.filesystem_policy?.read_only ?? [];
-      if (!allowed.some(value => value === "/etc" || value === "/" || value.startsWith("/etc/")))
+    } else if (probe.caseId === "process_privilege_denied") {
+      const helper = "/.openshell/runtime/openshell-sandbox";
+      if (!readOnlyPathAllows(effective.policy, helper) ||
+        (effective.policy?.filesystem_policy?.read_write ?? []).some(value =>
+          pathContains(value, helper) || pathContains(helper, value)))
         return probeReply("unsupported", null);
-      const result = await sandboxExec(request.scope, ["/bin/sh", "-c", "test -r /etc/os-release"], deadlineAt);
+      const result = await sandboxExec(request.scope, detail.id, [helper, "runtime-privilege-probe"], deadlineAt);
       if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
         return probeReply("unsupported", null);
-      if (result.exitCode !== 0)
+      if (result.exitCode !== 0) return probeReply("fail", null);
+      let report;
+      try { report = JSON.parse(result.stdout); } catch { return probeReply("fail", null); }
+      const passKeys = ["effective_capabilities_zero", "errno", "setuid_root", "uid_nonroot", "verdict", "version"];
+      if (!report || Object.keys(report).sort().join("\0") !== passKeys.join("\0") || report.version !== 1)
         return probeReply("fail", null);
-      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, operation: "read_os_release" };
-    } else if (probe.caseId === "filesystem_deny") {
-      const allowed = [...(effective.policy?.filesystem_policy?.read_only ?? []), ...(effective.policy?.filesystem_policy?.read_write ?? [])];
-      const target = "/etc/os-release";
-      if (allowed.some(value => value === "/" || target === value || target.startsWith(value.endsWith("/") ? value : `${value}/`)))
-        return probeReply("unsupported", null);
-      // test(1) reads metadata only. A pass requires OpenShell's own denial
-      // event for this exact path, so DAC errors or a missing file cannot pass.
-      const result = await sandboxExec(request.scope, ["/bin/sh", "-c", "test -r /etc/os-release"], deadlineAt);
-      if (result.exitCode === 0)
+      if (report.verdict === "unsupported") return probeReply("unsupported", null);
+      if (report.verdict !== "pass" || report.uid_nonroot !== true ||
+        report.effective_capabilities_zero !== true || report.setuid_root !== "denied" || report.errno !== "EPERM")
         return probeReply("fail", null);
-      if (result.exitCode === null || !(await policyDeniedFor("/etc/os-release")))
+      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id,
+        containerId: workload.Id, imageDigest: request.imageDigest, policyHash: effective.hash,
+        policyVersion: effective.version, configRevision: effective.config_revision,
+        assertion: "nonroot_zero_capabilities_setuid0_eperm" };
+    } else if (["network_allow", "network_host_port_deny", "network_dns_redirect_deny",
+      "network_l7_allow", "network_l7_deny"].includes(probe.caseId)) {
+      const fixture = networkProbeFixture();
+      if (!fixture) return probeReply("unsupported", null);
+      const item = probe.caseId === "network_allow" ? fixture.allow :
+        probe.caseId === "network_host_port_deny" ? fixture.hostPortDeny :
+        probe.caseId === "network_l7_allow" ? fixture.l7Allow :
+        probe.caseId === "network_l7_deny" ? fixture.l7Deny : fixture.dnsRedirectDeny;
+      const l7Case = probe.caseId === "network_l7_allow" || probe.caseId === "network_l7_deny";
+      const requirePolicyEndpoint = probe.caseId === "network_allow" ||
+        probe.caseId === "network_l7_allow" || probe.caseId === "network_l7_deny" ||
+        probe.caseId === "network_dns_redirect_deny";
+      const expectedEndpoint = probe.caseId === "network_dns_redirect_deny" ? fixture.dnsRedirectDeny : item;
+      const selectedEndpoint = networkEndpoint(effective.policy, expectedEndpoint, { l7: l7Case });
+      if (requirePolicyEndpoint && !selectedEndpoint) return probeReply("unsupported", null);
+      if (probe.caseId === "network_host_port_deny" && networkEndpoint(effective.policy, item))
         return probeReply("unsupported", null);
-      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id, policyHash: effective.hash, policyVersion: effective.version, configRevision: effective.config_revision, denial: "policy_denied:/etc/os-release" };
+      if (probe.caseId === "network_host_port_deny" && networkEndpoint(effective.policy, fixture.wrongHostDeny))
+        return probeReply("unsupported", null);
+      const uid = effective.policy?.process?.run_as_user;
+      const gid = effective.policy?.process?.run_as_group;
+      if (!/^[1-9][0-9]{0,8}$/.test(uid ?? "") || !/^[0-9]{1,9}$/.test(gid ?? ""))
+        return probeReply("unsupported", null);
+      const nonce = randomUUID();
+      const dnsCase = probe.caseId === "network_dns_redirect_deny";
+      const direct = await directCanaryHttp(workload, uid, gid, item, nonce, deadlineAt, {
+        resolve: dnsCase,
+      });
+      if (!direct || direct.status !== 200 || direct.body !== item.marker)
+        return probeReply("unsupported", null);
+      const before = await container(request.scope, detail, request.imageDigest, deadlineAt);
+      if (before.Id !== workload.Id || !before.State.Running) throw new Error("sandbox_scope_changed");
+      let redirectAttempt = null;
+      if (dnsCase) {
+        const redirect = fixture.redirectDeny;
+        if (!networkEndpoint(effective.policy, redirect)) return probeReply("unsupported", null);
+        const redirectBaseline = await directCanaryHttp(workload, uid, gid, redirect, nonce, deadlineAt, { follow: true });
+        if (!redirectBaseline || redirectBaseline.status !== 200 || redirectBaseline.body !== redirect.marker)
+          return probeReply("unsupported", null);
+        const redirected = await sandboxCanaryHttp(request.scope, detail.id, redirect, nonce, deadlineAt, { follow: true });
+        const redirectResponse = parseCanaryHttp(redirected);
+        let redirectDenial;
+        try { redirectDenial = JSON.parse(redirectResponse?.body ?? ""); } catch {}
+        if (!redirectResponse || redirectResponse.status !== 403 || redirectDenial?.error !== "policy_denied")
+          return probeReply(redirected.exitCode === 0 ? "fail" : "unsupported", null);
+        redirectAttempt = { status: redirectResponse.status, bodyHash: hash(redirectResponse.body) };
+      }
+      const sandboxResult = await sandboxCanaryHttp(request.scope, detail.id, item, nonce, deadlineAt, {
+        resolve: dnsCase, direct: dnsCase,
+      });
+      const after = await container(request.scope, detail, request.imageDigest, deadlineAt);
+      if (after.Id !== workload.Id || !after.State.Running) throw new Error("sandbox_scope_changed");
+      if (sandboxResult.exitCode === 127 || sandboxResult.exitCode === 124 || sandboxResult.exitCode === null)
+        return probeReply("unsupported", null);
+      let assertion;
+      let wrongHostAttempt = null;
+      if (dnsCase) {
+        if (sandboxResult.exitCode === 0 || sandboxResult.stdout.length !== 0)
+          return probeReply("fail", null);
+        assertion = "redirect_policy_denial_and_pinned_resolve_target_rejected";
+      } else {
+        const response = parseCanaryHttp(sandboxResult);
+        if (!response) return probeReply(sandboxResult.exitCode === 0 ? "fail" : "unsupported", null);
+        const shouldAllow = probe.caseId === "network_allow" || probe.caseId === "network_l7_allow";
+        if (shouldAllow) {
+          if (response.status !== 200 || response.body !== item.marker) return probeReply("fail", null);
+          assertion = "fixture_http_response_allowed";
+        } else {
+          let denial;
+          try { denial = JSON.parse(response.body); } catch { return probeReply("fail", null); }
+          if (response.status !== 403 || denial?.error !== "policy_denied") return probeReply("fail", null);
+          assertion = probe.caseId === "network_l7_deny"
+            ? "fresh_l7_policy_denial_response" : "fresh_destination_policy_denial_response";
+        }
+      }
+      if (probe.caseId === "network_host_port_deny") {
+        const wrongHost = fixture.wrongHostDeny;
+        const wrongHostBaseline = await directCanaryHttp(workload, uid, gid, wrongHost, nonce, deadlineAt);
+        if (!wrongHostBaseline || wrongHostBaseline.status !== 200 || wrongHostBaseline.body !== wrongHost.marker)
+          return probeReply("unsupported", null);
+        const wrongHostResponse = parseCanaryHttp(await sandboxCanaryHttp(request.scope, detail.id,
+          wrongHost, nonce, deadlineAt));
+        let wrongHostDenial;
+        try { wrongHostDenial = JSON.parse(wrongHostResponse?.body ?? ""); } catch {}
+        const stillSame = await container(request.scope, detail, request.imageDigest, deadlineAt);
+        if (stillSame.Id !== workload.Id || !stillSame.State.Running) throw new Error("sandbox_scope_changed");
+        if (!wrongHostResponse || wrongHostResponse.status !== 403 || wrongHostDenial?.error !== "policy_denied")
+          return probeReply("fail", null);
+        wrongHostAttempt = { status: wrongHostResponse.status, bodyHash: hash(wrongHostResponse.body),
+          baselineBodyHash: hash(wrongHostBaseline.body) };
+      }
+      observation = { caseId: probe.caseId, contractHash: probe.contractHash,
+        sandboxId: detail.id, containerId: workload.Id, imageDigest: request.imageDigest,
+        policyHash: effective.hash, policyVersion: effective.version,
+        configRevision: effective.config_revision, fixtureHash: qualificationFixtureHash(),
+        attemptHash: hash(nonce), markerHash: hash(item.marker),
+        endpointHash: hash(new URL(item.urlTemplate.replace("{nonce}", nonce)).origin),
+        hostBaseline: { status: direct.status, bodyHash: hash(direct.body) },
+        assertion, ...(redirectAttempt ? { redirectAttempt } : {}),
+        ...(wrongHostAttempt ? { wrongHostAttempt } : {}) };
+    } else if (["filesystem_allow", "filesystem_deny", "filesystem_escape"].includes(probe.caseId)) {
+      const fixture = filesystemProbeFixture();
+      if (!fixture) return probeReply("unsupported", null);
+      const target = probe.caseId === "filesystem_allow" ? fixture.allowedReadPath :
+        probe.caseId === "filesystem_deny" ? fixture.deniedReadPath : fixture.escapeTargetPath;
+      const operand = probe.caseId === "filesystem_escape" ? fixture.escapeOperand : target;
+      const expectedAllowed = probe.caseId === "filesystem_allow";
+      if (filesystemPathAllowed(effective.policy, target) !== expectedAllowed ||
+        (probe.caseId === "filesystem_escape" &&
+          (!filesystemPathAllowed(effective.policy, fixture.escapeViaRoot) || filesystemPathAllowed(effective.policy, target))))
+        return probeReply("unsupported", null);
+      const marker = probe.caseId === "filesystem_allow" ? fixture.allowedReadMarker :
+        probe.caseId === "filesystem_deny" ? fixture.deniedReadMarker : fixture.escapeReadMarker;
+      const hostRead = await dockerCanaryRead(workload,
+        effective.policy?.process?.run_as_user, effective.policy?.process?.run_as_group,
+        target, marker, deadlineAt);
+      if (!hostRead) return probeReply("unsupported", null);
+      const before = await container(request.scope, detail, request.imageDigest, deadlineAt);
+      if (before.Id !== workload.Id) throw new Error("sandbox_scope_changed");
+      // /usr/bin/test reads metadata only. Docker exec verifies the same exact
+      // immutable container and UID can see the canary outside OpenShell's
+      // Landlock path; sandbox exec then tests the policy-bound path operand.
+      const result = await sandboxExec(request.scope, detail.id, ["/usr/bin/head", "-c", "1", operand], deadlineAt);
+      const after = await container(request.scope, detail, request.imageDigest, deadlineAt);
+      if (after.Id !== workload.Id) throw new Error("sandbox_scope_changed");
+      if (result.exitCode === 127 || result.exitCode === 124 || result.exitCode === null)
+        return probeReply("unsupported", null);
+      if (expectedAllowed && (result.exitCode !== 0 || result.stdout !== marker)) return probeReply("fail", null);
+      if (!expectedAllowed && (result.exitCode !== 1 || result.stdout.length !== 0))
+        return probeReply(result.exitCode === 0 ? "fail" : "unsupported", null);
+      observation = { caseId: probe.caseId, contractHash: probe.contractHash, sandboxId: detail.id,
+        containerId: workload.Id, imageDigest: request.imageDigest, policyHash: effective.hash,
+        policyVersion: effective.version, configRevision: effective.config_revision,
+        fixtureHash: qualificationFixtureHash(), targetPath: target,
+        operandHash: hash(operand), canaryMarkerHash: hash(marker),
+        hostCanaryMode: hostRead.mode, hostReadMatchedMarker: true,
+        assertion: expectedAllowed ? "allowed_canary_read" : "host_readable_but_boundary_denied" };
     } else {
       // No other v0.1.2 probe is reported as passing without its dedicated
       // runtime assertion (including a policy_denied observation for denies).
@@ -562,7 +1956,8 @@ export function openShellHostEngine({
   async function contain(scope, imageDigest, deadlineAt) {
     try {
       await revokeProviders(scope, deadlineAt);
-      await cli(["sandbox", "stop", scope.sandboxRef], deadlineAt, false);
+      const target = await observed(scope, deadlineAt);
+      await cli(["sandbox", "stop", scope.sandboxRef, "--expected-sandbox-id", target.id], deadlineAt, false);
       const stopped = await observed(scope, deadlineAt);
       const workload = await container(scope, stopped, imageDigest, deadlineAt);
       if (stopped.phase !== "Stopped" || workload.State.Running)
@@ -587,11 +1982,11 @@ export function openShellHostEngine({
     if (!Array.isArray(before.providers) || before.providers.length > 4 || before.next_page_token !== "")
       throw new Error("sandbox_operation_unsupported");
     for (const provider of before.providers) {
-      await observed(scope, deadlineAt);
+      const target = await observed(scope, deadlineAt);
       if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name ?? ""))
         throw new Error("sandbox_observation_unavailable");
       await cli(
-        ["sandbox", "provider", "detach", scope.sandboxRef, provider.name, "--wait", "--timeout", "2", "--output", "json"],
+        ["sandbox", "provider", "detach", scope.sandboxRef, provider.name, "--expected-sandbox-id", target.id, "--wait", "--timeout", "2", "--output", "json"],
         deadlineAt,
       );
     }
@@ -611,7 +2006,377 @@ export function openShellHostEngine({
       sameDocument(result.policy, pinned.document)
     );
   }
-  async function executeAction(request, deadlineAt) {
+  function provisioningLabels(scope, requestId, provisioningHash, operationKey, bindingVersion) {
+    return {
+      "aw.company_id": scope.companyId,
+      "aw.binding_id": scope.bindingId,
+      "aw.cell_id": scope.cellId,
+      "aw.generation": scope.cellGeneration,
+      "aw.binding_version": String(bindingVersion),
+      "aw.provisioning_request_id": requestId,
+      "aw.provisioning_hash": provisioningHash,
+      "aw.operation_key_hash": hash(operationKey),
+    };
+  }
+  async function listProvisioningCandidates(scope, deadlineAt) {
+    const result = await cli(["sandbox", "list", "--selector", `aw.binding_id=${scope.bindingId}`,
+      "--page-size", "10", "--output", "json"], deadlineAt);
+    if (!Array.isArray(result.sandboxes) || result.sandboxes.length > 10 || result.next_page_token !== "")
+      throw new Error("sandbox_observation_unavailable");
+    return result.sandboxes;
+  }
+  function verifyProvisioningMarker(value, scope, requestId, provisioningHash, operationKey, bindingVersion) {
+    return verifyProvisioningMarkerHash(value, scope, requestId, provisioningHash, hash(operationKey), bindingVersion);
+  }
+  function verifyProvisioningMarkerHash(value, scope, requestId, provisioningHash, operationKeyHash, bindingVersion) {
+    const expectedLabels = {
+      ...provisioningLabels(scope, requestId, provisioningHash, "", bindingVersion),
+      "aw.operation_key_hash": operationKeyHash,
+    };
+    return value && value.name === scope.sandboxRef && typeof value.id === "string" && uuid.test(value.id) &&
+      value.workspace === config.workspace && Object.entries(expectedLabels).every(([key, expected]) =>
+        value.labels?.[key] === expected);
+  }
+  function validQualificationSample(sample) {
+    const target = sample?.sampleTarget;
+    const creation = sample?.creation;
+    if (!target || !creation || creation.purpose !== "qualification" || !sample.probeFixture ||
+      !/^[a-f0-9]{64}$/.test(target.targetHash ?? "") ||
+      !sameDocument(sample.probeFixture, qualificationProbeFixture()) ||
+      target.sandboxId !== creation.sandboxId || target.containerId !== creation.containerId ||
+      target.provisioningHash !== creation.provisioningHash || target.bindingVersion !== creation.bindingVersion ||
+      target.imageDigest !== creation.imageDigest || target.policyHash !== creation.policyHash ||
+      !sameDocument(target.resourceLimits, creation.resourceLimits) ||
+      target.probePolicyHash !== creation.observedPolicyHash || target.policyVersion !== creation.policyVersion ||
+      target.configRevision !== creation.configRevision ||
+      !sameDocument(target.qualificationCredentialFixture ?? null, sample.probeFixture.credential ?? null) ||
+      target.probeFixtureHash !== sample.probeFixture.fixtureHash) return false;
+    const { targetHash, ...body } = target;
+    return hash(JSON.stringify(canonical(body))) === targetHash;
+  }
+  async function cleanupExpiredProvisioning(request, detail, workload, provisioning, deadlineAt) {
+    if (detail.phase !== "Stopped" || workload.State.Running) {
+      await cli(["sandbox", "stop", request.scope.sandboxRef,
+        "--expected-sandbox-id", detail.id], deadlineAt, false);
+      const stopped = await observed(request.scope, deadlineAt);
+      const stoppedWorkload = await container(request.scope, stopped, request.imageDigest, deadlineAt);
+      if (stopped.id !== detail.id || stopped.phase !== "Stopped" ||
+        stoppedWorkload.Id !== workload.Id || stoppedWorkload.State.Running)
+        throw new Error("sandbox_observation_unavailable");
+    }
+    await cli(["sandbox", "delete", request.scope.sandboxRef,
+      "--expected-sandbox-id", detail.id], deadlineAt, false);
+    const remaining = await listProvisioningCandidates(request.scope, deadlineAt);
+    if (remaining.some(value => value.id === detail.id || value.name === request.scope.sandboxRef))
+      throw new Error("sandbox_observation_unavailable");
+    delete journal.scopes[request.scope.bindingId];
+    await atomicJson(journalFile, journal);
+    throw new Error("sandbox_scope_changed");
+  }
+  function provisioningRecord(value, envelope, provisioningHash, requestId, imageDigest) {
+    return {
+      state: "claimed", envelope, provisioningHash, requestId,
+      operationKey: value.operationKey, operationKeyHash: hash(value.operationKey),
+      imageDigest, bindingVersion: value.bindingVersion,
+      resourceLimits: value.resourceLimits, purpose: value.purpose,
+      expiresAt: value.expiresAt, idleUntilUnixSeconds: value.idleUntilUnixSeconds,
+      policyHash: value.policyHash, document: canonical(value.document),
+    };
+  }
+  function creationRecord(value, imageDigest, requestId, provisioningHash, sandboxId, containerId, workdirPath) {
+    return {
+      purpose: value.purpose, imageDigest, requestId, provisioningHash,
+      operationKey: value.operationKey, operationKeyHash: hash(value.operationKey),
+      bindingVersion: value.bindingVersion, policyHash: value.policyHash,
+      document: canonical(value.document), resourceLimits: canonical(value.resourceLimits),
+      expiresAt: value.expiresAt, idleUntilUnixSeconds: value.idleUntilUnixSeconds,
+      sandboxId, containerId, workdirPath,
+    };
+  }
+  async function exactCreatedWorkload(scope, request, record, deadlineAt) {
+    if (!record?.sandboxId || !record.containerId || record.imageDigest !== request.imageDigest)
+      throw new Error("sandbox_scope_changed");
+    const candidates = await listProvisioningCandidates(scope, deadlineAt);
+    if (candidates.length !== 1 || candidates[0].id !== record.sandboxId ||
+      !verifyProvisioningMarkerHash(candidates[0], scope, record.requestId,
+        record.provisioningHash, record.operationKeyHash, record.bindingVersion))
+      throw new Error("sandbox_scope_changed");
+    const detail = await observed(scope, deadlineAt);
+    if (detail.id !== record.sandboxId ||
+      !verifyProvisioningMarkerHash(detail, scope, record.requestId,
+        record.provisioningHash, record.operationKeyHash, record.bindingVersion))
+      throw new Error("sandbox_scope_changed");
+    const workload = await container(scope, detail, record.imageDigest, deadlineAt);
+    const currentPolicy = await policy(scope, deadlineAt);
+    if (workload.Id !== record.containerId || workload.Config?.WorkingDir !== record.workdirPath ||
+      workload.Config?.Labels?.["aw.provisioning_request_id"] !== record.requestId ||
+      workload.Config?.Labels?.["aw.provisioning_hash"] !== record.provisioningHash ||
+      workload.Config?.Labels?.["aw.operation_key_hash"] !== record.operationKeyHash ||
+      workload.Config?.Labels?.["aw.binding_version"] !== String(record.bindingVersion) ||
+      !sameDocument(currentPolicy.policy, record.document) ||
+      !resourceHostConfigMatches(workload, record.resourceLimits, record.document) ||
+      !(await dockerDiskQuotaBackendSupported(deadlineAt)) ||
+      !(await dockerSupervisorLogsDisabled(scope, detail, deadlineAt)))
+      throw new Error("sandbox_scope_changed");
+    return { detail, workload, currentPolicy };
+  }
+  function preparedReply(request, entry, provisioningHash, value, requiresRecreate = false) {
+    return {
+      action: "prepare", backendVersion: "0.1.2", imageDigest: request.imageDigest,
+      hostEpoch: epoch,
+      provisioningHash, bindingVersion: value.bindingVersion, policyHash: value.policyHash,
+      probePolicyHash: requiresRecreate
+        ? hash(JSON.stringify(canonical(value.document)))
+        : (entry.provisioning?.observedPolicyHash ?? hash(JSON.stringify(canonical(value.document)))),
+      resourceLimits: value.resourceLimits,
+      ...(requiresRecreate ? { requiresRecreate: true } : {
+        sandboxId: entry.sandboxId, containerId: entry.containerId,
+      }),
+    };
+  }
+  async function retireQualificationTarget(request, entry, requested, deadlineAt) {
+    const creation = entry.creation;
+    const sample = entry.qualification;
+    const resuming = entry.transition?.phase === "retire-qualification" &&
+      entry.transition.requestId === requested.requestId &&
+      entry.transition.provisioningHash === requested.provisioningHash &&
+      sameDocument(entry.transition.currentIntent, requested) &&
+      entry.transition.fromSandboxId === creation?.sandboxId &&
+      entry.transition.fromCreationHash === creation?.provisioningHash;
+    if (!creation || creation.purpose !== "qualification" || !validQualificationSample(sample) ||
+      !sameDocument(creation, sample.creation) ||
+      !sample.expiresAt || Date.parse(sample.expiresAt) <= Date.now() ||
+      Date.parse(requested.expiresAt) > Date.parse(sample.expiresAt) ||
+      requested.idleUntilUnixSeconds > creation.idleUntilUnixSeconds ||
+      creation.sandboxId !== entry.sandboxId || creation.containerId !== entry.containerId)
+      throw new Error("sandbox_scope_changed");
+    if (creation.imageDigest !== request.imageDigest ||
+      Object.keys(creation.resourceLimits).some(key => request.provisioning.resourceLimits[key] > creation.resourceLimits[key]))
+      throw new Error("sandbox_scope_changed");
+    entry.transition = {
+      phase: "retire-qualification", fromSandboxId: creation.sandboxId,
+      fromContainerId: creation.containerId, fromCreationHash: creation.provisioningHash,
+      requestId: requested.requestId, provisioningHash: requested.provisioningHash,
+      currentIntent: structuredClone(requested),
+    };
+    await atomicJson(journalFile, journal);
+    const candidates = await listProvisioningCandidates(request.scope, deadlineAt);
+    if (!candidates.length && !resuming) throw new Error("sandbox_scope_changed");
+    if (candidates.length) {
+      if (candidates.length !== 1 || candidates[0].id !== creation.sandboxId ||
+        !verifyProvisioningMarkerHash(candidates[0], request.scope, creation.requestId,
+          creation.provisioningHash, creation.operationKeyHash, creation.bindingVersion))
+        throw new Error("sandbox_scope_changed");
+      const { detail, workload, currentPolicy } = await exactCreatedWorkload(request.scope, request, creation, deadlineAt);
+      if (detail.phase !== "Stopped" || workload.State.Running ||
+        !sameDocument(currentPolicy.policy, creation.document) ||
+        !resourceHostConfigMatches(workload, creation.resourceLimits, creation.document)) {
+        await cli(["sandbox", "stop", request.scope.sandboxRef,
+          "--expected-sandbox-id", creation.sandboxId], deadlineAt, false);
+        const stopped = await exactCreatedWorkload(request.scope, request, creation, deadlineAt);
+        if (stopped.detail.id !== creation.sandboxId || stopped.detail.phase !== "Stopped" || stopped.workload.State.Running)
+          throw new Error("sandbox_observation_unavailable");
+      }
+      await cli(["sandbox", "delete", request.scope.sandboxRef,
+        "--expected-sandbox-id", creation.sandboxId], deadlineAt, false);
+    }
+    const remaining = await listProvisioningCandidates(request.scope, deadlineAt);
+    if (remaining.some(value => value.id === creation.sandboxId || value.name === request.scope.sandboxRef))
+      throw new Error("sandbox_observation_unavailable");
+    entry.sandboxId = null;
+    entry.containerId = null;
+    entry.creation = null;
+    entry.provisioning = requested;
+    entry.transition = { ...entry.transition, phase: "create-admission" };
+    await atomicJson(journalFile, journal);
+  }
+  async function prepareProvisionedSandbox(request, deadlineAt) {
+    const scope = request.scope;
+    const { envelope, provisioningHash, requestId, expired } = validateProvisioning(request);
+    const value = request.provisioning;
+    let entry = journal.scopes[scope.bindingId];
+    if (expired && value.purpose === "admission") throw new Error("sandbox_scope_changed");
+    const requested = provisioningRecord(value, envelope, provisioningHash, requestId, request.imageDigest);
+    if (!entry) {
+      if (expired || value.idleUntilUnixSeconds <= Math.floor(Date.now() / 1000) + 1 || value.purpose !== "qualification")
+        throw new Error("sandbox_scope_changed");
+      entry = journal.scopes[scope.bindingId] = {
+        scope, sandboxId: null, containerId: null, provisioning: requested,
+      };
+      await atomicJson(journalFile, journal);
+    } else if (!sameDocument(entry.scope, scope) || !entry.provisioning) {
+      throw new Error("sandbox_scope_changed");
+    }
+    if (entry.transition && (entry.transition.requestId !== requestId ||
+      entry.transition.provisioningHash !== provisioningHash))
+      throw new Error("sandbox_scope_changed");
+    const sameCurrentIntent = entry.provisioning.provisioningHash === provisioningHash &&
+      entry.provisioning.requestId === requestId &&
+      sameDocument(entry.provisioning.envelope, envelope);
+    if (value.purpose === "admission" && entry.creation?.purpose === "admission" &&
+      sameCurrentIntent) {
+      const current = await exactCreatedWorkload(scope, request, entry.creation, deadlineAt);
+      if (current.detail.phase !== "Stopped" || current.workload.State.Running)
+        throw new Error("sandbox_scope_changed");
+      return preparedReply(request, entry, provisioningHash, value);
+    }
+    if (!sameCurrentIntent) {
+      if (value.purpose !== "admission" || expired ||
+        value.idleUntilUnixSeconds <= Math.floor(Date.now() / 1000) + 1)
+        throw new Error("sandbox_scope_changed");
+      if (entry.creation?.purpose === "qualification") {
+        if (entry.provisioning.purpose !== "qualification") throw new Error("sandbox_scope_changed");
+        await retireQualificationTarget(request, entry, requested, deadlineAt);
+      } else if (entry.creation?.purpose === "admission") {
+        const creation = entry.creation;
+        const qualificationWorkdir = entry.qualification?.probeFixture?.filesystem.workdirPath;
+        const samePhysicalEnvelope = creation.imageDigest === request.imageDigest &&
+          sameDocument(creation.document, value.document) &&
+          sameDocument(creation.resourceLimits, value.resourceLimits) &&
+          (!qualificationWorkdir || creation.workdirPath === qualificationWorkdir) &&
+          value.expiresAt <= creation.expiresAt &&
+          value.idleUntilUnixSeconds <= creation.idleUntilUnixSeconds;
+        if (!samePhysicalEnvelope) return preparedReply(request, entry, provisioningHash, value, true);
+        const current = await exactCreatedWorkload(scope, request, creation, deadlineAt);
+        if (current.detail.id !== entry.sandboxId || current.workload.Id !== entry.containerId ||
+          current.detail.phase !== "Stopped" || current.workload.State.Running)
+          throw new Error("sandbox_scope_changed");
+        entry.provisioning = requested;
+        entry.provisioning.state = "stopped";
+        entry.provisioning.observedPolicyHash = current.currentPolicy.hash;
+        entry.transition = null;
+        await atomicJson(journalFile, journal);
+        return preparedReply(request, entry, provisioningHash, value);
+      } else {
+        throw new Error("sandbox_scope_changed");
+      }
+    }
+    if (!entry.provisioning || entry.provisioning.provisioningHash !== provisioningHash ||
+      entry.provisioning.requestId !== requestId || !sameDocument(entry.provisioning.envelope, envelope))
+      throw new Error("sandbox_scope_changed");
+    if (!entry.creation && value.purpose === "admission" && entry.transition?.phase !== "create-admission")
+      throw new Error("sandbox_scope_changed");
+    const creation = entry.creation;
+    if (creation && (creation.provisioningHash !== provisioningHash || creation.requestId !== requestId ||
+      !sameDocument(creation.document, value.document)))
+      throw new Error("sandbox_scope_changed");
+    const labels = provisioningLabels(scope, requestId, provisioningHash, value.operationKey, value.bindingVersion);
+    let candidates = await listProvisioningCandidates(scope, deadlineAt);
+    if (candidates.length > 1 || candidates.some(candidate => !verifyProvisioningMarker(
+      candidate, scope, requestId, provisioningHash, value.operationKey, value.bindingVersion)))
+      throw new Error("sandbox_scope_changed");
+    let candidate = candidates[0] ?? null;
+    if (entry.sandboxId && (!candidate || candidate.id !== entry.sandboxId))
+      throw new Error("sandbox_scope_changed");
+    if (candidate && entry.sandboxId && candidate.id !== entry.sandboxId)
+      throw new Error("sandbox_scope_changed");
+    if (!candidate && expired) throw new Error("sandbox_scope_changed");
+
+    if (!candidate) {
+      const privateConfig = await privateConfiguration();
+      const filename = path.join(privateConfig.stateHome, `provisioning-policy-${randomUUID()}.json`);
+      const driverConfig = JSON.stringify({ docker: {
+        disk_limit_bytes: String(value.resourceLimits.diskBytes),
+        pids_limit: String(value.resourceLimits.pidsLimit),
+      } });
+      const labelsArgs = Object.entries(labels).flatMap(([key, label]) => ["--label", `${key}=${label}`]);
+      const cpu = `${value.resourceLimits.cpuMillis}m`;
+      const idle = ["/.openshell/runtime/openshell-sandbox", "runtime-idle-until",
+        "--unix-seconds", String(value.idleUntilUnixSeconds)];
+      try {
+        await writeFile(filename, JSON.stringify(canonical(value.document)), { flag: "wx", mode: 0o600 });
+        try {
+          await cli(["sandbox", "create", "--request-id", requestId,
+            "--no-auto-providers", "--name", scope.sandboxRef,
+            "--from", request.imageDigest,
+            "--driver-config-json", driverConfig,
+            "--cpu", cpu,
+            "--memory", String(value.resourceLimits.memoryBytes),
+            "--policy", filename,
+            ...labelsArgs,
+            "--detach", "--output", "json", "--", ...idle], deadlineAt);
+        } catch {
+          // Resolve an unknown create outcome only through this journaled request marker.
+        }
+        candidates = await listProvisioningCandidates(scope, deadlineAt);
+        if (candidates.length !== 1 || !verifyProvisioningMarker(candidates[0], scope,
+          requestId, provisioningHash, value.operationKey, value.bindingVersion))
+          throw new Error("sandbox_observation_unavailable");
+        candidate = candidates[0];
+      } finally {
+        await unlink(filename).catch(() => {});
+      }
+    }
+    if (!candidate || !verifyProvisioningMarker(candidate, scope, requestId,
+      provisioningHash, value.operationKey, value.bindingVersion))
+      throw new Error("sandbox_scope_changed");
+
+    if (entry.sandboxId && entry.sandboxId !== candidate.id)
+      throw new Error("sandbox_scope_changed");
+    entry.sandboxId = candidate.id;
+    entry.provisioning = { ...entry.provisioning, state: "observed", sandboxId: candidate.id };
+    await atomicJson(journalFile, journal);
+    const detail = await observed(scope, deadlineAt);
+    if (detail.id !== candidate.id || !verifyProvisioningMarker(detail, scope, requestId,
+      provisioningHash, value.operationKey, value.bindingVersion))
+      throw new Error("sandbox_scope_changed");
+    const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+    const currentPolicy = await policy(scope, deadlineAt);
+    const qualificationWorkdir = value.purpose === "qualification"
+      ? value.qualificationProbeFixture.filesystem.workdirPath
+      : entry.qualification?.probeFixture?.filesystem.workdirPath ?? null;
+    if (workload.Config?.Labels?.["aw.provisioning_request_id"] !== requestId ||
+      workload.Config?.Labels?.["aw.provisioning_hash"] !== provisioningHash ||
+      workload.Config?.Labels?.["aw.operation_key_hash"] !== hash(value.operationKey) ||
+      workload.Config?.Labels?.["aw.binding_version"] !== String(value.bindingVersion) ||
+      (qualificationWorkdir && (workload.Config?.Labels?.["openshell.ai/workspace-root"] !== qualificationWorkdir ||
+        workload.Config?.WorkingDir !== qualificationWorkdir)) ||
+      !sameDocument(currentPolicy.policy, value.document) ||
+      !(await dockerDiskQuotaBackendSupported(deadlineAt)) ||
+      !resourceHostConfigMatches(workload, value.resourceLimits, value.document) ||
+      !(await dockerSupervisorLogsDisabled(scope, detail, deadlineAt)))
+      throw new Error("sandbox_observation_unavailable");
+    if (expired) return cleanupExpiredProvisioning(request, detail, workload, value, deadlineAt);
+    if (value.purpose === "admission") {
+      if (detail.phase === "Ready" && workload.State.Running) {
+        await cli(["sandbox", "stop", scope.sandboxRef,
+          "--expected-sandbox-id", detail.id], deadlineAt, false);
+        const stopped = await observed(scope, deadlineAt);
+        const stoppedWorkload = await container(scope, stopped, request.imageDigest, deadlineAt);
+        if (stopped.id !== detail.id || stopped.phase !== "Stopped" ||
+          stoppedWorkload.Id !== workload.Id || stoppedWorkload.State.Running ||
+          !resourceHostConfigMatches(stoppedWorkload, value.resourceLimits, value.document))
+          throw new Error("sandbox_observation_unavailable");
+      } else if (detail.phase !== "Stopped" || workload.State.Running) {
+        throw new Error("sandbox_observation_unavailable");
+      }
+    } else if (detail.phase !== "Ready" || !workload.State.Running) {
+      throw new Error("sandbox_observation_unavailable");
+    }
+    // Live observations may pin the Docker engine by replacing the scope row
+    // in the journal. Refresh the reference before recording the immutable
+    // creation receipt so the final ready/stopped state is not written to a
+    // stale object.
+    entry = journal.scopes[scope.bindingId];
+    if (!entry || entry.sandboxId !== detail.id ||
+      entry.provisioning?.requestId !== requestId ||
+      entry.provisioning?.provisioningHash !== provisioningHash)
+      throw new Error("sandbox_scope_changed");
+    entry.containerId = workload.Id;
+    entry.creation = creationRecord(value, request.imageDigest, requestId, provisioningHash, detail.id, workload.Id,
+      workload.Config?.WorkingDir);
+    entry.creation.observedPolicyHash = currentPolicy.hash;
+    entry.creation.policyVersion = currentPolicy.version;
+    entry.creation.configRevision = currentPolicy.config_revision;
+    entry.provisioning = { ...entry.provisioning,
+      state: value.purpose === "qualification" ? "ready" : "stopped",
+      containerId: workload.Id, observedPolicyHash: currentPolicy.hash,
+      policyVersion: currentPolicy.version, configRevision: currentPolicy.config_revision };
+    if (entry.transition?.requestId === requestId) entry.transition = null;
+    await atomicJson(journalFile, journal);
+    return preparedReply(request, entry, provisioningHash, value);
+  }
+  async function executeAction(request, deadlineAt, commandId) {
     const scope = request.scope;
     const sourceExpiry = request.action === "apply"
       ? request.admission?.expiresAt
@@ -636,7 +2401,9 @@ export function openShellHostEngine({
       try { return { action: "capabilities", capabilities: await hostCapabilities(request, scope, deadlineAt) }; }
       catch { return { action: "capabilities", capabilities: null }; }
     }
-    if (request.action === "probe") return probeBoundary(request, deadlineAt);
+    if (request.action === "probe") return probeBoundary(request, deadlineAt, commandId);
+    if (request.action === "prepare" && request.provisioning)
+      return prepareProvisionedSandbox(request, deadlineAt);
     const detail = await observed(scope, deadlineAt);
     if (request.action === "inspect") {
       try {
@@ -646,7 +2413,8 @@ export function openShellHostEngine({
         if (pinnedPolicy) {
           const currentPolicy = await policy(scope, deadlineAt);
           if (samePolicyRevision(currentPolicy, pinnedPolicy) &&
-            resourceHostConfigMatches(workload, pinnedPolicy.resourceLimits))
+            await dockerDiskQuotaBackendSupported(deadlineAt) &&
+            resourceHostConfigMatches(workload, pinnedPolicy.resourceLimits, pinnedPolicy.document))
             policyHash = pinnedPolicy.policyHash;
         }
         return {
@@ -711,9 +2479,22 @@ export function openShellHostEngine({
           requiresRecreate: true,
           effectivePolicyHash: before.hash,
         };
+      if (!(await dockerDiskQuotaBackendSupported(deadlineAt)) ||
+        !dockerDiskStorageOptionMatches(workload, admission.resourceLimits) ||
+        !dockerPersistentLogsDisabled(workload) ||
+        !(await dockerSupervisorLogsDisabled(scope, detail, deadlineAt)))
+        return {
+          action: "apply",
+          applied: false,
+          policyHash: null,
+          requiresRecreate: true,
+          effectivePolicyHash: before.hash,
+        };
+      if (!dockerDiskMountsMatch(workload, admission.document))
+        throw new Error("sandbox_operation_unsupported");
       const boundedWorkload = await applyDockerResourceLimits(scope, detail, request.imageDigest,
-        admission.resourceLimits, deadlineAt, workload.Id);
-      if (!resourceHostConfigMatches(boundedWorkload, admission.resourceLimits))
+        admission.resourceLimits, deadlineAt, workload.Id, admission.document);
+      if (!resourceHostConfigMatches(boundedWorkload, admission.resourceLimits, admission.document))
         throw new Error("sandbox_observation_unavailable");
       const privateConfig = await privateConfiguration();
       const filename = path.join(privateConfig.stateHome, `policy-${randomUUID()}.json`);
@@ -736,6 +2517,8 @@ export function openShellHostEngine({
             "--wait",
             "--timeout",
             String(Math.min(6, remaining)),
+            "--expected-sandbox-id",
+            detail.id,
           ],
           deadlineAt,
           false,
@@ -831,8 +2614,10 @@ export function openShellHostEngine({
         request.imageDigest,
         deadlineAt,
       );
+      if (!(await dockerDiskQuotaBackendSupported(deadlineAt)))
+        throw new Error("sandbox_operation_unsupported");
       if (detail.phase === "Ready" && beforeWorkload.State.Running) {
-        if (!resourceHostConfigMatches(beforeWorkload, pinnedPolicy.resourceLimits))
+        if (!resourceHostConfigMatches(beforeWorkload, pinnedPolicy.resourceLimits, pinnedPolicy.document))
           throw new Error("sandbox_observation_unavailable");
         return {
           action: "start",
@@ -846,10 +2631,10 @@ export function openShellHostEngine({
         };
       }
       if (detail.phase !== "Stopped" || beforeWorkload.State.Running ||
-        !resourceHostConfigMatches(beforeWorkload, pinnedPolicy.resourceLimits))
+        !resourceHostConfigMatches(beforeWorkload, pinnedPolicy.resourceLimits, pinnedPolicy.document))
         throw new Error("sandbox_operation_unsupported");
       try {
-        await cli(["sandbox", "start", scope.sandboxRef], deadlineAt, false);
+        await cli(["sandbox", "start", scope.sandboxRef, "--expected-sandbox-id", detail.id], deadlineAt, false);
       } catch {
         // A lost CLI response is resolved from independent gateway and Docker
         // observations below; it is never treated as success by itself.
@@ -865,6 +2650,8 @@ export function openShellHostEngine({
       if (
         afterDetail.phase !== "Ready" ||
         !afterWorkload.State.Running ||
+        !resourceHostConfigMatches(afterWorkload, pinnedPolicy.resourceLimits, pinnedPolicy.document) ||
+        !(await dockerSupervisorLogsDisabled(scope, afterDetail, deadlineAt)) ||
         !samePolicyRevision(afterPolicy, pinnedPolicy)
       ) {
         await contain(scope, request.imageDigest, deadlineAt);
@@ -882,13 +2669,13 @@ export function openShellHostEngine({
       };
     }
     if (request.action === "stop") {
-      await cli(["sandbox", "stop", scope.sandboxRef], deadlineAt, false);
+      await cli(["sandbox", "stop", scope.sandboxRef, "--expected-sandbox-id", detail.id], deadlineAt, false);
       if ((await observed(scope, deadlineAt)).phase !== "Stopped")
         throw new Error("sandbox_observation_unavailable");
       return { action: "stop", stopped: true };
     }
     if (request.action === "destroy") {
-      await cli(["sandbox", "delete", scope.sandboxRef], deadlineAt, false);
+      await cli(["sandbox", "delete", scope.sandboxRef, "--expected-sandbox-id", detail.id], deadlineAt, false);
       const remaining = await cli(
         [
           "sandbox",
@@ -936,7 +2723,7 @@ export function openShellHostEngine({
       )
         throw new Error("sandbox_operation_unsupported");
       for (const provider of providers.providers) {
-        await observed(scope, deadlineAt);
+        const target = await observed(scope, deadlineAt);
         if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name))
           throw new Error("sandbox_observation_unavailable");
         await cli(
@@ -946,6 +2733,8 @@ export function openShellHostEngine({
             "detach",
             scope.sandboxRef,
             provider.name,
+            "--expected-sandbox-id",
+            target.id,
             "--wait",
             "--timeout",
             "2",
@@ -1073,7 +2862,8 @@ export function openShellHostEngine({
     const modelBrokerProviderName = request.modelBrokerCredential ? `awmb-${request.requestId.replaceAll("-", "")}` : null;
     if (brokerProviderName) await attachBrokerProvider(request, input.scope, deadlineAt, brokerProviderName);
     if (modelBrokerProviderName) await attachModelBrokerProvider(request, input.scope, deadlineAt, modelBrokerProviderName);
-    const cliArgs = ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", input.scope.sandboxRef, "--workdir", request.cwd];
+    const cliArgs = ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", input.scope.sandboxRef,
+      "--expected-sandbox-id", detail.id, "--workdir", request.cwd];
     for (const key of Object.keys(request.env).sort()) cliArgs.push("--env", `${key}=${request.env[key]}`);
     cliArgs.push("--", ...request.argv);
     const remaining = Math.max(1, Math.min(60_000, Date.parse(deadlineAt) - Date.now()));
@@ -1184,6 +2974,8 @@ export function openShellHostEngine({
           (request.action === "probe") !== Boolean(request.probe) ||
           (request.action === "apply") !== Boolean(request.admission) ||
           (request.action === "start") !== Boolean(request.start) ||
+          (request.provisioning !== undefined && request.action !== "prepare") ||
+          (request.action === "prepare" && request.provisioning !== undefined && !request.provisioning) ||
           (Boolean(request.cleanupAttestation) &&
             (!['capabilities', 'probe'].includes(request.action) ||
               request.requesterUserId !== undefined ||
@@ -1217,6 +3009,7 @@ export function openShellHostEngine({
                 "probe",
                 "admission",
                 "start",
+                "provisioning",
                 "cleanupAttestation",
                 "claimToken",
               ].includes(key),
@@ -1250,7 +3043,7 @@ export function openShellHostEngine({
         try {
           result = {
             success: true,
-            reply: await executeAction(request, deadlineAt),
+            reply: await executeAction(request, deadlineAt, id),
             errorCode: null,
           };
         } catch (error) {
@@ -1285,8 +3078,8 @@ export function openShellHostEngine({
         for (const { scope } of Object.values(journal.scopes)) {
           try {
             const deadlineAt = new Date(Date.now() + 15000).toISOString();
-            await observed(scope, deadlineAt);
-            await cli(["sandbox", "stop", scope.sandboxRef], deadlineAt, false);
+            const detail = await observed(scope, deadlineAt);
+            await cli(["sandbox", "stop", scope.sandboxRef, "--expected-sandbox-id", detail.id], deadlineAt, false);
             if ((await observed(scope, deadlineAt)).phase !== "Stopped")
               incomplete = true;
           } catch {

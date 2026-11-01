@@ -11,13 +11,27 @@ const executable = process.env.AW_V7_OPENSHELL_PROVER;
   const policy = () => { const p = policyFixture(); p.process.allowedBinaries = []; p.process.allowedSyscalls = []; p.filesystem = { readPaths: ["/usr", "/etc"], writePaths: [], deniedPaths: [] }; p.network.destinations = []; return p; };
   const backend = () => openShellBackend({ identity, boundary: policy(), bridge, prover: { executable: executable!, executableSha256: "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1" } });
   const compilation = () => compileSandboxPolicy({ boundary: policy(), candidate: policy(), capabilities: snapshot, authorizedConnectionGrantHashes: {}, sourcePolicyRefs: ["fixture-only"] });
-  const input = () => ({ ...identity, policy: compilation(), currentStaticFingerprint: null, expiresAt: new Date(Date.now() + 30000).toISOString() });
+  const input = () => ({ ...identity, policy: compilation(), currentStaticFingerprint: null, expiresAt: new Date(Date.now() + 30000).toISOString(), idempotencyKey: "v7-sandbox-policy:binding:1:admission-epoch" });
   beforeEach(() => {
     observedHash = null; image = "fixture.invalid/sandbox@sha256:" + "a".repeat(64);
     snapshot = { ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])), backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "fixture-only", sandboxImageDigest: image, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: true, policyProverBoundaryCheck: true, policyProverCoverage: ["filesystemPolicy", "processPrivilegePolicy", "networkDestinationPolicy", "networkLayer7Policy"], credentialBindingDimensions: [], testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString(), qualificationHash: "a".repeat(64), evidenceKind: "local_fixture" } as SandboxCapabilitySnapshot;
     bridge = { capabilities: async () => snapshot, prepare: async () => ({ ...identity, backendVersion: "0.1.2", imageDigest: image }), inspect: async () => ({ state: "stopped", policyHash: observedHash, imageDigest: image, generation: "1", controlsHealthy: true }), effectivePolicy: async () => projectOpenShellPolicy(policy()).document, apply: vi.fn(async args => { observedHash = args.policyHash; return { applied: true, policyHash: args.policyHash }; }), start: vi.fn(async () => ({ operationId: "actual-native-start" })), revokeProviders: vi.fn(async () => {}), stop: vi.fn(async () => ({ operationId: "actual-native-stop" })), destroy: vi.fn(async () => ({ operationId: "actual-native-delete" })), probe: async ({ test }) => ({ verdict: "unsupported", observationHash: null, contractHash: test.contractHash }) };
   });
-  it("requires an observed exact policy, forwards canonical resource units, and preserves fixture provenance", async () => { const b = backend(); expect(b.evidenceKind).toBe("local_fixture"); await expect(b.startWorkload({ ...identity, policy: compilation(), expiresAt: new Date(Date.now() + 30000).toISOString(), idempotencyKey: "start" })).rejects.toMatchObject({ status: 409 }); expect((await b.applyPolicy(input())).applied).toBe(true); expect(bridge.apply).toHaveBeenCalledWith(expect.objectContaining({ resourceLimits: { cpuMillis: 1000, memoryBytes: 268435456, pidsLimit: 64 } })); expect(await b.startWorkload({ ...identity, policy: compilation(), expiresAt: new Date(Date.now() + 30000).toISOString(), idempotencyKey: "start" })).toEqual({ operationId: "actual-native-start" }); });
+  it("requires an observed exact policy, forwards canonical resource units, and preserves fixture provenance", async () => {
+    const b = backend();
+    expect(b.evidenceKind).toBe("local_fixture");
+    await expect(b.startWorkload({ ...identity, policy: compilation(), expiresAt: new Date(Date.now() + 30000).toISOString(), idempotencyKey: "start" })).rejects.toMatchObject({ status: 409 });
+    const policyInput = input();
+    expect((await b.applyPolicy(policyInput)).applied).toBe(true);
+    const resources = policyInput.policy.compiledPolicy.resources;
+    expect(bridge.apply).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: policyInput.idempotencyKey, resourceLimits: {
+      cpuMillis: resources.cpuMillis,
+      memoryBytes: resources.memoryBytes,
+      diskBytes: resources.diskBytes,
+      pidsLimit: resources.pidsLimit,
+    } }));
+    expect(await b.startWorkload({ ...identity, policy: compilation(), expiresAt: new Date(Date.now() + 30000).toISOString(), idempotencyKey: "start" })).toEqual({ operationId: "actual-native-start" });
+  });
   it("rejects scope swaps, changed images, expired deadlines and degraded controls", async () => { const b = backend(); await expect(b.prepareSandbox({ ...identity, companyId: "other" })).rejects.toMatchObject({ status: 403 }); image = "fixture.invalid/sandbox@sha256:" + "b".repeat(64); await expect(b.prepareSandbox(identity)).rejects.toMatchObject({ status: 409 }); image = snapshot.sandboxImageDigest; await b.applyPolicy(input()); await expect(b.startWorkload({ ...identity, policy: compilation(), expiresAt: new Date(0).toISOString(), idempotencyKey: "start" })).rejects.toMatchObject({ status: 403 }); const old = compilation(); snapshot.forceStop = false; await expect(b.startWorkload({ ...identity, policy: old, expiresAt: new Date(Date.now() + 30000).toISOString(), idempotencyKey: "start" })).rejects.toMatchObject({ status: 409 }); expect(bridge.start).not.toHaveBeenCalled(); });
   it("requires recreation for a static-policy change", async () => { expect(await backend().applyPolicy({ ...input(), currentStaticFingerprint: "different" })).toMatchObject({ applied: false, requiresRecreate: true }); expect(bridge.apply).not.toHaveBeenCalled(); });
   it("rejects an expired original deadline before any host policy command", async () => { await expect(backend().applyPolicy({ ...input(), expiresAt: new Date(0).toISOString() })).rejects.toMatchObject({ status: 403 }); expect(bridge.apply).not.toHaveBeenCalled(); });
@@ -26,7 +40,7 @@ const executable = process.env.AW_V7_OPENSHELL_PROVER;
     const candidate = policy(); candidate.filesystem.readPaths = ["/usr"];
     const compiled = compileSandboxPolicy({ boundary: policy(), candidate, capabilities: snapshot, authorizedConnectionGrantHashes: {}, sourcePolicyRefs: ["fixture-only"] });
     // The host adds /etc. It is allowed by the maximum, but not by this run.
-    await expect(backend().applyPolicy({ ...identity, policy: compiled, currentStaticFingerprint: null, expiresAt: new Date(Date.now() + 30000).toISOString() })).rejects.toMatchObject({ status: 409, details: { code: "sandbox_candidate_unproven" } });
+    await expect(backend().applyPolicy({ ...identity, policy: compiled, currentStaticFingerprint: null, expiresAt: new Date(Date.now() + 30000).toISOString(), idempotencyKey: "candidate-epoch" })).rejects.toMatchObject({ status: 409, details: { code: "sandbox_candidate_unproven" } });
     expect(bridge.stop).toHaveBeenCalledOnce(); expect(bridge.start).not.toHaveBeenCalled();
   });
   it("requests actual Stop even when provider revocation fails and reports the real operation ID", async () => { vi.mocked(bridge.revokeProviders).mockRejectedValue(new Error("fixture-revocation-failure")); await expect(backend().stopWorkload({ ...identity, idempotencyKey: "stop" })).rejects.toMatchObject({ status: 409, details: { code: "sandbox_revocation_pending", operationId: "actual-native-stop" } }); expect(bridge.stop).toHaveBeenCalledOnce(); });

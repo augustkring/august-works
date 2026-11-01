@@ -3956,6 +3956,20 @@
       "when": 1793331471494,
       "tag": "0566_customer_feedback_experience_measures",
       "breakpoints": true
+    },
+    {
+      "idx": 567,
+      "version": "7",
+      "when": 1793513102187,
+      "tag": "0567_sandbox_qualification_probe_gate",
+      "breakpoints": true
+    },
+    {
+      "idx": 568,
+      "version": "7",
+      "when": 1793523397368,
+      "tag": "0568_sandbox_recompile_stopped_policy",
+      "breakpoints": true
     }
   ]
 }

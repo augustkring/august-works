@@ -256,7 +256,7 @@ export async function configureManagedConversationSandboxHost(input: {
           const resources = (value.policy as any).compiledPolicy.resources;
           const reply = await bridge.apply({ ...identity, document: projectOpenShellPolicy((value.policy as any).compiledPolicy).document,
             policyHash, expiresAt: value.expiresAt, idempotencyKey: `conversation-software-policy:${policyHash}`,
-            resourceLimits: { cpuMillis: resources.cpuMillis, memoryBytes: resources.memoryBytes, pidsLimit: resources.pidsLimit } });
+            resourceLimits: { cpuMillis: resources.cpuMillis, memoryBytes: resources.memoryBytes, diskBytes: resources.diskBytes, pidsLimit: resources.pidsLimit } });
           state.set(identity.cellId, reply.applied ? "ready" : "stopped"); policies.set(identity.cellId, policyHash);
           return { applied: reply.applied, requiresRecreate: reply.requiresRecreate, observedPolicyHash: reply.policyHash, unsupportedFeatures: [] };
         },

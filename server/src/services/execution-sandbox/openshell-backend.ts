@@ -1,8 +1,9 @@
-import { sandboxCapabilitySnapshotSchema, type SandboxCapabilitySnapshot, type SandboxPolicy, type SandboxPolicyCompilation } from "@paperclipai/shared";
+import { qualificationProbeFixtureSchema, sandboxCapabilitySnapshotSchema, type SandboxCapabilitySnapshot, type SandboxPolicy, type SandboxPolicyCompilation, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
 import { conflict, forbidden } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import type { ExecutionSandboxBackend, PreparedSandbox, SandboxIdentity, SandboxObservation, SandboxProbeCase, SandboxProbeResult } from "./backend.js";
+import type { ExecutionSandboxBackend, PreparedSandbox, SandboxIdentity, SandboxObservation, SandboxProbeCase, SandboxProbeResult, SandboxProvisioningIntent } from "./backend.js";
 import { compileSandboxPolicy, type ResolvedSandboxBrokerBinding } from "./policy-compiler.js";
+import { projectOpenShellQualificationProbePolicy } from "./openshell-policy.js";
 import { projectOpenShellPolicy, type OpenShellPolicyDocument } from "./openshell-policy.js";
 import { checkOpenShellBoundary } from "./openshell-prover.js";
 
@@ -10,11 +11,16 @@ import { checkOpenShellBoundary } from "./openshell-prover.js";
  * bodies and model output cannot register a bridge or supply qualification. */
 export interface OpenShellHostBridge {
   capabilities(scope: SandboxIdentity): Promise<SandboxCapabilitySnapshot | null>;
-  prepare(scope: SandboxIdentity): Promise<PreparedSandbox>;
+  prepare(scope: SandboxIdentity, provisioning?: {
+    purpose: "qualification" | "admission"; operationKey: string; bindingVersion: number; expiresAt: string; policyHash: string;
+    document: OpenShellPolicyDocument;
+    resourceLimits: Pick<SandboxPolicy["resources"], "cpuMillis" | "memoryBytes" | "diskBytes" | "pidsLimit">;
+    probeFixtureHash?: string; qualificationProbeFixture?: SandboxQualificationProbeFixture;
+  }): Promise<PreparedSandbox>;
   inspect(scope: SandboxIdentity): Promise<SandboxObservation>;
   effectivePolicy(scope: SandboxIdentity): Promise<OpenShellPolicyDocument>;
   apply(scope: SandboxIdentity & { document: OpenShellPolicyDocument; policyHash: string; expiresAt: string; idempotencyKey: string;
-    resourceLimits: Pick<SandboxPolicy["resources"], "cpuMillis" | "memoryBytes" | "pidsLimit">;
+    resourceLimits: Pick<SandboxPolicy["resources"], "cpuMillis" | "memoryBytes" | "diskBytes" | "pidsLimit">;
     credentialProviderProfile?: { id: string; hash: string; binaries: string[] } }): Promise<{ applied: boolean; policyHash: string | null; requiresRecreate?: boolean }>;
   start(scope: SandboxIdentity & { expiresAt: string; policyHash: string; idempotencyKey: string }): Promise<{ operationId: string }>;
   /** Revocation and native Stop must be independently available. */
@@ -32,6 +38,7 @@ export function openShellBackend(options: {
   resolveCredentialBrokerBindings?: (policy: SandboxPolicyCompilation) => Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: ResolvedSandboxBrokerBinding[] }>;
 }): ExecutionSandboxBackend {
   const { bridge, identity } = options;
+  let preparedEvidence: PreparedSandbox | null = null;
   function scope(input: SandboxIdentity) {
     if (nativeSha256(input) !== nativeSha256(identity)) throw forbidden("OpenShell bridge belongs to another immutable runtime scope");
   }
@@ -39,14 +46,61 @@ export function openShellBackend(options: {
   function scoped(input: SandboxIdentity) { scope({ companyId: input.companyId, bindingId: input.bindingId, cellId: input.cellId, cellGeneration: input.cellGeneration, sandboxRef: input.sandboxRef }); }
   async function capabilities() {
     const raw = await bridge.capabilities(identity); if (!raw) return null;
-    const snapshot = sandboxCapabilitySnapshotSchema.parse(raw);
+    const parsed = sandboxCapabilitySnapshotSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    const snapshot = parsed.data;
     if (snapshot.evidenceKind !== (options.evidenceKind ?? "local_fixture") || snapshot.backend !== "openshell" || snapshot.backendVersion !== "0.1.2" || new Date(snapshot.expiresAt) <= new Date() || new Date(snapshot.testedAt) > new Date()) return null;
     return snapshot;
   }
   async function observed(input: SandboxIdentity) {
     scoped(input); const result = await bridge.inspect(identity), caps = await capabilities();
-    if (!caps || result.generation !== identity.cellGeneration || result.imageDigest !== caps.sandboxImageDigest) throw conflict("OpenShell image, generation or qualification changed");
+    const expectedImage = caps?.sandboxImageDigest ?? preparedEvidence?.imageDigest;
+    if (!expectedImage || result.generation !== identity.cellGeneration || result.imageDigest !== expectedImage) throw conflict("OpenShell image, generation or qualification changed");
     return result;
+  }
+  async function provisioning(input: SandboxProvisioningIntent) {
+    if (!Number.isFinite(Date.parse(input.expiresAt)) || Date.parse(input.expiresAt) <= Date.now())
+      throw forbidden("An original unexpired provisioning deadline is required");
+    let document: OpenShellPolicyDocument, policyHash: string, resourceLimits: Pick<SandboxPolicy["resources"], "cpuMillis" | "memoryBytes" | "diskBytes" | "pidsLimit">;
+    let qualificationProbeFixture: SandboxQualificationProbeFixture | undefined;
+    if (input.purpose === "qualification") {
+      if (input.policy) throw forbidden("Qualification setup cannot accept an execution policy");
+      const preflight = await capabilities();
+      if (!preflight?.qualificationProbeFixture) throw forbidden("Protected qualification probe fixture is unavailable");
+      qualificationProbeFixture = qualificationProbeFixtureSchema.parse(preflight.qualificationProbeFixture);
+      const { fixtureHash, ...fixtureBody } = qualificationProbeFixture;
+      if (nativeSha256(fixtureBody) !== fixtureHash ||
+          qualificationProbeFixture.runAsUser !== String(options.boundary.process.uid) ||
+          qualificationProbeFixture.runAsGroup !== String(options.boundary.process.uid))
+        throw forbidden("Protected qualification fixture or process identity does not match the current controller boundary");
+      const projected = projectOpenShellQualificationProbePolicy(qualificationProbeFixture);
+      if (projected.unsupportedFeatures.length || !projected.document || !projected.documentHash)
+        throw forbidden("OpenShell cannot represent the protected qualification fixture policy");
+      document = projected.document;
+      policyHash = projected.documentHash;
+      resourceLimits = {
+        cpuMillis: options.boundary.resources.cpuMillis,
+        memoryBytes: options.boundary.resources.memoryBytes,
+        diskBytes: options.boundary.resources.diskBytes,
+        pidsLimit: options.boundary.resources.pidsLimit,
+      };
+    } else {
+      const compilation = input.policy;
+      if (!compilation || compilation.proverResult !== "pass" || compilation.boundaryPolicyHash !== nativeSha256(options.boundary))
+        throw forbidden("Admission provisioning requires the exact passing controller compilation");
+      const projected = projectOpenShellPolicy(compilation.compiledPolicy, compilation.modelBrokerEndpoint);
+      if (projected.unsupportedFeatures.length) throw forbidden("OpenShell cannot enforce the compiled admission policy");
+      document = projected.document;
+      policyHash = nativeSha256(compilation);
+      resourceLimits = {
+        cpuMillis: compilation.compiledPolicy.resources.cpuMillis,
+        memoryBytes: compilation.compiledPolicy.resources.memoryBytes,
+        diskBytes: compilation.compiledPolicy.resources.diskBytes,
+        pidsLimit: compilation.compiledPolicy.resources.pidsLimit,
+      };
+    }
+    return { purpose: input.purpose, operationKey: input.operationKey, bindingVersion: input.bindingVersion, expiresAt: input.expiresAt, policyHash, document, resourceLimits,
+      ...(qualificationProbeFixture ? { probeFixtureHash: qualificationProbeFixture.fixtureHash, qualificationProbeFixture } : {}) };
   }
   async function boundaryProof(candidate: OpenShellPolicyDocument, modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"]) {
     const boundary = projectOpenShellPolicy(options.boundary, modelBrokerEndpoint);
@@ -69,9 +123,35 @@ export function openShellBackend(options: {
     // This adapter never promotes locally supplied fixture observations.
     evidenceKind: options.evidenceKind ?? "local_fixture",
     capabilities,
-    prepareSandbox: async input => {
-      scoped(input); const prepared = await bridge.prepare(identity), caps = await capabilities();
-      if (!caps || prepared.companyId !== identity.companyId || prepared.cellId !== identity.cellId || prepared.bindingId !== identity.bindingId || prepared.cellGeneration !== identity.cellGeneration || prepared.sandboxRef !== identity.sandboxRef || prepared.imageDigest !== caps.sandboxImageDigest || prepared.backendVersion !== caps.backendVersion) throw conflict("OpenShell preparation does not match the qualified native runtime");
+    prepareSandbox: async (input, intent) => {
+      scoped(input); const intentValue = intent ? await provisioning(intent) : undefined;
+      const rawPrepared = await bridge.prepare(identity, intentValue), caps = await capabilities();
+      const prepared = rawPrepared;
+      if (prepared.requiresRecreate) return prepared;
+      const scopeMatches = prepared.companyId === identity.companyId && prepared.cellId === identity.cellId && prepared.bindingId === identity.bindingId && prepared.cellGeneration === identity.cellGeneration && prepared.sandboxRef === identity.sandboxRef;
+      if (!scopeMatches || (caps && prepared.imageDigest !== caps.sandboxImageDigest) ||
+        (caps && prepared.backendVersion !== caps.backendVersion) ||
+        (!caps && !(intent?.purpose === "qualification" && prepared.sandboxId && prepared.containerId && prepared.provisioningHash)))
+        throw conflict("OpenShell preparation does not match the qualified native runtime");
+      if (intentValue?.purpose === "qualification") {
+        const target = caps?.qualificationTarget;
+        const targetHashValid = target ? nativeSha256((({ targetHash: _targetHash, ...base }) => base)(target)) === target.targetHash : false;
+        const exactReceipt = Boolean(target && intentValue.probeFixtureHash &&
+          target.companyId === identity.companyId && target.bindingId === identity.bindingId &&
+          target.cellId === identity.cellId && target.cellGeneration === identity.cellGeneration &&
+          target.sandboxRef === identity.sandboxRef && target.phase === "Ready" &&
+          target.bindingVersion === intentValue.bindingVersion && target.sandboxId === prepared.sandboxId &&
+          target.containerId === prepared.containerId && target.hostEpoch === prepared.hostEpoch &&
+          target.imageDigest === prepared.imageDigest && target.provisioningHash === prepared.provisioningHash &&
+          target.policyHash === intentValue.policyHash && target.probePolicyHash === nativeSha256(intentValue.document) &&
+          target.probeFixtureHash === intentValue.probeFixtureHash &&
+          nativeSha256(target.resourceLimits) === nativeSha256(intentValue.resourceLimits) &&
+          prepared.bindingVersion === intentValue.bindingVersion && prepared.policyHash === intentValue.policyHash &&
+          prepared.probePolicyHash === nativeSha256(intentValue.document) &&
+          nativeSha256(prepared.resourceLimits ?? null) === nativeSha256(intentValue.resourceLimits) && targetHashValid);
+        if (!exactReceipt) throw conflict("OpenShell qualification preparation lacks an exact protected target receipt", { code: "sandbox_qualification_target_mismatch" });
+      }
+      preparedEvidence = prepared;
       return prepared;
     },
     applyPolicy: async input => {
@@ -100,9 +180,11 @@ export function openShellBackend(options: {
             binaries: [...new Set(brokerBinaries as string[])].sort() }
         : undefined;
       const receipt = await bridge.apply({ ...identity, document: projection.document, policyHash, expiresAt: input.expiresAt,
-        idempotencyKey: `v7-sandbox-policy:${identity.bindingId}:${identity.cellGeneration}:${policyHash}`,
+        idempotencyKey: input.idempotencyKey,
         resourceLimits: { cpuMillis: input.policy.compiledPolicy.resources.cpuMillis,
-          memoryBytes: input.policy.compiledPolicy.resources.memoryBytes, pidsLimit: input.policy.compiledPolicy.resources.pidsLimit },
+          memoryBytes: input.policy.compiledPolicy.resources.memoryBytes,
+          diskBytes: input.policy.compiledPolicy.resources.diskBytes,
+          pidsLimit: input.policy.compiledPolicy.resources.pidsLimit },
         ...(credentialProviderProfile ? { credentialProviderProfile } : {}) });
       if (receipt.requiresRecreate) return { applied: false, requiresRecreate: true, observedPolicyHash: null, unsupportedFeatures: [] };
       if (!receipt.applied || receipt.policyHash !== policyHash) throw conflict("OpenShell did not observe the exact requested policy");

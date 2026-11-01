@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sandboxCapabilitySnapshotSchema, sandboxPolicySchema } from "./execution-sandbox.js";
+import { qualificationProbeFixtureSchema, sandboxCapabilitySnapshotSchema, sandboxPolicySchema } from "./execution-sandbox.js";
 import { runtimeGenerationSchema } from "./runtime-host-contracts.js";
 
 export const SANDBOX_HOST_COMMAND = "v7_openshell_rpc";
@@ -17,11 +17,13 @@ export const sandboxHostScopeSchema = z
 
 // This is the exact OpenShell v0.1.2 policy shape emitted by `policy get
 // --full --output json` for the subset the AW projection can currently use.
-// Shared policy units and limits are the source of truth; disk and wall-clock
-// are deliberately absent until this host has an enforcing/observable owner.
+// Shared policy units and limits are the source of truth. Disk is accepted
+// only when the selected Docker rootfs quota is observed; wall-clock remains
+// absent until this host has an enforcing/observable owner.
 const sandboxDockerResourceLimitsSchema = sandboxPolicySchema.shape.resources.pick({
   cpuMillis: true,
   memoryBytes: true,
+  diskBytes: true,
   pidsLimit: true,
 }).strict();
 const openShellObservedDocumentSchema = z
@@ -107,8 +109,47 @@ export const sandboxHostRequestSchema = z
         control: z.string().regex(/^[a-zA-Z0-9]{1,100}$/),
         expected: z.enum(["allow", "deny", "observe"]),
         contractHash: hash,
+        qualificationCredentialCapability: z.string().min(100).max(8192).optional(),
+        qualificationCredentialNonce: z.string().regex(/^[a-f0-9]{32}$/).optional(),
       })
       .strict()
+      .superRefine((probe, ctx) => {
+        const credentialCase = probe.caseId.startsWith("credential_");
+        if (probe.qualificationCredentialCapability && !credentialCase)
+          ctx.addIssue({ code: "custom", path: ["qualificationCredentialCapability"], message: "qualification credential capability is valid only for fixed credential probes" });
+        if (Boolean(probe.qualificationCredentialCapability) !== Boolean(probe.qualificationCredentialNonce))
+          ctx.addIssue({ code: "custom", path: ["qualificationCredentialNonce"], message: "qualification token and nonce must be supplied together" });
+      })
+      .optional(),
+    /** Controller-generated immutable CreateSandbox envelope. The host
+     * derives scope, epoch and image from this signed outer request, then
+     * journals the full envelope before its first OpenShell effect. */
+    provisioning: z
+      .object({
+        purpose: z.enum(["qualification", "admission"]),
+        operationKey: z.string().min(1).max(200),
+        bindingVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        expiresAt: z.iso.datetime(),
+        idleUntilUnixSeconds: z.number().int().positive(),
+        requestId: z.string().uuid(),
+        probeFixtureHash: hash.optional(),
+        qualificationProbeFixture: qualificationProbeFixtureSchema.optional(),
+        policyHash: hash,
+        provisioningHash: hash,
+        document: openShellObservedDocumentSchema,
+        resourceLimits: sandboxDockerResourceLimitsSchema,
+      })
+      .strict()
+      .superRefine((value, ctx) => {
+        const deadline = Date.parse(value.expiresAt);
+        if (!Number.isFinite(deadline) || Math.floor(deadline / 1000) !== value.idleUntilUnixSeconds)
+          ctx.addIssue({ code: "custom", message: "idle deadline must equal the original expiry" });
+        if (value.purpose === "qualification" && (!value.qualificationProbeFixture ||
+            value.probeFixtureHash !== value.qualificationProbeFixture.fixtureHash))
+          ctx.addIssue({ code: "custom", path: ["qualificationProbeFixture"], message: "qualification provisioning requires its protected fixture hash" });
+        if (value.purpose === "admission" && (value.qualificationProbeFixture !== undefined || value.probeFixtureHash !== undefined))
+          ctx.addIssue({ code: "custom", path: ["qualificationProbeFixture"], message: "admission provisioning cannot carry setup-only fixture metadata" });
+      })
       .optional(),
     admission: z
       .object({
@@ -160,6 +201,7 @@ export const sandboxHostRequestSchema = z
       (value.action === "probe") !== Boolean(value.probe) ||
       (value.action === "apply") !== Boolean(value.admission) ||
       (value.action === "start") !== Boolean(value.start) ||
+      (Boolean(value.provisioning) && value.action !== "prepare") ||
       (Boolean(value.cleanupAttestation) &&
         (!['capabilities', 'probe'].includes(value.action) || value.requesterUserId !== undefined)) ||
       (!value.cleanupAttestation && !value.requesterUserId)
@@ -182,8 +224,19 @@ export const sandboxHostReplySchema = z.discriminatedUnion("action", [
       action: z.literal("prepare"),
       backendVersion: z.literal("0.1.2"),
       imageDigest: digest,
+      hostEpoch: z.number().int().positive().optional(),
+      sandboxId: z.string().uuid().optional(),
+      containerId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+      provisioningHash: hash.optional(),
+      bindingVersion: z.number().int().positive().optional(),
+      policyHash: hash.optional(),
+      probePolicyHash: hash.optional(),
+      resourceLimits: z.object({ cpuMillis: z.number().int().min(100).max(64000), memoryBytes: z.number().int().min(67108864).max(137438953472), diskBytes: z.number().int().min(1048576).max(1099511627776), pidsLimit: z.number().int().min(16).max(16384) }).strict().optional(),
+      requiresRecreate: z.boolean().optional(),
     })
-    .strict(),
+    .strict()
+    .refine(value => !value.requiresRecreate || (!value.sandboxId && !value.containerId),
+      "A recreate decision must not claim an active sandbox or container receipt"),
   z
     .object({
       action: z.literal("inspect"),

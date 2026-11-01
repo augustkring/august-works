@@ -1,11 +1,12 @@
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { constants, createHash, generateKeyPairSync, privateDecrypt, randomBytes, randomUUID, sign } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import express from "express";
 import request from "supertest";
 import { WebSocket } from "ws";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import {
   activityLog,
@@ -29,6 +30,7 @@ import {
   runtimeCapacityProfiles,
   runtimeHostCommands,
   runtimeHosts,
+  runtimePolicySnapshots,
   runtimeHostRequestNonces,
   runtimeSandboxBindings,
   runtimeVersionCatalog,
@@ -39,7 +41,7 @@ import {
   toolProfileBindings,
   toolProfiles,
 } from "@paperclipai/db";
-import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema } from "@paperclipai/shared";
+import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostReplySchema, type SandboxCapabilitySnapshot, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -47,15 +49,15 @@ import {
 import { seedV5Companies } from "./helpers/v5-fixtures.js";
 import { policyFixture } from "./helpers/sandbox-fixture.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
-import { executionSandboxService } from "../services/execution-sandbox/sandbox-service.js";
+import { executionSandboxService, sandboxCapabilityFacts } from "../services/execution-sandbox/sandbox-service.js";
 import { executionSandboxRoutes } from "../routes/execution-sandbox.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { nativeSandboxHostTransport } from "../services/execution-sandbox/native-host-bridge.js";
 import { open as unseal } from "../services/saas/crypto.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
-import type { SandboxIdentity } from "../services/execution-sandbox/backend.js";
+import { sandboxProbeCases, type SandboxIdentity } from "../services/execution-sandbox/backend.js";
 import { openShellBackend } from "../services/execution-sandbox/openshell-backend.js";
-import { projectOpenShellPolicy } from "../services/execution-sandbox/openshell-policy.js";
+import { projectOpenShellPolicy, projectOpenShellQualificationProbePolicy } from "../services/execution-sandbox/openshell-policy.js";
 import { agentIdentityService } from "../services/agent-identities.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
@@ -66,11 +68,78 @@ import { errorHandler } from "../middleware/index.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { environmentRuntimeService } from "../services/environment-runtime.js";
 import { environmentService } from "../services/environments.js";
-import { createSandboxBrokerJwt, verifyLocalAgentJwt, verifySandboxBrokerJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
+import { createSandboxBrokerJwt, createSandboxQualificationCredentialJwt, verifyLocalAgentJwt, verifySandboxBrokerJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
 import { createToolGatewayService } from "../services/tool-gateway.js";
 import { registerAssignedMcpGateway } from "../services/native-runtime/assigned-mcp-tools.js";
 import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
+const qualificationPolicyGolden = JSON.parse(readFileSync(new URL("./fixtures/openshell-qualification-policy-golden.json", import.meta.url), "utf8")) as { fixture: SandboxQualificationProbeFixture; document: unknown };
+
+describe("sandbox qualification mechanism pins", () => {
+  it("accepts a typed no-recreate prepare decision only without an active container claim", () => {
+    const receipt = {
+      action: "prepare" as const, backendVersion: "0.1.2" as const,
+      imageDigest: `fixture.invalid/sandbox@sha256:${"b".repeat(64)}`,
+      hostEpoch: 9, provisioningHash: "1".repeat(64), bindingVersion: 3,
+      policyHash: "2".repeat(64), probePolicyHash: "3".repeat(64),
+      resourceLimits: { cpuMillis: 500, memoryBytes: 268435456, diskBytes: 33554432, pidsLimit: 128 },
+      requiresRecreate: true,
+    };
+    expect(sandboxHostReplySchema.parse(receipt)).toEqual(receipt);
+    expect(() => sandboxHostReplySchema.parse({ ...receipt, sandboxId: randomUUID() })).toThrow();
+  });
+  const base = (): SandboxCapabilitySnapshot => {
+    const fixtureBase = {
+      version: 1 as const, fixtureId: "operator-canary-v1", profileId: "paperclip-qualification",
+      profileHash: "5".repeat(64), binaries: ["/usr/bin/curl"] as ["/usr/bin/curl"], wrongBinaryPath: "/usr/bin/wget" as const,
+      origin: "https://paperclip.example.test", port: 443, method: "POST" as const, gatewayPublicId: "gw-fixture",
+      toolName: "read_canary", wrongToolName: "write_canary", argumentTemplateHash: nativeSha256({ caseId: "<caseId>", fixtureId: "<fixtureId>", nonce: "<nonce>" }), marker: "fixture-ok",
+    };
+    const credentialFixture = { ...fixtureBase, fixtureHash: nativeSha256(fixtureBase) };
+    const { fixtureHash: _goldenFixtureHash, ...goldenFixtureBody } = qualificationPolicyGolden.fixture;
+    const probeFixtureBody = { ...goldenFixtureBody, credential: credentialFixture };
+    const probeFixture = { ...probeFixtureBody, fixtureHash: nativeSha256(probeFixtureBody) };
+    const target = {
+      hostEpoch: 9, companyId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", bindingId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      bindingVersion: 2, cellId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", cellGeneration: "3",
+      sandboxRef: "aw-v7-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", sandboxId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      containerId: "a".repeat(64), imageDigest: `fixture.invalid/sandbox@sha256:${"b".repeat(64)}`,
+      hostKernelVersion: "fixture-kernel", runtimeBinarySha256: "c".repeat(64), openshellCliSha256: "d".repeat(64),
+      dockerEngineIdHash: "e".repeat(64), policyHash: "f".repeat(64), provisioningHash: "1".repeat(64),
+      resourceLimits: { cpuMillis: 500, memoryBytes: 268435456, diskBytes: 33554432, pidsLimit: 128 },
+      policyVersion: 1, configRevision: "revision-1", phase: "Stopped" as const, mechanism: "openshell_create_sandbox_v0.1.2" as const,
+      probePolicyHash: "2".repeat(64), probeFixtureHash: probeFixture.fixtureHash, qualificationCredentialFixture: credentialFixture,
+    };
+    return sandboxCapabilitySnapshotSchema.parse({
+      ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])), backend: "openshell", backendVersion: "0.1.2",
+      hostKernelVersion: target.hostKernelVersion, sandboxImageDigest: target.imageDigest, filesystemEnforcementMode: "hard_requirement",
+      staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: true, policyProverBoundaryCheck: true,
+      policyProverCoverage: [...SANDBOX_CONTROLS], credentialBindingDimensions: [], testedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60000).toISOString(), qualificationHash: nativeSha256(target), evidenceKind: "protected_host_report",
+      qualificationTarget: { ...target, targetHash: nativeSha256(target) }, qualificationProbeFixture: probeFixture, qualificationCredentialFixture: credentialFixture,
+    }) as SandboxCapabilitySnapshot;
+  };
+  it.each(["runtimeBinarySha256", "openshellCliSha256", "dockerEngineIdHash", "hostEpoch", "probeFixtureHash"])(
+    "does not let an admission target borrow qualification after %s changes", field => {
+      const qualified = base(), changed = structuredClone(qualified);
+      const target = changed.qualificationTarget! as unknown as Record<string, unknown>;
+      target[field] = typeof target[field] === "number" ? (target[field] as number) + 1 : "9".repeat(64);
+      expect(nativeSha256(sandboxCapabilityFacts(changed))).not.toBe(nativeSha256(sandboxCapabilityFacts(qualified)));
+    },
+  );
+  it("ignores active provisioning IDs and target policy hashes while preserving the qualification sample", () => {
+    const qualified = base(), changed = structuredClone(qualified);
+    Object.assign(changed.qualificationTarget!, { sandboxId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", containerId: "9".repeat(64),
+      provisioningHash: "8".repeat(64), policyHash: "7".repeat(64), probePolicyHash: "6".repeat(64), phase: "Ready" });
+    expect(nativeSha256(sandboxCapabilityFacts(changed))).toBe(nativeSha256(sandboxCapabilityFacts(qualified)));
+  });
+  it("keeps the exact operator fixture identity in the stable mechanism pin", () => {
+    const qualified = base(), changed = structuredClone(qualified);
+    changed.qualificationTarget!.qualificationCredentialFixture!.fixtureHash = "9".repeat(64);
+    expect(nativeSha256(sandboxCapabilityFacts(changed))).not.toBe(nativeSha256(sandboxCapabilityFacts(qualified)));
+  });
+});
 import { secretService } from "../services/secrets.js";
+import { toolAccessService } from "../services/tool-access.js";
 import { issueService } from "../services/issues.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
@@ -93,6 +162,10 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       host: typeof runtimeHosts.$inferSelect,
       cell: typeof runtimeCells.$inferSelect,
       scope: SandboxIdentity;
+    let priorQualificationJwtSecret: string | undefined;
+    let credentialFixtureForTest: SandboxCapabilitySnapshot["qualificationCredentialFixture"] = undefined;
+    let qualificationProbeFixtureForTest: SandboxQualificationProbeFixture | undefined;
+    let qualificationSecretValueForTest: string | null = null;
     const keys = generateKeyPairSync("rsa", { modulusLength: 3072 });
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v7-sandbox-host-");
@@ -107,18 +180,58 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         status: "approved",
       });
       await db.insert(runtimeCapacityProfiles).values({
+        // This database fixture represents the existing V6-qualified cell
+        // profile/reservation owner required before physical qualification.
         key: "sandbox-host-fixture",
         cpuMillis: 1000,
         memoryBytes: 1073741824n,
         diskBytes: 10737418240n,
         pidsLimit: 128,
-        qualified: false,
+        qualified: true,
       });
     }, 60000);
     afterAll(async () => {
       await database?.cleanup();
     }, 30000);
+    it("database admission gate accepts only the exact 19 qualified probe cases", async () => {
+      const ids = [
+        "filesystem_allow", "filesystem_deny", "filesystem_escape",
+        "process_nonprivileged", "process_privilege_denied",
+        "syscall_allow", "syscall_deny",
+        "network_allow", "network_host_port_deny", "network_dns_redirect_deny",
+        "network_l7_allow", "network_l7_deny",
+        "credential_allow", "credential_raw_read_deny", "credential_wrong_destination_deny",
+        "credential_wrong_binary_deny", "credential_revoke_deny",
+        "resource_exhaustion_contained", "force_stop",
+      ];
+      const targetHash = "a".repeat(64);
+      const valid = ids.map((caseId) => ({ caseId, verdict: "pass", observationHash: "b".repeat(64), targetQualificationHash: targetHash }));
+      const check = async (results: unknown) => {
+        const rows = await db.execute(sql`SELECT aw_v7_sandbox_qualification_probes_valid(${JSON.stringify(results)}::jsonb, ${targetHash}) AS valid`);
+        return Boolean((rows as unknown as Array<{ valid: boolean }>)[0]?.valid);
+      };
+      expect(await check(valid)).toBe(true);
+      expect(await check(valid.slice(0, -1))).toBe(false);
+      expect(await check([...valid.slice(0, -1), { ...valid[18]!, caseId: valid[0]!.caseId }])).toBe(false);
+      expect(await check([...valid.slice(0, -1), { ...valid[18]!, caseId: "unknown_case" }])).toBe(false);
+      expect(await check([...valid.slice(0, -1), { ...valid[18]!, targetQualificationHash: "c".repeat(64) }])).toBe(false);
+      expect(await check([...valid.slice(0, -1), { ...valid[18]!, verdict: "unsupported" }])).toBe(false);
+      const missingVerdict = [...valid.slice(0, -1), { ...valid[18]! }];
+      delete (missingVerdict[18] as { verdict?: string }).verdict;
+      expect(await check(missingVerdict)).toBe(false);
+      expect(await check([...valid.slice(0, -1), { ...valid[18]!, verdict: null }])).toBe(false);
+      const missingTarget = [...valid.slice(0, -1), { ...valid[18]! }];
+      delete (missingTarget[18] as { targetQualificationHash?: string }).targetQualificationHash;
+      expect(await check(missingTarget)).toBe(false);
+      expect(await check([...valid.slice(0, -1), { ...valid[18]!, targetQualificationHash: null }])).toBe(false);
+    });
+
     beforeEach(async () => {
+      priorQualificationJwtSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
+      process.env.PAPERCLIP_AGENT_JWT_SECRET = "v7-sandbox-qualification-fixture-secret";
+      credentialFixtureForTest = undefined;
+      qualificationProbeFixtureForTest = undefined;
+      qualificationSecretValueForTest = null;
       await instanceSettingsService(db).updateExperimental({
         sandbox_abstraction_v7: true,
         openshell_v7: true,
@@ -140,6 +253,9 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           cpuTotalMillis: 4000,
           memoryTotalBytes: 8000000000n,
           diskTotalBytes: 40000000000n,
+          cpuReservedMillis: 1000,
+          memoryReservedBytes: 1073741824n,
+          diskReservedBytes: 10737418240n,
           publicKeyPem: keys.publicKey
             .export({ type: "spki", format: "pem" })
             .toString(),
@@ -188,6 +304,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       transportForTest = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] });
       testWorkloadStates.clear();
       testWorkloadPolicies.clear();
+      qualificationToolResponses.length = 0;
       const binding = await executionSandboxService(db, { operatorUserIds: [f.userId] }).create(
         f.actor,
         f.home,
@@ -206,6 +323,10 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         cellGeneration: "1",
         sandboxRef: `aw-v7-${binding.id}`,
       };
+    });
+    afterEach(() => {
+      if (priorQualificationJwtSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
+      else process.env.PAPERCLIP_AGENT_JWT_SECRET = priorQualificationJwtSecret;
     });
     async function pending() {
       await expect
@@ -231,6 +352,34 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           .where(eq(runtimeHostCommands.runtimeCellId, cell.id))
       )[0]!;
     }
+    async function qualificationCredentialProbe(expiresInMs = 20_000) {
+      const [binding] = await db.select().from(runtimeSandboxBindings).where(eq(runtimeSandboxBindings.id, scope.bindingId)).limit(1);
+      const commandId = randomUUID(), nonce = randomBytes(16).toString("hex"), fixtureId = "operator-canary-v1";
+      const base = sandboxProbeCases("1".repeat(64), SANDBOX_CONTROLS).find(test => test.caseId === "credential_allow")!;
+      const argumentsValue = { fixtureId, caseId: base.caseId, nonce };
+      const requestBody = { jsonrpc: "2.0", id: commandId, method: "tools/call", params: { name: "read_canary", arguments: argumentsValue } };
+      const claim = {
+        version: 1 as const, purpose: "qualification_credential_probe" as const, aud: "paperclip-sandbox-qualification" as const,
+        jti: randomUUID(), commandId, caseId: "credential_allow" as const, fixtureId, fixtureHash: "a".repeat(64),
+        hostEpoch: host.credentialVersion, scope: { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId,
+          generation: scope.cellGeneration, sandboxRef: scope.sandboxRef }, bindingVersion: binding!.version,
+        sandboxId: "33333333-3333-4333-8333-333333333333", containerId: "b".repeat(64),
+        provisioningHash: "c".repeat(64), targetQualificationHash: "d".repeat(64),
+        connectionId: "44444444-4444-4444-8444-444444444444", grantId: "55555555-5555-4555-8555-555555555555",
+        secretVersionHash: "e".repeat(64), sourceBindingHash: "f".repeat(64), operatorUserId: f.userId,
+        operatorSessionId: f.actor.sessionId!, profileId: "paperclip-qualification", profileHash: "1".repeat(64),
+        binaries: ["/usr/bin/curl"], gatewayPublicId: "gw-fixture", toolName: "read_canary",
+        argumentTemplateHash: nativeSha256({ caseId: "<caseId>", fixtureId: "<fixtureId>", nonce: "<nonce>" }),
+        argumentsHash: nativeSha256(argumentsValue), requestBodyHash: nativeSha256(requestBody), nonce,
+        origin: "https://paperclip.example.test", method: "POST" as const, path: "/mcp/gateways/gw-fixture",
+        expiresAt: new Date(Date.now() + expiresInMs).toISOString(), maxUses: 1 as const,
+      };
+      const capabilityToken = createSandboxQualificationCredentialJwt({ companyId: scope.companyId,
+        bindingId: scope.bindingId, operatorUserId: f.userId, claim });
+      if (!capabilityToken) throw new Error("Could not create test-only qualification capability");
+      return { commandId, nonce, capabilityToken, probe: { ...base, qualificationCredentialCapability: capabilityToken,
+        qualificationCredentialNonce: nonce, qualificationCommandId: commandId } };
+    }
     function supportedPolicy() {
       const policy = policyFixture();
       policy.filesystem.deniedPaths = [];
@@ -247,11 +396,42 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         backend: "openshell" as const,
         evidenceKind: "protected_host_report" as const,
         capabilities: () => bridge.capabilities(identity),
-        prepareSandbox: () => bridge.prepare(identity),
+        prepareSandbox: async (_input: SandboxIdentity, intent?: import("../services/execution-sandbox/backend.js").SandboxProvisioningIntent) => {
+          if (!intent) return bridge.prepare(identity);
+          let document;
+          let policyHash: string;
+          if (intent.purpose === "qualification") {
+            const preflight = await bridge.capabilities(identity);
+            const probeFixture = preflight?.qualificationProbeFixture;
+            if (!preflight || !probeFixture || !qualificationProbeFixtureForTest ||
+              nativeSha256(probeFixture) !== nativeSha256(qualificationProbeFixtureForTest) ||
+              preflight.qualificationHash !== probeFixture.fixtureHash || preflight.policyProverBoundaryCheck ||
+              preflight.policyProverCoverage.length > 0 || SANDBOX_CONTROLS.some(control => preflight[control]))
+              throw new Error("Qualification setup has no exact capability-free protected probe fixture preflight");
+            const projected = projectOpenShellQualificationProbePolicy(probeFixture);
+            if (projected.unsupportedFeatures.length || !projected.document || !projected.documentHash)
+              throw new Error("Qualification probe policy projection is unsupported");
+            document = projected.document;
+            policyHash = projected.documentHash;
+          } else {
+            document = projectOpenShellPolicy(intent.policy!.compiledPolicy, intent.policy!.modelBrokerEndpoint).document;
+            policyHash = nativeSha256(intent.policy!);
+          }
+          const resources = intent.purpose === "qualification" ? policyFixture().resources : intent.policy!.compiledPolicy.resources;
+          const request = { purpose: intent.purpose, operationKey: intent.operationKey, bindingVersion: intent.bindingVersion, expiresAt: intent.expiresAt,
+            policyHash, document,
+            resourceLimits: { cpuMillis: resources.cpuMillis, memoryBytes: resources.memoryBytes, diskBytes: resources.diskBytes, pidsLimit: resources.pidsLimit },
+            ...(intent.purpose === "qualification" && qualificationProbeFixtureForTest ? {
+              probeFixtureHash: qualificationProbeFixtureForTest.fixtureHash, qualificationProbeFixture: qualificationProbeFixtureForTest,
+            } : {}) };
+          const prepared = await bridge.prepare(identity, request);
+          return { ...prepared, bindingVersion: intent.bindingVersion, policyHash,
+            probePolicyHash: nativeSha256(document), resourceLimits: request.resourceLimits };
+        },
         inspectWorkload: async () => ({ ...await bridge.inspect(identity), state, policyHash, controlsHealthy: true }),
         applyPolicy: async input => {
           const hash = nativeSha256(input.policy);
-          const result = await bridge.apply({ ...identity, document: projectOpenShellPolicy(input.policy.compiledPolicy).document, policyHash: hash, expiresAt: input.expiresAt, idempotencyKey: `v7-sandbox-policy:${identity.bindingId}:${identity.cellGeneration}:${hash}`, resourceLimits: { cpuMillis: input.policy.compiledPolicy.resources.cpuMillis, memoryBytes: input.policy.compiledPolicy.resources.memoryBytes, pidsLimit: input.policy.compiledPolicy.resources.pidsLimit } });
+          const result = await bridge.apply({ ...identity, document: projectOpenShellPolicy(input.policy.compiledPolicy).document, policyHash: hash, expiresAt: input.expiresAt, idempotencyKey: input.idempotencyKey, resourceLimits: { cpuMillis: input.policy.compiledPolicy.resources.cpuMillis, memoryBytes: input.policy.compiledPolicy.resources.memoryBytes, diskBytes: input.policy.compiledPolicy.resources.diskBytes, pidsLimit: input.policy.compiledPolicy.resources.pidsLimit } });
           if (result.applied) { state = "ready"; policyHash = hash; }
           return { applied: result.applied, requiresRecreate: result.requiresRecreate, observedPolicyHash: result.policyHash, unsupportedFeatures: [] };
         },
@@ -261,7 +441,8 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         probeBoundary: input => bridge.probe({ ...identity, test: input.test }),
       };
     }
-    async function driveHost<T>(work: Promise<T>, targetCellId: string): Promise<T> {
+    async function driveHost<T>(work: Promise<T>, targetCellId: string,
+      onCommand?: (command: Record<string, any>) => Promise<void> | void): Promise<T> {
       let settled = false;
       const result = work.then(value => ({ value }), error => ({ error })).then(value => { settled = true; return value; });
       const deadline = Date.now() + 15000;
@@ -271,10 +452,76 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         const secret = privateDecrypt({ key: keys.privateKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: "sha256", oaepLabel: Buffer.from("aw-runtime-command-v6") }, Buffer.from(claim.envelope.encryptedKey, "base64url"));
         const command = unseal<Record<string, any>>(claim.envelope.ciphertext, secret.toString("hex"), `command:${claim.id}:${host.id}:1`);
         const action = command.action as string;
+        await onCommand?.(command);
+        if (typeof command.probe?.qualificationCredentialCapability === "string") {
+          const persisted = await db.select({ payload: runtimeHostCommands.payload }).from(runtimeHostCommands).where(eq(runtimeHostCommands.id, claim.id)).limit(1);
+          const serialized = JSON.stringify(persisted[0]?.payload ?? null);
+          expect(serialized).not.toContain(command.probe.qualificationCredentialCapability);
+          expect(serialized).not.toContain(command.probe.qualificationCredentialNonce);
+          expect(serialized).toContain("__sealedQualificationCredential");
+          const envelope = (persisted[0]?.payload as Record<string, any>).__sealedQualificationCredential;
+          expect(envelope).toMatchObject({ version: 1, commandId: claim.id });
+          expect(envelope.tokenSha256).toMatch(/^[0-9a-f]{64}$/);
+          expect(envelope.nonceSha256).toMatch(/^[0-9a-f]{64}$/);
+          expect(envelope.sealed).toEqual(expect.any(String));
+        }
         const common = { generation: command.scope.cellGeneration, imageDigest: command.imageDigest };
-        const reply = action === "capabilities" ? { action, capabilities: testCapabilities(command.imageDigest) }
-          : action === "prepare" ? { action, backendVersion: "0.1.2", imageDigest: command.imageDigest }
-          : action === "probe" ? { action, verdict: "pass", observationHash: "d".repeat(64), contractHash: command.probe.contractHash }
+        const reply = action === "capabilities" ? { action, capabilities: testCapabilities(command.imageDigest, command.scope) }
+          : action === "prepare" ? (() => {
+              const provisioning = command.provisioning;
+              const target = testQualificationTarget(command, provisioning);
+              testTargets.set(command.scope.bindingId, target);
+              if (provisioning?.purpose === "qualification") testQualificationSamples.set(command.scope.bindingId, target);
+              testWorkloadStates.set(command.scope.cellId, provisioning?.purpose === "admission" ? "stopped" : "ready");
+              return { action, backendVersion: "0.1.2", imageDigest: command.imageDigest, hostEpoch: command.hostEpoch,
+                sandboxId: target.sandboxId, containerId: target.containerId, provisioningHash: target.provisioningHash,
+                bindingVersion: provisioning.bindingVersion, policyHash: provisioning.policyHash,
+                probePolicyHash: target.probePolicyHash, resourceLimits: provisioning.resourceLimits };
+            })()
+          : action === "probe" ? await (async () => {
+              let verdict: "pass" | "fail" | "unsupported" = "pass";
+              let observation: unknown = { caseId: command.probe.caseId, simulated: true };
+              if (command.probe.qualificationCredentialCapability) {
+                const fixture = testTargets.get(command.scope.bindingId)?.qualificationCredentialFixture;
+                if (!qualificationProtocolApp || !fixture) throw new Error("Credential probe has no pinned local protocol fixture");
+                const caseId = command.probe.caseId;
+                const tool = caseId === "credential_wrong_destination_deny" ? fixture.wrongToolName : fixture.toolName;
+                const call = request(qualificationProtocolApp).post(`/mcp/gateways/${fixture.gatewayPublicId}`);
+                if (caseId !== "credential_wrong_binary_deny") call.set("Authorization", `Bearer ${command.probe.qualificationCredentialCapability}`);
+                const response = await call.send({ jsonrpc: "2.0", id: claim.id, method: "tools/call", params: { name: tool,
+                  arguments: { fixtureId: fixture.fixtureId, caseId, nonce: command.probe.qualificationCredentialNonce } } });
+                const reasonCode = response.body?.error?.data?.reasonCode;
+                const marker = response.body?.result?.structuredContent?.marker;
+                const serializedResponse = JSON.stringify(response.body);
+                expect(serializedResponse).not.toContain("qualification-provider-output-sentinel");
+                if (qualificationSecretValueForTest) expect(serializedResponse).not.toContain(qualificationSecretValueForTest);
+                expect(serializedResponse).not.toContain(command.probe.qualificationCredentialCapability);
+                if (response.status === 200) {
+                  expect(response.body.result.content).toEqual([{ type: "text", text: fixture.marker }]);
+                  expect(response.body.result.structuredContent).toEqual({ marker: fixture.marker });
+                }
+                qualificationToolResponses.push({ caseId, status: response.status, reasonCode: reasonCode ?? null, marker: marker ?? null });
+                if (caseId === "credential_allow") {
+                  const replay = await request(qualificationProtocolApp).post(`/mcp/gateways/${fixture.gatewayPublicId}`)
+                    .set("Authorization", `Bearer ${command.probe.qualificationCredentialCapability}`)
+                    .send({ jsonrpc: "2.0", id: claim.id, method: "tools/call", params: { name: tool,
+                      arguments: { fixtureId: fixture.fixtureId, caseId, nonce: command.probe.qualificationCredentialNonce } } });
+                  expect(replay.status).toBe(409);
+                  expect(JSON.stringify(replay.body)).toContain("sandbox_qualification_capability_replayed");
+                }
+                const passed = caseId === "credential_allow" || caseId === "credential_raw_read_deny"
+                  ? response.status === 200 && marker === fixture.marker
+                  : caseId === "credential_wrong_destination_deny"
+                    ? response.status === 403 && reasonCode === "sandbox_qualification_tool_mismatch"
+                    : caseId === "credential_wrong_binary_deny"
+                      ? response.status === 401 && reasonCode === "sandbox_qualification_credential_required"
+                      : response.status === 403 && reasonCode === "sandbox_qualification_grant_revoked";
+                verdict = passed ? "pass" : "fail";
+                observation = { caseId, status: response.status, reasonCode: reasonCode ?? null, marker: marker ?? null };
+              }
+              return { action, verdict, observationHash: nativeSha256(observation), contractHash: command.probe.contractHash,
+                targetQualificationHash: testTargets.get(command.scope.bindingId)?.targetHash };
+            })()
           : action === "inspect" ? { action, ...common, state: testWorkloadStates.get(command.scope.cellId) ?? "stopped", policyHash: testWorkloadPolicies.get(command.scope.cellId) ?? null, controlsHealthy: true }
           : action === "apply" ? (testWorkloadStates.set(command.scope.cellId, "ready"), testWorkloadPolicies.set(command.scope.cellId, command.admission.policyHash), { action, applied: true, requiresRecreate: false, policyHash: command.admission.policyHash, effectivePolicyHash: command.admission.policyHash })
           : action === "start" ? (testWorkloadStates.set(command.scope.cellId, "running"), testWorkloadPolicies.set(command.scope.cellId, command.start.policyHash), { action, started: true, operationId: claim.id, sandboxId: command.scope.bindingId, containerId: "b".repeat(64), imageDigest: command.imageDigest, policyHash: command.start.policyHash, effectivePolicyHash: command.start.policyHash })
@@ -292,14 +539,52 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       if ("error" in output) throw output.error;
       return output.value;
     }
+    let qualificationProtocolApp: any = null;
+    const qualificationToolResponses: Array<{ caseId: string; status: number; reasonCode: string | null; marker: string | null }> = [];
     const testWorkloadStates = new Map<string, "stopped" | "ready" | "running">();
     const testWorkloadPolicies = new Map<string, string>();
     const testCapabilitySnapshots = new Map<string, Record<string, unknown>>();
-    const testCapabilities = (digest: string) => {
-      let snapshot = testCapabilitySnapshots.get(digest);
+    const testTargets = new Map<string, Record<string, any>>();
+    const testQualificationSamples = new Map<string, Record<string, any>>();
+    const testQualificationTarget = (command: Record<string, any>, provisioning: Record<string, any>) => {
+      const sandboxId = "f3a4f0a0-cd95-4fd2-8f4c-2b5223309a17";
+      const containerId = "b".repeat(64);
+      const target = {
+        hostEpoch: command.hostEpoch, companyId: command.scope.companyId, bindingId: command.scope.bindingId,
+        bindingVersion: provisioning.bindingVersion,
+        cellId: command.scope.cellId, cellGeneration: command.scope.cellGeneration, sandboxRef: command.scope.sandboxRef,
+        sandboxId, containerId, imageDigest: command.imageDigest, hostKernelVersion: "fixture-kernel", runtimeBinarySha256: "a".repeat(64),
+        openshellCliSha256: "b".repeat(64), dockerEngineIdHash: "d".repeat(64),
+        policyHash: provisioning.policyHash, provisioningHash: provisioning.provisioningHash,
+        resourceLimits: provisioning.resourceLimits, policyVersion: 1, configRevision: "fixture-config-1",
+        phase: provisioning.purpose === "admission" ? "Stopped" : "Ready",
+        mechanism: "openshell_create_sandbox_v0.1.2", probePolicyHash: nativeSha256(provisioning.document),
+        probeFixtureHash: provisioning.probeFixtureHash ?? testQualificationSamples.get(command.scope.bindingId)?.probeFixtureHash,
+        ...((provisioning.qualificationProbeFixture?.credential ?? testQualificationSamples.get(command.scope.bindingId)?.qualificationCredentialFixture)
+          ? { qualificationCredentialFixture: provisioning.qualificationProbeFixture?.credential ?? testQualificationSamples.get(command.scope.bindingId)?.qualificationCredentialFixture } : {}),
+      };
+      return { ...target, targetHash: nativeSha256(target) };
+    };
+    const testCapabilities = (digest: string, scope?: SandboxIdentity) => {
+      const target = scope ? testTargets.get(scope.bindingId) : undefined;
+      const cacheKey = scope ? `${scope.bindingId}:${digest}` : digest;
+      let snapshot = testCapabilitySnapshots.get(cacheKey);
       if (!snapshot) {
-        snapshot = { ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])), backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "fixture-kernel", sandboxImageDigest: digest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: true, policyProverBoundaryCheck: true, policyProverCoverage: [...SANDBOX_CONTROLS], credentialBindingDimensions: ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], credentialBrokerProviderProfile: { id: "paperclip-broker", hash: "d".repeat(64) }, testedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString(), qualificationHash: "a".repeat(64), evidenceKind: "protected_host_report" };
-        testCapabilitySnapshots.set(digest, snapshot);
+        const preflight = Boolean(scope && !target);
+        const probeFixture = preflight ? qualificationProbeFixtureForTest : undefined;
+        snapshot = { ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, !preflight])), backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "fixture-kernel", sandboxImageDigest: digest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: !preflight, policyProverBoundaryCheck: !preflight, policyProverCoverage: preflight ? [] : [...SANDBOX_CONTROLS], credentialBindingDimensions: preflight ? [] : ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], credentialBrokerProviderProfile: { id: "paperclip-broker", hash: "d".repeat(64) }, testedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString(), qualificationHash: probeFixture?.fixtureHash ?? "a".repeat(64), evidenceKind: "protected_host_report",
+          ...(probeFixture ? { qualificationProbeFixture: probeFixture, qualificationCredentialFixture: probeFixture.credential } : {}) };
+        testCapabilitySnapshots.set(cacheKey, snapshot);
+      }
+      if (target) {
+        for (const control of SANDBOX_CONTROLS) snapshot[control] = true;
+        snapshot.dynamicNetworkPolicy = true; snapshot.policyProverBoundaryCheck = true;
+        snapshot.policyProverCoverage = [...SANDBOX_CONTROLS];
+        snapshot.credentialBindingDimensions = ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"];
+        snapshot.qualificationTarget = target;
+        snapshot.qualificationProbeFixture = qualificationProbeFixtureForTest;
+        snapshot.qualificationCredentialFixture = target.qualificationCredentialFixture ?? testQualificationSamples.get(scope!.bindingId)?.qualificationCredentialFixture;
+        snapshot.qualificationHash = target.targetHash;
       }
       return snapshot;
     };
@@ -351,6 +636,56 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           .where(eq(runtimeHostCommands.runtimeCellId, cell.id)),
       ).toHaveLength(0);
     });
+    it("keeps qualification bearer material sealed and fails closed on ciphertext tamper, key rotation, and expiry", async () => {
+      const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] });
+      const bridge = transport.bridge(f.actor);
+      const waitForCommand = async (id: string) => {
+        await expect.poll(async () => (await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.id, id)).limit(1))[0]?.id,
+          { timeout: 1000 }).toBe(id);
+        return (await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.id, id)).limit(1))[0]!;
+      };
+      const first = await qualificationCredentialProbe();
+      const firstCall = bridge.probe({ ...scope, test: first.probe }).then(() => null, error => error);
+      const firstCommand = await waitForCommand(first.commandId);
+      const firstPayload = firstCommand.payload as Record<string, any>;
+      const firstSerialized = JSON.stringify(firstPayload);
+      expect(firstSerialized).not.toContain(first.capabilityToken);
+      expect(firstSerialized).not.toContain(first.nonce);
+      expect(firstPayload.__sealedQualificationCredential).toMatchObject({ version: 1, commandId: first.commandId });
+      expect(firstPayload.__sealedQualificationCredential.tokenSha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(firstPayload.__sealedQualificationCredential.nonceSha256).toMatch(/^[a-f0-9]{64}$/);
+      const tamperedPayload = structuredClone(firstPayload);
+      tamperedPayload.__sealedQualificationCredential.sealed = `${tamperedPayload.__sealedQualificationCredential.sealed}tampered`;
+      await db.update(runtimeHostCommands).set({ payload: tamperedPayload }).where(eq(runtimeHostCommands.id, firstCommand.id));
+      await expect(transport.claim(host.id)).rejects.toMatchObject({ status: 409 });
+      await db.update(runtimeHostCommands).set({ status: "CANCELED", errorCode: "sandbox_qualification_test_tamper", completedAt: new Date() })
+        .where(eq(runtimeHostCommands.id, firstCommand.id));
+      await expect(firstCall).resolves.toMatchObject({ status: 409 });
+
+      const second = await qualificationCredentialProbe();
+      const secondCall = bridge.probe({ ...scope, test: second.probe }).then(() => null, error => error);
+      const secondCommand = await waitForCommand(second.commandId);
+      const originalSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
+      process.env.PAPERCLIP_AGENT_JWT_SECRET = "rotated-qualification-test-key";
+      try {
+        await expect(transport.claim(host.id)).rejects.toMatchObject({ status: 409 });
+      } finally {
+        if (originalSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
+        else process.env.PAPERCLIP_AGENT_JWT_SECRET = originalSecret;
+      }
+      await db.update(runtimeHostCommands).set({ status: "CANCELED", errorCode: "sandbox_qualification_test_key_rotation", completedAt: new Date() })
+        .where(eq(runtimeHostCommands.id, secondCommand.id));
+      await expect(secondCall).resolves.toMatchObject({ status: 409 });
+
+      const expiring = await qualificationCredentialProbe(3500);
+      const expiringCall = bridge.probe({ ...scope, test: expiring.probe }).then(() => null, error => error);
+      const expiringCommand = await waitForCommand(expiring.commandId);
+      await new Promise(resolve => setTimeout(resolve, 3600));
+      await expect(transport.claim(host.id)).rejects.toMatchObject({ status: 409 });
+      await db.update(runtimeHostCommands).set({ status: "CANCELED", errorCode: "sandbox_qualification_test_expired", completedAt: new Date() })
+        .where(eq(runtimeHostCommands.id, expiringCommand.id));
+      await expect(expiringCall).resolves.toMatchObject({ status: 409 });
+    }, 10000);
     it("caps the durable apply command at the original policy expiry and rejects an already expired request before queueing", async () => {
       // A test-only reservation row is used to exercise the native command
       // lane independently from qualification; this is not qualification proof.
@@ -365,14 +700,14 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         policyHash: "f".repeat(64),
         expiresAt: new Date(0).toISOString(),
         idempotencyKey: "expired-source-policy",
-        resourceLimits: { cpuMillis: 1000, memoryBytes: 536870912, pidsLimit: 256 },
+        resourceLimits: { cpuMillis: 1000, memoryBytes: 536870912, diskBytes: policyFixture().resources.diskBytes, pidsLimit: 256 },
       });
       await expect(expired).rejects.toMatchObject({ status: 409 });
       expect(await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, cell.id))).toHaveLength(0);
       await expect(bridge.apply({
         ...scope, document: projectOpenShellPolicy(policyFixture()).document,
         policyHash: "f".repeat(64), expiresAt: new Date(Date.now() + 8000).toISOString(),
-        idempotencyKey: "invalid-resource-envelope", resourceLimits: { cpuMillis: 0, memoryBytes: 536870912, pidsLimit: 256 },
+        idempotencyKey: "invalid-resource-envelope", resourceLimits: { cpuMillis: 0, memoryBytes: 536870912, diskBytes: policyFixture().resources.diskBytes, pidsLimit: 256 },
       })).rejects.toThrow();
       expect(await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, cell.id))).toHaveLength(0);
 
@@ -383,7 +718,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         policyHash: "e".repeat(64),
         expiresAt: expiresAt.toISOString(),
         idempotencyKey: "bounded-source-policy",
-        resourceLimits: { cpuMillis: 1000, memoryBytes: 536870912, pidsLimit: 256 },
+        resourceLimits: { cpuMillis: 1000, memoryBytes: 536870912, diskBytes: policyFixture().resources.diskBytes, pidsLimit: 256 },
       }).catch((error) => error);
       const command = await pending();
       expect(command.deadlineAt.getTime()).toBeLessThanOrEqual(expiresAt.getTime());
@@ -400,6 +735,40 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       });
       await expect(pendingApply).resolves.toMatchObject({ status: 409 });
     });
+    it("does not accept a successful provisioning receipt after its original expiry", async () => {
+      const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] });
+      const bridge = transport.bridge(f.actor);
+      const expiresAt = new Date(Date.now() + 8000);
+      const qualificationFixture = qualificationPolicyGolden.fixture;
+      const projectedFixture = projectOpenShellQualificationProbePolicy(qualificationFixture);
+      expect(projectedFixture.document).toBeTruthy();
+      const document = projectedFixture.document!;
+      const pendingReceipt = bridge.prepare(scope, {
+        purpose: "qualification", operationKey: `late-provisioning-receipt:${randomUUID()}`,
+        bindingVersion: 1, expiresAt: expiresAt.toISOString(), policyHash: projectedFixture.documentHash!, document,
+        resourceLimits: { cpuMillis: policyFixture().resources.cpuMillis, memoryBytes: policyFixture().resources.memoryBytes,
+          diskBytes: policyFixture().resources.diskBytes, pidsLimit: policyFixture().resources.pidsLimit },
+        probeFixtureHash: qualificationFixture.fixtureHash, qualificationProbeFixture: qualificationFixture,
+      }).then(() => null, error => error);
+      let claim: Awaited<ReturnType<typeof transport.claim>> = null;
+      await expect.poll(async () => {
+        claim = await transport.claim(host.id);
+        return Boolean(claim);
+      }, { timeout: 3000 }).toBe(true);
+      const claimed = claim!;
+      const command = decrypt(claimed);
+      const stored = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.id, claimed.id));
+      const provisioningHash = (stored[0]!.payload as Record<string, any>).provisioning.provisioningHash;
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, expiresAt.getTime() - Date.now() + 25)));
+      await expect(transport.complete(host.id, claimed.id, {
+        claimToken: command.claimToken, generation: scope.cellGeneration, success: true,
+        reply: { action: "prepare", backendVersion: "0.1.2", imageDigest: image, hostEpoch: 1,
+          sandboxId: "f3a4f0a0-cd95-4fd2-8f4c-2b5223309a17", containerId: "b".repeat(64),
+          provisioningHash }, errorCode: null,
+      })).rejects.toMatchObject({ status: 409, details: { code: "sandbox_scope_changed" } });
+      expect((await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.id, claimed.id)))[0]?.status).toBe("CLAIMED");
+      await expect(pendingReceipt).resolves.toMatchObject({ status: 409 });
+    }, 15000);
     it("persists an encrypted current native scope and rejects mismatched receipts without earning capability", async () => {
       // Private host metadata reads require current proof, not a new recent event.
       await db.update(authSessions).set({ authenticatedAt: new Date(Date.now() - 301000) })
@@ -545,20 +914,35 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       ).toHaveLength(0);
     });
     it("retains unsupported host qualification without treating configured image as physical preparation", async () => {
+      qualificationProbeFixtureForTest = qualificationPolicyGolden.fixture;
       const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] });
       const service = executionSandboxService(db, {
         operatorUserIds: [f.userId],
-        backendFor: (_binding, actor) =>
-          openShellBackend({
+        backendFor: (_binding, actor) => {
+          const nativeBridge = transport.bridge(actor);
+          const bridge = {
+            ...nativeBridge,
+            prepare: async (identity: SandboxIdentity, provisioning?: Parameters<typeof nativeBridge.prepare>[1]) => {
+              const prepared = await nativeBridge.prepare(identity, provisioning);
+              if (provisioning?.purpose !== "qualification") return prepared;
+              const currentCapabilities = await nativeBridge.capabilities(identity);
+              const target = currentCapabilities?.qualificationTarget;
+              if (!target) throw new Error("Protected target receipt is unavailable after CreateSandbox");
+              return { ...prepared, bindingVersion: target.bindingVersion, policyHash: target.policyHash,
+                probePolicyHash: target.probePolicyHash, resourceLimits: target.resourceLimits };
+            },
+          };
+          return openShellBackend({
             identity: scope,
             boundary: policyFixture(),
-            bridge: transport.bridge(actor),
+            bridge,
             evidenceKind: "protected_host_report",
             prover: {
               executable: "/unused-unqualified-fixture",
               executableSha256: "a".repeat(64),
             },
-          }),
+          });
+        },
       });
       let finished = false;
       const qualification = service
@@ -574,6 +958,9 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
             claimToken: string;
             action: string;
             probe?: { contractHash: string };
+            hostEpoch: number;
+            imageDigest: string;
+            provisioning?: { provisioningHash: string };
           };
           await transport.complete(host.id, claim.id, {
             claimToken: payload.claimToken,
@@ -581,8 +968,35 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
             success: true,
             reply:
               payload.action === "capabilities"
-                ? { action: "capabilities", capabilities: null }
-                : {
+                ? (() => {
+                    const capabilities = testCapabilities(payload.imageDigest, scope);
+                    if (testTargets.has(scope.bindingId)) {
+                      for (const control of SANDBOX_CONTROLS) capabilities[control] = false;
+                      capabilities.dynamicNetworkPolicy = false;
+                      capabilities.policyProverBoundaryCheck = false;
+                      capabilities.policyProverCoverage = [];
+                      capabilities.credentialBindingDimensions = [];
+                    }
+                    return { action: "capabilities", capabilities };
+                  })()
+                : payload.action === "prepare"
+                  ? (() => {
+                      const target = testQualificationTarget(payload, payload.provisioning);
+                      testTargets.set(scope.bindingId, target);
+                      return { action: "prepare", backendVersion: "0.1.2", imageDigest: payload.imageDigest,
+                        hostEpoch: payload.hostEpoch, sandboxId: target.sandboxId, containerId: target.containerId,
+                        provisioningHash: target.provisioningHash, bindingVersion: payload.provisioning.bindingVersion,
+                        policyHash: payload.provisioning.policyHash, probePolicyHash: target.probePolicyHash,
+                        resourceLimits: payload.provisioning.resourceLimits };
+                    })()
+                  : payload.action === "revoke_providers"
+                    ? { action: "revoke_providers", revoked: true }
+                    : payload.action === "stop"
+                      ? { action: "stop", stopped: true }
+                      : payload.action === "inspect"
+                        ? { action: "inspect", state: "stopped", policyHash: null, imageDigest: payload.imageDigest,
+                            generation: "1", controlsHealthy: false }
+                        : {
                     action: "probe",
                     verdict: "unsupported",
                     observationHash: null,
@@ -594,16 +1008,58 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       }
       expect(await qualification).toMatchObject({
         status: "requested",
-        capabilitySnapshot: null,
+        capabilitySnapshot: expect.objectContaining({
+          evidenceKind: "protected_host_report", qualificationProbeFixture: qualificationPolicyGolden.fixture,
+          policyProverBoundaryCheck: false,
+        }),
         version: 2,
       });
+      const qualificationCommands = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, cell.id));
+      const setup = qualificationCommands.find(command => (command.payload as Record<string, any>).action === "prepare");
+      expect(setup?.payload).toMatchObject({
+        action: "prepare",
+        provisioning: { purpose: "qualification", operationKey: expect.stringContaining(`:${scope.bindingId}:1:`),
+          probeFixtureHash: qualificationPolicyGolden.fixture.fixtureHash,
+          qualificationProbeFixture: qualificationPolicyGolden.fixture,
+          resourceLimits: { cpuMillis: policyFixture().resources.cpuMillis, memoryBytes: policyFixture().resources.memoryBytes,
+            diskBytes: policyFixture().resources.diskBytes, pidsLimit: policyFixture().resources.pidsLimit },
+          document: qualificationPolicyGolden.document },
+      });
+      const setupPayload = setup!.payload as Record<string, any>;
+      const provisioning = setupPayload.provisioning;
+      expect(provisioning.requestId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(provisioning.idleUntilUnixSeconds).toBe(Math.floor(Date.parse(provisioning.expiresAt) / 1000));
+      expect(provisioning.provisioningHash).toBe(nativeSha256({
+        scope: setupPayload.scope,
+        hostEpoch: setupPayload.hostEpoch,
+        imageDigest: setupPayload.imageDigest,
+        purpose: provisioning.purpose,
+        operationKey: provisioning.operationKey,
+        bindingVersion: provisioning.bindingVersion,
+        expiresAt: provisioning.expiresAt,
+        idleUntilUnixSeconds: provisioning.idleUntilUnixSeconds,
+        policyHash: provisioning.policyHash,
+        document: provisioning.document,
+        resourceLimits: provisioning.resourceLimits,
+      }));
+      await expect(transport.bridge(f.actor).prepare(scope, {
+        purpose: provisioning.purpose,
+        operationKey: provisioning.operationKey,
+        bindingVersion: provisioning.bindingVersion,
+        expiresAt: provisioning.expiresAt,
+        policyHash: provisioning.policyHash,
+        document: provisioning.document,
+        resourceLimits: provisioning.resourceLimits,
+        probeFixtureHash: provisioning.probeFixtureHash,
+        qualificationProbeFixture: provisioning.qualificationProbeFixture,
+      })).rejects.toMatchObject({ status: 409, details: { code: "sandbox_scope_changed" } });
       const retained = await service.get(f.actor, f.home, scope.bindingId);
       expect(retained.qualifications[0]).toMatchObject({
         status: "inconclusive",
-        backendVersion: "unqualified",
-        hostOrImageRef: `cell:${cell.id}:1`,
+        backendVersion: "0.1.2",
+        hostOrImageRef: image,
       });
-      expect(retained.qualifications[0]?.results).toHaveLength(18);
+      expect(retained.qualifications[0]?.results).toHaveLength(19);
     }, 20000);
     it("admits a qualified native Task through the HTTP route and meters only the signed host start/stop receipts (CI transport simulation)", async () => {
       await instanceSettingsService(db).updateExperimental({
@@ -672,6 +1128,50 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       }).returning();
       await secretService(db).createBinding({ companyId: f.home, secretId: providerSecret.id, targetType: "tool_connection", targetId: connection!.id, configPath: "credentials.authorization", versionSelector: "latest", required: true, label: "Brokered provider token" });
       const [brokerGrant] = await db.insert(connectionGrants).values({ companyId: f.home, connectionId: connection!.id, kind: "organization", credentialSecretRefs: connection!.credentialSecretRefs, status: "active", isDefault: true }).returning();
+      qualificationSecretValueForTest = `qualification-secret-${randomUUID()}`;
+      const qualificationSecret = await secretService(db).create(f.home, {
+        name: `Operator qualification canary secret ${randomUUID()}`,
+        key: `qualification_canary_secret_${randomUUID().replace(/-/g, "")}`,
+        provider: "local_encrypted", value: qualificationSecretValueForTest,
+      });
+      const qualificationApplicationKey = `qualification-canary-${randomUUID().replace(/-/g, "")}`;
+      const [qualificationApplication] = await db.insert(toolApplications).values({ companyId: f.home,
+        applicationKey: qualificationApplicationKey, name: "Operator qualification canary", type: "mcp_http", status: "active" }).returning();
+      const qualificationCredentialRefs = [{ name: "credentials.authorization", secretId: qualificationSecret.id,
+        version: "latest", placement: "header", key: "Authorization", prefix: "Bearer " }];
+      const qualificationSecretRefs = [{ secretId: qualificationSecret.id, versionSelector: "latest",
+        configPath: "credentials.authorization", required: true, label: "Qualification-only canary credential" }];
+      // This owner seam supplies a public DNS answer without performing live
+      // DNS. All provider HTTP stays on the local `remoteHttpRequest` stub.
+      const qualificationToolAccess = toolAccessService(db, {
+        remoteHttpEndpointLookup: async () => [{ address: "8.8.8.8", family: 4 }],
+        remoteHttpRequest: async (url, init) => {
+          expect(url).toBe("https://example.com/mcp");
+          const request = JSON.parse(String(init.body)) as { id: string; method: string };
+          expect(request.method).toBe("tools/list");
+          return new Response(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { tools: [{
+            name: "read_canary", description: "Fixed local qualification marker",
+            inputSchema: { type: "object", properties: { fixtureId: { type: "string" }, caseId: { type: "string" }, nonce: { type: "string" } },
+              required: ["fixtureId", "caseId", "nonce"], additionalProperties: false },
+            annotations: { readOnlyHint: true },
+          }] } }), { status: 200, headers: { "content-type": "application/json" } });
+        },
+      });
+      const qualificationConnection = await qualificationToolAccess.createConnection(f.home, {
+        applicationId: qualificationApplication!.id, name: "Operator qualification canary", transport: "mcp_remote",
+        status: "active", enabled: true, config: { url: "https://example.com/mcp" }, transportConfig: { url: "https://example.com/mcp" },
+        credentialRefs: qualificationCredentialRefs, credentialSecretRefs: qualificationSecretRefs,
+      }, { actorType: "user", actorId: f.userId });
+      let qualificationGrant: typeof connectionGrants.$inferSelect | undefined;
+      const expectedQualificationToolName = `mcp.${qualificationApplicationKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}-${qualificationConnection.id.replace(/-/g, "").slice(0, 8)}:read-canary`;
+      await db.insert(toolCatalogEntries).values({ companyId: f.home, applicationId: qualificationApplication!.id,
+        connectionId: qualificationConnection.id, entryKind: "tool", name: `read_canary-${randomUUID()}`, toolName: "read_canary",
+        title: "Read operator qualification canary", description: "Returns one fixed, non-sensitive qualification marker",
+        inputSchema: { type: "object", properties: { fixtureId: { type: "string" }, caseId: { type: "string" }, nonce: { type: "string" } },
+          required: ["fixtureId", "caseId", "nonce"], additionalProperties: false },
+        annotations: { readOnlyHint: true }, riskLevel: "read", isReadOnly: true, isWrite: false, isDestructive: false,
+        status: "active", versionHash: randomUUID(), quarantinedAt: null,
+      });
       await db.insert(toolCatalogEntries).values({
         companyId: f.home, applicationId: application!.id, connectionId: connection!.id, entryKind: "tool",
         name: `read_record-${randomUUID()}`, toolName: "read_record", title: "Read record", description: "Read a fixture record",
@@ -679,13 +1179,24 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         annotations: { readOnlyHint: true }, riskLevel: "read", isReadOnly: true, isWrite: false, isDestructive: false,
         status: "active", versionHash: randomUUID(), quarantinedAt: null,
       });
+      // Use the canonical health owner with a deterministic local protocol stub so
+      // the active shared-grant fixture is catalog-visible without live network.
+      const qualificationHealth = await qualificationToolAccess.checkHealth(qualificationConnection.id, { actorType: "user", actorId: f.userId });
+      expect(qualificationHealth.connection.healthStatus).toBe("ok");
+      [qualificationGrant] = await db.select().from(connectionGrants).where(and(
+        eq(connectionGrants.companyId, f.home), eq(connectionGrants.connectionId, qualificationConnection.id),
+        eq(connectionGrants.status, "active"), eq(connectionGrants.isDefault, true),
+      )).limit(1);
+      expect(qualificationGrant).toMatchObject({ kind: "organization", status: "active", isDefault: true });
       const [agentToolProfile] = await db.insert(toolProfiles).values({ companyId: f.home, profileKey: `broker-agent-${randomUUID()}`, name: "Brokered agent tool profile", defaultAction: "deny" }).returning();
       await db.insert(toolProfileBindings).values({ companyId: f.home, profileId: agentToolProfile!.id, targetType: "agent", targetId: presence.id });
       const expectedBrokerToolName = `mcp.${applicationKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}-${connection!.id.replace(/-/g, "").slice(0, 8)}:read-record`;
       await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: agentToolProfile!.id, selectorType: "tool_name", effect: "include", toolName: expectedBrokerToolName });
       const [gatewayProfile] = await db.insert(toolProfiles).values({ companyId: f.home, profileKey: `broker-gateway-${randomUUID()}`, name: "Brokered gateway profile", defaultAction: "deny" }).returning();
       await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id, selectorType: "connection", effect: "include", connectionId: connection!.id });
+      await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id, selectorType: "connection", effect: "include", connectionId: qualificationConnection.id });
       const dispatchedBrokerCalls: Array<{ url: string; body: string | null; authorization: string | null }> = [];
+      let qualificationProviderMarkerOverride: string | null = null;
       let nextProviderBarrier: { started: () => void; wait: Promise<void> } | null = null;
       const deferNextProviderResponse = () => {
         let markStarted!: () => void, release!: () => void;
@@ -695,6 +1206,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         return { started, release };
       };
       const gatewayOptions: Parameters<typeof createToolGatewayService>[1] = {
+        operatorUserIds: [f.userId],
         toolActionSigningSecret: "v7-sandbox-broker-fixture",
         remoteHttpRequest: async (url, init) => {
           const body = typeof init.body === "string" ? init.body : null;
@@ -703,12 +1215,43 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           const barrier = nextProviderBarrier;
           if (barrier) { nextProviderBarrier = null; barrier.started(); await barrier.wait; }
           const requestId = body ? (JSON.parse(body) as { id?: unknown }).id ?? "broker-fixture" : "broker-fixture";
-          return new Response(JSON.stringify({ jsonrpc: "2.0", id: requestId, result: { content: [{ type: "text", text: "read ok" }], structuredContent: { ok: true } } }), { status: 200, headers: { "content-type": "application/json" } });
+          const parsedBody = body ? JSON.parse(body) as { params?: { arguments?: { caseId?: unknown } } } : null;
+          const structuredContent = typeof parsedBody?.params?.arguments?.caseId === "string" && parsedBody.params.arguments.caseId.startsWith("credential_")
+            ? { marker: qualificationProviderMarkerOverride ?? credentialFixtureForTest?.marker,
+                providerDebugSentinel: "qualification-provider-output-sentinel", echoedAuthorization: authorization }
+            : { ok: true };
+          return new Response(JSON.stringify({ jsonrpc: "2.0", id: requestId, result: { content: [{ type: "text", text: "read ok" }], structuredContent } }), { status: 200, headers: { "content-type": "application/json" } });
         },
       };
       const gateway = createToolGatewayService(db, gatewayOptions);
       registerAssignedMcpGateway(db, gateway, scopedDb => createToolGatewayService(scopedDb, gatewayOptions));
       const namedGateway = await gateway.createNamedGateway({ companyId: f.home, body: { name: "Native task broker fixture", profileId: gatewayProfile!.id } });
+      const argumentTemplateHash = nativeSha256({ caseId: "<caseId>", fixtureId: "<fixtureId>", nonce: "<nonce>" });
+      const credentialFixtureBase = {
+        version: 1 as const, fixtureId: "operator-canary-v1", profileId: "paperclip-qualification", profileHash: "5".repeat(64),
+        binaries: ["/usr/bin/curl"] as ["/usr/bin/curl"], wrongBinaryPath: "/usr/bin/wget" as const,
+        origin: "https://paperclip.example.test", port: 443, method: "POST" as const,
+        gatewayPublicId: namedGateway.gatewayPublicId, toolName: expectedQualificationToolName, wrongToolName: "wrong_scope_canary",
+        argumentTemplateHash, marker: "qualification-fixture-ok",
+      };
+      credentialFixtureForTest = { ...credentialFixtureBase, fixtureHash: nativeSha256(credentialFixtureBase) };
+      const { fixtureHash: _goldenHash, ...goldenFixtureBody } = qualificationPolicyGolden.fixture;
+      const probeFixtureBody = { ...goldenFixtureBody, credential: credentialFixtureForTest };
+      qualificationProbeFixtureForTest = { ...probeFixtureBody, fixtureHash: nativeSha256(probeFixtureBody) };
+      const qualificationCanary = {
+        argumentTemplateHash, endpointOrigin: "https://example.com", endpointPath: "/mcp",
+        fixtureHash: credentialFixtureForTest.fixtureHash, fixtureId: credentialFixtureForTest.fixtureId,
+        gatewayPublicId: namedGateway.gatewayPublicId, grantId: qualificationGrant!.id,
+        kind: "operator_owned_local_readonly_canary", marker: credentialFixtureForTest.marker,
+        noSideEffects: true, purpose: "sandbox_qualification", readOnly: true, setupOnly: true,
+        toolName: expectedQualificationToolName, version: 1, wrongToolName: "wrong_scope_canary",
+      };
+      await qualificationToolAccess.updateConnection(qualificationConnection.id, {
+        config: { ...(qualificationConnection.config as Record<string, unknown>), sandboxQualificationCanary: qualificationCanary },
+      });
+      qualificationProtocolApp = express();
+      qualificationProtocolApp.use(express.json());
+      qualificationProtocolApp.use(mcpGatewayProtocolRoutes(gateway));
       const initialBrokerBinding = {
         connectionId: connection!.id, grantVersionHash: "0".repeat(64), hostname: "provider.example.test", port: 443,
         methods: ["POST"] as const, pathPrefixes: ["/mcp"], binary: null, ttlSeconds: 120,
@@ -723,7 +1266,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       boundary.credentials = { mode: "brokered", bindings: [{ ...initialBrokerBinding, grantVersionHash: initialBrokerResolution.authorizedConnectionGrantHashes[connection!.id]! }] };
       const sandboxBinding = await executionSandboxService(db, { operatorUserIds: [f.userId] }).create(f.actor, f.home, { runtimeCellId: admissionCell!.id, expectedCellGeneration: admissionCell!.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy: boundary });
       const sandboxIdentity: SandboxIdentity = { companyId: f.home, bindingId: sandboxBinding.id, cellId: admissionCell!.id, cellGeneration: admissionCell!.generation.toString(), sandboxRef: `aw-v7-${sandboxBinding.id}` };
-      expect(sandboxCapabilitySnapshotSchema.safeParse(testCapabilities(image)).success).toBe(true);
+      expect(sandboxCapabilitySnapshotSchema.safeParse({ ...testCapabilities(image), evidenceKind: "local_fixture", qualificationTarget: undefined, qualificationProbeFixture: undefined, qualificationCredentialFixture: undefined }).success).toBe(true);
       const serviceOptions = {
         operatorUserIds: [f.userId],
         credentialBrokerOrigin: "https://paperclip.example.test/",
@@ -736,10 +1279,86 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         throw new Error(`CI-only qualification did not pass: ${JSON.stringify({ report: retained.qualifications[0], probes: probeReceipts.filter(row => (row.payload as Record<string, any>).action === "probe").map(row => ({ test: (row.payload as any).probe, status: row.status, errorCode: row.errorCode, safeResult: row.safeResult })) })}`);
       }
       expect(qualification).toMatchObject({ status: "ready", version: 2 });
+      const [revokedQualificationGrant] = await db.select({ status: connectionGrants.status }).from(connectionGrants)
+        .where(eq(connectionGrants.id, qualificationGrant!.id)).limit(1);
+      const [activeRuntimeGrant] = await db.select({ status: connectionGrants.status }).from(connectionGrants)
+        .where(eq(connectionGrants.id, brokerGrant!.id)).limit(1);
+      expect(revokedQualificationGrant?.status).toBe("revoked");
+      expect(activeRuntimeGrant?.status).toBe("active");
+      expect(qualificationToolResponses).toEqual(expect.arrayContaining([
+        { caseId: "credential_allow", status: 200, reasonCode: null, marker: credentialFixtureForTest!.marker },
+        { caseId: "credential_raw_read_deny", status: 200, reasonCode: null, marker: credentialFixtureForTest!.marker },
+        { caseId: "credential_wrong_destination_deny", status: 403, reasonCode: "sandbox_qualification_tool_mismatch", marker: null },
+        { caseId: "credential_wrong_binary_deny", status: 401, reasonCode: "sandbox_qualification_credential_required", marker: null },
+        { caseId: "credential_revoke_deny", status: 403, reasonCode: "sandbox_qualification_grant_revoked", marker: null },
+      ]));
+
+      // Recreate only the setup-only canary grant, then revoke it while a
+      // read-only request is in flight. The task's actual boundary grant is
+      // separate and must remain active throughout this race.
+      const qualificationActor = { actorType: "user" as const, actorId: f.userId };
+      const reactivatedCanaryGrant = await qualificationToolAccess.addConnectionInstallation(qualificationConnection.id, {
+        credentialSecretRefs: qualificationSecretRefs, isDefault: true,
+      }, qualificationActor);
+      const [currentCanaryConnection] = await db.select().from(toolConnections).where(eq(toolConnections.id, qualificationConnection.id)).limit(1);
+      await qualificationToolAccess.updateConnection(qualificationConnection.id, {
+        config: { ...(currentCanaryConnection!.config as Record<string, unknown>), sandboxQualificationCanary: {
+          ...qualificationCanary, grantId: reactivatedCanaryGrant.id,
+        } },
+      });
+      const [currentQualificationBinding] = await db.select().from(runtimeSandboxBindings)
+        .where(eq(runtimeSandboxBindings.id, sandboxBinding.id)).limit(1);
+      const qualifiedTarget = testTargets.get(sandboxBinding.id)!;
+      const priorTarget = qualifiedTarget;
+      const targetWithoutHash = { ...priorTarget, bindingVersion: currentQualificationBinding!.version };
+      delete targetWithoutHash.targetHash;
+      const raceTarget = { ...targetWithoutHash, targetHash: nativeSha256(targetWithoutHash) };
+      testTargets.set(sandboxBinding.id, raceTarget);
+      const badMarkerCommandId = randomUUID();
+      const badMarkerCapability = await gateway.issueSandboxQualificationCredentialProbe({
+        actor: f.actor, scope: sandboxIdentity, bindingVersion: currentQualificationBinding!.version,
+        operationKey: `qualification-canary-bad-marker:${sandboxBinding.id}:${currentQualificationBinding!.version}`,
+        target: raceTarget as NonNullable<SandboxCapabilitySnapshot["qualificationTarget"]>,
+        caseId: "credential_allow", commandId: badMarkerCommandId,
+      });
+      expect(badMarkerCapability).toBeTruthy();
+      const allowProbe = sandboxProbeCases(raceTarget.probePolicyHash, SANDBOX_CONTROLS).find(test => test.caseId === "credential_allow")!;
+      qualificationProviderMarkerOverride = "wrong-provider-marker";
+      const badMarkerProbe = { ...allowProbe, qualificationCredentialCapability: badMarkerCapability!.capabilityToken,
+        qualificationCredentialNonce: badMarkerCapability!.nonce, qualificationCommandId: badMarkerCommandId };
+      await driveHost(transportForTest.bridge(f.actor).probe({ ...sandboxIdentity, test: badMarkerProbe }), admissionCell!.id);
+      qualificationProviderMarkerOverride = null;
+      expect(qualificationToolResponses.at(-1)).toMatchObject({
+        caseId: "credential_allow", status: 502, reasonCode: "sandbox_qualification_result_invalid", marker: null,
+      });
+      const inFlightCommandId = randomUUID();
+      const inFlightCapability = await gateway.issueSandboxQualificationCredentialProbe({
+        actor: f.actor, scope: sandboxIdentity, bindingVersion: currentQualificationBinding!.version,
+        operationKey: `qualification-canary-race:${sandboxBinding.id}:${currentQualificationBinding!.version}`,
+        target: raceTarget as NonNullable<SandboxCapabilitySnapshot["qualificationTarget"]>,
+        caseId: "credential_allow", commandId: inFlightCommandId,
+      });
+      expect(inFlightCapability).toBeTruthy();
+      const raceProbe = { ...allowProbe, qualificationCredentialCapability: inFlightCapability!.capabilityToken,
+        qualificationCredentialNonce: inFlightCapability!.nonce, qualificationCommandId: inFlightCommandId };
+      const raceBarrier = deferNextProviderResponse();
+      const raceRequest = driveHost(transportForTest.bridge(f.actor).probe({ ...sandboxIdentity, test: raceProbe }), admissionCell!.id);
+      await raceBarrier.started;
+      await qualificationToolAccess.revokeConnectionGrant(qualificationConnection.id, reactivatedCanaryGrant.id, qualificationActor);
+      raceBarrier.release();
+      await raceRequest;
+      expect(qualificationToolResponses.at(-1)).toMatchObject({
+        caseId: "credential_allow", status: 403, reasonCode: "sandbox_qualification_grant_revoked", marker: null,
+      });
+      const [stillActiveRuntimeGrant] = await db.select({ status: connectionGrants.status }).from(connectionGrants)
+        .where(eq(connectionGrants.id, brokerGrant!.id)).limit(1);
+      expect(stillActiveRuntimeGrant?.status).toBe("active");
       const candidatePolicy = structuredClone(boundary);
       candidatePolicy.riskClass = "C3";
-      const compiled = await executionSandboxService(db, serviceOptions).compile(f.actor, f.home, sandboxBinding.id, { expectedVersion: 2, executionManifestId: manifest!.record.id, candidatePolicy });
+      candidatePolicy.resources.wallClockSeconds = Math.max(1, Math.floor(boundary.resources.wallClockSeconds / 2));
+      let compiled = await executionSandboxService(db, serviceOptions).compile(f.actor, f.home, sandboxBinding.id, { expectedVersion: 2, executionManifestId: manifest!.record.id, candidatePolicy });
       expect(compiled.status, JSON.stringify({ proverResult: compiled.compilation.proverResult, failedBoundaries: compiled.compilation.failedBoundaries, unsupportedFeatures: compiled.compilation.unsupportedFeatures })).toBe("qualified");
+      const firstPolicySnapshotId = compiled.id;
       const runtime = runtimeControlService(db, {
         runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 },
       } as SaasPlatformConfig, undefined, { credentialBrokerOrigin: "https://paperclip.example.test/" });
@@ -757,19 +1376,71 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       }));
       app.use(errorHandler);
       const admissionPath = `/api/companies/${f.home}/runtime-sandboxes/${sandboxBinding.id}/admit`;
+      const driftedTargetBase = { ...qualifiedTarget, runtimeBinarySha256: "9".repeat(64) };
+      const { targetHash: _oldTargetHash, ...driftedTargetFacts } = driftedTargetBase;
+      testTargets.set(sandboxBinding.id, { ...driftedTargetBase, targetHash: nativeSha256(driftedTargetFacts) });
+      const commandsBeforeMechanismDrift = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id));
+      const commandIdsBeforeMechanismDrift = new Set(commandsBeforeMechanismDrift.map(command => command.id));
+      const changedRuntime = await driveHost(request(app).post(admissionPath).send({ expectedVersion: 3, policySnapshotId: compiled.id }), admissionCell!.id);
+      expect(changedRuntime.status).toBe(409);
+      expect(JSON.stringify(changedRuntime.body)).toContain("Current protected-host capability snapshot changed");
+      const afterMechanismDrift = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id));
+      const driftCommands = afterMechanismDrift.filter(command => !commandIdsBeforeMechanismDrift.has(command.id));
+      expect(driftCommands.map(command => (command.payload as Record<string, unknown>).action)).toEqual(["capabilities"]);
+      testTargets.set(sandboxBinding.id, qualifiedTarget);
       const commandCountBeforeDenials = (await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id))).length;
       await db.update(agentProviderBindings).set({ status: "revoked" }).where(eq(agentProviderBindings.id, provider.id));
-      const revokedProvider = await request(app).post(admissionPath).send({ expectedVersion: 3, policySnapshotId: compiled.id });
+      const revokedProvider = await request(app).post(admissionPath).send({ expectedVersion: 5, policySnapshotId: compiled.id });
       expect(revokedProvider.status).toBe(409);
       await db.update(agentProviderBindings).set({ status: "active" }).where(eq(agentProviderBindings.id, provider.id));
       await db.update(heartbeatRuns).set({ status: "paused" }).where(eq(heartbeatRuns.id, run!.id));
-      const pausedRun = await request(app).post(admissionPath).send({ expectedVersion: 3, policySnapshotId: compiled.id });
+      const pausedRun = await request(app).post(admissionPath).send({ expectedVersion: 5, policySnapshotId: compiled.id });
       expect(pausedRun.status).toBe(409);
       await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, run!.id));
       expect((await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id))).length).toBe(commandCountBeforeDenials);
-      const admissionPromise = request(app).post(admissionPath).send({ expectedVersion: 3, policySnapshotId: compiled.id });
-      const admitted = await driveHost(admissionPromise.then(response => { expect(response.status, JSON.stringify(response.body)).toBe(200); return response.body; }), admissionCell!.id);
-      expect(admitted.binding).toMatchObject({ status: "running", version: 5 });
+      const [bindingBeforeAdmission] = await db.select({ capabilitySnapshot: runtimeSandboxBindings.capabilitySnapshot,
+        version: runtimeSandboxBindings.version }).from(runtimeSandboxBindings)
+        .where(eq(runtimeSandboxBindings.id, sandboxBinding.id)).limit(1);
+      const currentAdmissionCapabilities = await driveHost(transportForTest.bridge(f.actor).capabilities(sandboxIdentity), admissionCell!.id);
+      const storedFacts = sandboxCapabilityFacts(sandboxCapabilitySnapshotSchema.parse(bindingBeforeAdmission!.capabilitySnapshot));
+      const currentFacts = sandboxCapabilityFacts(sandboxCapabilitySnapshotSchema.parse(currentAdmissionCapabilities!));
+      const storedFactRecord = storedFacts as unknown as Record<string, unknown>;
+      const currentFactRecord = currentFacts as unknown as Record<string, unknown>;
+      const factMismatches = Object.keys(storedFactRecord).filter(key => nativeSha256(storedFactRecord[key]) !== nativeSha256(currentFactRecord[key]));
+      const storedMechanism = storedFactRecord.qualificationMechanism as Record<string, unknown> | null;
+      const currentMechanism = currentFactRecord.qualificationMechanism as Record<string, unknown> | null;
+      const mechanismMismatches = Object.keys(storedMechanism ?? {}).filter(key =>
+        nativeSha256(storedMechanism?.[key]) !== nativeSha256(currentMechanism?.[key])).map(key => `qualificationMechanism.${key}`);
+      expect([...factMismatches.filter(key => key !== "qualificationMechanism"), ...mechanismMismatches]).toEqual([]);
+      const admissionInput = { expectedVersion: bindingBeforeAdmission!.version, policySnapshotId: compiled.id };
+      const admissionPromise = request(app).post(admissionPath).send(admissionInput);
+      let admissionReplay: Promise<{ status: number; body: any } | { error: unknown }> | undefined;
+      let replayHostCommandCount: { before: number; after: number } | undefined;
+      const admitted = await driveHost(admissionPromise.then(response => { expect(response.status, JSON.stringify(response.body)).toBe(200); return response.body; }),
+        admissionCell!.id, async command => {
+          if (command.action === "prepare" && !admissionReplay) {
+            const before = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
+              .where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id));
+            const currentReplay = request(app).post(admissionPath).send(admissionInput)
+              .then(response => ({ status: response.status, body: response.body }), error => ({ error }));
+            admissionReplay = currentReplay;
+            const result = await currentReplay;
+            if ("error" in result) throw result.error;
+            const after = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
+              .where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id));
+            replayHostCommandCount = { before: before.length, after: after.length };
+          }
+        });
+      expect(admitted.binding).toMatchObject({ status: "running" });
+      expect(admissionReplay).toBeDefined();
+      const replayResult = await admissionReplay!;
+      if ("error" in replayResult) throw replayResult.error;
+      expect(replayResult.status, JSON.stringify(replayResult.body)).toBe(200);
+      expect(replayResult.body).toMatchObject({ duplicate: true, inProgress: true, binding: { status: "admitting" } });
+      expect(replayHostCommandCount?.after).toBe(replayHostCommandCount?.before,
+        "an exact in-progress retry observes the claim without dispatching another host effect");
+      expect(admitted.binding.version).toBe(bindingBeforeAdmission!.version + 2,
+        "the durable claim and successful start each advance the binding fence");
       expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "HEALTHY" });
       expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"]]);
       const previousJwtSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
@@ -781,6 +1452,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       await runtime.relay.listen(0);
       const relayHost = new WebSocket(`ws://127.0.0.1:${(relayServer.address() as import("node:net").AddressInfo).port}/api/internal/runtime/relay`);
       let stopResult: any = null;
+      const adapterExecutionDrains: Promise<void>[] = [];
       try {
         await once(relayHost, "open");
         const relayProof = signedRuntimeRelayProof(host!.id, keys.privateKey);
@@ -889,12 +1561,16 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         await runAdmissionRace(true);
         const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask: runtime.executeSandboxTask });
         const executionEnvironment = { id: randomUUID(), driver: "sandbox", config: {}, envVars: {}, metadata: null } as any;
-        const executeThroughAdapter = () => environmentRuntime.execute({
+        const executeThroughAdapter = () => {
+          const execution = environmentRuntime.execute({
           environment: executionEnvironment,
           lease: lease as any,
           command: "node", args: ["-e", "process.stdout.write('fixture')"], cwd: "/workspace", timeoutMs: 60000,
           onLog: async (stream, chunk) => { streamed.push([stream, chunk]); },
-        });
+          });
+          adapterExecutionDrains.push(execution.then(() => undefined, () => undefined));
+          return execution;
+        };
         const streamed: Array<[string, string]> = [];
         const firstFrame = new Promise<Record<string, any>>(resolve => relayHost.on("message", raw => {
           const message = JSON.parse(raw.toString());
@@ -945,7 +1621,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         expect(dispatched.body.result.isError).toBe(false);
         expect(dispatched.body.result.content[0].text).toContain("read ok");
         expect(dispatchedBrokerCalls).toHaveLength(dispatchedBeforeDeniedCalls + 1);
-        expect(dispatchedBrokerCalls[0]?.authorization).toBe(`Bearer ${providerSecretValue}`);
+        expect(dispatchedBrokerCalls[dispatchedBeforeDeniedCalls]?.authorization).toBe(`Bearer ${providerSecretValue}`);
         await brokerOperation(brokerToken!, namedGateway.gatewayPublicId, operationId).expect(200);
         expect(dispatchedBrokerCalls).toHaveLength(dispatchedBeforeDeniedCalls + 1);
         await db.update(toolConnections).set({
@@ -994,12 +1670,82 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           capabilityToken: firstCommand.capabilityToken, onOutput: () => {},
         })).rejects.toThrow();
 
+        const service = executionSandboxService(db, {
+          ...serviceOptions,
+          recordRuntimeWorkloadState: (tx, input) => runtime.recordSandboxWorkloadState(tx, input),
+        });
+        stopResult = await driveHost(service.stop(f.actor, f.home, sandboxBinding.id, "fixture-user-stop"), admissionCell!.id);
+        expect(stopResult.binding.status).toBe("stopped");
+        const firstPolicyExpiry = compiled.expiresAt.getTime();
+        const [policyAfterStop] = await db.select().from(runtimePolicySnapshots)
+          .where(eq(runtimePolicySnapshots.id, compiled.id)).limit(1);
+        expect(policyAfterStop?.status).toBe("revoked");
+        expect(policyAfterStop?.expiresAt.getTime()).toBe(firstPolicyExpiry);
+        const longerRecompilePolicy = structuredClone(candidatePolicy);
+        longerRecompilePolicy.resources.wallClockSeconds = boundary.resources.wallClockSeconds;
+        expect(longerRecompilePolicy.resources.wallClockSeconds).toBeGreaterThan(candidatePolicy.resources.wallClockSeconds);
+        compiled = await executionSandboxService(db, serviceOptions).compile(f.actor, f.home, sandboxBinding.id, {
+          expectedVersion: stopResult.binding.version, executionManifestId: manifest!.record.id,
+          candidatePolicy: longerRecompilePolicy,
+        });
+        expect(compiled.status).toBe("qualified");
+        expect(compiled.expiresAt.getTime()).toBeLessThanOrEqual(firstPolicyExpiry);
+        expect(compiled.id).not.toBe(firstPolicySnapshotId);
+        const [bindingAfterRecompile] = await db.select({ version: runtimeSandboxBindings.version })
+          .from(runtimeSandboxBindings).where(eq(runtimeSandboxBindings.id, sandboxBinding.id)).limit(1);
+        const firstAdmissionTarget = testTargets.get(sandboxBinding.id)!;
+        expect(firstAdmissionTarget.bindingVersion).toBeGreaterThan(qualifiedTarget.bindingVersion);
+        const commandsBeforeStaleVersion = await db.select().from(runtimeHostCommands)
+          .where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id));
+        const staleAdmission = await request(app).post(admissionPath).send({
+          expectedVersion: stopResult.binding.version, policySnapshotId: compiled.id,
+        });
+        expect(staleAdmission.status).toBe(409);
+        expect(JSON.stringify(staleAdmission.body)).toContain("Sandbox changed; refresh before admission");
+        expect((await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id))).length)
+          .toBe(commandsBeforeStaleVersion.length);
+        const secondAdmissionPromise = request(app).post(admissionPath).send({
+          expectedVersion: bindingAfterRecompile!.version, policySnapshotId: compiled.id,
+        });
+        const secondAdmission = await driveHost(secondAdmissionPromise.then(response => {
+          expect(response.status, JSON.stringify(response.body)).toBe(200); return response.body;
+        }), admissionCell!.id);
+        expect(secondAdmission.binding.status).toBe("running");
+        const oldExecClaims = verifySandboxExecJwt(firstCommand.capabilityToken);
+        expect(oldExecClaims?.sandbox_exec.policySnapshotId).toBe(firstPolicySnapshotId);
+        const [revokedPriorPolicy] = await db.select({ status: runtimePolicySnapshots.status })
+          .from(runtimePolicySnapshots).where(eq(runtimePolicySnapshots.id, firstPolicySnapshotId)).limit(1);
+        expect(revokedPriorPolicy?.status).toBe("revoked");
+        await expect(runtime.relay.executeOpenShell({
+          cellId: admissionCell!.id, generation: admissionCell!.generation.toString(), request: firstCommand.request,
+          capabilityToken: firstCommand.capabilityToken, onOutput: () => {},
+        })).rejects.toThrow();
+        const rejectedRunningPolicy = await db.insert(runtimePolicySnapshots).values({
+          ...compiled, id: randomUUID(), policyVersion: compiled.policyVersion + 1, status: "qualified",
+        }).then(() => null, error => error as { cause?: { code?: string; message?: string } });
+        expect(rejectedRunningPolicy?.cause?.code).toBe("23514");
+        expect(rejectedRunningPolicy?.cause?.message).toContain("sandbox_policy_current_execution_required");
+        const secondAdmissionTarget = testTargets.get(sandboxBinding.id)!;
+        expect(secondAdmissionTarget.bindingVersion).toBeGreaterThan(firstAdmissionTarget.bindingVersion);
+        const admissionEffectPayloads = (await db.select({ payload: runtimeHostCommands.payload })
+          .from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id)))
+          .map(row => row.payload as Record<string, any>);
+        const applyEpochKeys = admissionEffectPayloads.filter(payload => payload.action === "apply")
+          .map(payload => payload.admission?.idempotencyKey).filter((key): key is string => typeof key === "string");
+        const startEpochKeys = admissionEffectPayloads.filter(payload => payload.action === "start")
+          .map(payload => payload.start?.idempotencyKey).filter((key): key is string => typeof key === "string");
+        expect(applyEpochKeys).toHaveLength(2);
+        expect(new Set(applyEpochKeys).size).toBe(2);
+        expect(startEpochKeys).toHaveLength(2);
+        expect(new Set(startEpochKeys).size).toBe(2);
         const secondFrame = new Promise<Record<string, any>>(resolve => relayHost.on("message", raw => {
           const message = JSON.parse(raw.toString());
           if (message.type === "exec_open") resolve(message);
         }));
         const uncertainExecution = executeThroughAdapter();
         const uncertainCommand = await secondFrame;
+        const currentExecClaims = verifySandboxExecJwt(uncertainCommand.capabilityToken);
+        expect(currentExecClaims?.sandbox_exec.policySnapshotId).toBe(compiled.id);
         await db.update(heartbeatRuns).set({ status: "paused" }).where(eq(heartbeatRuns.id, run!.id));
         relayHost.send(JSON.stringify({ type: "exec_output", channelId: uncertainCommand.channelId, stream: "stdout", base64: Buffer.from("revoked output").toString("base64") }));
         await expect(uncertainExecution).rejects.toThrow("Current active native Task run is required");
@@ -1009,11 +1755,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         expect(uncertainClaim?.status).toBe("CLAIMED");
         await expect(executeThroughAdapter()).rejects.toThrow("previous sandbox execution");
 
-        const service = executionSandboxService(db, {
-          ...serviceOptions,
-          recordRuntimeWorkloadState: (tx, input) => runtime.recordSandboxWorkloadState(tx, input),
-        });
-        stopResult = await driveHost(service.stop(f.actor, f.home, sandboxBinding.id, "fixture-user-stop"), admissionCell!.id);
+        stopResult = await driveHost(service.stop(f.actor, f.home, sandboxBinding.id, "fixture-user-stop-after-uncertain"), admissionCell!.id);
         expect(stopResult.binding.status).toBe("stopped");
         await environmentService(db).releaseLease(lease!.id, "released");
         await db.update(heartbeatRuns).set({ status: "failed", resultJson: { workspaceRestoreFailure: "restore_failed" } })
@@ -1132,6 +1874,9 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       } finally {
         relayHost.terminate();
         await runtime.relay.stop();
+        // Each execution is asserted at its call site; drain handled settlements
+        // here so no late relay rejection can escape teardown.
+        await Promise.all(adapterExecutionDrains);
         await new Promise<void>(resolve => relayServer.close(() => resolve()));
         if (previousJwtSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
         else process.env.PAPERCLIP_AGENT_JWT_SECRET = previousJwtSecret;
@@ -1139,7 +1884,8 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       await new Promise(resolve => setTimeout(resolve, 5));
       expect(stopResult.binding.status).toBe("stopped");
       expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "STOPPED", activeSince: null });
-      expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"], ["stop", "SUCCEEDED"]]);
+      expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status]))
+        .toEqual([["start", "SUCCEEDED"], ["stop", "SUCCEEDED"], ["start", "SUCCEEDED"], ["stop", "SUCCEEDED"]]);
       expect((await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.entityId, admissionCell!.id)))).some(event => event.action === "runtime.sandbox_workload_started")).toBe(true);
     }, 240000);
     it("rejects a late completion after host fencing and expires bounded pending work", async () => {

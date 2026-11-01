@@ -64,13 +64,24 @@ async function handleMcpGatewayProtocol(
 ) {
   try {
     const token = bearerToken(req);
-    if (!token) {
-      res.status(401).json({ error: "Bearer token is required" });
-      return;
-    }
     const headers = callerHeaders(req);
     const body = (req.body ?? {}) as { jsonrpc?: string; id?: unknown; method?: string; params?: Record<string, unknown> };
     const id = body.id ?? null;
+    if (!token) {
+      const params = body.params ?? {};
+      const name = typeof params.name === "string" ? params.name : "";
+      if (body.method === "tools/call" && locator.gatewayPublicId && name &&
+        await toolGateway.isSandboxQualificationCanaryCall({ gatewayPublicId: locator.gatewayPublicId, tool: name })) {
+        res.status(401).json({ error: { message: "A one-use sandbox qualification capability is required", data: { reasonCode: "sandbox_qualification_credential_required" } } });
+      } else res.status(401).json({ error: "Bearer token is required" });
+      return;
+    }
+    const qualificationToken = toolGateway.isSandboxQualificationCredentialToken(token);
+    if (qualificationToken && body.jsonrpc !== "2.0")
+      throw new ToolGatewayHttpError(403, "Qualification request does not match its one-use protocol body", "sandbox_qualification_tool_mismatch");
+    if (qualificationToken && body.method !== "tools/call") {
+      throw new ToolGatewayHttpError(403, "Qualification credential is valid only for its one-use tool call", "sandbox_qualification_tool_mismatch");
+    }
     if (body.method === "initialize") {
       const binding = await toolGateway.describeNamedGatewayRunBinding({
         ...locator,
@@ -141,6 +152,21 @@ async function handleMcpGatewayProtocol(
       const name = typeof params.name === "string" ? params.name : "";
       if (!name) {
         res.status(400).json({ jsonrpc: "2.0", id, error: { code: -32602, message: "params.name is required" } });
+        return;
+      }
+      if (qualificationToken) {
+        if (typeof id !== "string" || !uuidPattern.test(id) || Object.keys(params).some(key => key !== "name" && key !== "arguments"))
+          throw new ToolGatewayHttpError(403, "Qualification request does not match its one-use body", "sandbox_qualification_tool_mismatch");
+        const result = await toolGateway.executeSandboxQualificationCredentialTool({
+          capabilityToken: token, gatewayPublicId: locator.gatewayPublicId ?? "", commandId: id,
+          tool: name, parameters: params.arguments ?? {},
+        });
+        const resultRecord = result.result && typeof result.result === "object" && !Array.isArray(result.result)
+          ? result.result as Record<string, unknown> : null;
+        const contentText = typeof resultRecord?.content === "string"
+          ? resultRecord.content : JSON.stringify(resultRecord?.data ?? result.result ?? null);
+        res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: contentText }],
+          structuredContent: resultRecord?.structuredContent ?? resultRecord?.data ?? null, isError: false } });
         return;
       }
       const contextMethods = {

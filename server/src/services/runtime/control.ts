@@ -687,9 +687,9 @@ export function runtimeControlService(
     const reply = command.safeResult as Record<string, any> | null;
     if (payload.action !== input.action || payload.scope?.bindingId !== input.bindingId || payload.scope?.companyId !== input.companyId || payload.scope?.cellId !== input.cellId || payload.scope?.cellGeneration !== input.generation || reply?.action !== input.action || (input.action === "start" ? reply.started !== true || reply.policyHash !== input.policyHash : reply.stopped !== true))
       throw conflict("Signed sandbox workload receipt does not match the requested state transition");
-    if (input.action === "start" && (cell.status !== "STOPPED" || payload.start?.policyHash !== input.policyHash || payload.start?.idempotencyKey !== `v7-sandbox-start:${input.bindingId}:${input.generation}:${input.policySnapshotId}`))
+    if (input.action === "start" && (cell.status !== "STOPPED" || payload.start?.policyHash !== input.policyHash))
       throw conflict("Sandbox Start receipt is not bound to the current stopped-cell admission");
-    const [claim] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+    const [claim] = await tx.select({ id: activityLog.id, details: activityLog.details }).from(activityLog).where(and(
       eq(activityLog.companyId, input.companyId), eq(activityLog.entityType, "runtime_sandbox"),
       eq(activityLog.entityId, input.bindingId), eq(activityLog.action, "sandbox.admission_claimed"),
       sql`${activityLog.details}->>'claimKey' = ${input.claimKey}`,
@@ -700,6 +700,13 @@ export function runtimeControlService(
       sql`${activityLog.details}->>'policyHash' = ${input.policyHash}`,
     )).limit(1);
     if (!claim) throw conflict("Sandbox workload receipt has no exact native admission claim");
+    const claimDetails = claim.details as Record<string, unknown>;
+    const claimVersion = Number(claimDetails.claimVersion);
+    const expectedVersion = Number(claimDetails.expectedVersion);
+    if (input.action === "start" && (!Number.isSafeInteger(claimVersion) ||
+      !Number.isSafeInteger(expectedVersion) || claimVersion !== expectedVersion + 1 ||
+      payload.start?.idempotencyKey !== `v7-sandbox-start:${input.bindingId}:${input.generation}:${claimVersion}:${input.policySnapshotId}`))
+      throw conflict("Sandbox Start receipt is not bound to the current admission epoch");
     const operationId = randomUUID();
     const requestHash = input.action === "stop" && input.idempotencyKey
       ? sha256(JSON.stringify({ cellId: input.cellId, action: "stop", idempotencyKey: input.idempotencyKey }))

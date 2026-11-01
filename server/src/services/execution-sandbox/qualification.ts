@@ -8,7 +8,22 @@ import {
   sandboxProbeCases,
   type ExecutionSandboxBackend,
   type SandboxIdentity,
+  type SandboxProbeCase,
 } from "./backend.js";
+
+export function sandboxQualificationCredentialFixtureValid(fixture: NonNullable<SandboxCapabilitySnapshot["qualificationCredentialFixture"]> | undefined) {
+  if (!fixture) return true;
+  const { fixtureHash, ...fixtureBase } = fixture;
+  let originValid = false;
+  try {
+    const origin = new URL(fixture.origin);
+    originValid = origin.protocol === "https:" && origin.origin === fixture.origin && origin.pathname === "/" &&
+      !origin.search && !origin.hash && Number(origin.port || 443) === fixture.port;
+  } catch { /* fail closed */ }
+  return nativeSha256(fixtureBase) === fixtureHash &&
+    nativeSha256({ caseId: "<caseId>", fixtureId: "<fixtureId>", nonce: "<nonce>" }) === fixture.argumentTemplateHash &&
+    originValid;
+}
 
 /** Positive and negative observations come from a registered backend, never
  * request-body booleans. Unsupported cases cannot earn an assurance control. */
@@ -18,6 +33,15 @@ export async function runSandboxQualification(
   now = new Date(),
   boundaryPolicyHash = "0".repeat(64),
   requiredControls: readonly string[] = SANDBOX_CONTROLS,
+  expectedProvisioning?: {
+    bindingVersion: number; sandboxId: string; containerId: string; hostEpoch: number;
+    imageDigest: string; provisioningHash: string; policyHash: string; probePolicyHash: string;
+    resourceLimits: { cpuMillis: number; memoryBytes: number; diskBytes: number; pidsLimit: number };
+  },
+  issueCredentialProbe?: (input: {
+    test: SandboxProbeCase;
+    target: NonNullable<SandboxCapabilitySnapshot["qualificationTarget"]>;
+  }) => Promise<{ commandId: string; capabilityToken: string; nonce: string } | null>,
 ) {
   const started = performance.now();
   const clock = () => new Date(now.getTime() + performance.now() - started);
@@ -36,6 +60,25 @@ export async function runSandboxQualification(
       new Date(value.expiresAt) <= new Date(value.testedAt)
     )
       return null;
+    if (backend.evidenceKind === "protected_host_report") {
+      const target = value.qualificationTarget;
+      const credentialFixtureHashValid = sandboxQualificationCredentialFixtureValid(target?.qualificationCredentialFixture);
+      const credentialFixtureMatches = nativeSha256(target?.qualificationCredentialFixture ?? null) ===
+        nativeSha256(value.qualificationCredentialFixture ?? null);
+      if (!target || target.companyId !== identity.companyId || target.bindingId !== identity.bindingId ||
+        target.cellId !== identity.cellId || target.cellGeneration !== identity.cellGeneration ||
+        target.sandboxRef !== identity.sandboxRef || target.imageDigest !== value.sandboxImageDigest ||
+        target.hostKernelVersion !== value.hostKernelVersion || target.phase !== "Ready" ||
+        !/^[a-f0-9]{64}$/.test(target.runtimeBinarySha256) || !/^[a-f0-9]{64}$/.test(target.openshellCliSha256) ||
+        !/^[a-f0-9]{64}$/.test(target.dockerEngineIdHash) || !/^[a-f0-9]{64}$/.test(target.probeFixtureHash) || !credentialFixtureHashValid || !credentialFixtureMatches ||
+        nativeSha256((({ targetHash: _targetHash, ...targetBase }) => targetBase)(target)) !== target.targetHash ||
+        (expectedProvisioning && (target.bindingVersion !== expectedProvisioning.bindingVersion ||
+          target.sandboxId !== expectedProvisioning.sandboxId || target.containerId !== expectedProvisioning.containerId ||
+          target.hostEpoch !== expectedProvisioning.hostEpoch || target.imageDigest !== expectedProvisioning.imageDigest ||
+          target.provisioningHash !== expectedProvisioning.provisioningHash || target.policyHash !== expectedProvisioning.policyHash ||
+          target.probePolicyHash !== expectedProvisioning.probePolicyHash ||
+          nativeSha256(target.resourceLimits) !== nativeSha256(expectedProvisioning.resourceLimits)))) return null;
+    }
     return value;
   };
   const declared = await readCapabilities();
@@ -45,21 +88,37 @@ export async function runSandboxQualification(
     verdict: "pass" | "fail" | "unsupported";
     observationHash: string | null;
     contractHash: string;
+    targetQualificationHash: string | null;
   }> = [];
   const probeCases = sandboxProbeCases(boundaryPolicyHash, requiredControls);
   for (const test of probeCases) {
     try {
-      const result = await backend.probeBoundary({ ...identity, test });
+      let probe = test;
+      if (test.control === "credentialBrokering" && backend.evidenceKind === "protected_host_report") {
+        const target = declared?.qualificationTarget;
+        const issued = target?.qualificationCredentialFixture && issueCredentialProbe ? await issueCredentialProbe({ test, target }).catch(() => null) : null;
+        if (!issued) {
+          results.push({ caseId: test.caseId, control: test.control, verdict: "unsupported", observationHash: null,
+            contractHash: test.contractHash, targetQualificationHash: null });
+          continue;
+        }
+        probe = { ...test, qualificationCredentialCapability: issued.capabilityToken, qualificationCommandId: issued.commandId,
+          qualificationCredentialNonce: issued.nonce };
+      }
+      const result = await backend.probeBoundary({ ...identity, test: probe });
       const contractMatches = result.contractHash === test.contractHash;
+      const targetMatches = backend.evidenceKind !== "protected_host_report" ||
+        (Boolean(declared?.qualificationTarget) && result.targetQualificationHash === declared!.qualificationTarget!.targetHash);
       results.push({
         caseId: test.caseId,
         control: test.control,
-        verdict: !contractMatches ? "unsupported" : result.verdict === "pass" &&
+        verdict: !contractMatches || !targetMatches ? "unsupported" : result.verdict === "pass" &&
           !result.observationHash?.match(/^[a-f0-9]{64}$/)
             ? "unsupported"
             : result.verdict,
         observationHash: result.observationHash,
         contractHash: test.contractHash,
+        targetQualificationHash: result.targetQualificationHash ?? null,
       });
     } catch {
       results.push({
@@ -68,6 +127,7 @@ export async function runSandboxQualification(
         verdict: "unsupported",
         observationHash: null,
         contractHash: test.contractHash,
+        targetQualificationHash: null,
       });
     }
   }
@@ -87,6 +147,8 @@ export async function runSandboxQualification(
     .filter((r) => r.verdict !== "pass")
     .map((r) => `${r.caseId}:${r.verdict}`);
   if (!unchanged) exceptions.push("capability_snapshot_changed_or_expired");
+  if (backend.evidenceKind === "protected_host_report" && !declared?.qualificationTarget)
+    exceptions.push("protected_qualification_target_missing");
   if (declared)
   for (const control of requiredControls)
       if (!declared[control as keyof SandboxCapabilitySnapshot]) exceptions.push(`${control}:not_declared`);

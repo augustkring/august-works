@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createLocalAgentJwt, createSandboxBrokerJwt, createSandboxExecJwt, verifyLocalAgentJwt, verifySandboxBrokerJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
+import { createLocalAgentJwt, createSandboxBrokerJwt, createSandboxExecJwt, createSandboxQualificationCredentialJwt, verifyLocalAgentJwt, verifySandboxBrokerJwt, verifySandboxExecJwt, verifySandboxQualificationCredentialJwt } from "../agent-auth-jwt.js";
 
 describe("agent local JWT", () => {
   const secretEnv = "PAPERCLIP_AGENT_JWT_SECRET";
@@ -179,6 +179,40 @@ describe("agent local JWT", () => {
     })!;
     process.env.PAPERCLIP_INSTANCE_ID = "sandbox-broker-current-instance";
     expect(verifySandboxBrokerJwt(otherInstanceToken)).toBeNull();
+  });
+
+  it("issues a distinct, narrowly scoped qualification credential token that cannot authenticate as a task broker", () => {
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    vi.setSystemTime(now);
+    const scope = {
+      companyId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      bindingId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      cellId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      generation: "7",
+      sandboxRef: "aw-v7-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    };
+    const claim = {
+      version: 1 as const, purpose: "qualification_credential_probe" as const, aud: "paperclip-sandbox-qualification" as const,
+      jti: "11111111-1111-4111-8111-111111111111", commandId: "22222222-2222-4222-8222-222222222222",
+      caseId: "credential_allow" as const, fixtureId: "synthetic-canary-v1", fixtureHash: "a".repeat(64), hostEpoch: 9,
+      scope, bindingVersion: 3, sandboxId: "33333333-3333-4333-8333-333333333333", containerId: "b".repeat(64),
+      provisioningHash: "c".repeat(64), targetQualificationHash: "4".repeat(64), connectionId: "44444444-4444-4444-8444-444444444444",
+      grantId: "55555555-5555-4555-8555-555555555555", secretVersionHash: "d".repeat(64), sourceBindingHash: "6".repeat(64),
+      operatorUserId: "user-1", operatorSessionId: "session-1", profileId: "paperclip-broker",
+      profileHash: "e".repeat(64), binaries: ["/usr/bin/curl"], gatewayPublicId: "gw-fixture", toolName: "mcp.qualification-canary-1234:read-canary",
+      argumentTemplateHash: "f".repeat(64), argumentsHash: "1".repeat(64), requestBodyHash: "2".repeat(64), nonce: "3".repeat(32),
+      origin: "https://sandbox-canary.example.test", method: "POST" as const, path: "/mcp/gateways/gw-fixture", expiresAt: new Date(now.getTime() + 20_000).toISOString(), maxUses: 1 as const,
+    };
+    const token = createSandboxQualificationCredentialJwt({ companyId: scope.companyId, bindingId: scope.bindingId, operatorUserId: "user-1", claim });
+    expect(token).toBeTruthy();
+    expect(verifySandboxQualificationCredentialJwt(token!)).toMatchObject({
+      purpose: "sandbox_qualification_broker", aud: "paperclip-sandbox-qualification", qualification_credential: claim,
+    });
+    expect(verifyLocalAgentJwt(token!)).toBeNull();
+    expect(verifySandboxBrokerJwt(token!)).toBeNull();
+    expect(verifySandboxExecJwt(token!)).toBeNull();
+    expect(createSandboxQualificationCredentialJwt({ companyId: scope.companyId, bindingId: scope.bindingId, operatorUserId: "other-user", claim })).toBeNull();
+    expect(createSandboxQualificationCredentialJwt({ companyId: scope.companyId, bindingId: scope.bindingId, operatorUserId: "user-1", claim: { ...claim, maxUses: 2 as 1 } })).toBeNull();
   });
 
   it("round-trips a skill_test run scope", () => {

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { hkdfSync, randomUUID } from "node:crypto";
 import { and, eq, gt, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import {
   runtimeCells,
@@ -28,9 +28,10 @@ import {
 } from "../v7-authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
-import { equalDigest, randomToken, sha256 } from "../saas/crypto.js";
+import { equalDigest, randomToken, sha256, seal, open as unseal } from "../saas/crypto.js";
 import { runtimeHostAuth } from "../runtime/host-auth.js";
 import { hostVersionMeetsMinimum } from "../runtime/catalog.js";
+import { verifySandboxQualificationCredentialJwt } from "../../agent-auth-jwt.js";
 import {
   assertRemoteRuntimeAssetErasureReady,
   isRemoteRuntimeAssetLocator,
@@ -57,9 +58,84 @@ export type RemoteRuntimeCleanupAttestation = {
   completedAt: string;
   expiresAt: string;
 };
+type SandboxProvisioningInput = Omit<NonNullable<SandboxHostRequest["provisioning"]>, "idleUntilUnixSeconds" | "requestId" | "provisioningHash">;
+function provisioningRequestId(provisioningHash: string) {
+  const bytes = Buffer.from(provisioningHash.slice(0, 32), "hex");
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 import { conflict, forbidden } from "../../errors.js";
 import type { OpenShellHostBridge } from "./openshell-backend.js";
 import type { SandboxIdentity } from "./backend.js";
+
+const SEALED_QUALIFICATION_CREDENTIAL = "__sealedQualificationCredential";
+function qualificationCredentialSealKey() {
+  const master = process.env.PAPERCLIP_AGENT_JWT_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim();
+  if (!master) throw conflict("Qualification credential sealing is unavailable");
+  return Buffer.from(hkdfSync("sha256", Buffer.from(master, "utf8"), Buffer.from("paperclip:v10:sandbox-qualification-capability:v1"), Buffer.from("runtime-host-command-at-rest"), 32)).toString("hex");
+}
+function storedSandboxHostRequest(request: SandboxHostRequest, expectedCommandId?: string): Record<string, unknown> {
+  const token = request.probe?.qualificationCredentialCapability;
+  if (!token) return request as unknown as Record<string, unknown>;
+  const credential = verifySandboxQualificationCredentialJwt(token)?.qualification_credential;
+  if (!credential || (expectedCommandId && credential.commandId !== expectedCommandId)) {
+    throw conflict("Qualification credential cannot be sealed");
+  }
+  const sealContext = `sandbox-qualification-capability:v1:${request.scope.companyId}:${request.scope.bindingId}:${credential.commandId}:${request.hostEpoch}`;
+  const encrypted = seal({ token, nonce: request.probe?.qualificationCredentialNonce }, qualificationCredentialSealKey(), sealContext);
+  const probe = { ...request.probe };
+  delete probe.qualificationCredentialCapability;
+  delete probe.qualificationCredentialNonce;
+  return { ...request, probe, [SEALED_QUALIFICATION_CREDENTIAL]: {
+    version: 1, commandId: credential.commandId, tokenSha256: sha256(token),
+    nonceSha256: sha256(request.probe?.qualificationCredentialNonce ?? ""), sealed: encrypted,
+  } };
+}
+function storedQualificationCredentialHashes(value: unknown): { commandId: string; tokenSha256: string; nonceSha256: string } | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw conflict("Native sandbox command payload is invalid");
+  const sealed = (value as Record<string, unknown>)[SEALED_QUALIFICATION_CREDENTIAL];
+  if (sealed === undefined) return undefined;
+  if (!sealed || typeof sealed !== "object" || Array.isArray(sealed)) throw conflict("Qualification credential envelope is invalid");
+  const envelope = sealed as Record<string, unknown>;
+  if (envelope.version !== 1 || typeof envelope.commandId !== "string" ||
+    typeof envelope.sealed !== "string" || typeof envelope.tokenSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(envelope.tokenSha256) || typeof envelope.nonceSha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(envelope.nonceSha256))
+    throw conflict("Qualification credential envelope is invalid");
+  return { commandId: envelope.commandId, tokenSha256: envelope.tokenSha256, nonceSha256: envelope.nonceSha256 };
+}
+function requestWithoutQualificationCredential(request: SandboxHostRequest): SandboxHostRequest {
+  const copy = structuredClone(request);
+  if (copy.probe) {
+    delete copy.probe.qualificationCredentialCapability;
+    delete copy.probe.qualificationCredentialNonce;
+  }
+  return copy;
+}
+function parseStoredSandboxHostRequest(value: unknown, hydrateCredential = false): SandboxHostRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw conflict("Native sandbox command payload is invalid");
+  const stored = structuredClone(value) as Record<string, unknown>;
+  const sealed = stored[SEALED_QUALIFICATION_CREDENTIAL];
+  const hashes = storedQualificationCredentialHashes(stored);
+  delete stored[SEALED_QUALIFICATION_CREDENTIAL];
+  const parsed = sandboxHostRequestSchema.parse(stored);
+  if (sealed === undefined || !hydrateCredential) return parsed;
+  if (!hashes || typeof (sealed as Record<string, unknown>).sealed !== "string") throw conflict("Qualification credential envelope is invalid");
+  try {
+    const context = `sandbox-qualification-capability:v1:${parsed.scope.companyId}:${parsed.scope.bindingId}:${hashes.commandId}:${parsed.hostEpoch}`;
+    const credential = unseal<{ token?: unknown; nonce?: unknown }>((sealed as Record<string, unknown>).sealed as string, qualificationCredentialSealKey(), context);
+    const claim = typeof credential.token === "string" ? verifySandboxQualificationCredentialJwt(credential.token)?.qualification_credential : null;
+    if (!claim || claim.commandId !== hashes.commandId || claim.scope.companyId !== parsed.scope.companyId || claim.scope.bindingId !== parsed.scope.bindingId ||
+      credential.nonce !== claim.nonce || !parsed.probe || sha256(credential.token as string) !== hashes.tokenSha256 ||
+      sha256(String(credential.nonce ?? "")) !== hashes.nonceSha256) throw new Error("sealed qualification token binding changed");
+    return sandboxHostRequestSchema.parse({ ...parsed, probe: { ...parsed.probe,
+      qualificationCredentialCapability: credential.token, qualificationCredentialNonce: credential.nonce } });
+  } catch {
+    throw conflict("Qualification credential envelope cannot be opened");
+  }
+}
 
 const safety = (action: string) =>
   ["stop", "destroy", "revoke_providers"].includes(action);
@@ -102,6 +178,7 @@ export function nativeSandboxHostTransport(
     request: SandboxHostRequest,
     hostId: string,
     now: Date,
+    commandId?: string,
   ) {
     const [host] = await tx
       .select()
@@ -140,6 +217,7 @@ export function nativeSandboxHostTransport(
       binding.runtimeCellId !== cell.id ||
       binding.cellGeneration !== request.scope.cellGeneration ||
       binding.backend !== "openshell" ||
+      (binding.sandboxRef ?? `aw-v7-${binding.id}`) !== request.scope.sandboxRef ||
       (["apply", "start"].includes(request.action) && binding.status !== "admitting") ||
       ["deleted"].includes(binding.status) ||
       (!safety(request.action) && binding.status === "quarantined") ||
@@ -158,6 +236,25 @@ export function nativeSandboxHostTransport(
       throw conflict("Native sandbox host scope changed", {
         code: "sandbox_scope_changed",
       });
+    // Provisioning is a privileged create effect. Recheck the immutable
+    // operator claim against the live binding and cell at every queue,
+    // worker claim, completion, and receipt read. The initial service check
+    // alone cannot close a concurrent admission or cell transition.
+    if (request.action === "prepare" && request.provisioning) {
+      const setup = request.provisioning;
+      const validPurposeState = setup.purpose === "admission"
+        ? binding.status === "admitting"
+        : ["requested", "ready", "failed"].includes(binding.status);
+      if (
+        cell.status !== "STOPPED" ||
+        binding.version !== setup.bindingVersion ||
+        !validPurposeState ||
+        Date.parse(setup.expiresAt) <= now.getTime()
+      )
+        throw conflict("Native sandbox provisioning claim is stale, expired, or outside its stopped purpose state", {
+          code: "sandbox_scope_changed",
+        });
+    }
     const safetyObservation = ["inspect", "capabilities"].includes(request.action) && ["stopping", "quarantined"].includes(binding.status);
     if (request.cleanupAttestation) {
       // Cleanup is a privacy/revocation obligation for a previously admitted
@@ -189,6 +286,21 @@ export function nativeSandboxHostTransport(
         };
         await assertV7Authorization(tx, actor, request.scope.companyId, "runtime:manage");
       }
+    }
+    if (request.probe?.qualificationCredentialCapability) {
+      const claims = verifySandboxQualificationCredentialJwt(request.probe.qualificationCredentialCapability);
+      const fixture = claims?.qualification_credential;
+      if (request.action !== "probe" || !fixture || fixture.commandId !== commandId ||
+        fixture.caseId !== request.probe.caseId || fixture.scope.companyId !== request.scope.companyId ||
+        fixture.nonce !== request.probe.qualificationCredentialNonce ||
+        fixture.scope.bindingId !== request.scope.bindingId || fixture.scope.cellId !== request.scope.cellId ||
+        fixture.scope.generation !== request.scope.cellGeneration || fixture.scope.sandboxRef !== request.scope.sandboxRef ||
+        fixture.hostEpoch !== request.hostEpoch || fixture.bindingVersion !== binding.version ||
+        Date.parse(fixture.expiresAt) <= now.getTime() || cell.status !== "STOPPED" ||
+        !["requested", "ready", "failed"].includes(binding.status))
+        throw conflict("Qualification credential token is expired or outside its current host probe claim", {
+          code: "sandbox_scope_changed",
+        });
     }
     return { cell, binding, host };
   }
@@ -261,6 +373,7 @@ export function nativeSandboxHostTransport(
     admission?: SandboxHostRequest["admission"],
     start?: SandboxHostRequest["start"],
     idempotencyKey: string = randomUUID(),
+    provisioning?: SandboxProvisioningInput,
   ) {
     scope = {
       companyId: scope.companyId,
@@ -275,12 +388,22 @@ export function nativeSandboxHostTransport(
     // or weakly authenticated operator.
     await assertOperator(actor, action, undefined, scope.companyId, scope.bindingId);
     const originalExpiry =
-      action === "apply" ? admission?.expiresAt : action === "start" ? start?.expiresAt : undefined;
+      action === "apply" ? admission?.expiresAt : action === "start" ? start?.expiresAt : action === "prepare" ? provisioning?.expiresAt : undefined;
     if (
-      (action === "apply" || action === "start") &&
+      (action === "apply" || action === "start" || (action === "prepare" && provisioning)) &&
       (!originalExpiry || !Number.isFinite(Date.parse(originalExpiry)) || Date.parse(originalExpiry) <= now.getTime())
     )
       throw conflict("Original execution deadline expired before host admission");
+    const qualificationCredential = action === "probe" && probe?.qualificationCredentialCapability
+      ? verifySandboxQualificationCredentialJwt(probe.qualificationCredentialCapability)?.qualification_credential
+      : undefined;
+    if (probe?.qualificationCredentialCapability && (!qualificationCredential ||
+      qualificationCredential.commandId !== idempotencyKey || qualificationCredential.caseId !== probe.caseId ||
+      qualificationCredential.nonce !== probe.qualificationCredentialNonce ||
+      qualificationCredential.scope.companyId !== scope.companyId || qualificationCredential.scope.bindingId !== scope.bindingId ||
+      qualificationCredential.scope.cellId !== scope.cellId || qualificationCredential.scope.generation !== scope.cellGeneration ||
+      qualificationCredential.scope.sandboxRef !== scope.sandboxRef || Date.parse(qualificationCredential.expiresAt) <= now.getTime()))
+      throw conflict("Qualification credential token does not match this probe command");
     const commandDeadlineAt = new Date(
       Math.min(
         now.getTime() + Math.min(30000, options.timeoutMs ?? 20000),
@@ -315,7 +438,7 @@ export function nativeSandboxHostTransport(
           : [];
         if (!cell || !host)
           throw conflict("An enrolled native host is required");
-        const request = sandboxHostRequestSchema.parse({
+        let request = sandboxHostRequestSchema.parse({
           version: 1,
           scope,
           action,
@@ -325,21 +448,55 @@ export function nativeSandboxHostTransport(
           hostEpoch: host.credentialVersion,
           imageDigest: cell.activeImageDigest ?? cell.desiredImageDigest,
           requesterUserId: userId,
+          ...(provisioning ? (() => {
+            const idleUntilUnixSeconds = Math.floor(Date.parse(provisioning.expiresAt) / 1000);
+            const envelope = {
+              scope, hostEpoch: host.credentialVersion, imageDigest: cell.activeImageDigest ?? cell.desiredImageDigest,
+              purpose: provisioning.purpose, operationKey: provisioning.operationKey, bindingVersion: provisioning.bindingVersion,
+              expiresAt: provisioning.expiresAt,
+              idleUntilUnixSeconds, policyHash: provisioning.policyHash, document: provisioning.document,
+              resourceLimits: provisioning.resourceLimits,
+            };
+            const provisioningHash = nativeSha256(envelope);
+            return { provisioning: { ...provisioning, idleUntilUnixSeconds, provisioningHash,
+              requestId: provisioningRequestId(provisioningHash) } };
+          })() : {}),
         });
-        await current(tx, request, host.id, now);
         const key = `v7-openshell:${nativeSha256({ scope, action, idempotencyKey })}`;
         const [existing] = await tx
           .select()
           .from(runtimeHostCommands)
           .where(eq(runtimeHostCommands.idempotencyKey, key));
         if (existing) {
-          if (nativeSha256(existing.payload) !== nativeSha256(request))
-            throw conflict(
-              "Sandbox operation key belongs to different immutable inputs",
-            );
+          const previous = parseStoredSandboxHostRequest(existing.payload, false);
+          await current(tx, request, host.id, now, existing.id);
+          if (action === "prepare" && provisioning && previous.provisioning?.operationKey === provisioning.operationKey) {
+            const comparable = (value: SandboxHostRequest) => ({ ...value, provisioning: value.provisioning && {
+              ...value.provisioning, expiresAt: null, idleUntilUnixSeconds: null, requestId: null,
+              provisioningHash: null,
+            } });
+            if (nativeSha256(comparable(previous)) !== nativeSha256(comparable(request)) ||
+              !previous.provisioning || Date.parse(previous.provisioning.expiresAt) <= now.getTime())
+              throw conflict("Sandbox provisioning replay is changed or expired");
+            // Keep the exact first persisted deadline and request bytes on
+            // retries; never renew the bootstrap helper's absolute expiry.
+            request = previous;
+          } else {
+            const previousHashes = storedQualificationCredentialHashes(existing.payload);
+            const incomingCredential = request.probe?.qualificationCredentialCapability;
+            const incomingNonce = request.probe?.qualificationCredentialNonce;
+            const credentialMatches = previousHashes
+              ? !!incomingCredential && !!incomingNonce && sha256(incomingCredential) === previousHashes.tokenSha256 &&
+                sha256(incomingNonce) === previousHashes.nonceSha256
+              : !incomingCredential && !incomingNonce;
+            if (nativeSha256(requestWithoutQualificationCredential(previous)) !==
+              nativeSha256(requestWithoutQualificationCredential(request)) || !credentialMatches)
+              throw conflict("Sandbox operation key belongs to different immutable inputs");
+          }
           await assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
           return existing;
         }
+        await current(tx, request, host.id, now, qualificationCredential?.commandId);
         const active = await tx
           .select({ id: runtimeHostCommands.id })
           .from(runtimeHostCommands)
@@ -357,13 +514,14 @@ export function nativeSandboxHostTransport(
         const [command] = await tx
           .insert(runtimeHostCommands)
           .values({
+            ...(qualificationCredential ? { id: qualificationCredential.commandId } : {}),
             runtimeHostId: host.id,
             companyId: scope.companyId,
             runtimeCellId: scope.cellId,
             cellGeneration: BigInt(scope.cellGeneration),
             commandType: SANDBOX_HOST_COMMAND,
             idempotencyKey: key,
-            payload: request,
+            payload: storedSandboxHostRequest(request, qualificationCredential?.commandId),
             deadlineAt: commandDeadlineAt,
           })
           .onConflictDoNothing()
@@ -402,17 +560,21 @@ export function nativeSandboxHostTransport(
       if (record.status === "SUCCEEDED") {
         return db.transaction(async (tx) => {
           await assertOperator(actor, action, tx as unknown as Db, scope.companyId, scope.bindingId);
+          const storedRequest = parseStoredSandboxHostRequest(record.payload, false);
           await current(
             tx as unknown as Db,
-            sandboxHostRequestSchema.parse(record.payload),
+            storedRequest,
             record.runtimeHostId,
             new Date(),
+            record.id,
           );
+          if (qualificationCredential && Date.parse(qualificationCredential.expiresAt) <= Date.now())
+            throw conflict("Qualification credential expired before receipt reconciliation");
           const reply = sandboxHostReplySchema.parse(record.safeResult);
           if (reply.action !== action)
             throw conflict("Native sandbox reply action changed");
           await assertOperator(actor, action, tx as unknown as Db, scope.companyId, scope.bindingId);
-          return { commandId: record.id, reply };
+          return { commandId: record.id, reply, request: storedRequest };
         });
       }
       if (
@@ -514,7 +676,7 @@ export function nativeSandboxHostTransport(
         if (record.status === "SUCCEEDED") {
           return db.transaction(async transaction => {
             const tx = transaction as unknown as Db;
-            await current(tx, sandboxHostRequestSchema.parse(record.payload), record.runtimeHostId, new Date());
+            await current(tx, parseStoredSandboxHostRequest(record.payload), record.runtimeHostId, new Date(), record.id);
             const reply = sandboxHostReplySchema.parse(record.safeResult);
             if (reply.action !== action) throw conflict("Native cleanup attestation action changed");
             return { commandId: record.id, reply };
@@ -577,14 +739,33 @@ export function nativeSandboxHostTransport(
             throw conflict("Native sandbox reply action changed");
           return reply.capabilities;
         },
-        prepare: async (scope) => {
-          const { reply } = await invoke(actor, scope, "prepare");
+        prepare: async (scope, provisioning) => {
+          const { reply, request } = await invoke(actor, scope, "prepare", undefined, undefined, undefined,
+            provisioning?.operationKey ?? randomUUID(), provisioning);
           if (reply.action !== "prepare")
             throw conflict("Native sandbox reply action changed");
+          if (provisioning && (reply.provisioningHash !== request.provisioning?.provisioningHash ||
+            reply.hostEpoch !== request.hostEpoch || reply.imageDigest !== request.imageDigest ||
+            (!reply.requiresRecreate && (!reply.sandboxId || !reply.containerId)) ||
+            (reply.requiresRecreate && (provisioning.purpose !== "admission" || reply.sandboxId || reply.containerId)) ||
+            reply.bindingVersion !== request.provisioning?.bindingVersion ||
+            reply.policyHash !== request.provisioning?.policyHash ||
+            !/^[a-f0-9]{64}$/.test(reply.probePolicyHash ?? "") ||
+            nativeSha256(reply.resourceLimits ?? null) !== nativeSha256(request.provisioning?.resourceLimits ?? null)))
+            throw conflict("OpenShell did not return the exact journaled provisioning target");
           return {
             ...scope,
             backendVersion: reply.backendVersion,
             imageDigest: reply.imageDigest,
+            ...(reply.hostEpoch ? { hostEpoch: reply.hostEpoch } : {}),
+            ...(reply.sandboxId ? { sandboxId: reply.sandboxId } : {}),
+            ...(reply.containerId ? { containerId: reply.containerId } : {}),
+            ...(reply.provisioningHash ? { provisioningHash: reply.provisioningHash } : {}),
+            ...(reply.bindingVersion ? { bindingVersion: reply.bindingVersion } : {}),
+            ...(reply.policyHash ? { policyHash: reply.policyHash } : {}),
+            ...(reply.probePolicyHash ? { probePolicyHash: reply.probePolicyHash } : {}),
+            ...(reply.resourceLimits ? { resourceLimits: reply.resourceLimits } : {}),
+            ...(reply.requiresRecreate ? { requiresRecreate: true } : {}),
           };
         },
         inspect: async (scope) => {
@@ -665,7 +846,9 @@ export function nativeSandboxHostTransport(
           ).commandId,
         }),
         probe: async (scope) => {
-          const { reply } = await invoke(actor, scope, "probe", scope.test);
+          const { qualificationCommandId, ...wireTest } = scope.test;
+          const commandKey = qualificationCommandId ?? randomUUID();
+          const { reply } = await invoke(actor, scope, "probe", wireTest, undefined, undefined, commandKey);
           if (reply.action !== "probe")
             throw conflict("Native sandbox reply action changed");
           if (reply.contractHash !== scope.test.contractHash)
@@ -704,10 +887,10 @@ export function nativeSandboxHostTransport(
           .limit(1)
           .for("update", { skipLocked: true });
         if (!command) return null;
-        const request = sandboxHostRequestSchema.parse(command.payload);
+        const request = parseStoredSandboxHostRequest(command.payload, false);
         let host;
         try {
-          ({ host } = await current(tx, request, hostId, now));
+          ({ host } = await current(tx, request, hostId, now, command.id));
         } catch {
           await tx
             .update(runtimeHostCommands)
@@ -731,11 +914,13 @@ export function nativeSandboxHostTransport(
             ),
           })
           .where(eq(runtimeHostCommands.id, command.id));
+        const hydratedRequest = parseStoredSandboxHostRequest(command.payload, true);
+        await current(tx, hydratedRequest, hostId, now, command.id);
         return {
           id: command.id,
           deadlineAt: command.deadlineAt,
           envelope: auth.protectCommand(host, command.id, {
-            ...request,
+            ...hydratedRequest,
             claimToken,
           }),
         };
@@ -767,8 +952,8 @@ export function nativeSandboxHostTransport(
           command.cellGeneration?.toString() !== input.generation
         )
           throw forbidden("Native sandbox claim mismatch");
-        const request = sandboxHostRequestSchema.parse(command.payload);
-        await current(tx, request, hostId, now);
+        const request = parseStoredSandboxHostRequest(command.payload, false);
+        await current(tx, request, hostId, now, command.id);
         if (input.reply && input.reply.action !== request.action)
           throw forbidden("Native sandbox action mismatch");
         if (["SUCCEEDED", "FAILED"].includes(command.status)) {
@@ -786,6 +971,10 @@ export function nativeSandboxHostTransport(
           command.leaseUntil <= now
         )
           throw conflict("Native sandbox lease expired");
+        // The sealed bearer token is opened only while this exact durable
+        // command still owns a live CLAIMED lease and current host scope.
+        const hydratedRequest = parseStoredSandboxHostRequest(command.payload, true);
+        await current(tx, hydratedRequest, hostId, now, command.id);
         await tx
           .update(runtimeHostCommands)
           .set({

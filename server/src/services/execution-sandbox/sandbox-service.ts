@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import type { SandboxQualificationCredentialClaim } from "../../agent-auth-jwt.js";
 import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, environmentLeases, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, type Db } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture } from "@paperclipai/shared";
@@ -11,7 +13,7 @@ import { agentRunWritesRevoked, assertAgentRunPolicyAllowed, assertAgentRunWrite
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { capabilityResolverService } from "../capability-resolver.js";
 import { compileSandboxPolicy } from "./policy-compiler.js";
-import { runSandboxQualification } from "./qualification.js";
+import { runSandboxQualification, sandboxQualificationCredentialFixtureValid } from "./qualification.js";
 import { existingCellContainerBackend } from "./compatibility-backend.js";
 import { sandboxProbeCases, type ExecutionSandboxBackend, type SandboxIdentity } from "./backend.js";
 import { fenceSandboxAdmissionOutcome, releaseSandboxAdmissionClaim } from "./sandbox-guardian.js";
@@ -20,9 +22,34 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 
 type Binding = typeof runtimeSandboxBindings.$inferSelect;
-function sandboxCapabilityFacts(value: ReturnType<typeof sandboxCapabilitySnapshotSchema.parse>) {
-  const { testedAt: _testedAt, expiresAt: _expiresAt, qualificationHash: _qualificationHash, ...facts } = value;
-  return facts;
+export function sandboxCapabilityFacts(value: ReturnType<typeof sandboxCapabilitySnapshotSchema.parse>) {
+  const { testedAt: _testedAt, expiresAt: _expiresAt, qualificationHash: _qualificationHash, qualificationTarget, ...facts } = value;
+  // A fresh native provision has a different sandbox/container UUID and
+  // provisioning/policy hashes. Keep the stable mechanism pins from the
+  // qualification receipt in the admission comparison so a newly injected
+  // helper, CLI, daemon or fixture cannot borrow an older qualification.
+  const mechanism = qualificationTarget ? {
+    hostEpoch: qualificationTarget.hostEpoch,
+    companyId: qualificationTarget.companyId,
+    bindingId: qualificationTarget.bindingId,
+    // This is a per-operation authority version. Qualification and admission
+    // advance the row while the host mechanism remains unchanged; prepare and
+    // credential-probe commands still enforce the live version at every fence.
+    cellId: qualificationTarget.cellId,
+    cellGeneration: qualificationTarget.cellGeneration,
+    sandboxRef: qualificationTarget.sandboxRef,
+    imageDigest: qualificationTarget.imageDigest,
+    hostKernelVersion: qualificationTarget.hostKernelVersion,
+    runtimeBinarySha256: qualificationTarget.runtimeBinarySha256,
+    openshellCliSha256: qualificationTarget.openshellCliSha256,
+    dockerEngineIdHash: qualificationTarget.dockerEngineIdHash,
+    policyVersion: qualificationTarget.policyVersion,
+    configRevision: qualificationTarget.configRevision,
+    mechanism: qualificationTarget.mechanism,
+    probeFixtureHash: qualificationTarget.probeFixtureHash,
+    qualificationCredentialFixture: qualificationTarget.qualificationCredentialFixture ?? null,
+  } : null;
+  return { ...facts, qualificationMechanism: mechanism };
 }
 export function executionSandboxService(db: Db, options: {
   operatorUserIds?: readonly string[];
@@ -193,6 +220,7 @@ export function executionSandboxService(db: Db, options: {
     policySnapshotId: string,
     expectedVersion?: number,
     claimKey?: string,
+    replayPhase?: "completed",
   ) {
     await assertConfiguredOperatorAuthentication(
       tx,
@@ -204,19 +232,24 @@ export function executionSandboxService(db: Db, options: {
     await assertV7Enabled(tx, "openshell_v7");
     await access(tx, actor, companyId, true);
     const row = await binding(tx, actor, companyId, id, true);
-    if (expectedVersion !== undefined && row.status === "ready" && row.version !== expectedVersion)
+    if (expectedVersion !== undefined && row.version !== expectedVersion)
       throw conflict("Sandbox changed; refresh before admission");
-    if (row.backend !== "openshell" || !["ready", "admitting", "running"].includes(row.status))
+    if (row.backend !== "openshell" || !["ready", "stopped", "admitting", "running"].includes(row.status))
       throw conflict("Only a currently qualified OpenShell binding can admit work");
     const currentCell = await cell(tx, companyId, row.runtimeCellId);
     const imageDigest = currentCell.activeImageDigest ?? currentCell.desiredImageDigest;
+    const currentCellStateMatches = replayPhase === "completed"
+      ? currentCell.status === "HEALTHY"
+      : currentCell.status === "STOPPED";
     if (
-      currentCell.status !== "STOPPED" ||
+      !currentCellStateMatches ||
       currentCell.generation.toString() !== row.cellGeneration ||
       row.capabilitySnapshotHash === null ||
       row.capabilitySnapshot?.sandboxImageDigest !== imageDigest
     )
-      throw conflict("Current stopped runtime generation and image qualification are required");
+      throw conflict(replayPhase === "completed"
+        ? "Current healthy runtime generation and image qualification are required"
+        : "Current stopped runtime generation and image qualification are required");
     const [snapshot] = await tx
       .select()
       .from(runtimePolicySnapshots)
@@ -372,7 +405,7 @@ export function executionSandboxService(db: Db, options: {
         if (expectedVersion !== details.expectedVersion && expectedVersion !== details.claimVersion)
           throw conflict("Sandbox admission claim version changed");
       }
-    } else if (row.status !== "ready") {
+    } else if (row.status !== "ready" && row.status !== "stopped") {
       throw conflict("Sandbox is already reserved for another admission");
     }
     return { row, currentCell, imageDigest, snapshot, capability, source, selected, claimEvent };
@@ -421,14 +454,69 @@ export function executionSandboxService(db: Db, options: {
       if (!selected) throw conflict("The requested backend is not installed; the binding remains unqualified");
       const current = await cell(db, companyId, initial.runtimeCellId);
       if (initial.version !== expectedVersion || current.generation.toString() !== initial.cellGeneration || current.status !== "STOPPED") throw conflict("Qualification requires the current stopped cell, without disrupting a running workload");
-      const startedAt = new Date(), report = await runSandboxQualification(selected, identity(initial), startedAt, initial.boundaryPolicyHash, initial.boundaryPolicy.requiredControls);
+      if (selected.backend === "openshell") {
+        // STOPPED cells retain their existing V6 host-capacity reservation
+        // until deletion. Reuse and verify that owner before creating the
+        // bounded qualification container; the OpenShell limits must fit
+        // inside the already-reserved cell profile.
+        const [capacity] = await db.select().from(runtimeCapacityProfiles).where(eq(runtimeCapacityProfiles.key, current.capacityProfile)).limit(1);
+        const [reservedHost] = current.runtimeHostId
+          ? await db.select().from(runtimeHosts).where(eq(runtimeHosts.id, current.runtimeHostId)).limit(1)
+          : [];
+        const limits = initial.boundaryPolicy.resources;
+        const hostFreshAfter = new Date(Date.now() - Math.max(30, options.runtimeSuspectSeconds ?? 90) * 1000);
+        if (!capacity?.qualified || !reservedHost || reservedHost.status !== "READY" || reservedHost.fencedAt ||
+          reservedHost.credentialRevokedAt || reservedHost.drainRequestedAt || !reservedHost.lastHeartbeatAt || reservedHost.lastHeartbeatAt <= hostFreshAfter ||
+          reservedHost.cpuReservedMillis < capacity.cpuMillis || reservedHost.memoryReservedBytes < capacity.memoryBytes || reservedHost.diskReservedBytes < capacity.diskBytes ||
+          limits.cpuMillis > capacity.cpuMillis || limits.memoryBytes > Number(capacity.memoryBytes) || limits.diskBytes > Number(capacity.diskBytes) || limits.pidsLimit > capacity.pidsLimit)
+          throw conflict("Qualification target has no current reserved host capacity for its bounded resource envelope");
+      }
+      const startedAt = new Date();
+      // OpenShell needs a real, source-pinned target before its fixed probes
+      // can run. Qualification receives only the backend's minimal no-network
+      // bootstrap policy and profile resource envelope; it never receives an
+      // execution manifest, broker binding, or user command. The process has
+      // an absolute expiry derived from this immutable qualification attempt.
+      const qualificationExpiry = new Date(startedAt.getTime() + initial.boundaryPolicy.resources.wallClockSeconds * 1000);
+      const qualificationOperationKey = `v7-sandbox-qualification:${id}:${initial.version}:${initial.boundaryPolicyHash}`;
+      const provisioningIntent = selected.backend === "openshell"
+        ? { purpose: "qualification" as const, operationKey: qualificationOperationKey, bindingVersion: initial.version, expiresAt: qualificationExpiry.toISOString() }
+        : undefined;
+      const preparedForQualification = provisioningIntent
+        ? await selected.prepareSandbox(identity(initial), provisioningIntent)
+        : undefined;
+      const report = await runSandboxQualification(selected, identity(initial), startedAt, initial.boundaryPolicyHash, initial.boundaryPolicy.requiredControls,
+        preparedForQualification?.sandboxId && preparedForQualification.containerId && preparedForQualification.hostEpoch && preparedForQualification.provisioningHash && preparedForQualification.policyHash && preparedForQualification.probePolicyHash && preparedForQualification.resourceLimits
+          ? { bindingVersion: initial.version, sandboxId: preparedForQualification.sandboxId, containerId: preparedForQualification.containerId,
+              hostEpoch: preparedForQualification.hostEpoch, imageDigest: preparedForQualification.imageDigest,
+              provisioningHash: preparedForQualification.provisioningHash, policyHash: preparedForQualification.policyHash,
+              probePolicyHash: preparedForQualification.probePolicyHash, resourceLimits: preparedForQualification.resourceLimits }
+          : undefined,
+        selected.evidenceKind === "protected_host_report" && initial.boundaryPolicy.credentials.mode === "brokered"
+          ? async ({ test, target }) => {
+              return createToolGatewayService(db, { operatorUserIds: options.operatorUserIds }).issueSandboxQualificationCredentialProbe({
+                actor, scope: identity(initial), bindingVersion: initial.version, operationKey: qualificationOperationKey,
+                target, caseId: test.caseId as SandboxQualificationCredentialClaim["caseId"],
+                commandId: randomUUID(),
+              });
+            }
+          : undefined);
+      if (preparedForQualification) {
+        await selected.stopWorkload({
+          ...identity(initial),
+          idempotencyKey: `${qualificationOperationKey}:stop`,
+        });
+        const stopped = await selected.inspectWorkload(identity(initial));
+        if (stopped.state !== "stopped" || stopped.generation !== initial.cellGeneration || stopped.imageDigest !== preparedForQualification.imageDigest)
+          throw conflict("Qualification setup target did not stop on its exact image and generation");
+      }
       // Host I/O stays outside the binding-row transaction: the native host
       // command owner takes a shared binding lock while awaiting its receipt.
       // Holding an update lock here would deadlock qualification against its
       // own prepare command.
-      const prepared = report.capabilities
+      const prepared = preparedForQualification ?? (report.capabilities
         ? await selected.prepareSandbox(identity(initial))
-        : { backendVersion: "unqualified", imageDigest: `cell:${current.id}:${initial.cellGeneration}` };
+        : { backendVersion: "unqualified", imageDigest: `cell:${current.id}:${initial.cellGeneration}` });
       if (report.capabilities && (
         report.capabilities.sandboxImageDigest !== prepared.imageDigest ||
         report.capabilities.backendVersion !== prepared.backendVersion ||
@@ -484,6 +572,26 @@ export function executionSandboxService(db: Db, options: {
         const riskFloor = Math.max(...source.record.manifest.capabilities.map(capability => Number(capability.risk.slice(1))), plan ? Number(plan.riskClass.slice(1)) : 0);
         if (Number(input.candidatePolicy.riskClass.slice(1)) < riskFloor) throw conflict("Policy cannot lower the execution's current risk class");
         if (row.capabilitySnapshot && (row.capabilitySnapshot.sandboxImageDigest !== (current.activeImageDigest ?? current.desiredImageDigest) || row.capabilitySnapshot.backend !== row.backend)) throw conflict("Runtime image or backend changed; repeat qualification");
+        if (row.status === "stopped") {
+          if (current.status !== "STOPPED") throw conflict("The runtime cell must remain stopped before policy recompilation");
+          const capability = sandboxCapabilitySnapshotSchema.safeParse(row.capabilitySnapshot);
+          const [qualification] = row.qualificationRunId ? await tx.select().from(sandboxQualificationRuns).where(and(
+            eq(sandboxQualificationRuns.companyId, companyId), eq(sandboxQualificationRuns.bindingId, id),
+            eq(sandboxQualificationRuns.id, row.qualificationRunId), eq(sandboxQualificationRuns.status, "passed"),
+          )).for("share") : [];
+          const probeCases = sandboxProbeCases(row.boundaryPolicyHash, row.boundaryPolicy.requiredControls);
+          if (!capability.success || capability.data.evidenceKind !== "protected_host_report" || capability.data.backend !== "openshell" ||
+            capability.data.expiresAt <= new Date().toISOString() || capability.data.qualificationHash.length !== 64 ||
+            !SANDBOX_CONTROLS.every(control => capability.data[control]) || !qualification ||
+            qualification.evidenceKind !== "protected_host_report" || qualification.reportHash !== capability.data.qualificationHash ||
+            qualification.suiteVersion !== "aw-v7-boundary-2" || qualification.results.length !== probeCases.length ||
+            probeCases.some(test => {
+              const matches = qualification.results.filter(result => result.caseId === test.caseId);
+              return matches.length !== 1 || matches[0]?.control !== test.control || matches[0]?.contractHash !== test.contractHash ||
+                matches[0]?.verdict !== "pass" || !/^[a-f0-9]{64}$/.test(matches[0]?.observationHash ?? "");
+            }))
+            throw conflict("A current protected-host qualification is required to recompile a stopped sandbox policy");
+        }
         const refs = [`manifest:${source.record.id}:${source.record.hash}`, `cell:${current.id}:${row.cellGeneration}`, `boundary:${row.boundaryPolicyHash}`, `authority:${source.authorityHash}`];
         let authorizedConnectionGrantHashes: Record<string, string> = {};
         let credentialBrokerBindings: SandboxCredentialBrokerBinding[] = [];
@@ -506,9 +614,17 @@ export function executionSandboxService(db: Db, options: {
         }
         const compilation = compileSandboxPolicy({ boundary: row.boundaryPolicy, candidate: input.candidatePolicy, capabilities: row.capabilitySnapshot, authorizedConnectionGrantHashes, credentialBrokerOrigin: options.credentialBrokerOrigin, credentialBrokerBindings, sourcePolicyRefs: refs });
         const [latest] = await tx.select().from(runtimePolicySnapshots).where(and(eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, id))).orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1);
+        const [sameManifestSnapshot] = await tx.select({ expiresAt: runtimePolicySnapshots.expiresAt }).from(runtimePolicySnapshots).where(and(
+          eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, id),
+          eq(runtimePolicySnapshots.executionManifestId, source.record.id),
+        )).orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1);
         if (latest?.status === "qualified") await tx.update(runtimePolicySnapshots).set({ status: "superseded" }).where(eq(runtimePolicySnapshots.id, latest.id));
-        const expiresAt = new Date(Math.min((source.run.startedAt?.getTime() ?? source.run.createdAt.getTime()) + compilation.compiledPolicy.resources.wallClockSeconds * 1000, plan?.startedAt ? plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000 : Infinity));
-        const [snapshot] = await tx.insert(runtimePolicySnapshots).values({ companyId, bindingId: id, runtimeCellId: current.id, agentId: source.record.agentId, executionManifestId: source.record.id, policyVersion: (latest?.policyVersion ?? 0) + 1, policyHash: nativeSha256(compilation), capabilitySnapshotHash: row.capabilitySnapshotHash, compilation, authorityHash: source.authorityHash, sourcePolicyRefs: refs, status: compilation.proverResult === "pass" && row.status === "ready" && expiresAt > new Date() ? "qualified" : "draft", expiresAt }).returning();
+        const expiresAt = new Date(Math.min(
+          (source.run.startedAt?.getTime() ?? source.run.createdAt.getTime()) + compilation.compiledPolicy.resources.wallClockSeconds * 1000,
+          plan?.startedAt ? plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000 : Infinity,
+          sameManifestSnapshot?.expiresAt.getTime() ?? Infinity,
+        ));
+        const [snapshot] = await tx.insert(runtimePolicySnapshots).values({ companyId, bindingId: id, runtimeCellId: current.id, agentId: source.record.agentId, executionManifestId: source.record.id, policyVersion: (latest?.policyVersion ?? 0) + 1, policyHash: nativeSha256(compilation), capabilitySnapshotHash: row.capabilitySnapshotHash, compilation, authorityHash: source.authorityHash, sourcePolicyRefs: refs, status: compilation.proverResult === "pass" && (row.status === "ready" || row.status === "stopped") && expiresAt > new Date() ? "qualified" : "draft", expiresAt }).returning();
         await tx.update(runtimeSandboxBindings).set({ version: row.version + 1, updatedAt: new Date() }).where(eq(runtimeSandboxBindings.id, id));
         await logActivity(tx, { companyId, actorType: "user", actorId: v7HumanActorId(actor), action: "sandbox.policy_compiled", entityType: "runtime_sandbox", entityId: id, details: { policySnapshotId: snapshot!.id, proverResult: compilation.proverResult, policyHash: snapshot!.policyHash } }, publications); return snapshot!;
       });
@@ -615,7 +731,7 @@ export function executionSandboxService(db: Db, options: {
       id: string,
       input: SandboxAdmissionInput,
     ) => {
-      const claimKey = `v7-sandbox-admission:${id}:${(await binding(db, actor, companyId, id)).cellGeneration}:${input.policySnapshotId}`;
+      const claimKey = `v7-sandbox-admission:${id}:${(await binding(db, actor, companyId, id)).cellGeneration}:${input.expectedVersion}:${input.policySnapshotId}`;
       const initial = await withV7ActivityTransaction(db, async (tx, publications) => {
         const [candidate] = await tx.select({ runtimeCellId: runtimeSandboxBindings.runtimeCellId }).from(runtimeSandboxBindings).where(and(
           eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, id),
@@ -641,17 +757,39 @@ export function executionSandboxService(db: Db, options: {
           .for("update");
         if (!current) throw notFound("Sandbox binding not found");
         if (current.status === "admitting") {
+          const [claim] = await tx
+            .select()
+            .from(activityLog)
+            .where(
+              and(
+                eq(activityLog.companyId, companyId),
+                eq(activityLog.entityType, "runtime_sandbox"),
+                eq(activityLog.entityId, id),
+                eq(activityLog.action, "sandbox.admission_claimed"),
+                sql`${activityLog.details}->>'claimKey' = ${claimKey}`,
+              ),
+            )
+            .orderBy(desc(activityLog.createdAt), desc(activityLog.id))
+            .limit(1);
+          const claimDetails = claim?.details as Record<string, unknown> | undefined;
+          const expectedClaimVersion = Number(claimDetails?.expectedVersion);
+          const claimVersion = Number(claimDetails?.claimVersion);
+          if (!claim || claimDetails?.policySnapshotId !== input.policySnapshotId ||
+            !Number.isSafeInteger(expectedClaimVersion) || !Number.isSafeInteger(claimVersion) ||
+            current.version !== claimVersion ||
+            (input.expectedVersion !== expectedClaimVersion && input.expectedVersion !== claimVersion))
+            throw conflict("Sandbox replay does not match the active admission version");
           const resumed = await admissionContext(
             tx,
             actor,
             companyId,
             id,
             input.policySnapshotId,
-            input.expectedVersion,
+            undefined,
             claimKey,
           );
-          if (!options.assertRuntimeStartAdmission) throw conflict("Original runtime start admission owner is unavailable");
-          await options.assertRuntimeStartAdmission(tx, { actor, companyId, cellId: resumed.row.runtimeCellId, userId: v7HumanActorId(actor) });
+          if (resumed.row.version !== claimVersion || resumed.row.status !== "admitting")
+            throw conflict("Sandbox admission claim changed before replay");
           return {
             ...resumed,
             claimKey,
@@ -660,9 +798,9 @@ export function executionSandboxService(db: Db, options: {
             claimCompleted: false as const,
           };
         }
-        if (current.status === "ready" || current.status === "running") {
+        if (current.status === "running") {
           const [priorClaim] = await tx
-            .select({ id: activityLog.id })
+            .select({ id: activityLog.id, details: activityLog.details })
             .from(activityLog)
             .where(
               and(
@@ -675,15 +813,6 @@ export function executionSandboxService(db: Db, options: {
             )
             .limit(1);
           if (priorClaim) {
-            const completed = await admissionContext(
-              tx,
-              actor,
-              companyId,
-              id,
-              input.policySnapshotId,
-              undefined,
-              claimKey,
-            );
             const [successEvent] = await tx
               .select()
               .from(activityLog)
@@ -698,20 +827,29 @@ export function executionSandboxService(db: Db, options: {
               )
               .orderBy(desc(activityLog.createdAt))
               .limit(1);
-            if (successEvent) {
-              const claimDetails = completed.claimEvent?.details as Record<string, unknown> | undefined;
-              const successDetails = successEvent.details as Record<string, unknown>;
-              if (![claimDetails?.expectedVersion, claimDetails?.claimVersion, successDetails.finalVersion].includes(input.expectedVersion))
-                throw conflict("Sandbox replay does not match the completed admission version");
-              return {
-                ...completed,
-                claimKey,
-                claimVersion: Number(claimDetails?.claimVersion),
-                claimReplay: true as const,
-                claimCompleted: true as const,
-                successEvent,
-              };
-            }
+            if (!successEvent) throw conflict("Running sandbox has no exact completed admission receipt");
+            const claimDetails = priorClaim.details as Record<string, unknown>;
+            const successDetails = successEvent.details as Record<string, unknown>;
+            if (![claimDetails.expectedVersion, claimDetails.claimVersion, successDetails.finalVersion].includes(input.expectedVersion))
+              throw conflict("Sandbox replay does not match the completed admission version");
+            const completed = await admissionContext(
+              tx,
+              actor,
+              companyId,
+              id,
+              input.policySnapshotId,
+              undefined,
+              claimKey,
+              "completed",
+            );
+            return {
+              ...completed,
+              claimKey,
+              claimVersion: Number(claimDetails.claimVersion),
+              claimReplay: true as const,
+              claimCompleted: true as const,
+              successEvent,
+            };
           }
         }
         const ready = await admissionContext(
@@ -732,7 +870,7 @@ export function executionSandboxService(db: Db, options: {
               eq(runtimeSandboxBindings.companyId, companyId),
               eq(runtimeSandboxBindings.id, id),
               eq(runtimeSandboxBindings.version, ready.row.version),
-              eq(runtimeSandboxBindings.status, "ready"),
+              inArray(runtimeSandboxBindings.status, ["ready", "stopped"]),
             ),
           )
           .returning();
@@ -768,12 +906,16 @@ export function executionSandboxService(db: Db, options: {
           claimCompleted: false as const,
         };
       });
+      if (initial.claimReplay && !initial.claimCompleted)
+        return { binding: initial.row, policySnapshotId: initial.snapshot.id, operationId: null,
+          duplicate: true, inProgress: true };
       const scope = identity(initial.row);
       const selected = initial.selected;
       const policyHash = nativeSha256(initial.snapshot.compilation);
-      const applyKey = `v7-sandbox-policy:${id}:${scope.cellGeneration}:${policyHash}`;
-      const startKey = `v7-sandbox-start:${id}:${scope.cellGeneration}:${initial.snapshot.id}`;
+      const applyKey = `v7-sandbox-policy:${id}:${scope.cellGeneration}:${initial.claimVersion}:${policyHash}`;
+      const startKey = `v7-sandbox-start:${id}:${scope.cellGeneration}:${initial.claimVersion}:${initial.snapshot.id}`;
       let effectAttempted = false;
+      let provisioningAttempted = false;
       const finishedDuplicate = async (successEvent: typeof activityLog.$inferSelect) => {
         const current = await db.transaction((transaction) =>
           admissionContext(
@@ -784,6 +926,7 @@ export function executionSandboxService(db: Db, options: {
             initial.snapshot.id,
             undefined,
             claimKey,
+            "completed",
           ),
         );
         const observation = await selected.inspectWorkload(scope);
@@ -810,7 +953,7 @@ export function executionSandboxService(db: Db, options: {
         try {
           await selected.stopWorkload({
             ...scope,
-            idempotencyKey: `v7-sandbox-admission-contain:${id}:${scope.cellGeneration}:${initial.snapshot.id}`,
+            idempotencyKey: `v7-sandbox-admission-contain:${id}:${scope.cellGeneration}:${initial.claimVersion}:${initial.snapshot.id}`,
           });
           const stopped = await selected.inspectWorkload(scope);
           return (
@@ -836,7 +979,16 @@ export function executionSandboxService(db: Db, options: {
             nativeSha256(sandboxCapabilityFacts(sandboxCapabilitySnapshotSchema.parse(initial.row.capabilitySnapshot)))
         )
           throw conflict("Current protected-host capability snapshot changed");
-        const prepared = await selected.prepareSandbox(scope);
+        provisioningAttempted = selected.backend === "openshell";
+        const prepared = await selected.prepareSandbox(scope, provisioningAttempted ? {
+          purpose: "admission",
+          operationKey: claimKey,
+          bindingVersion: initial.claimVersion,
+          expiresAt: initial.snapshot.expiresAt.toISOString(),
+          policy: initial.snapshot.compilation,
+        } : undefined);
+        if (prepared.requiresRecreate)
+          throw conflict("The stopped sandbox no longer matches its immutable creation policy; recover its workspace before recreating it", { code: "sandbox_recreate_requires_recovery" });
         if (
           prepared.companyId !== scope.companyId ||
           prepared.bindingId !== scope.bindingId ||
@@ -847,6 +999,33 @@ export function executionSandboxService(db: Db, options: {
           prepared.imageDigest !== initial.imageDigest
         )
           throw conflict("Prepared workload does not match the qualified immutable runtime");
+        if (provisioningAttempted) {
+          const targetCapabilities = sandboxCapabilitySnapshotSchema.safeParse(await selected.capabilities());
+          const target = targetCapabilities.success ? targetCapabilities.data.qualificationTarget : undefined;
+          const credentialFixtureValid = sandboxQualificationCredentialFixtureValid(target?.qualificationCredentialFixture);
+          if (!targetCapabilities.success || targetCapabilities.data.evidenceKind !== "protected_host_report" ||
+            !targetCapabilities.data.hostKernelVersion || !prepared.hostEpoch || !prepared.sandboxId || !prepared.containerId || !prepared.provisioningHash || !target ||
+            target.sandboxId !== prepared.sandboxId || target.containerId !== prepared.containerId ||
+            target.imageDigest !== prepared.imageDigest || target.provisioningHash !== prepared.provisioningHash ||
+            target.hostEpoch !== prepared.hostEpoch || target.bindingVersion !== initial.claimVersion || prepared.bindingVersion !== initial.claimVersion ||
+            target.companyId !== scope.companyId || target.bindingId !== scope.bindingId ||
+            target.cellId !== scope.cellId || target.cellGeneration !== scope.cellGeneration || target.sandboxRef !== scope.sandboxRef ||
+            target.hostKernelVersion !== targetCapabilities.data.hostKernelVersion || target.phase !== "Stopped" ||
+            !/^[a-f0-9]{64}$/.test(target.runtimeBinarySha256) || !/^[a-f0-9]{64}$/.test(target.openshellCliSha256) ||
+            !/^[a-f0-9]{64}$/.test(target.dockerEngineIdHash) || !/^[a-f0-9]{64}$/.test(target.probeFixtureHash) || !credentialFixtureValid ||
+            nativeSha256(target.qualificationCredentialFixture ?? null) !== nativeSha256(targetCapabilities.data.qualificationCredentialFixture ?? null) ||
+            target.policyHash !== policyHash || target.policyHash !== prepared.policyHash ||
+            target.probePolicyHash !== prepared.probePolicyHash ||
+            nativeSha256((({ targetHash: _targetHash, ...targetBase }) => targetBase)(target)) !== target.targetHash ||
+            nativeSha256(target.resourceLimits) !== nativeSha256({
+              cpuMillis: initial.snapshot.compilation.compiledPolicy.resources.cpuMillis,
+              memoryBytes: initial.snapshot.compilation.compiledPolicy.resources.memoryBytes,
+              diskBytes: initial.snapshot.compilation.compiledPolicy.resources.diskBytes,
+              pidsLimit: initial.snapshot.compilation.compiledPolicy.resources.pidsLimit,
+            }) || nativeSha256(target.resourceLimits) !== nativeSha256(prepared.resourceLimits) ||
+            target.mechanism !== "openshell_create_sandbox_v0.1.2")
+            throw conflict("Admission target lacks fresh ID-bound native qualification evidence");
+        }
         const before = await selected.inspectWorkload(scope);
         const resumedRunning = initial.claimReplay &&
           before.state === "running" &&
@@ -862,6 +1041,7 @@ export function executionSandboxService(db: Db, options: {
             policy: initial.snapshot.compilation,
             currentStaticFingerprint: null,
             expiresAt: initial.snapshot.expiresAt.toISOString(),
+            idempotencyKey: applyKey,
           });
           if (applied.requiresRecreate) {
             // The host explicitly observed a static-control mismatch before
@@ -1004,6 +1184,7 @@ export function executionSandboxService(db: Db, options: {
           return { binding: current.row, duplicate: true };
         });
         effectAttempted = false;
+        provisioningAttempted = false;
         return {
           binding: completion.binding,
           policySnapshotId: initial.snapshot.id,
@@ -1012,7 +1193,7 @@ export function executionSandboxService(db: Db, options: {
           duplicate: completion.duplicate,
         };
       } catch (error) {
-        if (effectAttempted) {
+        if (effectAttempted || provisioningAttempted) {
           const stopConfirmed = await stopAndConfirm();
           const fenced = await fenceSandboxAdmissionOutcome(db, {
             companyId,
@@ -1021,7 +1202,7 @@ export function executionSandboxService(db: Db, options: {
             generation: scope.cellGeneration,
             policySnapshotId: initial.snapshot.id,
             claimKey,
-            operationKeys: [applyKey, startKey],
+            operationKeys: [claimKey, applyKey, startKey],
             stopConfirmed,
           });
           if (!fenced)

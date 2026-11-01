@@ -1,15 +1,66 @@
 import { describe, expect, it } from "vitest";
-import { sandboxPolicySchema, SANDBOX_CONTROLS, type SandboxCapabilitySnapshot, type SandboxPolicy } from "@paperclipai/shared";
+import { readFileSync } from "node:fs";
+import { sandboxCapabilitySnapshotSchema, sandboxPolicySchema, SANDBOX_CONTROLS, type SandboxCapabilitySnapshot, type SandboxPolicy } from "@paperclipai/shared";
 import { compileSandboxPolicy } from "../services/execution-sandbox/policy-compiler.js";
 import { projectOpenShellPolicy } from "../services/execution-sandbox/openshell-policy.js";
 import { runSandboxQualification } from "../services/execution-sandbox/qualification.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { existingCellContainerBackend } from "../services/execution-sandbox/compatibility-backend.js";
 import type { ExecutionSandboxBackend } from "../services/execution-sandbox/backend.js";
 const now = new Date("2026-10-05T12:00:00Z"), image = "fixture.invalid/sandbox@sha256:" + "a".repeat(64);
 import { policyFixture } from "./helpers/sandbox-fixture.js";
+const qualificationPolicyGolden = JSON.parse(readFileSync(new URL("./fixtures/openshell-qualification-policy-golden.json", import.meta.url), "utf8")) as { fixture: import("@paperclipai/shared").SandboxQualificationProbeFixture };
 const caps = (): SandboxCapabilitySnapshot => ({ ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])), backend: "openshell", backendVersion: "fixture", hostKernelVersion: "fixture", sandboxImageDigest: image, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: true, policyProverBoundaryCheck: true, policyProverCoverage: [...SANDBOX_CONTROLS], credentialBindingDimensions: ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], credentialBrokerProviderProfile: { id: "paperclip-broker", hash: "d".repeat(64) }, testedAt: now.toISOString(), expiresAt: "2026-10-06T12:00:00Z", qualificationHash: "a".repeat(64), evidenceKind: "local_fixture" } as SandboxCapabilitySnapshot);
+const protectedCaps = (): SandboxCapabilitySnapshot => {
+  const snapshot = caps();
+  const target = {
+    hostEpoch: 1, companyId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", bindingId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    bindingVersion: 1, cellId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", cellGeneration: "1",
+    sandboxRef: "aw-v7-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", sandboxId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    containerId: "b".repeat(64), imageDigest: image, hostKernelVersion: "fixture", runtimeBinarySha256: "c".repeat(64),
+    openshellCliSha256: "d".repeat(64), dockerEngineIdHash: "e".repeat(64), policyHash: "1".repeat(64),
+    provisioningHash: "2".repeat(64), resourceLimits: { cpuMillis: 1000, memoryBytes: 536870912, diskBytes: 1073741824, pidsLimit: 128 },
+    policyVersion: 1, configRevision: "fixture-1", phase: "Ready" as const,
+    mechanism: "openshell_create_sandbox_v0.1.2" as const, probePolicyHash: "3".repeat(64),
+    probeFixtureHash: qualificationPolicyGolden.fixture.fixtureHash,
+  };
+  snapshot.evidenceKind = "protected_host_report";
+  snapshot.qualificationProbeFixture = qualificationPolicyGolden.fixture;
+  snapshot.qualificationTarget = { ...target, targetHash: nativeSha256(target) };
+  snapshot.qualificationHash = snapshot.qualificationTarget.targetHash;
+  return snapshot;
+};
 const compile = (candidate = policyFixture(), capabilities: SandboxCapabilitySnapshot | null = caps(), boundary = policyFixture(), grants = {}) => compileSandboxPolicy({ candidate, capabilities, boundary, authorizedConnectionGrantHashes: grants, sourcePolicyRefs: ["fixture-only"], now });
 describe("V7 policy subset proofs, distinct from physical boundary qualification", () => {
+  it("keeps report and target hashes separate while qualification verifies the canonical target body", async () => {
+    const capability = protectedCaps();
+    const targetHash = capability.qualificationTarget!.targetHash;
+    capability.qualificationHash = "f".repeat(64);
+    expect(capability.qualificationHash).not.toBe(targetHash);
+    expect(sandboxCapabilitySnapshotSchema.safeParse(capability).success).toBe(true);
+    let current = structuredClone(capability);
+    const backend = {
+      backend: "openshell" as const,
+      evidenceKind: "protected_host_report" as const,
+      capabilities: async () => structuredClone(current),
+      probeBoundary: async ({ test }: { test: import("../services/execution-sandbox/backend.js").SandboxProbeCase }) => ({
+        verdict: "pass" as const, observationHash: "b".repeat(64), contractHash: test.contractHash, targetQualificationHash: targetHash,
+      }),
+    } as ExecutionSandboxBackend;
+    const target = capability.qualificationTarget!;
+    const targetIdentity = { companyId: target.companyId, bindingId: target.bindingId, cellId: target.cellId,
+      cellGeneration: target.cellGeneration, sandboxRef: target.sandboxRef };
+    const report = await runSandboxQualification(backend, targetIdentity, now, "1".repeat(64), ["filesystemPolicy"]);
+    expect(report.status).toBe("passed");
+    expect(report.capabilities?.qualificationHash).not.toBe(targetHash);
+    expect(sandboxCapabilitySnapshotSchema.safeParse(report.capabilities).success).toBe(true);
+
+    current.qualificationTarget!.containerId = "9".repeat(64);
+    const tampered = await runSandboxQualification(backend, targetIdentity, now, "1".repeat(64), ["filesystemPolicy"]);
+    expect(tampered.status).toBe("inconclusive");
+    expect(tampered.capabilities).toBeNull();
+    expect(tampered.exceptions).toContain("protected_qualification_target_missing");
+  });
   it("proves a narrower policy and pins deterministic content", () => { const p = policyFixture(); p.filesystem.readPaths = ["/work/input"]; p.resources.wallClockSeconds = 60; const first = compile(p); expect(first.proverResult).toBe("pass"); expect(compile(p)).toEqual(first); expect(first.candidatePolicyHash).not.toBe(first.boundaryPolicyHash); });
   it.each([
     ["filesystem sibling", (p: SandboxPolicy) => { p.filesystem.readPaths = ["/worker"]; }, "filesystem_read_expansion"],
@@ -85,9 +136,8 @@ describe("V7 policy subset proofs, distinct from physical boundary qualification
     const p = policyFixture();
     p.network.destinations = [];
     p.credentials = { mode: "none", bindings: [] };
-    const capability = caps();
+    const capability = protectedCaps();
     capability.modelBrokerProviderProfile = { id: "paperclip-model-broker", hash: "e".repeat(64) };
-    capability.evidenceKind = "protected_host_report";
     const result = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: capability,
       authorizedConnectionGrantHashes: {}, credentialBrokerOrigin: "https://paperclip.example.test/",
       sourcePolicyRefs: ["fixture-only"], now });
