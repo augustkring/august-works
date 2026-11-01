@@ -1,0 +1,36 @@
+{
+  "purpose": "RECOVERY ONLY; no new qualification or activation claim",
+  "baseR58": {
+    "manifestSha256": "869a13678482daf3e4c19d7e8a973aa95e6e47cc7eb0d3ad2066fcdcf7ba47f7",
+    "archiveSha256": "919339129d37985e695912d9d43504e588265ff5dc86ddfb7f633189a2a4928e",
+    "checkpointHead": "4a51d9486"
+  },
+  "sourceHead": "4a51d94864438c0e8ab141bdc21679f27740fecb",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "components": [
+    {
+      "name": "Native R103",
+      "sourceFiles": 17,
+      "tests": "20/20 focused PASS; meaningful removed-fence control failed; full coherent Native9 pending"
+    },
+    {
+      "name": "Native R104 clean Host26 overlay",
+      "sourceFiles": 14,
+      "status": "Frozen clean handoff, no final integration/type/activation claim"
+    },
+    {
+      "name": "server dimension",
+      "tests": "29 component PASS; historical isolated full TSC failed, compact receipt honest"
+    },
+    {
+      "name": "constructor origin",
+      "tests": "43 component PASS; coherent full TSC pending"
+    }
+  ],
+  "exclusions": [
+    "active Host.27 and ongoing constructors/resolvers",
+    "raw logs/PG/data/provider archives/deps/dist/build",
+    "Git/Main/Mirror mutation",
+    "unrelated tests/corpus rereads"
+  ]
+}

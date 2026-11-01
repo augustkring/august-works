@@ -1,0 +1,1044 @@
+{
+  "files": [
+    {
+      "archivePath": "constructor-origin/constructor-origin-safety.patch",
+      "sourcePath": "/workspace/v10-preparation/server-broker-constructor-origin-followup-nov01/constructor-origin-safety.patch",
+      "before": {
+        "bytes": 3332,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460398,
+        "nlink": 1,
+        "mtimeNs": 1793544678220757643,
+        "ctimeNs": 1793544678220757643
+      },
+      "beforeSha256": "3fba2de360210f1738dc228d5eadd53e366e38b23204c32e5eca98804ce7fc0b"
+    },
+    {
+      "archivePath": "constructor-origin/files/server/src/__tests__/server-broker-capability-composition.test.ts",
+      "sourcePath": "/workspace/v10-preparation/server-broker-constructor-origin-followup-nov01/files/server/src/__tests__/server-broker-capability-composition.test.ts",
+      "before": {
+        "bytes": 10898,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 560492,
+        "nlink": 1,
+        "mtimeNs": 1793544415831657340,
+        "ctimeNs": 1793544415831657340
+      },
+      "beforeSha256": "86d0a2474dea86f5456df0d4bc4e00a7ec4ffc558c426f6532870f6cca4a3c62"
+    },
+    {
+      "archivePath": "constructor-origin/files/server/src/services/runtime/control.ts",
+      "sourcePath": "/workspace/v10-preparation/server-broker-constructor-origin-followup-nov01/files/server/src/services/runtime/control.ts",
+      "before": {
+        "bytes": 270029,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 560491,
+        "nlink": 1,
+        "mtimeNs": 1793544415831471630,
+        "ctimeNs": 1793544415831471630
+      },
+      "beforeSha256": "34198ad65cb47ded193c0f8cad0022b48e5f9727fe9b0b89c65114e779145984"
+    },
+    {
+      "archivePath": "constructor-origin/qualification-receipt.json",
+      "sourcePath": "/workspace/v10-preparation/r59-constructor-origin-compact-receipt.json",
+      "before": {
+        "bytes": 420,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 282894,
+        "nlink": 1,
+        "mtimeNs": 1793544949985750137,
+        "ctimeNs": 1793544949985750137
+      },
+      "beforeSha256": "90a80d614e1c7e9ac783a7579259744aaff4457ac11cdc8662a2e5bc65ab0fe4"
+    },
+    {
+      "archivePath": "constructor-origin/source-pins.json",
+      "sourcePath": "/workspace/v10-preparation/server-broker-constructor-origin-followup-nov01/source-pins.json",
+      "before": {
+        "bytes": 1405,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460459,
+        "nlink": 1,
+        "mtimeNs": 1793544678220927811,
+        "ctimeNs": 1793544678220927811
+      },
+      "beforeSha256": "6d4f25a713d99916f334072d2ef43eb3e9eba5afd29226823fe0b0f83d580872"
+    },
+    {
+      "archivePath": "native-r103/candidate/manifest.json",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/manifest.json",
+      "before": {
+        "bytes": 4076,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460357,
+        "nlink": 1,
+        "mtimeNs": 1793544055160939443,
+        "ctimeNs": 1793544055160939443
+      },
+      "beforeSha256": "942b802d938defb79cab1a8ac43b92ce5e817ea46087eb17d522699330a9f720"
+    },
+    {
+      "archivePath": "native-r103/candidate/packages/db/src/test-embedded-postgres.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/packages/db/src/test-embedded-postgres.ts",
+      "before": {
+        "bytes": 12712,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684043,
+        "nlink": 1,
+        "mtimeNs": 1793527802569844023,
+        "ctimeNs": 1793544055149224855
+      },
+      "beforeSha256": "9f989d24cc239759f144bb82fd65409013f1d4f54ccab3e0a4a3a427f405a1f2"
+    },
+    {
+      "archivePath": "native-r103/candidate/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
+      "before": {
+        "bytes": 68659,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684006,
+        "nlink": 1,
+        "mtimeNs": 1793520655741087754,
+        "ctimeNs": 1793544055148785393
+      },
+      "beforeSha256": "4643900473cfeedf1394f33499d03040266570dcb0a0356e3792eaa9ccdc2b38"
+    },
+    {
+      "archivePath": "native-r103/candidate/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
+      "before": {
+        "bytes": 102654,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684008,
+        "nlink": 1,
+        "mtimeNs": 1793520655737228583,
+        "ctimeNs": 1793544055149024363
+      },
+      "beforeSha256": "4bcf1613cc0218f7b442e4e4a6c26be966b5c757fd98a31cb382472244062e5a"
+    },
+    {
+      "archivePath": "native-r103/candidate/r101-grouped-initial-budget-only.diff",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/r101-grouped-initial-budget-only.diff",
+      "before": {
+        "bytes": 2522,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460364,
+        "nlink": 1,
+        "mtimeNs": 1793543564401355231,
+        "ctimeNs": 1793544055149957350
+      },
+      "beforeSha256": "5060e6c0366b9dfa26a861179d9d2968cf942afa5fcf6fa2be82f8e5785032ce"
+    },
+    {
+      "archivePath": "native-r103/candidate/r101-native-owner-selection-only.diff",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/r101-native-owner-selection-only.diff",
+      "before": {
+        "bytes": 735,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460359,
+        "nlink": 1,
+        "mtimeNs": 1793543564410214955,
+        "ctimeNs": 1793544055149763398
+      },
+      "beforeSha256": "61d3917af30049978640e5bc2893b25d9fa61dc29929b1e6c649987d83ed2832"
+    },
+    {
+      "archivePath": "native-r103/candidate/r103-native-policy-reader-selection-only.diff",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/r103-native-policy-reader-selection-only.diff",
+      "before": {
+        "bytes": 851,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460366,
+        "nlink": 1,
+        "mtimeNs": 1793544055160414672,
+        "ctimeNs": 1793544055160414672
+      },
+      "beforeSha256": "3f32500b0da72e5bb45f41a333c9b808612c0f7e8b61e8dd0891fbcb6794ef82"
+    },
+    {
+      "archivePath": "native-r103/candidate/r89-cancel-fence-only.diff",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/r89-cancel-fence-only.diff",
+      "before": {
+        "bytes": 901,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460365,
+        "nlink": 1,
+        "mtimeNs": 1793535662380558686,
+        "ctimeNs": 1793544055152161524
+      },
+      "beforeSha256": "103bb7476c1de73f930e4e69ab0bfee60f034b8d3623bb4fb78ecafaa5f177ed"
+    },
+    {
+      "archivePath": "native-r103/candidate/r89-portable-cancel-test-only.diff",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/r89-portable-cancel-test-only.diff",
+      "before": {
+        "bytes": 1779,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460356,
+        "nlink": 1,
+        "mtimeNs": 1793535961472929537,
+        "ctimeNs": 1793544055149622695
+      },
+      "beforeSha256": "88daf2f4816f5176e36d10141ecbed345267ad932295b5e882d3a3f910b42cb3"
+    },
+    {
+      "archivePath": "native-r103/candidate/r90-native-memory-planner-only.diff",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/r90-native-memory-planner-only.diff",
+      "before": {
+        "bytes": 3466,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460358,
+        "nlink": 1,
+        "mtimeNs": 1793537001544151796,
+        "ctimeNs": 1793544055149726702
+      },
+      "beforeSha256": "dc8f807b2b33afc99f7e8f36273d3f2aabe148e5b1f36cae743bfb20962703b7"
+    },
+    {
+      "archivePath": "native-r103/candidate/r91-memory-budget-contract-only.diff",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/r91-memory-budget-contract-only.diff",
+      "before": {
+        "bytes": 1389,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460355,
+        "nlink": 1,
+        "mtimeNs": 1793537222997543847,
+        "ctimeNs": 1793544055149561022
+      },
+      "beforeSha256": "2368b4df8874e6e674bf2cfe53b86b877c169b27a98062496b73c8f37512c60c"
+    },
+    {
+      "archivePath": "native-r103/candidate/r94-capture-owner-selection-only.diff",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/r94-capture-owner-selection-only.diff",
+      "before": {
+        "bytes": 2683,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460350,
+        "nlink": 1,
+        "mtimeNs": 1793538350667076719,
+        "ctimeNs": 1793544055147322436
+      },
+      "beforeSha256": "961aaa0c22b1b7721628ce93e57e10f157c4a43c1cd413aaf52e413d0fe164a8"
+    },
+    {
+      "archivePath": "native-r103/candidate/r94-memory-profile-only.diff",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/r94-memory-profile-only.diff",
+      "before": {
+        "bytes": 1480,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 460361,
+        "nlink": 1,
+        "mtimeNs": 1793538350656310088,
+        "ctimeNs": 1793544055149919844
+      },
+      "beforeSha256": "2ae979b57d43b9a569665cf9a59b395f6c0415f3003bb5899b3c990f156ce740"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "before": {
+        "bytes": 209815,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684097,
+        "nlink": 1,
+        "mtimeNs": 1793524677562713565,
+        "ctimeNs": 1793544055151776324
+      },
+      "beforeSha256": "d0bac44ac43eaf973e9858b63b15b7dc3e71578ffae94d7aa5513b802c7a855c"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "before": {
+        "bytes": 74904,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684095,
+        "nlink": 1,
+        "mtimeNs": 1793528152592853074,
+        "ctimeNs": 1793544055151695291
+      },
+      "beforeSha256": "dfa2aa71af205730086b326a665dcae83e03de4d0ed841fec61ada4db3852282"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/__tests__/retained-runtime-skill-source.integration.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/__tests__/retained-runtime-skill-source.integration.test.ts",
+      "before": {
+        "bytes": 18261,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684098,
+        "nlink": 1,
+        "mtimeNs": 1793529624625114585,
+        "ctimeNs": 1793544055152095485
+      },
+      "beforeSha256": "7331c7b070bca0a75f1d1252719ebf29dc3af6daf6c3e81dcef6b399df375046"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/authorization.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/authorization.ts",
+      "before": {
+        "bytes": 298867,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684093,
+        "nlink": 1,
+        "mtimeNs": 1793518737829286875,
+        "ctimeNs": 1793544055151559797
+      },
+      "beforeSha256": "44c2969fcc1dd11e162a9980aad380afdc4611e0a5b1e7a31163defcceb23eca"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/company-skills.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/company-skills.ts",
+      "before": {
+        "bytes": 309716,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684053,
+        "nlink": 1,
+        "mtimeNs": 1793528139767145497,
+        "ctimeNs": 1793544055150374399
+      },
+      "beforeSha256": "f2fc3b3c0a72bfb1718802515a204f265ba1a8bff74474ba69ac5e1e9e0b4fa8"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/context/context-engine.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/context/context-engine.test.ts",
+      "before": {
+        "bytes": 14946,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684075,
+        "nlink": 1,
+        "mtimeNs": 1793516964056427584,
+        "ctimeNs": 1793544055151304472
+      },
+      "beforeSha256": "b8c7cc408916009dd3fb5c962d8aaa414c227e502edfd2c87e1c06bb0f66b237"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/context/context-engine.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/context/context-engine.ts",
+      "before": {
+        "bytes": 43006,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684069,
+        "nlink": 1,
+        "mtimeNs": 1793518737829968572,
+        "ctimeNs": 1793544055151258132
+      },
+      "beforeSha256": "9bdb22f04e57c63120efa4401ef1833216d7ddd841f62d507eb63921c2b73a90"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/context/context-manifest.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/context/context-manifest.test.ts",
+      "before": {
+        "bytes": 19527,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684067,
+        "nlink": 1,
+        "mtimeNs": 1793535961471262772,
+        "ctimeNs": 1793544055151160715
+      },
+      "beforeSha256": "78b43341a918d0bd5543c0365b580faf138d4c902b153b5b700a49b6f5ff056e"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/context/context-manifest.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/context/context-manifest.ts",
+      "before": {
+        "bytes": 60899,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684068,
+        "nlink": 1,
+        "mtimeNs": 1793535662379026700,
+        "ctimeNs": 1793544055151206584
+      },
+      "beforeSha256": "31dd1f6a9c4c11c70e64b5e12959c02a80d7dd41fbcab26d9ddd734cf34bb0b9"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/learning/learning-assets.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/learning/learning-assets.ts",
+      "before": {
+        "bytes": 21649,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684088,
+        "nlink": 1,
+        "mtimeNs": 1793529025295404787,
+        "ctimeNs": 1793544055151504964
+      },
+      "beforeSha256": "a1bc879f5aaf020f9248619df5f83b5b553523ee1d042e3e7bdd689f209a7033"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/memory/memory-privacy.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/memory/memory-privacy.ts",
+      "before": {
+        "bytes": 109060,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684060,
+        "nlink": 1,
+        "mtimeNs": 1793543564399496847,
+        "ctimeNs": 1793544055151055456
+      },
+      "beforeSha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/native-direct-input.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/native-direct-input.ts",
+      "before": {
+        "bytes": 386650,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684056,
+        "nlink": 1,
+        "mtimeNs": 1793544055153178779,
+        "ctimeNs": 1793544055153178779
+      },
+      "beforeSha256": "9e5947439e47b68191941f9ac125d8b6a57ff3595311ab44f61fbf5119fe7954"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "before": {
+        "bytes": 157800,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684055,
+        "nlink": 1,
+        "mtimeNs": 1793523545543936136,
+        "ctimeNs": 1793544055150564416
+      },
+      "beforeSha256": "eee8d9a45767f8ccc45fcb3c3bb707aa1cd75185fb68a685b9eea4b54b44cfa2"
+    },
+    {
+      "archivePath": "native-r103/candidate/server/src/services/skill-resolver.ts",
+      "sourcePath": "/workspace/v10-preparation/native-grouped-reader-profile-r103-candidate/server/src/services/skill-resolver.ts",
+      "before": {
+        "bytes": 14508,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684079,
+        "nlink": 1,
+        "mtimeNs": 1793528273947530315,
+        "ctimeNs": 1793544055151354848
+      },
+      "beforeSha256": "b3a4099151c00ca500875eab7471a13b9c1c8ae7dd5bb2a7e3ca757153fb0101"
+    },
+    {
+      "archivePath": "native-r103/native-r103-grouped-profile-qualification.json",
+      "sourcePath": "/workspace/v10-preparation/native-r103-grouped-profile-qualification.json",
+      "before": {
+        "bytes": 2785,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 278530,
+        "nlink": 1,
+        "mtimeNs": 1793544949984905711,
+        "ctimeNs": 1793544949984905711
+      },
+      "beforeSha256": "be48465d7c2d45b486aa49446dfaa68a759abc106e5d60eba0b8cfd34b99224e"
+    },
+    {
+      "archivePath": "native-r103/native-r103-grouped-profile.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-grouped-profile.test.ts",
+      "before": {
+        "bytes": 17701,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 387049,
+        "nlink": 1,
+        "mtimeNs": 1793544226218900103,
+        "ctimeNs": 1793544226218900103
+      },
+      "beforeSha256": "fc6fde52cc6371a713d19459d9715ec3e89fa0125f62783d0e06f2e99dddd2ec"
+    },
+    {
+      "archivePath": "native-r103/native-r103-without-final-principal-fence.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-without-final-principal-fence.ts",
+      "before": {
+        "bytes": 108960,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 387050,
+        "nlink": 1,
+        "mtimeNs": 1793544226219157612,
+        "ctimeNs": 1793544226219157612
+      },
+      "beforeSha256": "d11d9e8543f5e534092034748be8219d7fb29315fde481d2d6cd36be4be97357"
+    },
+    {
+      "archivePath": "native-r103/run-native-r103-grouped-profile.sh",
+      "sourcePath": "/workspace/v10-preparation/run-native-r103-grouped-profile.sh",
+      "before": {
+        "bytes": 3012,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 387051,
+        "nlink": 1,
+        "mtimeNs": 1793544226219423212,
+        "ctimeNs": 1793544226219423212
+      },
+      "beforeSha256": "7e68fc67e9b58131071528a4ef8fe056f120166921b462631a05c20cdbbb7771"
+    },
+    {
+      "archivePath": "native-r103/snapshot-private-native-r103.py",
+      "sourcePath": "/workspace/v10-preparation/snapshot-private-native-r103.py",
+      "before": {
+        "bytes": 7840,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 387048,
+        "nlink": 1,
+        "mtimeNs": 1793544055161174828,
+        "ctimeNs": 1793544055161174828
+      },
+      "beforeSha256": "6730f691c359259a64d3d866e8d174b3ac359a25363408ace845b2d626847358"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/packages/db/src/test-embedded-postgres.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/packages/db/src/test-embedded-postgres.ts",
+      "before": {
+        "bytes": 12712,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 560498,
+        "nlink": 1,
+        "mtimeNs": 1793527802569844023,
+        "ctimeNs": 1793544675722506106
+      },
+      "beforeSha256": "9f989d24cc239759f144bb82fd65409013f1d4f54ccab3e0a4a3a427f405a1f2"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
+      "before": {
+        "bytes": 8391,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685130,
+        "nlink": 1,
+        "mtimeNs": 1793539408369742372,
+        "ctimeNs": 1793544675723463423
+      },
+      "beforeSha256": "421b606d30bd4396ac0d6e31da114f6339bfbf5aea4d000e5df9a3c92a96d2f0"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
+      "before": {
+        "bytes": 68659,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685136,
+        "nlink": 1,
+        "mtimeNs": 1793520655741087754,
+        "ctimeNs": 1793544675723810678
+      },
+      "beforeSha256": "4643900473cfeedf1394f33499d03040266570dcb0a0356e3792eaa9ccdc2b38"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.ts",
+      "before": {
+        "bytes": 102654,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685137,
+        "nlink": 1,
+        "mtimeNs": 1793520655737228583,
+        "ctimeNs": 1793544675726562950
+      },
+      "beforeSha256": "4bcf1613cc0218f7b442e4e4a6c26be966b5c757fd98a31cb382472244062e5a"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "before": {
+        "bytes": 77335,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685139,
+        "nlink": 1,
+        "mtimeNs": 1793543775093192835,
+        "ctimeNs": 1793544675729713895
+      },
+      "beforeSha256": "9137ed3b683d0fdea911facb84862fad52935c05bd3ce75028f5386a3f360103"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/services/authorization.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/services/authorization.ts",
+      "before": {
+        "bytes": 298867,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685142,
+        "nlink": 1,
+        "mtimeNs": 1793518737829286875,
+        "ctimeNs": 1793544675731211540
+      },
+      "beforeSha256": "44c2969fcc1dd11e162a9980aad380afdc4611e0a5b1e7a31163defcceb23eca"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/services/context/context-engine.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/services/context/context-engine.test.ts",
+      "before": {
+        "bytes": 14946,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685146,
+        "nlink": 1,
+        "mtimeNs": 1793516964056427584,
+        "ctimeNs": 1793544675739161882
+      },
+      "beforeSha256": "b8c7cc408916009dd3fb5c962d8aaa414c227e502edfd2c87e1c06bb0f66b237"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/services/context/context-engine.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/services/context/context-engine.ts",
+      "before": {
+        "bytes": 43006,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685147,
+        "nlink": 1,
+        "mtimeNs": 1793518737829968572,
+        "ctimeNs": 1793544675739637371
+      },
+      "beforeSha256": "9bdb22f04e57c63120efa4401ef1833216d7ddd841f62d507eb63921c2b73a90"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/services/context/context-manifest.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/services/context/context-manifest.test.ts",
+      "before": {
+        "bytes": 19527,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685148,
+        "nlink": 1,
+        "mtimeNs": 1793535961471262772,
+        "ctimeNs": 1793544675740658205
+      },
+      "beforeSha256": "78b43341a918d0bd5543c0365b580faf138d4c902b153b5b700a49b6f5ff056e"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/services/context/context-manifest.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/services/context/context-manifest.ts",
+      "before": {
+        "bytes": 60899,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685160,
+        "nlink": 1,
+        "mtimeNs": 1793535662379026700,
+        "ctimeNs": 1793544675741502862
+      },
+      "beforeSha256": "31dd1f6a9c4c11c70e64b5e12959c02a80d7dd41fbcab26d9ddd734cf34bb0b9"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/services/memory/memory-privacy.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/services/memory/memory-privacy.ts",
+      "before": {
+        "bytes": 109060,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685166,
+        "nlink": 1,
+        "mtimeNs": 1793543564399496847,
+        "ctimeNs": 1793544675743049000
+      },
+      "beforeSha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/services/native-direct-input.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/services/native-direct-input.ts",
+      "before": {
+        "bytes": 386650,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685168,
+        "nlink": 1,
+        "mtimeNs": 1793544055153178779,
+        "ctimeNs": 1793544675750164110
+      },
+      "beforeSha256": "9e5947439e47b68191941f9ac125d8b6a57ff3595311ab44f61fbf5119fe7954"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "before": {
+        "bytes": 30091,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685170,
+        "nlink": 1,
+        "mtimeNs": 1793539408369072710,
+        "ctimeNs": 1793544675761737842
+      },
+      "beforeSha256": "b4a970720406ebbab60bd8d07d9ddc65fe01c82a6d541f28639a8a3dc1db944f"
+    },
+    {
+      "archivePath": "native-r104-overlay/files/server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/files/server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "before": {
+        "bytes": 157800,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 685171,
+        "nlink": 1,
+        "mtimeNs": 1793523545543936136,
+        "ctimeNs": 1793544675762422257
+      },
+      "beforeSha256": "eee8d9a45767f8ccc45fcb3c3bb707aa1cd75185fb68a685b9eea4b54b44cfa2"
+    },
+    {
+      "archivePath": "native-r104-overlay/native-r103-clean-host26-overlay.patch",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/native-r103-clean-host26-overlay.patch",
+      "before": {
+        "bytes": 120530,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 560501,
+        "nlink": 1,
+        "mtimeNs": 1793544675765657369,
+        "ctimeNs": 1793544675765657369
+      },
+      "beforeSha256": "a6169aa3e83d237cbab651184660f6ed9b7ea22e7bef6b4f0888747cbc2fe3f4"
+    },
+    {
+      "archivePath": "native-r104-overlay/source-pins.json",
+      "sourcePath": "/workspace/v10-preparation/native-r103-clean-host26-overlay-r104/source-pins.json",
+      "before": {
+        "bytes": 5549,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 560502,
+        "nlink": 1,
+        "mtimeNs": 1793544675766476347,
+        "ctimeNs": 1793544675766476347
+      },
+      "beforeSha256": "ad98ae57d1544b95a315fab0b9524c16b230cf2a39e1e72842a7b1cb1df0d70d"
+    },
+    {
+      "archivePath": "root-current-note.md",
+      "sourcePath": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+      "before": {
+        "bytes": 62933,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 386387,
+        "nlink": 1,
+        "mtimeNs": 1793544863908343694,
+        "ctimeNs": 1793544863908343694
+      },
+      "beforeSha256": "74859f3a1758339dce38a1dbe0d9d53ed92bed54b1220173752d8a4e18f7b5b9"
+    },
+    {
+      "archivePath": "server-dimension/README.md",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/README.md",
+      "before": {
+        "bytes": 2729,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684663,
+        "nlink": 1,
+        "mtimeNs": 1793544175469406284,
+        "ctimeNs": 1793544175469406284
+      },
+      "beforeSha256": "950672f67116fb6e02bd50063e30fb2ec2c0efdda62d1edbb0e4f09ddbca9d88"
+    },
+    {
+      "archivePath": "server-dimension/files/packages/shared/src/execution-sandbox.ts",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/files/packages/shared/src/execution-sandbox.ts",
+      "before": {
+        "bytes": 14018,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 681848,
+        "nlink": 1,
+        "mtimeNs": 1793542859421301298,
+        "ctimeNs": 1793542859421301298
+      },
+      "beforeSha256": "8aa41c536821cd43e41fb9d8df5c99ea7e9d536c4223b364800397dbf220bd87"
+    },
+    {
+      "archivePath": "server-dimension/files/server/src/__tests__/server-broker-capability-composition.test.ts",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/files/server/src/__tests__/server-broker-capability-composition.test.ts",
+      "before": {
+        "bytes": 9884,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 682906,
+        "nlink": 1,
+        "mtimeNs": 1793543815551912716,
+        "ctimeNs": 1793543815551912716
+      },
+      "beforeSha256": "5b20c8140536e494502a67f767467dc621c564f36a7b2f46ea3d825c9fc7ab93"
+    },
+    {
+      "archivePath": "server-dimension/files/server/src/app.ts",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/files/server/src/app.ts",
+      "before": {
+        "bytes": 70473,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 681867,
+        "nlink": 1,
+        "mtimeNs": 1793543180888521726,
+        "ctimeNs": 1793543180888521726
+      },
+      "beforeSha256": "b88ce634d593d06bbdb42a086865fbbe4c93ba8e4962417a6b32ddd6265985bb"
+    },
+    {
+      "archivePath": "server-dimension/files/server/src/services/execution-sandbox/openshell-backend.ts",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/files/server/src/services/execution-sandbox/openshell-backend.ts",
+      "before": {
+        "bytes": 23258,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 681866,
+        "nlink": 1,
+        "mtimeNs": 1793543180888620425,
+        "ctimeNs": 1793543180888620425
+      },
+      "beforeSha256": "57b17c311c77d40142bb146410cde87783e2f5ece208b3b03d5cf0633e170156"
+    },
+    {
+      "archivePath": "server-dimension/files/server/src/services/execution-sandbox/policy-compiler.ts",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/files/server/src/services/execution-sandbox/policy-compiler.ts",
+      "before": {
+        "bytes": 16796,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 682902,
+        "nlink": 1,
+        "mtimeNs": 1793543401728047019,
+        "ctimeNs": 1793543401728047019
+      },
+      "beforeSha256": "25605f5ac26dd2d2e20579776f894967beaf582cbccbedda8be97dae47785534"
+    },
+    {
+      "archivePath": "server-dimension/files/server/src/services/runtime/control.ts",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/files/server/src/services/runtime/control.ts",
+      "before": {
+        "bytes": 269503,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 682454,
+        "nlink": 1,
+        "mtimeNs": 1793543236607750347,
+        "ctimeNs": 1793543236607750347
+      },
+      "beforeSha256": "b365da8126c346aa1c842ced4d8e72229748cbd32dbd72928b6701036319b610"
+    },
+    {
+      "archivePath": "server-dimension/files/server/src/services/tool-gateway.ts",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/files/server/src/services/tool-gateway.ts",
+      "before": {
+        "bytes": 551797,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 681860,
+        "nlink": 1,
+        "mtimeNs": 1793543180888162254,
+        "ctimeNs": 1793543180888162254
+      },
+      "beforeSha256": "7750e0d0038a189dd0b025551446a6c864df636feed7f518bb7b8c302360769c"
+    },
+    {
+      "archivePath": "server-dimension/qualification-receipt.json",
+      "sourcePath": "/workspace/v10-preparation/r59-server-dimension-compact-receipt.json",
+      "before": {
+        "bytes": 658,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 281118,
+        "nlink": 1,
+        "mtimeNs": 1793544949985623095,
+        "ctimeNs": 1793544949985623095
+      },
+      "beforeSha256": "0100db325d2640e00433499fd581152442a739ea4289a5d5507e06ecd4a0487d"
+    },
+    {
+      "archivePath": "server-dimension/server-broker-capability-composition.patch",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/server-broker-capability-composition.patch",
+      "before": {
+        "bytes": 25473,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684100,
+        "nlink": 1,
+        "mtimeNs": 1793544098411654988,
+        "ctimeNs": 1793544098411654988
+      },
+      "beforeSha256": "93f47c630b7ea2db955e0fd3c95e7d6f59dc274decacfb33e67288873a0aea2a"
+    },
+    {
+      "archivePath": "server-dimension/source-pins.json",
+      "sourcePath": "/workspace/v10-preparation/server-broker-capability-composition-nov01/source-pins.json",
+      "before": {
+        "bytes": 4376,
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000,
+        "device": 27,
+        "inode": 684101,
+        "nlink": 1,
+        "mtimeNs": 1793544098414078996,
+        "ctimeNs": 1793544098414078996
+      },
+      "beforeSha256": "4f27ebf10e39bc68058814d61a9561888fe9d7cde23555994a6ff5b503ed2dac"
+    }
+  ]
+}
