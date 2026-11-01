@@ -1,0 +1,3 @@
+# R74 recovery delta
+
+Recovery only. This delta references R73/R72 for unchanged source and captures only the verified Code, Native, and Host source deltas plus compact receipts. Qualification status is deliberately scoped: the Code 48-PG fixture passed; Native R131 passed its scoped Agent 48 and full TypeScript checks but failed the actual Worker caller-collector assertion; Host75 passed 77 Node tests/full server TypeScript; Host76 is reconstructed from a recovery receipt. Host77 is frozen source with a thread-reported read-only review and no durable review artifact located. No broad acceptance or source activation is claimed.
