@@ -1,0 +1,49 @@
+{
+  "scope": "Closed Host50\u201352 compact status/restore only; not successful end-to-end model/Worker route qualification",
+  "host50": {
+    "sourcePinsSha256": "443ed46ca65f9dd6fb621dea18c9cb869fe62d0058b9a2ea731609ce88ee889c",
+    "serverTscExit": "0",
+    "hostNodeExit": "0",
+    "hostNodeTests": 101,
+    "clockTestsPassed": 16,
+    "selectorTestsPassed": 62,
+    "protectedQualificationRows": 19,
+    "protectedQualificationRowsPassed": 19,
+    "routeExitCodes": {
+      "managedSource": "1",
+      "managedWorker": "1"
+    },
+    "credentialBrokeringFalseBeforeModel": true,
+    "sourceLogSha256": {
+      "host-session-node.log": "147b8e6d8bc3cc641c0205812f05a00ede751b43711bf026ee2678d0fc2544b4",
+      "qualification-clock-vitest.log": "8d58ac32232aafa794e75f5f1e679692575d49562b923b768203578c97786033",
+      "sandbox-network-selector-vitest.log": "4ff5e471b5794e53b6b8e8e3f2d1b720a87e9ab58e2036963c32d23ae3365315",
+      "managed-source-target-vitest.log": "727c14be357da76af325665edb59b490a713834e00df0363a41f4dbebebb776a",
+      "managed-worker-lifecycle-vitest.log": "c7ce8a984748a563fc86055a2c8758dbf576bfd5403a069d7d27cb269fa09151"
+    }
+  },
+  "host51": {
+    "resultBeforeRestore": {
+      "source-oxc": 0,
+      "shared-build": 0,
+      "db-build": 0,
+      "server-tsc": 0,
+      "managed-source-target-vitest": 1,
+      "managed-worker-lifecycle-vitest": 1
+    },
+    "restoreLogSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+    "preflightAttempt1Sha256": "817180509b6c3bc63cfaf46d13454d450a78d28a834b25ad1cd9bbf23cf78f54",
+    "diagnostic": "Closed diagnostic isolates fresh-prover/current-control mismatch; actual target routes remain failed; source and compiled outputs restored."
+  },
+  "host52": {
+    "freezeSha256": "c27320e52abffb2d9308c666b8466ac762386e109ba114077a06e3ba6498f834",
+    "restoreLogSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+    "exitCodes": {
+      "db-build": "0",
+      "shared-build": "0",
+      "source-oxc": "0"
+    },
+    "status": "Pre-test stale guard exited before tests; no Host, server typecheck, or Vitest test receipts."
+  },
+  "limitations": "Host50 TSC/Host101/clock16/selector62/19-row qualification report passed, but model and Worker routes failed because credentialBrokering was false before model. Host51 diagnostics isolate the mismatch but do not pass the route. Host52 did not run tests."
+}
