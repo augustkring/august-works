@@ -1,0 +1,51 @@
+{
+  "baseCheckpoint": "R70 / Host63",
+  "baseHost63SourcePinsSha256": "cff18656ce91a19a93a407eb1f9c0b898cb364919bb60e9006dcd7e6a3a9f707",
+  "candidateHost68SourcePinsSha256": "83c19270ebeae346571139f6b21127fd929cbd71f86fb0b41c00c92e737f2da0",
+  "sourcePathCounts": {
+    "base": 107,
+    "candidate": 108,
+    "added": 1,
+    "deleted": 0,
+    "changed": 5
+  },
+  "added": [
+    {
+      "path": "deploy/v6/host-agent/sandbox-host-contracts.test.mjs",
+      "candidateSha256": "3810999a1fee63ba2776058dc641ba336bc63197aa7eac6cfdae5fac221a2745"
+    }
+  ],
+  "deleted": [],
+  "changed": [
+    {
+      "path": "deploy/v6/host-agent/openshell.mjs",
+      "baseSha256": "4d849b448f95c26853cc25a05ea3cd740c3a9194b031f5d4dea8f061719cebc8",
+      "candidateSha256": "68da0b3f6814856a383b317846a1f8535adb2a74222c2fce9a799a3557b85fb0",
+      "bytes": 225032
+    },
+    {
+      "path": "deploy/v6/host-agent/openshell.test.mjs",
+      "baseSha256": "528e71e475a8f45a020856c527c0d100981e9191ae60d049ca681a01c0455c8b",
+      "candidateSha256": "a2fc1947c073829d326e549b1d5129657d025482774f31507d1b7033193c718a",
+      "bytes": 193527
+    },
+    {
+      "path": "packages/shared/src/sandbox-host-contracts.ts",
+      "baseSha256": "3a1b71ad5e582731bdb6fc02a3378c13fcbfaef3d8f256f9c99145d765c2455e",
+      "candidateSha256": "324d08e67923c05cd8a543f8da1c166c4427f66a2437a38b8a3c900bdc36c11a",
+      "bytes": 13411
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "baseSha256": "76e961f44b1bb7e0e06d69ab1d6232d137a33e3f6111ec6a6aaa22f4e372e761",
+      "candidateSha256": "d9f7305e40ee7f4401d0b98a00c96f5344b9e2fef7483217910e4c8461e04c97",
+      "bytes": 154103
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "baseSha256": "a61f71de29bdaa6daf98f925a19c4448e62e07b8930b2b969c37f97f81bea806",
+      "candidateSha256": "5d4315b4e0d96edb160d02145cdfd11c9c09e8f5d1dece418672ff1ff9352a1a",
+      "bytes": 141456
+    }
+  ]
+}

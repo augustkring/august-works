@@ -1,0 +1,5 @@
+{
+  "revision": "R1124",
+  "status": "frozen private chronology followup; Oxc2 PASS; selected 21 PostgreSQL cases PREPARED, NOT RUN",
+  "review": "bounded review closed; closure receipt is not a test/qualification receipt"
+}
