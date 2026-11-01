@@ -35,7 +35,7 @@ function completedSse(overrides: Record<string, unknown> = {}) {
     { id: "msg-1", type: "message", role: "assistant", content: [{ type: "output_text", text: "ok" }] },
   ];
   const responseValue = {
-    id: "resp-completed-1", status: "completed", model: "gpt-test-model", output,
+    id: "resp-completed-1", status: "completed", model: "gpt-test-model",
     usage: { input_tokens: 19, output_tokens: 3 }, ...overrides, output,
   };
   const events: string[] = [];
@@ -174,7 +174,7 @@ describe("strict OpenAI Responses transport boundary", () => {
       onWireDispatch: vi.fn(), fetch: async () => response(sse),
     })).rejects.toMatchObject({
       name: "OpenAIResponsesKnownUsageError",
-      knownUsage: { usage: { inputTokens: 19, outputTokens: 3 }, providerResponseId: "resp-completed-1" },
+      knownUsage: { usage: { inputTokens: 19, outputTokens: 3 }, providerResponseId: "resp-completed-1", responseHash: digest(sse) },
     } satisfies Partial<OpenAIResponsesKnownUsageError>);
   });
 
