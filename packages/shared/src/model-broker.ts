@@ -1,5 +1,6 @@
 import { z } from "zod";
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
+export const OPENAI_RESPONSES_WIRE_ENDPOINT = "https://api.openai.com/v1/responses" as const;
 /** Owner-declared lifecycle facts are bound by the installed profile file pin.
  * Missing metadata is reported as untracked by the profile owner; it does not
  * create a replacement choice or qualify a fallback. */
@@ -30,6 +31,7 @@ export const modelProviderWireReceiptSchema = z.object({
   endpoint: z.enum([
     "https://api.anthropic.com/v1/messages",
     "https://openrouter.ai/api/alpha/decisions",
+    OPENAI_RESPONSES_WIRE_ENDPOINT,
   ]),
   bodySha256: hash,
   callId: z.string().min(1).max(200).nullable(),
