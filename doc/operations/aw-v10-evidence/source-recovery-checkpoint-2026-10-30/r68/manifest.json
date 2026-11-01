@@ -1,0 +1,80 @@
+{
+  "purpose": "RECOVERY ONLY; no activation, merge, or broad qualification claim",
+  "capturedAtUtc": "2026-11-01T18:31:13.252320+00:00",
+  "mainHead": "7b923edb5a138481a26f89efb3e33023ef3bb85a",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 84,
+  "archive": {
+    "path": "private-candidates.tar.gz",
+    "bytes": 240588,
+    "sha256": "0b08edc795f0c05f9a2c84769fdde3761b992ad7c0a1325d82a3d74c486068b3",
+    "verifiedEntries": 84
+  },
+  "host60Delta": {
+    "baseCheckpoint": "R67 / Host53",
+    "baseHost53SourcePinsSha256": "94b075fdda7788ed9d907d9678d7ca9d83c82ac6a4cba87c18957d7f994184e1",
+    "candidateHost60SourcePinsSha256": "5c3aa8eb95c8eb351bb2cb00aa9f16b9b568fcd0f92f9c9b3384ade1518134c4",
+    "sourcePathCounts": {
+      "base": 104,
+      "candidate": 105,
+      "added": 1,
+      "deleted": 0,
+      "changed": 3
+    },
+    "added": [
+      {
+        "path": "server/src/__tests__/native-fixture-agent-claim.integration.test.ts",
+        "candidateSha256": "03d14ee857bd26752f3788f6d3b320c8e4cdd8dacf23b20ee8504438e82957ed"
+      }
+    ],
+    "deleted": [],
+    "changed": [
+      {
+        "path": "deploy/v6/host-agent/openshell.test.mjs",
+        "baseSha256": "ef9953341bcfdfedce18ea478949e40295f17902a9a1fd50d3b2630cb31ee0ba",
+        "candidateSha256": "528e71e475a8f45a020856c527c0d100981e9191ae60d049ca681a01c0455c8b",
+        "bytes": 188999
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "baseSha256": "8156f7d9ce87015e21cbf21716cd3297fa764102494470c2324b4d418aa6c339",
+        "candidateSha256": "76e961f44b1bb7e0e06d69ab1d6232d137a33e3f6111ec6a6aaa22f4e372e761",
+        "bytes": 149667
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "baseSha256": "ab60327090de9330886606778e2baeb530ef3bd0bcff23c1d5b03feaf3e1bd56",
+        "candidateSha256": "6b46bf4b78a81d4ee05dda192e6ad522de40617487c26ab597231653895621fa",
+        "bytes": 223090
+      }
+    ]
+  },
+  "references": {
+    "R67ManifestSha256": "46bd77af389f0dbaca5f316b1d762601526c0d46dd17adab1bb5becec72cb073",
+    "R67ArchiveSha256": "89a2fbe0de6030619dc74cd6c3bb1aa2abbe71260bd0aa4e5a416ff5960435c5",
+    "Host60PinsSha256": "5c3aa8eb95c8eb351bb2cb00aa9f16b9b568fcd0f92f9c9b3384ade1518134c4",
+    "Host60RunnerSha256": "1a2a0797ab606c7f2c8ad11c983b2633875bac062fa99d615892740a94f92b24",
+    "R1072PatchSha256": "7a5c4a3ed1f15add73f9092eef8cb4971e3c94118f7c05a95fd6f7df9b4ee64a",
+    "R1072PinsSha256": "e5af6297e86dbf2fdba28bd3f4c2d234cdb062be94da7b24735db632e7aa78bd",
+    "R1072ElevenPostgresReceiptSha256": "850819adbae082cd0ef27bb95752eb685dd03a236c06e775264282bc5e634a75",
+    "closedHost54To59PinsSha256": {
+      "54": "e294a4dce397898f0c72aa4ce4f3ff4e8e1c4303cd86ebc1a6d9e2313d0ab53e",
+      "55": "6e5ba4f6a81543adbf691ee09bec17e91ae071c8d05696362736f56cc5e5bea9",
+      "56": "b09089e8d0ec384a0eed177e6a4e1418d548bffa7a60879d9b2f7c5a480639f6",
+      "57": "171bd473dc2f820d35f2f3db74ced7135989af4df2b6eebdb28b13fda1015f5b",
+      "58": "74d48f5a704d202eb62e86891a7e067a57af3ee696590ce1ca446129086f55ba",
+      "59": "0731ece10b3fa7647f23ff282625decf87c6a0c700a19c13dbe0fa812b0ce2eb"
+    },
+    "storageRecoveryReceiptSha256": "e98685258076f60b22004364413139ac12e1da9add67be00e106cd228ae7fe52",
+    "publicationCohortPreviewSha256": "61e28df5539e5496871186d6a882d44fcf6aef79a1d8f7b30aecf5db0a033d80",
+    "metadataInventoryR3Sha256": {
+      "updated-owner-plan-r3.json": "f75c5904dd7242bc682ee96808d47c02cef04396bd54bd6e94825e4e16d3d039",
+      "updated-owner-plan-r3-pins.json": "ad8622c5e7b8dcec4bf6469d1a76e0b2751fe9fce7c69527fc0efaea8c81f2d1",
+      "updated-owner-plan-r3-audit.json": "a9906fa9a8ad72aefc39e767a7163be04819db0b9ce0919a9dd66c85fec7cb25",
+      "README.md": "1a35ee643287cbc22d56dfb237b4d359a00cbc21851f081e28259bebb0fc0428"
+    },
+    "finalFreezePlanSha256": "3c8b7cda1499f5f92fb2411b8e71d17f899525b03c88d0cf8a23fbdf158e4d1a"
+  },
+  "qualificationStatus": "Host60 sources are frozen; active Host60 qualification outputs are excluded. R1072 is represented by its scoped 11-test actual-PostgreSQL receipt. Hosts54\u201359 statuses are diagnostic and include route failures. Host60 is now closed: its Native first-claim suite passed 11/11, but targeted Worker route failed. No overall Host/Native or final aggregate pass is claimed.",
+  "metadataInventoryR3Review": "Independent root check covered the sole R2\u2192R3 addition test, native-fixture-agent-claim; historical invariants matched. Review was membership-only and is not integrated acceptance. R3 records 55 additions and identifies the R1072 actual-PG 11-test receipt as the remaining test evidence. The R2 helper is unchanged (SHA256 9f0619291221763b1e1d59e94af791d266672a7e5276d21bbda0414625135d29)."
+}
