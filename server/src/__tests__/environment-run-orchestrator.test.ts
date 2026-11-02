@@ -389,6 +389,31 @@ describe("environmentRunOrchestrator — realizeForRun", () => {
     expect(result.executionTarget).toBeNull();
   });
 
+  it.each([undefined, "/provider/original"])("persists the sandbox driver's realized root before target resolution (prior root: %s)", async (remoteCwd) => {
+    const lease = makeLease({ metadata: { retained: "provider-metadata", ...(remoteCwd ? { remoteCwd } : {}) } });
+    const realizedCwd = remoteCwd ?? "/workspace/private-task";
+    const realization = { version: 1, mode: "copy", authoritativeRoot: realizedCwd };
+    const runtime = makeMockRuntime({ realizeWorkspace: vi.fn().mockResolvedValue({
+      cwd: realizedCwd, metadata: { workspaceRealization: realization },
+    }) });
+    mockUpdateLeaseMetadata.mockImplementation(async (_id, metadata) => ({ ...lease, metadata }));
+    mockResolveEnvironmentExecutionTarget.mockImplementation(async (input) => ({
+      kind: "remote", transport: "sandbox", remoteCwd: input.leaseMetadata.remoteCwd,
+    }));
+    const orchestrator = environmentRunOrchestrator(mockDb, { environmentRuntime: runtime });
+    const result = await orchestrator.realizeForRun(makeRealizeInput({ environment: makeEnvironment("sandbox"), lease }));
+    expect(mockUpdateLeaseMetadata).toHaveBeenCalledWith(lease.id, {
+      retained: "provider-metadata", remoteCwd: realizedCwd, workspaceRealization: realization,
+    });
+    expect(result.lease.metadata?.remoteCwd).toBe(realizedCwd);
+    expect(mockResolveEnvironmentExecutionTarget).toHaveBeenCalledWith(expect.objectContaining({
+      leaseMetadata: expect.objectContaining({ remoteCwd: realizedCwd }),
+      lease: expect.objectContaining({ metadata: expect.objectContaining({ remoteCwd: realizedCwd }) }),
+    }));
+    expect(result.executionTarget).toEqual(expect.objectContaining({ remoteCwd: realizedCwd }));
+    expect(mockUpdateLeaseMetadata.mock.invocationCallOrder[0]).toBeLessThan(mockResolveEnvironmentExecutionTarget.mock.invocationCallOrder[0]);
+  });
+
   it("persisted metadata is updated on lease and execution workspace after realization", async () => {
     const persistedExecutionWorkspace = makePersistedExecutionWorkspace();
     const updatedLease = makeLease({
@@ -427,6 +452,7 @@ describe("environmentRunOrchestrator — realizeForRun", () => {
     );
 
     // The returned lease should reflect the updated value
+    expect(mockUpdateLeaseMetadata.mock.calls[0][1]).not.toHaveProperty("remoteCwd");
     expect(result.lease).toEqual(updatedLease);
     expect(result.persistedExecutionWorkspace).toEqual(updatedEw);
   });

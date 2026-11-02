@@ -38,7 +38,7 @@ it("dispatches an ordinary scheduler-created capped Worker through current Sandb
       };
       if (callIndex === 1) return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "scheduler-write",
         name: tool("write_document"), input: { idempotencyKey: "scheduler-real-draft-output", key: "result",
-          title: "Scheduler result", body: "A real scheduler-owned bounded result for Human review." } }] };
+          title: "Scheduler result", body: "A real scheduler-owned bounded result for Human review.", baseRevisionId: null } }] };
       if (callIndex === 2) return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "scheduler-finish",
         name: tool("paperclip_finish"), input: { schema: "paperclip.run_result.v1", reportedWorkDisposition: "done",
           summary: "Retained the scheduler's bounded result.", completionClaim: {

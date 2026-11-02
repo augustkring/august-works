@@ -486,6 +486,9 @@ jobs:
       - name: Typecheck workspaces whose build scripts skip TypeScript
         run: pnpm run typecheck:build-gaps
 
+      - name: Typecheck all workspaces
+        run: pnpm -r typecheck
+
       - name: Verify release registry test coverage
         run: pnpm run test:release-registry
 
@@ -601,11 +604,26 @@ jobs:
 
       - name: Install root-owned Node for remote erasure mechanics tests
         if: matrix.group == 'general-server-without-chat'
+        env:
+          ERASER_TEST_RUNNER_ENVIRONMENT: ${{ runner.environment }}
         run: |
           trusted_node_dir=/usr/local/libexec/paperclip-erasure-test-node
           sudo install -d -o root -g root -m 0755 "$trusted_node_dir"
           sudo install -o root -g root -m 0755 "$(command -v node)" "$trusted_node_dir/node"
           echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
+          # The disposable GitHub image exposes this root-owned PATH directory
+          # as 0777. Lock that known image directory before workspace installs;
+          # self-hosted images retain their operator-managed permissions.
+          if [[ "$ERASER_TEST_RUNNER_ENVIRONMENT" == github-hosted ]]; then
+            eraser_image_bin=/usr/local/bin
+            test "$(/usr/bin/readlink -f -- "$eraser_image_bin")" = "$eraser_image_bin"
+            test "$(/usr/bin/stat -Lc %u -- "$eraser_image_bin")" = 0
+            eraser_image_bin_mode=$(/usr/bin/stat -Lc %a -- "$eraser_image_bin")
+            echo "eraser-profile original-path=$eraser_image_bin uid=0 mode=$eraser_image_bin_mode"
+            if [[ "$eraser_image_bin_mode" == 777 ]]; then
+              sudo chmod 0755 -- "$eraser_image_bin"
+            fi
+          fi
           # Report the exact fixed binary profile when a hosted runner refuses it.
           # These are public path/owner/mode facets; no environment values or file bodies.
           for executable in "$trusted_node_dir/node" /bin/sh /usr/bin/env /usr/bin/readlink /usr/bin/stat /usr/bin/sha256sum /usr/bin/cut /usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin /bin; do

@@ -4189,5 +4189,10 @@
     "runtimeUnavailableDetail": "This runtime is not available for managed model calls. Choose an available runtime in Runtime settings.",
     "toolUnavailableTitle": "Task paused — tool unavailable",
     "toolUnavailableDetail": "This tool is not available for managed work. Choose an available tool or contact your company administrator."
+  },
+  "taskChatPause": {
+    "unknownTitle": "Task is paused.",
+    "unknownDetail": "Review the paused work before resuming it.",
+    "reviewResume": "Review resume"
   }
 }

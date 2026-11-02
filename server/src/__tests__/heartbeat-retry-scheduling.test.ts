@@ -73,6 +73,7 @@ const mockedAppendHeartbeatRunEvent = vi.mocked(appendHeartbeatRunEvent);
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 const PROVIDER_QUOTA_TEST_ADAPTER = "provider_quota_test";
+let providerQuotaExecuteCalls = 0;
 
 if (!embeddedPostgresSupport.supported) {
   console.warn(
@@ -117,7 +118,9 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
     heartbeat = heartbeatService(db);
     registerServerAdapter({
       type: PROVIDER_QUOTA_TEST_ADAPTER,
-      execute: async () => ({
+      execute: async () => {
+        providerQuotaExecuteCalls += 1;
+        return {
         exitCode: 1,
         signal: null,
         timedOut: false,
@@ -131,7 +134,8 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
           retryNotBefore: "2030-04-22T21:00:00.000Z",
           providerQuotaRetryNotBefore: "2030-04-22T21:00:00.000Z",
         },
-      }),
+        };
+      },
       testEnvironment: async () => ({
         adapterType: PROVIDER_QUOTA_TEST_ADAPTER,
         status: "pass",
@@ -324,54 +328,32 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       resultJson: { executionRecovery: { kind: "bootstrap", providerWorkStarted: false } } }).where(eq(heartbeatRuns.id, scheduled.run!.id));
     expect(await heartbeat.scheduleBoundedRetry(scheduled.run!.id, { now, random: () => 0 })).toMatchObject({ outcome: "retry_exhausted" });
   });
-  it("records pre-provider quota rejection, schedules the reset-time retry, and leaves the agent idle", async () => {
+  it("schedules a seeded pre-provider quota failure at reset time and preserves an already idle Agent", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();
 
-    await insertCompanyFixture({
-      id: companyId,
-      name: "Paperclip",
-      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
-      requireBoardApprovalForNewAgents: false,
-      defaultResponsibleUserId: "responsible-user",
-    });
-
-    await db.insert(agents).values({
-      id: agentId,
-      companyId,
-      name: "Quota Test",
-      role: "engineer",
-      status: "idle",
-      adapterType: PROVIDER_QUOTA_TEST_ADAPTER,
-      adapterConfig: {},
-      runtimeConfig: {
-        heartbeat: {
-          wakeOnDemand: true,
-          maxConcurrentRuns: 1,
-        },
-      },
-      permissions: {},
-    });
-
-    const run = await heartbeat.invoke(agentId, "on_demand", {}, "manual");
-    expect(run).not.toBeNull();
-
-    const failedRun = await waitForRunToFinish(heartbeat, run!.id);
+    const runId = randomUUID();
+    const now = new Date("2030-04-22T12:00:00.000Z");
+    const retryNotBefore = "2030-04-22T21:00:00.000Z";
+    // Component preconditions: the adapter/classifier has already persisted a
+    // pre-provider failure, and its lifecycle owner has already made the Agent
+    // idle. This proves scheduling, not paid admission or idle terminalization.
+    await seedRetryFixture({ runId, companyId, agentId, now, errorCode: "provider_quota",
+      adapterType: PROVIDER_QUOTA_TEST_ADAPTER, resultJson: {
+        executionRecovery: { kind: "bootstrap", providerWorkStarted: false },
+        errorFamily: "provider_quota", retryNotBefore, providerQuotaRetryNotBefore: retryNotBefore,
+      } });
+    await db.update(agents).set({ status: "idle", errorReason: null }).where(eq(agents.id, agentId));
+    const callsBefore = providerQuotaExecuteCalls;
+    const scheduled = await heartbeat.scheduleBoundedRetry(runId, { now, random: () => 0 });
+    expect(scheduled.outcome).toBe("scheduled");
+    expect(providerQuotaExecuteCalls).toBe(callsBefore);
+    const failedRun = await heartbeat.getRun(runId);
     expect(failedRun?.status).toBe("failed");
     expect(failedRun?.errorCode).toBe("provider_quota");
     expect((failedRun?.resultJson as Record<string, unknown> | null)?.errorFamily).toBe("provider_quota");
-
-    await expect
-      .poll(
-        () =>
-          db
-            .select({ id: heartbeatRuns.id })
-            .from(heartbeatRuns)
-            .where(eq(heartbeatRuns.retryOfRunId, run!.id))
-            .then((rows) => rows.length),
-        { timeout: 5_000, interval: 50 },
-      )
-      .toBe(1);
+    expect(await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+      .where(eq(heartbeatRuns.retryOfRunId, runId))).toHaveLength(1);
 
     const retryRun = await db
       .select({
@@ -382,7 +364,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
         contextSnapshot: heartbeatRuns.contextSnapshot,
       })
       .from(heartbeatRuns)
-      .where(eq(heartbeatRuns.retryOfRunId, run!.id))
+      .where(eq(heartbeatRuns.retryOfRunId, runId))
       .then((rows) => rows[0] ?? null);
     expect(retryRun?.status).toBe("scheduled_retry");
     expect(retryRun?.scheduledRetryReason).toBe("transient_failure");
@@ -404,6 +386,26 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
         { timeout: 5_000, interval: 50 },
       )
       .toEqual({ status: "idle", errorReason: null });
+  });
+
+  it("refuses the opaque quota adapter before execute without inventing a provider-quota retry", async () => {
+    const companyId = randomUUID(), agentId = randomUUID();
+    await insertCompanyFixture({ id: companyId, name: "Unavailable quota adapter",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false, defaultResponsibleUserId: "responsible-user" });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Quota admission", role: "engineer", status: "idle",
+      adapterType: PROVIDER_QUOTA_TEST_ADAPTER, adapterConfig: {}, permissions: {},
+      runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } });
+    const callsBefore = providerQuotaExecuteCalls;
+    const run = await heartbeat.invoke(agentId, "on_demand", {}, "manual");
+    if (!run) throw new Error("Expected an actual quota-adapter admission attempt");
+    const failedRun = await waitForRunToFinish(heartbeat, run.id);
+    await heartbeat.waitForRunExecutionDrain(run.id);
+    expect(failedRun).toMatchObject({ status: "failed", errorCode: "configuration_incomplete",
+      resultJson: { configurationIncomplete: { reason: "paid_transport_unqualified" } } });
+    expect(providerQuotaExecuteCalls).toBe(callsBefore);
+    expect((failedRun?.resultJson as Record<string, unknown> | null)?.errorFamily).not.toBe("provider_quota");
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.retryOfRunId, run.id))).toHaveLength(0);
   });
 
   async function seedMaxTurnFixture(input?: {

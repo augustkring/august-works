@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
 import { act, createRef, StrictMode, useState, type ReactElement } from "react";
+import { i18n } from "../../i18n";
+import experienceEn from "../../i18n/experience/en.json";
+import experienceDa from "../../i18n/experience/da.json";
 import type { IssueChatComposerHandle } from "../IssueChatThread";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -1834,6 +1837,35 @@ describe("TaskChatComposer", () => {
       expect(sendButton().disabled).toBe(false);
       await act(async () => sendButton().click());
       expect(onAdd).toHaveBeenCalledWith("/new", undefined, undefined, undefined, expect.any(String));
+    });
+
+    it.each(["en", "da"] as const)("preserves the draft and blocks messages while pause scope is unknown (%s)", async locale => {
+      const previousLocale = i18n.language;
+      const onAdd = vi.fn(), onResume = vi.fn();
+      const props = { onAdd, workMode: "standard" as const, draftKey: `unknown-pause-${locale}` };
+      const copy = locale === "da" ? experienceDa.taskChatPause : experienceEn.taskChatPause;
+      try {
+        await act(async () => { await i18n.changeLanguage(locale); });
+        render(<TaskChatComposer {...props} />);
+        typeText("Keep this exact draft.");
+        act(() => root!.render(<TaskChatComposer {...props} pause={{ scope: "unknown", onResume }} />));
+        expect(container.querySelector('[contenteditable="true"]')).toBeNull();
+        expect(container.querySelector('button[aria-label="Send"]')).toBeNull();
+        expect(container.textContent).toContain(copy.unknownTitle);
+        expect(container.textContent).toContain(copy.unknownDetail);
+        const review = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.trim() === copy.reviewResume);
+        if (!review) throw new Error("Expected the localized neutral review action");
+        act(() => review.click());
+        expect(onResume).toHaveBeenCalledOnce();
+        expect(onAdd).not.toHaveBeenCalled();
+        act(() => root!.render(<TaskChatComposer {...props} pause={{ scope: "subtree", onResume }} />));
+        expect(container.querySelector('[contenteditable="true"]')).toBeNull();
+        act(() => root!.render(<TaskChatComposer {...props} />));
+        expect(editable().textContent).toBe("Keep this exact draft.");
+        expect(onAdd).not.toHaveBeenCalled();
+      } finally {
+        await act(async () => { await i18n.changeLanguage(previousLocale); });
+      }
     });
 
     it("preserves a typed draft and blocks sending until resume completes", async () => {

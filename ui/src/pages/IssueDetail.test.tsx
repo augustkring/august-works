@@ -1298,6 +1298,9 @@ describe("IssueDetail", () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    mockIssuesApi.releaseTreeHold.mockClear();
+    mockIssuesApi.createTreeHold.mockClear();
+    mockIssuesApi.previewTreeControl.mockClear();
     localStorage.clear();
     sessionStorage.clear();
     mockPanelState.panelVisible = true;
@@ -5416,6 +5419,117 @@ describe("IssueDetail", () => {
       });
     });
 
+    function currentRootPause() {
+      return { holdId: "hold-1", rootIssueId: "issue-1", issueId: "issue-1", isRoot: true,
+        mode: "pause" as const, reason: null, releasePolicy: { strategy: "manual" as const } };
+    }
+
+    it("keeps reload pause scope unknown until the exact hold membership resolves, then shows the subtree without descendants", async () => {
+      let resolveMembers!: (holds: IssueTreeHold[]) => void;
+      const members = new Promise<IssueTreeHold[]>(resolve => { resolveMembers = resolve; });
+      mockSidebarState.isMobile = isMobile;
+      mockAuthApi.getSession.mockResolvedValue({ session: { userId: "user-1" }, user: { id: "user-1" } });
+      mockIssuesApi.get.mockResolvedValue(createIssue());
+      mockIssuesApi.list.mockResolvedValue([]);
+      mockIssuesApi.getTreeControlState.mockResolvedValue({ activePauseHold: currentRootPause() });
+      mockIssuesApi.listTreeHolds.mockImplementation((_issueId: string, options?: { mode?: string }) =>
+        options?.mode === "pause" ? members : Promise.resolve([]));
+      mockIssuesApi.previewTreeControl.mockResolvedValue(createResumePreview());
+      await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+      await waitForAssertion(() => expect(composerProps().composerPause?.scope).toBe("unknown"));
+      expect(container.textContent).toContain("Review resume");
+      const pausedMenu = container.querySelector<HTMLButtonElement>('button[aria-label="More task actions"]');
+      if (!pausedMenu) throw new Error("Expected the actual Task actions menu");
+      await act(async () => pausedMenu.click());
+      expect(container.textContent).not.toContain("Resume work");
+      expect(container.textContent).not.toContain("Resume subtree");
+      expect(mockIssuesApi.releaseTreeHold).not.toHaveBeenCalled();
+      const review = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.trim() === "Review resume");
+      if (!review) throw new Error("Expected the neutral review action");
+      await act(async () => review.click());
+      await waitForAssertion(() => expect(mockIssuesApi.previewTreeControl).toHaveBeenCalled());
+      expect(container.querySelector('[data-slot="dialog-content"]')?.textContent).toContain("Review resume");
+      const applyUnknown = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-slot="dialog-content"] button'))
+        .find(button => button.textContent?.trim() === "Review resume");
+      await waitForAssertion(() => expect(applyUnknown?.disabled).toBe(false));
+      expect(mockIssuesApi.releaseTreeHold).not.toHaveBeenCalled();
+      await act(async () => resolveMembers([createPauseHold()]));
+      await waitForAssertion(() => {
+        expect(composerProps().composerPause?.scope).toBe("subtree");
+        expect(container.textContent).toContain("Subtree is paused.");
+        expect(container.querySelector('[data-slot="dialog-content"]')?.textContent).toContain("Resume subtree");
+        const menuResume = Array.from(container.querySelectorAll("button")).find(button =>
+          button.textContent?.trim() === "Resume subtree" && !button.closest('[data-slot="dialog-content"]'));
+        expect(menuResume).toBeTruthy();
+      });
+    });
+
+    it("uses a fresh canonical resume preview even when auxiliary membership is unavailable", async () => {
+      mockSidebarState.isMobile = isMobile;
+      mockAuthApi.getSession.mockResolvedValue({ session: { userId: "user-1" }, user: { id: "user-1" } });
+      mockIssuesApi.get.mockResolvedValue(createIssue({ assigneeAgentId: "agent-1" }));
+      mockIssuesApi.getTreeControlState.mockResolvedValue({ activePauseHold: currentRootPause() });
+      mockIssuesApi.listTreeHolds.mockImplementation((_issueId: string, options?: { mode?: string }) =>
+        options?.mode === "pause" ? Promise.reject(new Error("membership unavailable")) : Promise.resolve([]));
+      mockIssuesApi.previewTreeControl.mockResolvedValue(createResumePreview());
+      mockIssuesApi.releaseTreeHold.mockResolvedValue(createPauseHold({ status: "released" }));
+      await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+      await waitForAssertion(() => expect(composerProps().composerPause?.scope).toBe("unknown"));
+      const review = Array.from(container.querySelectorAll("button")).find(button => button.textContent?.trim() === "Review resume");
+      if (!review) throw new Error("Expected the neutral review action");
+      await act(async () => review.click());
+      await waitForAssertion(() => expect(mockIssuesApi.previewTreeControl).toHaveBeenCalled());
+      expect(mockIssuesApi.releaseTreeHold).not.toHaveBeenCalled();
+      const apply = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-slot="dialog-content"] button'))
+        .find(button => button.textContent?.trim() === "Review resume");
+      if (!apply) throw new Error("Expected the current preview confirmation");
+      await waitForAssertion(() => expect(apply.disabled).toBe(false));
+      await act(async () => apply.click());
+      await waitForAssertion(() => expect(mockIssuesApi.releaseTreeHold).toHaveBeenCalledWith(
+        "PAP-1", "hold-1", { reason: null, metadata: { wakeAgents: true } },
+      ));
+      expect(mockIssuesApi.createTreeHold).not.toHaveBeenCalled();
+    });
+
+    it.each(["missing", "stale", "foreign_company", "foreign_root", "released", "wrong_mode", "missing_members"] as const)(
+      "keeps the composer paused with unknown scope for %s canonical hold data", async variant => {
+        const hold = createPauseHold();
+        if (variant === "stale") hold.id = "old-hold";
+        if (variant === "foreign_company") hold.companyId = "other-company";
+        if (variant === "foreign_root") hold.rootIssueId = "other-root";
+        if (variant === "released") hold.status = "released";
+        if (variant === "wrong_mode") hold.mode = "cancel";
+        if (variant === "missing_members") delete hold.members;
+        mockSidebarState.isMobile = isMobile;
+      mockAuthApi.getSession.mockResolvedValue({ session: { userId: "user-1" }, user: { id: "user-1" } });
+        mockIssuesApi.get.mockResolvedValue(createIssue());
+        mockIssuesApi.getTreeControlState.mockResolvedValue({ activePauseHold: currentRootPause() });
+        mockIssuesApi.listTreeHolds.mockImplementation((_issueId: string, options?: { mode?: string }) =>
+          Promise.resolve(options?.mode === "pause" && variant !== "missing" ? [hold] : []));
+        await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+        await waitForAssertion(() => {
+          expect(composerProps().composerPause?.scope).toBe("unknown");
+          expect(container.querySelector('[data-testid="paused-composer-takeover"]')).not.toBeNull();
+        });
+        expect(mockIssuesApi.releaseTreeHold).not.toHaveBeenCalled();
+      },
+    );
+
+    it("keeps a known pause while its membership read fails", async () => {
+      mockSidebarState.isMobile = isMobile;
+      mockAuthApi.getSession.mockResolvedValue({ session: { userId: "user-1" }, user: { id: "user-1" } });
+      mockIssuesApi.get.mockResolvedValue(createIssue());
+      mockIssuesApi.getTreeControlState.mockResolvedValue({ activePauseHold: currentRootPause() });
+      mockIssuesApi.listTreeHolds.mockImplementation((_issueId: string, options?: { mode?: string }) =>
+        options?.mode === "pause" ? Promise.reject(new Error("membership unavailable")) : Promise.resolve([]));
+      await act(async () => root.render(<QueryClientProvider client={queryClient}><IssueDetail /></QueryClientProvider>));
+      await waitForAssertion(() => {
+        expect(queryClient.getQueryState(["issues", "tree-holds", "PAP-1", "active-pause-with-members"])?.status).toBe("error");
+        expect(composerProps().composerPause?.scope).toBe("unknown");
+        expect(container.querySelector('[data-testid="paused-composer-takeover"]')).not.toBeNull();
+      });
+    });
+
     it.each([true, false])("applies a late pause response (root=%s)", async (isRoot) => {
       const response = await renderWithPendingTreeControl();
       response.resolve({
@@ -5430,14 +5544,15 @@ describe("IssueDetail", () => {
         },
       });
       await waitForAssertion(() => {
-        expect(composerProps().composerPause?.scope).toBe(isRoot ? "leaf" : "subtree");
+        expect(composerProps().composerPause?.scope).toBe(isRoot ? "unknown" : "subtree");
         expect(container.querySelector('[data-testid="paused-composer-takeover"]')).not.toBeNull();
       });
     });
   });
 
   it("renders a quiet task pause notice and defaults leaf resume to wake the assignee", async () => {
-    const activeHold = createPauseHold();
+    const activeHold = createPauseHold({ members: (createPauseHold().members ?? [])
+      .filter(member => member.issueId === "issue-1") });
     const releasedHold = createPauseHold({
       status: "released",
       releasedAt: new Date("2026-04-21T00:01:00.000Z"),
@@ -5464,7 +5579,8 @@ describe("IssueDetail", () => {
         releasePolicy: { strategy: "manual", note: "leaf_pause" },
       },
     });
-    mockIssuesApi.listTreeHolds.mockResolvedValue([activeHold]);
+    mockIssuesApi.listTreeHolds.mockImplementation((_issueId: string, options?: { mode?: string }) =>
+      Promise.resolve(options?.mode === "pause" ? [activeHold] : []));
     mockIssuesApi.previewTreeControl.mockResolvedValue(createResumePreview());
     mockIssuesApi.releaseTreeHold.mockResolvedValue(releasedHold);
     mockAgentsApi.list.mockResolvedValue([createAgent()]);

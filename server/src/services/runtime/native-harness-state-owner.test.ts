@@ -10,7 +10,7 @@ import { nativeRuntimeContextFixture } from "../native-runtime/runtime-context.t
 import { exactNativeHarnessStateCommand, exactNativeRuntimeAssetErasureCommand, exactNativeRunnerMonitorStatusCommand,
   exactNativeSessionFilesystemFenceCommand, nativeRelayClaimFailureStatus } from "./control.js";
 import { createRemoteRunnerProcessLauncher, remoteRunnerPathExists, stageRemoteRunnerDirectory, syncRemoteRunnerDirectoryOut } from "../native-runtime/native-session-executor.js";
-import { REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT,
+import { REMOTE_NATIVE_ERASER_ENV, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_RELEASE_SCRIPT,
   REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
   REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "../native-runtime/remote-runner-identity.js";
 import { createRemoteRuntimeAssetLocator } from "../native-runtime/runtime-asset-retention.js";
@@ -403,14 +403,17 @@ describe("Native harness-state relay command owner", () => {
       providerLeaseId: "lease-fixture", runnerInstanceId: randomUUID(), normalizedSessionId: randomUUID(), remoteCwd });
     const expectedProcessPid = 23123;
     const expectedProcessStartedAt = "2026-10-28T12:00:00.000Z";
-    const argv = ["sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, "paperclip-native-asset-erasure",
+    const argv = ["/bin/sh", "-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, "paperclip-native-asset-erasure",
       remoteCwd, locator.normalizedSessionIdDigest, locator.runId, locator.runnerInstanceId,
       locator.environmentLeaseId, locator.providerLeaseId, locator.normalizedSessionIdDigest,
       String(expectedProcessPid), expectedProcessStartedAt,
       REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
-    const request = { argv, cwd: remoteCwd, stdinBase64: "", env: {} } as unknown as RuntimeSandboxExecRelayRequest;
+    const request = { argv, cwd: remoteCwd, stdinBase64: "", env: { ...REMOTE_NATIVE_ERASER_ENV } } as unknown as RuntimeSandboxExecRelayRequest;
     const authority = { request, locator, remoteCwd, expectedProcessPid, expectedProcessStartedAt };
     expect(exactNativeRuntimeAssetErasureCommand(authority)).toBe(true);
+    expect(exactNativeRuntimeAssetErasureCommand({ ...authority, request: { ...request, argv: ["sh", ...argv.slice(1)] } })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ ...authority, request: { ...request, env: {} } })).toBe(false);
+    expect(exactNativeRuntimeAssetErasureCommand({ ...authority, request: { ...request, env: { ...REMOTE_NATIVE_ERASER_ENV, BASH_ENV: "/tmp/bootstrap" } } })).toBe(false);
     expect(exactNativeRuntimeAssetErasureCommand({ request: { ...request,
       argv: [...argv.slice(0, 4), "/workspace/outside", ...argv.slice(5)] }, locator, remoteCwd,
       expectedProcessPid, expectedProcessStartedAt })).toBe(false);

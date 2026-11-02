@@ -167,7 +167,9 @@ describePostgres("plugin agent runtime state authorization", () => {
     expect(pinnedVersionId).toBeTruthy();
     await db.update(companySkillVersions).set({ state: "active", visibility: "company", activatedAt: new Date() }).where(eq(companySkillVersions.id, pinnedVersionId!));
     await db.update(companySkills).set({ activeVersionId: pinnedVersionId, currentVersionId: pinnedVersionId, lifecycleState: "active", sharingScope: "private", ownerAgentId: agentId, metadata: { triggerTerms: ["runtime pin fixture"] } }).where(eq(companySkills.id, skill.id));
-    await instanceSettingsService(db).updateExperimental({ enableBetaSkills: true });
+    // This deterministic manifest/consumer fixture invokes no model; optional
+    // Role Packs must not assert an unsupported managed spend guarantee.
+    await instanceSettingsService(db).updateExperimental({ enableBetaSkills: true, role_packs_v5: false });
     await db.update(agents).set({ adapterConfig: { paperclipSkillSync: { desiredSkills: [{ key: skill.key, versionId: pinnedVersionId }] } } }).where(eq(agents.id, agentId));
     const providers = agentProviderBindingService(db);
     const binding = await providers.create(humanActor, home, agentId, {
@@ -184,9 +186,12 @@ describePostgres("plugin agent runtime state authorization", () => {
     }).returning();
     await preparePlatformSkillAdmission(db, { companyId: home, agentId, runId: run!.id,
       responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
-    await agentRuntimeFabricService(db).prepare({
+    const prepared = await agentRuntimeFabricService(db).prepare({
       companyId: home, agentId, runId: run!.id, responsibleUserId: userId, issueId: null, query: "Prepare runtime pin fixture",
     });
+    expect(prepared?.manifest.rolePack).toBeNull();
+    expect(prepared?.manifest.executionPolicy.policies)
+      .toEqual(["reported_cost_threshold_only", "source_provenance", "approval_before_side_effects"]);
     const state = await pluginAgentRuntimeState(db, pluginId, home, agentId);
     expect(state).toMatchObject({
       agent: { id: agentId }, skillsReady: true,

@@ -3598,13 +3598,15 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     staleTime: 0,
     retry: false,
   });
-  const { data: treeControlState, error: treeControlStateError } = useQuery({
+  const { data: treeControlState, error: treeControlStateError,
+    isFetching: treeControlStateLoading } = useQuery({
     queryKey: ["issues", "tree-control-state", issueId ?? "pending"],
     queryFn: () => issuesApi.getTreeControlState(issueId!),
     enabled: !!issueId,
     retry: false,
   });
-  const { data: activeRootPauseHolds = [] } = useQuery({
+  const { data: activeRootPauseHolds = [], isFetching: activeRootPauseHoldsLoading,
+    isError: activeRootPauseHoldsError } = useQuery({
     queryKey: [
       "issues",
       "tree-holds",
@@ -4299,19 +4301,15 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   });
   const executeTreeControl = useMutation({
     onMutate: () => setTreeControlWakeWarning(null),
-    mutationFn: async ({
-      mode,
-      scope,
-      runId,
-      wakeAgents = false,
-    }: {
-      mode: IssueTreeControlMode;
+    mutationFn: async (input: { mode: "resume"; wakeAgents?: boolean; feedback?: never } | {
+      mode: Exclude<IssueTreeControlMode, "resume">;
       scope: "leaf" | "subtree";
       runId?: string;
       wakeAgents?: boolean;
       feedback?: "composer";
     }) => {
-      if (mode === "resume") {
+      const wakeAgents = input.wakeAgents ?? false;
+      if (input.mode === "resume") {
         const pauseHoldId = treeControlState?.activePauseHold?.holdId;
         if (!pauseHoldId) {
           throw new Error(
@@ -4330,6 +4328,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         );
         return { kind: "release" as const, hold: releasedHold };
       }
+      const { mode, scope, runId } = input;
       const created = await issuesApi.createTreeHold(issueId!, {
         mode,
         reason: null,
@@ -6826,6 +6825,25 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     [treeControlPreview],
   );
   const activePauseHold = treeControlState?.activePauseHold ?? null;
+  const composerPauseScope = useMemo<TaskComposerPause["scope"]>(() => {
+    if (!activePauseHold || !issue || treeControlStateLoading || treeControlStateError ||
+        activePauseHold.issueId !== issue.id || activePauseHold.mode !== "pause") return "unknown";
+    if (!activePauseHold.isRoot) return "subtree";
+    if (activePauseHold.rootIssueId !== issue.id || activeRootPauseHoldsLoading || activeRootPauseHoldsError)
+      return "unknown";
+    // The paused set belongs to this current canonical hold, not to an
+    // independently loading/filtered view of today's Task descendants.
+    const hold = activeRootPauseHolds.find(candidate => candidate.id === activePauseHold.holdId &&
+      candidate.companyId === issue.companyId && candidate.rootIssueId === issue.id &&
+      candidate.mode === "pause" && candidate.status === "active");
+    if (!hold || !Array.isArray(hold.members) || hold.members.length === 0 ||
+        hold.members.some(member => member.holdId !== hold.id ||
+        member.companyId !== issue.companyId || typeof member.skipped !== "boolean")) return "unknown";
+    const activeMembers = hold.members.filter(member => !member.skipped);
+    if (!activeMembers.some(member => member.issueId === issue.id)) return "unknown";
+    return activeMembers.some(member => member.issueId !== issue.id) ? "subtree" : "leaf";
+  }, [activePauseHold, issue, treeControlStateLoading, treeControlStateError,
+    activeRootPauseHolds, activeRootPauseHoldsLoading, activeRootPauseHoldsError]);
   const activeRootPauseHoldsForDisplay = useMemo(
     () => (activePauseHold?.isRoot === true ? activeRootPauseHolds : []),
     [activePauseHold?.isRoot, activeRootPauseHolds],
@@ -6935,8 +6953,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
 
   const hasAttachments = attachmentList.length > 0;
   const canShowSubtreeControls = canManageTreeControl && childIssues.length > 0;
-  const canResumeSubtree =
-    canShowSubtreeControls && activePauseHold?.isRoot === true;
+  const canResumeSubtree = canManageTreeControl && activePauseHold?.isRoot === true &&
+    composerPauseScope === "subtree";
   const canRestoreSubtree =
     canShowSubtreeControls && activeCancelHolds.length > 0;
   const isTerminalIssue =
@@ -6948,10 +6966,8 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     childIssues.length === 0 &&
     !activePauseHold &&
     !isTerminalIssue;
-  const canResumeLeafWork =
-    canManageTreeControl &&
-    childIssues.length === 0 &&
-    activePauseHold?.isRoot === true;
+  const canResumeLeafWork = canManageTreeControl && activePauseHold?.isRoot === true &&
+    composerPauseScope === "leaf";
   const treeControlScope: "leaf" | "subtree" =
     childIssues.length === 0 ? "leaf" : "subtree";
   const previewAffectedIssueCount = treePreviewAffectedIssues.length;
@@ -7412,7 +7428,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   </button>
                 ) : null}
                 <TaskTreeControlMenuItems
-                  scope={treeControlScope}
+                  scope={canResumeLeafWork ? "leaf" : canResumeSubtree ? "subtree" : treeControlScope}
                   canPause={
                     canPauseLeafWork ||
                     (canShowSubtreeControls &&
@@ -8077,7 +8093,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   mentions={mentionOptions}
                   conversationMode={!!issue.conversationAgentId}
                   composerPause={activePauseHold ? {
-                    scope: activePauseHold.isRoot && childIssues.length === 0 ? "leaf" : "subtree",
+                    scope: composerPauseScope,
                     pending: executeTreeControl.isPending && executeTreeControl.variables?.mode === "resume",
                     onResume: activePauseHold.isRoot && canManageTreeControl ? () => {
                       executeTreeControl.reset();
@@ -8272,7 +8288,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
               if (!open) executeTreeControl.reset();
             }}
             mode={treeControlMode}
-            scope={treeControlScope}
+            scope={treeControlMode === "resume" ? composerPauseScope : treeControlScope}
             affectedCount={previewAffectedIssueCount}
             affectedAgentCount={previewAffectedAgentCount}
             loading={treeControlPreviewLoading}
@@ -8292,13 +8308,14 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
               executeTreeControl.reset();
               void refetchTreeControlPreview();
             }}
-            onApply={() =>
-              executeTreeControl.mutate({
-                mode: treeControlMode,
-                scope: treeControlScope,
-                wakeAgents: treeControlWakeAgentsOnResume,
-              })
-            }
+            onApply={() => {
+              if (treeControlMode === "resume") {
+                executeTreeControl.mutate({ mode: "resume", wakeAgents: treeControlWakeAgentsOnResume });
+              } else {
+                executeTreeControl.mutate({ mode: treeControlMode, scope: treeControlScope,
+                  wakeAgents: treeControlWakeAgentsOnResume });
+              }
+            }}
           />
 
           <Dialog

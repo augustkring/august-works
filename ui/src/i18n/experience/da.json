@@ -4189,5 +4189,10 @@
     "runtimeUnavailableDetail": "Denne runtime kan ikke bruges til administrerede modelkald. Vælg en tilgængelig runtime i Runtime-indstillinger.",
     "toolUnavailableTitle": "Opgaven er sat på pause — værktøjet er utilgængeligt",
     "toolUnavailableDetail": "Dette værktøj kan ikke bruges til administreret arbejde. Vælg et tilgængeligt værktøj, eller kontakt din virksomheds administrator."
+  },
+  "taskChatPause": {
+    "unknownTitle": "Opgaven er sat på pause.",
+    "unknownDetail": "Gennemgå det arbejde, der er sat på pause, før du genoptager det.",
+    "reviewResume": "Gennemgå genoptagelse"
   }
 }
