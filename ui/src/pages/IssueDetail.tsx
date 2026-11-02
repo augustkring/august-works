@@ -3575,6 +3575,14 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   );
   const activePluginTab =
     issuePluginTabItems.find((item) => item.value === detailTab) ?? null;
+  const { data: treeControlState, error: treeControlStateError,
+    isFetching: treeControlStateLoading } = useQuery({
+    queryKey: ["issues", "tree-control-state", issueId ?? "pending"],
+    queryFn: () => issuesApi.getTreeControlState(issueId!),
+    enabled: !!issueId,
+    retry: false,
+  });
+  const activePauseHold = treeControlState?.activePauseHold ?? null;
   const {
     data: treeControlPreview,
     isFetching: treeControlPreviewLoading,
@@ -3586,6 +3594,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
       "tree-control-preview",
       issueId ?? "pending",
       treeControlMode,
+      ...(treeControlMode === "resume" ? [activePauseHold?.holdId ?? "no-hold"] : []),
     ],
     queryFn: () =>
       issuesApi.previewTreeControl(issueId!, {
@@ -3598,15 +3607,19 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     staleTime: 0,
     retry: false,
   });
-  const { data: treeControlState, error: treeControlStateError,
-    isFetching: treeControlStateLoading } = useQuery({
-    queryKey: ["issues", "tree-control-state", issueId ?? "pending"],
-    queryFn: () => issuesApi.getTreeControlState(issueId!),
-    enabled: !!issueId,
+  const { data: activePauseResumePreview, isFetching: activePauseResumePreviewLoading,
+    error: activePauseResumePreviewError } = useQuery({
+    queryKey: ["issues", "tree-control-preview", issueId ?? "pending", "resume",
+      activePauseHold?.holdId ?? "no-hold"],
+    queryFn: () => issuesApi.previewTreeControl(issueId!, {
+      mode: "resume", releasePolicy: { strategy: "manual" },
+    }),
+    enabled: !!issueId && canManageTreeControl && activePauseHold?.isRoot === true &&
+      !treeControlStateLoading && !treeControlStateError,
+    staleTime: 0,
     retry: false,
   });
-  const { data: activeRootPauseHolds = [], isFetching: activeRootPauseHoldsLoading,
-    isError: activeRootPauseHoldsError } = useQuery({
+  const { data: activeRootPauseHolds = [] } = useQuery({
     queryKey: [
       "issues",
       "tree-holds",
@@ -6817,33 +6830,38 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
     pushToast,
   ]);
 
+  // Exact hold release is narrower than the bulk subtree-resume API. Keep
+  // its labels and confirmation counts on the same current server preview.
+  const currentPauseReleaseIssues = useMemo(() => {
+    if (!activePauseHold?.isRoot || !issue || treeControlStateLoading || treeControlStateError ||
+        activePauseHold.issueId !== issue.id || activePauseHold.rootIssueId !== issue.id ||
+        activePauseHold.mode !== "pause" || activePauseResumePreviewLoading || activePauseResumePreviewError)
+      return null;
+    const preview = activePauseResumePreview;
+    if (!preview || preview.companyId !== issue.companyId || preview.rootIssueId !== issue.id ||
+        preview.mode !== "resume" || !Array.isArray(preview.issues)) return null;
+    const root = preview.issues.find(candidate => candidate.id === issue.id);
+    if (!root || !root.activeHoldIds.includes(activePauseHold.holdId)) return null;
+    if (root.skipped && !(root.skipReason === "terminal_status" && root.status === issue.status &&
+        (root.status === "done" || root.status === "cancelled"))) return null;
+    if (!root.skipped && root.skipReason !== null) return null;
+    return preview.issues.filter(candidate => !candidate.skipped &&
+      candidate.activeHoldIds.includes(activePauseHold.holdId) &&
+      candidate.activeHoldIds.every(id => id === activePauseHold.holdId));
+  }, [activePauseHold, issue, treeControlStateLoading, treeControlStateError,
+    activePauseResumePreview, activePauseResumePreviewLoading, activePauseResumePreviewError]);
   const treePreviewAffectedIssues = useMemo(
-    () =>
-      (treeControlPreview?.issues ?? []).filter(
-        (candidate) => !candidate.skipped,
-      ),
-    [treeControlPreview],
+    () => treeControlMode === "resume" ? (currentPauseReleaseIssues ?? []) :
+      (treeControlPreview?.issues ?? []).filter(candidate => !candidate.skipped),
+    [treeControlMode, currentPauseReleaseIssues, treeControlPreview],
   );
-  const activePauseHold = treeControlState?.activePauseHold ?? null;
   const composerPauseScope = useMemo<TaskComposerPause["scope"]>(() => {
     if (!activePauseHold || !issue || treeControlStateLoading || treeControlStateError ||
         activePauseHold.issueId !== issue.id || activePauseHold.mode !== "pause") return "unknown";
     if (!activePauseHold.isRoot) return "subtree";
-    if (activePauseHold.rootIssueId !== issue.id || activeRootPauseHoldsLoading || activeRootPauseHoldsError)
-      return "unknown";
-    // The paused set belongs to this current canonical hold, not to an
-    // independently loading/filtered view of today's Task descendants.
-    const hold = activeRootPauseHolds.find(candidate => candidate.id === activePauseHold.holdId &&
-      candidate.companyId === issue.companyId && candidate.rootIssueId === issue.id &&
-      candidate.mode === "pause" && candidate.status === "active");
-    if (!hold || !Array.isArray(hold.members) || hold.members.length === 0 ||
-        hold.members.some(member => member.holdId !== hold.id ||
-        member.companyId !== issue.companyId || typeof member.skipped !== "boolean")) return "unknown";
-    const activeMembers = hold.members.filter(member => !member.skipped);
-    if (!activeMembers.some(member => member.issueId === issue.id)) return "unknown";
-    return activeMembers.some(member => member.issueId !== issue.id) ? "subtree" : "leaf";
-  }, [activePauseHold, issue, treeControlStateLoading, treeControlStateError,
-    activeRootPauseHolds, activeRootPauseHoldsLoading, activeRootPauseHoldsError]);
+    if (!currentPauseReleaseIssues) return "unknown";
+    return currentPauseReleaseIssues.some(candidate => candidate.id !== issue.id) ? "subtree" : "leaf";
+  }, [activePauseHold, issue, treeControlStateLoading, treeControlStateError, currentPauseReleaseIssues]);
   const activeRootPauseHoldsForDisplay = useMemo(
     () => (activePauseHold?.isRoot === true ? activeRootPauseHolds : []),
     [activePauseHold?.isRoot, activeRootPauseHolds],
@@ -6971,8 +6989,10 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
   const treeControlScope: "leaf" | "subtree" =
     childIssues.length === 0 ? "leaf" : "subtree";
   const previewAffectedIssueCount = treePreviewAffectedIssues.length;
-  const previewAffectedAgentCount =
-    treeControlPreview?.totals.affectedAgents ?? 0;
+  const previewAffectedAgentCount = treeControlMode === "resume"
+    ? new Set(treePreviewAffectedIssues.flatMap(candidate => [candidate.assigneeAgentId,
+      candidate.activeRun?.agentId].filter((id): id is string => typeof id === "string"))).size
+    : treeControlPreview?.totals.affectedAgents ?? 0;
   const reopenComposerHint = closedIsolatedWorkspaceReopenPending
     ? "This issue's isolated workspace was archived. Your next comment or resume reopens it and rebuilds the worktree."
     : null;
@@ -7450,7 +7470,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                     executeTreeControl.reset();
                     setTreeControlMode("resume");
                     setTreeControlWakeAgentsOnResume(
-                      isAgentOwnedNonTerminalIssue || canShowSubtreeControls,
+                      currentPauseReleaseIssues?.some(candidate => candidate.assigneeAgentId || candidate.activeRun?.agentId) ?? false,
                     );
                     setTreeControlOpen(true);
                     setMoreOpen(false);
@@ -8098,7 +8118,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                     onResume: activePauseHold.isRoot && canManageTreeControl ? () => {
                       executeTreeControl.reset();
                       setTreeControlMode("resume");
-                      setTreeControlWakeAgentsOnResume(isAgentOwnedNonTerminalIssue || canShowSubtreeControls);
+                      setTreeControlWakeAgentsOnResume(currentPauseReleaseIssues?.some(candidate => candidate.assigneeAgentId || candidate.activeRun?.agentId) ?? false);
                       setTreeControlOpen(true);
                     } : undefined,
                     resumeHref: !activePauseHold.isRoot ? createIssueDetailPath(activePauseHoldRoot?.identifier ?? activePauseHold.rootIssueId) : undefined,

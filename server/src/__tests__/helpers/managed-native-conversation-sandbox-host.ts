@@ -128,6 +128,36 @@ function safeNativePreReceiptFailedChecks(error: unknown): string[] {
 }
 
 
+/** The software Host must use the already provisioned image Node, rather
+ * than the CI bootstrap's writable toolcache. No signed request env changes. */
+function qualifiedFixtureImageNode(configured: string | undefined): string {
+  if (configured === undefined) return process.execPath;
+  if (!configured || !posix.isAbsolute(configured) || posix.normalize(configured) !== configured ||
+      !["/bin/", "/sbin/", "/usr/", "/opt/"].some(root => configured.startsWith(root)))
+    throw new Error("fixture_image_node_path_invalid");
+  const node = realpathSync(configured);
+  const file = lstatSync(configured);
+  if (node !== configured || !file.isFile() || file.isSymbolicLink() || file.uid !== 0 ||
+      (file.mode & 0o6022) !== 0 || (file.mode & 0o111) === 0)
+    throw new Error("fixture_image_node_binary_unqualified");
+  for (const image of [node, "/usr/bin/sha256sum"]) {
+    for (let current = realpathSync(image); ; current = dirname(current)) {
+      const metadata = statSync(current);
+      if (metadata.uid !== 0 || (metadata.mode & 0o6022) !== 0)
+        throw new Error("fixture_image_node_ancestor_unqualified");
+      if (current === "/") break;
+    }
+  }
+  // The existing CI image prerequisite copies the current pinned Node bytes.
+  const sums = spawnSync("/usr/bin/sha256sum", [node, process.execPath], {
+    encoding: "utf8", timeout: 5_000, maxBuffer: 16 * 1024, env: { PATH: "/usr/bin:/bin" },
+  });
+  const hashes = typeof sums.stdout === "string" ? sums.stdout.trim().split("\n").map(line => /^([a-f0-9]{64})\s/.exec(line)?.[1]) : [];
+  if (sums.error || sums.signal || sums.status !== 0 || hashes.length !== 2 || !hashes[0] || hashes[0] !== hashes[1])
+    throw new Error("fixture_image_node_bytes_mismatch");
+  return node;
+}
+
 export async function configureManagedConversationSandboxHost(input: {
   db: ReturnType<typeof createDb>;
   actor: AuthorizationActor;
@@ -151,6 +181,7 @@ export async function configureManagedConversationSandboxHost(input: {
   ordinaryWorker?: true;
 }) {
   const { db, actor, companyId, agentId, providerBindingId } = input;
+  const fixtureImageNode = qualifiedFixtureImageNode(process.env.PAPERCLIP_TEST_ERASER_NODE_PATH);
   const policyFixture = () => {
     const policy = defaultPolicyFixture();
     if (input.wallClockSeconds !== undefined) {
@@ -1455,7 +1486,7 @@ export async function configureManagedConversationSandboxHost(input: {
       const cli = args.slice(4, separator);
       const workdirIndex = cli.indexOf("--workdir");
       const cwd = workdirIndex >= 0 ? cli[workdirIndex + 1] : input.root;
-      const softwarePath = [...new Set([dirname(process.execPath), "/usr/local/bin", "/usr/bin", "/bin"])].join(":");
+      const softwarePath = [...new Set([dirname(fixtureImageNode), "/usr/local/bin", "/usr/bin", "/bin"])].join(":");
       const env: NodeJS.ProcessEnv = { PATH: softwarePath, HOME: providerImageHome ?? input.root };
       for (let index = 0; index < cli.length; index++) {
         if (cli[index] !== "--env") continue;
