@@ -29,6 +29,7 @@ import { nativeCancelOriginTestFactsForRun } from "./native-session-executor.js"
 import { isRemoteAssetErasureErrorCode } from "./runtime-asset-erasure-errors.js";
 import { validatePrpEvent } from "../../vendor/paperclip-runner/index.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
+import { getRunLogStore } from "../run-log-store.js";
 import * as modelReservationOwner from "../orchestration/model-reservations.js";
 import { verifyNativeCleanupRuntimeState } from "../execution-sandbox/run-lease-cleanup.js";
 import { agentIdentityService } from "../agent-identities.js";
@@ -1002,8 +1003,69 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
             .map(([key,part])=>[key,/id|hash|digest|text|body|token|secret|key|prompt|content|path|arg/i.test(key)?undefined:closedFacts(part,depth+1)]));
           return undefined;
         };
+        type CheckpointLogFailure = { sentinel: string; detail: string | null; errno: string | null;
+          httpStatus: number | null; exitCode: number | null; frameClass: string };
+        let checkpointLogFacts: { readState: "read" | "no_scoped_log" | "read_unknown"; tailTruncated?: boolean;
+          checkpointPrefixPresent?: boolean; failures?: CheckpointLogFailure[] } | null = null;
+        // Read only this failed fixture Run's canonical log; never include log text in facts.
+        if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1") {
+          try {
+            const [logOwner] = await db.select({ logStore: heartbeatRuns.logStore, logRef: heartbeatRuns.logRef,
+              logBytes: heartbeatRuns.logBytes }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, facts.companyId),
+              eq(heartbeatRuns.agentId, facts.agentId), eq(heartbeatRuns.id, facts.run.id))).limit(1);
+            if (logOwner?.logStore !== "local_file" || !logOwner.logRef ||
+                !Number.isSafeInteger(logOwner.logBytes) || (logOwner.logBytes ?? 0) < 1) {
+              checkpointLogFacts = { readState: "no_scoped_log" };
+            } else {
+              const tailLimit = 16 * 1024;
+              const offset = Math.max(0, (logOwner.logBytes ?? 0) - tailLimit);
+              const tail = await getRunLogStore().read({ store: "local_file", logRef: logOwner.logRef },
+                { offset, limitBytes: tailLimit });
+              const prefix = "[paperclip-runner] remote checkpoint failed: ";
+              const sentinels = ["runner_harness_state_mismatch", "runner_harness_backup_unsupported_entry",
+                "runner_harness_backup_lease_missing", "runner_harness_backup_lease_mismatch", "runner_harness_backup_unavailable",
+                "runner_remote_state_unavailable", "runner_remote_checkpoint_exclusion_invalid", "runner_remote_checkpoint_snapshot_failed",
+                "runner_remote_checkpoint_failed", "runner_remote_checkpoint_archive_too_large", "runner_remote_checkpoint_archive_invalid",
+                "runner_remote_checkpoint_archive_unsafe_path", "runner_remote_checkpoint_archive_unsafe_entry",
+                "runner_remote_checkpoint_archive_expanded_too_large", "runner_remote_checkpoint_too_many_entries",
+                "runner_remote_checkpoint_unsafe_entry", "runner_remote_checkpoint_expanded_too_large", "runner_remote_checkpoint_incomplete",
+                "forbidden", "sandbox_scope_changed", "sandbox_observation_unavailable", "exec_unknown"];
+              const details = ["runner_state_invalid_json", "runner_identity", "provider_state_unreadable",
+                "provider_identity_incomplete", "provider_identity_changed"];
+              const errors = ["ENOENT", "ESRCH", "EACCES", "EPERM", "EBADF", "EIO", "ENOSPC", "EXDEV", "ENOTDIR",
+                "EISDIR", "ELOOP", "EMFILE", "ENFILE", "EINVAL", "ETIMEDOUT", "EPIPE", "ECONNRESET", "ECONNREFUSED", "ABORT_ERR"];
+              const failures: CheckpointLogFailure[] = [];
+              const records = tail.content.split("\n").slice(offset > 0 ? 1 : 0);
+              for (const record of records) {
+                let entry: unknown;
+                try { entry = JSON.parse(record); } catch { continue; }
+                if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+                const value = entry as Record<string, unknown>;
+                if (value.stream !== "stderr" || typeof value.chunk !== "string") continue;
+                for (const line of value.chunk.split(/\r?\n/)) {
+                  if (!line.startsWith(prefix)) continue;
+                  const text = line.slice(prefix.length);
+                  const sentinel = sentinels.find(label => text === label || text.startsWith(`${label}:`)) ?? "OTHER";
+                  const detail = sentinel === "runner_harness_state_mismatch"
+                    ? details.find(label => text === `${sentinel}: ${label}`) ?? null : null;
+                  const errno = errors.find(code => new RegExp(`(?:^|[\\s:;(])${code}(?=$|[\\s:;)])`).test(text)) ?? null;
+                  const statusValue = /(?:^|\s)(?:status|statusCode|httpStatus)[=: ]+([45]\d{2})(?=$|[\s,;:)\]}])/.exec(text)?.[1];
+                  const exitValue = /(?:^|\s)(?:exit|exitCode)[=: ]+([1-9]\d{0,2})(?=$|[\s,;:)\]}])/.exec(text)?.[1];
+                  const exit = exitValue ? Number(exitValue) : null;
+                  const frameClass = /(?:^|\s)at (?:async )?(inspectRemoteHarnessState|syncRemoteRunnerDirectoryOut|recordHarnessBackupStampForCurrentLease|checkpointRemoteRunnerUnlocked)(?:\s|\()/.exec(text)?.[1] ?? "other";
+                  failures.push({ sentinel, detail, errno, httpStatus: statusValue ? Number(statusValue) : null,
+                    exitCode: exit !== null && exit <= 255 ? exit : null, frameClass });
+                  if (failures.length === 4) break;
+                }
+                if (failures.length === 4) break;
+              }
+              checkpointLogFacts = { readState: "read", tailTruncated: offset > 0,
+                checkpointPrefixPresent: failures.length > 0, failures };
+            }
+          } catch { checkpointLogFacts = { readState: "read_unknown" }; }
+        }
         startupFacts={finalization:closedFacts(finalization),events:events.map(event=>({type:event.type,payload:closedFacts(event.payload)})),
-          results:results.map(value=>({status:value.status,code:value.code,result:closedFacts(value.result)}))};
+          results:results.map(value=>({status:value.status,code:value.code,result:closedFacts(value.result)})), checkpointLogFacts};
       },
       providerReply:({body,callIndex})=>{
         if(!query)throw new Error("metric_fixture_query_missing");

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chromium, expect as browserExpect, type BrowserContext, type Page } from "@playwright/test";
+import { chromium, expect as browserExpect, type BrowserContext, type Locator, type Page, type Response } from "@playwright/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { activityLog, createDb, projectWorkspaces, projects } from "@paperclipai/db";
@@ -15,6 +15,91 @@ import { createLocalDiskStorageProvider } from "../../storage/local-disk-provide
 import { createStorageService } from "../../storage/service.js";
 import { setupLiveEventsWebSocketServer } from "../../realtime/live-events-ws.js";
 import { nativeSha256 } from "./canonical.js";
+
+const managedBrowserApiRouteClass = (rawUrl: string, origin: string): string | null => {
+  try {
+    const url = new URL(rawUrl);
+    if (url.origin !== origin || !url.pathname.startsWith("/api/")) return null;
+    const path = url.pathname;
+    if (path === "/api/health") return "health";
+    if (path === "/api/auth/get-session") return "auth_session";
+    if (path === "/api/cli-auth/me") return "board_access";
+    if (path === "/api/instance/settings/experimental") return "experimental_settings";
+    if (path === "/api/companies") return "companies";
+    if (/^\/api\/companies\/[^/]+\/agents$/.test(path)) return "company_agents";
+    if (/^\/api\/companies\/[^/]+\/chats\/[^/]+$/.test(path)) return "agent_chat";
+    return "other_same_origin_api";
+  } catch {
+    return null;
+  }
+};
+
+const managedBrowserRouteClass = (rawUrl: string, origin: string): string => {
+  try {
+    const url = new URL(rawUrl);
+    if (url.origin !== origin) return "other_origin";
+    if (/^\/[^/]+\/chats\/[^/]+$/.test(url.pathname)) return "company_chat";
+    if (url.pathname === "/auth" || url.pathname.startsWith("/auth/")) return "auth";
+    if (url.pathname === "/onboarding") return "onboarding";
+    if (/^\/[^/]+\/dashboard$/.test(url.pathname)) return "company_dashboard";
+    return "other_same_origin_route";
+  } catch {
+    return "unavailable";
+  }
+};
+
+function attachManagedBrowserEntryDiagnostic(page: Page, origin: string) {
+  const responseCounts = new Map<string, { routeClass: string; status: number; count: number }>();
+  const pageErrorNames = new Set<string>();
+  const allowedErrorNames = new Set(["Error", "TypeError", "ReferenceError", "RangeError", "SyntaxError", "URIError", "EvalError", "AggregateError"]);
+  const onResponse = (response: Response) => {
+    const routeClass = managedBrowserApiRouteClass(response.url(), origin);
+    if (!routeClass) return;
+    const status = response.status();
+    const key = `${routeClass}:${status}`;
+    const existing = responseCounts.get(key);
+    if (existing) existing.count = Math.min(99, existing.count + 1);
+    else if (responseCounts.size < 16) responseCounts.set(key, { routeClass, status, count: 1 });
+  };
+  const onPageError = (error: Error) => {
+    pageErrorNames.add(allowedErrorNames.has(error.name) ? error.name : "Other");
+  };
+  page.on("response", onResponse);
+  page.on("pageerror", onPageError);
+  return {
+    async reportFailure(entry: "project_card_entry" | "repository_card_entry", composer: Locator, claim: Locator) {
+      let documentFacts: Record<string, unknown> = { readyState: "unavailable", mainPresent: false, statusRolePresent: false, alertRolePresent: false, composerElementPresent: false };
+      try {
+        documentFacts = await page.evaluate(() => ({
+          readyState: document.readyState,
+          mainPresent: document.querySelector("main") !== null,
+          statusRolePresent: document.querySelector('[role="status"]') !== null,
+          alertRolePresent: document.querySelector('[role="alert"]') !== null,
+          composerElementPresent: document.querySelector('[data-testid="task-chat-composer-input"]') !== null,
+        }));
+      } catch { /* Keep fixed unavailable facts if the document is gone. */ }
+      let composerVisible = false, claimVisible = false, loadingStatusVisible = false, noBoardAccessVisible = false;
+      try { composerVisible = await composer.isVisible(); } catch { /* unavailable */ }
+      try { claimVisible = await claim.isVisible(); } catch { /* unavailable */ }
+      try { loadingStatusVisible = await page.getByRole("status").first().isVisible(); } catch { /* unavailable */ }
+      try { noBoardAccessVisible = await page.getByRole("heading", { name: "No organization access", exact: true }).isVisible(); } catch { /* unavailable */ }
+      let routeClass = "unavailable";
+      try { routeClass = managedBrowserRouteClass(page.url(), origin); } catch { /* unavailable */ }
+      console.error(JSON.stringify({
+        kind: "managed_browser_entry_wait_diagnostic_v1",
+        entry,
+        page: { routeClass, sameOrigin: routeClass !== "other_origin" && routeClass !== "unavailable", ...documentFacts, composerVisible, claimVisible, loadingStatusVisible, noBoardAccessVisible },
+        apiResponseStatusCounts: [...responseCounts.values()].slice(0, 16),
+        pageErrorNames: [...pageErrorNames].slice(0, 8),
+      }));
+    },
+    dispose() {
+      page.off("response", onResponse);
+      page.off("pageerror", onPageError);
+    },
+  };
+}
+
 
 const binary = process.env.PAPERCLIP_QUALIFIED_OPENCODE_BINARY;
 const executablePath = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
@@ -114,11 +199,19 @@ describe.skipIf(!binary || !existsSync(binary) || !executablePath || !existsSync
             expect(mode.status()).toBe(200);
             page = await currentBrowserContext.newPage();
             route = context.conversationRoute;
-            await page.goto(`${context.origin}${route}`);
+            const entryDiagnostic = attachManagedBrowserEntryDiagnostic(page, context.origin);
             const composer = page.getByTestId("task-chat-composer-input").last()
               .locator('[contenteditable="true"],textarea').first();
             const claim = page.getByRole("button", { name: "Claim this instance", exact: true });
-            await browserExpect(composer.or(claim).first()).toBeVisible({ timeout: 30_000 });
+            try {
+              await page.goto(`${context.origin}${route}`);
+              await browserExpect(composer.or(claim).first()).toBeVisible({ timeout: 30_000 });
+            } catch (error) {
+              try { await entryDiagnostic.reportFailure("project_card_entry", composer, claim); } catch { /* Preserve the original error. */ }
+              throw error;
+            } finally {
+              entryDiagnostic.dispose();
+            }
             if (await claim.isVisible()) {
               const claimed = page.waitForResponse(response => response.request().method() === "POST" &&
                 new URL(response.url()).pathname === "/api/bootstrap/claim");
@@ -260,11 +353,19 @@ describe.skipIf(!binary || !existsSync(binary) || !executablePath || !existsSync
             expect(mode.status()).toBe(200);
             page = await currentBrowserContext.newPage();
             route = context.conversationRoute;
-            await page.goto(`${context.origin}${route}`);
+            const entryDiagnostic = attachManagedBrowserEntryDiagnostic(page, context.origin);
             const composer = page.getByTestId("task-chat-composer-input").last()
               .locator('[contenteditable="true"],textarea').first();
             const claim = page.getByRole("button", { name: "Claim this instance", exact: true });
-            await browserExpect(composer.or(claim).first()).toBeVisible({ timeout: 30_000 });
+            try {
+              await page.goto(`${context.origin}${route}`);
+              await browserExpect(composer.or(claim).first()).toBeVisible({ timeout: 30_000 });
+            } catch (error) {
+              try { await entryDiagnostic.reportFailure("repository_card_entry", composer, claim); } catch { /* Preserve the original error. */ }
+              throw error;
+            } finally {
+              entryDiagnostic.dispose();
+            }
             if (await claim.isVisible()) {
               const claimed = page.waitForResponse(response => response.request().method() === "POST" &&
                 new URL(response.url()).pathname === "/api/bootstrap/claim");

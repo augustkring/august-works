@@ -14,7 +14,7 @@ import { execFile, execFileSync } from "node:child_process";
 import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
-  heartbeatRuns, issueComments, issueThreadInteractions, issues, toolInvocations,
+  heartbeatRunEvents, heartbeatRuns, issueComments, issueThreadInteractions, issues, toolInvocations,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -677,6 +677,46 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       } });
   } finally {
     await heartbeat.drainActiveRunExecutions();
+    // Failure diagnostics read existing server events only. The pinned OpenCode
+    // session.error schema has eight name literals and APIError.data.statusCode;
+    // it declares no code field. Never print messages, bodies, paths or IDs.
+    try {
+      const failedRuns = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
+          eq(heartbeatRuns.status, "failed"))).orderBy(desc(heartbeatRuns.createdAt)).limit(8);
+      const knownNames = new Set(["ProviderAuthError", "UnknownError", "MessageOutputLengthError",
+        "MessageAbortedError", "StructuredOutputError", "ContextOverflowError", "ContentFilterError", "APIError"]);
+      const record = (value: unknown): Record<string, unknown> =>
+        value !== null && typeof value === "object" && !Array.isArray(value)
+          ? value as Record<string, unknown> : {};
+      for (const [index, failedRun] of failedRuns.entries()) {
+        const events = await db.select({ payload: heartbeatRunEvents.payload }).from(heartbeatRunEvents)
+          .where(and(eq(heartbeatRunEvents.companyId, companyId), eq(heartbeatRunEvents.agentId, agentId),
+            eq(heartbeatRunEvents.runId, failedRun.id), eq(heartbeatRunEvents.eventType, "turn.failed")))
+          .orderBy(desc(heartbeatRunEvents.seq)).limit(4);
+        console.info("managed_scheduler_failed_turn_projection", JSON.stringify({
+          failedRunOrdinal: index + 1, failedRunStatus: "failed",
+          executionObserved: executionsByRun.has(failedRun.id),
+          providerCallCount: providerCalls.filter(call => call.runId === failedRun.id).length,
+          modelIssuanceCount: issuerFacts.filter(fact => fact.runId === failedRun.id).length,
+          fixtureTotalAuthenticatedModelTunnels: authenticatedModelTunnels,
+          turnFailures: events.map(event => {
+            const payload = record(event.payload), error = record(payload.error), data = record(error.data);
+            return {
+              status: payload.status === "failed" ? "failed" : "unrecognized",
+              name: typeof error.name === "string" && knownNames.has(error.name) ? error.name : "unrecognized",
+              code: null,
+              codeFieldPresent: Object.hasOwn(error, "code") || Object.hasOwn(data, "code"),
+              httpStatus: error.name === "APIError" && typeof data.statusCode === "number" &&
+                Number.isInteger(data.statusCode) && data.statusCode >= 100 && data.statusCode <= 599
+                ? data.statusCode : null,
+            };
+          }),
+        }));
+      }
+    } catch {
+      // Diagnostics must never replace the original assertion/runtime failure.
+    }
     registerNativeDraftGateway(db, undefined);
     await sandboxHeartbeat?.close?.();
     modelTunnelAssociations.retireAll();

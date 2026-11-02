@@ -141,16 +141,20 @@ describe("heartbeat comment wake batching", () => {
           const [deferredWake] = await db.select().from(agentWakeupRequests).where(and(
             eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
             eq(agentWakeupRequests.status, "deferred_issue_execution")));
-          expect(deferredWake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_commented",
+          // Queue lifecycle reason is separate from the original wake reason in its saved context.
+          expect(deferredWake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_execution_deferred",
             requestedByActorType: "user", requestedByActorId: actor.userId,
             payload: { issueId: task.id, commentId: discardedComment.id } });
+          expect(deferredWake?.payload?._paperclipWakeContext).toMatchObject({ issueId: task.id, taskId: task.id,
+            commentId: discardedComment.id, wakeCommentId: discardedComment.id, wakeReason: "issue_commented" });
           await issueService(db).removeComment(discardedComment.id);
           releaseProvider();
           await heartbeat.drainActiveRunExecutions();
 
           const [finalWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, deferredWake!.id));
           expect(finalWake).toMatchObject({ id: deferredWake!.id, status: "cancelled", source: "automation",
-            reason: "issue_commented", requestedByActorType: "user", requestedByActorId: actor.userId });
+            reason: "issue_execution_deferred", requestedByActorType: "user", requestedByActorId: actor.userId });
+          expect(finalWake?.payload?._paperclipWakeContext).toMatchObject({ wakeReason: "issue_commented" });
           const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
           expect(runs).toHaveLength(1);
           expect(runs[0]).toMatchObject({ id: firstRunId, status: "succeeded", runtimeMode: "native",
@@ -224,16 +228,19 @@ describe("heartbeat comment wake batching", () => {
           const [deferredWake] = await db.select().from(agentWakeupRequests).where(and(
             eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
             eq(agentWakeupRequests.status, "deferred_issue_execution")));
-          expect(deferredWake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_commented",
+          expect(deferredWake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_execution_deferred",
             requestedByActorType: "user", requestedByActorId: actor.userId,
             payload: { issueId: task.id, commentId: selfComment.id } });
+          expect(deferredWake?.payload?._paperclipWakeContext).toMatchObject({ issueId: task.id, taskId: task.id,
+            commentId: selfComment.id, wakeCommentId: selfComment.id, wakeReason: "issue_commented" });
           releaseProvider();
           await heartbeat.drainActiveRunExecutions();
 
           const [finalWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, deferredWake!.id));
           expect(finalWake).toMatchObject({ id: deferredWake!.id, status: "cancelled",
             error: "Deferred wake contained only comments authored by the finishing run", source: "automation",
-            reason: "issue_commented", requestedByActorType: "user", requestedByActorId: actor.userId });
+            reason: "issue_execution_deferred", requestedByActorType: "user", requestedByActorId: actor.userId });
+          expect(finalWake?.payload?._paperclipWakeContext).toMatchObject({ wakeReason: "issue_commented" });
           const requests = await db.select().from(agentWakeupRequests).where(and(
             eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId)));
           expect(requests.filter(request => request.status === "cancelled")).toHaveLength(1);
@@ -302,10 +309,10 @@ describe("heartbeat comment wake batching", () => {
             const [deferredWake] = await db.select().from(agentWakeupRequests).where(and(
               eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
               eq(agentWakeupRequests.status, "deferred_issue_execution")));
-            expect(deferredWake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_commented",
+            expect(deferredWake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_execution_deferred",
               requestedByActorType: "user", requestedByActorId: actor.userId,
               payload: { issueId: task.id, commentId: queuedComment.id } });
-            expect(deferredWake?.contextSnapshot).toMatchObject({ issueId: task.id, taskId: task.id,
+            expect(deferredWake?.payload?._paperclipWakeContext).toMatchObject({ issueId: task.id, taskId: task.id,
               commentId: queuedComment.id, wakeCommentId: queuedComment.id, wakeReason: "issue_commented" });
 
             await issueService(db).removeComment(queuedComment.id);
@@ -314,8 +321,9 @@ describe("heartbeat comment wake batching", () => {
 
             const [finalWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, deferredWake!.id));
             expect(finalWake).toMatchObject({ id: deferredWake!.id, status: "cancelled",
-              error: "Queued messages were discarded before promotion", source: "automation", reason: "issue_commented",
+              error: "Queued messages were discarded before promotion", source: "automation", reason: "issue_execution_deferred",
               requestedByActorType: "user", requestedByActorId: actor.userId });
+            expect(finalWake?.payload?._paperclipWakeContext).toMatchObject({ wakeReason: "issue_commented" });
             const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
             expect(runs).toHaveLength(1);
             expect(runs[0]).toMatchObject({ id: firstRunId, status: "succeeded", runtimeMode: "native",
