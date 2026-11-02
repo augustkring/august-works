@@ -1,0 +1,642 @@
+{
+  "base_head": "62ce903dd6d870675491503d7407d33537f8490d",
+  "created_utc": "2026-11-02T14:47:19.449601+00:00",
+  "files": [
+    {
+      "archive_path": "metadata/source-pins-r1.json",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630527811472620,
+        "sha256": "9d0dfdcf142377942a4e49c57baaa144ea71063856bd0108c032810b4f65d8a9",
+        "size": 4761,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630527811472620,
+        "sha256": "9d0dfdcf142377942a4e49c57baaa144ea71063856bd0108c032810b4f65d8a9",
+        "size": 4761,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/reviewed-observer-browser-metric-integration-20261102/source-pins-r1.json"
+    },
+    {
+      "archive_path": "sources/observer-r4/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793628385796196492,
+        "sha256": "8712940d60185b153dd9e1b376c12bbe28fc16a42660bb52db6b9c82d3958f8e",
+        "size": 280137,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793628385796196492,
+        "sha256": "8712940d60185b153dd9e1b376c12bbe28fc16a42660bb52db6b9c82d3958f8e",
+        "size": 280137,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts"
+    },
+    {
+      "archive_path": "sources/observer-r4/.github/workflows/pr-trusted.yml",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731110425886,
+        "sha256": "0473db68e86748481a205a0d169ca3b9b16388ffac46e66bac233388a5f7bd4a",
+        "size": 74215,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731110425886,
+        "sha256": "0473db68e86748481a205a0d169ca3b9b16388ffac46e66bac233388a5f7bd4a",
+        "size": 74215,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/files/.github/workflows/pr-trusted.yml"
+    },
+    {
+      "archive_path": "sources/observer-r4/scripts/fixtures/native-session-handle-observer",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 493,
+        "mtime_ns": 1793627642721531605,
+        "sha256": "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8",
+        "size": 505,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 493,
+        "mtime_ns": 1793627642721531605,
+        "sha256": "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8",
+        "size": 505,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/files/scripts/fixtures/native-session-handle-observer"
+    },
+    {
+      "archive_path": "sources/observer-r4/scripts/fixtures/native-session-handle-observer.mjs",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 420,
+        "mtime_ns": 1793627914125760419,
+        "sha256": "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55",
+        "size": 5494,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 420,
+        "mtime_ns": 1793627914125760419,
+        "sha256": "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55",
+        "size": 5494,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/files/scripts/fixtures/native-session-handle-observer.mjs"
+    },
+    {
+      "archive_path": "sources/observer-r4/scripts/fixtures/native-session-handle-observer-check.mjs",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793628868316023479,
+        "sha256": "b8ab28e009c8e014220c9208efd9dae1551984bbe16adece0d21f966691280b1",
+        "size": 9705,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793628868316023479,
+        "sha256": "b8ab28e009c8e014220c9208efd9dae1551984bbe16adece0d21f966691280b1",
+        "size": 9705,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/files/scripts/fixtures/native-session-handle-observer-check.mjs"
+    },
+    {
+      "archive_path": "sources/connection-browser-r4/tests/e2e/connection-intents.spec.ts",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627062842394109,
+        "sha256": "234b5587dfb5614337b16aa14fce6f510a098a2d3244b51892c600dff1fac8b0",
+        "size": 7676,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627062842394109,
+        "sha256": "234b5587dfb5614337b16aa14fce6f510a098a2d3244b51892c600dff1fac8b0",
+        "size": 7676,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/connection-intent-managed-browser-20261102/r4/files/tests/e2e/connection-intents.spec.ts"
+    },
+    {
+      "archive_path": "sources/connection-browser-r4/tests/e2e/fixtures/managed-connection-intent.ts",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627807368677004,
+        "sha256": "2d1ec3e9dda2c8f1d1e0f70ab3a60ef76e6dc0ca656204ed33ec94e0e652b2ca",
+        "size": 22324,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627807368677004,
+        "sha256": "2d1ec3e9dda2c8f1d1e0f70ab3a60ef76e6dc0ca656204ed33ec94e0e652b2ca",
+        "size": 22324,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/connection-intent-managed-browser-20261102/r4/files/tests/e2e/fixtures/managed-connection-intent.ts"
+    },
+    {
+      "archive_path": "sources/metric-root-fix-r2/server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630116162704370,
+        "sha256": "a5215e736b9dc93597ff1a37c6c971fcc3b5a9f4dcb17a236f9b32acc2aca6ad",
+        "size": 109019,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630116162704370,
+        "sha256": "a5215e736b9dc93597ff1a37c6c971fcc3b5a9f4dcb17a236f9b32acc2aca6ad",
+        "size": 109019,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/metric-native-paid-admission-root-fix-20261102/r2/files/server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts"
+    },
+    {
+      "archive_path": "cohort-metadata/observer-r4/source-pins.json",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731131288970,
+        "sha256": "94e7d2ed62f51a7e39b8722948f87c15e5d32706f3b8d1c12c146293244ada44",
+        "size": 4286,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731131288970,
+        "sha256": "94e7d2ed62f51a7e39b8722948f87c15e5d32706f3b8d1c12c146293244ada44",
+        "size": 4286,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/source-pins.json"
+    },
+    {
+      "archive_path": "cohort-metadata/observer-r4/implementation.patch",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731130795275,
+        "sha256": "ef41c01a3a80e8253b330fc98a770843675a7899edfc8593c24b5ee08200116f",
+        "size": 39291,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731130795275,
+        "sha256": "ef41c01a3a80e8253b330fc98a770843675a7899edfc8593c24b5ee08200116f",
+        "size": 39291,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/implementation.patch"
+    },
+    {
+      "archive_path": "cohort-metadata/observer-r4/observer-only.patch",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731130932171,
+        "sha256": "d1aa2059fec3a480032b4ca1445cdf048536a0d67ac0b2d4d952f4f7c83f20e5",
+        "size": 36390,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731130932171,
+        "sha256": "d1aa2059fec3a480032b4ca1445cdf048536a0d67ac0b2d4d952f4f7c83f20e5",
+        "size": 36390,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/observer-only.patch"
+    },
+    {
+      "archive_path": "cohort-metadata/observer-r4/r3-to-r4-regular-file-guard.patch",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731130965722,
+        "sha256": "f1ccaa810ab77229a52ccff30179698e0c539ccfd4ff8a2da13c138afc564e7d",
+        "size": 647,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731130965722,
+        "sha256": "f1ccaa810ab77229a52ccff30179698e0c539ccfd4ff8a2da13c138afc564e7d",
+        "size": 647,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/r3-to-r4-regular-file-guard.patch"
+    },
+    {
+      "archive_path": "cohort-metadata/observer-r4/REVIEW.md",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731131020615,
+        "sha256": "c314d84bac15ee68d55d129bf40051fbb6b6e10e55fcc9100f2c76bbf5be205e",
+        "size": 1922,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731131020615,
+        "sha256": "c314d84bac15ee68d55d129bf40051fbb6b6e10e55fcc9100f2c76bbf5be205e",
+        "size": 1922,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/REVIEW.md"
+    },
+    {
+      "archive_path": "cohort-metadata/observer-r4/installer.syntax.sh",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731184890114,
+        "sha256": "d902f4c2f91a3f3b55114d31e9732d5552ae485b5f44d4fa7a7b08aaac04c54d",
+        "size": 5114,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629731184890114,
+        "sha256": "d902f4c2f91a3f3b55114d31e9732d5552ae485b5f44d4fa7a7b08aaac04c54d",
+        "size": 5114,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/installer.syntax.sh"
+    },
+    {
+      "archive_path": "cohort-metadata/observer-r4/regular-file-controls-receipt.json",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629754484890444,
+        "sha256": "591ae387353e16b41ab58422bb603d4fe4dbeed5083ab275afbca2a671bbcecb",
+        "size": 281,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629754484890444,
+        "sha256": "591ae387353e16b41ab58422bb603d4fe4dbeed5083ab275afbca2a671bbcecb",
+        "size": 281,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r4/regular-file-controls-receipt.json"
+    },
+    {
+      "archive_path": "cohort-metadata/connection-browser-r4/source-pins.json",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627807370904877,
+        "sha256": "9bd5679d1d49959d4e4aa7105dd51e22c24a38b0f7867f79f941eac28b1ffb05",
+        "size": 2055,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627807370904877,
+        "sha256": "9bd5679d1d49959d4e4aa7105dd51e22c24a38b0f7867f79f941eac28b1ffb05",
+        "size": 2055,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/connection-intent-managed-browser-20261102/r4/source-pins.json"
+    },
+    {
+      "archive_path": "cohort-metadata/connection-browser-r4/source.patch",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627807370458103,
+        "sha256": "874caba878d6e50b313f77a47f0372bf0ae03260d3ce2ed4cc5234c09c026b0f",
+        "size": 33865,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627807370458103,
+        "sha256": "874caba878d6e50b313f77a47f0372bf0ae03260d3ce2ed4cc5234c09c026b0f",
+        "size": 33865,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/connection-intent-managed-browser-20261102/r4/source.patch"
+    },
+    {
+      "archive_path": "cohort-metadata/connection-browser-r4/r3-to-r4.patch",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627807370756693,
+        "sha256": "5d2cd30518c2e609c2ee31ea6bc314b3a3ce3d136a40a72b16c5ed0278137b9c",
+        "size": 5402,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793627807370756693,
+        "sha256": "5d2cd30518c2e609c2ee31ea6bc314b3a3ce3d136a40a72b16c5ed0278137b9c",
+        "size": 5402,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/connection-intent-managed-browser-20261102/r4/r3-to-r4.patch"
+    },
+    {
+      "archive_path": "cohort-metadata/metric-root-fix-r2/source-pins.json",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630131385540853,
+        "sha256": "ef9b80cd7d971f5368d0121f3c8d957f69ad4c4aa04976f3cef5c2149eeae47d",
+        "size": 1152,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630131385540853,
+        "sha256": "ef9b80cd7d971f5368d0121f3c8d957f69ad4c4aa04976f3cef5c2149eeae47d",
+        "size": 1152,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/metric-native-paid-admission-root-fix-20261102/r2/source-pins.json"
+    },
+    {
+      "archive_path": "cohort-metadata/metric-root-fix-r2/metric-setup-hook.patch",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630131364248843,
+        "sha256": "7a633ab471848d3eb27f7a8db8e49ab868a9dda0e3bec2e8496a81d688e25134",
+        "size": 1297,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630131364248843,
+        "sha256": "7a633ab471848d3eb27f7a8db8e49ab868a9dda0e3bec2e8496a81d688e25134",
+        "size": 1297,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/metric-native-paid-admission-root-fix-20261102/r2/metric-setup-hook.patch"
+    },
+    {
+      "archive_path": "cohort-metadata/metric-root-fix-r2/review-notes.md",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630131368459738,
+        "sha256": "f7e5d62aba3a5b8d841ce2f0dcc9425203d92ca53025f5ea76267406ec26c598",
+        "size": 985,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630131368459738,
+        "sha256": "f7e5d62aba3a5b8d841ce2f0dcc9425203d92ca53025f5ea76267406ec26c598",
+        "size": 985,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/metric-native-paid-admission-root-fix-20261102/r2/review-notes.md"
+    },
+    {
+      "archive_path": "receipts/observer-r2-pure-controls-46.json",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793628385934475273,
+        "sha256": "55bb8bedde5f4c422d3b231ca858a4a6692ddb79039e196f2f0118246765130d",
+        "size": 1732,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793628385934475273,
+        "sha256": "55bb8bedde5f4c422d3b231ca858a4a6692ddb79039e196f2f0118246765130d",
+        "size": 1732,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r2/pure-controls-receipt.json"
+    },
+    {
+      "archive_path": "receipts/observer-r3-held-local-prerequisite.json",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629675855500126,
+        "sha256": "4ba33e7c230505014879cb2c45f65ae93a439978328400a0e42c354bdd35a4cc",
+        "size": 771,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629675855500126,
+        "sha256": "4ba33e7c230505014879cb2c45f65ae93a439978328400a0e42c354bdd35a4cc",
+        "size": 771,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r3/qualification-local-unavailable-r1/receipt.json"
+    },
+    {
+      "archive_path": "receipts/nondumpable-uid-metadata-control.json",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629194269691922,
+        "sha256": "10f29b82dc70a6b805661d39bcb83d453cb310428c583314d930b8e3818ecb26",
+        "size": 437,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793629194269691922,
+        "sha256": "10f29b82dc70a6b805661d39bcb83d453cb310428c583314d930b8e3818ecb26",
+        "size": 437,
+        "uid": 1000
+      },
+      "source_path": "/workspace/v10-preparation/nondumpable-uid-metadata-control-20261102/receipt.json"
+    },
+    {
+      "archive_path": "README.md",
+      "copy": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630839449544416,
+        "sha256": "d451d665d882ab8731a23283148f08cbd98f02dd701a3da95137aab14c10d15e",
+        "size": 992,
+        "uid": 1000
+      },
+      "source": {
+        "gid": 1000,
+        "kind": "file",
+        "link": null,
+        "mode": 384,
+        "mtime_ns": 1793630839449544416,
+        "sha256": "d451d665d882ab8731a23283148f08cbd98f02dd701a3da95137aab14c10d15e",
+        "size": 992,
+        "uid": 1000
+      },
+      "source_path": "(generated private recovery note)"
+    }
+  ],
+  "integrated_pins_sha256": "9d0dfdcf142377942a4e49c57baaa144ea71063856bd0108c032810b4f65d8a9",
+  "limitations": [
+    "source recovery only; not activation or final acceptance",
+    "observer kernel prerequisite unavailable; privileged control not run",
+    "browser Oxc-only",
+    "metric SDK not run",
+    "no runtime/database/assets/dependencies included"
+  ],
+  "schema": "r83-private-source-recovery-v1",
+  "source_count": 8,
+  "source_pin_path": "/workspace/v10-preparation/reviewed-observer-browser-metric-integration-20261102/source-pins-r1.json",
+  "status": "PREPARED_NOT_PUBLISHED"
+}
