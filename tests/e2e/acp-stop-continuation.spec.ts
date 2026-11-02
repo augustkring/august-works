@@ -1,8 +1,11 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 import { assertUnqualifiedRuntime } from "./fixtures/assert-unqualified-runtime.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test, expect, type APIResponse } from "@playwright/test";
+
+registerEnglishAccountLocaleIsolation(test);
 
 async function json(response: APIResponse) {
   const body = await response.text();

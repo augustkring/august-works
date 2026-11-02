@@ -1,3 +1,4 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 import { assertUnqualifiedRuntime } from "./fixtures/assert-unqualified-runtime.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -6,6 +7,8 @@ import path from "node:path";
 import { test, expect, type APIResponse } from "@playwright/test";
 import { and, eq } from "../../server/node_modules/drizzle-orm/index.js";
 import { createDb, closeRegisteredClients, heartbeatRuns, issueRecoveryActions, issues, issueComments, agentWakeupRequests, authUsers, companyMemberships } from "../../packages/db/src/index.ts";
+
+registerEnglishAccountLocaleIsolation(test);
 
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()} ${await response.text()}`).toBe(true);
@@ -102,9 +105,26 @@ for (const action of ["task_retry", "thread_retry", "inbox_retry", "message", "q
       } else if (action === "message") {
         await page.getByRole("textbox", { name: "editable markdown" }).fill("Please continue the pending follow-up.");
         await page.getByRole("button", { name: "Send", exact: true }).click();
+      } else if (action === "inbox_retry") {
+        const retryAccepted = page.waitForResponse(response => {
+          const retryRequest = response.request();
+          const retryUrl = new URL(response.url());
+          if (retryRequest.method() !== "POST" ||
+              retryUrl.pathname !== `/api/agents/${agent.id}/wakeup` ||
+              retryUrl.searchParams.get("companyId") !== company.id) return false;
+          const body: unknown = retryRequest.postDataJSON();
+          return typeof body === "object" && body !== null &&
+            "reason" in body && body.reason === "retry_failed_run" &&
+            "failedRunId" in body && body.failedRunId === sourceRunId;
+        });
+        await page.getByRole("button", { name: "Retry", exact: true }).click();
+        const accepted = await retryAccepted;
+        expect(accepted.status()).toBe(202);
+        expect(await accepted.finished()).toBeNull();
+        // Keep the Task assertions, after the exact retry mutation is acknowledged.
+        await page.goto(taskUrl);
       } else {
         await page.getByRole("button", { name: action === "thread_retry" ? "Try again" : "Retry", exact: true }).click();
-        if (action === "inbox_retry") await page.goto(taskUrl);
       }
       await assertUnqualifiedRuntime({ request, page, companyId: company.id, agentId: agent.id,
         excludedRunIds: [sourceRunId] });

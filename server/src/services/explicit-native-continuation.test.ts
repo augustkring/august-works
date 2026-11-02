@@ -1025,6 +1025,31 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(envelope.completedWork).toBe("Deployment completed.");
   });
 
+  it("resolves a comment wake within its one-connection pool transaction", async () => {
+    const f = await seed(true);
+    const singleConnectionDb = createDb(database.connectionString, { maxConnections: 1 });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const wakePromise = heartbeatService(singleConnectionDb).wakeup(f.agentId, {
+      source: "automation", triggerDetail: "system", reason: "issue_commented",
+      requestedByActorType: "user", requestedByActorId: "board",
+      payload: { issueId: f.issueId, commentId: f.commentId },
+      contextSnapshot: { issueId: f.issueId, wakeCommentId: f.commentId },
+    });
+    void wakePromise.catch(() => {});
+    try {
+      const wake = await Promise.race([
+        wakePromise,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("single_connection_wakeup_timed_out")), 10_000);
+        }),
+      ]);
+      expect(wake).toMatchObject({ status: "queued", contextSnapshot: { wakeCommentId: f.commentId } });
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      await singleConnectionDb.$client.end({ timeout: 1 }).catch(() => {});
+    }
+  });
+
   it.each(["pause", "dependency", "state"])("keeps the existing %s gate on the actual user wake", async gate => {
     const f = await seed();
     await db.insert(heartbeatRuns).values({ companyId: f.companyId, agentId: f.agentId, status: "running" });
