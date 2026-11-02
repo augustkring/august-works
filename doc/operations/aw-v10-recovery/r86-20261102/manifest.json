@@ -1,0 +1,429 @@
+{
+  "schema": "r86-private-recovery-manifest-v1",
+  "claim": "Recovery-only source snapshot; not integrated qualification/activation",
+  "baseHead": "417842459429fbdd8866618abd540ff0e42d3a04",
+  "sourceCount": 11,
+  "payloadFileCount": 42,
+  "files": [
+    {
+      "path": "README.md",
+      "kind": "regular",
+      "sha256": "cdbd74f5a5095ab2903a44558b93aa529d20642a135c5310dce33d61bc277a97",
+      "size": 467,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643559483200855
+    },
+    {
+      "path": "candidate-tree/docs/help/change-review.json",
+      "kind": "regular",
+      "sha256": "bf2ae261d1b380a66d0b6255e8a02aa655c3e476bd1b78767c6a621b9c669c3f",
+      "size": 195765,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642802589820412
+    },
+    {
+      "path": "candidate-tree/server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
+      "kind": "regular",
+      "sha256": "464d7da2e24aee1b374011214ca27f403407e745f6accb6731652783dcae309d",
+      "size": 12669,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642885517568922
+    },
+    {
+      "path": "candidate-tree/server/src/__tests__/helpers/managed-native-model-transport.test.ts",
+      "kind": "regular",
+      "sha256": "f428e5d1ece4cfae54c42798763a9a7b965176b15b663da7907420418841ec9a",
+      "size": 8892,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642885516944460
+    },
+    {
+      "path": "candidate-tree/server/src/__tests__/helpers/managed-native-model-transport.ts",
+      "kind": "regular",
+      "sha256": "1b968998bc825a97309f4295a9e29f0245c2a3b698402439d6e68a2edab8c8b3",
+      "size": 14886,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642885515958912
+    },
+    {
+      "path": "candidate-tree/server/src/__tests__/pi-local-adapter-environment.test.ts",
+      "kind": "regular",
+      "sha256": "5ef8b92eeca86863ef19481ad1dd386459c3b9331bc65913bfb0d60661dd182b",
+      "size": 4067,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641913133747342
+    },
+    {
+      "path": "candidate-tree/server/src/modules/wake-queue/application/use-cases.test.ts",
+      "kind": "regular",
+      "sha256": "a222270d06140644f9b23b2af7f48fad85a0c8c27cd7139e3170352d8cc09bb0",
+      "size": 58029,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641833520793984
+    },
+    {
+      "path": "candidate-tree/server/src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts",
+      "kind": "regular",
+      "sha256": "57f690b6b0395e20b50b37b6dfa8692314d463cfb24e9cc2655227789d2b5759",
+      "size": 5965,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641646876388481
+    },
+    {
+      "path": "candidate-tree/server/src/services/workflows/workflow-direct-agent.test.ts",
+      "kind": "regular",
+      "sha256": "e0069020060ebc8c1becf261eb8382683b92ca3f7f6187776d96e20ee912e46d",
+      "size": 24208,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641756990519607
+    },
+    {
+      "path": "candidate-tree/tests/e2e/aw-v9-workflow-intent.spec.ts",
+      "kind": "regular",
+      "sha256": "dd3372276d80383cb164a0c83a13cd7819b0074c03724b2bfc8c217db888b4d6",
+      "size": 5863,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643155212804597
+    },
+    {
+      "path": "candidate-tree/ui/src/pages/WorkflowDescribe.test.tsx",
+      "kind": "regular",
+      "sha256": "1c65a245274bbaad181778ea176fc5e6aa5fd367863786cc1ba3630d84a512e6",
+      "size": 11220,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641897404010950
+    },
+    {
+      "path": "candidate-tree/ui/src/pages/WorkflowDescribe.tsx",
+      "kind": "regular",
+      "sha256": "adb8398a293c67ea7306e4c0e1cf6190854b5aa66c81eb794132f109fed1a145",
+      "size": 10973,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641897402744593
+    },
+    {
+      "path": "combined-11-path.patch",
+      "kind": "regular",
+      "sha256": "ddd80faea2d1e2ee335868a578068cb8c900abc51bd338a72676c5098931aa95",
+      "size": 20937,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643559456240769
+    },
+    {
+      "path": "integration-plan.json",
+      "kind": "regular",
+      "sha256": "f0f8505f9ad7b4dfb68cb3a9c63d12fcc29ed1153d01270323970ab17fed5050",
+      "size": 11234,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643559483166833
+    },
+    {
+      "path": "owner-evidence/combined-wake-queue-unit/source-pins.json",
+      "kind": "regular",
+      "sha256": "2c15a1b53e1345cf9caa9b11a73f84d7accd81a5c252e6d8fec3979f6b64c5e6",
+      "size": 1625,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641833523825854
+    },
+    {
+      "path": "owner-evidence/combined-wake-queue-unit/source.patch",
+      "kind": "regular",
+      "sha256": "619290711a973188819e808129b9f8c229a856d96bc1aaab27bed0f4764b4fca",
+      "size": 6507,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641833523655167
+    },
+    {
+      "path": "owner-evidence/combined-wake-queue-unit/syntax-receipt.json",
+      "kind": "regular",
+      "sha256": "ac3dfaa66d7cba4b7f5e144ecbc2cf92d1cbcca5306b968c71b2c38199bbf279",
+      "size": 241,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641845596457089
+    },
+    {
+      "path": "owner-evidence/direct-agent-erasure-order/outbox-order.patch",
+      "kind": "regular",
+      "sha256": "699de85c9b65e909837112bad6bc9456872c2a46984fbfa0edfd68930de83bb3",
+      "size": 2640,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641756990843205
+    },
+    {
+      "path": "owner-evidence/direct-agent-erasure-order/receipt.json",
+      "kind": "regular",
+      "sha256": "118d303fb22d14aec9654c118bad58d770dc447dd5f764419e6c2bd962b42d4c",
+      "size": 1898,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641824979304113
+    },
+    {
+      "path": "owner-evidence/direct-agent-erasure-order/source-pins.json",
+      "kind": "regular",
+      "sha256": "9e2bab7800f6fc7ac296ee5938af4fc84049aa4fa5ce4b13c44c9ab682c3559c",
+      "size": 1221,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641824979544095
+    },
+    {
+      "path": "owner-evidence/managed-model-transport-diagnostics/failure-diagnostics.patch",
+      "kind": "regular",
+      "sha256": "a931e4bb05d183ce4dd43ec5c6c3132ed130a8d230e9c89830e3ad053b385b92",
+      "size": 3326,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642885517933943
+    },
+    {
+      "path": "owner-evidence/managed-model-transport-diagnostics/review.json",
+      "kind": "regular",
+      "sha256": "e46ec6af8ed690ed1dbf167f9e811a172c83f3c6d01b1ad588ce16047517015e",
+      "size": 427,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642885520518164
+    },
+    {
+      "path": "owner-evidence/managed-model-transport-diagnostics/source-pins.json",
+      "kind": "regular",
+      "sha256": "edd03b3661a9ce59be7ab911d638e29cbc6812f0593b5b800a3ba1e8dbc0d7a4",
+      "size": 923,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642885520434698
+    },
+    {
+      "path": "owner-evidence/managed-model-transport-diagnostics/syntax-receipt.json",
+      "kind": "regular",
+      "sha256": "f8cb7b3b3cbdcf10e9ca15416ebb1f02e401710bcdb4e6d680cbe68ac146a655",
+      "size": 275,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642900823004222
+    },
+    {
+      "path": "owner-evidence/native-task-erasure-deadline/source-pins.json",
+      "kind": "regular",
+      "sha256": "f27891c738e8221c3125b839fd0076687dd397cc862c5e3822363323439bad7a",
+      "size": 1067,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641646877013895
+    },
+    {
+      "path": "owner-evidence/native-task-erasure-deadline/syntax-receipt.json",
+      "kind": "regular",
+      "sha256": "3884f6d77718007ffaa18e369d4028273b53bd5d09ab331f93ed66526ba77004",
+      "size": 852,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641671091962856
+    },
+    {
+      "path": "owner-evidence/native-task-erasure-deadline/upfront-deadline-caller.patch",
+      "kind": "regular",
+      "sha256": "41fe115396d8ac477b12f21283e44d71ec258a9158faa402debcd14a0f821135",
+      "size": 1196,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641646876621553
+    },
+    {
+      "path": "owner-evidence/pi-local-probe-contract/pi-unqualified-probe.patch",
+      "kind": "regular",
+      "sha256": "94833744a625114b1b7848044152cea1541a3d113ec88ef4e6daa783b32bcae9",
+      "size": 2611,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641913134023299
+    },
+    {
+      "path": "owner-evidence/pi-local-probe-contract/source-pins.json",
+      "kind": "regular",
+      "sha256": "e0fda985a5da52193fa9d88cbc441230fa6646213a770e460de30fac37f60a5a",
+      "size": 1347,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641953163753948
+    },
+    {
+      "path": "owner-evidence/pi-local-probe-contract/whole2-receipt.json",
+      "kind": "regular",
+      "sha256": "9a065f8137611d5b31f0d0215612483cef743a1b09d42adfc01cea6437a84588",
+      "size": 3435,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642295143706681
+    },
+    {
+      "path": "owner-evidence/workflow-describe-help-map/README.json",
+      "kind": "regular",
+      "sha256": "9fcb307d3a39e1beb2d07d9cec74c6f3d31de77944071975c10c7d7a017bacaf",
+      "size": 1162,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642802593579535
+    },
+    {
+      "path": "owner-evidence/workflow-describe-help-map/cli-receipt.json",
+      "kind": "regular",
+      "sha256": "ea90cfd4b8ccf3d4159851e9c5585fcdb69aae737a0dcdd0e4b0f7b7e59fbac4",
+      "size": 75735,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643186684909308
+    },
+    {
+      "path": "owner-evidence/workflow-describe-help-map/cli-review-evidence.json",
+      "kind": "regular",
+      "sha256": "fd404523826a36e3527614d66270116e2ea4a6391eb3b5b55ba9392db8497ec2",
+      "size": 188597,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643186294018040
+    },
+    {
+      "path": "owner-evidence/workflow-describe-help-map/pins.json",
+      "kind": "regular",
+      "sha256": "5bbf3009c38f627f72e6f60a35d621fb131199b71e59d35ecd5dfa22adb86a30",
+      "size": 598,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642802593902462
+    },
+    {
+      "path": "owner-evidence/workflow-describe-help-map/two-row-map.patch",
+      "kind": "regular",
+      "sha256": "44e8ea989cbc8d517aa9eab66b342cfef873bc712d9d4bc53cad7b95629d6b77",
+      "size": 2017,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642802593496009
+    },
+    {
+      "path": "owner-evidence/workflow-e2e-readiness/oxc-pins.json",
+      "kind": "regular",
+      "sha256": "6bb5fd639decc5373280691edb14fc17664773d1461858633d5b458406e7fe7f",
+      "size": 385,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643155213240025
+    },
+    {
+      "path": "owner-evidence/workflow-e2e-readiness/qualification-receipt.json",
+      "kind": "regular",
+      "sha256": "3624978708b39d86f85c2238765a0a7474349d6c8f7251b23bebacae8b478c62",
+      "size": 969,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643193121889228
+    },
+    {
+      "path": "owner-evidence/workflow-e2e-readiness/source-pins.json",
+      "kind": "regular",
+      "sha256": "82aeb02fed792c72e621d1b2f84aa2d4fe003d30b1510b678d2e1eed27633967",
+      "size": 467,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643155213167856
+    },
+    {
+      "path": "owner-evidence/workflow-e2e-readiness/workflow-readiness.patch",
+      "kind": "regular",
+      "sha256": "feed35a398feea3b9575f5bd3549870614f3d9c77811c70c98580c6bdb8779e5",
+      "size": 683,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643155213037769
+    },
+    {
+      "path": "owner-evidence/workflow-intent-button-guard/source-pins.json",
+      "kind": "regular",
+      "sha256": "3ea49e2528c2d272ba5a12467cd3c559466f5700bf62c6f3331d35c8f807d266",
+      "size": 1643,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793642053363557831
+    },
+    {
+      "path": "owner-evidence/workflow-intent-button-guard/workflow-intent-button-guard.patch",
+      "kind": "regular",
+      "sha256": "b8e8746b71c63446cbcdfc2fd238be633681274863bb1ba340cd347aaa607b29",
+      "size": 2190,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793641897405122412
+    },
+    {
+      "path": "ui-scoped-status.json",
+      "kind": "regular",
+      "sha256": "b2c642d67aebe40818f2a2c34de89bfdf8212abc2fdb989a79198c659cbd2720",
+      "size": 289,
+      "mode": "0600",
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793643559447924877
+    }
+  ]
+}
