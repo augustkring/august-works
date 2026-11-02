@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import experienceEn from "../../i18n/experience/en.json";
 import experienceDa from "../../i18n/experience/da.json";
-import { TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE } from "../../lib/system-notice-humanizer";
+import { NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE, TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE } from "../../lib/system-notice-humanizer";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { TaskChatSystemNotice } from "./TaskChatSystemNotice";
 import type { TaskChatMessageItem } from "./task-chat-model";
@@ -80,6 +80,28 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
     expect(container.textContent).toContain(copy.toolUnavailableDetail);
     expect(container.textContent).not.toContain("Runtime settings");
     expect(container.textContent).not.toContain("secret/config binding");
+  });
+
+  it.each(["en", "da"])("localizes only the known Runtime action label in %s and preserves its destination", lang => {
+    noticeLocale.language = lang;
+    const href = "/agents/12345678-1234-1234-1234-123456789abc/runtime";
+    renderNotice({ text: `${NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE} [Runtime settings](${href}).`,
+      presentation: { kind: "system_notice", title: "Configuration incomplete", tone: "warning", detailsDefaultOpen: false } });
+    const copy = (lang === "da" ? experienceDa : experienceEn).taskChatSystemNotice;
+    expect(toggleButton().textContent).toContain(copy.runtimeUnavailableTitle);
+    flushSync(() => toggleButton().click());
+    const link = container.querySelector<HTMLAnchorElement>(`a[href="${href}"]`);
+    expect(link?.textContent).toBe(copy.runtimeSettingsAction);
+    expect(link?.getAttribute("href")).toBe(href);
+    expect(container.textContent).toContain(copy.runtimeUnavailableDetail);
+    if (lang === "da") expect(container.textContent).not.toContain("Runtime settings");
+  });
+
+  it("keeps unrelated Markdown labels unchanged", () => {
+    noticeLocale.language = "da";
+    renderNotice({ text: "Unrelated [Runtime settings](/agents/12345678-1234-1234-1234-123456789abc/runtime)." });
+    flushSync(() => toggleButton().click());
+    expect(container.querySelector("a")?.textContent).toBe("Runtime settings");
   });
 
   it("collapses to a humanized one-liner with relative time and hides the raw body", () => {

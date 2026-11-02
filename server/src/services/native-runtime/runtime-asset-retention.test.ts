@@ -40,7 +40,7 @@ function runEraser(args: string[], options: Parameters<typeof spawnSync>[2] = {}
   if (!trustedEraserNode) throw new Error("test_host_root_owned_node_unavailable");
   const env = { ...process.env, ...(options?.env ?? {}),
     PATH: `${dirname(trustedEraserNode)}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` };
-  return spawnSync("sh", args, { ...options, env });
+  return spawnSync("sh", args, { ...options, encoding: "utf8", env });
 }
 
 describe("remote Native runtime asset erasure binding", () => {

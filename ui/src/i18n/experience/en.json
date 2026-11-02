@@ -4184,6 +4184,7 @@
     "internalNewUse": "Internal — not offered for customer use. This setting does not delete existing data or cancel recovery work owned by existing services."
   },
   "taskChatSystemNotice": {
+    "runtimeSettingsAction": "Runtime settings",
     "runtimeUnavailableTitle": "Task paused — runtime unavailable",
     "runtimeUnavailableDetail": "This runtime is not available for managed model calls. Choose an available runtime in Runtime settings.",
     "toolUnavailableTitle": "Task paused — tool unavailable",

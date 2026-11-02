@@ -61,6 +61,7 @@ export function TaskChatSystemNotice({
   const runtimeUnavailableCopy = {
     title: t("taskChatSystemNotice.runtimeUnavailableTitle"),
     detail: t("taskChatSystemNotice.runtimeUnavailableDetail"),
+    action: t("taskChatSystemNotice.runtimeSettingsAction"),
   };
   const toolUnavailableCopy = {
     title: t("taskChatSystemNotice.toolUnavailableTitle"), detail: t("taskChatSystemNotice.toolUnavailableDetail"),
@@ -69,6 +70,8 @@ export function TaskChatSystemNotice({
     ? item.text.replace(TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE, toolUnavailableCopy.detail)
     : item.text.includes(NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE)
     ? item.text.replace(NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE, runtimeUnavailableCopy.detail)
+      .replace(/\[Runtime settings\]\((\/agents\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\/runtime)\)/gi,
+        (_label, href: string) => `[${runtimeUnavailableCopy.action}](${href})`)
     : item.text;
   const streamlined = useStreamlinedTaskChatPresentation();
   const [open, setOpen] = useState(Boolean(item.presentation?.detailsDefaultOpen));

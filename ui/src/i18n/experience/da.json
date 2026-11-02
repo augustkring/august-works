@@ -4184,6 +4184,7 @@
     "internalNewUse": "Intern — tilbydes ikke til kundebrug. Denne indstilling sletter ikke eksisterende data eller annullerer gendannelsesarbejde, som eksisterende tjenester ejer."
   },
   "taskChatSystemNotice": {
+    "runtimeSettingsAction": "Runtime-indstillinger",
     "runtimeUnavailableTitle": "Opgaven er sat på pause — runtime utilgængelig",
     "runtimeUnavailableDetail": "Denne runtime kan ikke bruges til administrerede modelkald. Vælg en tilgængelig runtime i Runtime-indstillinger.",
     "toolUnavailableTitle": "Opgaven er sat på pause — værktøjet er utilgængeligt",

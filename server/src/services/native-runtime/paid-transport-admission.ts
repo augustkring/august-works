@@ -1,6 +1,8 @@
 /** Admission policy for paid Native provider transports. */
 export const NATIVE_PAID_ADMISSION_OWNER = "Managed model gateway owner";
 export const NATIVE_PAID_ADMISSION_REASON = "paid_transport_unqualified";
+export const NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE =
+  "This runtime is not available for managed model calls. Choose an available runtime in Runtime settings.";
 
 export class NativePaidTransportAdmissionError extends Error {
   readonly code = "configuration_incomplete";
@@ -9,9 +11,7 @@ export class NativePaidTransportAdmissionError extends Error {
   readonly provider: string;
 
   constructor(provider: string, binding?: { companyId: string; agentId: string }) {
-    super(
-      "This runtime is not available for managed model calls. Choose an available runtime in Runtime settings.",
-    );
+    super(NATIVE_PAID_RUNTIME_UNAVAILABLE_MESSAGE);
     this.name = "NativePaidTransportAdmissionError";
     this.provider = provider;
     this.resultJson = {
