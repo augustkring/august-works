@@ -270,14 +270,6 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
 
-      - name: Install root-owned Node for remote erasure mechanics tests
-        if: matrix.group == 'general-server-without-chat'
-        run: |
-          trusted_node_dir=/usr/local/libexec/paperclip-erasure-test-node
-          sudo install -d -o root -g root -m 0755 "$trusted_node_dir"
-          sudo install -o root -g root -m 0755 "$(command -v node)" "$trusted_node_dir/node"
-          echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
-
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         env:
@@ -606,6 +598,14 @@ jobs:
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
+
+      - name: Install root-owned Node for remote erasure mechanics tests
+        if: matrix.group == 'general-server-without-chat'
+        run: |
+          trusted_node_dir=/usr/local/libexec/paperclip-erasure-test-node
+          sudo install -d -o root -g root -m 0755 "$trusted_node_dir"
+          sudo install -o root -g root -m 0755 "$(command -v node)" "$trusted_node_dir/node"
+          echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
