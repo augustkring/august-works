@@ -8,6 +8,7 @@ import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it, vi } 
 import { startRunnerApiTestServer } from "../../__tests__/helpers/runner-api-server.js";
 import { createRunnerdCodexTransport, defaultCapabilityRunnerdBinary } from "../../vendor/paperclip-runner/index.js";
 import { runnerApiCatalog } from "./runner-api-catalog.js";
+import { TOOL_MODEL_EFFECT_ADMISSION_REASON, TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE } from "./paid-transport-admission.js";
 import { registerRunnerPrpAuthority } from "../../realtime/runner-prp-ws.js";
 import type { NativeProjectToolResultSource } from "./paperclip-runner-tool-authority.js";
 
@@ -178,14 +179,19 @@ else if(m.id!==undefined) send({id:m.id,result:{}});
     const outcomes = await Promise.all(operations.map(async operation => {
       try {
         await fixture.authority.execute({ tool: "call_api", callId: operation.operationId, arguments: { operationId: operation.operationId } });
-        return { operationId: operation.operationId, rejected: false, message: "" };
+        return { operationId: operation.operationId, path: operation.path, rejected: false, message: "" };
       } catch (error) {
-        return { operationId: operation.operationId, rejected: true, message: String(error) };
+        return { operationId: operation.operationId, path: operation.path, rejected: true, message: String(error) };
       }
     }));
     for (const outcome of outcomes) {
       expect(outcome, outcome.operationId).toMatchObject({ rejected: true });
-      expect(outcome.message, outcome.operationId).toMatch(/cannot bypass|credential broker/);
+      if (outcome.path === "/api/plugins/tools/execute") {
+        expect(outcome.message, outcome.operationId).toContain(TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE);
+        expect(outcome.message, outcome.operationId).toContain(`reason: ${TOOL_MODEL_EFFECT_ADMISSION_REASON}`);
+      } else {
+        expect(outcome.message, outcome.operationId).toMatch(/cannot bypass|credential broker/);
+      }
     }
     const [run] = await server.db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
     expect((run.resultJson as Record<string, unknown> | null)?.apiToolReceipts).toBeUndefined();
