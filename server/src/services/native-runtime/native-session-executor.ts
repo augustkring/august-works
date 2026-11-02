@@ -13094,6 +13094,11 @@ export function createRemoteRunnerProcessLauncher(input: {
         }
         child.exitCode = null;
         const identityMismatch = observed.exitCode === 4;
+        // These exact untimed-out observations no longer authorize signalling
+        // the original identity. Keep unknown/timeout/transport cases intact;
+        // this is not a workload-stop receipt or an actual process exit code.
+        if (!observed.timedOut && (observed.exitCode === 3 || identityMismatch))
+          launchedIdentity = null;
         if (input.managedModelSession && !identityMismatch) {
           const stopped = await runner.execute({
             command: "sh",

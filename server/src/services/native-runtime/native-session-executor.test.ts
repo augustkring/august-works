@@ -686,6 +686,8 @@ describe("remote runner process supervision", () => {
   it.each(["delivered", "sandbox_missing", "logging_failed"] as const)(
     "detaches runnerd and contains asynchronous signal failures (%s)", async (signalOutcome) => {
     let launchNonce = "";
+    let releaseMonitor!: () => void;
+    const monitorMayFinish = new Promise<void>(resolve => { releaseMonitor = resolve; });
     const execute = vi.fn(
       async (input: {
         command?: string;
@@ -717,6 +719,7 @@ describe("remote runner process supervision", () => {
           };
         }
         if (label === "paperclip-runner-monitor") {
+          if (input.modelBrokerSessionPhase === "refresh") await monitorMayFinish;
           return {
             exitCode: 3,
             signal: null,
@@ -792,10 +795,38 @@ describe("remote runner process supervision", () => {
       cwd: "/controller",
       environment: {},
     });
+    await vi.waitFor(() => expect(execute.mock.calls.some(([input]) =>
+      input.args?.[2] === "paperclip-runner-monitor" && input.modelBrokerSessionPhase === "refresh")).toBe(true));
+    expect(handle.child.kill("SIGKILL")).toBe(true);
+    await vi.waitFor(() =>
+      expect(
+        execute.mock.calls.some(
+          ([input]) =>
+            input.args?.[2] === "paperclip-runner-signal" &&
+            input.args?.[1]?.includes('kill -KILL "$expected_pid"'),
+        ),
+      ).toBe(true),
+    );
+    if (signalOutcome !== "delivered") {
+      await vi.waitFor(() => expect(onLog).toHaveBeenCalledWith(
+        "stderr", "Remote runner signal failed; process termination is not confirmed.\n",
+      ));
+      // Let rejected logging callbacks settle too. Neither failure may escape
+      // this fire-and-forget Node child-process-compatible kill boundary.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    } else {
+      expect(onLog).not.toHaveBeenCalled();
+    }
+    expect(handle.child.exitCode).toBeNull();
+    releaseMonitor();
     await expect(handle.completion).resolves.toMatchObject({
       code: null,
       stderr: "paperclip-runnerd: provider transport closed",
     });
+    const afterCompletion = execute.mock.calls.length;
+    expect(handle.child.kill("SIGKILL")).toBe(false);
+    await Promise.resolve();
+    expect(execute).toHaveBeenCalledTimes(afterCompletion);
 
     const launch = execute.mock.calls.find(
       ([input]) => input.args?.[2] === "paperclip-runner-launch",
@@ -810,7 +841,7 @@ describe("remote runner process supervision", () => {
     expect(execute.mock.calls.filter(([input]) => input.nativePreparationPurpose === "native_session_start")
       .map(([input]) => input.args?.[2])).toEqual(["paperclip-runner-launch"]);
     const harnessStateCalls = execute.mock.calls
-      .filter(([input]) => input.nativePreparationPurpose === "native_harness_state")
+      .filter(([input]) => input.nativePreparationPurpose === "native_harness_state" && input.args?.[2] !== "paperclip-runner-signal")
       .map(([input]) => input);
     expect(harnessStateCalls.slice(0, 4).map(input => input.args?.[2])).toEqual([
       "paperclip-runner-process-identity",
@@ -836,27 +867,7 @@ describe("remote runner process supervision", () => {
     });
     expect(handle.child.pid).toBe(4321);
 
-    expect(handle.child.kill("SIGKILL")).toBe(true);
-    await vi.waitFor(() =>
-      expect(
-        execute.mock.calls.some(
-          ([input]) =>
-            input.args?.[2] === "paperclip-runner-signal" &&
-            input.args?.[1]?.includes('kill -KILL "$expected_pid"'),
-        ),
-      ).toBe(true),
-    );
-    if (signalOutcome !== "delivered") {
-      await vi.waitFor(() => expect(onLog).toHaveBeenCalledWith(
-        "stderr", "Remote runner signal failed; process termination is not confirmed.\n",
-      ));
-      // Let rejected logging callbacks settle too. Neither failure may escape
-      // this fire-and-forget Node child-process-compatible kill boundary.
-      await new Promise<void>((resolve) => setImmediate(resolve));
-    } else {
-      expect(onLog).not.toHaveBeenCalled();
-    }
-    expect(handle.child.exitCode).toBeNull();
+
   });
 
   it("terminates a detached runner when its process identity cannot be adopted", async () => {

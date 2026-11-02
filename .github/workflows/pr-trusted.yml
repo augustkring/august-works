@@ -492,9 +492,33 @@ jobs:
       - name: Verify release registry test coverage
         run: pnpm run test:release-registry
 
+      # The complete SDK pack is produced once from the existing locked
+      # workspace, not reinstalled independently in every server shard.
+      - name: Build managed Native provider pack
+        run: |
+          provider_pack="$RUNNER_TEMP/paperclip-native-provider-pack"
+          artifact_dir="$RUNNER_TEMP/paperclip-native-provider-pack-artifact"
+          mkdir -p "$artifact_dir"
+          pnpm --filter @paperclipai/paperclip-runner run build:provider-pack "$provider_pack"
+          git diff --exit-code -- pnpm-lock.yaml
+          test -x "$provider_pack/dist/bin/paperclip-runnerd"
+          git rev-parse HEAD > "$artifact_dir/source-commit.txt"
+          tar -czf "$artifact_dir/provider-pack.tar.gz" -C "$provider_pack" .
+          (cd "$artifact_dir" && sha256sum provider-pack.tar.gz source-commit.txt > provider-pack.sha256)
+
+      - name: Retain managed Native provider pack
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: managed-native-provider-pack-${{ github.run_id }}
+          path: ${{ runner.temp }}/paperclip-native-provider-pack-artifact/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
   general_tests:
     name: General tests (${{ matrix.group_label }})
-    needs: [gate]
+    needs: [gate, typecheck_release_registry]
     if: ${{ needs.gate.outputs.full_ci == 'true' }}
     runs-on: ${{ needs.gate.outputs.runner }}
     timeout-minutes: 20
@@ -664,6 +688,27 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           git diff --exit-code -- pnpm-lock.yaml
+
+      - name: Download managed Native provider pack
+        if: matrix.group == 'general-server-without-chat'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: managed-native-provider-pack-${{ github.run_id }}
+          path: ${{ runner.temp }}/paperclip-native-provider-pack-artifact
+
+      - name: Prepare managed Native fixture image bytes
+        if: matrix.group == 'general-server-without-chat'
+        run: |
+          artifact_dir="$RUNNER_TEMP/paperclip-native-provider-pack-artifact"
+          provider_pack="$RUNNER_TEMP/paperclip-native-provider-pack"
+          (cd "$artifact_dir" && sha256sum --check provider-pack.sha256)
+          test "$(cat "$artifact_dir/source-commit.txt")" = "$(git rev-parse HEAD)"
+          mkdir -p "$provider_pack"
+          tar -xzf "$artifact_dir/provider-pack.tar.gz" -C "$provider_pack"
+          test -f "$provider_pack/provider-pack.json"
+          test -x "$provider_pack/dist/bin/paperclip-runnerd"
+          echo "PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH=$provider_pack" >> "$GITHUB_ENV"
+          echo "PAPERCLIP_RUNNER_BINARY=$provider_pack/dist/bin/paperclip-runnerd" >> "$GITHUB_ENV"
 
       - name: Install generated-code sandbox
         if: matrix.group == 'general-server-without-chat'

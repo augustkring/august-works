@@ -164,6 +164,10 @@ describe("Native harness-state relay command owner", () => {
     const runnerInstanceId = randomUUID();
     let launchNonce = "";
     let monitorAttempts = 0;
+    let releaseMonitor!: () => void;
+    const monitorMayFinish = new Promise<void>(resolve => { releaseMonitor = resolve; });
+    let secondMonitorEntered!: () => void;
+    const monitorEntered = new Promise<void>(resolve => { secondMonitorEntered = resolve; });
     const launcherCommands: Array<{ command: string; args?: string[]; stdin?: string }> = [];
     const launcherRunner = { execute: vi.fn(async (commandInput: { command: string; args?: string[]; stdin?: string }) => {
       launcherCommands.push(commandInput);
@@ -179,6 +183,8 @@ describe("Native harness-state relay command owner", () => {
       if (label === "paperclip-runner-monitor") {
         monitorAttempts++;
         if (monitorAttempts === 1) throw new Error("runner_process_status_unavailable");
+        secondMonitorEntered();
+        await monitorMayFinish;
         return { exitCode: 3, timedOut: false, stdout: "", stderr: "" };
       }
       if (label === "paperclip-runner-diagnostics")
@@ -193,10 +199,19 @@ describe("Native harness-state relay command owner", () => {
     });
     const handle = launcher({ command: "/controller/paperclip-runnerd", args: ["--runner-id", runnerInstanceId],
       cwd: "/controller", environment: {} });
-    await handle.completion;
+    await monitorEntered;
+    expect(monitorAttempts).toBe(2);
     expect(handle.child.kill("SIGTERM")).toBe(true);
     await vi.waitFor(() => expect(launcherCommands.some(commandInput =>
       commandInput.args?.[2] === "paperclip-runner-signal")).toBe(true));
+    releaseMonitor();
+    expect(await handle.completion).toMatchObject({ code: null, signal: null });
+    const completedCommandCount = launcherCommands.length;
+    expect(handle.child.kill("SIGKILL")).toBe(false);
+    await Promise.resolve();
+    expect(launcherCommands).toHaveLength(completedCommandCount);
+    expect(handle.child.exitCode).toBeNull();
+    expect(handle.child.signalCode).toBeNull();
     expect(monitorAttempts).toBe(2);
     const monitor = launcherCommands.find(commandInput => commandInput.args?.[2] === "paperclip-runner-monitor")!;
     const monitorRequest = { argv: [monitor.command, ...(monitor.args ?? [])], cwd: taskRoot,
@@ -208,6 +223,7 @@ describe("Native harness-state relay command owner", () => {
     }))).toBe("FAILED");
 
     const signal = launcherCommands.find(commandInput => commandInput.args?.[2] === "paperclip-runner-signal")!;
+    expect(signal).toMatchObject({ nativePreparationPurpose: "native_harness_state", bypassSession: true });
     const signalRequest = { argv: [signal.command, ...(signal.args ?? [])], cwd: taskRoot,
       stdinBase64: "", env: {} } as unknown as RuntimeSandboxExecRelayRequest;
     expect(exactNativeHarnessStateCommand({ request: signalRequest, taskRoot, execution, runId })).toBe(true);
@@ -324,10 +340,58 @@ describe("Native harness-state relay command owner", () => {
       processIdentityPath: posix.join(runnerRoot, "runner-process.identity"), stateDirectory: runnerRoot,
       diagnosticsDirectory: posix.join(sessionRoot, "diagnostics"), runnerInstanceId,
     });
-    await expect(unavailableLauncher({ command: "/controller/paperclip-runnerd", args: ["--runner-id", runnerInstanceId],
-      cwd: "/controller", environment: {} }).completion).rejects.toThrow("runner_process_status_unavailable");
+    const unavailableHandle = unavailableLauncher({ command: "/controller/paperclip-runnerd", args: ["--runner-id", runnerInstanceId],
+      cwd: "/controller", environment: {} });
+    await expect(unavailableHandle.completion).rejects.toThrow("runner_process_status_unavailable");
+    expect(unavailableHandle.child.kill("SIGKILL")).toBe(true);
+    expect(unavailableRunner.execute.mock.calls.at(-1)![0].args).toEqual([
+      "-c", `${REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT}; kill -KILL "$expected_pid"`, "paperclip-runner-signal",
+      posix.join(runnerRoot, "runner-process.identity"), launchNonce, runnerInstanceId, "4321", "require-fingerprint",
+    ]);
     expect(unavailableMonitorAttempts).toBe(4); // Initial observation plus at most three status retries.
     expect(unavailableLaunchCount).toBe(1); // Unknown status never restarts the process.
+  });
+
+  it.each([
+    { exitCode: 3, timedOut: false, canSignal: false },
+    { exitCode: 4, timedOut: false, canSignal: false },
+    { exitCode: 3, timedOut: true, canSignal: true },
+    { exitCode: 4, timedOut: true, canSignal: true },
+    { exitCode: null, timedOut: false, canSignal: true },
+    { exitCode: 1, timedOut: false, canSignal: true },
+  ])("retains uncertainty without a Stop receipt for monitor $exitCode / timeout $timedOut", async ({ exitCode, timedOut, canSignal }) => {
+    const runnerInstanceId = randomUUID();
+    let nonce = "";
+    const execute = vi.fn(async (command: { args?: string[] }) => {
+      const label = command.args?.[2];
+      if (label === "paperclip-runner-launch") {
+        nonce = command.args?.[4] ?? "";
+        return { exitCode: 0, timedOut: false, stdout: "", stderr: "" };
+      }
+      if (label === "paperclip-runner-process-identity") return { exitCode: 0, timedOut: false,
+        stdout: `${nonce}\n4321\n2026-10-28T00:00:00.000Z\n${runnerInstanceId}\nlinux:abc-123:456\n`, stderr: "" };
+      if (label === "paperclip-runner-monitor") return { exitCode, timedOut, stdout: "", stderr: "" };
+      return { exitCode: 1, timedOut: false, stdout: "", stderr: "" };
+    });
+    const launch = createRemoteRunnerProcessLauncher({
+      target: { kind: "remote", transport: "sandbox", remoteCwd: "/workspace" } as any,
+      runner: { execute } as any, remoteBinary: "/runtime/paperclip-runnerd",
+      processIdentityPath: "/runtime/runner-process.identity", stateDirectory: "/runtime",
+      diagnosticsDirectory: "/runtime/diagnostics", runnerInstanceId,
+    });
+    const handle = launch({ command: "/controller/runnerd", args: [], cwd: "/controller", environment: {} });
+    const result = await handle.completion;
+    expect(result).toMatchObject({ code: null, signal: null });
+    expect(result.stderr.includes("runner_remote_process_identity_mismatch")).toBe(exitCode === 4);
+    expect(handle.child.exitCode).toBeNull();
+    expect(handle.child.signalCode).toBeNull();
+    const beforeKill = execute.mock.calls.length;
+    expect(handle.child.kill("SIGKILL")).toBe(canSignal);
+    if (canSignal) {
+      const command = execute.mock.calls.at(-1)![0];
+      expect(command.args).toEqual(["-c", `${REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT}; kill -KILL "$expected_pid"`,
+        "paperclip-runner-signal", "/runtime/runner-process.identity", nonce, runnerInstanceId, "4321", "require-fingerprint"]);
+    } else expect(execute).toHaveBeenCalledTimes(beforeKill);
   });
 
   it("authorizes only the exact session fence and serializes its real lock outside the removable session root", async () => {

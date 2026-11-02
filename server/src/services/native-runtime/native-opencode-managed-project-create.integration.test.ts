@@ -69,13 +69,14 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode private Project c
   }, 30_000);
 
   it("creates a private Project with a local workspace, then consumes that exact result on the next provider request", async () => {
+    const fixtureDeadlineAt = new Date(Date.now() + 180_000);
     const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
     const createCallId = `managed-project-create-${suffix}`;
     const projectName = `Managed private Project ${suffix}`;
     const workspaceName = `Local workspace ${suffix}`;
     let projectCreateReplayEvidence: Record<string, unknown> | null = null;
     const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
-      root, instanceId, steps: [
+      root, instanceId, fixtureDeadlineAt, steps: [
         { tool: "create_project", id: createCallId, input: { name: projectName,
           description: "Created by the qualified managed Native tool path.",
           workspace: { name: workspaceName }, idempotencyKey: randomUUID() } },
