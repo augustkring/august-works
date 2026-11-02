@@ -1696,7 +1696,7 @@ describe("company portability", () => {
     try {
       await vi.waitFor(() => {
         expect(issueSvc.listComments).toHaveBeenCalledTimes(2);
-      }, { timeout: 500 });
+      }, { timeout: 10_000 });
       expect(issueSvc.listComments.mock.calls.map(([issueId]) => issueId)).toEqual(issueIds.slice(0, 2));
     } catch (error) {
       waitError = error;

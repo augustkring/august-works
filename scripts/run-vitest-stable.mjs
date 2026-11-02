@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,6 +63,8 @@ const additionalSerializedServerTests = new Set([
   "server/src/__tests__/routines-e2e.test.ts",
 ]);
 let invocationIndex = 0;
+// One shared finite notice allowance across this job's sequential children.
+let reportingNoticeBudget = 20;
 const serializedModeName = "serialized";
 const generalModeName = "general";
 const allModeName = "all";
@@ -366,11 +368,44 @@ function runVitest(args, label, testShard = null, selectedServerFiles = []) {
     console.log(`[test:run] chat shard ${testShard.index + 1}/${testShard.count}: ${selected.tests.length}/${collected.length} tests, ${selected.lines.length} source lines; exact filter coverage verified`);
     args.push("--allowOnly=false");
   }
-  const result = spawnSync("pnpm", ["exec", "vitest", "run", ...sourceOnlyVitestArgs, ...args], {
+  let reportDirectory;
+  const reportingArguments = [];
+  if (process.env.PAPERCLIP_VITEST_REPORT_DIR) {
+    const reportRoot = process.env.PAPERCLIP_VITEST_REPORT_DIR;
+    if (!path.isAbsolute(reportRoot)) fail("Vitest result directory must be absolute");
+    mkdirSync(reportRoot, { recursive: true });
+    reportDirectory = mkdtempSync(path.join(reportRoot, `invocation-${invocationIndex}-`));
+    env.PAPERCLIP_VITEST_INVOCATION_REPORT_DIR = reportDirectory;
+    env.PAPERCLIP_VITEST_REPORT_REPO_ROOT = repoRoot;
+    env.PAPERCLIP_VITEST_NOTICE_BUDGET = String(reportingNoticeBudget);
+    reportingArguments.push("--reporter=default", `--reporter=${path.join(scriptsDir, "vitest-module-results-reporter.mjs")}`);
+    writeFileSync(path.join(reportDirectory, "invocation.json"), JSON.stringify({ invocationIndex, label,
+      args: [...sourceOnlyVitestArgs, ...args, ...reportingArguments], selectedServerFiles, githubSha: env.GITHUB_SHA ?? null, githubRunId: env.GITHUB_RUN_ID ?? null,
+      githubRunAttempt: env.GITHUB_RUN_ATTEMPT ?? null, githubJob: env.GITHUB_JOB ?? null,
+      processExit: "pending" }) + "\n", { mode: 0o600 });
+  }
+  const result = spawnSync("pnpm", ["exec", "vitest", "run", ...sourceOnlyVitestArgs, ...args, ...reportingArguments], {
     cwd: repoRoot,
     env,
     stdio: "inherit",
   });
+  if (reportDirectory) {
+    try {
+      const temporary = path.join(reportDirectory, "exit.json.tmp");
+      writeFileSync(temporary, JSON.stringify({ status: result.status, signal: result.signal,
+        spawnErrorCode: result.error?.code ?? null, processExit: "recorded" }) + "\n", { mode: 0o600 });
+      renameSync(temporary, path.join(reportDirectory, "exit.json"));
+    } catch {
+      console.error("[test:run] Vitest completion record unavailable; process result must not be inferred from module reports");
+    }
+    // Missing/invalid reporting counters conservatively exhaust notices; they
+    // never change the actual child exit code or classify missing tests.
+    try {
+      const count = JSON.parse(readFileSync(path.join(reportDirectory, "notice-count.json"), "utf8")).count;
+      reportingNoticeBudget = Number.isSafeInteger(count) && count >= 0 && count <= reportingNoticeBudget
+        ? reportingNoticeBudget - count : 0;
+    } catch { reportingNoticeBudget = 0; }
+  }
   if (result.error) {
     console.error(`[test:run] Failed to start Vitest: ${result.error.message}`);
     process.exit(1);

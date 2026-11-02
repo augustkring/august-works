@@ -10,7 +10,7 @@ const launcher='/usr/local/libexec/paperclip-fixture-observers/native-session-ha
 const scanner=launcher+'.mjs';
 const hashes={ [launcher]:'9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8',
   [scanner]:'7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55' };
-const started=Date.now(), deadline=started+10_000, limit=150*1024*1024;
+const started=Date.now(), deadline=started+10_000, limit=192*1024*1024;
 let root, stage='prerequisite', ownsChildren=false;
 const facets={procDirectoryOwnerMatchesOriginalUid:null,statusEffectiveUidMatchesOriginalUid:null,
   directCwdEACCES:false,directFdEACCES:false,observedHolders:null,

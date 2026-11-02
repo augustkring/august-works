@@ -696,7 +696,7 @@ jobs:
             observer_check_chain "$observer_target"
           done
           # Run ONLY the finite unprivileged kernel control; the observer itself cannot signal/write.
-          echo "9654f0ccdf73de89cf22e9f7bd049c06320b4c2009a882d01ff9d0928d129e3c  scripts/fixtures/native-session-handle-observer-check.mjs" | /usr/bin/sha256sum --check --strict
+          echo "a6fba302c87c6eaefe0c0a10b625cb3f14ae2959956900eeeb314c7912dfdfab  scripts/fixtures/native-session-handle-observer-check.mjs" | /usr/bin/sha256sum --check --strict
           /usr/bin/timeout --kill-after=2s 12s /usr/bin/env -i PATH=/usr/bin:/bin "$trusted_node_dir/node" --no-addons --disable-proto=throw scripts/fixtures/native-session-handle-observer-check.mjs
           echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
           echo "PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER=1" >> "$GITHUB_ENV"
@@ -840,6 +840,8 @@ jobs:
         run: bash scripts/ci-install-native-sandbox.sh
 
       - name: Run grouped general test suites
+        env:
+          PAPERCLIP_VITEST_REPORT_DIR: ${{ runner.temp }}/vitest-results
         run: |
           if [ -n "${{ matrix.shard_count }}" ]; then
             pnpm test:run:general -- --group '${{ matrix.group }}' \
@@ -847,6 +849,15 @@ jobs:
           else
             pnpm test:run:general -- --group '${{ matrix.group }}'
           fi
+
+      - name: Upload compact Vitest results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: vitest-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.group }}-${{ matrix.shard_index }}
+          path: ${{ runner.temp }}/vitest-results/**/*.json
+          if-no-files-found: warn
+          retention-days: 3
 
   docker_context_integrity:
     name: Docker context integrity
