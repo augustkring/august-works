@@ -1,0 +1,1131 @@
+{
+  "candidates": [
+    "scheduler-model-producer-r2",
+    "project-workspace-fixture-r3",
+    "project-workspace-integration-r1",
+    "sandbox-image-node-prerequisite-r1",
+    "opencode-source-migration-r1",
+    "pause-current-ancestry-preview-ead-r4"
+  ],
+  "created_utc": "2026-11-02T11:48:17Z",
+  "entries": [
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793620097162843548,
+      "path": "README.md",
+      "sha256": "687adbb7b856c35716bbc471b4520e2ed3d1bd2f3af19fa01dc1b2bd79c9aee6",
+      "size": 933,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166581719,
+      "path": "opencode-source-migration-r1",
+      "size": 80,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166844365,
+      "path": "opencode-source-migration-r1/artifacts",
+      "size": 120,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619983358056031,
+      "path": "opencode-source-migration-r1/artifacts/MIGRATION.md",
+      "sha256": "8e804a0233d89390e34ca978961dfa53b3599aee58a3c83babc1a0baa44b08e1",
+      "size": 4155,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619983357841767,
+      "path": "opencode-source-migration-r1/artifacts/fixture-observation.patch",
+      "sha256": "fbe0894b3408cb3031e41f979740d2e180bbeadc16b1be2c8db523deacc93723",
+      "size": 3920,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793620029758885924,
+      "path": "opencode-source-migration-r1/artifacts/source-migration.patch",
+      "sha256": "44ee716f84d3a7961f3d6a795838102d255b99a8bd930a2e4e5bbe3e3ecc1f38",
+      "size": 79374,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793620034274720689,
+      "path": "opencode-source-migration-r1/artifacts/source-pins.json",
+      "sha256": "2671aa8b1af9acedbc78c3dda12d52018e1fced021f804874afe29948a30be93",
+      "size": 2584,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166181715,
+      "path": "opencode-source-migration-r1/files",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166181715,
+      "path": "opencode-source-migration-r1/files/server",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166485353,
+      "path": "opencode-source-migration-r1/files/server/src",
+      "size": 80,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166485353,
+      "path": "opencode-source-migration-r1/files/server/src/__tests__",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166485353,
+      "path": "opencode-source-migration-r1/files/server/src/__tests__/helpers",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619983356377457,
+      "path": "opencode-source-migration-r1/files/server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "sha256": "770f5b8456566655d9099ee9030ecbf435dbbf92233d38dde9c6762d731b5441",
+      "size": 42274,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166181715,
+      "path": "opencode-source-migration-r1/files/server/src/services",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166181715,
+      "path": "opencode-source-migration-r1/files/server/src/services/native-runtime",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793620029757167842,
+      "path": "opencode-source-migration-r1/files/server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "sha256": "1d5c2d9cebc297f3e3764b3f154e87a5836afe18c0012e6db75777344a5fa7fb",
+      "size": 51298,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166895212,
+      "path": "pause-current-ancestry-preview-ead-r4",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097167223327,
+      "path": "pause-current-ancestry-preview-ead-r4/artifacts",
+      "size": 100,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619929616189626,
+      "path": "pause-current-ancestry-preview-ead-r4/artifacts/prepare-shadow.py",
+      "sha256": "1263e6e134c46627a6f0fe44ea714dc3105d71be76d6d57c85535b0cc9025b40",
+      "size": 3024,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619929615923104,
+      "path": "pause-current-ancestry-preview-ead-r4/artifacts/source-pins.json",
+      "sha256": "2267ab9b853bf3689b14188ba01c61cf5fb7684023d88e755dfcfa929864baa3",
+      "size": 2703,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619929616031668,
+      "path": "pause-current-ancestry-preview-ead-r4/artifacts/source.patch",
+      "sha256": "a140329c93bd03317e9c2341c0e759e995148938c968957de0ea57192840f068",
+      "size": 42787,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097164748392,
+      "path": "project-workspace-fixture-r3",
+      "size": 80,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097164946842,
+      "path": "project-workspace-fixture-r3/artifacts",
+      "size": 160,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960753262703,
+      "path": "project-workspace-fixture-r3/artifacts/REVIEW.md",
+      "sha256": "1e6f6436a48e811a814bb643d2ea77d6a0034e9e3c2fb0905ec232f93a8089c0",
+      "size": 4354,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960753188701,
+      "path": "project-workspace-fixture-r3/artifacts/negative-case-plan.json",
+      "sha256": "4631439f4dc31f793229bf679002ed994877aeb88b392fd3798c28529bf5f6a0",
+      "size": 6082,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960752673113,
+      "path": "project-workspace-fixture-r3/artifacts/project-workspace-fixture.patch",
+      "sha256": "ef7a9a0bc16d522881e914e09403a8682288ee55fb0bc34af665c28d93bddf34",
+      "size": 18652,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960752722507,
+      "path": "project-workspace-fixture-r3/artifacts/remove-redundant-policy-assignments.patch",
+      "sha256": "25f613078ecd0dca7bf09e19c9787facdec7801d25f27ce09c2f9e86d19c1757",
+      "size": 1088,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960760562089,
+      "path": "project-workspace-fixture-r3/artifacts/review-receipt.json",
+      "sha256": "e31400706132bd344993927720bb467b2c5945b04d2e25573b9119ec5edca20e",
+      "size": 548,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960752921608,
+      "path": "project-workspace-fixture-r3/artifacts/source-pins.json",
+      "sha256": "0102132596dba5d9b17809d89936afb706477fc1edfb4c17abe429a249890273",
+      "size": 5033,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097164237802,
+      "path": "project-workspace-fixture-r3/files",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097164237802,
+      "path": "project-workspace-fixture-r3/files/server",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097164237802,
+      "path": "project-workspace-fixture-r3/files/server/src",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097164237802,
+      "path": "project-workspace-fixture-r3/files/server/src/__tests__",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097164639969,
+      "path": "project-workspace-fixture-r3/files/server/src/__tests__/helpers",
+      "size": 80,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960739174880,
+      "path": "project-workspace-fixture-r3/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "51ca6b2d8c52546e93d24688b3e1b4564c365ff8e18a6f471ae3d053acc2ff44",
+      "size": 230585,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616755823922956,
+      "path": "project-workspace-fixture-r3/files/server/src/__tests__/helpers/managed-native-project-workspace-fixture.ts",
+      "sha256": "71d5769c222dad28b9ecdbe80c515e134483bf8a2dd8d5500d10db467438194f",
+      "size": 13224,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165380967,
+      "path": "project-workspace-integration-r1",
+      "size": 80,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165537703,
+      "path": "project-workspace-integration-r1/artifacts",
+      "size": 140,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517499971300,
+      "path": "project-workspace-integration-r1/artifacts/REVIEW.md",
+      "sha256": "23798225401d68de6fb30a92a46c1f7d311130f75698781d9f158a4dfdbc4212",
+      "size": 2037,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517499934995,
+      "path": "project-workspace-integration-r1/artifacts/negative-check-plan.json",
+      "sha256": "ab06f5732791856d433b7906f716ac8523a867b3c900cc0c5e1c99f421c11a14",
+      "size": 3711,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517494829909,
+      "path": "project-workspace-integration-r1/artifacts/project-workspace-integration.patch",
+      "sha256": "90e62790b6bc31f7f21cbf174c873d8295ffecb4a6149db6a69db1e36fed8ec5",
+      "size": 15191,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517500274668,
+      "path": "project-workspace-integration-r1/artifacts/review-receipt.json",
+      "sha256": "dbbd377cbfc551b7d2d813fff41a8d94aad9e1ff93b1ea5986d864a5fc960c00",
+      "size": 548,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517499852240,
+      "path": "project-workspace-integration-r1/artifacts/source-pins.json",
+      "sha256": "dd7e1bb0e5978bb0a23479b2f375b2c5af242f6c59f2d3e1041191e8021e1b2d",
+      "size": 2870,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165168306,
+      "path": "project-workspace-integration-r1/files",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165168306,
+      "path": "project-workspace-integration-r1/files/server",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165168306,
+      "path": "project-workspace-integration-r1/files/server/src",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165168306,
+      "path": "project-workspace-integration-r1/files/server/src/__tests__",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617448351481592,
+      "path": "project-workspace-integration-r1/files/server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
+      "sha256": "83663db8a78b50f5965236d2394cde6642a6c98731e4896d1d6f54546e7f61e8",
+      "size": 14892,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165998839,
+      "path": "sandbox-image-node-prerequisite-r1",
+      "size": 80,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097166148195,
+      "path": "sandbox-image-node-prerequisite-r1/artifacts",
+      "size": 100,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618509850799655,
+      "path": "sandbox-image-node-prerequisite-r1/artifacts/fixed-probe-controls.mjs",
+      "sha256": "5806ff9198b073c4171734cc90379796dfc6d8fe62ee4bfa0614a6e6f826ff4c",
+      "size": 3668,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618509902800743,
+      "path": "sandbox-image-node-prerequisite-r1/artifacts/image-node-prerequisite.patch",
+      "sha256": "916b4d5085cdf7a0347a389bd67e43fa8ad2bd4e4096b568dd23592621c1fb94",
+      "size": 3100,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618509906800826,
+      "path": "sandbox-image-node-prerequisite-r1/artifacts/source-pins.json",
+      "sha256": "2daef16368c185cfd0ab8f21a5b70df5d5f0f81e167e0d3ca497566ecb687c3d",
+      "size": 1128,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165582271,
+      "path": "sandbox-image-node-prerequisite-r1/files",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165582271,
+      "path": "sandbox-image-node-prerequisite-r1/files/server",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165582271,
+      "path": "sandbox-image-node-prerequisite-r1/files/server/src",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165582271,
+      "path": "sandbox-image-node-prerequisite-r1/files/server/src/__tests__",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097165582271,
+      "path": "sandbox-image-node-prerequisite-r1/files/server/src/__tests__/helpers",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618427978852143,
+      "path": "sandbox-image-node-prerequisite-r1/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "dfe9bae7a7ec5e208cd81cfd065b30c59a617a531d81b654844300b97da8a2c1",
+      "size": 231483,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097163933482,
+      "path": "scheduler-model-producer-r2",
+      "size": 80,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097164182849,
+      "path": "scheduler-model-producer-r2/artifacts",
+      "size": 120,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618994251312961,
+      "path": "scheduler-model-producer-r2/artifacts/REVIEW.md",
+      "sha256": "dba42be34d8cbde3635b732ec1535514608d6ff5abee39517af143261245f1da",
+      "size": 4232,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618994346886525,
+      "path": "scheduler-model-producer-r2/artifacts/producer.patch",
+      "sha256": "0cbdbab3cf78a6b1ce5f3258f3648961da1d72b83cb495b261a152feb6ffb09d",
+      "size": 115244,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618994347008749,
+      "path": "scheduler-model-producer-r2/artifacts/r1-to-r2.patch",
+      "sha256": "c0b9e11502df50c3e5f93160dabcc178cd4315e12fd3b7658b881a8a0710133e",
+      "size": 16176,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618994349272686,
+      "path": "scheduler-model-producer-r2/artifacts/source-pins.json",
+      "sha256": "08ae2823b9d2e6331cc1c74caea108521ee7d9d2b741d784bbd98f1ab53530e6",
+      "size": 4976,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097162843548,
+      "path": "scheduler-model-producer-r2/files",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097162843548,
+      "path": "scheduler-model-producer-r2/files/server",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097162843548,
+      "path": "scheduler-model-producer-r2/files/server/src",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097162843548,
+      "path": "scheduler-model-producer-r2/files/server/src/__tests__",
+      "size": 60,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 448,
+      "mtime_ns": 1793620097163890538,
+      "path": "scheduler-model-producer-r2/files/server/src/__tests__/helpers",
+      "size": 180,
+      "type": "dir",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618258561495565,
+      "path": "scheduler-model-producer-r2/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "173c755ec5ce864ef004e4fe2b8b2a30d6641097d33842a89bd0bb9dfb5c50d6",
+      "size": 261590,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618832308437540,
+      "path": "scheduler-model-producer-r2/files/server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "sha256": "addec1b564ae9b1b87dcf655b5cd1162df91accb196ca9e74a8a953502f1d267",
+      "size": 40398,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618258539817313,
+      "path": "scheduler-model-producer-r2/files/server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
+      "sha256": "5bc53ba03a9ad41f0f7ed548dfe46d11b47943cf0ccdde57d5f2b13101836dcc",
+      "size": 2245,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618358801488435,
+      "path": "scheduler-model-producer-r2/files/server/src/__tests__/helpers/managed-native-model-transport.test.ts",
+      "sha256": "7ff6407f6cf2e36c6abb6a35d84d23cc548b74bf6098ea6b8c10a32376ea150d",
+      "size": 8756,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618358800937152,
+      "path": "scheduler-model-producer-r2/files/server/src/__tests__/helpers/managed-native-model-transport.ts",
+      "sha256": "5eb7f8bdc3a6e54233ac4e9eedeaea069a1e70d99ec32d5cd914ed6d481d01b6",
+      "size": 10560,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618832308207353,
+      "path": "scheduler-model-producer-r2/files/server/src/__tests__/helpers/managed-native-opencode-fixture-pin.ts",
+      "sha256": "e32cfad043cd8ad9d90e9f449b656a389292912f5132fd180a346371e4923b51",
+      "size": 1776,
+      "type": "file",
+      "uid": 1000
+    },
+    {
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618258539914911,
+      "path": "scheduler-model-producer-r2/files/server/src/__tests__/helpers/managed-native-serial-scheduler-fixture.test.ts",
+      "sha256": "5a8da3ddc532c5f1539416de723b9cac78643452d56b9588294eed9c50c838c3",
+      "size": 5109,
+      "type": "file",
+      "uid": 1000
+    }
+  ],
+  "entry_count": 77,
+  "format": "r80-private-source-checkpoint-v1",
+  "qualification": "private unqualified WIP; source preservation only",
+  "source_count": 38,
+  "source_records": [
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618258561495565,
+      "sha256": "173c755ec5ce864ef004e4fe2b8b2a30d6641097d33842a89bd0bb9dfb5c50d6",
+      "size": 261590,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618832308437540,
+      "sha256": "addec1b564ae9b1b87dcf655b5cd1162df91accb196ca9e74a8a953502f1d267",
+      "size": 40398,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/files/server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618258539817313,
+      "sha256": "5bc53ba03a9ad41f0f7ed548dfe46d11b47943cf0ccdde57d5f2b13101836dcc",
+      "size": 2245,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/files/server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618358801488435,
+      "sha256": "7ff6407f6cf2e36c6abb6a35d84d23cc548b74bf6098ea6b8c10a32376ea150d",
+      "size": 8756,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/files/server/src/__tests__/helpers/managed-native-model-transport.test.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618358800937152,
+      "sha256": "5eb7f8bdc3a6e54233ac4e9eedeaea069a1e70d99ec32d5cd914ed6d481d01b6",
+      "size": 10560,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/files/server/src/__tests__/helpers/managed-native-model-transport.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618832308207353,
+      "sha256": "e32cfad043cd8ad9d90e9f449b656a389292912f5132fd180a346371e4923b51",
+      "size": 1776,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/files/server/src/__tests__/helpers/managed-native-opencode-fixture-pin.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618258539914911,
+      "sha256": "5a8da3ddc532c5f1539416de723b9cac78643452d56b9588294eed9c50c838c3",
+      "size": 5109,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/files/server/src/__tests__/helpers/managed-native-serial-scheduler-fixture.test.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618994347008749,
+      "sha256": "c0b9e11502df50c3e5f93160dabcc178cd4315e12fd3b7658b881a8a0710133e",
+      "size": 16176,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/r1-to-r2.patch",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618994251312961,
+      "sha256": "dba42be34d8cbde3635b732ec1535514608d6ff5abee39517af143261245f1da",
+      "size": 4232,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/REVIEW.md",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618994346886525,
+      "sha256": "0cbdbab3cf78a6b1ce5f3258f3648961da1d72b83cb495b261a152feb6ffb09d",
+      "size": 115244,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/producer.patch",
+      "uid": 1000
+    },
+    {
+      "candidate": "scheduler-model-producer-r2",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618994349272686,
+      "sha256": "08ae2823b9d2e6331cc1c74caea108521ee7d9d2b741d784bbd98f1ab53530e6",
+      "size": 4976,
+      "source": "/workspace/v10-preparation/managed-scheduler-model-producer-20261102/r2/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-fixture-r3",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960739174880,
+      "sha256": "51ca6b2d8c52546e93d24688b3e1b4564c365ff8e18a6f471ae3d053acc2ff44",
+      "size": 230585,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-fixture-20261102/r3/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-fixture-r3",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616755823922956,
+      "sha256": "71d5769c222dad28b9ecdbe80c515e134483bf8a2dd8d5500d10db467438194f",
+      "size": 13224,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-fixture-20261102/r3/files/server/src/__tests__/helpers/managed-native-project-workspace-fixture.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-fixture-r3",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960752673113,
+      "sha256": "ef7a9a0bc16d522881e914e09403a8682288ee55fb0bc34af665c28d93bddf34",
+      "size": 18652,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-fixture-20261102/r3/project-workspace-fixture.patch",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-fixture-r3",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960753262703,
+      "sha256": "1e6f6436a48e811a814bb643d2ea77d6a0034e9e3c2fb0905ec232f93a8089c0",
+      "size": 4354,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-fixture-20261102/r3/REVIEW.md",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-fixture-r3",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960752722507,
+      "sha256": "25f613078ecd0dca7bf09e19c9787facdec7801d25f27ce09c2f9e86d19c1757",
+      "size": 1088,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-fixture-20261102/r3/remove-redundant-policy-assignments.patch",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-fixture-r3",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960753188701,
+      "sha256": "4631439f4dc31f793229bf679002ed994877aeb88b392fd3798c28529bf5f6a0",
+      "size": 6082,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-fixture-20261102/r3/negative-case-plan.json",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-fixture-r3",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960760562089,
+      "sha256": "e31400706132bd344993927720bb467b2c5945b04d2e25573b9119ec5edca20e",
+      "size": 548,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-fixture-20261102/r3/review-receipt.json",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-fixture-r3",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793616960752921608,
+      "sha256": "0102132596dba5d9b17809d89936afb706477fc1edfb4c17abe429a249890273",
+      "size": 5033,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-fixture-20261102/r3/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-integration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617448351481592,
+      "sha256": "83663db8a78b50f5965236d2394cde6642a6c98731e4896d1d6f54546e7f61e8",
+      "size": 14892,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-integration-20261102/r1/files/server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-integration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517499934995,
+      "sha256": "ab06f5732791856d433b7906f716ac8523a867b3c900cc0c5e1c99f421c11a14",
+      "size": 3711,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-integration-20261102/r1/negative-check-plan.json",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-integration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517499971300,
+      "sha256": "23798225401d68de6fb30a92a46c1f7d311130f75698781d9f158a4dfdbc4212",
+      "size": 2037,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-integration-20261102/r1/REVIEW.md",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-integration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517500274668,
+      "sha256": "dbbd377cbfc551b7d2d813fff41a8d94aad9e1ff93b1ea5986d864a5fc960c00",
+      "size": 548,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-integration-20261102/r1/review-receipt.json",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-integration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517499852240,
+      "sha256": "dd7e1bb0e5978bb0a23479b2f375b2c5af242f6c59f2d3e1041191e8021e1b2d",
+      "size": 2870,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-integration-20261102/r1/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "candidate": "project-workspace-integration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793617517494829909,
+      "sha256": "90e62790b6bc31f7f21cbf174c873d8295ffecb4a6149db6a69db1e36fed8ec5",
+      "size": 15191,
+      "source": "/workspace/v10-preparation/managed-native-project-workspace-integration-20261102/r1/project-workspace-integration.patch",
+      "uid": 1000
+    },
+    {
+      "candidate": "sandbox-image-node-prerequisite-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618427978852143,
+      "sha256": "dfe9bae7a7ec5e208cd81cfd065b30c59a617a531d81b654844300b97da8a2c1",
+      "size": 231483,
+      "source": "/workspace/v10-preparation/managed-sandbox-image-node-prerequisite-20261102/r1/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "sandbox-image-node-prerequisite-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618509902800743,
+      "sha256": "916b4d5085cdf7a0347a389bd67e43fa8ad2bd4e4096b568dd23592621c1fb94",
+      "size": 3100,
+      "source": "/workspace/v10-preparation/managed-sandbox-image-node-prerequisite-20261102/r1/image-node-prerequisite.patch",
+      "uid": 1000
+    },
+    {
+      "candidate": "sandbox-image-node-prerequisite-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618509850799655,
+      "sha256": "5806ff9198b073c4171734cc90379796dfc6d8fe62ee4bfa0614a6e6f826ff4c",
+      "size": 3668,
+      "source": "/workspace/v10-preparation/managed-sandbox-image-node-prerequisite-20261102/r1/fixed-probe-controls.mjs",
+      "uid": 1000
+    },
+    {
+      "candidate": "sandbox-image-node-prerequisite-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793618509906800826,
+      "sha256": "2daef16368c185cfd0ab8f21a5b70df5d5f0f81e167e0d3ca497566ecb687c3d",
+      "size": 1128,
+      "source": "/workspace/v10-preparation/managed-sandbox-image-node-prerequisite-20261102/r1/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "candidate": "opencode-source-migration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793620029757167842,
+      "sha256": "1d5c2d9cebc297f3e3764b3f154e87a5836afe18c0012e6db75777344a5fa7fb",
+      "size": 51298,
+      "source": "/workspace/v10-preparation/managed-opencode-source-migration-r1/files/server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "opencode-source-migration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619983356377457,
+      "sha256": "770f5b8456566655d9099ee9030ecbf435dbbf92233d38dde9c6762d731b5441",
+      "size": 42274,
+      "source": "/workspace/v10-preparation/managed-opencode-source-migration-r1/files/server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "uid": 1000
+    },
+    {
+      "candidate": "opencode-source-migration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619983358056031,
+      "sha256": "8e804a0233d89390e34ca978961dfa53b3599aee58a3c83babc1a0baa44b08e1",
+      "size": 4155,
+      "source": "/workspace/v10-preparation/managed-opencode-source-migration-r1/MIGRATION.md",
+      "uid": 1000
+    },
+    {
+      "candidate": "opencode-source-migration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619983357841767,
+      "sha256": "fbe0894b3408cb3031e41f979740d2e180bbeadc16b1be2c8db523deacc93723",
+      "size": 3920,
+      "source": "/workspace/v10-preparation/managed-opencode-source-migration-r1/fixture-observation.patch",
+      "uid": 1000
+    },
+    {
+      "candidate": "opencode-source-migration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793620029758885924,
+      "sha256": "44ee716f84d3a7961f3d6a795838102d255b99a8bd930a2e4e5bbe3e3ecc1f38",
+      "size": 79374,
+      "source": "/workspace/v10-preparation/managed-opencode-source-migration-r1/source-migration.patch",
+      "uid": 1000
+    },
+    {
+      "candidate": "opencode-source-migration-r1",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793620034274720689,
+      "sha256": "2671aa8b1af9acedbc78c3dda12d52018e1fced021f804874afe29948a30be93",
+      "size": 2584,
+      "source": "/workspace/v10-preparation/managed-opencode-source-migration-r1/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "candidate": "pause-current-ancestry-preview-ead-r4",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619929616189626,
+      "sha256": "1263e6e134c46627a6f0fe44ea714dc3105d71be76d6d57c85535b0cc9025b40",
+      "size": 3024,
+      "source": "/workspace/v10-preparation/pause-current-ancestry-preview-ead-r4-20261102/prepare-shadow.py",
+      "uid": 1000
+    },
+    {
+      "candidate": "pause-current-ancestry-preview-ead-r4",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619929616031668,
+      "sha256": "a140329c93bd03317e9c2341c0e759e995148938c968957de0ea57192840f068",
+      "size": 42787,
+      "source": "/workspace/v10-preparation/pause-current-ancestry-preview-ead-r4-20261102/source.patch",
+      "uid": 1000
+    },
+    {
+      "candidate": "pause-current-ancestry-preview-ead-r4",
+      "gid": 1000,
+      "mode": 384,
+      "mtime_ns": 1793619929615923104,
+      "sha256": "2267ab9b853bf3689b14188ba01c61cf5fb7684023d88e755dfcfa929864baa3",
+      "size": 2703,
+      "source": "/workspace/v10-preparation/pause-current-ancestry-preview-ead-r4-20261102/source-pins.json",
+      "uid": 1000
+    }
+  ]
+}
