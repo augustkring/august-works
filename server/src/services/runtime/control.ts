@@ -4003,7 +4003,7 @@ export function runtimeControlService(
               runId: source.run.id, actor: { type: "board", source: "session", userId: claims.responsible_user_id },
               policy: receiptData.bootstrap.policy, inputs: receiptData.bootstrap.inputs });
           }
-          if (Object.values(conversationCredentialChecks).every(Boolean) && (receiptData || nativeSessionStartValid)) {
+          if (Object.values(conversationCredentialChecks).every(Boolean) && (receiptData || nativeSessionStartValid || nativeHarnessStateValid)) {
             conversationCredentialValid = conversationModelClaims.exp * 1000 > Date.now() &&
               Date.parse(modelCredential.expiresAt) > Date.now() && Date.parse(request.deadlineAt) > Date.now();
           }
