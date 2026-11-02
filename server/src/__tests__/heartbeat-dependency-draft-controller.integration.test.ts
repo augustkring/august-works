@@ -66,7 +66,7 @@ describe("dependency scheduling through the installed Native text draft controll
     if (home) { await makeWritable(home); await rm(home, { recursive: true, force: true }); }
   });
 
-  it("keeps a one-document Task idle while blocked, then completes one scheduler Run for Human review", async () => {
+  async function seedInstalledDraft() {
     const f = await seedV5Presences(db);
     // Seed the current Human once; reuse that same authenticated actor for all
     // source, provider and Plan operations rather than invalidating its session.
@@ -111,6 +111,12 @@ describe("dependency scheduling through the installed Native text draft controll
         expiresAt: new Date(Date.now() + 120_000).toISOString() },
       qualificationEvidenceRef: "https://protected.test.invalid/qualification/worker-fixture-only.json",
       qualificationArtifactSha256: "c".repeat(64) };
+
+    return { f, human, profile, model };
+  }
+
+  it("keeps a one-document Task idle while blocked, then completes one scheduler Run for Human review", async () => {
+    const { f, human, profile, model } = await seedInstalledDraft();
 
     const tasks = issueService(db);
     const blocker = await tasks.create(f.home, { title: "Human dependency", description: "A Human must resolve this dependency.",
@@ -251,4 +257,149 @@ describe("dependency scheduling through the installed Native text draft controll
       }
     }
   }, 60_000);
+  it("keeps a second one-document Plan queued until the first scheduler Run releases capacity", async () => {
+    const { f, human, profile, model } = await seedInstalledDraft();
+    const tasks = issueService(db);
+    const plans = orchestrationService(db);
+    const taskPlans: { task: Awaited<ReturnType<typeof tasks.create>>; plan: Awaited<ReturnType<typeof plans.create>> }[] = [];
+    let releaseFirst!: () => void;
+    const firstResponse = new Promise<void>(resolve => { releaseFirst = resolve; });
+    let calls = 0;
+    const dispatchedPlanIds: string[] = [];
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      const call = ++calls;
+      expect(call).toBeLessThanOrEqual(2);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      const body = String(init.body);
+      expect(JSON.parse(body)).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(body).tools).toBeUndefined();
+      expect(body).toContain("assignedRuntimeContext");
+      expect(body).not.toContain(credential);
+      const current = taskPlans[call - 1]!;
+      const reservations = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, current.plan.id));
+      expect(reservations).toHaveLength(1);
+      expect(reservations[0]).toMatchObject({ status: "dispatched", maximumMinor: 3 });
+      dispatchedPlanIds.push(current.plan.id);
+      if (call === 1) await firstResponse;
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: `Internal draft ${call} retained for Human review.` }],
+        usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const consumer = workerModelGateway(db, { profiles: [profile], sourceSha,
+      protectedEvidenceOrigin: "https://protected.test.invalid", fetch });
+    const app = express(); app.use(express.json()); app.use(mcpGatewayProtocolRoutes(createToolGatewayService(db))); app.use(errorHandler);
+    const server = createServer(app);
+    const priorApiUrl = process.env.PAPERCLIP_API_URL;
+    let heartbeat: ReturnType<typeof heartbeatService> | undefined;
+    const substitution = vi.fn(() => { throw new Error("Installed draft controller must not use the provider backend seam"); });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => { server.off("error", reject); resolve(); });
+      });
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("capacity_draft_api_listener_missing");
+      process.env.PAPERCLIP_API_URL = `http://127.0.0.1:${address.port}`;
+      registerNativeDraftGateway(db, consumer);
+      heartbeat = heartbeatService(db, { nativeSessionBackendFactory: substitution });
+      for (const ordinal of [1, 2]) {
+        const draft = await tasks.create(f.home, { title: `Capacity-controlled internal draft ${ordinal}`,
+          description: "Retain one internal text document for Human review; no interactive tools or external effects.",
+          status: "todo", workMode: "standard", responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
+          { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+        const task = await tasks.update(draft.id, { assigneeAgentId: f.presence.id, actorUserId: f.userId, privacyActor: human });
+        if (!task) throw new Error("capacity_draft_task_missing");
+        const plan = await plans.create(human, f.home, { issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(),
+          workload: "semantic", riskClass: "C0", completionContract: { objective: `Retain internal draft ${ordinal} for Human review`,
+            requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["Human review remains required"] },
+          budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "native-writer", issueId: task.id }] });
+        await plans.decide(human, f.home, plan.id, { expectedVersion: plan.version, action: "start",
+          rationale: "Admit the existing one-call document controller subject to actual scheduler capacity" });
+        taskPlans.push({ task, plan });
+      }
+      const wake = (issueId: string) => heartbeat!.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId }, contextSnapshot: { issueId, wakeReason: "issue_assigned" } });
+      const first = await wake(taskPlans[0]!.task.id);
+      expect(first).not.toBeNull();
+      await vi.waitFor(() => {
+        expect(calls).toBe(1);
+        expect(dispatchedPlanIds).toEqual([taskPlans[0]!.plan.id]);
+      }, { timeout: 10_000, interval: 25 });
+      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, first!.id)))[0]?.status).toBe("running");
+      const second = await wake(taskPlans[1]!.task.id);
+      expect(second).not.toBeNull();
+      expect(second!.id).not.toBe(first!.id);
+      const queued = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, second!.id));
+      expect(queued[0]).toMatchObject({ status: "queued", contextSnapshot: { issueId: taskPlans[1]!.task.id } });
+      expect(calls).toBe(1);
+      expect(dispatchedPlanIds).toEqual([taskPlans[0]!.plan.id]);
+      expect(await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, taskPlans[1]!.plan.id))).toEqual([]);
+      expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, second!.id))).toEqual([]);
+      expect(substitution).not.toHaveBeenCalled();
+      releaseFirst();
+      await heartbeat.drainActiveRunExecutions();
+      const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+      expect(runs).toHaveLength(2);
+      expect(dispatchedPlanIds).toEqual(taskPlans.map(({ plan }) => plan.id));
+      expect(calls).toBe(2);
+      for (const [index, { task, plan }] of taskPlans.entries()) {
+        const runId = index === 0 ? first!.id : second!.id;
+        const run = runs.find(candidate => candidate.id === runId);
+        expect(run).toMatchObject({ nativeIssueId: task.id, responsibleUserId: f.userId,
+          runtimeMode: "native", driverKind: "aw_text_messages", status: "succeeded", error: null });
+        const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, plan.id));
+        expect(attempts).toHaveLength(1);
+        expect(attempts[0]).toMatchObject({ runId, agentId: f.presence.id });
+        const manifests = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId));
+        expect(manifests).toHaveLength(1);
+        expect(attempts[0]!.executionManifestId).toBe(manifests[0]!.id);
+        const reservations = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, plan.id));
+        expect(reservations).toHaveLength(1);
+        expect(reservations[0]).toMatchObject({ workerAttemptId: attempts[0]!.id, status: "completed", maximumMinor: 3,
+          usage: { inputTokens: 10, outputTokens: 20 } });
+        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0])
+          .toMatchObject({ toolActionsUsed: 2, modelCostReserved: 3 });
+        expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, runId)))
+          .toEqual([expect.objectContaining({ schemaStatus: "accepted" })]);
+        const receipt = nativeRunInputSourceReceiptSchema.parse(run?.runnerProfileJson?.nativeInputSourceReceipt);
+        expect(receipt.binding).toMatchObject({ companyId: f.home, agentId: f.presence.id, issueId: task.id, runId });
+        expect((await documentService(db).getIssueDocumentByKey(task.id, "result"))?.body)
+          .toBe(`Internal draft ${index + 1} retained for Human review.`);
+        const revisions = await db.select({ revision: documentRevisions }).from(issueDocuments)
+          .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+          .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, documents.companyId),
+            eq(documentRevisions.id, documents.latestRevisionId), eq(documentRevisions.documentId, documents.id)))
+          .where(and(eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));
+        expect(revisions).toHaveLength(1);
+        const source = nativePayloadSourceSnapshotSchema.parse(revisions[0]!.revision.payloadSourceSnapshot);
+        const intents = run?.runnerProfileJson?.nativeAwModelWireIntents;
+        if (!Array.isArray(intents) || intents.length !== 1) throw new Error("capacity_draft_wire_intent_missing");
+        const intent: unknown = intents[0];
+        if (!intent || typeof intent !== "object" || !("requestHash" in intent) || !("wireBodyHash" in intent))
+          throw new Error("capacity_draft_wire_intent_invalid");
+        expect(intent.requestHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(intent.wireBodyHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(source.inputs).toContainEqual(expect.objectContaining({ kind: "worker_model_dispatch", runId,
+          reservationId: reservations[0]!.id, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash }));
+        expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0]!.status).not.toBe("done");
+      }
+      expect(substitution).not.toHaveBeenCalled();
+    } finally {
+      releaseFirst();
+      try { await heartbeat?.drainActiveRunExecutions(); }
+      finally {
+        registerNativeDraftGateway(db, undefined);
+        if (priorApiUrl === undefined) delete process.env.PAPERCLIP_API_URL; else process.env.PAPERCLIP_API_URL = priorApiUrl;
+        server.closeAllConnections();
+        if (server.listening)
+          await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      }
+    }
+  }, 60_000);
+
 });

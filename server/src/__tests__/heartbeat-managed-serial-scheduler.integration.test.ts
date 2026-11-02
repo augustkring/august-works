@@ -108,7 +108,7 @@ it("keeps two real serial Plan/Run lifecycles on one Task isolated after actual 
           .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, `serial-result-${ordinal}`)));
         expect(output).toEqual([{ body: `Actual serial lifecycle ${ordinal} retained result.` }]);
         const leases = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, wake!.id)));
-        expect(leases).toHaveLength(1); expect(leases[0]).toMatchObject({ status: "released", cleanupStatus: "success", failureReason: null });
+        expect(leases).toHaveLength(1); expect(leases[0]).toMatchObject({ status: "expired", leasePolicy: "ephemeral", cleanupStatus: "success", failureReason: "paperclip_runner_destroy_after_turn" });
         expect(leases[0]!.releasedAt).toBeInstanceOf(Date);
         expect(await verifyNativeCleanupRuntimeState(db, { companyId, runId: wake!.id, leaseId: leases[0]!.id }, leases[0]!.metadata?.remoteExecutionTermination))
           .toMatchObject({ runId: wake!.id, leaseId: leases[0]!.id, state: "stopped" });

@@ -194,6 +194,28 @@ test("workspaces-a shards map to Vitest native --shard slices over a stable proj
   assert.equal(unsharded.workspacesVitestShard, null);
 });
 
+test("workspace groups cover every declared root project exactly once for every caller", () => {
+  // Read the deliberately static declaration without importing Vitest or its config graph.
+  const config = readFileSync(path.join(repoRoot, "vitest.config.ts"), "utf8");
+  const declaration = /projects:\s*\[([\s\S]*?)\]/.exec(config)?.[1];
+  assert.ok(declaration, "expected the root project declaration");
+  const literals = [...declaration.matchAll(/"([^"\n]+)"/g)];
+  assert.equal(declaration.replace(/"[^"\n]+"/g, "").replace(/[\s,]/g, ""), "",
+    "project declarations must stay explicit or this coverage check must be updated");
+  const declared = literals.map(([, directory]) =>
+    JSON.parse(readFileSync(path.join(repoRoot, directory, "package.json"), "utf8")).name);
+  assert.equal(new Set(declared).size, declared.length, "root project names must be unique");
+  const serverName = JSON.parse(readFileSync(path.join(repoRoot, "server", "package.json"), "utf8")).name;
+  assert.ok(declared.includes(serverName), "the server must remain a root project");
+  for (const caller of [undefined, "PR", "Release", "Cloud"]) {
+    const env = caller === undefined ? {} : { GITHUB_WORKFLOW: caller };
+    const selected = [serverName, ...["general-workspaces-a", "general-workspaces-b"].flatMap(group =>
+      dryRunJson(["--mode", "general", "--group", group], env).workspaceProjects)];
+    assert.equal(new Set(selected).size, selected.length, `workspace groups must not overlap for ${caller ?? "local"}`);
+    assert.deepEqual(selected.sort(), [...declared].sort(), `all root projects must run for ${caller ?? "local"}`);
+  }
+});
+
 test("duration-aware partition balances skewed weights better than round-robin", () => {
   // Round-robin puts all three heavy suites on shard 0 (indexes 0, 3, 6).
   const files = ["a", "b", "c", "d", "e", "f", "g", "h", "i"];

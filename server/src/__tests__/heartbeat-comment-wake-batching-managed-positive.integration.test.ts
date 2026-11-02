@@ -18,6 +18,8 @@ let completedTests = 0;
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), "heartbeat-comment-managed-positive-"));
   vi.stubEnv("PAPERCLIP_HOME", home);
+  vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
+  vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
   database = await startEmbeddedPostgresTestDatabase("heartbeat-comment-managed-positive-", { preserveDataOnFailure: () => completedTests !== 3 });
   db = createDb(database.connectionString);
 }, 60_000);

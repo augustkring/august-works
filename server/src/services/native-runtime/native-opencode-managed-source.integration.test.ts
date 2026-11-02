@@ -38,6 +38,7 @@ let instanceId = "";
 const projectApiServers: Array<ReturnType<typeof createServer>> = [];
 beforeAll(async () => {
   if (!hasPinnedOpenCodeProfile()) return;
+  vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
   root = await mkdtemp(join(tmpdir(), "managed-opencode-source-scheduler-")); await chmod(root, 0o700);
   vi.stubEnv("PAPERCLIP_HOME", root);
   database = await startEmbeddedPostgresTestDatabase("managed-opencode-source-scheduler-"); db = createDb(database.connectionString);

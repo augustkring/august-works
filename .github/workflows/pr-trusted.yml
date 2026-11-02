@@ -728,7 +728,7 @@ jobs:
               test -n "$current" || current=/
             done
           }
-          for observer_target in "$trusted_node_dir/node" "$observer_dir/native-session-handles-v1" "$observer_dir/native-session-handles-v1.mjs"; do
+          for observer_target in "$trusted_node_dir/node" "$observer_dir/native-session-handles-v1" "$observer_dir/native-session-handles-v1.mjs" "$observer_dir/native-model-socket-v1" "$observer_dir/native-model-socket-v1.mjs"; do
             if [[ -e "$observer_target" || -L "$observer_target" ]]; then test -f "$observer_target"; fi
             observer_check_chain "$observer_target"
           done
@@ -738,6 +738,16 @@ jobs:
           for observer_name in native-session-handles-v1 native-session-handles-v1.mjs; do
             observer_expected=9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8
             [[ "$observer_name" != *.mjs ]] || observer_expected=7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55
+            if [[ -e "$observer_dir/$observer_name" ]]; then
+              echo "$observer_expected  $observer_dir/$observer_name" | /usr/bin/sha256sum --check --strict
+            fi
+          done
+          # Separate fixed read-only live socket observer; no Stop/erasure authority.
+          echo "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079  scripts/fixtures/native-model-socket-observer" | /usr/bin/sha256sum --check --strict
+          echo "0c37aeb3918777cf967617f248b4841e7797e4097e813aff72806580a7e488ef  scripts/fixtures/native-model-socket-observer.mjs" | /usr/bin/sha256sum --check --strict
+          for observer_name in native-model-socket-v1 native-model-socket-v1.mjs; do
+            observer_expected=ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079
+            [[ "$observer_name" != *.mjs ]] || observer_expected=0c37aeb3918777cf967617f248b4841e7797e4097e813aff72806580a7e488ef
             if [[ -e "$observer_dir/$observer_name" ]]; then
               echo "$observer_expected  $observer_dir/$observer_name" | /usr/bin/sha256sum --check --strict
             fi
@@ -754,10 +764,18 @@ jobs:
           if [[ ! -e "$observer_dir/native-session-handles-v1.mjs" ]]; then
             sudo install -o root -g root -m 0444 scripts/fixtures/native-session-handle-observer.mjs "$observer_dir/native-session-handles-v1.mjs"
           fi
+          if [[ ! -e "$observer_dir/native-model-socket-v1" ]]; then
+            sudo install -o root -g root -m 0555 scripts/fixtures/native-model-socket-observer "$observer_dir/native-model-socket-v1"
+          fi
+          if [[ ! -e "$observer_dir/native-model-socket-v1.mjs" ]]; then
+            sudo install -o root -g root -m 0444 scripts/fixtures/native-model-socket-observer.mjs "$observer_dir/native-model-socket-v1.mjs"
+          fi
           /usr/bin/cmp -s "$(command -v node)" "$trusted_node_dir/node"
           echo "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8  $observer_dir/native-session-handles-v1" | /usr/bin/sha256sum --check --strict
           echo "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55  $observer_dir/native-session-handles-v1.mjs" | /usr/bin/sha256sum --check --strict
-          for observer_target in "$trusted_node_dir/node" "$observer_dir/native-session-handles-v1" "$observer_dir/native-session-handles-v1.mjs"; do
+          echo "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079  $observer_dir/native-model-socket-v1" | /usr/bin/sha256sum --check --strict
+          echo "0c37aeb3918777cf967617f248b4841e7797e4097e813aff72806580a7e488ef  $observer_dir/native-model-socket-v1.mjs" | /usr/bin/sha256sum --check --strict
+          for observer_target in "$trusted_node_dir/node" "$observer_dir/native-session-handles-v1" "$observer_dir/native-session-handles-v1.mjs" "$observer_dir/native-model-socket-v1" "$observer_dir/native-model-socket-v1.mjs"; do
             observer_check_chain "$observer_target"
           done
           # Run ONLY the finite unprivileged kernel control; the observer itself cannot signal/write.
@@ -765,6 +783,10 @@ jobs:
           /usr/bin/timeout --kill-after=2s 12s /usr/bin/env -i PATH=/usr/bin:/bin "$trusted_node_dir/node" --no-addons --disable-proto=throw scripts/fixtures/native-session-handle-observer-check.mjs
           echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
           echo "PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER=1" >> "$GITHUB_ENV"
+          # Qualify actual same-UID nondumpable completeness and socket ownership before enabling this distinct lane.
+          echo "edc06751c7f925f5d9c627abe04e6a0982b7959256b447ae327ce16a0043666d  scripts/fixtures/native-model-socket-observer-check.mjs" | /usr/bin/sha256sum --check --strict
+          /usr/bin/timeout --kill-after=2s 12s /usr/bin/env -i PATH=/usr/bin:/bin "$trusted_node_dir/node" --no-addons --disable-proto=throw scripts/fixtures/native-model-socket-observer-check.mjs
+          echo "PAPERCLIP_TEST_PRIVILEGED_MODEL_SOCKET_OBSERVER=1" >> "$GITHUB_ENV"
           # The disposable GitHub image exposes this root-owned PATH directory
           # as 0777. Lock that known image directory before workspace installs;
           # self-hosted images retain their operator-managed permissions.

@@ -167,7 +167,8 @@ it("runs a real capped Project Worker in its realized worktree without changing 
       const leases = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
         eq(environmentLeases.heartbeatRunId, wake!.id)));
       expect(leases).toHaveLength(1);
-      expect(leases[0]).toMatchObject({ status: "released", cleanupStatus: "success", failureReason: null });
+      expect(leases[0]).toMatchObject({ status: "expired", leasePolicy: "ephemeral", cleanupStatus: "success", failureReason: "paperclip_runner_destroy_after_turn" });
+      expect(leases[0]!.releasedAt).toBeInstanceOf(Date);
       expect(await verifyNativeCleanupRuntimeState(db, { companyId, runId: wake!.id, leaseId: leases[0]!.id },
         leases[0]!.metadata?.remoteExecutionTermination)).toMatchObject({ state: "stopped", runId: wake!.id });
       expect(providerSourceChecks).toBe(reservations.length);

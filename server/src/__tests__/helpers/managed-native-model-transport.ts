@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
-import { closeSync, createReadStream, fstatSync, openSync, lstatSync, readFileSync, readdirSync, readlinkSync, readSync, statSync } from "node:fs";
+import { closeSync, createReadStream, fstatSync, openSync, lstatSync, readFileSync, readdirSync, readlinkSync, readSync, realpathSync, statSync } from "node:fs";
 import type { ReadStream } from "node:fs";
 import type { Socket } from "node:net";
+import { spawnSync } from "node:child_process";
+import { dirname } from "node:path";
 
 export type ModelProviderObservation = { token: string; capabilityHash: string; expiresAt: string;
   imageSha256: string; imageBytes: number; manifestDigest: string; runPid: number | null; runStartedAt: string | null };
@@ -23,7 +25,88 @@ function endpoint(address: string | undefined, port: number | undefined) {
   checked(address === "127.0.0.1" && Number.isInteger(port) && port! > 0 && port! <= 65535);
   return `0100007F:${port!.toString(16).padStart(4, "0").toUpperCase()}`;
 }
+// CI-only fixed operation; a live model origin is still authorized by observation() below.
+function privilegedSocketOwner(client: Socket, until: number) {
+  const launcher = "/usr/local/libexec/paperclip-fixture-observers/native-model-socket-v1";
+  const scanner = `${launcher}.mjs`;
+  const node = "/usr/local/libexec/paperclip-erasure-test-node/node";
+  const observerUid = process.getuid?.();
+  checked(!client.destroyed && Number.isSafeInteger(observerUid) && (observerUid ?? 0) > 0 && Date.now() < until);
+  const local = endpoint(client.remoteAddress, client.remotePort), remote = endpoint(client.localAddress, client.localPort);
+  const fileHash = (file: string, limit: number) => {
+    const fd = openSync(file, "r");
+    try {
+      const before = fstatSync(fd); checked(before.isFile() && before.size > 0 && before.size <= limit);
+      const digest = createHash("sha256"), chunk = Buffer.allocUnsafe(64 * 1024); let total = 0;
+      while (true) {
+        checked(Date.now() < until);
+        const bytes = readSync(fd, chunk, 0, chunk.length, null); if (bytes === 0) break;
+        total += bytes; checked(total <= limit); digest.update(chunk.subarray(0, bytes));
+      }
+      const after = fstatSync(fd);
+      checked(total === before.size && before.dev === after.dev && before.ino === after.ino && before.size === after.size &&
+        before.mtimeMs === after.mtimeMs && before.ctimeMs === after.ctimeMs);
+      return digest.digest("hex");
+    } finally { closeSync(fd); }
+  };
+  // Bind the fixed root-owned Node to the actual trusted fixture process image, not an ambient path/hash variable.
+  const expectedNodeHash = fileHash("/proc/self/exe", 256 * 1024 * 1024);
+  const qualification = () => {
+    const identities: unknown[] = [];
+    for (const [file, expectedHash] of [[launcher, "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079"], [scanner, "0c37aeb3918777cf967617f248b4841e7797e4097e813aff72806580a7e488ef"],
+      [node, expectedNodeHash], ["/usr/bin/sudo", null], ["/usr/bin/env", null], ["/usr/bin/id", null], ["/bin/sh", null]] as const) {
+      const resolved = realpathSync(file), entry = lstatSync(file), metadata = lstatSync(resolved);
+      checked(entry.uid === 0 && (entry.isSymbolicLink() || (entry.mode & 0o22) === 0));
+      for (let parent = dirname(file); ; parent = dirname(parent)) {
+        const ancestor = lstatSync(parent); checked(ancestor.uid === 0 && (ancestor.isSymbolicLink() || (ancestor.mode & 0o6022) === 0));
+        if (parent === "/") break;
+      }
+      const forbidden = file === "/usr/bin/sudo" ? 0o2022 : 0o6022;
+      checked(metadata.isFile() && !metadata.isSymbolicLink() && metadata.uid === 0 && (metadata.mode & forbidden) === 0 &&
+        (file === scanner || (metadata.mode & 0o111) !== 0));
+      if (file === launcher || file === scanner || file === node) checked(resolved === file);
+      for (let current = resolved; ; current = dirname(current)) {
+        const ancestor = lstatSync(current);
+        checked(!ancestor.isSymbolicLink() && ancestor.uid === 0 && (ancestor.mode & (current === resolved ? forbidden : 0o6022)) === 0);
+        if (current === "/") break;
+      }
+      if (expectedHash) checked(fileHash(file, file === node ? 256 * 1024 * 1024 : 32 * 1024) === expectedHash);
+      identities.push({ file, resolved, dev: metadata.dev, ino: metadata.ino, size: metadata.size,
+        mtimeMs: metadata.mtimeMs, ctimeMs: metadata.ctimeMs, mode: metadata.mode, uid: metadata.uid, gid: metadata.gid });
+    }
+    return JSON.stringify(identities);
+  };
+  const before = qualification();
+  const request = JSON.stringify({ schema: "paperclip.fixture.native-model-socket.v1", observerUid,
+    localPort: client.remotePort, remotePort: client.localPort, deadlineAt: until });
+  checked(Buffer.byteLength(request) <= 4096 && !client.destroyed && Date.now() < until);
+  const result = spawnSync("/usr/bin/sudo", ["-n", "--", launcher], { input: request, encoding: "utf8", cwd: "/",
+    env: { PATH: "/usr/bin:/bin" }, timeout: Math.max(1, until - Date.now()), maxBuffer: 8192 });
+  checked(!result.error && !result.signal && result.status === 0 && result.stderr === "" &&
+    typeof result.stdout === "string" && Buffer.byteLength(result.stdout) <= 8192 && Date.now() < until);
+  const response: unknown = JSON.parse(result.stdout);
+  checked(response && typeof response === "object" && !Array.isArray(response));
+  const value = response as Record<string, unknown>;
+  checked(Number.isSafeInteger(value.observerMaxRssBytes) && (value.observerMaxRssBytes as number) > 0 &&
+    (value.observerMaxRssBytes as number) <= 64 * 1024 * 1024);
+  if (value.complete === false) {
+    const stages = ["table_open", "table_read", "tuple", "proc_list", "process_directory_stat", "process_state_read",
+      "fd_directory_list", "fd_readlink", "owner_count", "memory_bound"];
+    const errnos = ["ENOENT", "ESRCH", "EACCES", "EPERM", "EBADF", "EIO", "ENOTDIR", "ELOOP", "EMFILE", "ENFILE", "EINVAL", "OTHER"];
+    checked(Object.keys(value).sort().join(",") === "complete,errno,observerMaxRssBytes,stage" && typeof value.stage === "string" && stages.includes(value.stage) &&
+      (value.errno === null || typeof value.errno === "string" && errnos.includes(value.errno)));
+    throw Object.assign(new Error("model_channel_observation_unavailable"), { code: value.errno ?? "OTHER" });
+  }
+  checked(value.complete === true && Object.keys(value).sort().join(",") === "complete,inode,local,observerMaxRssBytes,pid,remote" &&
+    Number.isSafeInteger(value.pid) && (value.pid as number) > 0 && typeof value.inode === "string" && /^[1-9]\d*$/.test(value.inode) &&
+    value.local === local && value.remote === remote);
+  checked(qualification() === before && !client.destroyed && Date.now() < until &&
+    endpoint(client.remoteAddress, client.remotePort) === local && endpoint(client.localAddress, client.localPort) === remote);
+  return { pid: value.pid as number, inode: value.inode as string, local, remote };
+}
+
 function socketOwner(client: Socket, until: number) {
+  if (process.env.PAPERCLIP_TEST_PRIVILEGED_MODEL_SOCKET_OBSERVER === "1") return privilegedSocketOwner(client, until);
   checked(!client.destroyed);
   const local = endpoint(client.remoteAddress, client.remotePort), remote = endpoint(client.localAddress, client.localPort);
   const fd = openSync("/proc/net/tcp", "r"), chunks: Buffer[] = []; let total = 0;

@@ -48,7 +48,10 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
     return railway.request(...args);
   };
   const previousApi = process.env.PAPERCLIP_API_URL;
+  const previousSourceDiagnostics = process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS;
   try {
+    // Existing server-owned closed-field projection; never print the raw error.
+    process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS = "1";
     await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: binary, timeoutSec: 180,
       schedulerMode: "serial", assignedToolGatewayHttpRequest: request,
       prepareNativeRuntimeContext: async ({ companyId, agentId, actor }) => {
@@ -195,8 +198,11 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
             const leases = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
               eq(environmentLeases.heartbeatRunId, first.run.id)));
             const [terminal] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, first.run.id));
-            return leases.length > 0 && leases.every(lease => lease.status === "released" && lease.cleanupStatus === "success")
-              && terminal?.nativeProcessCleanupPending === false;
+            // This fixture destroys each non-reusable provider resource. The
+            // current signed Stop proof is still independently verified below.
+            return leases.length > 0 && leases.every(lease => lease.status === "expired" && lease.leasePolicy === "ephemeral" &&
+              lease.cleanupStatus === "success" && lease.failureReason === "paperclip_runner_destroy_after_turn" &&
+              lease.releasedAt instanceof Date) && terminal?.nativeProcessCleanupPending === false;
           }, { timeout: remaining() }).toBe(true);
           for (const lease of await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
             eq(environmentLeases.heartbeatRunId, first.run.id)))) {
@@ -270,6 +276,8 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
     });
     completed = true;
   } finally {
+    if (previousSourceDiagnostics === undefined) delete process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS;
+    else process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS = previousSourceDiagnostics;
     if (previousApi === undefined) delete process.env.PAPERCLIP_API_URL; else process.env.PAPERCLIP_API_URL = previousApi;
     try { await db.$client.end({ timeout: 5 }); } finally { await database.cleanup(); }
     // Preserve the actual Run/Host tree for failed two-Run provenance audits.

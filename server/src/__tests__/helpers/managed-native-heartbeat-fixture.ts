@@ -36,7 +36,7 @@ import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
 import { createToolGatewayService } from "../../services/tool-gateway.js";
 import { mcpGatewayProtocolRoutes } from "../../routes/tool-gateway.js";
-import { registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
+import { getAssignedMcpGateway, registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
 
 const sourceSha = "a".repeat(40);
@@ -323,9 +323,12 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   // fixture that URL's real protocol endpoint instead of pointing it at a
   // dummy base URL or suppressing managed MCP delivery.
   const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest });
-  if (input.afterSuccessfulAssignedToolResult) {
-    const executeAssignedTool = assignedToolGateway.executeTool.bind(assignedToolGateway);
-    assignedToolGateway.executeTool = async (call, workflowContext, scopedContext) => {
+  const observedAssignedGateways = new WeakSet<ReturnType<typeof createToolGatewayService>>();
+  function observeAssignedGateway(owner: ReturnType<typeof createToolGatewayService>) {
+    if (!input.afterSuccessfulAssignedToolResult || observedAssignedGateways.has(owner)) return;
+    observedAssignedGateways.add(owner);
+    const executeAssignedTool = owner.executeTool.bind(owner);
+    owner.executeTool = async (call, workflowContext, scopedContext) => {
       // Capture the exact plain request before the asynchronous owner call. The
       // workflow and scoped contexts remain the original owner objects.
       const capturedCall = structuredClone(call);
@@ -338,6 +341,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       return result;
     };
   }
+  observeAssignedGateway(assignedToolGateway);
   registerAssignedMcpGateway(db, assignedToolGateway);
   brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
   const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();
@@ -605,6 +609,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
     providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
     brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest, observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
+  // Host setup installs its actual configured gateway. Observe that owner too;
+  // do not replace its registration, transaction factory or qualification options.
+  if (input.afterSuccessfulAssignedToolResult) observeAssignedGateway(getAssignedMcpGateway(db));
   if (input.beforeManagedModelRequest && sandboxHeartbeat) {
     const originalModelRequest = sandboxHeartbeat.modelRequest;
     if (!originalModelRequest) throw new Error("scheduler_fixture_model_observer_host_method_missing");
