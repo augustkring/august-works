@@ -837,8 +837,31 @@ export async function configureManagedConversationSandboxHost(input: {
     const rows = result.stdout.trim().split(/\n+/).filter(Boolean);
     return rows.length === 1 && rows[0]!.trim().startsWith("Z");
   };
+  const nativeSessionHandleScanFailures: Array<{ stage: string; errno: string | null; elapsedMs: number;
+    deadlineRemainingMs: number | null; numericPidsScanned: number; sameUidProcesses: number;
+    nonZombieProcesses: number; fdEntriesScanned: number }> = [];
   const nativeSessionHandleFacts = (sourceSessions: string, upperSessions: string, deadlineMs: number) => {
-    if (Date.now() >= deadlineMs || typeof process.getuid !== "function") return { holders: null, complete: false };
+    const startedAt = Date.now();
+    let numericPidsScanned = 0, sameUidProcesses = 0, nonZombieProcesses = 0, fdEntriesScanned = 0;
+    const failed = (stage: "initial_deadline" | "uid_api_unavailable" | "process_deadline" | "process_directory_stat" |
+      "process_state_read" | "cwd_readlink" | "fd_directory_list" | "fd_deadline" | "fd_readlink" | "proc_list_or_outer",
+      error?: unknown) => {
+      const code = error && typeof error === "object" && "code" in error ? error.code : null;
+      const errno = code === null ? null : typeof code === "string" &&
+        ["ENOENT", "ESRCH", "EACCES", "EPERM", "EBADF", "EIO", "ENOTDIR", "ELOOP", "EMFILE", "ENFILE", "EINVAL"].includes(code)
+        ? code : "OTHER";
+      const now = Date.now();
+      const fact = { stage, errno, elapsedMs: Math.max(0, now - startedAt),
+        deadlineRemainingMs: Number.isFinite(deadlineMs) ? Math.trunc(deadlineMs - now) : null,
+        numericPidsScanned, sameUidProcesses, nonZombieProcesses, fdEntriesScanned };
+      nativeSessionHandleScanFailures.push(fact);
+      if (nativeSessionHandleScanFailures.length > 8) nativeSessionHandleScanFailures.shift();
+      if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+        try { console.info("conversation_software_host_fd_scan_failed", JSON.stringify(fact)); } catch { /* Diagnostic only. */ }
+      }
+      return { holders: null, complete: false };
+    };
+    if (Date.now() >= deadlineMs || typeof process.getuid !== "function") return failed(typeof process.getuid !== "function" ? "uid_api_unavailable" : "initial_deadline");
     let holders = 0;
     const trustedUid = process.getuid();
     const within = (value: string) => value === sourceSessions || value.startsWith(`${sourceSessions}/`) ||
@@ -846,16 +869,18 @@ export async function configureManagedConversationSandboxHost(input: {
     try {
       for (const entry of readdirSync("/proc")) {
         if (!/^\d+$/.test(entry)) continue;
-        if (Date.now() >= deadlineMs) return { holders: null, complete: false };
+        if (Date.now() >= deadlineMs) return failed("process_deadline");
+        numericPidsScanned++;
         const proc = join("/proc", entry);
         let procStat;
         try { procStat = statSync(proc); }
         catch (error) {
           const code = (error as NodeJS.ErrnoException).code;
           if (code === "ENOENT" || code === "ESRCH") continue;
-          return { holders: null, complete: false };
+          return failed("process_directory_stat", error);
         }
         if (procStat.uid !== trustedUid) continue;
+        sameUidProcesses++;
         let processState: string;
         try {
           const statText = readFileSync(join(proc, "stat"), "utf8");
@@ -864,34 +889,36 @@ export async function configureManagedConversationSandboxHost(input: {
         } catch (error) {
           const code = (error as NodeJS.ErrnoException).code;
           if (code === "ENOENT" || code === "ESRCH") continue;
-          return { holders: null, complete: false };
+          return failed("process_state_read", error);
         }
         if (processState === "Z") continue;
+        nonZombieProcesses++;
         try {
           const cwd = readlinkSync(join(proc, "cwd"));
           if (within(cwd)) holders++;
         } catch (error) {
           const code = (error as NodeJS.ErrnoException).code;
-          if (code !== "ENOENT" && code !== "ESRCH") return { holders: null, complete: false };
+          if (code !== "ENOENT" && code !== "ESRCH") return failed("cwd_readlink", error);
         }
         let descriptors: string[];
         try { descriptors = readdirSync(join(proc, "fd")); }
         catch (error) {
           const code = (error as NodeJS.ErrnoException).code;
           if (code === "ENOENT" || code === "ESRCH") continue;
-          return { holders: null, complete: false };
+          return failed("fd_directory_list", error);
         }
         for (const descriptor of descriptors) {
-          if (Date.now() >= deadlineMs) return { holders: null, complete: false };
+          if (Date.now() >= deadlineMs) return failed("fd_deadline");
+          fdEntriesScanned++;
           try { if (within(readlinkSync(join(proc, "fd", descriptor)))) holders++; }
           catch (error) {
             const code = (error as NodeJS.ErrnoException).code;
-            if (code !== "ENOENT" && code !== "ESRCH") return { holders: null, complete: false };
+            if (code !== "ENOENT" && code !== "ESRCH") return failed("fd_readlink", error);
           }
         }
       }
       return { holders, complete: true };
-    } catch { return { holders: null, complete: false }; }
+    } catch (error) { return failed("proc_list_or_outer", error); }
   };
   const attachActualNativeSessionBacking = async (command: Record<string, any>, deadlineMs: number) => {
     const descriptor = command.nativeSessionErasure as Record<string, any> | undefined;
@@ -2951,6 +2978,7 @@ export async function configureManagedConversationSandboxHost(input: {
         executables:[...new Set(execFacts.map(fact=>fact.executable.split("/").at(-1)))],lastExecs:execFacts.slice(-6),credentialProbes:qualificationToolResponses,
         hostSessionErrorFacts:execFacts.flatMap(fact=>fact.hostSessionErrorDetails?[fact.hostSessionErrorDetails]:[]).slice(-8),
         hostRelayPreflightFacts:relayPreflightFacts.slice(-8),
+        nativeSessionHandleScanFailures: structuredClone(nativeSessionHandleScanFailures),
         nativeRunnerClosureWitness:safeNativeRunnerClosureObservation(),
         softwareProbeCount:softwareProbeObservations.length,qualificationEvidence,failures:sandboxExecutionFailures}));
       const sandboxStageCounts = execFacts.reduce<Record<string, { calls: number; nonzeroExits: number; timeouts: number }>>((counts, fact) => {
@@ -2969,6 +2997,7 @@ export async function configureManagedConversationSandboxHost(input: {
       modelBrokerSessionReceipts: [...modelBrokerSessionReceipts],
       nativeSessionBackingObservations: [...nativeSessionBackingObservations],
       nativeRunnerClosureWitness: safeNativeRunnerClosureObservation(),
+      nativeSessionHandleScanFailures: structuredClone(nativeSessionHandleScanFailures),
       nativeSessionBackingTransfers: [...nativeSessionBackingByKey.values()].map(value => ({
         sessionDigest: value.sessionDigest, taskRootMatches: value.taskRoot === expectedTaskRoot,
         rootIdentityWitnessed: value.witnessMatched,
