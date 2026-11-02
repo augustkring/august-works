@@ -1,0 +1,5 @@
+# R79 private source recovery
+
+Recovery only against pushed Main `184b1125b413b130d5b1480579b0933dd402b87c`. Changed private sources, exact pins and scoped receipts are preserved as portable bytes. This includes reviewed deferred ordinary Worker workspace/artifact preparation, scheduler admission, stopped-session replay, Host/C7 fixture composition, CLI focus ownership, a caller deadline and signoff timeout diagnostics. Matching source is recoverable from the pinned baseline commit.
+
+The combined candidate has not yet passed TypeScript or actual scheduler/C7 acceptance. A prior four-source coherent compiler was OOM-killed; no SDK run was started from it. CLI component tests37, whole UI typing and token gates pass, but its original Chromium journey is pending. The signoff diagnostic preserves the original expectations. Metadata and aggregate activation remain pending. No raw database, active log or credentials are included. Do not apply unqualified recovery sources as accepted application code.

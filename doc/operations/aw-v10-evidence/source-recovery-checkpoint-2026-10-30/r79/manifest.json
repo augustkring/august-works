@@ -1,0 +1,531 @@
+{
+  "schemaVersion": 1,
+  "kind": "Recovery only, not source activation or acceptance",
+  "sourceBaselineHead": "184b1125b413b130d5b1480579b0933dd402b87c",
+  "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "cohorts": [
+    {
+      "name": "workspace-coherent-r4",
+      "capturedManifestSha256": "b9f21eae56b3d348c48e9b0fac801838dad1a27b33047c1740d2edf8641d209d",
+      "changedSourcePaths": [
+        {
+          "path": "packages/adapter-utils/src/command-managed-runtime.ts",
+          "baselineSha256": "1392bc738bf752cabfa89e3e843a07afb6fa6eb86afe05af227f3196f69fafc9",
+          "candidateSha256": "06729e4261b920ebd418660fd0522aadabdef4eb2e866130f7abab79eeec30fc"
+        },
+        {
+          "path": "packages/adapter-utils/src/execution-target.ts",
+          "baselineSha256": "20d05b2e968fd2adb47b576c68819e449fb5fcd57bbf0d7f196ee5f8f428af33",
+          "candidateSha256": "78a8d867cc1eda9cc17ab22975f2bae3634787fdf372fd8471295057704e22b2"
+        },
+        {
+          "path": "packages/adapter-utils/src/sandbox-managed-runtime.ts",
+          "baselineSha256": "f4b4bb2c71d4f92f04533f8db0a4acc888999ebb496b8ad59bce80730096281c",
+          "candidateSha256": "3c6c8455f5cce1de2b4a4f3d170eb5147ebcbb4f6af5c80f2a042f86ba36187a"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+          "baselineSha256": null,
+          "candidateSha256": "284efa9e6e77f8242f7afc8a6f09eff831b0bee1334ef6b6e86b5efa8d4a55fb"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+          "baselineSha256": "16e9c5e9d9094a245f431c4501df74a84654123284af062e9cd35ffee443cebd",
+          "candidateSha256": "a30fbd3d77c39ea22c3fe482f1942627fd3caccea4ed1ef123e9f1715c7e7736"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+          "baselineSha256": null,
+          "candidateSha256": "c6c1f13b4c81a55231142cd1579f4e100c74cce79eb7eb6d9617f9b56e638371"
+        },
+        {
+          "path": "server/src/services/heartbeat-github-launchers.ts",
+          "baselineSha256": "8d3babb75a866f667212871c20c08423cc05ae14201cfc75a03aa6e4c923ac8a",
+          "candidateSha256": "6b292a243ebd5fb23c4c5c9d9224263438a0008588ceb13fdd12ae35a3d3a2ef"
+        },
+        {
+          "path": "server/src/services/heartbeat.ts",
+          "baselineSha256": "2e96c2238f3aefa732745a8fbf9da91a10247cbf04ea9af686b4631d73f8141d",
+          "candidateSha256": "80e83df511d2e50e36d8116e6159dd4abe3f7c5b2224e5fac1bf7e38d1381f50"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-artifact-preparation.ts",
+          "baselineSha256": null,
+          "candidateSha256": "2a9d5422bd1b31174568356946fb00a3db2acd2fef7ba533259fdf9f9d1d2f24"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+          "baselineSha256": "54b9d1b1cc33797f76979adb36bedb12ac19a8ff6bb87863dd0e376ee696ba2f",
+          "candidateSha256": "24f5bce4f26219daba7bb47f2409a5ae56929a95b995131d6b18c3e20fd686ba"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-session-executor.test.ts",
+          "baselineSha256": "eb5d842ed30a4d5aa5368bd62fbfd9c8146277f81ea53aa89a2c02a891b51966",
+          "candidateSha256": "48b8fb2395f409d4e8a7000dd508b446f5bd742da87d9090d342880f1352102b"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-session-executor.ts",
+          "baselineSha256": "614e1e561efca35be5b5ddb024b845848f3310ffd6baa88644a67dea5d76acd8",
+          "candidateSha256": "9d4b1f5d64c533ea31686abaae6565a7cab5809d302889bef0df0c31107bf55b"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-workspace-sync.ts",
+          "baselineSha256": "55a77ab0afaae05c71823f6ef3d22728bac4a594312debc1527248c8a1b87e3a",
+          "candidateSha256": "8c75e5f7e21e9e9b23519083073594b22e62c9d0c3bfaa2389ea4d157d0661ac"
+        },
+        {
+          "path": "server/src/services/native-runtime/runtime-asset-retention.test.ts",
+          "baselineSha256": "665479374ec3799797dc7ff98484d2eb82e4900c2eada85dca62cacc01a608d6",
+          "candidateSha256": "756827884f238dc3c91425b30c1ee94217d5c0897bdd6a13d467b28eef34248b"
+        },
+        {
+          "path": "server/src/services/native-runtime/runtime-asset-retention.ts",
+          "baselineSha256": "d16425ddcd239a8b9a43438e2aaf03a25d5427a9e0381e15cd39a161372b9825",
+          "candidateSha256": "9b334eec762bf63326eea35f65e4d2e5fc2d0e2a9773f3a01c00f2bdc0caca39"
+        },
+        {
+          "path": "server/src/services/orchestration/native-draft-runtime.ts",
+          "baselineSha256": "dd70fb31148dd5df199597f897affe2ec487351d0b5c021b1e8371f47e58ac36",
+          "candidateSha256": "10c4fe58eb75dc2442a50559c13409c216cb2e15ce4c0618a542b12b47a2a8cf"
+        },
+        {
+          "path": "server/src/services/orchestration/worker-model-gateway.ts",
+          "baselineSha256": "3556e066742fa42fa2044fb38dab96e909296dedda3212fd0451f9421944c4f5",
+          "candidateSha256": "a09849d29591328f2ac901b3beefc85902648225953854fd2532665c3face106"
+        },
+        {
+          "path": "server/src/services/runtime/control.ts",
+          "baselineSha256": "7a7ea57a6c6db89750fa666de35e6b0f30b026d212af7356982ab7618c226b7a",
+          "candidateSha256": "ec9c269c08a35d443e1a2dd672c9cdb59feeba419441bb38b2bc2d247fc48850"
+        },
+        {
+          "path": "server/src/services/runtime/native-runtime-context-preparation.test.ts",
+          "baselineSha256": "e3e515de6a07bc812d6916b1ea35d0b677cee537298391461aa8eee9f036a324",
+          "candidateSha256": "701b2e9d0ccf8ba6907118ae3bb18375b319be68a86ae28ef368e376a500d931"
+        }
+      ],
+      "qualification": "Recovery only. Source review and component evidence are scoped; combined TS, scheduler, C7 and final acceptance are pending."
+    },
+    {
+      "name": "cli-focus-r3",
+      "capturedManifestSha256": "dc1a82027b935c7df0bc02331579cb709470edbb75d184c96526dd64bfeee791",
+      "changedSourcePaths": [
+        {
+          "path": "ui/src/pages/CliAuth.tsx",
+          "baselineSha256": "7b62e07376bb19e3de7b1add42df0a47b267bb433a743b7741d5b62ae155f008",
+          "candidateSha256": "f5f6a2aa8e97b7d70a1fba769a24f985ed738d9d5a191edb1dfdc6e819fc1c27"
+        },
+        {
+          "path": "ui/src/pages/Auth.test.tsx",
+          "baselineSha256": "0e10bf76cdca2497a579dbca11bf445bddcc0e9c45de03363d138dffbe1624b2",
+          "candidateSha256": "a133e672562820a1ea94f2a2705ac4385d2d03eff45e831b18a0684f067e5c19"
+        }
+      ],
+      "qualification": "Recovery only. Source review and component evidence are scoped; combined TS, scheduler, C7 and final acceptance are pending."
+    },
+    {
+      "name": "native-caller-deadline",
+      "capturedManifestSha256": "c845f421724465e56ab6cbe93a9cedcba06be472422452f6182c057d2c57f17d",
+      "changedSourcePaths": [
+        {
+          "path": "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
+          "baselineSha256": "2048522980b3e540b752987b2a30bc55c9106caccd33a07e2185140cb6135ca6",
+          "candidateSha256": "1cac09626bad82e4b5fbe0839ddcf3de2a25e581e8fafea587127715d68a1998"
+        }
+      ],
+      "qualification": "Recovery only. Source review and component evidence are scoped; combined TS, scheduler, C7 and final acceptance are pending."
+    }
+  ],
+  "entries": [
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/source-pins.json",
+      "archivePath": "cohorts/workspace-coherent-r4/source-pins.json",
+      "sha256": "b9f21eae56b3d348c48e9b0fac801838dad1a27b33047c1740d2edf8641d209d",
+      "bytes": 137903,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595555692678989
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/packages/adapter-utils/src/command-managed-runtime.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/packages/adapter-utils/src/command-managed-runtime.ts",
+      "sha256": "06729e4261b920ebd418660fd0522aadabdef4eb2e866130f7abab79eeec30fc",
+      "bytes": 33042,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793593442040001586
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/packages/adapter-utils/src/execution-target.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/packages/adapter-utils/src/execution-target.ts",
+      "sha256": "78a8d867cc1eda9cc17ab22975f2bae3634787fdf372fd8471295057704e22b2",
+      "bytes": 213902,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793592142924533837
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/packages/adapter-utils/src/sandbox-managed-runtime.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/packages/adapter-utils/src/sandbox-managed-runtime.ts",
+      "sha256": "3c6c8455f5cce1de2b4a4f3d170eb5147ebcbb4f6af5c80f2a042f86ba36187a",
+      "bytes": 90660,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793592142926794203
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+      "sha256": "284efa9e6e77f8242f7afc8a6f09eff831b0bee1334ef6b6e86b5efa8d4a55fb",
+      "bytes": 9988,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793586227277007182
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "a30fbd3d77c39ea22c3fe482f1942627fd3caccea4ed1ef123e9f1715c7e7736",
+      "bytes": 229627,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595555269158433
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "sha256": "c6c1f13b4c81a55231142cd1579f4e100c74cce79eb7eb6d9617f9b56e638371",
+      "bytes": 33214,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585818993705600
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/heartbeat-github-launchers.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/heartbeat-github-launchers.ts",
+      "sha256": "6b292a243ebd5fb23c4c5c9d9224263438a0008588ceb13fdd12ae35a3d3a2ef",
+      "bytes": 3721,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793593344331325028
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/heartbeat.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/heartbeat.ts",
+      "sha256": "80e83df511d2e50e36d8116e6159dd4abe3f7c5b2224e5fac1bf7e38d1381f50",
+      "bytes": 1231243,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793592654328930280
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/native-runtime/native-artifact-preparation.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/native-runtime/native-artifact-preparation.ts",
+      "sha256": "2a9d5422bd1b31174568356946fb00a3db2acd2fef7ba533259fdf9f9d1d2f24",
+      "bytes": 11969,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595243975341233
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "sha256": "24f5bce4f26219daba7bb47f2409a5ae56929a95b995131d6b18c3e20fd686ba",
+      "bytes": 105503,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585770023553764
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/native-runtime/native-session-executor.test.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/native-runtime/native-session-executor.test.ts",
+      "sha256": "48b8fb2395f409d4e8a7000dd508b446f5bd742da87d9090d342880f1352102b",
+      "bytes": 432162,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595293059719679
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/native-runtime/native-session-executor.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "9d4b1f5d64c533ea31686abaae6565a7cab5809d302889bef0df0c31107bf55b",
+      "bytes": 723743,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595243976905405
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/native-runtime/native-workspace-sync.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/native-runtime/native-workspace-sync.ts",
+      "sha256": "8c75e5f7e21e9e9b23519083073594b22e62c9d0c3bfaa2389ea4d157d0661ac",
+      "bytes": 36035,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793593484873519448
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/native-runtime/runtime-asset-retention.test.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/native-runtime/runtime-asset-retention.test.ts",
+      "sha256": "756827884f238dc3c91425b30c1ee94217d5c0897bdd6a13d467b28eef34248b",
+      "bytes": 33464,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793593304200169437
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/native-runtime/runtime-asset-retention.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/native-runtime/runtime-asset-retention.ts",
+      "sha256": "9b334eec762bf63326eea35f65e4d2e5fc2d0e2a9773f3a01c00f2bdc0caca39",
+      "bytes": 80969,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793592910956620405
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/orchestration/native-draft-runtime.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/orchestration/native-draft-runtime.ts",
+      "sha256": "10c4fe58eb75dc2442a50559c13409c216cb2e15ce4c0618a542b12b47a2a8cf",
+      "bytes": 15323,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585305417550485
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/orchestration/worker-model-gateway.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/orchestration/worker-model-gateway.ts",
+      "sha256": "a09849d29591328f2ac901b3beefc85902648225953854fd2532665c3face106",
+      "bytes": 175413,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793585576203847810
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/runtime/control.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/runtime/control.ts",
+      "sha256": "ec9c269c08a35d443e1a2dd672c9cdb59feeba419441bb38b2bc2d247fc48850",
+      "bytes": 293518,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595243977251568
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/coherent-r4/files/server/src/services/runtime/native-runtime-context-preparation.test.ts",
+      "archivePath": "cohorts/workspace-coherent-r4/files/server/src/services/runtime/native-runtime-context-preparation.test.ts",
+      "sha256": "701b2e9d0ccf8ba6907118ae3bb18375b319be68a86ae28ef368e376a500d931",
+      "bytes": 10259,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793593567937706899
+    },
+    {
+      "source": "/workspace/v10-preparation/cli-consent-focus-owner-r3-20261102/source-pins.json",
+      "archivePath": "cohorts/cli-focus-r3/source-pins.json",
+      "sha256": "dc1a82027b935c7df0bc02331579cb709470edbb75d184c96526dd64bfeee791",
+      "bytes": 704,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793594393280484565
+    },
+    {
+      "source": "/workspace/v10-preparation/cli-consent-focus-owner-r3-20261102/files/ui/src/pages/CliAuth.tsx",
+      "archivePath": "cohorts/cli-focus-r3/files/ui/src/pages/CliAuth.tsx",
+      "sha256": "f5f6a2aa8e97b7d70a1fba769a24f985ed738d9d5a191edb1dfdc6e819fc1c27",
+      "bytes": 18184,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793594124421922420
+    },
+    {
+      "source": "/workspace/v10-preparation/cli-consent-focus-owner-r3-20261102/files/ui/src/pages/Auth.test.tsx",
+      "archivePath": "cohorts/cli-focus-r3/files/ui/src/pages/Auth.test.tsx",
+      "sha256": "a133e672562820a1ea94f2a2705ac4385d2d03eff45e831b18a0684f067e5c19",
+      "bytes": 50029,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793594393276558781
+    },
+    {
+      "source": "/workspace/v10-preparation/native-memory-task-fixture-deadline-20261102/source-pins.json",
+      "archivePath": "cohorts/native-caller-deadline/source-pins.json",
+      "sha256": "c845f421724465e56ab6cbe93a9cedcba06be472422452f6182c057d2c57f17d",
+      "bytes": 585,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793594984717137254
+    },
+    {
+      "source": "/workspace/v10-preparation/native-memory-task-fixture-deadline-20261102/files/server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
+      "archivePath": "cohorts/native-caller-deadline/files/server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
+      "sha256": "1cac09626bad82e4b5fbe0839ddcf3de2a25e581e8fafea587127715d68a1998",
+      "bytes": 13168,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793594984715202412
+    },
+    {
+      "source": "/workspace/v10-preparation/signoff-policy-invoke-diagnostics-nov02/signoff-policy.spec.ts.candidate",
+      "archivePath": "cohorts/signoff-diagnostic/files/tests/e2e/signoff-policy.spec.ts",
+      "sha256": "85bffc807cfd09129c49acec6c57e85e0a5edb6bf64d3bde60b4382f83bcffbf",
+      "bytes": 25019,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595138526220992
+    },
+    {
+      "source": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+      "archivePath": "records/root-continuation-20261101-current.md",
+      "sha256": "3804f68f5c5288b3a1fd799c46bf3ac6fac5a025cab63fea5f93f7ae13a95afb",
+      "bytes": 248045,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595534378191969
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/r3/source-pins.json",
+      "archivePath": "records/heartbeat-sandbox-workspace-preparation-20261102/r3/source-pins.json",
+      "sha256": "6e4446390c06fa0ecc75bea1e506d46f39ec0b2a7928ef4c0ad36fc379af00a0",
+      "bytes": 6210,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595349575251962
+    },
+    {
+      "source": "/workspace/v10-preparation/heartbeat-sandbox-workspace-preparation-20261102/r3/REVIEW.md",
+      "archivePath": "records/heartbeat-sandbox-workspace-preparation-20261102/r3/REVIEW.md",
+      "sha256": "c712d77ecfbb7e93b48574f47dc9a9ec9794a457794cd95c7a19fec5785749f7",
+      "bytes": 2480,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595361729509244
+    },
+    {
+      "source": "/workspace/v10-preparation/native-c7-replay-policy-provenance-fix-20261102/source-pins.json",
+      "archivePath": "records/native-c7-replay-policy-provenance-fix-20261102/source-pins.json",
+      "sha256": "ba15af45a4c982f37353f4c283919abcae0b6ab45e801d6678601a68a3801653",
+      "bytes": 1360,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793593360446008183
+    },
+    {
+      "source": "/workspace/v10-preparation/native-c7-replay-coherent-ts-20261102/qualification-receipt.json",
+      "archivePath": "records/native-c7-replay-coherent-ts-20261102/qualification-receipt.json",
+      "sha256": "dae9931ff947dcf21e9e70285f9f33834477753320fc2499cc89a4d8f87132ff",
+      "bytes": 1603,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793594617999285838
+    },
+    {
+      "source": "/workspace/v10-preparation/cli-consent-focus-owner-r3-20261102/qualification-receipt.json",
+      "archivePath": "records/cli-consent-focus-owner-r3-20261102/qualification-receipt.json",
+      "sha256": "82220f075111aae0f45b1fe108e61434952f2a911ca51df20d1be51dd10b2349",
+      "bytes": 1240,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793594472970639305
+    },
+    {
+      "source": "/workspace/v10-preparation/cli-consent-focus-owner-r3-20261102/ui-qualification-receipt.json",
+      "archivePath": "records/cli-consent-focus-owner-r3-20261102/ui-qualification-receipt.json",
+      "sha256": "d0c2df58e13ae67d3cee9bb1c650baab6a4836255f67648bb8a872284c346ace",
+      "bytes": 971,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793594936430524572
+    },
+    {
+      "source": "/workspace/v10-preparation/signoff-policy-invoke-diagnostics-nov02/signoff-policy-diagnostic.patch",
+      "archivePath": "records/signoff-policy-invoke-diagnostics-nov02/signoff-policy-diagnostic.patch",
+      "sha256": "ce74ddc72a66c48fca585d767b492dd96a28622bd4c1229c2899a8889084f20a",
+      "bytes": 2866,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595138530931603
+    },
+    {
+      "source": "/workspace/v10-preparation/remaining-ci-fixture-design-20261102/assessment.md",
+      "archivePath": "records/remaining-ci-fixture-design-20261102/assessment.md",
+      "sha256": "0913febf67fc78c1e45a989214f3bf111ef05e42d42ffe442d93cc7f6d9950b4",
+      "bytes": 6793,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595061882666645
+    },
+    {
+      "source": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r10.json",
+      "archivePath": "records/final-metadata-inventory-audit-nov01/updated-owner-plan-r10.json",
+      "sha256": "048c0e1cc3dd66acb8d86d796c46bcfbbfc2f2a7bca590baf869616c24ac0287",
+      "bytes": 339511,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793593295178918375
+    },
+    {
+      "source": "/workspace/v10-preparation/run-final-workspace-aggregate-20261101.sh",
+      "archivePath": "records/run-final-workspace-aggregate-20261101.sh",
+      "sha256": "8cf2f391bd5084dfbc584a22d13b555b3d4b98ffb24bc99469cde8774e82ee15",
+      "bytes": 17817,
+      "mode": 448,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793590816653650610
+    },
+    {
+      "source": "/workspace/v10-preparation/restore-final-rust-cold-cache-20261102.py",
+      "archivePath": "records/restore-final-rust-cold-cache-20261102.py",
+      "sha256": "6249c18169eb7066f1d2511facc33bd963c9fae61b3fb20c96786cba48743d35",
+      "bytes": 6856,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793590816481236858
+    },
+    {
+      "source": "/workspace/v10-preparation/closed-oct28-flat-patch-dedup-receipt-20261102.json",
+      "archivePath": "records/closed-oct28-flat-patch-dedup-receipt-20261102.json",
+      "sha256": "9d33c9384652c5ab5a479e25addf91a81bc491d9b09c056c9e2dde80006ec55f",
+      "bytes": 4265,
+      "mode": 384,
+      "uid": 1000,
+      "gid": 1000,
+      "mtimeNs": 1793595342447835455
+    }
+  ]
+}
