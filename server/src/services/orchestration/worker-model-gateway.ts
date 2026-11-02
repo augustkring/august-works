@@ -1825,14 +1825,13 @@ export function workerModelGateway(db: Db, options: Options) {
       );
     });
   }
-  return {
-    runtimeCandidates: agentRuntimeCandidateService(db, options),
-    runtimeCandidateConformance: agentRuntimeCandidateConformanceService(db, options),
-    qualifyAuthoringTest: authoringTestRuntime(db, options, (companyId, agentId, profileId) => profile(companyId, agentId, profileId, undefined, "candidate_evaluation")).qualify,
-    executeAuthoringTest: authoringTestRuntime(db, options, (companyId, agentId, profileId) => profile(companyId, agentId, profileId, undefined, "candidate_evaluation")).execute,
-    /** Private pre-start qualification. Editable provider configuration is a
-     * selector; only the installed operator profile supplies prices/authority. */
-    async qualifyDraft(tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) {
+  /** The same installed profile, current principal/provider/grant/tariff owner
+   * qualifies both admitted worker transports. This only bounds Plan admission;
+   * OpenCode must still pass the executor and RuntimeControl Sandbox gates. */
+  async function qualifyWorkerTransport(tx: Db,
+    input: { companyId: string; agentId: string; responsibleUserId: string },
+    allowManagedWorker: boolean,
+  ) {
       await assertV7Enabled(tx, "orchestration_v7");
       await assertV7Authorization(tx, { type: "board", source: "session", userId: input.responsibleUserId }, input.companyId, "company_scope:read");
       const [presence] = await tx.select({ agent: agents, identity: agentIdentities, company: companies }).from(agents)
@@ -1845,16 +1844,25 @@ export function workerModelGateway(db: Db, options: Options) {
         throw forbidden("Internal drafts require their current native presence");
       await assertAuthoredProceduresCurrent(tx, presence.agent, input.responsibleUserId);
       const selected = resolvePaperclipRunnerProviderProfile(presence.agent.adapterConfig);
-      if (selected.provider !== "aw_text_only") throw forbidden("The installed text transport is required");
-      const p = profile(input.companyId, input.agentId, selected.workerModelProfileId);
-      if (selected.provider !== "aw_text_only" || selected.workerModelProfileId !== p.id ||
-          selected.model !== p.tariff.model || selected.maxOutputTokens > p.maxOutputTokens)
-        throw forbidden("The draft presence does not select its exact qualified transport");
+      if (selected.provider !== "aw_text_only" && !(allowManagedWorker && selected.provider === "opencode"))
+        throw forbidden("The installed worker model transport is required");
+      const configurationHash = hashContextPolicySnapshot({ adapterType: presence.agent.adapterType,
+        adapterConfig: presence.agent.adapterConfig });
+      const p = profile(input.companyId, input.agentId,
+        selected.provider === "aw_text_only" ? selected.workerModelProfileId : undefined, configurationHash);
+      if (selected.provider === "aw_text_only"
+        ? p.transport !== "server-text-only-v1" || selected.workerModelProfileId !== p.id ||
+          selected.model !== p.tariff.model || selected.maxOutputTokens > p.maxOutputTokens
+        : p.transport !== "server-anthropic-messages-v1" || selected.model !== `anthropic/${p.tariff.model}`)
+        throw forbidden("The worker presence does not select its exact qualified transport");
+      const maxOutputTokens = selected.provider === "aw_text_only" ? selected.maxOutputTokens : p.maxOutputTokens;
       const provider = await agentProviderBindingService(tx).assertRuntime(input.companyId, input.agentId);
       if (provider.provider.id !== p.providerBindingId || provider.provider.capabilitySnapshotHash !== p.providerSnapshotHash ||
           provider.runtime.conformanceSnapshotHash !== p.providerSnapshotHash ||
           provider.runtime.qualifiedConfigurationHash !== p.qualifiedConfigurationHash ||
-          provider.runtime.providerProfileRef !== p.providerProfileRef || provider.runtime.providerProfileRef.startsWith("aw:cell:"))
+          provider.runtime.providerProfileRef !== p.providerProfileRef ||
+          (provider.runtime.providerProfileRef.startsWith("aw:cell:") &&
+            !(allowManagedWorker && p.transport === "server-anthropic-messages-v1")))
         throw forbidden("Draft provider qualification changed or requires physical workload admission");
       const selection = await aiConnectionService(tx).select({ ...input, userId: input.responsibleUserId,
         adapterType: "claude_local", binding: p.binding, model: p.tariff.model });
@@ -1866,10 +1874,22 @@ export function workerModelGateway(db: Db, options: Options) {
           credentialVersion.version.revokedAt || ["disabled", "destroyed"].includes(credentialVersion.version.status))
         throw forbidden("Draft credential grant is no longer current");
       const quote = quoteModelReservation({ tariff: p.tariff, sourceSha: options.sourceSha,
-        inputTokensUpperBound: p.inputTokensUpperBound, maxOutputTokens: selected.maxOutputTokens });
-      return { profileId: p.id, model: selected.model, maxOutputTokens: selected.maxOutputTokens,
+        inputTokensUpperBound: p.inputTokensUpperBound, maxOutputTokens });
+      return { profileId: p.id, model: p.tariff.model, maxOutputTokens,
         maximumEnvelopeBytes: p.maximumEnvelopeBytes, maximumMinor: quote.maximumMinor };
-    },
+  }
+  return {
+    runtimeCandidates: agentRuntimeCandidateService(db, options),
+    runtimeCandidateConformance: agentRuntimeCandidateConformanceService(db, options),
+    qualifyAuthoringTest: authoringTestRuntime(db, options, (companyId, agentId, profileId) => profile(companyId, agentId, profileId, undefined, "candidate_evaluation")).qualify,
+    executeAuthoringTest: authoringTestRuntime(db, options, (companyId, agentId, profileId) => profile(companyId, agentId, profileId, undefined, "candidate_evaluation")).execute,
+    /** Private pre-start qualification. Editable provider configuration is a
+     * selector; only the installed operator profile supplies prices/authority. */
+    qualifyDraft: (tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) =>
+      qualifyWorkerTransport(tx, input, false),
+    /** Existing capped Worker-plan admission, separate from draft conformance. */
+    qualifyManagedWorker: (tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) =>
+      qualifyWorkerTransport(tx, input, true),
     /** Private controller failure path. Safety fencing does not require the
      * original human still to have access or the capability still to be live. */
     async abandon(claims: RuntimeToolsTokenClaims) {

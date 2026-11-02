@@ -262,7 +262,7 @@ export function createCommandManagedRuntimeClient(input: {
   commandCwd: string;
   timeoutMs: number;
   shellCommand?: "bash" | "sh" | null;
-  /** Set only by the verified projectless Native workspace-sync owner. */
+  /** Set only by the current Native workspace-sync source owner. */
   nativeWorkspacePreparation?: boolean;
 }): SandboxManagedRuntimeClient & { finishNativeWorkspacePreparation(): void } {
   const shellCommand = preferredShellForSandbox(input.shellCommand);
@@ -591,11 +591,10 @@ export async function prepareCommandManagedRuntime(input: {
   // preparation. A server-verified projectless conversation is different:
   // RuntimeControl binds every command to that exact private Task root, so its
   // staging commands must execute with that same cwd instead of `/`.
-  const commandCwd = input.workspaceRepositoryMode === "server_verified_none"
+  const commandCwd = input.nativeWorkspacePreparation === true || input.workspaceRepositoryMode === "server_verified_none"
     ? workspaceRemoteDir
     : "/";
   if (input.nativeWorkspacePreparation === true && (
-    input.workspaceRepositoryMode !== "server_verified_none" ||
     input.syncWorkspace === false ||
     (input.assets?.length ?? 0) > 0 ||
     (input.additionalSources?.length ?? 0) > 0 ||

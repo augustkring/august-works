@@ -834,6 +834,69 @@ describe("CliAuthPage rate-limit recovery", () => {
     expect(cliContainer.textContent).not.toContain("pcp_board_");
   });
 
+  it.each(["restore", "cancel", "tab", "account"] as const)("preserves explicit approval focus ownership across a delayed challenge read: %s", async mode => {
+    let activeSession = v9SessionFixture("operator");
+    getSessionMock.mockImplementation(async () => activeSession);
+    reauthenticatePasswordMock.mockImplementation(async () => {
+      activeSession = { ...activeSession, session: { ...activeSession.session, id: "session-confirmed" } };
+      return { sessionId: "session-confirmed" };
+    });
+    let holdChallenge = false;
+    const challengeReplies: Array<(value: Response) => void> = [];
+    let approvals = 0;
+    fetchCli.mockImplementation(async (_url, init) => {
+      if (init?.method === "POST") {
+        approvals++;
+        return response({ error: "Recent authentication required", details: { code: "recent_authentication_required" } }, 403);
+      }
+      if (holdChallenge) return new Promise<Response>(resolve => { challengeReplies.push(resolve); });
+      return response(pending());
+    });
+    await mountCli(); await advance(1);
+    await reactAct(async () => { button("Approve CLI access")!.click(); }); await advance(1);
+    await enterCurrentPassword("CURRENT-PRIVATE-PASSWORD");
+    await reactAct(async () => { button("Confirm my identity")!.click(); }); await advance(2);
+    const approve = button("Approve CLI access")!;
+    expect(document.activeElement).toBe(approve);
+    expect(approvals).toBe(1);
+    holdChallenge = true;
+    let refresh!: Promise<void>;
+    await reactAct(async () => {
+      refresh = cliClient!.invalidateQueries({ queryKey: ["cli-auth-challenge", challengeId], refetchType: "active" });
+      void refresh.catch(() => {});
+    });
+    await advance(1);
+    expect(approve.disabled).toBe(true);
+    // jsdom retains focus on disabled buttons; emulate Chromium's native blur
+    // without changing authority, approving, or replacing the real GET owner.
+    await reactAct(async () => {
+      const tabIndex = document.body.getAttribute("tabindex");
+      document.body.setAttribute("tabindex", "-1"); document.body.focus();
+      if (tabIndex === null) document.body.removeAttribute("tabindex");
+      else document.body.setAttribute("tabindex", tabIndex);
+    });
+    expect(document.activeElement).toBe(document.body);
+    if (mode === "cancel") await reactAct(async () => { button("Cancel")!.focus(); });
+    if (mode === "tab") await reactAct(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+    if (mode === "account") await reactAct(async () => {
+      activeSession = v9SessionFixture("other-operator");
+      cliClient!.setQueryData(queryKeys.auth.session, activeSession);
+    });
+    holdChallenge = false;
+    await reactAct(async () => { for (const finishChallenge of challengeReplies) finishChallenge(response(pending())); await refresh; }); await advance(2);
+    const currentApprove = button("Approve CLI access");
+    if (mode === "restore") {
+      expect(currentApprove?.disabled).toBe(false);
+      expect(document.activeElement).toBe(currentApprove);
+    } else {
+      expect(document.activeElement).not.toBe(currentApprove);
+      if (mode === "cancel") expect(document.activeElement).toBe(button("Cancel"));
+    }
+    expect(approvals).toBe(1);
+  });
+
   it("retains confirmation when a same-account session refresh overlaps native confirmation", async () => {
     let finishProof!: (receipt: { sessionId: string }) => void;
     let finishStatus!: (value: { userId: string; hasPassword: boolean; twoFactorEnabled: boolean; phishingResistantRequired: boolean }) => void;

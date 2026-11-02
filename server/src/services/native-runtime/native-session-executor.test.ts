@@ -1,3 +1,5 @@
+import { REMOTE_NATIVE_ERASER_ENV } from "./remote-runner-identity.js";
+import { exactNativeManagedArtifactCommand, nativeProviderPackVerificationArgs, nativeProviderPackLinkCommand, NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, configuredNativeProviderPackInstallRoot } from "./native-artifact-preparation.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   access,
@@ -1091,6 +1093,23 @@ describe("native provider usage normalization", () => {
 });
 
 describe("remote provider pack manifest", () => {
+  it("selects an exact operator installation path without Agent or suffix authority", () => {
+    const previous = process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT;
+    try {
+      delete process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT;
+      expect(configuredNativeProviderPackInstallRoot()).toBe("/opt/paperclip-runner/provider-pack");
+      process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT = "/srv/pinned-provider-pack";
+      expect(configuredNativeProviderPackInstallRoot()).toBe("/srv/pinned-provider-pack");
+      for (const invalid of ["relative/pack", "/", "/work/../pack"] ) {
+        process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT = invalid;
+        expect(() => configuredNativeProviderPackInstallRoot()).toThrow("native_provider_pack_install_root_invalid");
+      }
+    } finally {
+      if (previous === undefined) delete process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT;
+      else process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT = previous;
+    }
+  });
+
   const canonical = (value: unknown): string => {
     if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
     if (value && typeof value === "object") {
@@ -1202,6 +1221,62 @@ describe("remote provider pack manifest", () => {
     expect(readRemoteProviderPackManifest(root).payload.pins.opencode).toBe(
       "1.18.32",
     );
+    // Reuse the real local manifest verifier fixture: the command owner must
+    // bind exactly those verified bytes, fixed scripts and private targets.
+    const verified = readRemoteProviderPackManifest(root);
+    const selectedNodePath = join(root, verified.payload.artifacts.nodeCommand.path);
+    const checksumBefore = execFileSync("/bin/sh", ["-c", NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT,
+      "paperclip-managed-artifact-checksum", selectedNodePath], {
+      encoding: "utf8", env: { ...REMOTE_NATIVE_ERASER_ENV, PATH: "/untrusted" },
+    }).trim().split(/\s+/)[0];
+    expect(`sha256:${checksumBefore}`).toBe(verified.payload.artifacts.nodeCommand.sha256);
+    // A substituted executable which could falsely report successful self
+    // verification still fails the independent system checksum first.
+    await writeFile(selectedNodePath, "#!/bin/sh\nexit 0\n");
+    const checksumAfter = execFileSync("/bin/sh", ["-c", NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT,
+      "paperclip-managed-artifact-checksum", selectedNodePath], {
+      encoding: "utf8", env: { ...REMOTE_NATIVE_ERASER_ENV, PATH: "/untrusted" },
+    }).trim().split(/\s+/)[0];
+    expect(`sha256:${checksumAfter}`).not.toBe(verified.payload.artifacts.nodeCommand.sha256);
+    await writeFile(selectedNodePath, node);
+    const taskRoot = "/work/native-worker";
+    const runtimeRoot = `${taskRoot}/.paperclip-runtime/paperclip-runner`;
+    const packRoot = `${runtimeRoot}/provider-pack`;
+    const runnerPath = `${runtimeRoot}/bin/paperclip-runnerd`;
+    const authority = { runnerSha256: "a".repeat(64), installedPackRoot: "/opt/paperclip-runner/provider-pack", providerPackManifest: verified };
+    const request = (argv: string[]) => ({ argv, cwd: taskRoot, stdinBase64: "", env: { ...REMOTE_NATIVE_ERASER_ENV } });
+    const valid = (argv: string[], selectedAuthority: unknown = authority) => exactNativeManagedArtifactCommand({
+      request: request(argv), taskRoot, authority: selectedAuthority });
+    const verify = [join(packRoot, verified.payload.artifacts.nodeCommand.path),
+      ...nativeProviderPackVerificationArgs(packRoot, verified)];
+    expect(valid(verify)).toBe(true);
+    expect(exactNativeManagedArtifactCommand({ request: { ...request(verify), env: {} }, taskRoot, authority })).toBe(false);
+    expect(exactNativeManagedArtifactCommand({ request: { ...request(verify),
+      env: { ...REMOTE_NATIVE_ERASER_ENV, NODE_OPTIONS: "--require=/work/untrusted.cjs" } }, taskRoot, authority })).toBe(false);
+
+    expect(valid([runnerPath, "--build-metadata"])).toBe(true);
+    expect(valid(["/bin/sh", "-c", NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT,
+      "paperclip-managed-artifact-checksum", runnerPath])).toBe(true);
+    expect(valid(["/bin/sh", "-c", NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT,
+      "paperclip-managed-artifact-checksum", verify[0]!])).toBe(true);
+    expect(valid(["sh", "-c", NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT,
+      "paperclip-managed-provider-pack", authority.installedPackRoot])).toBe(true);
+    expect(valid(["/tmp/other/.local/share/paperclip-runner/provider-pack/" + verified.payload.artifacts.nodeCommand.path,
+      ...nativeProviderPackVerificationArgs("/tmp/other/.local/share/paperclip-runner/provider-pack", verified)])).toBe(false);
+    expect(valid(["sh", "-c", NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT,
+      "paperclip-managed-provider-pack", "/tmp/other/.local/share/paperclip-runner/provider-pack"])).toBe(false);
+    expect(valid(["sh", "-c", nativeProviderPackLinkCommand("/opt/paperclip-runner/provider-pack", packRoot)])).toBe(true);
+    expect(valid(["sh", "-c", nativeProviderPackLinkCommand("/work/untrusted", packRoot)])).toBe(false);
+    expect(valid(["sh", "-c", nativeProviderPackLinkCommand(packRoot, packRoot)])).toBe(false);
+    expect(valid(["sh", "-c", "printf arbitrary"])).toBe(false);
+    expect(valid([verify[0]!, "-e", verify[2]! + ";process.exit(0)", ...verify.slice(3)])).toBe(false);
+    expect(valid(["/work/untrusted-node", ...verify.slice(1)])).toBe(false);
+    expect(valid([...verify.slice(0, -1), Buffer.from("{}").toString("base64")])).toBe(false);
+    expect(valid(verify, { ...authority, runnerSha256: null })).toBe(false);
+    expect(valid(verify, { ...authority, providerPackManifest: { ...verified, digest: "sha256:" + "b".repeat(64) } })).toBe(false);
+    expect(exactNativeManagedArtifactCommand({ request: { ...request(verify), cwd: "/other" }, taskRoot, authority })).toBe(false);
+    expect(exactNativeManagedArtifactCommand({ request: { ...request(verify), stdinBase64: "YQ==" }, taskRoot, authority })).toBe(false);
+
     for (const [artifactName, substituteName] of [
       ["nodeCommand", "productionLock"],
       ["opencodeExecutable", "opencodeCommand"],

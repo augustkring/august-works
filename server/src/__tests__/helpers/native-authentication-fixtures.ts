@@ -15,3 +15,11 @@ export async function seedNativePasskeySession(db: Db, userId: string) {
     authenticationMethod: "passkey", authenticatedAt: now, authenticatorVersion: user!.version });
   return sessionId;
 }
+
+/** One current DB-backed passkey actor for all managed runtime fixture setup.
+ * Enrolling another passkey invalidates earlier sessions by the real owner. */
+export async function seedNativePasskeyActor(db: Db, userId: string, companyIds: string[]) {
+  const sessionId = await seedNativePasskeySession(db, userId);
+  return { type: "board" as const, source: "session" as const, userId,
+    companyIds: [...companyIds], sessionId, isInstanceAdmin: false as const };
+}

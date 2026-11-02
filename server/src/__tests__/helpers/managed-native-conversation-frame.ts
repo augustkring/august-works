@@ -20,7 +20,7 @@ import { discoverNativeCapabilities } from "../../services/native-provider-confo
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../../services/provider-capabilities.js";
 import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
 import { enableV5ForTest, seedV5Presences } from "./v5-fixtures.js";
-import { seedNativePasskeySession } from "./native-authentication-fixtures.js";
+import { seedNativePasskeyActor, seedNativePasskeySession } from "./native-authentication-fixtures.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
 import { heartbeatService } from "../../services/heartbeat.js";
 import { issueRoutes } from "../../routes/issues.js";
@@ -198,12 +198,8 @@ export async function runManagedNativeConversationFrame(input: {
     throw new Error("conversation_fixture_budget_must_be_positive_integer");
   await db.update(companies).set({ budgetMonthlyCents }).where(eq(companies.id, companyId));
   await db.update(agents).set({ budgetMonthlyCents }).where(eq(agents.id, agentId));
-  const sessionId = await seedNativePasskeySession(db, userId);
-  // The route fixture uses the transport actor shape, whose identity fields
-  // are non-null when present. Keep one canonical Human actor through both
-  // route admission and the fixture's authorization callbacks.
-  const human: Express.Request["actor"] = { type: "board", source: "session", userId, companyIds: [companyId],
-    sessionId, isInstanceAdmin: false };
+  const human = await seedNativePasskeyActor(db, userId, [companyId]);
+  const sessionId = human.sessionId;
   const model = "fixture-managed-conversation-v1";
   const baseAdapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
   await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,

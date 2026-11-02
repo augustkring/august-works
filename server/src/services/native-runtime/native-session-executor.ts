@@ -1,3 +1,7 @@
+import { configuredNativeProviderPackInstallRoot, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT } from "./native-artifact-preparation.js";
+import { REMOTE_PROVIDER_PACK_SCHEMA, REMOTE_PROVIDER_PACK_PINS, REMOTE_PROVIDER_PACK_PROFILE_DIGESTS, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS } from "./native-artifact-preparation.js";
+import { NATIVE_PROVIDER_PACK_DISCOVERY_SCRIPT, NATIVE_RUNNER_ARTIFACT_CHECKSUM_SCRIPT, nativeProviderPackLinkCommand, nativeProviderPackVerificationArgs } from "./native-artifact-preparation.js";
+import { readNativeWorkspaceSyncReference, type NativeWorkspaceSyncReference } from "./native-workspace-sync.js";
 import {
   isSupportedRemoteCodexVersion,
   parseCodexCliVersion,
@@ -164,7 +168,7 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeManagedConsumedSourceSetCurrent, assertNativeMemorySourceInputCurrent,
   nativeMemoryReviewTransitionStateHash, assertNativeProjectSourceCurrent,
-  assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
+  assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent, assertNativeWorkspaceMetadataSourcesCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
 import { assertNativeManagedProjectCreateReceiptCurrentInTransaction, managedNativeProjectArgumentsJsonSchema,
   managedNativeProjectArgumentsSchema, managedNativeProjectApiBodyJsonSchema, managedNativeProjectApiCallSchema,
@@ -9378,6 +9382,42 @@ function startNativeSessionExecutionLeaseRenewal(input: {
   };
 }
 
+/** Trusted Heartbeat workspace owner result. Metadata is descriptive; the
+ * current Host policy remains the outer filesystem/network authority. No
+ * provider, credentials, cwd, model, tools or execution-input mutations pass. */
+export interface NativeManagedWorkspacePreparationResult {
+  environment: Partial<Record<"PAPERCLIP_GIT_METADATA_ROOTS" | "PAPERCLIP_RUNNER_NETWORK_ROOTS" |
+    "PAPERCLIP_RUNNER_NETWORK_ACCESS", string>>;
+  workspaceSync: NativeWorkspaceSyncReference;
+}
+
+export function validateNativeManagedWorkspaceEnvironment(
+  environment: NativeManagedWorkspacePreparationResult["environment"],
+  previous: NodeJS.ProcessEnv,
+): Record<string, string> {
+  if (!environment || typeof environment !== "object" || Array.isArray(environment))
+    throw new Error("native_workspace_preparation_environment_invalid");
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(environment)) {
+    if (!["PAPERCLIP_GIT_METADATA_ROOTS", "PAPERCLIP_RUNNER_NETWORK_ROOTS", "PAPERCLIP_RUNNER_NETWORK_ACCESS"].includes(key) ||
+      typeof value !== "string" || value.length > 65536)
+      throw new Error("native_workspace_preparation_environment_invalid");
+    if (key === "PAPERCLIP_RUNNER_NETWORK_ACCESS") {
+      if (!["enabled", "disabled"].includes(value) || value !== previous[key])
+        throw new Error("native_workspace_preparation_network_changed");
+    } else {
+      let roots: unknown;
+      try { roots = JSON.parse(value); } catch { throw new Error("native_workspace_preparation_roots_invalid"); }
+      if (!Array.isArray(roots) || roots.length > 64 || new Set(roots).size !== roots.length ||
+        roots.some(root => typeof root !== "string" || !posix.isAbsolute(root) || root.includes("\0") ||
+          root.length > 4096 || posix.normalize(root) !== root))
+        throw new Error("native_workspace_preparation_roots_invalid");
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
 export async function executePaperclipNativeSession(input: {
   db: Db;
   execution: NativeExecutionInput;
@@ -9435,6 +9475,9 @@ export async function executePaperclipNativeSession(input: {
       sourceSet: NativePayloadSourceSet } }) => Promise<void>;
   /** Resolved adapter env; the runner transport applies a provider allowlist before spawn. */
   runnerEnvironment?: NodeJS.ProcessEnv;
+  /** Existing Heartbeat workspace owner, invoked after immutable model source
+   * authority is committed and before runtime-context files are staged. */
+  prepareManagedWorkspace?: () => Promise<NativeManagedWorkspacePreparationResult>;
   /** Private grant materialization; never a user-configured host path. */
   managedAiCredentialHome?: string;
   managedAiCredentialIdentity?: string;
@@ -10536,6 +10579,17 @@ async function executePaperclipNativeSessionWithinScope(
       input.useRunnerd && input.backend === undefined
         ? await createRunnerdBackend({
             ...input,
+            ...(input.prepareManagedWorkspace ? { prepareManagedWorkspace: async () => {
+              await renewNativeSessionExecutionLease({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                leaseOwner, attempt, controller });
+              const prepared = await input.prepareManagedWorkspace!();
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await renewNativeSessionExecutionLease({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                leaseOwner, attempt, controller });
+              return prepared;
+            } } : {}),
             // Durable scope and prior-run verification use the controller's
             // canonical workspace identity. createRunnerdBackend separately
             // projects remoteCwd into the provider execution boundary.
@@ -11874,30 +11928,6 @@ export function mayUsePreinstalledRunnerArtifact(
 const RUNNERD_BUILD_METADATA_SCHEMA =
   "paperclip-runner/runnerd-build-metadata/v1";
 const RUNNERD_BINARY_CONTRACT_VERSION = 2;
-
-const REMOTE_PROVIDER_PACK_SCHEMA = "paperclip-runner/remote-provider-pack/v1";
-const REMOTE_PROVIDER_PACK_PINS = {
-  nodeMinimum: "24.11.0",
-  codex: "0.156.0",
-  opencode: "1.18.32",
-  acpx: "0.13.1",
-  claudeAcp: "0.73.0",
-  codexAcp: "1.6.2",
-} as const;
-const REMOTE_PROVIDER_PACK_PROFILE_DIGESTS = {
-  claude:
-    "sha256:9d73d1f0f121fb96cc8badb28c22d5bff02d8582eb2e40360a81c189e1b9422a",
-  codex:
-    "sha256:c4538599d1ab767db5dff50934f13bb5ba313a59d9c4a83e993fac4617ea63d3",
-} as const;
-const REMOTE_PROVIDER_PACK_ARTIFACT_PATHS = {
-  nodeCommand: "node_modules/node/bin/node",
-  productionLock: "pnpm-lock.yaml",
-  opencodeCommand: "node_modules/.bin/opencode",
-  opencodeExecutable: "node_modules/opencode-ai/bin/opencode.exe",
-  opencodeProxy: "dist/cli/opencode-app-server-proxy.cjs",
-  acpxSidecar: "dist/cli/acpx-runtime-sidecar.cjs",
-} as const;
 
 type RemoteProviderPackManifest = {
   schema: typeof REMOTE_PROVIDER_PACK_SCHEMA;
@@ -13244,6 +13274,9 @@ export async function createRunnerdBackend(input: {
     remoteRunnerInstanceId?: string;
   }) => Promise<void>;
   runnerEnvironment?: NodeJS.ProcessEnv;
+  /** Existing Heartbeat workspace owner, invoked after immutable model source
+   * authority is committed and before runtime-context files are staged. */
+  prepareManagedWorkspace?: () => Promise<NativeManagedWorkspacePreparationResult>;
   /** Private grant materialization; never a user-configured host path. */
   managedAiCredentialHome?: string;
   runnerExecutionTarget?: AdapterExecutionTarget | null;
@@ -13345,8 +13378,9 @@ async function createRunnerdBackendWithinSessionClaim(
   const remoteSessionRoot = remoteRuntimeRoot
     ? posix.join(remoteRuntimeRoot, "sessions", remoteSessionDigest)
     : null;
-  const nativeConversationHarnessState = input.conversationMode === true && remoteTarget?.transport === "sandbox" &&
-    input.execution.provider.kind === "opencode" && input.execution.session.driverKind === "opencode_server";
+  const nativeOwnedHarnessState = (input.conversationMode === true || input.prepareManagedWorkspace !== undefined) &&
+    remoteTarget?.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
+    input.execution.session.driverKind === "opencode_server";
   const remoteCommandRunner = remoteTarget
     ? remoteTarget.transport === "ssh"
       ? createNativeSshCommandRunner({
@@ -13517,6 +13551,43 @@ async function createRunnerdBackendWithinSessionClaim(
   // are staged in this pre-receipt phase, so source pinning must derive from
   // the server-owned conversation mode and current Run/manifest binding, not
   // from whether this particular setup command carries broker credentials.
+  const requiresRemoteProviderPack =
+    remoteTarget !== null &&
+    (input.execution.provider.kind === "opencode" ||
+      input.execution.provider.kind === "acpx");
+  const configuredProviderPackRoot =
+    input.runnerRemoteProviderPackPath?.trim() || null;
+  let expectedProviderPackManifest: RemoteProviderPackManifest | null = null;
+  if (requiresRemoteProviderPack) {
+    if (
+      !configuredProviderPackRoot ||
+      !existsSync(configuredProviderPackRoot) ||
+      !lstatSync(configuredProviderPackRoot).isDirectory()
+    ) {
+      throw new Error(
+        "runner_remote_provider_artifact_incompatible: configure PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH with the build-owned provider pack",
+      );
+    }
+    expectedProviderPackManifest = readRemoteProviderPackManifest(
+      configuredProviderPackRoot,
+    );
+  }
+  const stagedRemoteProviderPackRoot = remoteRuntimeRoot
+    ? posix.join(remoteRuntimeRoot, "provider-pack")
+    : null;
+  let activeRemoteProviderPackRoot: string | null = null;
+  const remoteBinary = remoteRuntimeRoot
+    ? posix.join(remoteRuntimeRoot, "bin", "paperclip-runnerd")
+    : null;
+  // The transport hashes runnerBinary on the controller before an external
+  // launcher starts runnerd. Keep that artifact identity in the controller's
+  // filesystem; the remote launcher separately owns the sandbox command path.
+  // When an explicit remote artifact is configured, prepareRemoteRunner stages
+  // these exact bytes at remoteBinary before launch.
+  const controllerRunnerBinary = remoteTarget
+    ? input.runnerRemoteBinaryPath?.trim() || resolvePaperclipRunnerBinary()
+    : resolvePaperclipRunnerBinary();
+
   const managedOpenCode = input.execution.provider.kind === "opencode" &&
     (input.conversationMode === true ||
       Boolean((input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()));
@@ -13618,8 +13689,23 @@ async function createRunnerdBackendWithinSessionClaim(
       ? systemInstructions.replaceAll(sourceContextForAuthority.instructions.bundle.rootPath,
         remoteInstructionRootForAuthority)
       : systemInstructions;
+    const workspaceSources = input.prepareManagedWorkspace
+      ? input.bootstrapSourceClosure?.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput,
+        { kind: "workspace_metadata" }> => source.kind === "workspace_metadata" &&
+          source.runId === input.execution.binding.runId &&
+          source.executionWorkspaceId === input.execution.binding.executionWorkspaceId) ?? [] : [];
+    if (input.prepareManagedWorkspace && (input.conversationMode === true || remoteTarget?.transport !== "sandbox" ||
+      workspaceSources.length !== 1)) throw new Error("native_workspace_preparation_source_missing");
+    const workspaceMetadataSource = workspaceSources[0] ?? null;
+    const artifactAuthority = input.prepareManagedWorkspace ? {
+      runnerSha256: createHash("sha256").update(readFileSync(controllerRunnerBinary)).digest("hex"),
+      installedPackRoot: configuredNativeProviderPackInstallRoot(),
+      providerPackManifest: expectedProviderPackManifest,
+    } : null;
     const sourceAuthority = {
       version: 1,
+      ...(artifactAuthority ? { artifactAuthority: structuredClone(artifactAuthority) } : {}),
+      ...(workspaceMetadataSource ? { workspaceMetadataSource: structuredClone(workspaceMetadataSource) } : {}),
       executionInputHash: input.nativeBootstrapExecutionInputHash ?? nativeSha256(input.execution),
       attachmentStageHash: null as string | null,
       systemInstructionsHash: nativeSha256(sourceBoundSystemInstructions),
@@ -13643,6 +13729,8 @@ async function createRunnerdBackendWithinSessionClaim(
         ? run.runnerProfileJson as Record<string, unknown> : null;
       if (!run || !profile || nativeSha256(profile.nativeExecutionInput) !== sourceAuthority.executionInputHash)
         throw new Error("managed_opencode_source_authority_input_changed");
+      if (workspaceMetadataSource)
+        await assertNativeWorkspaceMetadataSourcesCurrent(tx as unknown as Db, run.companyId, [workspaceMetadataSource]);
       const previous = profile?.nativeOpenCodeSourceAuthority;
       const previousAuthority = previous && typeof previous === "object" && !Array.isArray(previous)
         ? previous as Record<string, unknown> : null;
@@ -13652,12 +13740,16 @@ async function createRunnerdBackendWithinSessionClaim(
       const previousAuthorityMatches = previous === undefined || Boolean(previousAuthority &&
         isDeepStrictEqual({
           version: previousAuthority.version,
+          ...(artifactAuthority ? { artifactAuthority: previousAuthority.artifactAuthority } : {}),
+          ...(workspaceMetadataSource ? { workspaceMetadataSource: previousAuthority.workspaceMetadataSource } : {}),
           executionInputHash: previousAuthority.executionInputHash,
           systemInstructionsHash: previousAuthority.systemInstructionsHash,
           toolSchemasHash: previousAuthority.toolSchemasHash,
           toolSchemas: previousAuthority.toolSchemas,
         }, {
           version: sourceAuthority.version,
+          ...(artifactAuthority ? { artifactAuthority: sourceAuthority.artifactAuthority } : {}),
+          ...(workspaceMetadataSource ? { workspaceMetadataSource: sourceAuthority.workspaceMetadataSource } : {}),
           executionInputHash: sourceAuthority.executionInputHash,
           systemInstructionsHash: sourceAuthority.systemInstructionsHash,
           toolSchemasHash: sourceAuthority.toolSchemasHash,
@@ -13677,6 +13769,37 @@ async function createRunnerdBackendWithinSessionClaim(
         runnerProfileJson: { ...profile, nativeOpenCodeSourceAuthority: previousAuthority ?? sourceAuthority }, updatedAt: new Date(),
       }).where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
     });
+    if (input.prepareManagedWorkspace) {
+      const coveredInputHash = nativeSha256(input.execution);
+      try {
+        await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, input.execution.binding.runId);
+        const prepared = await input.prepareManagedWorkspace();
+        if (nativeSha256(input.execution) !== coveredInputHash)
+          throw new Error("native_workspace_preparation_mutated_input");
+        const environment = validateNativeManagedWorkspaceEnvironment(prepared.environment, input.runnerEnvironment ?? {});
+        const workspaceReference = readNativeWorkspaceSyncReference(prepared.workspaceSync);
+        if (!workspaceReference) throw new Error("native_workspace_preparation_descriptor_missing");
+        await input.db.transaction(async tx => {
+          const [run] = await tx.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, input.execution.binding.companyId), eq(heartbeatRuns.id, input.execution.binding.runId),
+            eq(heartbeatRuns.agentId, input.execution.binding.agentId), eq(heartbeatRuns.status, "running"))).for("share");
+          const profile = record(run?.runnerProfileJson), authority = record(profile.nativeOpenCodeSourceAuthority);
+          if (!run || nativeSha256(profile.nativeExecutionInput) !== sourceAuthority.executionInputHash ||
+            authority.version !== sourceAuthority.version || authority.executionInputHash !== sourceAuthority.executionInputHash ||
+            authority.systemInstructionsHash !== sourceAuthority.systemInstructionsHash ||
+            authority.toolSchemasHash !== sourceAuthority.toolSchemasHash ||
+            !isDeepStrictEqual(authority.toolSchemas, sourceAuthority.toolSchemas) ||
+            !isDeepStrictEqual(authority.artifactAuthority, artifactAuthority) ||
+            !isDeepStrictEqual(authority.workspaceMetadataSource, workspaceMetadataSource) ||
+            !isDeepStrictEqual(readNativeWorkspaceSyncReference(profile.nativeWorkspaceSync), workspaceReference))
+            throw new Error("native_workspace_preparation_owner_changed");
+          await assertNativeWorkspaceMetadataSourcesCurrent(tx as unknown as Db, run.companyId, [workspaceMetadataSource!]);
+        });
+        input = { ...input, runnerEnvironment: { ...input.runnerEnvironment, ...environment } };
+      } catch (error) { authorityEpoch.revoke(); throw error; }
+    }
+  } else if (input.prepareManagedWorkspace) {
+    throw new Error("native_workspace_preparation_requires_model_authority");
   }
   const root = runnerdStateRoot(input.execution);
   const durableIdentity = readRunnerdDurableIdentity(root);
@@ -13728,42 +13851,6 @@ async function createRunnerdBackendWithinSessionClaim(
     });
   }
   mkdirSync(root, { recursive: true, mode: 0o700 });
-  const requiresRemoteProviderPack =
-    remoteTarget !== null &&
-    (input.execution.provider.kind === "opencode" ||
-      input.execution.provider.kind === "acpx");
-  const configuredProviderPackRoot =
-    input.runnerRemoteProviderPackPath?.trim() || null;
-  let expectedProviderPackManifest: RemoteProviderPackManifest | null = null;
-  if (requiresRemoteProviderPack) {
-    if (
-      !configuredProviderPackRoot ||
-      !existsSync(configuredProviderPackRoot) ||
-      !lstatSync(configuredProviderPackRoot).isDirectory()
-    ) {
-      throw new Error(
-        "runner_remote_provider_artifact_incompatible: configure PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH with the build-owned provider pack",
-      );
-    }
-    expectedProviderPackManifest = readRemoteProviderPackManifest(
-      configuredProviderPackRoot,
-    );
-  }
-  const stagedRemoteProviderPackRoot = remoteRuntimeRoot
-    ? posix.join(remoteRuntimeRoot, "provider-pack")
-    : null;
-  let activeRemoteProviderPackRoot: string | null = null;
-  const remoteBinary = remoteRuntimeRoot
-    ? posix.join(remoteRuntimeRoot, "bin", "paperclip-runnerd")
-    : null;
-  // The transport hashes runnerBinary on the controller before an external
-  // launcher starts runnerd. Keep that artifact identity in the controller's
-  // filesystem; the remote launcher separately owns the sandbox command path.
-  // When an explicit remote artifact is configured, prepareRemoteRunner stages
-  // these exact bytes at remoteBinary before launch.
-  const controllerRunnerBinary = remoteTarget
-    ? input.runnerRemoteBinaryPath?.trim() || resolvePaperclipRunnerBinary()
-    : resolvePaperclipRunnerBinary();
   const explicitRemoteCodex = input.runnerRemoteCodexPath?.trim() || null;
   const remoteCodexNpmSpec = input.runnerRemoteCodexNpmSpec?.trim() || null;
   if (explicitRemoteCodex && remoteCodexNpmSpec) {
@@ -13924,39 +14011,22 @@ async function createRunnerdBackendWithinSessionClaim(
   const verifyRemoteProviderPack = async (packRoot: string) => {
     if (!remoteTarget || !remoteCommandRunner || !expectedProviderPackManifest)
       return;
-    const expected = Buffer.from(
-      canonicalJson(expectedProviderPackManifest),
-      "utf8",
-    ).toString("base64");
     const providerNodeCommand = posix.join(
       packRoot,
       expectedProviderPackManifest.payload.artifacts.nodeCommand.path,
     );
-    const verifyScript = [
-      "const fs=require('node:fs')",
-      "const crypto=require('node:crypto')",
-      "const path=require('node:path')",
-      "const root=process.argv[1]",
-      "const expected=Buffer.from(process.argv[2],'base64').toString('utf8')",
-      "const actual=fs.readFileSync(path.join(root,'provider-pack.json'),'utf8').trim()",
-      "const canonical=(v)=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v&&typeof v==='object'?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}':JSON.stringify(v)",
-      "const manifest=JSON.parse(actual)",
-      "if(canonical(manifest)!==expected)throw new Error('manifest mismatch')",
-      "const hash=(p)=>'sha256:'+crypto.createHash('sha256').update(fs.readFileSync(path.join(root,p))).digest('hex')",
-      "const tree=(treeRoot)=>{const digest=crypto.createHash('sha256');const visit=(directory,prefix='')=>{for(const entry of fs.readdirSync(directory,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){const relative=prefix?prefix+'/'+entry.name:entry.name;const absolute=path.join(directory,entry.name);if(entry.isDirectory()){digest.update('directory\\0'+relative+'\\n');visit(absolute,relative)}else if(entry.isFile()){digest.update('file\\0'+relative+'\\0'+'sha256:'+crypto.createHash('sha256').update(fs.readFileSync(absolute)).digest('hex')+'\\n')}else if(entry.isSymbolicLink()){digest.update('symlink\\0'+relative+'\\0'+fs.readlinkSync(absolute)+'\\n')}else throw new Error('unsupported dist entry '+relative)}};visit(treeRoot);return 'sha256:'+digest.digest('hex')}",
-      "for(const name of ['nodeCommand','productionLock','opencodeCommand','opencodeExecutable','opencodeProxy','acpxSidecar']){const artifact=manifest.payload.artifacts[name];if(hash(artifact.path)!==artifact.sha256)throw new Error(name+' digest mismatch')}",
-      "if(tree(path.join(root,'dist'))!==manifest.payload.distDigest)throw new Error('dist tree digest mismatch')",
-      "const version=process.versions.node.split('.').map(Number)",
-      "const minimum=manifest.payload.pins.nodeMinimum.split('.').map(Number)",
-      "if(version[0]<minimum[0]||(version[0]===minimum[0]&&(version[1]<minimum[1]||(version[1]===minimum[1]&&version[2]<minimum[2]))))throw new Error('Node version incompatible')",
-      "if(process.platform!==manifest.payload.target.platform||process.arch!==manifest.payload.target.architecture)throw new Error('provider pack target mismatch')",
-      "const packageVersion=(pkg)=>JSON.parse(fs.readFileSync(path.join(root,'node_modules',...pkg.split('/'),'package.json'),'utf8')).version",
-      "const expectedPackages={acpx:manifest.payload.pins.acpx,'@agentclientprotocol/claude-agent-acp':manifest.payload.pins.claudeAcp,'@agentclientprotocol/codex-acp':manifest.payload.pins.codexAcp,'opencode-ai':manifest.payload.pins.opencode}",
-      "for(const [pkg,version] of Object.entries(expectedPackages))if(packageVersion(pkg)!==version)throw new Error(pkg+' version mismatch')",
-    ].join(";");
+    if (input.prepareManagedWorkspace) {
+      const checksum = await remoteCommandRunner.execute({ command: "/bin/sh",
+        args: ["-c", NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, "paperclip-managed-artifact-checksum", providerNodeCommand],
+        cwd: remoteTarget.remoteCwd, bypassSession: true, timeoutMs: 10_000, nativePreparationPurpose: "provider_artifact" });
+      const expectedNodeHash = expectedProviderPackManifest.payload.artifacts.nodeCommand.sha256.slice("sha256:".length);
+      if (checksum.exitCode !== 0 || checksum.timedOut || checksum.stdout.trim().split(/\s+/)[0] !== expectedNodeHash)
+        throw new Error("native_worker_provider_node_artifact_changed");
+    }
     const verified = await remoteCommandRunner.execute({
       command: providerNodeCommand,
-      args: ["-e", verifyScript, packRoot, expected],
+      args: nativeProviderPackVerificationArgs(packRoot, expectedProviderPackManifest),
+      ...(input.prepareManagedWorkspace ? { env: { ...REMOTE_NATIVE_ERASER_ENV } } : {}),
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 30_000,
@@ -13992,12 +14062,17 @@ async function createRunnerdBackendWithinSessionClaim(
 
   const discoverPreinstalledProviderPack = async () => {
     if (!remoteTarget || !remoteCommandRunner) return null;
+    const installedPack = input.prepareManagedWorkspace ? await input.db.select({ profile: heartbeatRuns.runnerProfileJson })
+      .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.execution.binding.companyId),
+        eq(heartbeatRuns.id, input.execution.binding.runId))).limit(1).then(rows =>
+          record(record(record(rows[0]?.profile).nativeOpenCodeSourceAuthority).artifactAuthority).installedPackRoot) : null;
+    if (input.prepareManagedWorkspace && typeof installedPack !== "string")
+      throw new Error("native_worker_provider_pack_authority_missing");
     const result = await remoteCommandRunner.execute({
       command: "sh",
-      args: [
-        "-c",
-        'for candidate in /opt/paperclip-runner/provider-pack "$HOME/.local/share/paperclip-runner/provider-pack"; do if [ -f "$candidate/provider-pack.json" ]; then printf \'%s\\n\' "$candidate"; break; fi; done',
-      ],
+      args: input.prepareManagedWorkspace
+        ? ["-c", NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT, "paperclip-managed-provider-pack", installedPack as string]
+        : ["-c", NATIVE_PROVIDER_PACK_DISCOVERY_SCRIPT],
       cwd: remoteTarget.remoteCwd,
       bypassSession: true,
       timeoutMs: 10_000,
@@ -14086,13 +14161,10 @@ async function createRunnerdBackendWithinSessionClaim(
         .digest("hex");
       try {
         const probe = await remoteCommandRunner.execute({
-          command: "sh",
-          args: [
-            "-c",
-            'test -x "$1" || exit 1; if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi',
-            "paperclip-runner-artifact",
-            executable,
-          ],
+          command: input.prepareManagedWorkspace ? "/bin/sh" : "sh",
+          args: input.prepareManagedWorkspace
+            ? ["-c", NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, "paperclip-managed-artifact-checksum", executable]
+            : ["-c", NATIVE_RUNNER_ARTIFACT_CHECKSUM_SCRIPT, "paperclip-runner-artifact", executable],
           cwd: remoteTarget.remoteCwd,
           bypassSession: true,
           timeoutMs: 10_000,
@@ -14118,7 +14190,7 @@ async function createRunnerdBackendWithinSessionClaim(
       );
     }
     const explicitRemoteBinary = input.runnerRemoteBinaryPath?.trim() || null;
-    if (!runnerArtifactPrepared && mayUsePreinstalledRunnerArtifact(explicitRemoteBinary)) {
+    if (!input.prepareManagedWorkspace && !runnerArtifactPrepared && mayUsePreinstalledRunnerArtifact(explicitRemoteBinary)) {
       const preinstalledRunner = await measureNativeRunnerSpan(
         input.trace,
         "runner.artifact.discover",
@@ -14155,6 +14227,14 @@ async function createRunnerdBackendWithinSessionClaim(
       // vendors the runner under vendor/paperclip-runner/bin, so the package
       // development fallback cannot locate it in a deployed server.
       const sourceBinary = controllerRunnerBinary;
+      if (input.prepareManagedWorkspace) {
+        const [current] = await input.db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, input.execution.binding.companyId), eq(heartbeatRuns.id, input.execution.binding.runId)));
+        const authority = record(record(current?.profile).nativeOpenCodeSourceAuthority);
+        const artifacts = record(authority.artifactAuthority);
+        if (artifacts.runnerSha256 !== createHash("sha256").update(readFileSync(sourceBinary)).digest("hex"))
+          throw new Error("native_worker_runner_artifact_changed");
+      }
       if (!existsSync(sourceBinary)) {
         throw new Error("runner_remote_artifact_unavailable");
       }
@@ -14203,9 +14283,11 @@ async function createRunnerdBackendWithinSessionClaim(
         targetPath: remoteBinary,
         mode: 0o700,
         nativePreparationPurpose: "provider_artifact",
-        forceRelayChunking: nativeConversationHarnessState,
+        forceRelayChunking: nativeOwnedHarnessState,
       });
     }
+    if (input.prepareManagedWorkspace && !await matchesControllerRunnerArtifact(remoteBinary))
+      throw new Error("native_worker_runner_artifact_changed");
     await measureNativeRunnerSpan(input.trace, "runner.artifact.verify", () =>
       verifyRemoteRunner(requiredMode),
     );
@@ -14220,7 +14302,7 @@ async function createRunnerdBackendWithinSessionClaim(
         targetPath: remoteCodexBinary,
         mode: 0o700,
         nativePreparationPurpose: "provider_artifact",
-        forceRelayChunking: nativeConversationHarnessState,
+        forceRelayChunking: nativeOwnedHarnessState,
       });
       await verifyRemoteCodex();
     }
@@ -14332,22 +14414,11 @@ async function createRunnerdBackendWithinSessionClaim(
                 "provider_pack.verify_preinstalled",
                 () => verifyRemoteProviderPack(preinstalledProviderPack!),
               );
-              const escapedSource = preinstalledProviderPack.replaceAll(
-                "'",
-                "'\\''",
-              );
-              const escapedTarget = stagedRemoteProviderPackRoot.replaceAll(
-                "'",
-                "'\\''",
-              );
-              const escapedParent = posix
-                .dirname(stagedRemoteProviderPackRoot)
-                .replaceAll("'", "'\\''");
               const linked = await remoteCommandRunner.execute({
                 command: "sh",
                 args: [
                   "-c",
-                  `umask 077; mkdir -p '${escapedParent}' && rm -rf '${escapedTarget}' && ln -s '${escapedSource}' '${escapedTarget}'`,
+                  nativeProviderPackLinkCommand(preinstalledProviderPack, stagedRemoteProviderPackRoot),
                 ],
                 cwd: remoteTarget.remoteCwd,
                 bypassSession: true,
@@ -14467,7 +14538,7 @@ async function createRunnerdBackendWithinSessionClaim(
       ],
       bypassSession: true,
       timeoutMs: 10_000,
-      ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+      ...(nativeOwnedHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
     });
     if (inspected.exitCode !== 0 || inspected.timedOut) {
       return {
@@ -14509,7 +14580,7 @@ async function createRunnerdBackendWithinSessionClaim(
         runner: remoteCommandRunner,
         stateDirectory: remoteStateDirectory,
         execution: input.execution,
-        nativeHarnessState: nativeConversationHarnessState,
+        nativeHarnessState: nativeOwnedHarnessState,
       });
     } catch {
       throw new Error("runner_harness_state_mismatch: provider_state_unreadable");
@@ -14669,7 +14740,7 @@ async function createRunnerdBackendWithinSessionClaim(
             sourcePath: resolve(backup.root, directory.name),
             targetPath,
             mode: 0o700,
-            ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+            ...(nativeOwnedHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
           });
         }
       },
@@ -14713,7 +14784,7 @@ async function createRunnerdBackendWithinSessionClaim(
         args: ["-c", `umask 077; install -d -m 0700 '${escapedTarget}'`],
         bypassSession: true,
         timeoutMs: 10_000,
-        ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+        ...(nativeOwnedHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
       });
       if (created.exitCode !== 0 || created.timedOut) {
         throw new Error("runner_remote_directory_staging_failed");
@@ -14908,7 +14979,7 @@ async function createRunnerdBackendWithinSessionClaim(
                             : remoteDirectory,
                         kind:
                           directory.name === "runner" ? "file" : "directory",
-                        nativeHarnessState: nativeConversationHarnessState,
+                        nativeHarnessState: nativeOwnedHarnessState,
                       }))
                     ) {
                       await stageRemoteRunnerDirectory({
@@ -14918,7 +14989,7 @@ async function createRunnerdBackendWithinSessionClaim(
                         targetPath: remoteDirectory,
                         mode: 0o700,
                         excludeEntries: directory.excludeEntries,
-                        ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+                        ...(nativeOwnedHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
                       });
                     }
                   }
@@ -15103,7 +15174,7 @@ async function createRunnerdBackendWithinSessionClaim(
                     targetPath,
                     mode: 0o700,
                     excludeEntries: directory.excludeEntries,
-                    nativeHarnessState: nativeConversationHarnessState,
+                    nativeHarnessState: nativeOwnedHarnessState,
                   });
                   if (!existsSync(targetPath)) {
                     throw new Error("runner_harness_state_mismatch");
@@ -15269,7 +15340,7 @@ async function createRunnerdBackendWithinSessionClaim(
       ? createRemoteRunnerProcessLauncher({
           target: remoteTarget,
           runner: remoteCommandRunner,
-          nativeHarnessState: nativeConversationHarnessState,
+          nativeHarnessState: input.conversationMode === true && nativeOwnedHarnessState,
           nativeSessionStart: remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
             input.execution.session.driverKind === "opencode_server",
           managedModelSession: remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
@@ -15360,7 +15431,7 @@ async function createRunnerdBackendWithinSessionClaim(
           ],
           bypassSession: true,
           timeoutMs: 30_000,
-          ...(nativeConversationHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+          ...(nativeOwnedHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
         });
         if (result.exitCode !== 0 || result.timedOut) {
           throw new Error("runner_continuity_break_archive_failed");
@@ -15541,7 +15612,7 @@ async function createRunnerdBackendWithinSessionClaim(
                 readRemoteRunnerState({
                   runner: remoteCommandRunner,
                   stateDirectory: remoteStateDirectory,
-                  nativeHarnessState: nativeConversationHarnessState,
+                  nativeHarnessState: nativeOwnedHarnessState,
                 })
             : undefined,
         prepareExternalRunnerState,

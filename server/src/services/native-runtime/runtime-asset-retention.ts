@@ -323,6 +323,10 @@ async function hasExactStoppedWorkloadRemovalReceipt(db: Db, locator: RemoteRunt
       leaseId: locator.environmentLeaseId }, lease.metadata?.remoteExecutionTermination);
   } catch { return null; }
   const proof = erasureRecord(verified.sandboxStop);
+  // Read policy identity from the original exact signed session START owner;
+  // the canonical Stop proof has no policyHash field.
+  const startBinding = await readRemoteNativeSessionStartBinding(db, locator);
+  if (!startBinding) return null;
   const receiptDigest = nativeSha256(verified);
   const jobs = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, locator.companyId),
     eq(memoryJobs.jobKey, runtimeAssetJobKey(locator.runId, [])))).orderBy(desc(memoryJobs.attemptNumber));
@@ -366,7 +370,7 @@ async function hasExactStoppedWorkloadRemovalReceipt(db: Db, locator: RemoteRunt
         request.data.scope.companyId !== locator.companyId || request.data.scope.bindingId !== receipt.target.bindingId ||
         request.data.scope.cellId !== receipt.target.cellId || request.data.scope.cellGeneration !== receipt.target.cellGeneration ||
         request.data.hostEpoch !== proof.hostEpoch || request.data.imageDigest !== proof.imageDigest ||
-        descriptor.policyHash !== proof.policyHash || descriptor.imageDigest !== proof.imageDigest ||
+        descriptor.policyHash !== startBinding.policyHash || descriptor.imageDigest !== proof.imageDigest ||
         !reply.success || reply.data.action !== "erase_native_session") continue;
     const actual = reply.data;
     if (actual.erased !== true || actual.upperLayerAbsent !== true || actual.mergedViewAbsent !== true ||

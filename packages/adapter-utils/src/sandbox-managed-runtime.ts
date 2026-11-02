@@ -626,7 +626,7 @@ function buildDefaultExtractRuntimeAssetCommand(input: {
 // before extraction (destroy-then-replace); when null the tarball is overlaid on
 // top of the existing tree (e.g. a git overlay merge). Every path is
 // shell-quoted; no untrusted value is concatenated into the shell (C1/C3).
-function buildWorkspaceTarExtractCommand(input: {
+export function buildWorkspaceTarExtractCommand(input: {
   workspaceRemoteDir: string;
   remoteTar: string;
   wipeExceptNames: string[] | null;
@@ -654,7 +654,7 @@ function buildWorkspaceTarExtractCommand(input: {
 // Named builder (C3): remove paths deleted in the host git worktree from the
 // sandbox workspace. Every path is shell-quoted; the caller supplies only
 // already-confined relative paths from the git snapshot.
-function buildRemoveDeletedPathsCommand(input: {
+export function buildRemoveDeletedPathsCommand(input: {
   remoteDir: string;
   deletedPaths: string[];
 }): string {

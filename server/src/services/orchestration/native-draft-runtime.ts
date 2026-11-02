@@ -153,7 +153,7 @@ export async function qualifyNativeDraftWorker(
     throw forbidden(
       "The one-call draft requires one declared canonical output",
     );
-  return gateway.qualifyDraft(tx, {
+  return gateway.qualifyManagedWorker(tx, {
     companyId: plan.companyId,
     agentId: worker.agentId,
     responsibleUserId,

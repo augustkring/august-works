@@ -39,7 +39,7 @@ export const V5_FEATURE_DEPENDENCIES: Partial<Record<V5FeatureKey, readonly V5Fe
   org_units_v5: ["agent_identities_v5"],
   agent_runtime_fabric_v5: ["agent_identities_v5", "agent_provider_bindings_v5"],
   role_packs_v5: ["agent_runtime_fabric_v5"],
-  skill_resolver_v5: ["agent_runtime_fabric_v5", "role_packs_v5"],
+  skill_resolver_v5: ["agent_runtime_fabric_v5"],
   skill_autonomous_proposals_v5: ["skill_lifecycle_v5"],
   skill_autonomous_promotion_v5: ["skill_autonomous_proposals_v5"],
   playbook_skill_projection_v5: ["playbooks_v5", "skill_lifecycle_v5"],

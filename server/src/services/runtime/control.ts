@@ -1,3 +1,6 @@
+import { exactNativeManagedArtifactCommand } from "../native-runtime/native-artifact-preparation.js";
+import { NATIVE_GIT_CONTEXT_PROBE_SCRIPT } from "@paperclipai/adapter-utils/execution-target";
+import { buildWorkspaceTarExtractCommand, buildRemoveDeletedPathsCommand } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
 import { hostVersionMeetsMinimum } from "./catalog.js";
 import { runtimeCommercialReason } from "./commercial.js";
 import type { NotifyCompany } from "../notifications/notifications.js";
@@ -83,7 +86,7 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "../native-runtime/native-chat-workspace.js";
-import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
+import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent, assertNativeWorkspaceMetadataSourcesCurrent } from "../native-direct-input.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
@@ -410,38 +413,46 @@ export function exactNativeRuntimeContextPreparationOwner(input: {
     exactNativeRuntimeContextPrepareCommand({ request: input.request, taskRoot: input.taskRoot, execution: input.execution });
 }
 
-function exactNativeWorkspacePrepareCommand(input: {
+/** Decode only the canonical single-quoted words emitted by shellQuote.
+ * No shell evaluation, interpolation, options or unquoted text are accepted. */
+function quotedNativeWorkspacePaths(text: string): string[] | null {
+  const values: string[] = []; let at = 0;
+  while (at < text.length) {
+    if (text[at] !== "'") return null;
+    at++; let value = "", closed = false;
+    while (at <= text.length) {
+      const next = text.indexOf("'", at); if (next < 0) return null;
+      value += text.slice(at, next);
+      if (text.slice(next, next + 4) === "'\\''") { value += "'"; at = next + 4; continue; }
+      at = next + 1; closed = true; break;
+    }
+    if (!closed || !value || value.includes("\0") || value.includes("\\") || path.posix.isAbsolute(value) ||
+      path.posix.normalize(value) !== value || value === "." || value.startsWith("../") ||
+      value === ".paperclip-runtime" || value.startsWith(".paperclip-runtime/")) return null;
+    values.push(value); if (values.length > 512) return null;
+    if (at === text.length) break;
+    if (text[at++] !== " ") return null;
+  }
+  return values.length ? values : null;
+}
+
+export function exactNativeWorkspacePrepareCommand(input: {
   request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
   taskRoot: string;
   execution: ReturnType<typeof parseNativeExecutionInput>;
 }): boolean {
   if (input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
     input.request.cwd !== input.taskRoot) return false;
-  const runtimeRoot = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner");
-  const archive = path.posix.join(runtimeRoot, "workspace-upload.tar");
-  const tempPrefix = `${archive}.paperclip-upload.`;
-  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
   const { argv, stdinBase64 } = input.request;
+  const emptyInput = stdinBase64 === "";
+  if (emptyInput && argv.length === 5 && argv[0] === "sh" && argv[1] === "-c" &&
+    argv[2] === NATIVE_GIT_CONTEXT_PROBE_SCRIPT && argv[3] === "paperclip-git-context" && argv[4] === "managed") return true;
   if (argv.length !== 3 || argv[0] !== "sh" || argv[1] !== "-c") return false;
   const script = argv[2];
-  const matchesTemp = (value: string | undefined): string | null => {
-    if (!value) return null;
-    if (!value.startsWith(tempPrefix)) return null;
-    const suffix = value.slice(tempPrefix.length);
-    return /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(suffix) ? value : null;
-  };
-  const emptyInput = stdinBase64 === "";
-  const initMatch = /^mkdir -p '([^']+)' && rm -f '([^']+)' && : > '([^']+)'$/.exec(script);
-  const appendMatch = /^base64 -d >> '([^']+)'$/.exec(script);
-  const commitMatch = /^mv -f '([^']+)' '([^']+)'$/.exec(script);
-  const removeMatch = /^rm -rf '([^']+)'$/.exec(script);
-  const tempPath = matchesTemp(initMatch?.[2] ?? appendMatch?.[1] ?? commitMatch?.[1] ?? removeMatch?.[1]);
-  if (tempPath && (tempPath.includes("'") || tempPath.includes("\n"))) return false;
-  const init = tempPath && `mkdir -p ${quote(runtimeRoot)} && rm -f ${quote(tempPath)} && : > ${quote(tempPath)}`;
-  const append = tempPath && `base64 -d >> ${quote(tempPath)}`;
-  const commit = tempPath && `mv -f ${quote(tempPath)} ${quote(archive)}`;
-  const tempCleanup = tempPath && `rm -rf ${quote(tempPath)}`;
-  const extract = `mkdir -p ${quote(input.taskRoot)} && find ${quote(input.taskRoot)} -mindepth 1 -maxdepth 1 ! -name '.paperclip-runtime' ! -name '.paperclip-upload-*' -exec rm -rf -- {} + && tar -xf ${quote(archive)} -C ${quote(input.taskRoot)} && rm -f ${quote(archive)}`;
+  const runtimeRoot = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner");
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  const stamp = path.posix.join(runtimeRoot, "workspace-sync-v1.json");
+  if (emptyInput && script === `test -f ${quote(stamp)} && cat ${quote(stamp)}`) return true;
   const validChunk = stdinBase64.length > 0 && stdinBase64.length <= 6 * 1024 * 1024 &&
     /^[A-Za-z0-9+/]+={0,2}$/.test(stdinBase64) && Buffer.from(stdinBase64, "base64").toString("base64") === stdinBase64 &&
     (() => {
@@ -449,9 +460,30 @@ function exactNativeWorkspacePrepareCommand(input: {
       return chunk.length <= 4 * 1024 * 1024 && /^[A-Za-z0-9+/]+={0,2}$/.test(chunk) &&
         Buffer.from(chunk, "base64").toString("base64") === chunk && Buffer.from(chunk, "base64").length <= 3 * 1024 * 1024;
     })();
-  if (((!!tempPath && (script === init || script === commit || script === tempCleanup)) || script === extract) && emptyInput)
-    return true;
-  if (append && script === append && validChunk) return true;
+  for (const name of ["workspace-upload.tar", "git-workspace-upload.tar"]) {
+    const archive = path.posix.join(runtimeRoot, name);
+    const suffix = /\.paperclip-upload\.([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})/i.exec(script)?.[1];
+    const tempPath = suffix ? `${archive}.paperclip-upload.${suffix}` : null;
+    if (tempPath) {
+      const init = `mkdir -p ${quote(runtimeRoot)} && rm -f ${quote(tempPath)} && : > ${quote(tempPath)}`;
+      const append = `base64 -d >> ${quote(tempPath)}`;
+      const commit = `mv -f ${quote(tempPath)} ${quote(archive)}`;
+      const cleanup = `rm -rf ${quote(tempPath)}`;
+      if (emptyInput && [init, commit, cleanup].includes(script)) return true;
+      if (validChunk && script === append) return true;
+    }
+    if (emptyInput && script === buildWorkspaceTarExtractCommand({ workspaceRemoteDir: input.taskRoot,
+      remoteTar: archive, wipeExceptNames: [".paperclip-runtime"] })) return true;
+    if (emptyInput && name === "workspace-upload.tar" && script === buildWorkspaceTarExtractCommand({
+      workspaceRemoteDir: input.taskRoot, remoteTar: archive, wipeExceptNames: null })) return true;
+  }
+  // Git-overlay deletion is still confined to canonical relative workspace
+  // names and never touches the retained runtime/source-authority directory.
+  const deletionPrefix = `cd ${quote(input.taskRoot)} && rm -rf -- `;
+  if (emptyInput && script.startsWith(deletionPrefix)) {
+    const paths = quotedNativeWorkspacePaths(script.slice(deletionPrefix.length));
+    return paths !== null && script === buildRemoveDeletedPathsCommand({ remoteDir: input.taskRoot, deletedPaths: paths });
+  }
   return false;
 }
 
@@ -491,6 +523,64 @@ function exactNativeProviderArtifactChunkCommand(input: {
   const append = `current=$(wc -c < ${quote(temp)}); test "$current" -le 67108864 && test $((current + ${chunkLength})) -le 67108864 && base64 -d >> ${quote(temp)}`;
   return argv[2] === append;
 }
+type CurrentSandboxTaskSource = NonNullable<Awaited<ReturnType<ReturnType<typeof executionSandboxService>["assertTaskExecutionContext"]>>>;
+const WORKER_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare", "native_provider_data_erasure_probe"]);
+
+async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandboxTaskSource,
+  purpose: string | undefined): Promise<string | null> {
+  if (!purpose || !WORKER_NATIVE_PREPARATION_PURPOSES.has(purpose)) return null;
+  const { run, manifest } = source, task = source.source.task;
+  if (task.conversationAgentId !== null || task.conversationUserId !== null) return null;
+  const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+    ? run.runnerProfileJson as Record<string, unknown> : {};
+  const authority = profile.nativeOpenCodeSourceAuthority && typeof profile.nativeOpenCodeSourceAuthority === "object" &&
+    !Array.isArray(profile.nativeOpenCodeSourceAuthority) ? profile.nativeOpenCodeSourceAuthority as Record<string, unknown> : {};
+  let execution: ReturnType<typeof parseNativeExecutionInput>;
+  try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); }
+  catch { throw conflict("Worker preparation requires its immutable Native input"); }
+  const workspace = nativePayloadSourceInputSchema.safeParse(authority.workspaceMetadataSource);
+  const capturedTask = profile.nativeBootstrapTaskSource && typeof profile.nativeBootstrapTaskSource === "object" &&
+    !Array.isArray(profile.nativeBootstrapTaskSource) ? profile.nativeBootstrapTaskSource as Record<string, unknown> : {};
+  const taskSource = nativePayloadSourceInputSchema.safeParse(capturedTask.input);
+  const root = path.resolve(execution.workspace.cwd), remoteCwd = source.lease.metadata?.remoteCwd;
+  const filesystem = source.policy.compilation.compiledPolicy.filesystem;
+  const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
+  const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
+  const artifacts = authority.artifactAuthority && typeof authority.artifactAuthority === "object" &&
+    !Array.isArray(authority.artifactAuthority) ? authority.artifactAuthority as Record<string, unknown> : {};
+  const installedPack = artifacts.installedPackRoot;
+  if (!nativeRuntimeErasurePolicyIsolated(source.policy.compilation.compiledPolicy) ||
+    typeof installedPack !== "string" || !path.posix.isAbsolute(installedPack) || installedPack === "/" ||
+    path.posix.normalize(installedPack) !== installedPack || installedPack.includes("\0") ||
+    writeRoots.some(value => typeof value === "string" && (installedPack === path.resolve(value) ||
+      installedPack.startsWith(path.resolve(value).replace(/\/$/, "") + "/") ||
+      path.resolve(value).startsWith(installedPack + "/") ||
+      ["/bin/sh", "/usr/bin/sha256sum", "/bin/sha256sum"].some(binary =>
+        binary === path.resolve(value) || binary.startsWith(path.resolve(value).replace(/\/$/, "") + "/")))))
+    throw conflict("Worker installed provider pack must be outside all tenant writable policy roots");
+  if (run.status !== "running" || run.runtimeMode !== "native" || run.scopeKind !== "issue" ||
+    !run.agentId || !run.responsibleUserId || run.nativeIssueId !== task.id || task.hiddenAt ||
+    ["done", "cancelled"].includes(task.status) || task.assigneeAgentId !== run.agentId || task.executionRunId !== run.id ||
+    manifest.runId !== run.id || manifest.agentId !== run.agentId || manifest.manifest.responsibleUserId !== run.responsibleUserId ||
+    execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
+    execution.binding.companyId !== run.companyId || execution.binding.runId !== run.id || execution.binding.issueId !== task.id ||
+    execution.binding.agentId !== run.agentId || execution.session.normalizedSessionId !== run.nativeSessionId ||
+    execution.completionContract.id !== run.completionContractId || execution.completionContract.sha256 !== run.completionContractSha256 ||
+    authority.version !== 1 || authority.executionInputHash !== nativeSha256(profile.nativeExecutionInput) ||
+    resolvePaperclipRunnerProviderProfile(source.source.agent.adapterConfig)?.provider !== "opencode" ||
+    !workspace.success || workspace.data.kind !== "workspace_metadata" || workspace.data.runId !== run.id ||
+    workspace.data.executionWorkspaceId !== execution.binding.executionWorkspaceId ||
+    !taskSource.success || taskSource.data.kind !== "task" || taskSource.data.issueId !== task.id ||
+    typeof remoteCwd !== "string" || path.resolve(remoteCwd) !== root ||
+    !readRoots.some(value => typeof value === "string" && path.resolve(value) === root) ||
+    !writeRoots.some(value => typeof value === "string" && path.resolve(value) === root))
+    throw conflict("Worker preparation source, Human, manifest, workspace or lease changed");
+  await assertNativeTaskSourceOwnerCurrent(tx, { companyId: run.companyId,
+    actor: { type: "board", source: "session", userId: run.responsibleUserId }, source: taskSource.data });
+  await assertNativeWorkspaceMetadataSourcesCurrent(tx, run.companyId, [workspace.data]);
+  return root;
+}
+
 export function runtimeControlService(
   db: Db,
   config: SaasPlatformConfig,
@@ -3585,7 +3675,37 @@ export function runtimeControlService(
         request.modelBrokerCredential !== undefined;
       let nativeSessionStartValid = false;
       let nativeHarnessStateValid = false;
-      if (providerArtifactPreparation) {
+      const workerPreparationRoot = await currentWorkerNativePreparationRoot(tx, source, nativePreparationPurpose);
+      if (workerPreparationRoot !== null) {
+        const profile = source.run.runnerProfileJson as Record<string, unknown>;
+        const execution = parseNativeExecutionInput(profile.nativeExecutionInput);
+        const noCredentialEnvironment = !Object.keys(request.env ?? {}).some(key => ["ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+          "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
+          "PAPERCLIP_GITHUB_BROKER_TOKEN", "PAPERCLIP_GITHUB_BROKER_URL",
+          "PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
+          "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+          "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS"].includes(key));
+        const exactCommand = nativeWorkspacePrepare
+          ? exactNativeWorkspacePrepareCommand({ request, taskRoot: workerPreparationRoot, execution })
+          : nativeRuntimeContextPrepare
+            ? exactNativeRuntimeContextPreparationOwner({ request, taskRoot: workerPreparationRoot, execution,
+              companyId: source.run.companyId, runId: source.run.id, agentId: source.run.agentId!,
+              responsibleUserId: source.run.responsibleUserId!, manifest: { runId: source.manifest.runId,
+                agentId: source.manifest.agentId, responsibleUserId: source.run.responsibleUserId! },
+              nativeExecutionInput: profile.nativeExecutionInput, sourceAuthority: profile.nativeOpenCodeSourceAuthority,
+              credentialMode: credentials.mode, credentialBindingCount: credentials.bindings.length })
+            : nativeHarnessState
+              ? exactNativeHarnessStateCommand({ request, taskRoot: workerPreparationRoot, execution, runId: source.run.id })
+            : nativeRuntimeAssetErasureProbe
+              ? exactNativeRuntimeAssetErasureProbeCommand({ request, taskRoot: workerPreparationRoot,
+                runId: source.run.id, sessionDigest: sha256(execution.session.normalizedSessionId ?? "") })
+              : exactNativeProviderArtifactChunkCommand({ request, taskRoot: workerPreparationRoot }) ||
+                exactNativeManagedArtifactCommand({ request, taskRoot: workerPreparationRoot,
+                  authority: (profile.nativeOpenCodeSourceAuthority as Record<string, unknown>).artifactAuthority });
+        if (!exactCommand || !noCredentialEnvironment || credentials.mode !== "none" || credentials.bindings.length !== 0 ||
+          request.brokerCredential !== undefined || request.modelBrokerCredential !== undefined || request.cwd !== workerPreparationRoot)
+          throw forbidden("Worker preparation requires its exact credentialless staged command");
+      } else if (providerArtifactPreparation) {
         const task = source.source.task;
         const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
         const [taskOwnerVersion] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` })
@@ -3690,7 +3810,7 @@ export function runtimeControlService(
           request.modelBrokerSession?.phase !== "start" || !request.modelBrokerCredential ||
           !exactNativeSessionLaunchCommand({ request, taskRoot, execution }))
           throw forbidden("Native worker session start is outside the exact current run, attempt, manifest and launch command");
-      } else if (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
+      } else if (!workerPreparationRoot && (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe)) {
         const task = source.source.task;
         const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
         const [taskOwnerVersion] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` })
@@ -4165,19 +4285,22 @@ export function runtimeControlService(
     const runProfile = initialSource.run.runnerProfileJson && typeof initialSource.run.runnerProfileJson === "object" &&
       !Array.isArray(initialSource.run.runnerProfileJson) ? initialSource.run.runnerProfileJson as Record<string, unknown> : {};
     try { conversationExecution = parseNativeExecutionInput(runProfile.nativeExecutionInput); } catch { /* monitor ownership fails closed */ }
-    // The shared remote artifact helpers also serve ordinary Worker runs. Only
-    // a route-created conversation Task can use this pre-receipt setup lane;
-    // Workers retain their existing typed model/MCP credential path.
-    if (requestedNativePreparationPurpose === "native_harness_state" && !hasConversationIdentity)
+    const workerPreparationRoot = !hasConversationIdentity && requestedNativePreparationPurpose &&
+      WORKER_NATIVE_PREPARATION_PURPOSES.has(requestedNativePreparationPurpose)
+      ? await db.transaction(tx => currentWorkerNativePreparationRoot(tx as unknown as Db, initialSource, requestedNativePreparationPurpose)) : null;
+    // Workspace/context staging has a separate exact immutable Worker owner.
+    // Other shared helpers retain their existing conversation or typed Worker
+    // credential paths; this lane never grants arbitrary artifact execution.
+    if (requestedNativePreparationPurpose === "native_harness_state" && !hasConversationIdentity && !workerPreparationRoot)
       throw conflict("Native harness state requires an authenticated conversation Task");
-    if (requestedNativePreparationPurpose === "native_workspace_prepare" && !hasConversationIdentity)
+    if (requestedNativePreparationPurpose === "native_workspace_prepare" && !hasConversationIdentity && !workerPreparationRoot)
       throw conflict("Native workspace preparation requires an authenticated conversation Task");
-    if (requestedNativePreparationPurpose === "native_runtime_context_prepare" && !hasConversationIdentity)
+    if (requestedNativePreparationPurpose === "native_runtime_context_prepare" && !hasConversationIdentity && !workerPreparationRoot)
       throw conflict("Native runtime-context preparation requires an authenticated conversation Task");
-    if (requestedNativePreparationPurpose === "native_provider_data_erasure_probe" && !hasConversationIdentity)
+    if (requestedNativePreparationPurpose === "native_provider_data_erasure_probe" && !hasConversationIdentity && !workerPreparationRoot)
       throw conflict("Native remote erasure storage probe requires an authenticated conversation Task");
     const nativePreparationPurpose = requestedNativePreparationPurpose &&
-      (hasConversationIdentity || requestedNativePreparationPurpose === "native_session_start")
+      (hasConversationIdentity || workerPreparationRoot !== null || requestedNativePreparationPurpose === "native_session_start")
       ? requestedNativePreparationPurpose : undefined;
     const workerModelSessionRefresh = modelBrokerSessionPhase === "refresh" && !hasConversationIdentity &&
       requestedNativePreparationPurpose === undefined;
@@ -4354,14 +4477,14 @@ export function runtimeControlService(
       const task = initialSource.source.task;
       const contextSnapshot = initialSource.run.contextSnapshot && typeof initialSource.run.contextSnapshot === "object"
         ? initialSource.run.contextSnapshot as Record<string, unknown> : {};
-      if (runnerProfile?.provider !== "opencode" || task.conversationAgentId !== initialSource.run.agentId ||
+      if (!workerPreparationRoot && (runnerProfile?.provider !== "opencode" || task.conversationAgentId !== initialSource.run.agentId ||
         task.conversationUserId !== initialSource.run.responsibleUserId || task.conversationState !== "active" ||
         task.conversationRetiredAt !== null || task.executionRunId !== initialSource.run.id ||
         !["in_review", "in_progress"].includes(task.status) || initialSource.run.runtimeMode !== "native" ||
         initialSource.run.scopeKind !== "issue" || initialSource.run.nativeIssueId !== task.id ||
         contextSnapshot.conversationSessionGeneration !== task.conversationSessionGeneration ||
         initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
-        initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId)
+        initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId))
         throw conflict("Provider artifact preparation requires the current Native conversation Run and manifest");
       if ((providerArtifactPreparation || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) &&
         (credentials.mode !== "none" || credentials.bindings.length !== 0 || managedModelPlaceholder))

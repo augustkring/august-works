@@ -66,8 +66,31 @@ export function CliAuthPage() {
   const approveButton = useRef<HTMLButtonElement>(null);
   const confirmationRegion = useRef<HTMLDivElement>(null);
   const focusedReceipt = useRef<string | null>(null);
+  const ownsApprovalFocus = useRef(false);
+  const restoreApprovalFocus = useRef(false);
   const confirmationRequired = confirmationNeeded === selectionEpoch;
-  useEffect(() => { setConfirmationNeeded(null); setConfirmedReceipt(null); }, [selectionEpoch]);
+  useEffect(() => {
+    setConfirmationNeeded(null); setConfirmedReceipt(null);
+    focusedReceipt.current = null; ownsApprovalFocus.current = false; restoreApprovalFocus.current = false;
+  }, [selectionEpoch]);
+  useEffect(() => {
+    const relinquish = () => { ownsApprovalFocus.current = false; restoreApprovalFocus.current = false; };
+    const focusMoved = (event: FocusEvent) => {
+      if (event.target !== document.body && event.target !== approveButton.current) relinquish();
+    };
+    const pointerMoved = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || !approveButton.current?.contains(event.target)) relinquish();
+    };
+    const tabMoved = (event: KeyboardEvent) => { if (event.key === "Tab") relinquish(); };
+    document.addEventListener("focusin", focusMoved);
+    document.addEventListener("pointerdown", pointerMoved, true);
+    document.addEventListener("keydown", tabMoved, true);
+    return () => {
+      document.removeEventListener("focusin", focusMoved);
+      document.removeEventListener("pointerdown", pointerMoved, true);
+      document.removeEventListener("keydown", tabMoved, true);
+    };
+  }, []);
   useEffect(() => { if (confirmationRequired) confirmationRegion.current?.focus(); }, [confirmationRequired]);
   const scope = useRef({ challengeId, token, accountEpoch: authority.epoch, epoch: 0 });
   if (scope.current.challengeId !== challengeId || scope.current.token !== token || scope.current.accountEpoch !== authority.epoch) {
@@ -135,13 +158,26 @@ export function CliAuthPage() {
     confirmedReceipt.sessionId === identity.sessionId && authority.canRead();
   useEffect(() => {
     const button = approveButton.current;
-    if (!confirmationRequired && confirmationCurrent && challengeQuery.isSuccess && !challengeQuery.isFetching && !challengeQuery.isPlaceholderData &&
-        button && !button.disabled && focusedReceipt.current !== confirmedReceipt?.sessionId) {
+    const sameReceipt = confirmedReceipt?.selectionEpoch === selectionEpoch && confirmedReceipt.userId === principal &&
+      confirmedReceipt.sessionId === identity.sessionId;
+    if (!sameReceipt) { ownsApprovalFocus.current = false; restoreApprovalFocus.current = false; return; }
+    const ready = !confirmationRequired && confirmationCurrent && challengeQuery.isSuccess &&
+      !challengeQuery.isFetching && !challengeQuery.isPlaceholderData && button && !button.disabled;
+    // Chromium can blur an already focused button when a fresh-read gate
+    // disables it. Restore only focus we still own, never an intentional move.
+    if (!ready && ownsApprovalFocus.current) restoreApprovalFocus.current = true;
+    const restoring = restoreApprovalFocus.current && ownsApprovalFocus.current &&
+      (document.activeElement === document.body || document.activeElement === button);
+    if (ready && (focusedReceipt.current !== confirmedReceipt.sessionId || restoring)) {
       button.focus();
-      if (document.activeElement === button) focusedReceipt.current = confirmedReceipt?.sessionId ?? null;
+      if (document.activeElement === button) {
+        focusedReceipt.current = confirmedReceipt.sessionId;
+        ownsApprovalFocus.current = true; restoreApprovalFocus.current = false;
+      }
     }
-  }, [confirmationRequired, confirmationCurrent, confirmedReceipt?.sessionId, challengeQuery.isSuccess,
-    challengeQuery.isFetching, challengeQuery.isPlaceholderData]);
+  }, [confirmationRequired, confirmationCurrent, confirmedReceipt, selectionEpoch, principal, identity.sessionId,
+    challengeQuery.isSuccess, challengeQuery.isFetching, challengeQuery.isPlaceholderData,
+    challengeQuery.data?.canApprove, approveMutation.isPending, cancelMutation.isPending]);
 
   if (!challengeId || !token) {
     return <div className="mx-auto max-w-xl py-10 text-sm text-destructive">{t("cliAuth.invalidUrl")}</div>;
@@ -302,7 +338,8 @@ export function CliAuthPage() {
             disabled={approveMutation.isPending || cancelMutation.isPending}>
             {cancelMutation.isPending ? t("cliAuth.cancelling") : t("cliAuth.cancel")}
           </Button>
-          <Button ref={approveButton} onClick={() => approveMutation.mutate(captureConsent())}
+          <Button ref={approveButton} onFocus={() => { if (confirmationCurrent) ownsApprovalFocus.current = true; }}
+            onClick={() => approveMutation.mutate(captureConsent())}
             disabled={confirmationRequired || challengeQuery.isFetching || challengeQuery.isPlaceholderData || !authority.canRead() || !challenge.canApprove || approveMutation.isPending || cancelMutation.isPending}>
             {approveMutation.isPending ? t("cliAuth.approving") : t("cliAuth.approve")}
           </Button>

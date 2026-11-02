@@ -40,13 +40,14 @@ describe("Native Memory Task source checks preserve readers when reusing one tra
   }, 30_000);
 
   it("matches Alice, Bob, and revoked Alice against a sealed managed Native Memory output", async () => {
+    const fixtureDeadlineAt = new Date(Date.now() + 180_000);
     const memoryCallId = `task-reuse-memory-${randomUUID()}`;
     const contextCallId = `task-reuse-context-${randomUUID()}`;
     const laterMemoryCallId = `task-reuse-later-memory-${randomUUID()}`;
     const documentCallId = `task-reuse-document-${randomUUID()}`;
     const finishCallId = `task-reuse-finish-${randomUUID()}`;
     const contextQuery = `task-reuse-private-context-${randomUUID()}`;
-    const fixture = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString, root,
+    const fixture = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString, root, fixtureDeadlineAt,
       instanceId: process.env.PAPERCLIP_INSTANCE_ID!, onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; },
       steps: [
         { tool: "self_remember", id: memoryCallId, input: { scope: "company", memoryType: "outcome",

@@ -1,0 +1,468 @@
+import { createHash, randomUUID } from "node:crypto";
+import { chmod, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { lookup } from "node:dns/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { createServer as createHttpServer, request as httpRequest } from "node:http";
+import { createConnection, type Socket } from "node:net";
+import { createServer as createHttpsServer } from "node:https";
+import { execFile, execFileSync } from "node:child_process";
+import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
+  heartbeatRuns, issueComments, issueThreadInteractions, issues,
+  orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
+import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
+import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
+import { aiConnectionService } from "../../services/ai-connections.js";
+import { agentProviderBindingService } from "../../services/agent-provider-bindings.js";
+import { discoverNativeCapabilities } from "../../services/native-provider-conformance.js";
+import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../../services/provider-capabilities.js";
+import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
+import { enableV5ForTest, seedV5Presences } from "./v5-fixtures.js";
+import { seedNativePasskeyActor } from "./native-authentication-fixtures.js";
+import { instanceSettingsService } from "../../services/instance-settings.js";
+import { heartbeatService } from "../../services/heartbeat.js";
+import { issueRoutes } from "../../routes/issues.js";
+import { runtimeConnectionIntentRoutes } from "../../routes/connection-intents.js";
+import { errorHandler } from "../../middleware/error-handler.js";
+import { actorMiddleware } from "../../middleware/auth.js";
+import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
+import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
+import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
+import { createToolGatewayService } from "../../services/tool-gateway.js";
+import { mcpGatewayProtocolRoutes } from "../../routes/tool-gateway.js";
+import { registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
+import type { AuthorizationActor } from "../../services/authorization.js";
+
+const OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
+const sourceSha = "a".repeat(40);
+
+import { makeConversationFixtureTreeWritable } from "./managed-native-conversation-frame.js";
+import type { runManagedNativeConversationFrame } from "./managed-native-conversation-frame.js";
+import type { NativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import { registerNativeDraftGateway } from "../../services/orchestration/native-draft-runtime.js";
+
+type FrameInput = Parameters<typeof runManagedNativeConversationFrame>[0];
+/** Pre-run extraction of the existing controlled Host fixture. The driver
+ * calls the real scheduler; this helper never inserts a Run or worker attempt.
+ * Fake CLI/provider HTTP effects remain software-only, not physical evidence. */
+export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInput,
+  "providerReply" | "createConversationApp" | "driveConversation" | "configureHeartbeat"> & {
+  providerReply: (facts: { body: Record<string, unknown>; callIndex: number; execution: NativeExecutionInput }) => {
+    stop_reason: "tool_use" | "end_turn"; content: Array<Record<string, unknown>>;
+  };
+  configureHeartbeat?: FrameInput["configureHeartbeat"];
+  driveScheduler: (context: { db: ReturnType<typeof createDb>; actor: AuthorizationActor; companyId: string;
+    agentId: string; gateway: ReturnType<typeof workerModelGateway>; heartbeat: ReturnType<typeof heartbeatService>;
+    facts: () => { providerCallCount: number; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
+      sandboxRuntimeFacts: Record<string, unknown> | null } }) => Promise<T>;
+}): Promise<T> {
+  if (input.sandboxRelay === false) throw new Error("scheduler_fixture_requires_managed_sandbox");
+  input = { ...input, sandboxRelay: true,
+    configureHeartbeat: input.configureHeartbeat ?? (async context => {
+      const { configureManagedConversationSandboxHost } = await import("./managed-native-conversation-sandbox-host.js");
+      return configureManagedConversationSandboxHost({ ...context, root: context.runHome, ordinaryWorker: true });
+    }) };
+  const { db } = input;
+  const opencodeBytes = await import("node:fs/promises").then(fs => fs.readFile(input.opencodeBinary));
+  if (createHash("sha256").update(opencodeBytes).digest("hex") !== OPENCODE_SHA256)
+    throw new Error("conversation_fixture_opencode_pin_mismatch");
+  const runHome = await mkdtemp(join(input.root, "conversation-run-"));
+  await chmod(runHome, 0o700);
+  await instanceSettingsService(db).getExperimental();
+  await enableV5ForTest(db);
+  await instanceSettingsService(db).updateExperimental({ enableAgentChat: true, enableNativeRunner: true,
+    enableContextEngineV1: true, enableWorkflowsV1: true, readiness_engine_v7: true,
+    enablePrivateAgentMemoryV1: true, orchestration_v7: true, role_packs_v5: false, skill_resolver_v5: false });
+  const keyPath = join(runHome, "broker-key.pem"), certPath = join(runHome, "broker-cert.pem");
+  const caKeyPath = join(runHome, "broker-ca-key.pem"), caCertPath = join(runHome, "broker-ca-cert.pem");
+  const csrPath = join(runHome, "broker.csr"), extensionsPath = join(runHome, "broker-extensions.cnf");
+  const brokerHostname = input.sandboxRelay ? "127-0-0-1.sslip.io" : "broker.localhost";
+  // The relay policy keeps its public-DNS-shaped exact broker origin; the
+  // normal fixture keeps its reserved test hostname.
+  if (input.sandboxRelay) {
+    const brokerAddresses = input.sandboxRelayDnsLookup
+      ? await input.sandboxRelayDnsLookup(brokerHostname, { all: true })
+      : await lookup(brokerHostname, { all: true });
+    if (brokerAddresses.length === 0 || brokerAddresses.some(value => !["127.0.0.1", "::1"].includes(value.address)))
+      throw new Error("conversation_fixture_broker_dns_not_loopback");
+  }
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", caKeyPath,
+    "-out", caCertPath, "-days", "1", "-subj", "/CN=Managed conversation fixture CA", "-addext",
+    "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign"], { stdio: "ignore" });
+  execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath,
+    "-out", csrPath, "-subj", `/CN=${brokerHostname}`], { stdio: "ignore" });
+  const { readFile } = await import("node:fs/promises");
+  await writeFile(extensionsPath, `basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:${brokerHostname}\n`);
+  execFileSync("openssl", ["x509", "-req", "-in", csrPath, "-CA", caCertPath, "-CAkey", caKeyPath,
+    "-CAcreateserial", "-out", certPath, "-days", "1", "-sha256", "-extfile", extensionsPath], { stdio: "ignore" });
+  await chmod(keyPath, 0o600);
+  const certBundlePath = join(runHome, "broker-trust-bundle.pem");
+  await writeFile(certBundlePath, Buffer.concat([await readFile("/etc/ssl/certs/ca-certificates.crt"),
+    Buffer.from("\n"), await readFile(caCertPath)]), { mode: 0o600 });
+  const f = await seedV5Presences(db);
+  const userId = f.userId, companyId = f.home, agentId = f.presence.id;
+  const budgetMonthlyCents = input.budgetMonthlyCents ?? 2000;
+  if (!Number.isSafeInteger(budgetMonthlyCents) || budgetMonthlyCents < 1)
+    throw new Error("conversation_fixture_budget_must_be_positive_integer");
+  await db.update(companies).set({ budgetMonthlyCents }).where(eq(companies.id, companyId));
+  await db.update(agents).set({ budgetMonthlyCents }).where(eq(agents.id, agentId));
+  const human = await seedNativePasskeyActor(db, userId, [companyId]);
+  const sessionId = human.sessionId;
+  const model = "fixture-managed-conversation-v1";
+  const baseAdapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
+  await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,
+    runtimeConfig: { timeoutSec: input.timeoutSec ?? 180 }, status: "idle" })
+    .where(eq(agents.id, agentId));
+  await input.prepareNativeRuntimeContext?.({ db, actor: human, companyId, agentId });
+  const [configuredAgent] = await db.select({ adapterConfig: agents.adapterConfig })
+    .from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).limit(1);
+  if (!configuredAgent || !configuredAgent.adapterConfig || typeof configuredAgent.adapterConfig !== "object" ||
+    Array.isArray(configuredAgent.adapterConfig))
+    throw new Error("conversation_fixture_adapter_configuration_missing");
+  const adapterConfig = configuredAgent.adapterConfig as Record<string, unknown>;
+  const providerService = agentProviderBindingService(db);
+  const providerBinding = await providerService.create(human, companyId, agentId, {
+    providerType: "paperclip_native", providerAgentRef: agentId, isolationMode: "isolated_per_presence", providerEndpointRef: null,
+  });
+  await providerService.attach(human, companyId, agentId, { providerBindingId: providerBinding.id, providerProfileRef: agentId });
+  const snapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId,
+    adapterType: "paperclip_runner", config: adapterConfig }));
+  await providerService.recordDiscovery(companyId, agentId, snapshot,
+    Object.fromEntries(providerConformanceRequirements(snapshot, providerBinding.isolationMode).map(check => [check, true])));
+  const provider = await providerService.assertRuntime(companyId, agentId);
+  const apiKey = `conversation-fixture-${randomUUID()}`;
+  const issued = await aiConnectionService(db).save(companyId, userId, { provider: "anthropic", method: "api_key",
+    ownership: "shared", name: "Conversation fixture provider", apiKey: "fixture", allAgents: false, agentIds: [agentId] }, apiKey);
+  const profile: WorkerModelProfile = workerModelProfileSchema.parse({
+    id: randomUUID(), companyId, workerAgentId: agentId, providerBindingId: provider.provider.id,
+    providerSnapshotHash: provider.provider.capabilitySnapshotHash, providerProfileRef: provider.runtime.providerProfileRef,
+    qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig }),
+    binding: { provider: "anthropic", method: "api_key", mode: "shared", ...issued },
+    transport: "server-anthropic-messages-v1", contract: "anthropic-messages-tools-2023-06-01",
+    maximumEnvelopeBytes: 64000, inputTokensUpperBound: 100000, maxOutputTokens: 1024,
+    tariff: input.tariff ?? { provider: "anthropic", model, currency: "USD", inputMinorPerMillion: 0,
+      outputMinorPerMillion: 0, fixedMinor: 1, qualificationHash: "b".repeat(64), sourceSha,
+      testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() },
+    qualificationEvidenceRef: "https://protected.test.invalid/qualification/managed-conversation-fixture.json",
+    qualificationArtifactSha256: "c".repeat(64),
+  });
+  let activeToken: string | null = null;
+  let activeExecution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput | null = null;
+  let activeRunId: string | null = null;
+  let activeIssueId: string | null = null;
+  let providerHookInvoked = false;
+  let providerHookFailure: { name: string; message: string } | null = null;
+  let providerStubFailure: { stage: string; code: string } | null = null;
+  let providerToolNames: string[] = [];
+  const brokerRequestFacts: Array<{ requestHash: string; status: number; code?: string; stage?: string;
+    sqlState?: string; constraint?: string; errorName?: string; errorStatus?: number;
+    errorCode?: string; serviceFrames?: string[] }> = [];
+  const providerCalls: Array<{ body: Record<string, unknown>; keyMatches: boolean }> = [];
+  const reservationForRun = async (runId: string) => db.select({ reservation: orchestrationModelReservations })
+    .from(orchestrationModelReservations).innerJoin(orchestrationWorkerAttempts,
+      and(eq(orchestrationWorkerAttempts.companyId, orchestrationModelReservations.companyId),
+        eq(orchestrationWorkerAttempts.id, orchestrationModelReservations.workerAttemptId)))
+    .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, runId)))
+    .orderBy(desc(orchestrationModelReservations.createdAt)).limit(1).then(rows => rows[0]?.reservation);
+  const gateway = workerModelGateway(db, { profiles: [profile], sourceSha,
+    protectedEvidenceOrigin: "https://protected.test.invalid", fetch: async (url, init) => {
+      if (String(url) !== "https://api.anthropic.com/v1/messages") {
+        providerStubFailure ??= { stage: "provider_url", code: "unexpected_provider_url" };
+        throw new Error("conversation_fixture_provider_url_invalid");
+      }
+      const headers = new Headers(init.headers);
+      const wireBody = String(init.body);
+      const body = JSON.parse(wireBody) as Record<string, unknown>;
+      providerCalls.push({ body, keyMatches: headers.get("x-api-key") === apiKey });
+      const execution = activeExecution;
+      const contract = execution?.completionContract.contract;
+      if (!execution || !contract) {
+        providerStubFailure ??= { stage: "execution_contract", code: "completion_contract_missing" };
+        throw new Error("conversation_fixture_completion_contract_missing");
+      }
+      const tools = Array.isArray(body.tools) ? body.tools as Array<Record<string, unknown>> : [];
+      providerToolNames = tools.map(tool => tool.name).filter((name): name is string =>
+        typeof name === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(name));
+      // A conversation turn completes with an ordinary assistant reply. The
+      // Native executor binds that text to the real final agentMessage event
+      // and yields to the next Human message; it does not need a Worker
+      // paperclip_finish result.
+      const usage = { input_tokens: 100, output_tokens: 32 };
+      const reply=input.providerReply({body,callIndex:providerCalls.length,execution})??{
+        stop_reason:"end_turn",content:[{type:"text",text:"I’ve received your message and am ready to continue."}]};
+      const responseBody = JSON.stringify({ id: `msg_conversation_${providerCalls.length}`, type: "message", role: "assistant", model,
+        ...reply, usage });
+      const response = new Response(responseBody,
+      { status: 200, headers: { "content-type": "application/json" } });
+      if (input.beforeProviderResponse && activeRunId && activeIssueId) {
+        providerHookInvoked = true;
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, activeRunId)).limit(1);
+        const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, activeRunId)).limit(1);
+        const reservation = await reservationForRun(activeRunId);
+        const [company] = await db.select({ budgetMonthlyCents: companies.budgetMonthlyCents }).from(companies).where(eq(companies.id, companyId)).limit(1);
+        const [agent] = await db.select({ budgetMonthlyCents: agents.budgetMonthlyCents }).from(agents).where(eq(agents.id, agentId)).limit(1);
+        if (!run || !manifest || !reservation || !company || !agent)
+          throw new Error("conversation_fixture_live_provider_boundary_facts_missing");
+        const profileValue = run.runnerProfileJson && typeof run.runnerProfileJson === "object"
+          ? run.runnerProfileJson as Record<string, unknown> : {};
+        const sourceReceipt = profileValue.nativeInputSourceReceipt ?? null;
+        try { await input.beforeProviderResponse({ db, actor: human, companyId, agentId, issueId: activeIssueId,
+          run, manifest, reservation, sourceReceipt,
+          request: { body, bodySha256: createHash("sha256").update(JSON.stringify(body)).digest("hex"),
+            wireBodySha256: createHash("sha256").update(wireBody).digest("hex"), byteLength: Buffer.byteLength(wireBody),
+            reservationRequestHash: reservation.requestHash, reservationInputHash: reservation.inputHash,
+            reservationAuthorityHash: reservation.authorityHash, idempotencyKey: reservation.idempotencyKey },
+          providerResponseSha256: createHash("sha256").update(responseBody).digest("hex"),
+          tariffSnapshot: reservation.conversationTariffSnapshot, quote: reservation.quote,
+          budget: { companyMonthlyCents: company.budgetMonthlyCents, agentMonthlyCents: agent.budgetMonthlyCents },
+          profileBinding: { id: profile.id, providerBindingId: profile.providerBindingId,
+            providerSnapshotHash: profile.providerSnapshotHash, qualifiedConfigurationHash: profile.qualifiedConfigurationHash,
+            model: profile.tariff.model },
+          usage: { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens } }); }
+        catch (error) {
+          providerHookFailure = { name: error instanceof Error ? error.name : "UnknownError",
+            message: error instanceof Error ? error.message.slice(0, 400) : "non_error_throwable" };
+          throw error;
+        }
+      }
+      else if (input.beforeProviderResponse) providerStubFailure ??= {
+        stage: "provider_callback_binding", code: "active_run_or_issue_missing",
+      };
+      return response;
+    } });
+  const issuerFacts: Array<{ scope: string; runId: string; manifestId: string }> = [];
+  const brokerApp = express();
+  brokerApp.use(express.json({ limit: "2mb" }));
+  // Heartbeat delivers a run-scoped MCP URL to the actual runner. Give the
+  // fixture that URL's real protocol endpoint instead of pointing it at a
+  // dummy base URL or suppressing managed MCP delivery.
+  const assignedToolGateway = createToolGatewayService(db);
+  registerAssignedMcpGateway(db, assignedToolGateway);
+  brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
+  const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();
+  let sandboxHeartbeat: Awaited<ReturnType<NonNullable<typeof input.configureHeartbeat>>> | undefined;
+  brokerApp.use((req, res, next) => {
+    if (req.method === "POST" && req.path === "/runtime-tools/model/v1/messages") {
+      const requestHash = createHash("sha256").update(JSON.stringify(req.body ?? null)).digest("hex");
+      const fact: (typeof brokerRequestFacts)[number] = { requestHash, status: 0 };
+      brokerRequestByObject.set(req, fact);
+      const sendJson = res.json.bind(res);
+      res.json = ((body: unknown) => {
+        if (body && typeof body === "object" && !Array.isArray(body) &&
+          typeof (body as Record<string, unknown>).code === "string")
+          fact.code = (body as Record<string, unknown>).code as string;
+        return sendJson(body as never);
+      }) as typeof res.json;
+      res.once("finish", () => { fact.status = res.statusCode; brokerRequestFacts.push(fact); });
+    }
+    next();
+  });
+  brokerApp.use((req, res, next) => {
+    if (!input.sandboxRelay || req.method !== "POST" || req.path !== "/runtime-tools/model/v1/messages") { next(); return; }
+    if (!sandboxHeartbeat?.modelRequest) { next(new Error("conversation_fixture_host_model_request_unavailable")); return; }
+    const controller = new AbortController();
+    const cancel = () => { if (!res.writableEnded) controller.abort(); };
+    req.once("aborted", cancel); res.once("close", cancel);
+    void sandboxHeartbeat.modelRequest(req.body, controller.signal).then(result => {
+      if (!res.writableEnded) res.status(200).set("Cache-Control", "no-store").set("X-Accel-Buffering", "no")
+        .type("text/event-stream").send(result.sse);
+    }).catch(next).finally(() => { req.off("aborted", cancel); res.off("close", cancel); });
+  });
+  brokerApp.use((req, _res, next) => {
+    if (!input.sandboxRelay && req.headers["x-api-key"] === "paperclip-managed-model-broker" && activeToken)
+      req.headers.authorization = `Bearer ${activeToken}`;
+    next();
+  });
+  brokerApp.use(runtimeConnectionIntentRoutes(db, gateway));
+  brokerApp.use((error: unknown, req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    const fact = brokerRequestByObject.get(req);
+    const diagnostic = error && typeof error === "object" ? error as Error & {
+      code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown };
+    } : null;
+    const safeIdentifier = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_:-]{1,96}$/.test(value) ? value : null;
+    if (fact && diagnostic) {
+      fact.errorName = safeIdentifier(diagnostic.name) ?? "UnknownError";
+      fact.errorCode = safeIdentifier(diagnostic.code) ?? safeIdentifier(diagnostic.cause?.code) ?? undefined;
+      const status = typeof diagnostic.status === "number" ? diagnostic.status
+        : typeof diagnostic.statusCode === "number" ? diagnostic.statusCode : null;
+      if (status !== null && status >= 400 && status <= 599) fact.errorStatus = status;
+      fact.serviceFrames = diagnostic.stack?.split("\n").slice(1).flatMap(frame => {
+        const match = /server\/src\/services\/([^\s():]+\.ts):(\d+):\d+/.exec(frame);
+        return match ? [`${match[1]}:${match[2]}`] : [];
+      }).slice(0, 6) ?? [];
+    }
+    const details = error && typeof error === "object" &&
+      (error as Record<string, unknown>).details && typeof (error as Record<string, unknown>).details === "object"
+      ? (error as Record<string, unknown>).details as Record<string, unknown> : null;
+    if (fact && details) {
+      if (typeof details.code === "string" && /^[a-z0-9_]{1,80}$/.test(details.code)) fact.code = details.code;
+      if (typeof details.stage === "string" && /^[a-z0-9_]{1,80}$/.test(details.stage)) fact.stage = details.stage;
+      if (typeof details.sqlState === "string" && /^[0-9A-Z]{5}$/.test(details.sqlState)) fact.sqlState = details.sqlState;
+      if (typeof details.constraint === "string" && /^[A-Za-z0-9_]{1,96}$/.test(details.constraint)) fact.constraint = details.constraint;
+    }
+    next(error);
+  });
+  brokerApp.use(errorHandler);
+  const broker = createHttpsServer({ key: await readFile(keyPath), cert: await readFile(certPath) }, brokerApp);
+  broker.listen(0, "127.0.0.1");
+  await new Promise<void>(resolve => broker.once("listening", resolve));
+  const address = broker.address();
+  if (!address || typeof address === "string") throw new Error("conversation_fixture_broker_listen_failed");
+  // Durable PRP and the runner accept only an origin, with no trailing path
+  // separator; a slash would make the managed environment tuple invalid.
+  const origin = new URL(`https://${brokerHostname}:${address.port}`).origin;
+  let brokerProxy: ReturnType<typeof createHttpServer> | null = null;
+  let brokerProxyOrigin: string | null = null;
+  const brokerProxySockets = new Set<Socket>();
+  let brokerProxyTunnelCount = 0;
+  let brokerProxyRejectedCount = 0;
+  if (input.sandboxRelay) {
+    brokerProxy = createHttpServer();
+    brokerProxy.on("connection", socket => {
+      brokerProxySockets.add(socket);
+      socket.setTimeout(60_000, () => socket.destroy());
+      socket.once("close", () => brokerProxySockets.delete(socket));
+    });
+    brokerProxy.on("request", (_request, response) => {
+      brokerProxyRejectedCount++;
+      response.writeHead(403, { connection: "close" }).end();
+    });
+    brokerProxy.on("connect", (request, client, head) => {
+      if (request.url !== `${brokerHostname}:${address.port}`) {
+        brokerProxyRejectedCount++;
+        client.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+        return;
+      }
+      brokerProxyTunnelCount++;
+      const upstream = createConnection(address.port, "127.0.0.1");
+      brokerProxySockets.add(upstream);
+      upstream.setTimeout(60_000, () => upstream.destroy());
+      upstream.once("close", () => brokerProxySockets.delete(upstream));
+      upstream.once("connect", () => {
+        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        if (head.length > 0) upstream.write(head);
+        client.pipe(upstream);
+        upstream.pipe(client);
+      });
+      upstream.once("error", () => client.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n"));
+      client.once("error", () => upstream.destroy());
+    });
+    brokerProxy.listen(0, "127.0.0.1");
+    await new Promise<void>(resolve => brokerProxy!.once("listening", resolve));
+    const proxyAddress = brokerProxy.address();
+    if (!proxyAddress || typeof proxyAddress === "string") throw new Error("conversation_fixture_broker_proxy_listen_failed");
+    brokerProxyOrigin = `http://127.0.0.1:${proxyAddress.port}`;
+    const runProxyCurl = (args: string[], env: NodeJS.ProcessEnv) => new Promise<string>((resolve, reject) => {
+      execFile("curl", args, { encoding: "utf8", timeout: 5_000, env }, (error, stdout) => {
+        if (error) reject(error); else resolve(stdout.trim());
+      });
+    });
+    try {
+      const status = await runProxyCurl(["--max-time", "5", "--silent", "--show-error", "--output", "/dev/null",
+        "--write-out", "%{http_code}", "--cacert", caCertPath,
+        `${origin}/__proxy_preflight`], {
+          ...process.env, HTTP_PROXY: "", http_proxy: "", HTTPS_PROXY: brokerProxyOrigin, https_proxy: brokerProxyOrigin,
+          ALL_PROXY: "", all_proxy: "", NO_PROXY: "", no_proxy: "" });
+      const wrongConnectStatus = await new Promise<number>((resolve, reject) => {
+        const request = httpRequest({ host: "127.0.0.1", port: proxyAddress.port, method: "CONNECT",
+          path: `untrusted.example:${address.port}`, timeout: 5_000 });
+        request.once("response", response => { response.resume(); resolve(response.statusCode ?? 0); });
+        request.once("connect", (response, socket) => { socket.destroy(); resolve(response.statusCode ?? 0); });
+        request.once("timeout", () => request.destroy(new Error("broker_proxy_reject_timeout")));
+        request.once("error", reject);
+        request.end();
+      });
+      const plainHttpStatus = await runProxyCurl(["--max-time", "5", "--silent", "--show-error", "--output", "/dev/null",
+        "--write-out", "%{http_code}", "--proxy", brokerProxyOrigin, "--noproxy", "", "http://localhost/"], {
+          ...process.env, HTTP_PROXY: "", http_proxy: "", HTTPS_PROXY: "", https_proxy: "",
+          ALL_PROXY: "", all_proxy: "", NO_PROXY: "", no_proxy: "" });
+      if (status !== "404" || wrongConnectStatus !== 403 || plainHttpStatus !== "403" ||
+        brokerProxyTunnelCount !== 1 || brokerProxyRejectedCount !== 2)
+        throw new Error("unexpected_broker_proxy_preflight_result");
+    } catch {
+      for (const socket of brokerProxySockets) socket.destroy();
+      if (brokerProxy.listening) await new Promise<void>(resolve => brokerProxy!.close(() => resolve()));
+      if (broker.listening) await new Promise<void>(resolve => broker.close(() => resolve()));
+      await makeConversationFixtureTreeWritable(runHome);
+    await rm(runHome, { recursive: true, force: true });
+      throw new Error("conversation_fixture_broker_proxy_preflight_failed");
+    }
+  }
+  setupRunnerPrpWebSocketServer(broker, { apiUrl: origin });
+  const prevBroker = process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
+  const prevJwt = process.env.PAPERCLIP_AGENT_JWT_SECRET;
+  const prevCa = process.env.NODE_EXTRA_CA_CERTS;
+  const prevRunnerPublicUrl = process.env.PAPERCLIP_RUNNER_PUBLIC_URL;
+  const prevPaperclipApiUrl = process.env.PAPERCLIP_API_URL;
+  process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = origin;
+  process.env.PAPERCLIP_API_URL = origin;
+  process.env.PAPERCLIP_AGENT_JWT_SECRET = `conversation-fixture-${randomUUID()}`;
+  process.env.NODE_EXTRA_CA_CERTS = certBundlePath;
+  if (input.sandboxRelay) {
+    const runnerPublicUrl = new URL(origin);
+    runnerPublicUrl.protocol = "wss:";
+    process.env.PAPERCLIP_RUNNER_PUBLIC_URL = runnerPublicUrl.origin;
+  }
+  sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
+    providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
+    brokerOrigin: origin, brokerProxyOrigin, certBundlePath, setBrokerToken: token => { activeToken = token; } });
+  registerNativeDraftGateway(db, gateway);
+  const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
+    environmentRuntime: sandboxHeartbeat?.environmentRuntime,
+    testNativeRunnerEnvironment: async ({ execution, runId, issueId,
+    agentId: currentAgentId, responsibleUserId, bootstrapSourceClosure }) => {
+    if (execution.provider.kind !== "opencode" || !responsibleUserId)
+      throw new Error("conversation_fixture_provider_or_human_missing");
+    activeExecution = execution;
+    activeRunId = runId;
+    activeIssueId = issueId;
+    const hostEnvironment = sandboxHeartbeat?.beforeNativeExecution
+      ? await sandboxHeartbeat.beforeNativeExecution({ execution, runId, issueId, agentId: currentAgentId,
+          responsibleUserId, bootstrapSourceClosure })
+      : {};
+    const minted = await gateway.issueForRun({ companyId, agentId: currentAgentId, runId, responsibleUserId });
+    const claims = verifyRuntimeToolsToken(minted.token, "worker_model");
+    if (!claims?.worker_model || claims.scope !== "worker_model") throw new Error("scheduler_fixture_issuer_scope_missing");
+    issuerFacts.push({ scope: claims.scope, runId: claims.run_id,
+      manifestId: claims.worker_model.executionManifestId });
+    return { PATH: `${dirname(input.opencodeBinary)}:${process.env.PATH ?? ""}`,
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
+      // Preserve the qualified sandbox host's proxy and CA bindings while
+      // adding only the model profile minted for this exact Native run.
+      ...hostEnvironment,
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: origin,
+      PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(minted.inputTokensUpperBound),
+      PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(minted.maxOutputTokens),
+      // The relay's exact public-DNS-shaped broker origin is tunneled through
+      // a loopback-only test proxy because this environment blocks direct
+      // loopback egress. The proxy accepts only that exact broker host+port.
+      NO_PROXY: input.sandboxRelay ? "localhost,127.0.0.1,::1" : new URL(origin).hostname,
+      no_proxy: input.sandboxRelay ? "localhost,127.0.0.1,::1" : new URL(origin).hostname,
+      HTTP_PROXY: "", http_proxy: "", HTTPS_PROXY: brokerProxyOrigin ?? "", https_proxy: brokerProxyOrigin ?? "",
+      ALL_PROXY: "", all_proxy: "",
+      NODE_EXTRA_CA_CERTS: certBundlePath, SSL_CERT_FILE: certBundlePath };
+  } });
+  try {
+    return await input.driveScheduler({ db, actor: human, companyId, agentId, gateway, heartbeat,
+      facts: () => ({ providerCallCount: providerCalls.length, issuerFacts: structuredClone(issuerFacts),
+        sandboxRuntimeFacts: sandboxHeartbeat?.facts?.() ?? null }) });
+  } finally {
+    await heartbeat.drainActiveRunExecutions();
+    registerNativeDraftGateway(db, undefined);
+    await sandboxHeartbeat?.close?.();
+    for (const socket of brokerProxySockets) socket.destroy();
+    if (brokerProxy?.listening) await new Promise<void>(resolve => brokerProxy!.close(() => resolve()));
+    runnerPrpWebSocketInternals.resetForTests();
+    await new Promise<void>(resolve => broker.close(() => resolve()));
+    if (prevBroker === undefined) delete process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN;
+    else process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = prevBroker;
+    if (prevJwt === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET; else process.env.PAPERCLIP_AGENT_JWT_SECRET = prevJwt;
+    if (prevCa === undefined) delete process.env.NODE_EXTRA_CA_CERTS; else process.env.NODE_EXTRA_CA_CERTS = prevCa;
+    if (prevRunnerPublicUrl === undefined) delete process.env.PAPERCLIP_RUNNER_PUBLIC_URL; else process.env.PAPERCLIP_RUNNER_PUBLIC_URL = prevRunnerPublicUrl;
+    if (prevPaperclipApiUrl === undefined) delete process.env.PAPERCLIP_API_URL; else process.env.PAPERCLIP_API_URL = prevPaperclipApiUrl;
+    await makeConversationFixtureTreeWritable(runHome);
+    await rm(runHome, { recursive: true, force: true });
+  }
+}

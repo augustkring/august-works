@@ -1591,41 +1591,9 @@ async function githubOperationLauncherBasePath(
 }
 
 /** Read only execution-target Git context; never import the controller's credentials into SSH. */
-export async function prepareGitHubExecutionEnvironment(input: {
-  target: AdapterExecutionTarget | null | undefined;
-  cwd: string;
-  env: Record<string, string>;
-  hostCredentials: boolean;
-  networkAccess: boolean;
-}): Promise<Record<string, string>> {
-  const script = String.raw`
-const fs = require('node:fs');
-const path = require('node:path');
-const cp = require('node:child_process');
-const env = {};
-env.PAPERCLIP_RUNNER_NETWORK_ROOTS = JSON.stringify(['/etc/resolv.conf','/etc/hosts','/etc/nsswitch.conf','/etc/ssl/certs','/etc/ssl/cert.pem'].flatMap(p => { try { return [fs.realpathSync(p)]; } catch { return []; } }));
-if (process.argv[1] === 'host') {
-  for (const [key, value] of Object.entries(process.env)) {
-    if (/^(GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN|PAPERCLIP_GIT_TOKEN|GH_CONFIG_DIR|GIT_CONFIG_(GLOBAL|SYSTEM|NOSYSTEM|COUNT|KEY_\d+|VALUE_\d+)|GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)|GIT_ASKPASS|SSH_ASKPASS|SSH_AUTH_SOCK|GIT_SSH_COMMAND|GIT_SSH)$/.test(key)) env[key] = value;
-  }
-  env.PAPERCLIP_GITHUB_HOST_HOME = process.env.HOME || '';
-  env.GH_CONFIG_DIR ||= path.join(process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || '', '.config'), 'gh');
-}
-try {
-  const top = cp.execFileSync('git', ['rev-parse', '--show-toplevel'], {encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();
-  if (fs.realpathSync(top) === fs.realpathSync(process.cwd())) {
-    env.PAPERCLIP_GIT_METADATA_ROOTS = JSON.stringify(cp.execFileSync('git', ['rev-parse','--path-format=absolute','--git-common-dir','--git-dir'], {encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim().split('\n').map(p => fs.realpathSync(p)));
-  }
-} catch {}
-process.stdout.write("\0" + JSON.stringify(env) + "\0");
-`;
-  const args = ["-e", script, input.hostCredentials ? "host" : "managed"];
-  const remote = input.target?.kind === "remote" ? input.target : null;
-  let discovered: Record<string, string>;
-  if (remote) {
-    // A legacy SSH host may run a standalone agent binary without Node. Use
-    // only the shell and Git, and emit bounded, NUL-framed environment records.
-    const probe = String.raw`
+/** Exact managed-mode metadata program shared with RuntimeControl's
+ * credentialless Native workspace command validator. */
+export const NATIVE_GIT_CONTEXT_PROBE_SCRIPT = String.raw`
 printf '\0PAPERCLIP_GIT_CONTEXT_V1\0'
 if [ "$1" = host ]; then
   for key in GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN PAPERCLIP_GIT_TOKEN GH_CONFIG_DIR GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_ASKPASS SSH_ASKPASS SSH_AUTH_SOCK GIT_SSH_COMMAND GIT_SSH; do
@@ -1667,11 +1635,53 @@ if [ -n "$top" ] && [ "$(cd "$top" && pwd -P)" = "$cwd" ]; then
 fi
 printf '\0PAPERCLIP_GIT_CONTEXT_END\0'
 `;
+
+export async function prepareGitHubExecutionEnvironment(input: {
+  target: AdapterExecutionTarget | null | undefined;
+  cwd: string;
+  env: Record<string, string>;
+  hostCredentials: boolean;
+  networkAccess: boolean;
+  /** Server-owned selected Native workspace preparation only. */
+  nativeWorkspacePreparation?: boolean;
+}): Promise<Record<string, string>> {
+  const script = String.raw`
+const fs = require('node:fs');
+const path = require('node:path');
+const cp = require('node:child_process');
+const env = {};
+env.PAPERCLIP_RUNNER_NETWORK_ROOTS = JSON.stringify(['/etc/resolv.conf','/etc/hosts','/etc/nsswitch.conf','/etc/ssl/certs','/etc/ssl/cert.pem'].flatMap(p => { try { return [fs.realpathSync(p)]; } catch { return []; } }));
+if (process.argv[1] === 'host') {
+  for (const [key, value] of Object.entries(process.env)) {
+    if (/^(GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN|PAPERCLIP_GIT_TOKEN|GH_CONFIG_DIR|GIT_CONFIG_(GLOBAL|SYSTEM|NOSYSTEM|COUNT|KEY_\d+|VALUE_\d+)|GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)|GIT_ASKPASS|SSH_ASKPASS|SSH_AUTH_SOCK|GIT_SSH_COMMAND|GIT_SSH)$/.test(key)) env[key] = value;
+  }
+  env.PAPERCLIP_GITHUB_HOST_HOME = process.env.HOME || '';
+  env.GH_CONFIG_DIR ||= path.join(process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || '', '.config'), 'gh');
+}
+try {
+  const top = cp.execFileSync('git', ['rev-parse', '--show-toplevel'], {encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();
+  if (fs.realpathSync(top) === fs.realpathSync(process.cwd())) {
+    env.PAPERCLIP_GIT_METADATA_ROOTS = JSON.stringify(cp.execFileSync('git', ['rev-parse','--path-format=absolute','--git-common-dir','--git-dir'], {encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim().split('\n').map(p => fs.realpathSync(p)));
+  }
+} catch {}
+process.stdout.write("\0" + JSON.stringify(env) + "\0");
+`;
+  const args = ["-e", script, input.hostCredentials ? "host" : "managed"];
+  const remote = input.target?.kind === "remote" ? input.target : null;
+  if (input.nativeWorkspacePreparation && (!remote || remote.transport !== "sandbox" || input.hostCredentials))
+    throw new Error("native_git_context_prepare_scope_invalid");
+  let discovered: Record<string, string>;
+  if (remote) {
+    // A legacy SSH host may run a standalone agent binary without Node. Use
+    // only the shell and Git, and emit bounded, NUL-framed environment records.
+
     const result = await adapterExecutionTargetCommandRunner(remote).execute({
-      command: "sh", args: ["-c", probe, "paperclip-git-context", input.hostCredentials ? "host" : "managed"],
+      command: "sh", args: ["-c", NATIVE_GIT_CONTEXT_PROBE_SCRIPT, "paperclip-git-context", input.hostCredentials ? "host" : "managed"],
       // The caller's cwd belongs to the controller. Copied sandbox/SSH
       // workspaces can live at a different path on the execution target.
       cwd: remote.remoteCwd, timeoutMs: 15_000,
+      ...(input.nativeWorkspacePreparation ? { nativePreparationPurpose: "native_workspace_prepare" as const,
+        bypassSession: true, useSession: false } : {}),
     });
     if (result.exitCode !== 0) throw new Error("Could not read execution-target Git context");
     const payload = result.stdout.split("\0PAPERCLIP_GIT_CONTEXT_V1\0")[1]?.split("\0PAPERCLIP_GIT_CONTEXT_END\0")[0];

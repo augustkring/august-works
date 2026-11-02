@@ -56,6 +56,7 @@ import { readNativeRuntimeAssetText } from "../../services/native-runtime/runtim
 import { nativeRuntimeAssetsRoot } from "../../services/native-runtime/runtime-asset-retention.js";
 import { resolveDefaultAgentWorkspaceDir, resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
+import { REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "../../services/native-runtime/remote-runner-identity.js";
 
 const hostAgentRequire = createRequire(import.meta.url);
 const { openShellHostEngine, NATIVE_SESSION_UPPER_ERASE_SCRIPT } = hostAgentRequire("../../../../deploy/v6/host-agent/openshell.mjs") as {
@@ -145,6 +146,9 @@ export async function configureManagedConversationSandboxHost(input: {
   wallClockSeconds?: number;
   /** Exact server-created ordinary Worker run; never a model-selected path. */
   ordinaryWorkerRunId?: string;
+  /** Bind one real scheduler-created ordinary Run at the existing execution
+   * callback. All persisted Task, Human, lease and source checks still run. */
+  ordinaryWorker?: true;
 }) {
   const { db, actor, companyId, agentId, providerBindingId } = input;
   const policyFixture = () => {
@@ -158,8 +162,9 @@ export async function configureManagedConversationSandboxHost(input: {
     return policy;
   };
   const brokerOrigin = new URL(input.brokerOrigin).origin;
+  const ordinaryWorkerMode = input.ordinaryWorker === true || input.ordinaryWorkerRunId !== undefined;
   const assertOrdinaryWorker = async (runId: string) => {
-    if (runId !== input.ordinaryWorkerRunId) throw new Error("worker_software_host_run_changed");
+    if (input.ordinaryWorkerRunId !== undefined && runId !== input.ordinaryWorkerRunId) throw new Error("worker_software_host_run_changed");
     const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
       eq(heartbeatRuns.id, runId), eq(heartbeatRuns.agentId, agentId)));
     if (!run || run.runtimeMode !== "native" || run.status !== "running" || run.responsibleUserId !== actor.userId || !run.nativeIssueId)
@@ -174,7 +179,7 @@ export async function configureManagedConversationSandboxHost(input: {
     return run;
   };
   if (input.ordinaryWorkerRunId) await assertOrdinaryWorker(input.ordinaryWorkerRunId);
-  const workspaceBoundaryRoot = input.ordinaryWorkerRunId ? resolveDefaultAgentWorkspaceDir(agentId)
+  const workspaceBoundaryRoot = ordinaryWorkerMode ? resolveDefaultAgentWorkspaceDir(agentId)
     : join(await realpath(resolvePaperclipInstanceRoot()), "chat-workspaces", companyId, agentId);
   const runtime = runtimeControlService(db, { runtime: { suspectSeconds: 90, unreachableSeconds: 600, relayPort: 3102 } } as SaasPlatformConfig,
     undefined, { credentialBrokerOrigin: brokerOrigin, workerModels: input.gateway as any });
@@ -668,11 +673,36 @@ export async function configureManagedConversationSandboxHost(input: {
   const modelBrokerSessionReceipts: Array<{ phase: string; sessionKey: string; capabilityHash: string;
     expiresAt: string; sessionDeadlineAt: string; nativeSessionIdDigest: string | null;
     startBindingDigest: string | null }> = [];
+  type SafeHostExecErrorDetails = { sentinel: string; errorType: "Error" | "TypeError" | "RangeError" | "AbortError" | "Other";
+    signalAborted: boolean; deadlineRemainingMs: number | null; phase: "start" | "refresh" | "stop" | null;
+    monitorLabel: boolean; sourceFrames: Array<{ source: "openshell.mjs"; line: number }>;
+    refreshCredentialFacts?: Record<string, boolean | number | string | null> };
+  let sessionHostJournalFile: string | null = null;
+  const hostExecErrorFactByRequestId = new Map<string, (details: SafeHostExecErrorDetails) => void>();
   const nativeSessionBackingObservations: Array<Record<string, boolean | number | string | null>> = [];
+  type NativeRunnerClosureWitness = {
+    phase: "launch_observed" | "identity_matched" | "alive_observed" | "stop_observed" | "gone_verified" | "invalid";
+    launchMatched: boolean; nonceMatches: boolean; runnerMatches: boolean;
+    identityMatched: boolean; runPidStartedAtMatched: boolean;
+    identityVerdict: "unknown" | "alive" | "gone" | "mismatch";
+    previousLiveGroupKnown: boolean; previousLiveSessionKnown: boolean; processGone: boolean;
+    processGroupLive: number | null; processSessionLive: number | null;
+    fdOrCwdSessionsHolders: number | null; fdOrCwdScanComplete: boolean; noSessionHandles: boolean;
+    runId: string; taskRoot: string; identityPath: string;
+    nonce: string; runnerId: string; sessionKey: string; sessionDigest: string; leaseId: string;
+    sessionDeadlineAt: string; expectedCapabilityHash: string;
+    pid: number | null; startedAt: string | null;
+    processFingerprint: string | null; processGroupId: number | null; processSessionId: number | null;
+    stopCheckerExit: number | null; stopReceiptMatched: boolean; startBindingDigest: string | null;
+  };
+  let nativeRunnerClosureWitness: NativeRunnerClosureWitness | null = null;
+  let activeHostExecStreams = 0;
   const nativeSessionBackingByKey = new Map<string, { sessionKey: string; sessionDigest: string; taskRoot: string;
+    runId: string; runnerInstanceId: string; leaseId: string; startBindingDigest: string;
     sandboxId: string; containerId: string; sourceSessions: string; upperSessions: string; originalTreeDigest: string;
     rootDev: number; rootIno: number; fileCount: number; byteCount: number; witnessMatched: boolean;
-    runnerStateFilePresent: boolean; runnerIdentityFilePresent: boolean }>();
+    runnerStateFilePresent: boolean; runnerIdentityFilePresent: boolean; processPid: number;
+    processGroupId: number; processSessionId: number }>();
   const fixtureOverlayPath = (containerPath: string) => {
     if (!sessionOverlayUpperDir || !posix.isAbsolute(containerPath) || posix.normalize(containerPath) !== containerPath ||
         containerPath === "/" || containerPath.split("/").some(part => part === "." || part === ".."))
@@ -733,10 +763,111 @@ export async function configureManagedConversationSandboxHost(input: {
     visit(rootPath, "", 0);
     return { treeDigest: nativeSha256(entries), fileCount, byteCount, entries };
   };
-  const attachActualNativeSessionBacking = (command: Record<string, any>, deadlineMs: number) => {
+  const nativeProcessGroupSession = (pid: number, deadlineMs: number) => {
+    if (!Number.isSafeInteger(pid) || pid <= 0 || Date.now() >= deadlineMs) return null;
+    const remaining = Math.max(1, Math.min(1000, deadlineMs - Date.now()));
+    const result = spawnSync("ps", ["-o", "pgid=", "-o", "sid=", "-p", String(pid)], {
+      encoding: "utf8", timeout: remaining, maxBuffer: 16 * 1024,
+    });
+    if (result.error || result.status !== 0 || result.signal || typeof result.stdout !== "string") return null;
+    const rows = result.stdout.trim().split(/\n+/).filter(Boolean);
+    if (rows.length !== 1) return null;
+    const fields = rows[0]!.trim().split(/\s+/);
+    if (fields.length !== 2 || fields.some(field => !/^\d+$/.test(field))) return null;
+    const pgid = Number(fields[0]), sid = Number(fields[1]);
+    return Number.isSafeInteger(pgid) && pgid > 0 && Number.isSafeInteger(sid) && sid > 0 ? { pgid, sid } : null;
+  };
+  const nativeGroupSessionLiveCounts = (pgid: number, sid: number, deadlineMs: number) => {
+    if (!Number.isSafeInteger(pgid) || pgid <= 0 || !Number.isSafeInteger(sid) || sid <= 0 || Date.now() >= deadlineMs) return null;
+    const remaining = Math.max(1, Math.min(1000, deadlineMs - Date.now()));
+    const result = spawnSync("ps", ["-eo", "pid=,pgid=,sid=,stat="], {
+      encoding: "utf8", timeout: remaining, maxBuffer: 4 * 1024 * 1024,
+    });
+    if (result.error || result.status !== 0 || result.signal || typeof result.stdout !== "string") return null;
+    let groupLive = 0, sessionLive = 0;
+    for (const row of result.stdout.split(/\n+/)) {
+      const fields = row.trim().split(/\s+/);
+      if (fields.length < 4 || !/^\d+$/.test(fields[0]!) || !/^\d+$/.test(fields[1]!) || !/^\d+$/.test(fields[2]!)) continue;
+      const state = fields[3]!;
+      if (state.startsWith("Z")) continue;
+      if (Number(fields[1]) === pgid) groupLive++;
+      if (Number(fields[2]) === sid) sessionLive++;
+    }
+    return { groupLive, sessionLive };
+  };
+  const nativeProcessGone = (pid: number, deadlineMs: number) => {
+    if (!Number.isSafeInteger(pid) || pid <= 0 || Date.now() >= deadlineMs) return false;
+    const result = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], {
+      encoding: "utf8", timeout: Math.max(1, Math.min(1000, deadlineMs - Date.now())), maxBuffer: 16 * 1024,
+    });
+    if (result.error || result.signal || typeof result.stdout !== "string") return false;
+    if (result.status === 1 && result.stdout.trim() === "") return true;
+    if (result.status !== 0) return false;
+    const rows = result.stdout.trim().split(/\n+/).filter(Boolean);
+    return rows.length === 1 && rows[0]!.trim().startsWith("Z");
+  };
+  const nativeSessionHandleFacts = (sourceSessions: string, upperSessions: string, deadlineMs: number) => {
+    if (Date.now() >= deadlineMs || typeof process.getuid !== "function") return { holders: null, complete: false };
+    let holders = 0;
+    const trustedUid = process.getuid();
+    const within = (value: string) => value === sourceSessions || value.startsWith(`${sourceSessions}/`) ||
+      value === upperSessions || value.startsWith(`${upperSessions}/`);
+    try {
+      for (const entry of readdirSync("/proc")) {
+        if (!/^\d+$/.test(entry)) continue;
+        if (Date.now() >= deadlineMs) return { holders: null, complete: false };
+        const proc = join("/proc", entry);
+        let procStat;
+        try { procStat = statSync(proc); }
+        catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === "ENOENT" || code === "ESRCH") continue;
+          return { holders: null, complete: false };
+        }
+        if (procStat.uid !== trustedUid) continue;
+        let processState: string;
+        try {
+          const statText = readFileSync(join(proc, "stat"), "utf8");
+          const close = statText.lastIndexOf(") ");
+          processState = close >= 0 ? statText.slice(close + 2).trim().split(/\s+/)[0] ?? "" : "";
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === "ENOENT" || code === "ESRCH") continue;
+          return { holders: null, complete: false };
+        }
+        if (processState === "Z") continue;
+        try {
+          const cwd = readlinkSync(join(proc, "cwd"));
+          if (within(cwd)) holders++;
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code !== "ENOENT" && code !== "ESRCH") return { holders: null, complete: false };
+        }
+        let descriptors: string[];
+        try { descriptors = readdirSync(join(proc, "fd")); }
+        catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === "ENOENT" || code === "ESRCH") continue;
+          return { holders: null, complete: false };
+        }
+        for (const descriptor of descriptors) {
+          if (Date.now() >= deadlineMs) return { holders: null, complete: false };
+          try { if (within(readlinkSync(join(proc, "fd", descriptor)))) holders++; }
+          catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (code !== "ENOENT" && code !== "ESRCH") return { holders: null, complete: false };
+          }
+        }
+      }
+      return { holders, complete: true };
+    } catch { return { holders: null, complete: false }; }
+  };
+  const attachActualNativeSessionBacking = async (command: Record<string, any>, deadlineMs: number) => {
     const descriptor = command.nativeSessionErasure as Record<string, any> | undefined;
     if (!descriptor || typeof descriptor.sessionKey !== "string" || typeof descriptor.sessionDigest !== "string" ||
         typeof descriptor.taskRoot !== "string" || typeof descriptor.sandboxId !== "string" || typeof descriptor.containerId !== "string" ||
+        typeof descriptor.runId !== "string" || typeof descriptor.runnerInstanceId !== "string" ||
+        descriptor.runId !== expectedRunId ||
         descriptor.taskRoot !== expectedTaskRoot || descriptor.sandboxId !== activeHostIdentity?.sandboxId ||
         descriptor.containerId !== activeHostIdentity?.containerId || descriptor.containerId !== fixtureSandboxContainerId ||
         !fixtureSandboxExists || fixtureSandboxPhase !== "Stopped" ||
@@ -746,6 +877,21 @@ export async function configureManagedConversationSandboxHost(input: {
       receipt.sessionKey === descriptor.sessionKey && receipt.nativeSessionIdDigest === descriptor.sessionDigest &&
       receipt.startBindingDigest === descriptor.startBindingDigest);
     if (!started) throw new Error("conversation_native_session_start_receipt_missing");
+    // startBindingDigest is deliberately start-only on the signed wire. Bind
+    // the stop receipt back to that start through the already validated
+    // process-closure witness instead of expecting the stop request to repeat
+    // start-only provenance.
+    const closureWitness = nativeRunnerClosureWitness;
+    const stoppedReceipt = modelBrokerSessionReceipts.find(receipt => receipt.phase === "stop" &&
+      receipt.sessionKey === descriptor.sessionKey && receipt.nativeSessionIdDigest === descriptor.sessionDigest);
+    const stopped = Boolean(started && stoppedReceipt && closureWitness &&
+      closureWitness.phase === "stop_observed" && closureWitness.stopReceiptMatched &&
+      closureWitness.sessionKey === descriptor.sessionKey && closureWitness.sessionDigest === descriptor.sessionDigest &&
+      closureWitness.runId === descriptor.runId && closureWitness.taskRoot === descriptor.taskRoot &&
+      closureWitness.runnerId === descriptor.runnerInstanceId && closureWitness.leaseId === descriptor.leaseId &&
+      closureWitness.startBindingDigest === descriptor.startBindingDigest &&
+      stoppedReceipt.capabilityHash === closureWitness.expectedCapabilityHash &&
+      stoppedReceipt.sessionDeadlineAt === closureWitness.sessionDeadlineAt);
     const sourceSessions = join(descriptor.taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions");
     const upperSessions = join(fixtureOverlayPath(descriptor.taskRoot), ".paperclip-runtime", "paperclip-runner", "sessions");
     const targetAtUpper = join(upperSessions, descriptor.sessionDigest);
@@ -753,6 +899,8 @@ export async function configureManagedConversationSandboxHost(input: {
     const previous = nativeSessionBackingByKey.get(descriptor.sessionKey);
     if (previous) {
       if (previous.sessionDigest !== descriptor.sessionDigest || previous.taskRoot !== descriptor.taskRoot ||
+          previous.runId !== descriptor.runId || previous.runnerInstanceId !== descriptor.runnerInstanceId ||
+          previous.leaseId !== descriptor.leaseId || previous.startBindingDigest !== descriptor.startBindingDigest ||
           previous.sandboxId !== descriptor.sandboxId || previous.containerId !== descriptor.containerId ||
           previous.sourceSessions !== sourceSessions || previous.upperSessions !== upperSessions)
         throw new Error("conversation_native_session_backing_replay_scope_changed");
@@ -762,9 +910,84 @@ export async function configureManagedConversationSandboxHost(input: {
       let targetAbsent = false;
       try { lstatSync(targetAtUpper); } catch (error) { targetAbsent = (error as NodeJS.ErrnoException).code === "ENOENT"; }
       if (!targetAbsent) throw new Error("conversation_native_session_replay_target_present");
+      const groups = nativeGroupSessionLiveCounts(previous.processGroupId, previous.processSessionId, deadlineMs);
+      const handles = nativeSessionHandleFacts(sourceTarget, targetAtUpper, deadlineMs);
+      if (activeHostExecStreams !== 0 || !nativeProcessGone(previous.processPid, deadlineMs) ||
+          groups?.groupLive !== 0 || groups.sessionLive !== 0 || !handles.complete || handles.holders !== 0)
+        throw new Error("conversation_native_session_replay_process_closure_unverified");
+      nativeSessionBackingObservations.push({ processWitnessPresent: true, processWitnessPhase: "gone_verified",
+        launchMatched: true, nonceMatches: true, runnerMatches: true, identityMatched: true,
+        runPidStartedAtMatched: true, identityVerdict: "gone", processGone: true,
+        previousLiveGroupKnown: true, previousLiveSessionKnown: true, processGroupLive: 0, processSessionLive: 0,
+        fdOrCwdSessionsHolders: 0, fdOrCwdScanComplete: true, noSessionHandles: true,
+        stopCheckerExit: 3, stopReceiptMatched: true, noActiveHostExecStreams: true,
+        closureWitnessComplete: true, backingMoved: false });
       return { ...previous, moved: false, replayAliasExact: true, targetAbsent };
     }
-
+    const processWitness = nativeRunnerClosureWitness;
+    if (!stopped || activeHostExecStreams !== 0 || !processWitness || processWitness.phase !== "stop_observed" ||
+        !processWitness.launchMatched || !processWitness.nonceMatches || !processWitness.runnerMatches ||
+        !processWitness.identityMatched || !processWitness.runPidStartedAtMatched ||
+        processWitness.identityVerdict !== "gone" || !processWitness.processGone || !processWitness.previousLiveGroupKnown ||
+        !processWitness.previousLiveSessionKnown || processWitness.processGroupLive !== 0 ||
+        processWitness.processSessionLive !== 0 ||
+        processWitness.stopCheckerExit !== 3 || !processWitness.stopReceiptMatched ||
+        processWitness.runId !== expectedRunId || processWitness.taskRoot !== descriptor.taskRoot ||
+        processWitness.sessionKey !== descriptor.sessionKey || processWitness.sessionDigest !== descriptor.sessionDigest ||
+        processWitness.leaseId !== descriptor.leaseId ||
+        processWitness.runnerId !== descriptor.runnerInstanceId || processWitness.runId !== descriptor.runId ||
+        processWitness.startBindingDigest !== descriptor.startBindingDigest ||
+        processWitness.identityPath !== join(descriptor.taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions",
+          descriptor.sessionDigest, "runner", "runner-process.identity"))
+      throw new Error("conversation_native_session_process_closure_unverified");
+    const targetIdentityPath = join(descriptor.taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions",
+      descriptor.sessionDigest, "runner", "runner-process.identity");
+    let identityMarkerMatches = false;
+    try {
+      const identityStat = lstatSync(targetIdentityPath);
+      const marker = readFileSync(targetIdentityPath, "utf8").split(/\r?\n/);
+      identityMarkerMatches = identityStat.isFile() && !identityStat.isSymbolicLink() && marker.length >= 5 &&
+        marker[0] === processWitness.nonce && marker[1] === String(processWitness.pid) &&
+        marker[2] === processWitness.startedAt && marker[3] === processWitness.runnerId &&
+        marker[4] === processWitness.processFingerprint;
+    } catch { identityMarkerMatches = false; }
+    const groupSessionLive = processWitness.processGroupId !== null && processWitness.processSessionId !== null
+      ? nativeGroupSessionLiveCounts(processWitness.processGroupId, processWitness.processSessionId, deadlineMs) : null;
+    const handleFacts = nativeSessionHandleFacts(sourceTarget, targetAtUpper, deadlineMs);
+    const [boundRun] = expectedRunId ? await db.select({ status: heartbeatRuns.status, processPid: heartbeatRuns.processPid,
+      processStartedAt: heartbeatRuns.processStartedAt }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, expectedRunId))).limit(1) : [];
+    const databaseIdentityMatches = Boolean(boundRun && processWitness.runId === expectedRunId &&
+      boundRun.processPid === processWitness.pid && boundRun.processStartedAt instanceof Date && processWitness.startedAt &&
+      boundRun.processStartedAt.toISOString() === processWitness.startedAt);
+    const closureWitnessComplete = identityMarkerMatches && databaseIdentityMatches && groupSessionLive?.groupLive === 0 &&
+      groupSessionLive.sessionLive === 0 && processWitness.pid !== null && nativeProcessGone(processWitness.pid, deadlineMs) &&
+      handleFacts.complete && handleFacts.holders === 0 && activeHostExecStreams === 0;
+    if (closureWitnessComplete) {
+      processWitness.phase = "gone_verified";
+      processWitness.identityVerdict = "gone";
+      processWitness.processGone = true;
+      processWitness.processGroupLive = groupSessionLive.groupLive;
+      processWitness.processSessionLive = groupSessionLive.sessionLive;
+      processWitness.fdOrCwdSessionsHolders = handleFacts.holders;
+      processWitness.fdOrCwdScanComplete = handleFacts.complete;
+      processWitness.noSessionHandles = true;
+    }
+    nativeSessionBackingObservations.push({
+      processWitnessPresent: true, processWitnessPhase: processWitness.phase,
+      launchMatched: processWitness.launchMatched, identityMatched: processWitness.identityMatched,
+      runPidStartedAtMatched: processWitness.runPidStartedAtMatched, identityVerdict: processWitness.identityVerdict,
+      processGone: processWitness.processGone, nonceMatches: processWitness.nonceMatches,
+      runnerMatches: processWitness.runnerMatches,
+      previousLiveGroupKnown: processWitness.previousLiveGroupKnown,
+      previousLiveSessionKnown: processWitness.previousLiveSessionKnown,
+      processGroupLive: groupSessionLive?.groupLive ?? null, processSessionLive: groupSessionLive?.sessionLive ?? null,
+      fdOrCwdSessionsHolders: handleFacts.holders, fdOrCwdScanComplete: handleFacts.complete,
+      noSessionHandles: handleFacts.complete && handleFacts.holders === 0,
+      identityMarkerMatches, databaseIdentityMatches, stopReceiptMatched: processWitness.stopReceiptMatched,
+      noActiveHostExecStreams: activeHostExecStreams === 0, closureWitnessComplete,
+    });
+    if (!closureWitnessComplete) throw new Error("conversation_native_session_process_closure_unverified");
     assertRealDirectoryTree(descriptor.taskRoot);
     assertRealDirectoryTree(join(descriptor.taskRoot, ".paperclip-runtime"));
     assertRealDirectoryTree(join(descriptor.taskRoot, ".paperclip-runtime", "paperclip-runner"));
@@ -803,11 +1026,21 @@ export async function configureManagedConversationSandboxHost(input: {
       sourceRootStat.dev === movedRoot.dev && aliasExact;
     if (!sameTree) throw new Error("conversation_native_session_move_witness_mismatch");
     const record = { sessionKey: descriptor.sessionKey, sessionDigest: descriptor.sessionDigest, taskRoot: descriptor.taskRoot,
+      runId: descriptor.runId, runnerInstanceId: descriptor.runnerInstanceId, leaseId: descriptor.leaseId,
+      startBindingDigest: descriptor.startBindingDigest,
       sandboxId: descriptor.sandboxId, containerId: descriptor.containerId, sourceSessions, upperSessions,
       originalTreeDigest: beforeTree.treeDigest, rootDev: sourceRootStat.dev, rootIno: sourceRootStat.ino,
       fileCount: beforeTree.fileCount, byteCount: beforeTree.byteCount, witnessMatched: sameTree,
-      runnerStateFilePresent: true, runnerIdentityFilePresent: true };
+      runnerStateFilePresent: true, runnerIdentityFilePresent: true, processPid: processWitness.pid!,
+      processGroupId: processWitness.processGroupId!, processSessionId: processWitness.processSessionId! };
     nativeSessionBackingByKey.set(descriptor.sessionKey, record);
+    nativeSessionBackingObservations.push({ processWitnessPresent: true, processWitnessPhase: "gone_verified",
+      launchMatched: true, nonceMatches: true, runnerMatches: true,
+      identityMatched: true, runPidStartedAtMatched: true, identityVerdict: "gone", processGone: true,
+      previousLiveGroupKnown: true, previousLiveSessionKnown: true, processGroupLive: 0, processSessionLive: 0,
+      fdOrCwdSessionsHolders: 0, fdOrCwdScanComplete: true, noSessionHandles: true, identityMarkerMatches: true,
+      databaseIdentityMatches: true, stopReceiptMatched: true, noActiveHostExecStreams: true,
+      closureWitnessComplete: true, backingMoved: true });
     return { ...record, moved: true, replayAliasExact: aliasExact, targetAbsent: false };
   };
   const sessionProviders = new Map<string, { type: string; credential: string | null; expiresAt: string | null;
@@ -843,6 +1076,7 @@ export async function configureManagedConversationSandboxHost(input: {
     if (sessionHostEngine) return;
     const hostRoot = join(input.root, ".openshell-session-engine");
     const stateHome = join(hostRoot, "state");
+    sessionHostJournalFile = join(hostRoot, "openshell-journal.json");
     mkdirSync(stateHome, { recursive: true, mode: 0o700 });
     const dockerRoot = join(hostRoot, "docker"), overlayLayerId = "f".repeat(64);
     const overlayUpperDir = join(dockerRoot, "overlay2", overlayLayerId, "diff");
@@ -1252,6 +1486,129 @@ export async function configureManagedConversationSandboxHost(input: {
     const { fixtureHash: expectedFixtureHash, ...fixtureBody } = qualificationProbeFixture;
     assert.equal(expectedFixtureHash, nativeSha256(fixtureBody), "Host and credential echo qualification fixture must share the exact source hash");
     await sessionHostEngine.initialize();
+    const originalExecuteStream = sessionHostEngine.executeStream.bind(sessionHostEngine);
+    sessionHostEngine.executeStream = async (hostInput: any, onOutput: any, signal?: AbortSignal) => {
+      try {
+        return await originalExecuteStream(hostInput, onOutput, signal);
+      } catch (error) {
+        const request = hostInput?.request;
+        const requestId = typeof request?.requestId === "string" ? request.requestId : null;
+        const sentinelNames = new Set(["exec_rejected", "exec_timeout", "exec_unknown", "sandbox_host_unavailable",
+          "sandbox_observation_unavailable", "sandbox_operation_unsupported", "sandbox_restart_observation_failed",
+          "sandbox_scope_changed", "sandbox_stop_observation_failed"]);
+        const rawSentinel = error instanceof Error ? error.message : "";
+        const sentinel = sentinelNames.has(rawSentinel) ? rawSentinel : "unclassified_host_error";
+        const rawErrorType = error && typeof error === "object" && "name" in error ? String(error.name) : "";
+        const errorType = (["Error", "TypeError", "RangeError", "AbortError"] as const)
+          .find(name => name === rawErrorType) ?? "Other";
+        const deadline = typeof request?.deadlineAt === "string" ? Date.parse(request.deadlineAt) : Number.NaN;
+        const remaining = Number.isFinite(deadline) ? deadline - Date.now() : null;
+        const phaseValue = request?.modelBrokerSession?.phase;
+        const phase = phaseValue === "start" || phaseValue === "refresh" || phaseValue === "stop" ? phaseValue : null;
+        const argv = Array.isArray(request?.argv) ? request.argv : [];
+        const sourceFrames = (error instanceof Error && typeof error.stack === "string" ? error.stack.split("\n") : [])
+          .flatMap(frame => {
+            const match = /openshell\.mjs:(\d+):\d+\)?$/.exec(frame.trim());
+            return match ? [{ source: "openshell.mjs" as const, line: Number(match[1]) }] : [];
+          }).filter(frame => Number.isSafeInteger(frame.line) && frame.line > 0).slice(0, 8);
+        let refreshCredentialFacts: Record<string, boolean | number | string | null> | undefined;
+        if (phase === "refresh") {
+          const broker = request?.modelBrokerCredential;
+          const descriptor = request?.modelBrokerSession;
+          let claims: Record<string, any> | null = null;
+          if (typeof broker?.capabilityToken === "string" && broker.capabilityToken.length <= 16_384) {
+            try {
+              claims = JSON.parse(Buffer.from(broker.capabilityToken.split(".")[1] ?? "", "base64url").toString("utf8"));
+            } catch { claims = null; }
+          }
+          let hostJournal: any = null;
+          if (sessionHostJournalFile) {
+            try { hostJournal = JSON.parse(readFileSync(sessionHostJournalFile, "utf8")); } catch { hostJournal = null; }
+          }
+          const sessionEntry = typeof descriptor?.sessionKey === "string"
+            ? hostJournal?.modelBrokerSessions?.[descriptor.sessionKey] : null;
+          const credentialExpiry = typeof broker?.expiresAt === "string" ? Date.parse(broker.expiresAt) : Number.NaN;
+          const sessionDeadline = typeof descriptor?.sessionDeadlineAt === "string" ? Date.parse(descriptor.sessionDeadlineAt) : Number.NaN;
+          const activeExpiry = sessionEntry && typeof sessionEntry.expiresAt === "string" ? Date.parse(sessionEntry.expiresAt) : Number.NaN;
+          const expiryRelation = Number.isFinite(credentialExpiry) && Number.isFinite(activeExpiry)
+            ? credentialExpiry === activeExpiry ? "equal" : credentialExpiry < activeExpiry ? "earlier" : "later" : "unknown";
+          let authority: Record<string, unknown> | null = null;
+          let familyValid = false;
+          if (claims?.scope === "worker_model" && claims.worker_model && !claims.conversation_model) {
+            const b = claims.worker_model;
+            familyValid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.planId ?? "") &&
+              /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.workerId ?? "") &&
+              /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.workerAttemptId ?? "") && b.executionManifestId === request?.manifestId &&
+              Number.isSafeInteger(b.expectedPlanVersion) && b.expectedPlanVersion >= 1;
+            if (familyValid) authority = { scope: claims.scope, sub: claims.sub, company_id: claims.company_id,
+              run_id: claims.run_id, responsible_user_id: claims.responsible_user_id, instance_id: claims.instance_id, worker_model: b };
+          } else if (claims?.scope === "conversation_model" && claims.conversation_model && !claims.worker_model) {
+            const b = claims.conversation_model;
+            familyValid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.issueId ?? "") && Number.isSafeInteger(b.conversationSessionGeneration) &&
+              b.conversationSessionGeneration >= 0 && b.executionManifestId === request?.manifestId &&
+              b.executionManifestHash === request?.manifestHash;
+            if (familyValid) authority = { scope: claims.scope, sub: claims.sub, company_id: claims.company_id,
+              run_id: claims.run_id, responsible_user_id: claims.responsible_user_id, instance_id: claims.instance_id, conversation_model: b };
+          }
+          const tokenIat = claims?.iat;
+          const tokenExp = claims?.exp;
+          const tokenTimesValid = claims !== null && Number.isSafeInteger(tokenIat) && Number.isSafeInteger(tokenExp) &&
+            tokenExp > tokenIat && tokenExp - tokenIat <= 300;
+          const claimIdentityMatches = typeof claims?.sub === "string" && claims.sub.length > 0 &&
+            typeof claims?.responsible_user_id === "string" && claims.responsible_user_id.length > 0 &&
+            claims?.company_id === hostInput?.scope?.companyId && claims?.run_id === request?.runId;
+          const tokenExpiryCoversCredential = claims !== null && Number.isFinite(credentialExpiry) &&
+            Number.isSafeInteger(tokenExp) && tokenExp * 1000 >= credentialExpiry;
+          const credentialExpiryWithinSession = Number.isFinite(credentialExpiry) && Number.isFinite(sessionDeadline) &&
+            credentialExpiry > Date.now() && credentialExpiry <= sessionDeadline;
+          const boundsValid = Number.isSafeInteger(broker?.inputTokensUpperBound) && broker.inputTokensUpperBound >= 1 &&
+            broker.inputTokensUpperBound <= 2_000_000 && Number.isSafeInteger(broker?.maxOutputTokens) &&
+            broker.maxOutputTokens >= 256 && broker.maxOutputTokens <= 8192;
+          let requestBindingMatches = false;
+          if (descriptor && hostInput?.scope && request) {
+            const binding = { companyId: hostInput.scope.companyId, runId: request.runId, attemptId: request.attemptId,
+              attempt: request.attempt, bindingId: request.bindingId, cellId: hostInput.scope.cellId,
+              generation: hostInput.scope.cellGeneration, hostEpoch: request.hostEpoch, manifestId: request.manifestId,
+              manifestHash: request.manifestHash, policySnapshotId: request.policySnapshotId, policyHash: request.policyHash,
+              sessionKey: descriptor.sessionKey, nativeSessionIdDigest: descriptor.nativeSessionIdDigest,
+              runnerInstanceId: descriptor.runnerInstanceId, leaseId: descriptor.leaseId,
+              sessionDeadlineAt: descriptor.sessionDeadlineAt };
+            try { requestBindingMatches = Boolean(sessionEntry?.binding) && nativeSha256(binding) === nativeSha256(sessionEntry.binding); }
+            catch { requestBindingMatches = false; }
+          }
+          let authorityMatchesEntry = false;
+          if (authority && typeof sessionEntry?.authorityHash === "string") {
+            try { authorityMatchesEntry = nativeSha256(authority) === sessionEntry.authorityHash; }
+            catch { authorityMatchesEntry = false; }
+          }
+          const activeExpiryRemainingMs = Number.isFinite(activeExpiry) ? Math.trunc(activeExpiry - Date.now()) : null;
+          refreshCredentialFacts = {
+            credentialPresent: Boolean(broker && typeof broker.capabilityToken === "string"),
+            tokenParsed: claims !== null, tokenFamilyValid: familyValid, claimIdentityMatches,
+            tokenTimesValid, tokenUnexpired: claims !== null && Number.isSafeInteger(tokenExp) && tokenExp * 1000 > Date.now(),
+            tokenExpiryCoversCredential, credentialExpiryFutureWithinSession: credentialExpiryWithinSession,
+            boundsValid,
+            sessionEntryPresent: Boolean(sessionEntry), sessionEntryActive: sessionEntry?.state === "active",
+            sessionEntryUpdating: sessionEntry?.state === "updating", nextCapabilityHashPresent: typeof sessionEntry?.nextCapabilityHash === "string",
+            expectedCapabilityHashMatches: typeof descriptor?.expectedCapabilityHash === "string" &&
+              descriptor.expectedCapabilityHash === sessionEntry?.capabilityHash,
+            requestBindingMatches, authorityMatchesEntry,
+            profileMatchesEntry: Boolean(broker && sessionEntry) && broker?.profileId === sessionEntry?.profileId &&
+              broker?.profileHash === sessionEntry?.profileHash,
+            inputBoundsMatchEntry: Boolean(broker && sessionEntry) &&
+              broker?.inputTokensUpperBound === sessionEntry?.inputTokensUpperBound && broker?.maxOutputTokens === sessionEntry?.maxOutputTokens,
+            descriptorDeadlineMatchesEntry: descriptor?.sessionDeadlineAt === sessionEntry?.binding?.sessionDeadlineAt,
+            expiryRelation, activeExpiryRemainingMs,
+          };
+        }
+        const record = requestId ? hostExecErrorFactByRequestId.get(requestId) : undefined;
+        record?.({ sentinel, errorType, signalAborted: signal?.aborted === true,
+          deadlineRemainingMs: remaining === null ? null : Math.trunc(remaining), phase,
+          monitorLabel: argv[0] === "sh" && argv[1] === "-c" && argv[2] === "paperclip-runner-monitor", sourceFrames,
+          ...(refreshCredentialFacts ? { refreshCredentialFacts } : {}) });
+        throw error;
+      }
+    };
   };
   const createBindingForRun=async(credentialBinding: typeof runtimeBrokerBinding, exactTaskRoot: string)=>{
     binding = await service.create(actor, companyId, { runtimeCellId: cell.id,
@@ -1374,7 +1731,7 @@ export async function configureManagedConversationSandboxHost(input: {
           .filter(value => Number.isFinite(value));
         const hostDeadlineAt = new Date(Math.min(now + 30_000, ...deadlines)).toISOString();
         const nativeSessionBacking = action === "erase_native_session"
-          ? attachActualNativeSessionBacking(command, Date.parse(hostDeadlineAt)) : null;
+          ? await attachActualNativeSessionBacking(command, Date.parse(hostDeadlineAt)) : null;
         const observed = await sessionHostEngine.execute(claim.id, command, hostDeadlineAt);
         if (observed.success && action === "prepare" && command.provisioning && !observed.reply?.requiresRecreate) {
           const actual = observed.reply;
@@ -2005,21 +2362,46 @@ export async function configureManagedConversationSandboxHost(input: {
     if (!hostHeartbeatInFlight) void heartbeatHost().catch(() => {});
   }, 20_000);
   hostHeartbeatTimer.unref();
+  const safeNativeRunnerClosureObservation = () => {
+    const witness = nativeRunnerClosureWitness;
+    return witness ? {
+      present: true, phase: witness.phase, launchMatched: witness.launchMatched,
+      identityMatched: witness.identityMatched, runPidStartedAtMatched: witness.runPidStartedAtMatched,
+      identityVerdict: witness.identityVerdict, processGone: witness.processGone,
+      nonceMatches: witness.nonceMatches, runnerMatches: witness.runnerMatches,
+      previousLiveGroupKnown: witness.previousLiveGroupKnown,
+      previousLiveSessionKnown: witness.previousLiveSessionKnown,
+      processGroupLive: witness.processGroupLive, processSessionLive: witness.processSessionLive,
+      fdOrCwdSessionsHolders: witness.fdOrCwdSessionsHolders, fdOrCwdScanComplete: witness.fdOrCwdScanComplete,
+      noSessionHandles: witness.noSessionHandles,
+      stopCheckerExit: witness.stopCheckerExit, stopReceiptMatched: witness.stopReceiptMatched,
+    } : { present: false, phase: "none", launchMatched: false, identityMatched: false,
+      runPidStartedAtMatched: false, identityVerdict: "unknown", processGone: false, previousLiveGroupKnown: false,
+      nonceMatches: false, runnerMatches: false, previousLiveSessionKnown: false, processGroupLive: null, processSessionLive: null,
+      fdOrCwdSessionsHolders: null, fdOrCwdScanComplete: false, noSessionHandles: false,
+      stopCheckerExit: null, stopReceiptMatched: false };
+  };
+  const relayPreflightFacts: Array<{ phase: "start" | "refresh" | "stop" | "none"; nativePreparationPurpose: string | null;
+    brokerCredentialPresent: boolean; modelCredentialPresent: boolean; managedOriginPresent: boolean;
+    managedOriginMatches: boolean; noBrokerPreparation: boolean; noCredentialEnvironment: boolean;
+    exactSessionStop: boolean }> = [];
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
     managedModelBrokerOriginPresent: boolean; modelBrokerSessionPhase: string | null;
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
     nativePreparationPurpose: string | null; providerPackImageProbe: boolean;
-    exitCode: number | null; timedOut: boolean; erasureFailureGuard: string | null; hostSessionErrorCode: string | null }> = [];
+    exitCode: number | null; timedOut: boolean; erasureFailureGuard: string | null; hostSessionErrorCode: string | null;
+    hostSessionErrorDetails?: SafeHostExecErrorDetails }> = [];
   relayHost.on("message", raw => {
     let message: Record<string, any>;
     try { message = JSON.parse(raw.toString()) as Record<string, any>; } catch { return; }
     if (message.type !== "exec_open" || !Array.isArray(message.request?.argv) || typeof message.channelId !== "string") return;
     const request = message.request as Record<string, any>;
+    const requestDeadlineMs = typeof request.deadlineAt === "string" ? Date.parse(request.deadlineAt) : Number.NaN;
     const requestEnv = request.env && typeof request.env === "object" ? request.env as Record<string, unknown> : {};
     const requestArgv = request.argv as string[];
     const nativePreparationPurpose = purposeByRequestId.get(request.requestId) ??
       (requestArgv[3] === "paperclip-native-asset-erasure" ? "native_provider_data_erasure" : null);
-    const requestLabel = requestArgv[0] === "sh" && requestArgv[1] === "-c" ? requestArgv[2] : null;
+    const requestLabel = requestArgv[0] === "sh" && requestArgv[1] === "-c" ? requestArgv[3] : null;
     relayCommandOwnerByRequestId.set(request.requestId, requestLabel === "paperclip-runner-monitor"
       ? "runner_monitor" : requestLabel === "paperclip-runner-process-identity"
         ? "runner_identity_read" : requestLabel === "paperclip-runner-signal"
@@ -2050,6 +2432,19 @@ export async function configureManagedConversationSandboxHost(input: {
       request.modelBrokerCredential === undefined && request.brokerCredential === undefined && noCredentialEnvironment &&
       requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === undefined;
     if (!managedModelOriginMatches && !credentialFreePreparation && !credentialFreeModelSessionStop) {
+      if (sessionStop?.phase === "refresh") relayPreflightFacts.push({
+        phase: "refresh",
+        nativePreparationPurpose: ["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare",
+          "native_provider_data_erasure", "native_provider_data_erasure_probe"].includes(nativePreparationPurpose ?? "")
+          ? nativePreparationPurpose : null,
+        brokerCredentialPresent: Boolean(request.brokerCredential),
+        modelCredentialPresent: Boolean(request.modelBrokerCredential),
+        managedOriginPresent: typeof requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === "string",
+        managedOriginMatches: managedModelOriginMatches,
+        noBrokerPreparation,
+        noCredentialEnvironment,
+        exactSessionStop,
+      });
       relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId, exitCode: 126, timedOut: false }));
       return;
     }
@@ -2067,15 +2462,59 @@ export async function configureManagedConversationSandboxHost(input: {
       assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
       nativePreparationPurpose, providerPackImageProbe,
       exitCode: null as number | null, timedOut: false, erasureFailureGuard: null as string | null,
-      hostSessionErrorCode: null as string | null };
+      hostSessionErrorCode: null as string | null, hostSessionErrorDetails: undefined as SafeHostExecErrorDetails | undefined };
     execFacts.push(fact);
+    if (typeof request.requestId === "string") hostExecErrorFactByRequestId.set(request.requestId, details => {
+      fact.hostSessionErrorDetails = details;
+    });
+    const sessionPhase = request.modelBrokerSession && typeof request.modelBrokerSession === "object"
+      ? request.modelBrokerSession.phase : null;
+    const launchPath = requestLabel === "paperclip-runner-launch" && typeof requestArgv[4] === "string" ? requestArgv[4] : null;
+    const launchNonce = requestLabel === "paperclip-runner-launch" && typeof requestArgv[5] === "string" ? requestArgv[5] : null;
+    const launchRunnerId = requestLabel === "paperclip-runner-launch" && typeof requestArgv[6] === "string" ? requestArgv[6] : null;
+    const launchSessionKey = typeof request.modelBrokerSession?.sessionKey === "string" ? request.modelBrokerSession.sessionKey : null;
+    const launchSessionDigest = typeof request.modelBrokerSession?.nativeSessionIdDigest === "string"
+      ? request.modelBrokerSession.nativeSessionIdDigest : null;
+    const launchStartBindingDigest = typeof request.modelBrokerSession?.startBindingDigest === "string"
+      ? request.modelBrokerSession.startBindingDigest : null;
+    const launchLeaseId = typeof request.modelBrokerSession?.leaseId === "string" ? request.modelBrokerSession.leaseId : null;
+    const launchSessionDeadlineAt = typeof request.modelBrokerSession?.sessionDeadlineAt === "string"
+      ? request.modelBrokerSession.sessionDeadlineAt : null;
+    const launchModelRunnerId = typeof request.modelBrokerSession?.runnerInstanceId === "string"
+      ? request.modelBrokerSession.runnerInstanceId : null;
+    const launchSessionMatch = Boolean(launchPath && expectedTaskRoot &&
+      launchPath.startsWith(`${join(expectedTaskRoot, ".paperclip-runtime", "paperclip-runner", "sessions")}/`) &&
+      /^\/[\w./-]+\/runner\/runner-process\.identity$/.test(launchPath) &&
+      typeof launchNonce === "string" && /^[0-9a-f-]{36}$/i.test(launchNonce) &&
+      typeof launchRunnerId === "string" && /^[0-9a-f-]{36}$/i.test(launchRunnerId) &&
+      typeof launchSessionKey === "string" && /^[a-f0-9]{64}$/.test(launchSessionKey) &&
+      typeof launchSessionDigest === "string" && /^[a-f0-9]{64}$/.test(launchSessionDigest) &&
+      typeof launchStartBindingDigest === "string" && /^[a-f0-9]{64}$/.test(launchStartBindingDigest) &&
+      typeof launchLeaseId === "string" && /^[0-9a-f-]{36}$/i.test(launchLeaseId) &&
+      typeof launchSessionDeadlineAt === "string" && Number.isFinite(Date.parse(launchSessionDeadlineAt)) &&
+      launchModelRunnerId === launchRunnerId &&
+      launchSessionDigest === launchPath.split("/").at(-3) &&
+      sessionPhase === "start" && cwd === expectedTaskRoot && expectedRunId !== null);
+    const identityRead = requestLabel === "paperclip-runner-process-identity" &&
+      requestArgv[0] === "sh" && requestArgv[1] === "-c" &&
+      typeof requestArgv[4] === "string" && nativePreparationPurpose === "native_harness_state" && cwd === expectedTaskRoot;
+    const monitorOperation = requestLabel === "paperclip-runner-monitor" && requestArgv[0] === "sh" && requestArgv[1] === "-c" &&
+      requestArgv[2] === REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT && typeof requestArgv[4] === "string";
+    const identityOutput: Buffer[] = [];
+    let identityOutputBytes = 0;
+    let streamStarted = false;
     void (async () => {
       try {
         if (!sessionHostEngine || typeof message.capabilityToken !== "string") throw new Error("sandbox_host_unavailable");
+        activeHostExecStreams++;
+        streamStarted = true;
         const result = await sessionHostEngine.executeStream({ scope: {
           companyId, bindingId: identity.bindingId, cellId: identity.cellId,
           cellGeneration: identity.cellGeneration, sandboxRef: identity.sandboxRef,
         }, request, capabilityToken: message.capabilityToken }, (stream: "stdout" | "stderr", chunk: Buffer) => {
+          if (identityRead && stream === "stdout" && identityOutputBytes + chunk.byteLength <= 2048) {
+            identityOutput.push(Buffer.from(chunk)); identityOutputBytes += chunk.byteLength;
+          } else if (identityRead && stream === "stdout") identityOutputBytes = 2049;
           if (nativePreparationPurpose === "native_provider_data_erasure" && stream === "stderr") {
             const text = chunk.toString("utf8");
             const identityCleanup = /^remote_identity_cleanup_failed:([a-z_]{1,40}):([0-9]{1,3})\s*$/m.exec(text);
@@ -2086,6 +2525,115 @@ export async function configureManagedConversationSandboxHost(input: {
           relayHost.send(JSON.stringify({ type: "exec_output", channelId: message.channelId,
             stream, base64: chunk.toString("base64") }));
         });
+        if (launchSessionMatch && result.exitCode === 0 && !result.timedOut && launchPath && launchNonce && launchRunnerId &&
+            launchSessionKey && launchSessionDigest && launchStartBindingDigest && launchLeaseId &&
+            launchSessionDeadlineAt && launchModelRunnerId &&
+            result.modelBrokerSessionReceipt?.sessionKey === launchSessionKey &&
+            typeof result.modelBrokerSessionReceipt?.capabilityHash === "string" &&
+            /^[a-f0-9]{64}$/.test(result.modelBrokerSessionReceipt.capabilityHash)) {
+          const sessionDigest = launchPath.split("/").at(-3) ?? "";
+          const expectedIdentityPath = join(expectedTaskRoot!, ".paperclip-runtime", "paperclip-runner", "sessions",
+            sessionDigest, "runner", "runner-process.identity");
+          nativeRunnerClosureWitness = {
+            phase: "launch_observed", launchMatched: launchPath === expectedIdentityPath && /^[a-f0-9]{64}$/.test(sessionDigest),
+            nonceMatches: false, runnerMatches: false, identityMatched: false, runPidStartedAtMatched: false, identityVerdict: "unknown",
+            previousLiveGroupKnown: false, previousLiveSessionKnown: false, processGone: false,
+            processGroupLive: null, processSessionLive: null,
+            fdOrCwdSessionsHolders: null, fdOrCwdScanComplete: false, noSessionHandles: false,
+            runId: expectedRunId!, taskRoot: expectedTaskRoot!,
+            identityPath: launchPath, nonce: launchNonce, runnerId: launchRunnerId,
+            sessionKey: launchSessionKey, sessionDigest: launchSessionDigest, leaseId: launchLeaseId,
+            sessionDeadlineAt: launchSessionDeadlineAt, expectedCapabilityHash: result.modelBrokerSessionReceipt.capabilityHash,
+            pid: null, startedAt: null,
+            processFingerprint: null, processGroupId: null, processSessionId: null, stopCheckerExit: null, stopReceiptMatched: false,
+            startBindingDigest: launchStartBindingDigest,
+          };
+        }
+        if (identityRead && result.exitCode === 0 && !result.timedOut && identityOutputBytes <= 2048 && nativeRunnerClosureWitness) {
+          const witness = nativeRunnerClosureWitness;
+          const identityPath = requestArgv[4]!;
+          const marker = Buffer.concat(identityOutput).toString("utf8").split(/\r?\n/);
+          const pid = Number(marker[1]);
+          const startedAt = marker[2];
+          const processFingerprint = marker[4];
+          const pathMatches = identityPath === witness.identityPath && identityPath === join(expectedTaskRoot!,
+            ".paperclip-runtime", "paperclip-runner", "sessions", witness.sessionDigest, "runner", "runner-process.identity");
+          const nonceMatches = marker.length >= 5 && marker[0] === witness.nonce;
+          const runnerMatches = marker.length >= 5 && marker[3] === witness.runnerId;
+          const markerMatches = marker.length >= 5 && nonceMatches && runnerMatches &&
+            Number.isSafeInteger(pid) && pid > 0 && typeof startedAt === "string" && Number.isFinite(Date.parse(startedAt)) &&
+            typeof processFingerprint === "string" && /^linux:[0-9a-f-]+:\d+$/.test(processFingerprint);
+          const group = markerMatches ? nativeProcessGroupSession(pid, requestDeadlineMs) : null;
+          witness.nonceMatches = nonceMatches;
+          witness.runnerMatches = runnerMatches;
+          witness.identityMatched = pathMatches && markerMatches;
+          // onSpawn persists the durable run PID/start timestamp only after
+          // this marker-read command has returned. Bind those exact fields at
+          // the first subsequent successful signed liveness monitor instead.
+          witness.runPidStartedAtMatched = false;
+          witness.identityVerdict = witness.identityMatched ? "unknown" : "mismatch";
+          witness.phase = witness.identityMatched ? "identity_matched" : "invalid";
+          witness.pid = markerMatches ? pid : null; witness.startedAt = markerMatches ? startedAt : null;
+          witness.processFingerprint = markerMatches ? processFingerprint : null;
+          witness.processGroupId = group?.pgid ?? null; witness.processSessionId = group?.sid ?? null;
+        }
+        if (monitorOperation && nativeRunnerClosureWitness) {
+          const witness = nativeRunnerClosureWitness;
+          const argsMatch = requestArgv[4] === witness.identityPath && requestArgv[5] === witness.nonce &&
+            requestArgv[6] === witness.runnerId && requestArgv[7] === String(witness.pid) &&
+            (request.modelBrokerSession?.phase === "refresh" || request.modelBrokerSession?.phase === "stop") &&
+            request.modelBrokerSession?.sessionKey === witness.sessionKey &&
+            request.modelBrokerSession?.nativeSessionIdDigest === witness.sessionDigest &&
+            request.modelBrokerSession?.runnerInstanceId === witness.runnerId &&
+            request.modelBrokerSession?.leaseId === witness.leaseId &&
+            request.modelBrokerSession?.sessionDeadlineAt === witness.sessionDeadlineAt &&
+            request.modelBrokerSession?.expectedCapabilityHash === witness.expectedCapabilityHash &&
+            nativePreparationPurpose === "native_harness_state";
+          if (argsMatch && request.modelBrokerSession?.phase === "refresh" && result.exitCode === 0 && !result.timedOut &&
+              witness.identityMatched) {
+            const [run] = expectedRunId === witness.runId
+              ? await db.select({ processPid: heartbeatRuns.processPid, processStartedAt: heartbeatRuns.processStartedAt })
+                .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, witness.runId))).limit(1)
+              : [];
+            witness.runPidStartedAtMatched = Boolean(run && run.processPid === witness.pid &&
+              run.processStartedAt instanceof Date && run.processStartedAt.toISOString() === witness.startedAt);
+            const group = witness.pid ? nativeProcessGroupSession(witness.pid, requestDeadlineMs) : null;
+            witness.previousLiveGroupKnown = Boolean(witness.runPidStartedAtMatched && group &&
+              group.pgid === witness.pid && group.pgid === group.sid);
+            witness.previousLiveSessionKnown = Boolean(witness.runPidStartedAtMatched && group && group.sid === witness.pid);
+            witness.processGroupId = group?.pgid ?? null; witness.processSessionId = group?.sid ?? null;
+            witness.identityVerdict = witness.runPidStartedAtMatched && witness.previousLiveGroupKnown &&
+              witness.previousLiveSessionKnown ? "alive" : "mismatch";
+            witness.phase = witness.identityVerdict === "alive" ? "alive_observed" : "invalid";
+          } else if (argsMatch && result.exitCode === 3 && !result.timedOut && witness.identityMatched &&
+              witness.runPidStartedAtMatched && witness.previousLiveGroupKnown && witness.previousLiveSessionKnown &&
+              request.modelBrokerSession?.phase === "stop") {
+            const marker = readFileSync(witness.identityPath, "utf8").split(/\r?\n/);
+            const markerStillMatches = marker.length >= 5 && marker[0] === witness.nonce && marker[1] === String(witness.pid) &&
+              marker[2] === witness.startedAt && marker[3] === witness.runnerId && marker[4] === witness.processFingerprint;
+            const stopCheck = markerStillMatches && Number.isFinite(requestDeadlineMs) && Date.now() < requestDeadlineMs
+              ? spawnSync("sh", ["-c", REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
+                "paperclip-runner-monitor", witness.identityPath, witness.nonce, witness.runnerId, String(witness.pid)], {
+                cwd: witness.taskRoot, encoding: "utf8", timeout: Math.max(1, Math.min(1000, requestDeadlineMs - Date.now())),
+                maxBuffer: 16 * 1024,
+              }) : null;
+            const independentGone = Boolean(stopCheck && !stopCheck.error && stopCheck.signal === null && stopCheck.status === 3 &&
+              nativeProcessGone(witness.pid!, requestDeadlineMs));
+            const groups = independentGone && witness.processGroupId !== null && witness.processSessionId !== null
+              ? nativeGroupSessionLiveCounts(witness.processGroupId, witness.processSessionId, requestDeadlineMs) : null;
+            const stopReceiptMatched = Boolean(result.modelBrokerSessionReceipt && request.modelBrokerSession?.phase === "stop" &&
+              result.modelBrokerSessionReceipt.sessionKey === witness.sessionKey &&
+              result.modelBrokerSessionReceipt.capabilityHash === request.modelBrokerSession.expectedCapabilityHash &&
+              result.modelBrokerSessionReceipt.capabilityHash === witness.expectedCapabilityHash);
+            if (independentGone && groups?.groupLive === 0 && groups.sessionLive === 0 && stopReceiptMatched) {
+              witness.stopCheckerExit = stopCheck!.status;
+              witness.stopReceiptMatched = true;
+              witness.processGone = true;
+              witness.processGroupLive = groups.groupLive; witness.processSessionLive = groups.sessionLive;
+              witness.phase = "stop_observed"; witness.identityVerdict = "gone";
+            } else { witness.phase = "invalid"; witness.identityVerdict = "mismatch"; }
+          }
+        }
         if (result.modelBrokerSessionReceipt) modelBrokerSessionReceipts.push({
           phase: request.modelBrokerSession?.phase ?? "unknown",
           sessionKey: result.modelBrokerSessionReceipt.sessionKey,
@@ -2103,9 +2651,15 @@ export async function configureManagedConversationSandboxHost(input: {
           ...(result.modelBrokerSessionReceipt ? { modelBrokerSessionReceipt: result.modelBrokerSessionReceipt } : {}) }));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "";
-        fact.hostSessionErrorCode = /^[a-z][a-z0-9_:-]{0,99}$/.test(errorMessage) ? errorMessage : "unclassified_host_error";
+        const safeHostSentinels = new Set(["exec_rejected", "exec_timeout", "exec_unknown", "sandbox_host_unavailable",
+          "sandbox_observation_unavailable", "sandbox_operation_unsupported", "sandbox_restart_observation_failed",
+          "sandbox_scope_changed", "sandbox_stop_observation_failed"]);
+        fact.hostSessionErrorCode = safeHostSentinels.has(errorMessage) ? errorMessage : "unclassified_host_error";
         fact.exitCode = 126;
         relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId, exitCode: 126, timedOut: false }));
+      } finally {
+        if (streamStarted) activeHostExecStreams--;
+        if (typeof request.requestId === "string") hostExecErrorFactByRequestId.delete(request.requestId);
       }
     })();
   });
@@ -2114,8 +2668,8 @@ export async function configureManagedConversationSandboxHost(input: {
   const beforeNativeExecution = async ({ runId, issueId, bootstrapSourceClosure }: {
     runId: string; issueId: string | null; bootstrapSourceClosure?: NativeBootstrapSourceClosure;
   }) => {
-    if (input.ordinaryWorkerRunId) {
-      if (runId !== input.ordinaryWorkerRunId || !bootstrapSourceClosure)
+    if (ordinaryWorkerMode) {
+      if ((input.ordinaryWorkerRunId !== undefined && runId !== input.ordinaryWorkerRunId) || !bootstrapSourceClosure)
         throw new Error("worker_software_host_bootstrap_closure_missing");
       if (ordinaryBootstrapClosure && nativeSha256(ordinaryBootstrapClosure) !== nativeSha256(bootstrapSourceClosure))
         throw new Error("worker_software_host_bootstrap_closure_changed");
@@ -2167,7 +2721,7 @@ export async function configureManagedConversationSandboxHost(input: {
       companyId, agentId, issueId, runId, responsibleUserId: run?.responsibleUserId,
       conversationSessionGeneration: conversationGeneration });
     let taskRoot = scope && scope.projectId === null ? nativeChatWorkspaceCwd(scope, null, false) : null;
-    if (input.ordinaryWorkerRunId) {
+    if (ordinaryWorkerMode) {
       const workerRun = await assertOrdinaryWorker(runId);
       if (scope) throw new Error("worker_software_host_workspace_owner_changed");
       const profile = workerRun.runnerProfileJson as Record<string, unknown> | null;
@@ -2319,6 +2873,8 @@ export async function configureManagedConversationSandboxHost(input: {
   const preinstalledPack = join(providerImageHome, ".local", "share", "paperclip-runner", "provider-pack");
   mkdirSync(join(providerImageHome, ".local", "share", "paperclip-runner"), { recursive: true, mode: 0o700 });
   symlinkSync(providerPackRoot, preinstalledPack, "dir");
+  const previousInstalledPackRoot = process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT;
+  process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT = preinstalledPack;
 
   return {
     leaseExpiryForRun: (runStartedAt: Date, callerDeadlineAt: Date) => {
@@ -2362,6 +2918,9 @@ export async function configureManagedConversationSandboxHost(input: {
       if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")console.info("conversation_software_host_preparation",JSON.stringify({phase:preparationStage,
         expectedRunBound:Boolean(expectedRunId),bindingPresent:Boolean(binding),execCount:execFacts.length,
         executables:[...new Set(execFacts.map(fact=>fact.executable.split("/").at(-1)))],lastExecs:execFacts.slice(-6),credentialProbes:qualificationToolResponses,
+        hostSessionErrorFacts:execFacts.flatMap(fact=>fact.hostSessionErrorDetails?[fact.hostSessionErrorDetails]:[]).slice(-8),
+        hostRelayPreflightFacts:relayPreflightFacts.slice(-8),
+        nativeRunnerClosureWitness:safeNativeRunnerClosureObservation(),
         softwareProbeCount:softwareProbeObservations.length,qualificationEvidence,failures:sandboxExecutionFailures}));
       const sandboxStageCounts = execFacts.reduce<Record<string, { calls: number; nonzeroExits: number; timeouts: number }>>((counts, fact) => {
         const stage = fact.nativePreparationPurpose ?? "unclassified";
@@ -2378,6 +2937,7 @@ export async function configureManagedConversationSandboxHost(input: {
       preAdmissionObservation,
       modelBrokerSessionReceipts: [...modelBrokerSessionReceipts],
       nativeSessionBackingObservations: [...nativeSessionBackingObservations],
+      nativeRunnerClosureWitness: safeNativeRunnerClosureObservation(),
       nativeSessionBackingTransfers: [...nativeSessionBackingByKey.values()].map(value => ({
         sessionDigest: value.sessionDigest, taskRootMatches: value.taskRoot === expectedTaskRoot,
         rootIdentityWitnessed: value.witnessMatched,
@@ -2396,6 +2956,7 @@ export async function configureManagedConversationSandboxHost(input: {
       execCount: execFacts.length, exactPrivateCwdCount: execFacts.filter(fact => fact.cwdExact).length,
       managedModelCredentialCount: execFacts.filter(fact => fact.modelCredentialPresent).length,
       execFacts,
+      hostSessionErrorFacts: execFacts.flatMap(fact => fact.hostSessionErrorDetails ? [fact.hostSessionErrorDetails] : []).slice(-8),
       assignedMcpEnvironmentAbsentCount: execFacts.filter(fact => fact.assignedMcpEnvironmentAbsent).length,
       preparationStage,negativeControls:negativeAdmissionControls,
       negativeNativeSessionStartControls,
@@ -2408,6 +2969,10 @@ export async function configureManagedConversationSandboxHost(input: {
       relayHost.close(); await new Promise<void>(resolve => relayServer.close(() => resolve())); await runtime.relay.stop();
       if (originalDockerHttpRequest) http.request = originalDockerHttpRequest;
       if (previousHostName === undefined) delete process.env.HOSTNAME; else process.env.HOSTNAME = previousHostName;
+      if (process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT === preinstalledPack) {
+        if (previousInstalledPackRoot === undefined) delete process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT;
+        else process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT = previousInstalledPackRoot;
+      }
       if (providerImageHome) rmSync(providerImageHome, { recursive: true, force: true }); },
   };
 }

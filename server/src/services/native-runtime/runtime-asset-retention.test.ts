@@ -4,8 +4,17 @@ import { spawn, spawnSync } from "node:child_process";
 import { access, chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { environmentLeases, heartbeatRuns, memoryJobs, nativeRunFinalizations, runtimeHostCommands, type Db } from "@paperclipai/db";
+import { SANDBOX_HOST_COMMAND } from "@paperclipai/shared";
+import { nativeSha256 } from "./canonical.js";
+const canonicalStopOwner = vi.hoisted(() => ({ receipt: null as unknown }));
+vi.mock("../remote-execution-termination.js", () => ({ remoteExecutionHasStopped: async () => true }));
+vi.mock("../execution-sandbox/run-lease-cleanup.js", () => ({
+  verifyNativeCleanupRuntimeState: async () => canonicalStopOwner.receipt,
+}));
 import {
+  assertRemoteRuntimeAssetErasureReady,
   createRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetLocator,
   isRemoteRuntimeAssetRemovalReceipt,
@@ -352,4 +361,123 @@ describe("remote Native runtime asset erasure binding", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  // Exercise the real claim/ledger/descriptor reader through public readiness.
+  // The B verifier boundary supplies its actual normalized proof shape (as in
+  // the R175 PG readback), which deliberately has no policyHash. This fixture
+  // does not qualify signatures or replace the signed Stop integration lane.
+  function replayFixture(variant: "valid" | "wrong_policy" | "wrong_start" | "missing_start" = "valid") {
+    const sessionId = randomUUID(), cwd = "/workspace/replay";
+    const locator = createRemoteRuntimeAssetLocator({ companyId: randomUUID(), runId: randomUUID(),
+      environmentId: randomUUID(), environmentLeaseId: randomUUID(), provider: "sandbox-fixture",
+      providerLeaseId: "fixture-lease", runnerInstanceId: randomUUID(), normalizedSessionId: sessionId, remoteCwd: cwd });
+    const scope = { companyId: locator.companyId, bindingId: randomUUID(), cellId: randomUUID(),
+      cellGeneration: "7", sandboxRef: "" };
+    scope.sandboxRef = `aw-v7-${scope.bindingId}`;
+    const hostId = randomUUID(), policyHash = "a".repeat(64), imageDigest = `fixture/image@sha256:${"b".repeat(64)}`;
+    const originalStart = { schema: "paperclip.remote-native-session-start-binding.v1",
+      locatorDigest: remoteRuntimeAssetLocatorDigest(locator), runnerInstanceId: locator.runnerInstanceId,
+      environmentLeaseId: locator.environmentLeaseId, provider: locator.provider, providerLeaseId: locator.providerLeaseId,
+      normalizedSessionIdDigest: locator.normalizedSessionIdDigest, hostId, hostEpoch: 1, cellId: scope.cellId,
+      cellGeneration: scope.cellGeneration, bindingId: scope.bindingId, manifestId: randomUUID(),
+      manifestHash: "c".repeat(64), policySnapshotId: randomUUID(), policyHash };
+    const requestId = randomUUID();
+    const startRow = { runtimeHostId: hostId, runtimeCellId: scope.cellId, cellGeneration: 7n,
+      idempotencyKey: requestId, completedAt: new Date(), safeResult: { exitCode: 0, timedOut: false },
+      payload: { remoteNativeSessionStartBinding: originalStart, hostId, cellId: scope.cellId,
+        generation: scope.cellGeneration, bindingId: scope.bindingId, manifestId: originalStart.manifestId,
+        manifestHash: originalStart.manifestHash, policySnapshotId: originalStart.policySnapshotId,
+        policyHash: variant === "wrong_start" ? "f".repeat(64) : policyHash, hostEpoch: 1,
+        requestId, runId: locator.runId, leaseId: locator.environmentLeaseId } };
+    const combinedStop = { schema: "paperclip.remote-termination.v1", companyId: locator.companyId,
+      runId: locator.runId, leaseId: locator.environmentLeaseId, provider: locator.provider,
+      providerLeaseId: locator.providerLeaseId, state: "stopped", confirmedAt: "2026-11-02T00:01:00.000Z",
+      sandboxStop: { runId: locator.runId, leaseId: locator.environmentLeaseId,
+        startCommandId: randomUUID(), startBindingDigest: "d".repeat(64), sandboxId: randomUUID(),
+        containerId: "e".repeat(64), intent: { eventId: randomUUID(), seq: "1", createdAt: "2026-11-02T00:00:00.000Z" },
+        ...scope, hostId, hostEpoch: 1, imageDigest, stopCommandId: randomUUID(), inspectCommandId: randomUUID(),
+        runtimeOperationId: randomUUID() } };
+    canonicalStopOwner.receipt = combinedStop;
+    const stop = combinedStop.sandboxStop;
+    const descriptor = { schema: "paperclip.remote-native-session-erasure.v1", startBindingDigest: stop.startBindingDigest,
+      sessionKey: "f".repeat(64), leaseId: locator.environmentLeaseId, taskRoot: cwd,
+      sessionDigest: locator.normalizedSessionIdDigest, policyHash: variant === "wrong_policy" ? "f".repeat(64) : policyHash,
+      sandboxId: stop.sandboxId, containerId: stop.containerId, imageDigest, dockerEngineIdHash: "a".repeat(64),
+      cellGeneration: scope.cellGeneration, runId: locator.runId, runnerInstanceId: locator.runnerInstanceId };
+    const receipt = { schema: "paperclip.remote-runtime-asset-removal.v1", locatorDigest: remoteRuntimeAssetLocatorDigest(locator),
+      commandRequestId: randomUUID(), purpose: "native_provider_data_erasure",
+      target: { hostId, cellId: scope.cellId, cellGeneration: scope.cellGeneration, bindingId: scope.bindingId },
+      relativePath: locator.relativePath, pathDigest: locator.pathDigest,
+      stopProof: { schema: "paperclip.native-sandbox-workload-stop.v1", runId: locator.runId,
+        normalizedSessionIdDigest: locator.normalizedSessionIdDigest, runnerInstanceId: locator.runnerInstanceId,
+        environmentLeaseId: locator.environmentLeaseId, providerLeaseId: locator.providerLeaseId,
+        startCommandId: stop.startCommandId, stopCommandId: stop.stopCommandId, inspectCommandId: stop.inspectCommandId,
+        runtimeOperationId: stop.runtimeOperationId, startBindingDigest: stop.startBindingDigest,
+        sandboxId: stop.sandboxId, containerId: stop.containerId, receiptDigest: nativeSha256(combinedStop), stoppedAt: combinedStop.confirmedAt },
+      stopProofBeforeDelete: true, exitCode: 0, timedOut: false, postDeleteAbsent: true };
+    const jobKey = `runtime-asset-erasure:v1:${locator.runId}`;
+    const sourceRefJson = { kind: "runtime_asset_erasure", runId: locator.runId, legacyDigests: [], remoteAssetLocator: locator };
+    const historical = { id: randomUUID(), jobKey, operationType: "retention", attemptNumber: 1,
+      status: "failed", sourceRefJson, executionOwnerId: null, resultJson: { remoteRuntimeAssetRemovalReceipt: receipt } };
+    const current = { id: randomUUID(), jobKey, operationType: "retention", attemptNumber: 2, status: "running",
+      sourceRefJson, startedAt: new Date(), finishedAt: null, executionOwnerId: "current-worker",
+      leaseExpiresAt: new Date(Date.now() + 60_000), resultJson: null };
+    const { taskRoot: _taskRoot, ...replyDescriptor } = descriptor;
+    const command = { id: receipt.commandRequestId, completedAt: new Date(), runtimeHostId: hostId,
+      runtimeCellId: scope.cellId, cellGeneration: 7n, status: "SUCCEEDED", commandType: SANDBOX_HOST_COMMAND,
+      payload: { version: 1, scope, action: "erase_native_session", hostEpoch: 1, imageDigest, nativeSessionErasure: descriptor,
+        __stoppedNativeErasure: { locatorDigest: receipt.locatorDigest, jobId: historical.id, jobKey,
+          jobAttemptNumber: 1, executionOwnerId: "original-worker", companyPurgeOperationId: null,
+          stopReceiptDigest: receipt.stopProof.receiptDigest, descriptorDigest: nativeSha256(descriptor) } },
+      safeResult: { ...replyDescriptor, action: "erase_native_session", erased: true,
+        upperLayerAbsent: true, mergedViewAbsent: true, stoppedBefore: true, stoppedAfter: true } };
+    const run = { id: locator.runId, companyId: locator.companyId, runtimeMode: "native", driverKind: "opencode_server",
+      status: "succeeded", finishedAt: new Date(), processGroupId: null, controllerLeaseExpiresAt: null,
+      processPid: 12345, processStartedAt: new Date(), runnerInstanceId: locator.runnerInstanceId,
+      nativeSessionId: sessionId, nativeProcessCleanupPending: false, runnerProfileJson: { nativeRemoteRuntimeAssetLocator: locator } };
+    const lease = { id: locator.environmentLeaseId, environmentId: locator.environmentId, heartbeatRunId: locator.runId,
+      provider: locator.provider, providerLeaseId: locator.providerLeaseId, status: "expired", leasePolicy: "ephemeral",
+      releasedAt: new Date(), cleanupStatus: "success", expiresAt: new Date(Date.now() - 1000),
+      metadata: { remoteCwd: cwd, remoteExecutionTermination: combinedStop } };
+    let startReads = 0;
+    function query(rows: unknown[]) {
+      const chain = { where: (_condition: unknown) => chain, orderBy: (_order: unknown) => chain,
+        limit: (limit: number) => Promise.resolve(rows.slice(0, limit)),
+        then: (resolve: (value: unknown[]) => unknown) => Promise.resolve(rows).then(resolve) };
+      return chain;
+    }
+    const db = { select: (fields?: Record<string, unknown>) => ({ from: (table: unknown) => {
+      if (table === runtimeHostCommands) {
+        if (fields && Object.hasOwn(fields, "runtimeHostId")) { startReads++; return query(variant === "missing_start" ? [] : [startRow]); }
+        return query(fields ? [] : [command]);
+      }
+      if (table === heartbeatRuns) return query([run]);
+      if (table === environmentLeases) return query([lease]);
+      if (table === memoryJobs) return query([current, historical]);
+      if (table === nativeRunFinalizations) return query([{ phase: "committed", leaseOwner: null, leaseExpiresAt: null }]);
+      return query([]);
+    } }), execute: async () => [{ erased: true }] } as unknown as Db;
+    return { db, locator, receipt, current, combinedStop, startReads: () => startReads };
+  }
+
+  it("reuses a failed-attempt checkpoint with canonical Stop lacking policyHash and the exact signed START policy", async () => {
+    const f = replayFixture();
+    expect(Object.hasOwn(f.combinedStop.sandboxStop, "policyHash")).toBe(false);
+    const ready = await assertRemoteRuntimeAssetErasureReady(f.db, f.locator);
+    expect(ready.job.id).toBe(f.current.id);
+    expect(ready.removalReceipt).toEqual(f.receipt);
+    // One original-start read for the claim, one for the whole receipt lookup,
+    // not one read per current/historical job row.
+    expect(f.startReads()).toBe(2);
+  });
+  it("refuses a descriptor policy that differs from its exact signed START", async () => {
+    const f = replayFixture("wrong_policy");
+    expect((await assertRemoteRuntimeAssetErasureReady(f.db, f.locator)).removalReceipt).toBeNull();
+  });
+  it.each(["wrong_start", "missing_start"] as const)("refuses missing or inconsistent signed START evidence (%s)", async variant => {
+    const f = replayFixture(variant);
+    await expect(assertRemoteRuntimeAssetErasureReady(f.db, f.locator))
+      .rejects.toMatchObject({ status: 409, details: { code: "native_asset_erasure_target_unqualified" } });
+  });
+
 });

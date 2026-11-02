@@ -70,6 +70,7 @@ import {
 import {
   prepareHeartbeatGitHubLaunchers,
   prepareHeartbeatProjectlessNativeEnvironment,
+  prepareHeartbeatCredentiallessNativeEnvironment,
 } from "./heartbeat-github-launchers.js";
 import {
   cleanupGitHubOperationLaunchers,
@@ -9449,6 +9450,8 @@ export interface HeartbeatServiceOptions {
   /** Test-only, run-bound environment additions used by managed provider boundary fixtures. */
   testNativeRunnerEnvironment?: (input: {
     execution: NativeExecutionInput;
+    /** Observe the exact server-built source closure; never supplies authority. */
+    bootstrapSourceClosure?: NativeBootstrapSourceClosure;
     runId: string;
     issueId: string | null;
     agentId: string;
@@ -22889,46 +22892,49 @@ export function heartbeatService(
       const networkAccess =
         trustPreset.kind === "standard" &&
         process.env.PAPERCLIP_RUNNER_NETWORK_ACCESS !== "disabled";
+      // A managed Worker cannot execute infrastructure commands until its
+      // locked Native input and existing managed source authority are sealed.
+      // This is a phase decision, never a no-repository claim: the later sync
+      // still discovers Git and applies its existing ignore/source rules.
+      const deferManagedNativeWorkspace = agent.adapterType === "paperclip_runner" &&
+        executionTarget?.kind === "remote" && executionTarget.transport === "sandbox" &&
+        nativeChatWorkspaceScope === null && resolvePaperclipRunnerProviderProfile(agent.adapterConfig).provider === "opencode";
+      const prepareGitEnvironment = async (nativeWorkspacePreparation = false): Promise<Record<string, string>> => {
+        const discovered = await prepareGitHubExecutionEnvironment({
+          target: executionTarget, cwd: executionWorkspace.cwd,
+          env: Object.fromEntries(Object.entries(currentRuntimeEnv).filter((entry): entry is [string, string] => typeof entry[1] === "string")),
+          hostCredentials: useHostGitHub, networkAccess, nativeWorkspacePreparation,
+        });
+        if (deferManagedNativeWorkspace) {
+          // The session supervisor retains configured repository grants. This
+          // phase carries no GitHub/provider credential or broker capability;
+          // unconfigured image credentials/startup files remain disabled.
+          return { ...prepareHeartbeatCredentiallessNativeEnvironment(discovered, networkAccess),
+            PAPERCLIP_GIT_METADATA_ROOTS: discovered.PAPERCLIP_GIT_METADATA_ROOTS,
+            PAPERCLIP_RUNNER_NETWORK_ROOTS: discovered.PAPERCLIP_RUNNER_NETWORK_ROOTS };
+        }
+        if (!useHostGitHub) {
+          const githubLaunchers = await prepareHeartbeatGitHubLaunchers({
+            native: agent.adapterType === "paperclip_runner", githubConfigured: githubSelection.configured,
+            agentId: agent.id, runId: run.id, target: executionTarget, cwd: executionWorkspace.cwd,
+            env: discovered, brokerUrl: configuredPaperclipApiBaseUrl() ?? "",
+            createBrokerToken: () => createRuntimeToolsToken({ agentId: agent.id, companyId: agent.companyId,
+              runId: run.id, responsibleUserId: responsibleUserId ?? "", scope: "github_credentials" })?.token ?? "",
+          });
+          githubLauncherLocation = githubLaunchers.cleanupLocation;
+          secretKeys.add("PAPERCLIP_GITHUB_BROKER_TOKEN");
+          return githubLaunchers.env;
+        }
+        return discovered;
+      };
       const gitExecutionEnv = projectlessNativeConversation
         ? prepareHeartbeatProjectlessNativeEnvironment(currentRuntimeEnv, networkAccess)
-        : await prepareGitHubExecutionEnvironment({
-            target: executionTarget,
-            cwd: executionWorkspace.cwd,
-            env: Object.fromEntries(
-              Object.entries(currentRuntimeEnv).filter(
-                (entry): entry is [string, string] => typeof entry[1] === "string",
-              ),
-            ),
-            hostCredentials: useHostGitHub,
-            // Networking is a controller-owned trust decision, independent of
-            // whether GitHub is configured or a credential can be acquired.
-            networkAccess,
-          });
+        : deferManagedNativeWorkspace
+          ? prepareHeartbeatCredentiallessNativeEnvironment(currentRuntimeEnv, networkAccess)
+          : await prepareGitEnvironment();
       runtimeConfig = { ...runtimeConfig, env: gitExecutionEnv };
       for (const key of MANAGED_GITHUB_TOKEN_KEYS) secretKeys.add(key);
       context.githubAuthenticationMode = useHostGitHub ? "host" : "managed";
-      if (!useHostGitHub && !projectlessNativeConversation) {
-        const githubLaunchers = await prepareHeartbeatGitHubLaunchers({
-          native: agent.adapterType === "paperclip_runner",
-          githubConfigured: githubSelection.configured,
-          agentId: agent.id,
-          runId: run.id,
-          target: executionTarget,
-          cwd: executionWorkspace.cwd,
-          env: gitExecutionEnv,
-          brokerUrl: configuredPaperclipApiBaseUrl() ?? "",
-          createBrokerToken: () => createRuntimeToolsToken({
-            agentId: agent.id,
-            companyId: agent.companyId,
-            runId: run.id,
-            responsibleUserId: responsibleUserId ?? "",
-            scope: "github_credentials",
-          })?.token ?? "",
-        });
-        githubLauncherLocation = githubLaunchers.cleanupLocation;
-        runtimeConfig = { ...runtimeConfig, env: githubLaunchers.env };
-        secretKeys.add("PAPERCLIP_GITHUB_BROKER_TOKEN");
-      }
       context.paperclipEnvironment = {
         id: selectedEnvironment.id,
         name: selectedEnvironment.name,
@@ -23669,6 +23675,7 @@ export function heartbeatService(
         let nativeBootstrapAncestorSources: NativeTaskSourceCapture[] | null = null;
         let nativeBootstrapRetainedRunSource: ReturnType<typeof nativeRetainedRunResumeWitness> | null = null;
         let nativeBootstrapSourceClosure: NativeBootstrapSourceClosure | null = null;
+        let selectedNativeEnvironment: Record<string, string> | null = null;
         let nativeBootstrapAttachmentSourceClosureFactory: Parameters<typeof executePaperclipNativeSession>[0]["prepareBootstrapSourceClosure"];
         const nativeBootstrapInteractionSources: Array<Extract<NativePayloadSourceInput, { kind: "interaction" }>> = [];
         let nativeRunnerInstanceId: string | null = null;
@@ -24595,7 +24602,12 @@ export function heartbeatService(
           });
           if (!nativeSelected) return;
           controllerLease.stop();
-          nativeWorkspaceSync = await prepareNativeWorkspaceSync({
+          if (deferManagedNativeWorkspace && options.testNativeRunnerEnvironment) {
+            selectedNativeEnvironment = await options.testNativeRunnerEnvironment({ execution: nativeExecution,
+              bootstrapSourceClosure: nativeBootstrapSourceClosure ?? undefined, runId: run.id,
+              issueId: issueId ?? null, agentId: agent.id, responsibleUserId: run.responsibleUserId ?? responsibleUserId ?? null });
+          }
+          if (!deferManagedNativeWorkspace) nativeWorkspaceSync = await prepareNativeWorkspaceSync({
             db,
             runId: run.id,
             companyId: agent.companyId,
@@ -25005,6 +25017,24 @@ export function heartbeatService(
                     db,
                     execution: nativeExecution,
                     bootstrapSourceClosure: nativeBootstrapSourceClosure,
+                    ...(deferManagedNativeWorkspace ? { prepareManagedWorkspace: async () => {
+                      nativeWorkspaceSync = await prepareNativeWorkspaceSync({ db, runId: run.id,
+                        companyId: agent.companyId, workspaceId: nativeExecution.binding.executionWorkspaceId,
+                        workspaceLocalDir: executionWorkspace.cwd, target: executionTarget,
+                        lease: activeEnvironmentLease!.lease, restartRecovery: runOptions.nativeRestartRecovery,
+                        sameRunRecovery: Boolean(runOptions.nativeLeaseOwner), resourceDisposition: providerResourceDispositionForRun,
+                        workspaceRepositoryMode: "discover", nativeWorkspacePreparation: true });
+                      if (!nativeWorkspaceSync) throw new Error("native_workspace_preparation_descriptor_missing");
+                      // Discover the target's real metadata only after its
+                      // authoritative workspace and Git/ignore snapshot were staged.
+                      const preparedEnvironment = await prepareGitEnvironment(true);
+                      runtimeConfig = { ...runtimeConfig, env: preparedEnvironment };
+                      return { environment: {
+                        PAPERCLIP_GIT_METADATA_ROOTS: preparedEnvironment.PAPERCLIP_GIT_METADATA_ROOTS,
+                        PAPERCLIP_RUNNER_NETWORK_ROOTS: preparedEnvironment.PAPERCLIP_RUNNER_NETWORK_ROOTS,
+                        PAPERCLIP_RUNNER_NETWORK_ACCESS: preparedEnvironment.PAPERCLIP_RUNNER_NETWORK_ACCESS,
+                      }, workspaceSync: nativeWorkspaceSync.reference };
+                    } } : {}),
                     ...(nativeBootstrapAttachmentSourceClosureFactory
                       ? { prepareBootstrapSourceClosure: nativeBootstrapAttachmentSourceClosureFactory } : {}),
                     ...(nativeExecution.provider.kind === "opencode" ? {
@@ -25097,15 +25127,16 @@ export function heartbeatService(
                         process.env,
                         executionWorkspace.cwd,
                       ),
-                      ...(options.testNativeRunnerEnvironment
+                      ...(selectedNativeEnvironment ?? (options.testNativeRunnerEnvironment
                         ? await options.testNativeRunnerEnvironment({
                             execution: nativeExecution,
+                            bootstrapSourceClosure: nativeBootstrapSourceClosure ?? undefined,
                             runId: run.id,
                             issueId: issueId ?? null,
                             agentId: agent.id,
                             responsibleUserId: run.responsibleUserId ?? responsibleUserId ?? null,
                           })
-                        : {}),
+                        : {})),
                       ...(nativeMcpServer
                         ? {
                             PAPERCLIP_NATIVE_MCP_NAME: nativeMcpServer.name,

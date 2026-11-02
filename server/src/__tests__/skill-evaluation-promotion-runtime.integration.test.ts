@@ -24,6 +24,7 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
 import { costService } from "../services/costs.js";
 import { agentService } from "../services/agents.js";
+import { NativePaidTransportAdmissionError } from "../services/native-runtime/paid-transport-admission.js";
 
 const support=await getEmbeddedPostgresTestSupport();
 describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutable runtime consumer",()=>{
@@ -63,6 +64,7 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
     await db.insert(pluginConfig).values({pluginId,companyId:f.home,configJson:{}});
     await db.transaction(tx=>synchronizeCompanyAgentRuntimeOwners(tx as unknown as Db,f.home));
 
+    let compatibilityPolicyVerified=false;
     async function evaluateAndPromote(candidateVersionId:string,championVersionId:string|null){
       const evaluation=await evaluations.start(actor,f.home,draft.skillId,{suiteId:suite.id,candidateVersionId,championVersionId,trials:2});
       await expect(lifecycle.promote(actor,f.home,draft.skillId,{versionId:candidateVersionId,expectedActiveVersionId:championVersionId,evaluationRunId:evaluation.id})).rejects.toMatchObject({status:409});
@@ -84,7 +86,21 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
                 blenteraPlatformContractHashes());
               await skillResolverService(db).authorizedVersion({type:"agent",source:"none",companyId:f.home,agentId,
                 runId:run!.id,onBehalfOfUserId:f.userId},f.home,draft.skillId,versionId,true,"task");
-              const prepared=await fabric.prepare({companyId:f.home,agentId,runId:run!.id,responsibleUserId:f.userId,issueId,query:testCase.input});
+              const prepareInput={companyId:f.home,agentId,runId:run!.id,responsibleUserId:f.userId,issueId,query:testCase.input};
+              if(!compatibilityPolicyVerified){
+                // The real enabled system Role Pack must still reject an
+                // unsupported hard-stop promise before persisting any manifest.
+                await expect(fabric.prepare(prepareInput)).rejects.toBeInstanceOf(NativePaidTransportAdmissionError);
+                expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,run!.id))).toEqual([]);
+                // This deterministic harness invokes no model. Select the
+                // existing report-only spend owner without optional Role Packs.
+                await instanceSettingsService(db).updateExperimental({role_packs_v5:false});
+                compatibilityPolicyVerified=true;
+              }
+              const prepared=await fabric.prepare(prepareInput);
+              expect(prepared?.manifest.rolePack).toBeNull();
+              expect(prepared?.manifest.executionPolicy.policies)
+                .toEqual(["reported_cost_threshold_only","source_provenance","approval_before_side_effects"]);
               expect(prepared?.manifest.skills.filter(pin=>pin.key!=="blentera-platform").map(pin=>pin.versionId))
                 .toEqual(testCase.shouldTrigger?[versionId]:[]);
               await costService(db).createEvent(f.home,{agentId,issueId,heartbeatRunId:run!.id,provider:"controlled-evaluation-fixture",model:"deterministic-fixture",
@@ -115,6 +131,9 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
       blenteraPlatformContractHashes());
     await fabric.prepare({companyId:f.home,agentId,runId:running!.id,responsibleUserId:f.userId,issueId:null,query:"Review a zephyr receipt"});
     const [pinned]=await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,running!.id));
+    expect(pinned!.manifest.rolePack).toBeNull();
+    expect(pinned!.manifest.executionPolicy.policies)
+      .toEqual(["reported_cost_threshold_only","source_provenance","approval_before_side_effects"]);
     expect(pinned!.manifest.skills.filter(pin=>pin.key!=="blentera-platform"))
       .toMatchObject([{skillId:draft.skillId,versionId:draft.candidate.id}]);
     const next=await lifecycle.propose(actor,f.home,draft.skillId,skillCandidateInputSchema.parse({baseActiveVersionId:draft.candidate.id,
@@ -139,6 +158,9 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
     expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,fresh!.id))).toEqual([]);
     await refreshControlledProvider();
     const current=await fabric.prepare(freshInput);
+    expect(current!.manifest.rolePack).toBeNull();
+    expect(current!.manifest.executionPolicy.policies)
+      .toEqual(["reported_cost_threshold_only","source_provenance","approval_before_side_effects"]);
     expect(current!.manifest.skills.filter(pin=>pin.key!=="blentera-platform"))
       .toMatchObject([{skillId:draft.skillId,versionId:next.id}]);
     const currentState=await pluginAgentRuntimeState(db,pluginId,f.home,agentId);

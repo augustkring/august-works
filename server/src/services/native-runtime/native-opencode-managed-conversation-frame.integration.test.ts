@@ -29,6 +29,8 @@ import { nativeCancelOriginTestFactsForRun } from "./native-session-executor.js"
 import { isRemoteAssetErasureErrorCode } from "./runtime-asset-erasure-errors.js";
 import { validatePrpEvent } from "../../vendor/paperclip-runner/index.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
+import * as modelReservationOwner from "../orchestration/model-reservations.js";
+import { verifyNativeCleanupRuntimeState } from "../execution-sandbox/run-lease-cleanup.js";
 import { agentIdentityService } from "../agent-identities.js";
 import { enqueueCompanyManagedOpenCodeRuntimeErasure, readRemoteRuntimeAssetLocator,
   readRemoteNativeSessionStartBinding, remoteRuntimeAssetLocatorDigest } from "./runtime-asset-retention.js";
@@ -138,16 +140,91 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     vi.stubEnv("PAPERCLIP_NATIVE_CANCEL_ORIGIN_TEST_DIAGNOSTICS", "1");
     vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
     const settledRunEvidence: { current: Record<string, unknown> | null } = { current: null };
+    const originalExpiryEvidence: { providerLeaseExpiresAt?: string; protectedReportExpiresAt?: number;
+      finalLeaseExpiresAt?: string; finalLeaseRetired?: boolean } = {};
     let eraseRemoteNativeRuntimeAsset: Awaited<ReturnType<typeof configureManagedConversationSandboxHost>>["eraseRemoteNativeRuntimeAsset"] | null = null;
     const sandboxHostFacts: { read?: () => Record<string, unknown> } = {};
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
+    const originalReservationFactory = modelReservationOwner.modelReservationService;
+    const restoreWireMethods: Array<() => void> = [];
+    const reservationFactorySpy = vi.spyOn(modelReservationOwner, "modelReservationService")
+      .mockImplementation((reservationDb, reservationOptions) => {
+        const service = originalReservationFactory(reservationDb, reservationOptions);
+        const originalWireDispatch = service.recordWireDispatch;
+        restoreWireMethods.push(() => { service.recordWireDispatch = originalWireDispatch; });
+        service.recordWireDispatch = async (...args) => {
+          try { return await originalWireDispatch.apply(service, args); }
+          catch (error) {
+            const staticSentinels = new Map([
+              ["Only one current, undisclosed provider dispatch may record its wire receipt", "wire_reservation_not_current"],
+              ["The original Native conversation principal and reservation are required", "wire_conversation_principal"],
+              ["Native conversation authority changed before provider dispatch", "wire_conversation_authority_changed"],
+              ["The original model reservation plan is required", "wire_plan_missing"],
+              ["The original model reservation principal is required", "wire_principal_changed"],
+              ["Model tariff or reservation scope changed before provider dispatch", "wire_tariff_or_scope_changed"],
+              ["Managed model dispatch requires its exact provider call ID", "wire_call_id_missing"],
+              ["Non-tool model dispatch cannot attach a provider tool call ID", "wire_call_id_forbidden"],
+              ["The provider wire endpoint does not match the qualified reservation provider", "wire_endpoint"],
+              ["The original model reservation changed before its wire receipt was retained", "wire_receipt_fenced"],
+              ["No current Native conversation model price ceiling is qualified", "wire_tariff_unavailable"],
+              ["Current qualified model price ceiling and bounded token envelope are required", "wire_tariff_or_bounds_invalid"],
+            ]);
+            const chain: Array<Record<string, unknown>> = [];
+            let cause: unknown = error;
+            for (let depth = 0; depth < 3 && cause && typeof cause === "object"; depth++) {
+              const value = cause as Record<string, unknown>;
+              const status = typeof value.status === "number" ? value.status : value.statusCode;
+              const sourceFrames = typeof value.stack === "string" ? value.stack.split("\n").flatMap(frame => {
+                const match = /(?:^|[/\\])(model-reservations|worker-model-gateway|v7-authorization|authorization|native-direct-input|memory-privacy)\.ts:(\d+):\d+\)?$/.exec(frame.trim());
+                return match ? [{ source: `${match[1]}.ts`, line: Number(match[2]) }] : [];
+              }).slice(0, 6) : [];
+              chain.push({ sentinel: typeof value.message === "string" ? staticSentinels.get(value.message) ?? "unclassified" : "unclassified",
+                errorClass: typeof value.name === "string" && ["Error", "HttpError", "PostgresError", "TypeError", "RangeError", "AbortError"].includes(value.name)
+                  ? value.name : "Other",
+                status: typeof status === "number" && status >= 400 && status <= 599 ? status : null,
+                sqlState: typeof value.code === "string" && /^[0-9A-Z]{5}$/.test(value.code) ? value.code : null,
+                sourceFrames,
+              });
+              cause = value.cause;
+            }
+            console.info("native_c7_original_wire_failure", JSON.stringify({ chain }));
+            throw error;
+          }
+        };
+        return service;
+      });
     const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary, sandboxRelay: true, timeoutSec: 600,
       sandboxRelayDnsLookup: async () => [{ address: "127.0.0.1", family: 4 }],
       configureHeartbeat: async context => {
-        const host = await configureManagedConversationSandboxHost({ ...context, root, wallClockSeconds: 120 });
+        const host = await configureManagedConversationSandboxHost({ ...context, root, wallClockSeconds: 300 });
         eraseRemoteNativeRuntimeAsset = host.eraseRemoteNativeRuntimeAsset;
         sandboxHostFacts.read = host.facts;
+        const modelRequest = host.modelRequest.bind(host);
+        host.modelRequest = async (body, signal) => {
+          try { return await modelRequest(body, signal); }
+          catch (error) {
+            const details = error && typeof error === "object" && "details" in error && error.details &&
+              typeof error.details === "object" ? error.details as Record<string, unknown> : {};
+            const stages = new Set(["provider_authority_recheck", "credential_lookup", "credential_recheck",
+              "wire_authority_recheck", "wire_run_binding", "wire_receipt_binding", "wire_intent_budget",
+              "wire_intent_write", "provider_transport", "reservation_settlement", "response_run_binding",
+              "response_history_revalidation", "response_receipt_binding", "response_wire_intent_match",
+              "response_result_identity", "response_source_union", "response_receipt_finalize",
+              "response_capture_write", "post_response_recheck"]);
+            const codes = new Set(["conversation_model_unsettled", "conversation_model_result_withheld",
+              "worker_model_unsettled", "worker_model_result_withheld"]);
+            console.info("native_c7_model_gateway_failure", JSON.stringify({
+              code: typeof details.code === "string" && codes.has(details.code) ? details.code : "unknown",
+              stage: typeof details.stage === "string" && stages.has(details.stage) ? details.stage : "unknown",
+              sqlState: typeof details.sqlState === "string" && /^[0-9A-Z]{5}$/.test(details.sqlState)
+                ? details.sqlState : null,
+              constraint: typeof details.constraint === "string" && /^[A-Za-z0-9_]{1,96}$/.test(details.constraint)
+                ? details.constraint : null,
+            }));
+            throw error;
+          }
+        };
         return host;
       },
       beforeProviderResponse: async facts => {
@@ -288,9 +365,16 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           });
           const locator = await readRemoteRuntimeAssetLocator(db, durableRun);
           if (!locator) throw new Error("conversation_remote_native_asset_locator_missing");
-          const oldAuthorityExpiry = new Date(Date.now() - 1000);
-          await db.update(environmentLeases).set({ expiresAt: oldAuthorityExpiry }).where(and(
-            eq(environmentLeases.companyId, facts.companyId), eq(environmentLeases.id, locator.environmentLeaseId)));
+          // Preserve the provider's original business-lease stamp. A canonical
+          // stopped/released lease needs no synthetic expiry rewrite for cleanup.
+          const [originalLease] = await db.select({ expiresAt: environmentLeases.expiresAt }).from(environmentLeases).where(and(
+            eq(environmentLeases.companyId, facts.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
+            eq(environmentLeases.heartbeatRunId, facts.run.id))).limit(1);
+          if (!(originalLease?.expiresAt instanceof Date) || !Number.isFinite(originalLease.expiresAt.getTime()))
+            throw new Error("conversation_remote_erasure_original_provider_expiry_missing");
+          originalExpiryEvidence.providerLeaseExpiresAt = originalLease.expiresAt.toISOString();
+          expect(facts.sandboxRuntimeFacts?.providerAttestedLeaseExpiresAt)
+            .toBe(originalExpiryEvidence.providerLeaseExpiresAt);
           const startBinding = await readRemoteNativeSessionStartBinding(db, locator);
           if (!startBinding) throw new Error("conversation_remote_erasure_signed_start_binding_missing");
           const [oldBinding] = await db.select({ capabilitySnapshot: runtimeSandboxBindings.capabilitySnapshot })
@@ -302,6 +386,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           if (!oldCapabilitySnapshot) throw new Error("conversation_remote_erasure_old_capability_snapshot_missing");
           const originalReportExpiresAt = Date.parse(String(oldCapabilitySnapshot.expiresAt));
           expect(Number.isFinite(originalReportExpiresAt)).toBe(true);
+          originalExpiryEvidence.protectedReportExpiresAt = originalReportExpiresAt;
           const [lease] = await db.select({ metadata: environmentLeases.metadata }).from(environmentLeases).where(and(
             eq(environmentLeases.companyId, facts.companyId), eq(environmentLeases.id, locator.environmentLeaseId))).limit(1);
           const remoteCwd = lease?.metadata && typeof lease.metadata.remoteCwd === "string" ? lease.metadata.remoteCwd : null;
@@ -468,18 +553,27 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                   .where(eq(runtimeHostCommands.id, startClaim.id));
               }
               expect(await relatedErasureCommands()).toHaveLength(0);
-              // This case selected a 120-second original boundary before
+              // This case selected a 300-second original boundary before
               // qualification. Never shorten or renew its admitted expiry here.
               // Let the originally admitted protected report expire naturally
               // after fail-closed generation checks. The successful cleanup
               // below must use only the original signed stopped-session cleanup authority.
               const reportExpiryWaitMs = originalReportExpiresAt - Date.now() + 1;
               if (reportExpiryWaitMs > 0) {
-                if (reportExpiryWaitMs > 120_000) throw new Error("conversation_remote_erasure_report_ttl_exceeds_test_bound");
+                if (reportExpiryWaitMs > 300_000) throw new Error("conversation_remote_erasure_report_ttl_exceeds_test_bound");
                 await new Promise(resolve => setTimeout(resolve, reportExpiryWaitMs));
               }
               expect(Date.now()).toBeGreaterThan(originalReportExpiresAt);
-              expect(leaseLifecycle?.expiresAt?.getTime()).toBeLessThan(Date.now());
+              const [leaseAfterReportExpiry] = await db.select().from(environmentLeases).where(and(
+                eq(environmentLeases.companyId, facts.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
+                eq(environmentLeases.heartbeatRunId, facts.run!.id))).limit(1);
+              expect(["expired", "released"]).toContain(leaseAfterReportExpiry?.status);
+              expect(leaseAfterReportExpiry?.releasedAt).toBeInstanceOf(Date);
+              expect(leaseAfterReportExpiry?.cleanupStatus).toBe("success");
+              expect(leaseAfterReportExpiry?.expiresAt?.getTime()).toBe(leaseLifecycle?.expiresAt?.getTime());
+              expect(await verifyNativeCleanupRuntimeState(db, { companyId: facts.companyId,
+                runId: facts.run!.id, leaseId: locator.environmentLeaseId },
+                leaseAfterReportExpiry?.metadata?.remoteExecutionTermination)).not.toBeNull();
               const concurrent = await Promise.allSettled([
                 eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput),
                 eraseRemoteNativeRuntimeAsset!(currentLocator, commandInput),
@@ -610,11 +704,11 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
             lostWorkerTick = raceWorker.tick({ now: new Date(Date.now() + 61_000), limit: 1, companyId: facts.companyId })
               .then(() => { lostWorkerOutcome = "settled" as const; }, () => { lostWorkerOutcome = "rejected" as const; });
               // This race starts before the callback's natural report-expiry
-              // wait. Include its bounded 120s remainder, the cleanup authority's
+              // wait. Include its bounded 300s remainder, the cleanup authority's
               // 60s aggregate freshness deadline, the final erase command's
               // separate 60s deadline, and 10s for durable receipt/job writes.
               // These fixture bounds do not change the production deadlines.
-              const cleanupReceiptWaitBudgetMs = 250_000;
+              const cleanupReceiptWaitBudgetMs = 430_000;
             let cleanupReceiptTimeout: ReturnType<typeof setTimeout> | undefined;
             const receiptOrCompletion = await Promise.race([
               receiptCaptured.then(() => "receipt" as const),
@@ -696,8 +790,26 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
             const hostFactsAfterErasure = sandboxHostFacts.read?.();
             const backingTransfers = Array.isArray(hostFactsAfterErasure?.nativeSessionBackingTransfers)
               ? hostFactsAfterErasure.nativeSessionBackingTransfers as Array<Record<string, unknown>> : [];
-            const erasureFacts = Array.isArray(hostFactsAfterErasure?.nativeSessionBackingObservations)
+            const backingObservations = Array.isArray(hostFactsAfterErasure?.nativeSessionBackingObservations)
               ? hostFactsAfterErasure.nativeSessionBackingObservations as Array<Record<string, unknown>> : [];
+            const erasureFacts = backingObservations.filter(fact => typeof fact.exactReply === "boolean");
+            const closureFacts = backingObservations.filter(fact => fact.processWitnessPresent === true);
+            expect(hostFactsAfterErasure?.nativeRunnerClosureWitness).toMatchObject({
+              present: true, phase: "gone_verified", launchMatched: true, nonceMatches: true, runnerMatches: true,
+              identityMatched: true, runPidStartedAtMatched: true, identityVerdict: "gone", processGone: true,
+              previousLiveGroupKnown: true, previousLiveSessionKnown: true, processGroupLive: 0,
+              processSessionLive: 0, fdOrCwdSessionsHolders: 0, fdOrCwdScanComplete: true,
+              noSessionHandles: true, stopCheckerExit: 3, stopReceiptMatched: true,
+            });
+            expect(closureFacts.length).toBeGreaterThan(0);
+            for (const closureFact of closureFacts) expect(closureFact).toMatchObject({
+              processWitnessPresent: true, processWitnessPhase: "gone_verified", launchMatched: true,
+              nonceMatches: true, runnerMatches: true, identityMatched: true, runPidStartedAtMatched: true,
+              identityVerdict: "gone", processGone: true, previousLiveGroupKnown: true,
+              previousLiveSessionKnown: true, processGroupLive: 0, processSessionLive: 0,
+              fdOrCwdSessionsHolders: 0, fdOrCwdScanComplete: true, noSessionHandles: true,
+              stopReceiptMatched: true, noActiveHostExecStreams: true, closureWitnessComplete: true,
+            });
             expect(backingTransfers).toHaveLength(1);
             expect(backingTransfers[0]).toMatchObject({ sessionDigest: locator.normalizedSessionIdDigest,
               taskRootMatches: true, rootIdentityWitnessed: true, witnessMatched: true });
@@ -724,6 +836,17 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
             expect(await relatedErasureCommands()).toHaveLength(1);
             await expect(fs.stat(path.join(sessionsRoot, locator.normalizedSessionIdDigest))).rejects.toMatchObject({ code: "ENOENT" });
             await expect(fs.readFile(path.join(siblingSessionRoot, "retained-neighbor.txt"), "utf8")).resolves.toBe("neighbor remains");
+            const [finalLease] = await db.select({ expiresAt: environmentLeases.expiresAt,
+              status: environmentLeases.status, releasedAt: environmentLeases.releasedAt,
+              cleanupStatus: environmentLeases.cleanupStatus }).from(environmentLeases).where(and(
+                eq(environmentLeases.companyId, facts.companyId), eq(environmentLeases.id, locator.environmentLeaseId),
+                eq(environmentLeases.heartbeatRunId, facts.run!.id))).limit(1);
+            originalExpiryEvidence.finalLeaseExpiresAt = finalLease?.expiresAt?.toISOString();
+            originalExpiryEvidence.finalLeaseRetired = Boolean(finalLease &&
+              ["released", "expired", "retained"].includes(finalLease.status) &&
+              finalLease.releasedAt !== null && finalLease.cleanupStatus === "success");
+            expect(originalExpiryEvidence.finalLeaseRetired).toBe(true);
+            expect(originalExpiryEvidence.finalLeaseExpiresAt).toBe(originalExpiryEvidence.providerLeaseExpiresAt);
           } finally {
             // Do not let a timed-out fake worker continue its signed relay into
             // the next integration case. Its exact host-command deadlines bound
@@ -732,7 +855,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
             if (lostWorkerTick) await lostWorkerTick;
           }
         }
-      } });
+      } }).finally(() => {
+        for (const restore of restoreWireMethods) restore();
+        reservationFactorySpy.mockRestore();
+      });
     expect(result.success, JSON.stringify({ runStatus: result.runStatus, runError: result.run?.error,
       run: result.run ? { id: result.run.id, status: result.run.status, startedAt: result.run.startedAt,
         runtimeMode: result.run.runtimeMode, scopeKind: result.run.scopeKind, nativeIssueId: result.run.nativeIssueId,
@@ -766,8 +892,28 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
       executionRunId: null });
     expect(result.sandboxRuntimeFacts).toMatchObject({ mode: "controlled_signed_host_relay", relayAuthenticated: true });
     const runtimeFacts = result.sandboxRuntimeFacts as Record<string, unknown> | null;
+    const providerExpiry = Date.parse(String(runtimeFacts?.providerAttestedLeaseExpiresAt));
+    const reportExpiry = originalExpiryEvidence.protectedReportExpiresAt;
+    const boundedRemainingMs = (value: number | undefined) => typeof value === "number" && Number.isFinite(value)
+      ? Math.max(-3_600_000, Math.min(3_600_000, value - Date.now())) : null;
+    console.info("managed remote erasure expiry-domain facts", {
+      providerExpiryRecorded: Number.isFinite(providerExpiry),
+      providerStampMatchesOriginal: runtimeFacts?.providerAttestedLeaseExpiresAt === originalExpiryEvidence.providerLeaseExpiresAt,
+      finalLeaseExpiryMatchesOriginal: originalExpiryEvidence.finalLeaseExpiresAt === originalExpiryEvidence.providerLeaseExpiresAt,
+      finalLeaseRetired: originalExpiryEvidence.finalLeaseRetired === true,
+      originalProtectedReportExpired: typeof reportExpiry === "number" && Number.isFinite(reportExpiry) && reportExpiry < Date.now(),
+      originalProviderRemainingMs: boundedRemainingMs(providerExpiry),
+      originalReportRemainingMs: boundedRemainingMs(reportExpiry),
+    });
     expect(typeof runtimeFacts?.providerAttestedLeaseExpiresAt).toBe("string");
-    expect(Date.parse(String(runtimeFacts?.providerAttestedLeaseExpiresAt))).toBeLessThan(Date.now());
+    expect(Number.isFinite(providerExpiry)).toBe(true);
+    expect(runtimeFacts?.providerAttestedLeaseExpiresAt).toBe(originalExpiryEvidence.providerLeaseExpiresAt);
+    expect(originalExpiryEvidence.finalLeaseExpiresAt).toBe(originalExpiryEvidence.providerLeaseExpiresAt);
+    expect(originalExpiryEvidence.finalLeaseRetired).toBe(true);
+    // The original protected report expires naturally; the provider's separate
+    // 600s lease remains unchanged and is already closed by the canonical Stop.
+    expect(typeof reportExpiry).toBe("number");
+    expect(reportExpiry).toBeLessThan(Date.now());
     expect(runtimeFacts?.execCount).toEqual(expect.any(Number));
     expect(Number(runtimeFacts?.execCount)).toBeGreaterThan(0);
     expect(Number(runtimeFacts?.exactPrivateCwdCount)).toBeGreaterThan(0);
