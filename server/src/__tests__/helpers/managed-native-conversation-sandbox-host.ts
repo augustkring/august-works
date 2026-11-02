@@ -531,6 +531,11 @@ export async function configureManagedSerialSchedulerSandboxHost(
   };
   const environmentRuntime = environmentRuntimeService(input.db, { executeSandboxTask, stopSandboxRunLease });
   return {
+    // Private composition seams for the two-Agent integration fixture. These
+    // are the same exact-run admission callbacks used by environmentRuntime;
+    // they do not add a second dispatch path or weaken the Host's checks.
+    executeManagedSandboxTask: executeSandboxTask,
+    stopManagedSandboxRunLease: stopSandboxRunLease,
     sandboxExec: (async command => {
       if (command.companyId !== input.companyId || !command.runId || !command.leaseId)
         throw new Error("scheduler_software_host_command_owner_changed");

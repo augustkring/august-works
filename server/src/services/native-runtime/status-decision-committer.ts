@@ -1701,10 +1701,7 @@ export async function commitNativeStatusDecision(input: {
         requestedByActorType: "agent",
         requestedByActorId: nativeRun.agentId,
       });
-      if (
-        nextExecutionState?.status === "pending" &&
-        previousExecutionState?.status !== "pending"
-      ) {
+      if (nextExecutionState?.status === "pending") {
         input = {
           ...input,
           decision: {

@@ -176,6 +176,7 @@ import {
   nativeRunResults,
   workAssessments,
   statusDecisions,
+  statusDecisionEffects,
   projects,
   projectWorkspaces,
   routineRevisions,
@@ -454,6 +455,7 @@ import {
   normalizeIssueExecutionPolicy,
   parseIssueExecutionState,
 } from "./issue-execution-policy.js";
+import { buildExecutionStageWakeup } from "./issue-execution-stage-wakeup.js";
 import {
   ISSUE_TREE_CONTROL_INTERACTION_WAKE_REASONS,
   isVerifiedIssueTreeControlInteractionWake,
@@ -29548,6 +29550,10 @@ export function heartbeatService(
   ) {
     const now = new Date();
     const staleClaimMs = Math.max(1_000, input.staleClaimMs ?? 60_000);
+    const stageWakeReasons = [
+      "execution_review_requested",
+      "execution_approval_requested",
+    ];
     const candidates = await db
       .select()
       .from(agentWakeupRequests)
@@ -29556,8 +29562,23 @@ export function heartbeatService(
           input.companyId
             ? eq(agentWakeupRequests.companyId, input.companyId)
             : undefined,
-          eq(agentWakeupRequests.requestedByActorType, "system"),
-          eq(agentWakeupRequests.requestedByActorId, "native-status-committer"),
+          or(
+            and(
+              eq(agentWakeupRequests.requestedByActorType, "system"),
+              eq(agentWakeupRequests.requestedByActorId, "native-status-committer"),
+            ),
+            and(
+              eq(agentWakeupRequests.requestedByActorType, "agent"),
+              eq(agentWakeupRequests.source, "assignment"),
+              inArray(agentWakeupRequests.reason, stageWakeReasons),
+              exists(db.select({ id: statusDecisionEffects.id }).from(statusDecisionEffects).where(and(
+                eq(statusDecisionEffects.companyId, agentWakeupRequests.companyId),
+                eq(statusDecisionEffects.effectKind, "execution_stage_wake"),
+                eq(statusDecisionEffects.targetType, "agent_wakeup_request"),
+                eq(statusDecisionEffects.targetId, sql`${agentWakeupRequests.id}::text`),
+              ))),
+            ),
+          ),
           inArray(agentWakeupRequests.status, ["queued", "claimed"]),
           isNull(agentWakeupRequests.runId),
         ),
@@ -29573,7 +29594,101 @@ export function heartbeatService(
       { runId: string | null; status: string }
     >();
 
+    async function committedExecutionStageWake(candidate: typeof candidates[number], payload: Record<string, unknown>, wakeContext: Record<string, unknown>, issueId: string | null) {
+      if (
+        candidate.requestedByActorType !== "agent" ||
+        !candidate.requestedByActorId ||
+        candidate.source !== "assignment" ||
+        !issueId ||
+        !stageWakeReasons.includes(candidate.reason ?? "") ||
+        readNonEmptyString(payload.issueId) !== issueId ||
+        readNonEmptyString(wakeContext.issueId) !== issueId ||
+        readNonEmptyString(wakeContext.taskId) !== issueId ||
+        wakeContext.source !== "issue.execution_stage" ||
+        wakeContext.wakeReason !== candidate.reason
+      ) return null;
+
+      const payloadStage = parseObject(payload.executionStage);
+      const contextStage = parseObject(wakeContext.executionStage);
+      const [effect] = await db.select().from(statusDecisionEffects).where(and(
+        eq(statusDecisionEffects.companyId, candidate.companyId),
+        eq(statusDecisionEffects.issueId, issueId),
+        eq(statusDecisionEffects.effectKind, "execution_stage_wake"),
+        eq(statusDecisionEffects.targetType, "agent_wakeup_request"),
+        eq(statusDecisionEffects.targetId, candidate.id),
+      )).limit(1);
+      if (!effect) return null;
+      const effectPayload = parseObject(effect.payload);
+      const effectStage = parseObject(effectPayload.executionStage);
+      if (
+        effectPayload.agentId !== candidate.agentId ||
+        effectPayload.reason !== candidate.reason ||
+        effectPayload.source !== "assignment" ||
+        effectPayload.requestedByActorType !== "agent" ||
+        effectPayload.requestedByActorId !== candidate.requestedByActorId
+      ) return null;
+
+      const [decision] = await db.select().from(statusDecisions).where(and(
+        eq(statusDecisions.companyId, candidate.companyId),
+        eq(statusDecisions.issueId, issueId),
+        eq(statusDecisions.id, effect.decisionId),
+        eq(statusDecisions.applicationState, "applied"),
+      )).limit(1);
+      if (!decision || decision.toStatus !== "in_review" ||
+        decision.reasonCode !== "execution_policy_stage_pending") return null;
+
+      const [sourceRun] = await db.select({ agentId: heartbeatRuns.agentId, nativeIssueId: heartbeatRuns.nativeIssueId,
+        runtimeMode: heartbeatRuns.runtimeMode }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, candidate.companyId),
+        eq(heartbeatRuns.id, decision.runId),
+      )).limit(1);
+      if (!sourceRun || sourceRun.runtimeMode !== "native" || sourceRun.nativeIssueId !== issueId ||
+        sourceRun.agentId !== candidate.requestedByActorId) return null;
+
+      const [targetIssue] = await db.select({ status: issues.status, assigneeAgentId: issues.assigneeAgentId,
+        statusVersion: issues.statusVersion, executionState: issues.executionState,
+        lastStatusDecisionId: issues.lastStatusDecisionId }).from(issues).where(and(
+        eq(issues.companyId, candidate.companyId),
+        eq(issues.id, issueId),
+      )).limit(1);
+      if (!targetIssue || targetIssue.lastStatusDecisionId !== decision.id || targetIssue.status !== decision.toStatus ||
+        targetIssue.assigneeAgentId !== candidate.agentId || candidate.idempotencyKey !== `issue.execution_stage:${issueId}:${decision.id}`)
+        return null;
+      const currentState = parseIssueExecutionState(targetIssue.executionState);
+      if (!currentState || currentState.status !== "pending") return null;
+
+      // Use the shared stage-wake builder as the canonical projection of every
+      // stage field, including reviewRequest, lastDecisionOutcome, returnAssignee,
+      // and allowedActions. This prevents an older wake for a reused stage ID
+      // from matching a later review round.
+      const currentStageWake = buildExecutionStageWakeup({
+        issueId,
+        previousState: null,
+        nextState: currentState,
+        interruptedRunId: null,
+        requestedByActorType: "agent",
+        requestedByActorId: candidate.requestedByActorId,
+      });
+      if (!currentStageWake || currentStageWake.agentId !== candidate.agentId ||
+        currentStageWake.wakeup.reason !== candidate.reason || currentStageWake.wakeup.source !== "assignment" ||
+        nativeSha256(currentStageWake.wakeup.payload.executionStage) !== nativeSha256(payloadStage) ||
+        nativeSha256(currentStageWake.wakeup.payload.executionStage) !== nativeSha256(contextStage) ||
+        nativeSha256(currentStageWake.wakeup.payload.executionStage) !== nativeSha256(effectStage))
+        return null;
+      const stageId = currentStageWake.wakeup.payload.executionStage.stageId;
+      if (typeof stageId !== "string" || !stageId) return null;
+      return { decisionId: decision.id, stageId, statusVersion: targetIssue.statusVersion };
+    }
+
     for (const candidate of candidates) {
+      const payload = parseObject(candidate.payload);
+      const wakeContext = parseObject(payload._paperclipWakeContext);
+      const issueId =
+        readNonEmptyString(payload.issueId) ??
+        readNonEmptyString(payload.taskId) ??
+        readNonEmptyString(wakeContext.issueId) ??
+        null;
+      const isStageCandidate = candidate.requestedByActorType === "agent";
       const dispatchActorId = `native-status-wake-dispatch:${candidate.id}`;
       const existingDispatch = await db
         .select()
@@ -29626,6 +29741,26 @@ export function heartbeatService(
         continue;
       }
 
+      const committedStage = isStageCandidate
+        ? await committedExecutionStageWake(candidate, payload, wakeContext, issueId)
+        : null;
+      if (isStageCandidate && !committedStage) {
+        await db.update(agentWakeupRequests).set({
+          status: "skipped",
+          finishedAt: now,
+          error: "Native execution stage wake is no longer current",
+          updatedAt: now,
+        }).where(and(
+          eq(agentWakeupRequests.id, candidate.id),
+          isNull(agentWakeupRequests.runId),
+          candidate.status === "claimed"
+            ? eq(agentWakeupRequests.status, "claimed")
+            : eq(agentWakeupRequests.status, "queued"),
+        ));
+        recovered += 1;
+        continue;
+      }
+
       const claimed = await db
         .update(agentWakeupRequests)
         .set({
@@ -29646,15 +29781,8 @@ export function heartbeatService(
         .returning({ id: agentWakeupRequests.id });
       if (claimed.length === 0) continue;
 
-      const payload = parseObject(candidate.payload);
-      const wakeContext = parseObject(payload._paperclipWakeContext);
-      const issueId =
-        readNonEmptyString(payload.issueId) ??
-        readNonEmptyString(payload.taskId) ??
-        readNonEmptyString(wakeContext.issueId) ??
-        null;
       const scopeKey = issueId
-        ? `${candidate.companyId}:${candidate.agentId}:${issueId}:${readNativeReviewAssignmentContext(wakeContext)?.nativeReviewInteractionId ?? ""}`
+        ? `${candidate.companyId}:${candidate.agentId}:${issueId}:${readNativeReviewAssignmentContext(wakeContext)?.nativeReviewInteractionId ?? ""}${committedStage ? `:stage:${committedStage.stageId}:decision:${committedStage.decisionId}` : ""}`
         : null;
       const priorDelivery = scopeKey
         ? deliveredByIssueScope.get(scopeKey)
@@ -29733,10 +29861,15 @@ export function heartbeatService(
             ...wakeContext,
             ...(issueId ? { issueId, taskId: issueId } : {}),
             wakeReason: candidate.reason,
-            source: "native_status_decision",
+            source: isStageCandidate ? "issue.execution_stage" : "native_status_decision",
             statusDecisionSource: "native_status_decision",
             nativeStatusWakeIntentId: candidate.id,
           },
+          ...(committedStage ? { issueStateGuard: {
+            statuses: ["in_review"],
+            assigneeAgentId: candidate.agentId,
+            statusVersion: committedStage.statusVersion,
+          } } : {}),
         });
 
         const delivered = await db

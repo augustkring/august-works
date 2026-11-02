@@ -1,7 +1,7 @@
 import { assertManagedFixtureOpenCodeImage } from "./managed-native-opencode-fixture-pin.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -12,7 +12,7 @@ import { createServer as createHttpsServer } from "node:https";
 import { connect as connectTls } from "node:tls";
 import { execFile, execFileSync } from "node:child_process";
 import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
   heartbeatRunEvents, heartbeatRuns, issueComments, issueThreadInteractions, issues, toolInvocations,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
@@ -20,6 +20,8 @@ import { workerModelProfileSchema, type WorkerModelProfile } from "../../service
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
 import { aiConnectionService } from "../../services/ai-connections.js";
 import { agentProviderBindingService } from "../../services/agent-provider-bindings.js";
+import { agentIdentityService } from "../../services/agent-identities.js";
+import { agentService } from "../../services/agents.js";
 import { discoverNativeCapabilities } from "../../services/native-provider-conformance.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../../services/provider-capabilities.js";
 import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
@@ -32,6 +34,8 @@ import { runtimeConnectionIntentRoutes } from "../../routes/connection-intents.j
 import { errorHandler } from "../../middleware/error-handler.js";
 import { actorMiddleware } from "../../middleware/auth.js";
 import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
+import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
+import { createStorageService } from "../../storage/service.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
 import { createToolGatewayService } from "../../services/tool-gateway.js";
@@ -43,9 +47,10 @@ const sourceSha = "a".repeat(40);
 
 import { makeConversationFixtureTreeWritable } from "./managed-native-conversation-frame.js";
 import type { runManagedNativeConversationFrame } from "./managed-native-conversation-frame.js";
-import type { NativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import type { NativeExecutionInput, NativeSessionBackend } from "../../vendor/paperclip-runner/index.js";
 import { nativeSha256 } from "../../services/native-runtime/canonical.js";
 import { registerNativeDraftGateway } from "../../services/orchestration/native-draft-runtime.js";
+import { environmentRuntimeService } from "../../services/environment-runtime.js";
 
 type FrameInput = Parameters<typeof runManagedNativeConversationFrame>[0];
 /** Pre-run extraction of the existing controlled Host fixture. The driver
@@ -55,6 +60,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   "providerReply" | "createConversationApp" | "driveConversation" | "configureHeartbeat"> & {
   /** Explicit opt-in. The default retains the original one-Run Host. */
   schedulerMode?: "serial";
+  /** Explicit two-presence opt-in for real Executor→Reviewer issue journeys. */
+  managedTwoAgentSignoff?: true;
+  /** Existing Native session test seam for API-policy components that must not dispatch a provider request. */
+  controlledNativeSessionBackendFactory?: (execution: NativeExecutionInput) => NativeSessionBackend;
   providerReply: (facts: { body: Record<string, unknown>; callIndex: number; execution: NativeExecutionInput;
     runId: string; issueId: string | null }) => {
     stop_reason: "tool_use" | "end_turn"; content: Array<Record<string, unknown>>;
@@ -70,6 +79,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   configureHeartbeat?: FrameInput["configureHeartbeat"];
   driveScheduler: (context: { db: ReturnType<typeof createDb>; actor: AuthorizationActor; companyId: string;
     agentId: string; gateway: ReturnType<typeof workerModelGateway>; heartbeat: ReturnType<typeof heartbeatService>;
+    managedAgentIds: { executor: string; reviewer: string } | null;
+    closeManagedAgentHostForRun: (runId: string) => Promise<void>;
+    managedSignoff: { app: ExpressApp; humanCookie: string; agentApiTokens: { executor: string; reviewer: string } } | null;
     facts: () => { providerCallCount: number; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
       sandboxRuntimeFacts: Record<string, unknown> | null };
     factsForRun: (runId: string) => { providerCallCount: number; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
@@ -78,6 +90,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   if (input.sandboxRelay === false) throw new Error("scheduler_fixture_requires_managed_sandbox");
   if (input.schedulerMode === "serial" && input.configureHeartbeat)
     throw new Error("scheduler_serial_fixture_requires_owned_host");
+  if (input.managedTwoAgentSignoff && input.schedulerMode !== "serial")
+    throw new Error("two_agent_signoff_requires_serial_host_admission");
+  if (input.managedTwoAgentSignoff && input.configureHeartbeat)
+    throw new Error("two_agent_signoff_requires_owned_host_admission");
   if (input.observeModelOriginDenials && input.schedulerMode !== "serial")
     throw new Error("scheduler_origin_denials_require_serial_fixture");
   const verifiedModelRun = new AsyncLocalStorage<string>();
@@ -141,48 +157,63 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   if (!Number.isSafeInteger(budgetMonthlyCents) || budgetMonthlyCents < 1)
     throw new Error("conversation_fixture_budget_must_be_positive_integer");
   await db.update(companies).set({ budgetMonthlyCents }).where(eq(companies.id, companyId));
-  await db.update(agents).set({ budgetMonthlyCents }).where(eq(agents.id, agentId));
   const human = await seedNativePasskeyActor(db, userId, [companyId]);
   const sessionId = human.sessionId;
   const model = "fixture-managed-conversation-v1";
   const baseAdapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
-  await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,
-    runtimeConfig: { timeoutSec: input.timeoutSec ?? 180 }, status: "idle" })
-    .where(eq(agents.id, agentId));
-  await input.prepareNativeRuntimeContext?.({ db, actor: human, companyId, agentId });
-  const [configuredAgent] = await db.select({ adapterConfig: agents.adapterConfig })
-    .from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).limit(1);
-  if (!configuredAgent || !configuredAgent.adapterConfig || typeof configuredAgent.adapterConfig !== "object" ||
-    Array.isArray(configuredAgent.adapterConfig))
-    throw new Error("conversation_fixture_adapter_configuration_missing");
-  const adapterConfig = configuredAgent.adapterConfig as Record<string, unknown>;
+  const createdReviewer = input.managedTwoAgentSignoff
+    ? await agentIdentityService(db).create(human, { name: "Managed signoff reviewer", homeCompanyId: companyId })
+    : null;
+  const reviewerAgentId = createdReviewer?.presence.id ?? null;
+  const managedAgentIds = reviewerAgentId ? { executor: agentId, reviewer: reviewerAgentId } : null;
+  const agentIds = [agentId, ...(reviewerAgentId ? [reviewerAgentId] : [])];
   const providerService = agentProviderBindingService(db);
-  const providerBinding = await providerService.create(human, companyId, agentId, {
-    providerType: "paperclip_native", providerAgentRef: agentId, isolationMode: "isolated_per_presence", providerEndpointRef: null,
-  });
-  await providerService.attach(human, companyId, agentId, { providerBindingId: providerBinding.id, providerProfileRef: agentId });
-  const snapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId,
-    adapterType: "paperclip_runner", config: adapterConfig }));
-  await providerService.recordDiscovery(companyId, agentId, snapshot,
-    Object.fromEntries(providerConformanceRequirements(snapshot, providerBinding.isolationMode).map(check => [check, true])));
-  const provider = await providerService.assertRuntime(companyId, agentId);
-  const apiKey = `conversation-fixture-${randomUUID()}`;
-  const issued = await aiConnectionService(db).save(companyId, userId, { provider: "anthropic", method: "api_key",
-    ownership: "shared", name: "Conversation fixture provider", apiKey: "fixture", allAgents: false, agentIds: [agentId] }, apiKey);
-  const profile: WorkerModelProfile = workerModelProfileSchema.parse({
-    id: randomUUID(), companyId, workerAgentId: agentId, providerBindingId: provider.provider.id,
-    providerSnapshotHash: provider.provider.capabilitySnapshotHash, providerProfileRef: provider.runtime.providerProfileRef,
-    qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig }),
-    binding: { provider: "anthropic", method: "api_key", mode: "shared", ...issued },
-    transport: "server-anthropic-messages-v1", contract: "anthropic-messages-tools-2023-06-01",
-    maximumEnvelopeBytes: 64000, inputTokensUpperBound: 100000, maxOutputTokens: 1024,
-    tariff: input.tariff ?? { provider: "anthropic", model, currency: "USD", inputMinorPerMillion: 0,
-      outputMinorPerMillion: 0, fixedMinor: 1, qualificationHash: "b".repeat(64), sourceSha,
-      testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() },
-    qualificationEvidenceRef: "https://protected.test.invalid/qualification/managed-conversation-fixture.json",
-    qualificationArtifactSha256: "c".repeat(64),
-  });
-  const executionsByRun = new Map<string, { execution: NativeExecutionInput; issueId: string | null }>();
+  const profilesByAgent = new Map<string, WorkerModelProfile>();
+  const providerBindingsByAgent = new Map<string, string>();
+  const apiKeysByAgent = new Map<string, string>();
+  for (const configuredAgentId of agentIds) {
+    await db.update(agents).set({ budgetMonthlyCents, adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,
+      runtimeConfig: { timeoutSec: input.timeoutSec ?? 180 }, status: "idle" }).where(eq(agents.id, configuredAgentId));
+    await input.prepareNativeRuntimeContext?.({ db, actor: human, companyId, agentId: configuredAgentId });
+    const [configuredAgent] = await db.select({ adapterConfig: agents.adapterConfig })
+      .from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, configuredAgentId))).limit(1);
+    if (!configuredAgent || !configuredAgent.adapterConfig || typeof configuredAgent.adapterConfig !== "object" ||
+      Array.isArray(configuredAgent.adapterConfig))
+      throw new Error("conversation_fixture_adapter_configuration_missing");
+    const adapterConfig = configuredAgent.adapterConfig as Record<string, unknown>;
+    const providerBinding = await providerService.create(human, companyId, configuredAgentId, {
+      providerType: "paperclip_native", providerAgentRef: configuredAgentId,
+      isolationMode: "isolated_per_presence", providerEndpointRef: null,
+    });
+    await providerService.attach(human, companyId, configuredAgentId,
+      { providerBindingId: providerBinding.id, providerProfileRef: configuredAgentId });
+    const snapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId,
+      adapterType: "paperclip_runner", config: adapterConfig }));
+    await providerService.recordDiscovery(companyId, configuredAgentId, snapshot,
+      Object.fromEntries(providerConformanceRequirements(snapshot, providerBinding.isolationMode).map(check => [check, true])));
+    const provider = await providerService.assertRuntime(companyId, configuredAgentId);
+    const apiKey = `conversation-fixture-${randomUUID()}`;
+    apiKeysByAgent.set(configuredAgentId, apiKey);
+    const issued = await aiConnectionService(db).save(companyId, userId, { provider: "anthropic", method: "api_key",
+      ownership: "shared", name: "Conversation fixture provider", apiKey: "fixture", allAgents: false,
+      agentIds: [configuredAgentId] }, apiKey);
+    const profile: WorkerModelProfile = workerModelProfileSchema.parse({
+      id: randomUUID(), companyId, workerAgentId: configuredAgentId, providerBindingId: provider.provider.id,
+      providerSnapshotHash: provider.provider.capabilitySnapshotHash, providerProfileRef: provider.runtime.providerProfileRef,
+      qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig }),
+      binding: { provider: "anthropic", method: "api_key", mode: "shared", ...issued },
+      transport: "server-anthropic-messages-v1", contract: "anthropic-messages-tools-2023-06-01",
+      maximumEnvelopeBytes: 64000, inputTokensUpperBound: 100000, maxOutputTokens: 1024,
+      tariff: input.tariff ?? { provider: "anthropic", model, currency: "USD", inputMinorPerMillion: 0,
+        outputMinorPerMillion: 0, fixedMinor: 1, qualificationHash: "b".repeat(64), sourceSha,
+        testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() },
+      qualificationEvidenceRef: "https://protected.test.invalid/qualification/managed-conversation-fixture.json",
+      qualificationArtifactSha256: "c".repeat(64),
+    });
+    profilesByAgent.set(configuredAgentId, profile);
+    providerBindingsByAgent.set(configuredAgentId, provider.provider.id);
+  }
+  const executionsByRun = new Map<string, { execution: NativeExecutionInput; issueId: string | null; agentId: string }>();
   let activeToken: string | null = null;
   let activeExecution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput | null = null;
   let activeRunId: string | null = null;
@@ -206,7 +237,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       and(eq(orchestrationWorkerAttempts.companyId, orchestrationModelReservations.companyId),
         eq(orchestrationWorkerAttempts.id, orchestrationModelReservations.workerAttemptId)))
     .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, runId)));
-  const gateway = workerModelGateway(db, { profiles: [profile], sourceSha,
+  const gateway = workerModelGateway(db, { profiles: [...profilesByAgent.values()], sourceSha,
     protectedEvidenceOrigin: "https://protected.test.invalid", fetch: async (url, init) => {
       if (String(url) !== "https://api.anthropic.com/v1/messages") {
         providerStubFailure ??= { stage: "provider_url", code: "unexpected_provider_url" };
@@ -220,8 +251,12 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const scoped = runId ? executionsByRun.get(runId) : undefined;
       const execution = input.schedulerMode === "serial" ? scoped?.execution : activeExecution;
       const issueId = input.schedulerMode === "serial" ? scoped?.issueId : activeIssueId;
-      if (!runId) throw new Error("scheduler_fixture_verified_model_run_missing");
-      providerCalls.push({ body, keyMatches: headers.get("x-api-key") === apiKey, runId });
+      const runAgentId = input.schedulerMode === "serial" ? scoped?.agentId : agentId;
+      if (!runId || !runAgentId || (input.schedulerMode === "serial" && !scoped))
+        throw new Error("scheduler_fixture_verified_model_run_missing");
+      const expectedApiKey = apiKeysByAgent.get(runAgentId);
+      if (!expectedApiKey) throw new Error("scheduler_fixture_run_agent_profile_missing");
+      providerCalls.push({ body, keyMatches: headers.get("x-api-key") === expectedApiKey, runId });
       const contract = execution?.completionContract.contract;
       if (!execution || !contract) {
         providerStubFailure ??= { stage: "execution_contract", code: "completion_contract_missing" };
@@ -265,13 +300,16 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId)).limit(1);
         const reservation = await reservationForRun(runId);
         const [company] = await db.select({ budgetMonthlyCents: companies.budgetMonthlyCents }).from(companies).where(eq(companies.id, companyId)).limit(1);
-        const [agent] = await db.select({ budgetMonthlyCents: agents.budgetMonthlyCents }).from(agents).where(eq(agents.id, agentId)).limit(1);
+        const [agent] = await db.select({ budgetMonthlyCents: agents.budgetMonthlyCents }).from(agents)
+          .where(eq(agents.id, runAgentId)).limit(1);
         if (!run || !manifest || !reservation || !company || !agent)
           throw new Error("conversation_fixture_live_provider_boundary_facts_missing");
         const profileValue = run.runnerProfileJson && typeof run.runnerProfileJson === "object"
           ? run.runnerProfileJson as Record<string, unknown> : {};
         const sourceReceipt = profileValue.nativeInputSourceReceipt ?? null;
-        try { await input.beforeProviderResponse({ db, actor: human, companyId, agentId, issueId: issueId,
+        const runProfile = profilesByAgent.get(runAgentId);
+        if (!runProfile) throw new Error("conversation_fixture_run_agent_profile_missing");
+        try { await input.beforeProviderResponse({ db, actor: human, companyId, agentId: runAgentId, issueId: issueId,
           run, manifest, reservation, sourceReceipt,
           request: { body, bodySha256: createHash("sha256").update(JSON.stringify(body)).digest("hex"),
             wireBodySha256: createHash("sha256").update(wireBody).digest("hex"), byteLength: Buffer.byteLength(wireBody),
@@ -280,9 +318,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
           providerResponseSha256: createHash("sha256").update(responseBody).digest("hex"),
           tariffSnapshot: reservation.conversationTariffSnapshot, quote: reservation.quote,
           budget: { companyMonthlyCents: company.budgetMonthlyCents, agentMonthlyCents: agent.budgetMonthlyCents },
-          profileBinding: { id: profile.id, providerBindingId: profile.providerBindingId,
-            providerSnapshotHash: profile.providerSnapshotHash, qualifiedConfigurationHash: profile.qualifiedConfigurationHash,
-            model: profile.tariff.model },
+          profileBinding: { id: runProfile.id, providerBindingId: runProfile.providerBindingId,
+            providerSnapshotHash: runProfile.providerSnapshotHash, qualifiedConfigurationHash: runProfile.qualifiedConfigurationHash,
+            model: runProfile.tariff.model },
           usage: { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens } }); }
         catch (error) {
           providerHookFailure = { name: error instanceof Error ? error.name : "UnknownError",
@@ -606,12 +644,168 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     runnerPublicUrl.protocol = "wss:";
     process.env.PAPERCLIP_RUNNER_PUBLIC_URL = runnerPublicUrl.origin;
   }
-  sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
-    providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
-    brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest, observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
-  // Host setup installs its actual configured gateway. Observe that owner too;
-  // do not replace its registration, transaction factory or qualification options.
-  if (input.afterSuccessfulAssignedToolResult) observeAssignedGateway(getAssignedMcpGateway(db));
+  type ConfiguredHost = Awaited<ReturnType<NonNullable<typeof input.configureHeartbeat>>> & {
+    factsForRun?: (runId: string) => Record<string, unknown>;
+    attestModelProxyClient?: (client: Socket) => Promise<ModelChannel | null>;
+    executeManagedSandboxTask?: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["executeSandboxTask"];
+    stopManagedSandboxRunLease?: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["stopSandboxRunLease"];
+    modelRequestAuthenticated?: (body: unknown, signal: AbortSignal, authorization: string | undefined) =>
+      ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
+  };
+  const hostsByAgent = new Map<string, ConfiguredHost>();
+  const closedAgentHostIds = new Set<string>();
+  const configureHostForAgent = async (configuredAgentId: string) => {
+    const existing = hostsByAgent.get(configuredAgentId);
+    if (existing && closedAgentHostIds.has(configuredAgentId))
+      throw new Error("scheduler_fixture_two_agent_host_reuse_not_supported");
+    if (existing) return existing;
+    if (!agentIds.includes(configuredAgentId)) throw new Error("scheduler_fixture_native_run_agent_unmapped");
+    const hostRoot = input.managedTwoAgentSignoff ? join(runHome, `agent-${configuredAgentId}`) : runHome;
+    if (input.managedTwoAgentSignoff) { await mkdir(hostRoot, { mode: 0o700 }); await chmod(hostRoot, 0o700); }
+    const host = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId: configuredAgentId,
+      providerBindingId: providerBindingsByAgent.get(configuredAgentId)!, gateway,
+      profile: profilesByAgent.get(configuredAgentId)!, runHome: hostRoot, opencodeBinary: input.opencodeBinary,
+      brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest,
+      observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
+    if (!host) throw new Error("scheduler_fixture_host_configuration_missing");
+    if (input.afterSuccessfulAssignedToolResult) observeAssignedGateway(getAssignedMcpGateway(db));
+    const schedulerHost = host as ConfiguredHost;
+    hostsByAgent.set(configuredAgentId, schedulerHost);
+    return schedulerHost;
+  };
+  if (!input.managedTwoAgentSignoff) await configureHostForAgent(agentId);
+  const hostForAuthenticatedAgent = (authorization: string | undefined) => {
+    const token = /^Bearer ([^\s]+)$/.exec(authorization ?? "")?.[1];
+    const claims = token ? verifyRuntimeToolsToken(token, "worker_model") : null;
+    const agentHost = claims?.scope === "worker_model" && claims.company_id === companyId
+      ? hostsByAgent.get(claims.sub) : undefined;
+    if (!agentHost) throw new Error("scheduler_fixture_authenticated_model_agent_unmapped");
+    return agentHost;
+  };
+  const hostForRun = async (runId: string) => {
+    const [run] = await db.select({ agentId: heartbeatRuns.agentId }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId))).limit(1);
+    const host = run ? hostsByAgent.get(run.agentId) : undefined;
+    if (!run || !host) throw new Error("scheduler_fixture_run_agent_unmapped");
+    return { agentId: run.agentId, host };
+  };
+  let closeManagedAgentHostForRun: (runId: string) => Promise<void> = async () => {
+    throw new Error("scheduler_fixture_two_agent_close_not_enabled");
+  };
+  if (input.managedTwoAgentSignoff) {
+    const closedHostRunByAgent = new Map<string, string>();
+    const admittedRunByAgent = new Map<string, string>();
+    let lastManagedExecution: { runId: string; agentId: string } | null = null;
+    const waitForTerminalManagedRun = async (runId: string) => {
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        const [run] = await db.select({ id: heartbeatRuns.id, status: heartbeatRuns.status })
+          .from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId)))
+          .limit(1);
+        if (!run) throw new Error("scheduler_fixture_previous_run_missing");
+        if (["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(run.status)) return run;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      throw new Error("scheduler_fixture_previous_run_terminal_timeout");
+    };
+    closeManagedAgentHostForRun = async (runId: string) => {
+      const [run] = await db.select().from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId))).limit(1);
+      if (!run || !["succeeded", "failed", "timed_out", "cancelled", "superseded"].includes(run.status))
+        throw new Error("scheduler_fixture_agent_host_close_requires_terminal_run");
+      const host = hostsByAgent.get(run.agentId);
+      if (!host?.close) throw new Error("scheduler_fixture_agent_host_close_unavailable");
+      if (admittedRunByAgent.get(run.agentId) !== runId)
+        throw new Error("scheduler_fixture_two_agent_one_run_per_agent_limit");
+      if (closedHostRunByAgent.has(run.agentId) && closedHostRunByAgent.get(run.agentId) !== runId)
+        throw new Error("scheduler_fixture_agent_host_close_run_changed");
+      if (!closedAgentHostIds.has(run.agentId)) await host.close();
+      closedAgentHostIds.add(run.agentId);
+      closedHostRunByAgent.set(run.agentId, runId);
+    };
+    const hostRouter = {
+      sandboxExec: async (command: Parameters<NonNullable<ConfiguredHost["sandboxExec"]>>[0]) => {
+        if (!command.runId) throw new Error("scheduler_fixture_host_command_run_missing");
+        return await (await hostForRun(command.runId)).host.sandboxExec!(command);
+      },
+      environmentRuntime: environmentRuntimeService(db, {
+        executeSandboxTask: async command => {
+          if (!command.runId) throw new Error("scheduler_fixture_host_command_run_missing");
+          const host = (await hostForRun(command.runId)).host;
+          if (!host.executeManagedSandboxTask) throw new Error("scheduler_fixture_host_command_owner_missing");
+          return await host.executeManagedSandboxTask(command);
+        },
+        stopSandboxRunLease: async scope => {
+          const host = (await hostForRun(scope.runId)).host;
+          if (!host.stopManagedSandboxRunLease) throw new Error("scheduler_fixture_host_cleanup_owner_missing");
+          return await host.stopManagedSandboxRunLease(scope);
+        },
+      }),
+      beforeNativeExecution: async (args: Parameters<NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testNativeRunnerEnvironment"]>>[0]) => {
+        const admittedRun = admittedRunByAgent.get(args.agentId);
+        if (admittedRun && admittedRun !== args.runId)
+          throw new Error("scheduler_fixture_two_agent_one_run_per_agent_limit");
+        if (closedAgentHostIds.has(args.agentId))
+          throw new Error("scheduler_fixture_two_agent_host_reuse_not_supported");
+        if (
+          lastManagedExecution &&
+          lastManagedExecution.agentId !== args.agentId &&
+          !closedAgentHostIds.has(lastManagedExecution.agentId)
+        ) {
+          // A policy-stage wake is emitted as part of the Executor's terminal
+          // status commit. The queued Reviewer can reach this callback before
+          // the driving test observes terminal completion, so wait for and close
+          // only that exact predecessor run's Host before admitting its own Host.
+          const predecessor = await waitForTerminalManagedRun(lastManagedExecution.runId);
+          await closeManagedAgentHostForRun(predecessor.id);
+        }
+        // Install the target Agent's Host only after closing the prior Agent's
+        // Host, because Host setup scopes process environment and cleanup to
+        // that Agent's root.
+        const host = await configureHostForAgent(args.agentId);
+        if (!host.beforeNativeExecution) throw new Error("scheduler_fixture_native_run_agent_host_missing");
+        admittedRunByAgent.set(args.agentId, args.runId);
+        lastManagedExecution = { runId: args.runId, agentId: args.agentId };
+        return await host.beforeNativeExecution(args);
+      },
+      modelRequest: async (_body: unknown, _signal?: AbortSignal) => {
+        throw new Error("scheduler_fixture_incoming_model_authority_required");
+      },
+      modelRequestAuthenticated: async (body: unknown, signal: AbortSignal, authorization: string | undefined) => {
+        const host = hostForAuthenticatedAgent(authorization);
+        if (!host.modelRequestAuthenticated) throw new Error("scheduler_fixture_authenticated_model_route_missing");
+        return await host.modelRequestAuthenticated(body, signal, authorization);
+      },
+      attestModelProxyClient: async (client: Socket) => {
+        const observed = [];
+        for (const [agent, host] of hostsByAgent) {
+          if (closedAgentHostIds.has(agent) || !host.attestModelProxyClient) continue;
+          const binding = await host.attestModelProxyClient(client);
+          if (binding) observed.push({ agent, binding });
+        }
+        if (observed.length !== 1) { for (const item of observed) item.binding.close(); return null; }
+        return observed[0]!.binding;
+      },
+      factsForRun: (runId: string) => {
+        const entry = executionsByRun.get(runId);
+        const host = entry ? hostsByAgent.get(entry.agentId) : undefined;
+        return { ...(host?.factsForRun?.(runId) ?? {}), serialAgentIdBound: Boolean(entry && host) };
+      },
+      facts: () => ({ mode: "controlled_two_agent_signed_host_relay",
+        agents: [...hostsByAgent].map(([agentId, host]) => ({ agentId, closed: closedAgentHostIds.has(agentId), facts: host.facts?.() ?? null })),
+        closedAgentHosts: [...closedAgentHostIds] }),
+      close: async () => {
+        for (const [agent, host] of hostsByAgent) {
+          if (closedAgentHostIds.has(agent)) continue;
+          await host.close?.(); closedAgentHostIds.add(agent);
+        }
+      },
+    };
+    sandboxHeartbeat = hostRouter as typeof sandboxHeartbeat;
+  } else {
+    sandboxHeartbeat = hostsByAgent.get(agentId);
+  }
   if (input.beforeManagedModelRequest && sandboxHeartbeat) {
     const originalModelRequest = sandboxHeartbeat.modelRequest;
     if (!originalModelRequest) throw new Error("scheduler_fixture_model_observer_host_method_missing");
@@ -627,6 +821,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   registerNativeDraftGateway(db, gateway);
   const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
     environmentRuntime: sandboxHeartbeat?.environmentRuntime,
+    ...(input.controlledNativeSessionBackendFactory
+      ? { nativeSessionBackendFactory: input.controlledNativeSessionBackendFactory }
+      : {}),
     testNativeRunnerEnvironment: async ({ execution, runId, issueId,
     agentId: currentAgentId, responsibleUserId, bootstrapSourceClosure }) => {
     if (execution.provider.kind !== "opencode" || !responsibleUserId)
@@ -635,7 +832,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     if (input.schedulerMode === "serial" && existing &&
         (existing.issueId !== issueId || nativeSha256(existing.execution) !== nativeSha256(execution)))
       throw new Error("scheduler_fixture_execution_changed_for_run");
-    executionsByRun.set(runId, { execution: structuredClone(execution), issueId });
+    executionsByRun.set(runId, { execution: structuredClone(execution), issueId, agentId: currentAgentId });
     if (input.schedulerMode !== "serial") {
       activeExecution = execution;
       activeRunId = runId;
@@ -645,19 +842,23 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       ? await sandboxHeartbeat.beforeNativeExecution({ execution, runId, issueId, agentId: currentAgentId,
           responsibleUserId, bootstrapSourceClosure })
       : {};
-    const minted = await gateway.issueForRun({ companyId, agentId: currentAgentId, runId, responsibleUserId });
-    const claims = verifyRuntimeToolsToken(minted.token, "worker_model");
-    if (!claims?.worker_model || claims.scope !== "worker_model") throw new Error("scheduler_fixture_issuer_scope_missing");
-    issuerFacts.push({ scope: claims.scope, runId: claims.run_id,
-      manifestId: claims.worker_model.executionManifestId });
+    const minted = input.controlledNativeSessionBackendFactory
+      ? null
+      : await gateway.issueForRun({ companyId, agentId: currentAgentId, runId, responsibleUserId });
+    if (minted) {
+      const claims = verifyRuntimeToolsToken(minted.token, "worker_model");
+      if (!claims?.worker_model || claims.scope !== "worker_model") throw new Error("scheduler_fixture_issuer_scope_missing");
+      issuerFacts.push({ scope: claims.scope, runId: claims.run_id,
+        manifestId: claims.worker_model.executionManifestId });
+    }
     return { PATH: `${dirname(input.opencodeBinary)}:${process.env.PATH ?? ""}`,
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",
       // Preserve the qualified sandbox host's proxy and CA bindings while
       // adding only the model profile minted for this exact Native run.
       ...hostEnvironment,
-      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: origin,
-      PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(minted.inputTokensUpperBound),
-      PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(minted.maxOutputTokens),
+      ...(minted ? { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: origin,
+        PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(minted.inputTokensUpperBound),
+        PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(minted.maxOutputTokens) } : {}),
       // The relay's exact public-DNS-shaped broker origin is tunneled through
       // a loopback-only test proxy because this environment blocks direct
       // loopback egress. The proxy accepts only that exact broker host+port.
@@ -667,8 +868,44 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       ALL_PROXY: "", all_proxy: "",
       NODE_EXTRA_CA_CERTS: certBundlePath, SSL_CERT_FILE: certBundlePath };
   } });
+  let managedSignoff: { app: ExpressApp; humanCookie: string;
+    agentApiTokens: { executor: string; reviewer: string } } | null = null;
+  if (managedAgentIds) {
+    const [humanSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+      token: authSessions.token, expiresAt: authSessions.expiresAt }).from(authSessions)
+      .where(and(eq(authSessions.id, sessionId), eq(authSessions.userId, userId))).limit(1);
+    if (!humanSession || humanSession.expiresAt.getTime() <= Date.now())
+      throw new Error("scheduler_fixture_human_session_unavailable");
+    const humanCookie = `session_token=${encodeURIComponent(humanSession.token)}`;
+    const resolveSession = async (req: ExpressRequest): Promise<BetterAuthSessionResult | null> => {
+      const tokenCookie = (req.header("cookie") ?? "").split(";").map(value => value.trim())
+        .find(value => value.startsWith("session_token="));
+      const token = tokenCookie ? decodeURIComponent(tokenCookie.slice("session_token=".length)) : null;
+      if (!token) return null;
+      const [session] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+        expiresAt: authSessions.expiresAt }).from(authSessions)
+        .where(and(eq(authSessions.token, token), sql`${authSessions.expiresAt} > now()`)).limit(1);
+      if (!session) return null;
+      const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+        .from(authUsers).where(eq(authUsers.id, session.userId)).limit(1);
+      if (!user) return null;
+      return { session: { id: session.id, userId: session.userId, expiresAt: session.expiresAt }, user };
+    };
+    const executorKey = await agentService(db).createApiKey(managedAgentIds.executor, "Managed signoff Executor test key",
+      { kind: "standard" }, { responsibleUserId: human.userId });
+    const reviewerKey = await agentService(db).createApiKey(managedAgentIds.reviewer, "Managed signoff Reviewer test key",
+      { kind: "standard" }, { responsibleUserId: human.userId });
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession }));
+    app.use("/api", issueRoutes(db, createStorageService(createLocalDiskStorageProvider(join(runHome, "signoff-api-storage"))), { heartbeat }));
+    app.use(errorHandler);
+    managedSignoff = { app, humanCookie,
+      agentApiTokens: { executor: executorKey.token, reviewer: reviewerKey.token } };
+  }
   try {
-    return await input.driveScheduler({ db, actor: human, companyId, agentId, gateway, heartbeat,
+    return await input.driveScheduler({ db, actor: human, companyId, agentId, managedAgentIds,
+      closeManagedAgentHostForRun, managedSignoff, gateway, heartbeat,
       facts: () => ({ providerCallCount: providerCalls.length, issuerFacts: structuredClone(issuerFacts),
         sandboxRuntimeFacts: input.schedulerMode === "serial" ? { ...sandboxHeartbeat?.facts?.(),
           originHttpDenials: Object.fromEntries(originHttpDenials), authenticatedModelTunnels, appliedModelProfileInjections: structuredClone(appliedModelProfileInjections) }
@@ -689,7 +926,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     // it declares no code field. Never print messages, bodies, paths or IDs.
     try {
       const failedRuns = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
-        .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
+        .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.agentId, agentIds),
           eq(heartbeatRuns.status, "failed"))).orderBy(desc(heartbeatRuns.createdAt)).limit(8);
       const knownNames = new Set(["ProviderAuthError", "UnknownError", "MessageOutputLengthError",
         "MessageAbortedError", "StructuredOutputError", "ContextOverflowError", "ContentFilterError", "APIError"]);
@@ -698,7 +935,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
           ? value as Record<string, unknown> : {};
       for (const [index, failedRun] of failedRuns.entries()) {
         const events = await db.select({ payload: heartbeatRunEvents.payload }).from(heartbeatRunEvents)
-          .where(and(eq(heartbeatRunEvents.companyId, companyId), eq(heartbeatRunEvents.agentId, agentId),
+          .where(and(eq(heartbeatRunEvents.companyId, companyId), inArray(heartbeatRunEvents.agentId, agentIds),
             eq(heartbeatRunEvents.runId, failedRun.id), eq(heartbeatRunEvents.eventType, "turn.failed")))
           .orderBy(desc(heartbeatRunEvents.seq)).limit(4);
         console.info("managed_scheduler_failed_turn_projection", JSON.stringify({
