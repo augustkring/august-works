@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
+import { realpathSync, statSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { access, chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createRemoteRuntimeAssetLocator,
@@ -14,6 +15,33 @@ import {
 } from "./runtime-asset-retention.js";
 import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
   REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT } from "./remote-runner-identity.js";
+
+function trustedEraserNodePath(): string | null {
+  const candidates = [process.env.PAPERCLIP_TEST_ERASER_NODE_PATH, process.execPath,
+    "/usr/bin/node", "/usr/local/bin/node", "/bin/node"];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const executable = realpathSync(candidate);
+      const file = statSync(executable);
+      if (!file.isFile() || file.uid !== 0 || (file.mode & 0o6022) !== 0) continue;
+      for (let parent = dirname(executable); ; parent = dirname(parent)) {
+        const directory = statSync(parent);
+        if (!directory.isDirectory() || directory.uid !== 0 || (directory.mode & 0o6022) !== 0) break;
+        if (parent === "/") return executable;
+      }
+    } catch { /* Try the next fixed candidate. */ }
+  }
+  return null;
+}
+
+const trustedEraserNode = trustedEraserNodePath();
+function runEraser(args: string[], options: Parameters<typeof spawnSync>[2] = {}) {
+  if (!trustedEraserNode) throw new Error("test_host_root_owned_node_unavailable");
+  const env = { ...process.env, ...(options?.env ?? {}),
+    PATH: `${dirname(trustedEraserNode)}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` };
+  return spawnSync("sh", args, { ...options, env });
+}
 
 describe("remote Native runtime asset erasure binding", () => {
   it("requires the exact signed session-start binding for retired-lease cleanup", () => {
@@ -137,7 +165,7 @@ describe("remote Native runtime asset erasure binding", () => {
     const fencePath = join(sessionsRoot, `.${digest}.lock`);
     try {
       await mkdir(taskRoot, { recursive: true, mode: 0o700 });
-      const runProbe = () => spawnSync("sh", ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT,
+      const runProbe = () => runEraser(["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT,
         "paperclip-native-asset-erasure-probe", taskRoot, digest, runId, randomUUID()],
       { encoding: "utf8", timeout: 10_000 });
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -209,18 +237,18 @@ describe("remote Native runtime asset erasure binding", () => {
         "paperclip-native-runtime-asset-erasure", taskRoot, digest, runId, runnerInstanceId, leaseId, providerLeaseId,
         expectedDigest, String(runner.pid), startedAt, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
         REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT];
-      const wrongLease = spawnSync("sh", commandArgs(randomUUID()), { encoding: "utf8", timeout: 10_000 });
+      const wrongLease = runEraser(commandArgs(randomUUID()), { encoding: "utf8", timeout: 10_000 });
       expect(wrongLease.status).not.toBe(0);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
       expect(processIsAlive(runner.pid)).toBe(true);
-      const wrongDigest = spawnSync("sh", commandArgs(environmentLeaseId, "0".repeat(64)),
+      const wrongDigest = runEraser(commandArgs(environmentLeaseId, "0".repeat(64)),
         { encoding: "utf8", timeout: 10_000 });
       expect(wrongDigest.status).not.toBe(0);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
       expect(processIsAlive(runner.pid)).toBe(true);
       const fencePath = join(sessionsRoot, `.${digest}.lock`);
       await mkdir(fencePath, { mode: 0o700 });
-      const staleSiblingLock = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
+      const staleSiblingLock = runEraser(commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
       expect(staleSiblingLock.status).not.toBe(0);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
       expect(processIsAlive(runner.pid)).toBe(true);
@@ -228,7 +256,7 @@ describe("remote Native runtime asset erasure binding", () => {
       const outsideLockTarget = join(root, "outside-lock-target");
       await mkdir(outsideLockTarget, { mode: 0o700 });
       await symlink(outsideLockTarget, fencePath);
-      const symlinkLock = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
+      const symlinkLock = runEraser(commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
       expect(symlinkLock.status).not.toBe(0);
       expect(await access(join(outsideLockTarget, "owner")).then(() => true, () => false)).toBe(false);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
@@ -236,23 +264,23 @@ describe("remote Native runtime asset erasure binding", () => {
       await rm(fencePath);
       const validIdentity = await readFile(identityPath, "utf8");
       await writeFile(identityPath, validIdentity.replace(`${nonce}\n`, "invalid/nonce\n"), { mode: 0o600 });
-      const invalidNonce = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
+      const invalidNonce = runEraser(commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
       expect(invalidNonce.status).not.toBe(0);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
       expect(processIsAlive(runner.pid)).toBe(true);
       await writeFile(identityPath, validIdentity.replace(`${fingerprint}\n`, "linux:deadbeef:1\n"), { mode: 0o600 });
-      const reusedPid = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
+      const reusedPid = runEraser(commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 10_000 });
       expect(reusedPid.status).not.toBe(0);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
       expect(processIsAlive(runner.pid)).toBe(true);
-      const wrongGeneration = spawnSync("sh", ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+      const wrongGeneration = runEraser(["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
         "paperclip-native-runtime-asset-erasure", taskRoot, digest, runId, runnerInstanceId, environmentLeaseId,
         providerLeaseId, digest, String(runner.pid + 1), startedAt, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
         REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT], { encoding: "utf8", timeout: 10_000 });
       expect(wrongGeneration.status).not.toBe(0);
       expect(processIsAlive(runner.pid)).toBe(true);
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
-      const wrongStartedAt = spawnSync("sh", ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+      const wrongStartedAt = runEraser(["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
         "paperclip-native-runtime-asset-erasure", taskRoot, digest, runId, runnerInstanceId, environmentLeaseId,
         providerLeaseId, digest, String(runner.pid), new Date(Date.parse(startedAt) + 1).toISOString(),
         REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT],
@@ -262,7 +290,7 @@ describe("remote Native runtime asset erasure binding", () => {
       expect(await access(sessionRoot).then(() => true, () => false)).toBe(true);
       await writeFile(identityPath, validIdentity, { mode: 0o600 });
 
-      const erased = spawnSync("sh", commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 15_000 });
+      const erased = runEraser(commandArgs(environmentLeaseId), { encoding: "utf8", timeout: 15_000 });
       const failedGroup = spawnSync("ps", ["-o", "pid=,ppid=,sid=,pgid=,stat=,args=", "-g", String(runner.pid)],
         { encoding: "utf8" }).stdout;
       expect(erased.status, JSON.stringify({ stderr: erased.stderr, stdout: erased.stdout,
@@ -305,7 +333,7 @@ describe("remote Native runtime asset erasure binding", () => {
         environmentLeaseId, normalizedSessionId: deadSessionId }) + "\n", { mode: 0o600 });
       await writeFile(join(deadRunnerRoot, "runner-process.identity"),
         `${deadNonce}\n${deadRunner.pid}\n${deadStartedAt}\n${runnerInstanceId}\n${deadFingerprint}\n`, { mode: 0o600 });
-      const deadErasure = spawnSync("sh", ["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
+      const deadErasure = runEraser(["-c", REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_SCRIPT,
         "paperclip-native-runtime-asset-erasure", taskRoot, deadDigest, runId, runnerInstanceId, environmentLeaseId,
         providerLeaseId, deadDigest, String(deadRunner.pid), deadStartedAt, REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT,
         REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT], { encoding: "utf8", timeout: 10_000 });

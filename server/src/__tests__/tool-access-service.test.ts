@@ -77,6 +77,7 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { projectToolConnectionLifecycle } from "../services/tool-connection-lifecycle.js";
 import { toolAccessPolicyService } from "../services/tool-access-policy.js";
 import { secretService } from "../services/secrets.js";
+import { RAILWAY_API_URL, RAILWAY_MCP_URL, RAILWAY_QUERIES, RAILWAY_TOOLS } from "../services/railway.js";
 import {
   canonicalToolArguments,
   signToolArguments,
@@ -729,6 +730,7 @@ async function createRemoteToolFixture(
   input: {
     riskLevel?: "read" | "write" | "destructive";
     quarantined?: boolean;
+    fixedRailway?: boolean;
   } = {},
 ) {
   const [application] = await db
@@ -795,6 +797,23 @@ async function createRemoteToolFixture(
       quarantineReason: input.quarantined ? "pending_review" : null,
     })
     .returning();
+  if (input.fixedRailway) {
+    const secret = await secretService(db).create(companyId, {
+      provider: "local_encrypted", name: `Railway Test tab ${randomUUID()}`, value: "fixed-railway-test-tab-token",
+    });
+    const refs = [{ configPath: "oauth.access_token", secretId: secret.id, versionSelector: "latest", required: true }];
+    const config = { url: RAILWAY_MCP_URL, sourceTemplateKey: "railway", connectionMethodKey: "mcp-oauth", railwayApiStatus: "available" };
+    const [fixedConnection] = await db.update(toolConnections).set({ authKind: "oauth", credentialSource: "paperclip_vault",
+      credentialSecretRefs: refs, config, transportConfig: config }).where(eq(toolConnections.id, connection!.id)).returning();
+    await db.update(connectionGrants).set({ credentialSecretRefs: refs }).where(eq(connectionGrants.connectionId, connection!.id));
+    await db.insert(companySecretBindings).values({ companyId, secretId: secret.id, targetType: "tool_connection",
+      targetId: connection!.id, configPath: "oauth.access_token", versionSelector: "latest", required: true });
+    const contract = RAILWAY_TOOLS.find(tool => tool.name === "paperclip-railway-list-projects")!;
+    const [fixedEntry] = await db.update(toolCatalogEntries).set({ toolName: contract.name,
+      inputSchema: contract.inputSchema, title: contract.title, description: contract.description,
+      annotations: contract.annotations }).where(eq(toolCatalogEntries.id, catalogEntry!.id)).returning();
+    return { application: application!, connection: fixedConnection!, catalogEntry: fixedEntry! };
+  }
   return {
     application: application!,
     connection: connection!,
@@ -3394,470 +3413,114 @@ describeEmbeddedPostgres("tool access service", () => {
     expect(summary.lastChangedByName).toBe(agent.name);
   });
 
-  it("executes allowed test calls as a board user while attributing the selected agent", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
+  it("executes a fixed Railway Test-tab call with the real board actor and selected agent", async () => {
+    const company = await createCompany(db), userId = `railway-test-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, ["tools:use"]);
     const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Allow test call ${randomUUID()}`,
-      policyType: "allow",
-      priority: 100,
-      selectors: { connectionId: connection.id },
+    const { connection } = await createRemoteToolFixture(db, company.id, { fixedRailway: true });
+    await db.insert(toolPolicies).values({ companyId: company.id, name: randomUUID(), policyType: "allow",
+      priority: 100, selectors: { connectionId: connection.id } });
+    const workspaceId = randomUUID();
+    const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      expect(String(url)).toBe(RAILWAY_API_URL);
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixed-railway-test-tab-token");
+      expect(JSON.parse(String(init?.body))).toMatchObject({ query: RAILWAY_QUERIES.projects, variables: { workspaceId } });
+      return Response.json({ data: { projects: { edges: [] } } });
     });
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) =>
-      mcpHttpResponse({
-        jsonrpc: "2.0",
-        id: JSON.parse(String(init?.body)).id,
-        result: { content: [{ type: "text", text: "sent" }] },
-      }),
-    );
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com", body: "hi" },
-      })
-      .expect(200);
-
-    expect(res.body).toMatchObject({
-      decision: "allowed",
-      result: {
-        data: expect.objectContaining({
-          isError: false,
-          transport: "mcp_http",
-        }),
-      },
-    });
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      actorType: "user",
-      actorId: userId,
-      agentId: agent.id,
-      runId: null,
-      status: "succeeded",
-    });
-    const audits = await db
-      .select()
-      .from(toolAccessAuditEvents)
-      .where(eq(toolAccessAuditEvents.companyId, company.id));
-    expect(audits).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          action: "call_completed",
-          details: expect.objectContaining({
-            source: "test",
-            agentId: agent.id,
-            runId: null,
-          }),
-        }),
-      ]),
-    );
+    const app = createRouteApp(db, boardSessionActor(company.id, "operator", userId),
+      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }));
+    const response = await request(app).post(`/api/tool-connections/${connection.id}/test-calls`)
+      .send({ agentId: agent.id, toolName: "paperclip-railway-list-projects", parameters: { workspaceId } }).expect(200);
+    expect(response.body).toMatchObject({ decision: "allowed", invocationId: expect.any(String), result: expect.anything() });
+    expect(response.body.error).toBeUndefined();
+    expect(upstream).toHaveBeenCalledOnce();
+    const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, response.body.invocationId));
+    expect(invocation).toMatchObject({ actorType: "user", actorId: userId, agentId: agent.id, runId: null, status: "succeeded" });
+    expect(await db.select().from(toolAccessAuditEvents).where(eq(toolAccessAuditEvents.companyId, company.id)))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ actorType: "user", actorId: userId, action: "call_completed",
+        details: expect.objectContaining({ source: "test", agentId: agent.id, runId: null }) })]));
   });
 
-  it("turns ask-first test calls into real pending action requests", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
+  it("preserves fixed Railway Test-tab approval, status and fresh rerun semantics", async () => {
+    const company = await createCompany(db), userId = `railway-review-${randomUUID()}`;
     await grantBoardUser(db, company.id, userId, ["tools:use"]);
     const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
+    const { connection } = await createRemoteToolFixture(db, company.id, { fixedRailway: true });
+    await db.insert(toolPolicies).values({ companyId: company.id, name: randomUUID(), policyType: "require_approval",
+      priority: 100, selectors: { connectionId: connection.id } });
+    const workspaceId = randomUUID();
+    const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      expect(String(url)).toBe(RAILWAY_API_URL);
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixed-railway-test-tab-token");
+      expect(JSON.parse(String(init?.body))).toMatchObject({ query: RAILWAY_QUERIES.projects, variables: { workspaceId } });
+      return Response.json({ data: { projects: { edges: [] } } });
     });
-    const fetchMock = vi.spyOn(globalThis, "fetch");
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-
-    expect(res.body).toMatchObject({
-      decision: "ask_first",
-      actionRequestId: expect.any(String),
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    const [actionRequest] = await db
-      .select()
-      .from(toolActionRequests)
-      .where(eq(toolActionRequests.id, res.body.actionRequestId));
-    expect(actionRequest).toMatchObject({
-      companyId: company.id,
-      issueId: null,
-      status: "pending",
-      requestedByUserId: userId,
-      requestedByAgentId: null,
-    });
-    expect(actionRequest!.signedArguments).toBeTruthy();
-    const events = await db
-      .select()
-      .from(toolCallEvents)
-      .where(eq(toolCallEvents.companyId, company.id));
-    expect(events).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          eventType: "approval_requested",
-          actionRequestId: actionRequest!.id,
-          metadata: expect.objectContaining({ source: "test" }),
-        }),
-      ]),
-    );
-  });
-
-  it("cancels an ask-first test request when approval signing is unavailable", async () => {
-    vi.stubEnv("PAPERCLIP_TOOL_ACTION_SIGNING_SECRET", "");
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first without signing ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: " " }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(500);
-
-    expect(res.body).toMatchObject({
-      reasonCode: "signing_secret_unconfigured",
-      error: expect.stringContaining("PAPERCLIP_TOOL_ACTION_SIGNING_SECRET"),
-    });
-    const [actionRequest] = await db
-      .select()
-      .from(toolActionRequests)
-      .where(eq(toolActionRequests.companyId, company.id));
-    expect(actionRequest).toMatchObject({
-      status: "cancelled",
-      signedArguments: null,
-    });
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      status: "failed",
-      errorCode: "signing_secret_unconfigured",
-    });
-  });
-
-  it("audits ask-first test calls with the real board actor and selected agent", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-
-    const gatewayAudit = await db
-      .select()
-      .from(activityLog)
-      .where(
-        and(
-          eq(activityLog.companyId, company.id),
-          eq(activityLog.action, "tool_gateway.approval_requested"),
-        ),
-      );
-    expect(gatewayAudit).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          agentId: agent.id,
-          details: expect.objectContaining({
-            source: "test",
-            actionRequestId: res.body.actionRequestId,
-            invocationId: res.body.invocationId,
-          }),
-        }),
-      ]),
-    );
-
-    const dedicatedAudit = await db
-      .select()
-      .from(toolAccessAuditEvents)
-      .where(eq(toolAccessAuditEvents.companyId, company.id));
-    expect(dedicatedAudit).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          details: expect.objectContaining({
-            source: "test",
-            agentId: agent.id,
-            actionRequestId: res.body.actionRequestId,
-            runId: null,
-          }),
-        }),
-      ]),
-    );
-  });
-
-  it("drives an ask-first test call through its live lifecycle (waiting → approved/done with the real result)", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const gateway = createToolGatewayService(db, {
-      toolActionSigningSecret: "test-secret",
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      gateway,
-    );
-
-    // 1. Park the call as a pending action request.
-    const created = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com", body: "hi" },
-      })
-      .expect(200);
-    const actionRequestId = created.body.actionRequestId as string;
-    expect(actionRequestId).toEqual(expect.any(String));
-
-    // 2. Status starts as "waiting" and surfaces the redacted "Where" snapshot.
-    const waiting = await request(app)
-      .get(
-        `/api/tool-connections/${connection.id}/test-calls/${actionRequestId}`,
-      )
-      .expect(200);
-    expect(waiting.body).toMatchObject({ actionRequestId, phase: "waiting" });
-    expect(waiting.body.parameters).toHaveProperty("to");
+    const gateway = createToolGatewayService(db, { toolActionSigningSecret: "test-secret" });
+    const app = createRouteApp(db, boardSessionActor(company.id, "operator", userId), gateway);
+    const body = { agentId: agent.id, toolName: "paperclip-railway-list-projects", parameters: { workspaceId } };
+    const created = await request(app).post(`/api/tool-connections/${connection.id}/test-calls`).send(body).expect(200);
+    expect(created.body).toMatchObject({ decision: "ask_first", actionRequestId: expect.any(String) });
+    expect(upstream).not.toHaveBeenCalled();
+    const [pending] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.id, created.body.actionRequestId));
+    expect(pending).toMatchObject({ status: "pending", requestedByUserId: userId, requestedByAgentId: null, issueId: null });
+    expect(pending!.signedArguments).toBeTruthy();
+    const waiting = await request(app).get(`/api/tool-connections/${connection.id}/test-calls/${pending!.id}`).expect(200);
+    expect(waiting.body).toMatchObject({ phase: "waiting", actionRequestId: pending!.id });
     expect(waiting.body.result).toBeUndefined();
-
-    // 3. Approving from the review queue is what runs the parked test call.
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) =>
-      mcpHttpResponse({
-        jsonrpc: "2.0",
-        id: JSON.parse(String(init?.body)).id,
-        result: { content: [{ type: "text", text: "sent" }] },
-      }),
-    );
-    await gateway.approveActionRequest({
-      companyId: company.id,
-      actionRequestId,
-      actor: { userId },
-    });
-    expect(fetchMock).toHaveBeenCalled();
-
-    // 4. Status mutates into the completed result shape with the real response.
-    const done = await request(app)
-      .get(
-        `/api/tool-connections/${connection.id}/test-calls/${actionRequestId}`,
-      )
-      .expect(200);
-    expect(done.body.phase).toBe("done");
+    await gateway.approveActionRequest({ companyId: company.id, actionRequestId: pending!.id, actor: { userId } });
+    const done = await request(app).get(`/api/tool-connections/${connection.id}/test-calls/${pending!.id}`).expect(200);
+    expect(done.body).toMatchObject({ phase: "done", result: expect.anything(), durationMs: expect.any(Number) });
     expect(done.body.error).toBeUndefined();
-    expect(done.body.result).toBeDefined();
-    expect(typeof done.body.durationMs).toBe("number");
-
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      status: "succeeded",
-      approvalState: "approved",
-    });
-  });
-
-  it("creates a fresh ask-first request when the Test tab reruns the same side-effecting action", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const gateway = createToolGatewayService(db, {
-      toolActionSigningSecret: "test-secret",
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      gateway,
-    );
-    const body = {
-      agentId: agent.id,
-      toolName: "send_email",
-      parameters: { to: "a@example.com", body: "hi" },
-    };
-
-    const first = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send(body)
-      .expect(200);
-
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) =>
-      mcpHttpResponse({
-        jsonrpc: "2.0",
-        id: JSON.parse(String(init?.body)).id,
-        result: { content: [{ type: "text", text: "sent" }] },
-      }),
-    );
-    await gateway.approveActionRequest({
-      companyId: company.id,
-      actionRequestId: first.body.actionRequestId as string,
-      actor: { userId },
-    });
-
-    const second = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send(body)
-      .expect(200);
-
-    expect(second.body).toMatchObject({
-      decision: "ask_first",
-      actionRequestId: expect.any(String),
-    });
-    expect(second.body.actionRequestId).not.toBe(first.body.actionRequestId);
-
-    const requests = await db
-      .select()
-      .from(toolActionRequests)
-      .where(eq(toolActionRequests.companyId, company.id));
+    expect(upstream).toHaveBeenCalledOnce();
+    const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, created.body.invocationId));
+    expect(invocation).toMatchObject({ actorType: "user", actorId: userId, agentId: agent.id, runId: null,
+      status: "succeeded", approvalState: "approved" });
+    const repeated = await request(app).post(`/api/tool-connections/${connection.id}/test-calls`).send(body).expect(200);
+    expect(repeated.body).toMatchObject({ decision: "ask_first", actionRequestId: expect.any(String) });
+    expect(repeated.body.actionRequestId).not.toBe(pending!.id);
+    expect(upstream).toHaveBeenCalledOnce();
+    const requests = await db.select().from(toolActionRequests).where(eq(toolActionRequests.companyId, company.id));
     expect(requests).toHaveLength(2);
-    expect(requests.map((row) => row.status).sort()).toEqual([
-      "approved",
-      "pending",
-    ]);
+    expect(requests.map(row => row.status).sort()).toEqual(["approved", "pending"]);
   });
 
-  it("reports a denied ask-first test call as denied without running the tool", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Ask first ${randomUUID()}`,
-      policyType: "require_approval",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const gateway = createToolGatewayService(db, {
-      toolActionSigningSecret: "test-secret",
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      gateway,
-    );
-
-    const created = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-    const actionRequestId = created.body.actionRequestId as string;
-
-    const fetchMock = vi.spyOn(globalThis, "fetch");
-    await gateway.declineActionRequest({
-      companyId: company.id,
-      actionRequestId,
-      actor: { userId },
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    const denied = await request(app)
-      .get(
-        `/api/tool-connections/${connection.id}/test-calls/${actionRequestId}`,
-      )
-      .expect(200);
-    expect(denied.body.phase).toBe("denied");
-    expect(denied.body.result).toBeUndefined();
-
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      status: "denied",
-      approvalState: "rejected",
-    });
-  });
+  // Generic MCP action approval cannot qualify hidden inference. Keep access
+  // policy projection separate from admission, including repeated Test clicks.
+  for (const policyType of ["allow", "require_approval", "block"] as const) {
+    for (const signingConfigured of [true, false]) {
+      it(`projects ${policyType} access but fences opaque test calls (signing configured: ${signingConfigured})`, async () => {
+        vi.stubEnv("PAPERCLIP_TOOL_ACTION_SIGNING_SECRET", "");
+        const company = await createCompany(db);
+        const userId = `tool-tester-${randomUUID()}`;
+        await grantBoardUser(db, company.id, userId, ["tools:use"]);
+        const agent = await createAgent(db, company.id);
+        const { connection } = await createRemoteToolFixture(db, company.id);
+        await db.insert(toolPolicies).values({ companyId: company.id, name: randomUUID(),
+          policyType, priority: 100, selectors: { connectionId: connection.id } });
+        const gateway = createToolGatewayService(db, {
+          toolActionSigningSecret: signingConfigured ? "test-secret" : " ",
+        });
+        const app = createRouteApp(db, boardSessionActor(company.id, "operator", userId), gateway);
+        const fetchMock = vi.spyOn(globalThis, "fetch");
+        const access = await request(app)
+          .get(`/api/tool-connections/${connection.id}/test-agents/${agent.id}/access`).expect(200);
+        expect(access.body.access).toMatchObject({ connectionId: connection.id, toolCount: 1,
+          allowedCount: policyType === "allow" ? 1 : 0,
+          askFirstCount: policyType === "require_approval" ? 1 : 0,
+          offCount: policyType === "block" ? 1 : 0 });
+        for (let click = 0; click < 2; click++) {
+          const response = await request(app).post(`/api/tool-connections/${connection.id}/test-calls`)
+            .send({ agentId: agent.id, toolName: "send_email", parameters: { to: "a@example.com" } }).expect(409);
+          expect(response.body).toMatchObject({ reasonCode: "tool_model_effect_unqualified", code: "configuration_incomplete",
+            configurationIncomplete: { companyId: company.id, agentId: agent.id, actionUrl: "/apps" } });
+        }
+        expect(fetchMock).not.toHaveBeenCalled();
+        for (const table of [toolInvocations, toolActionRequests, toolAccessAuditEvents]) {
+          expect(await db.select().from(table).where(eq(table.companyId, company.id))).toEqual([]);
+        }
+      });
+    }
+  }
 
   it("404s a single-id test-call status fetch for a non-test-origin action request", async () => {
     const company = await createCompany(db);
@@ -3876,127 +3539,6 @@ describeEmbeddedPostgres("tool access service", () => {
     await request(app)
       .get(`/api/tool-connections/${connection.id}/test-calls/${randomUUID()}`)
       .expect(404);
-  });
-
-  it("returns off for blocked test calls without executing the remote tool", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Block ${randomUUID()}`,
-      policyType: "block",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const fetchMock = vi.spyOn(globalThis, "fetch");
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-
-    expect(res.body).toMatchObject({
-      decision: "off",
-      error: { reasonCode: "deny_policy_block" },
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    const [invocation] = await db
-      .select()
-      .from(toolInvocations)
-      .where(eq(toolInvocations.companyId, company.id));
-    expect(invocation).toMatchObject({
-      status: "denied",
-      errorCode: "deny_policy_block",
-      actorType: "user",
-      actorId: userId,
-      agentId: agent.id,
-      runId: null,
-    });
-  });
-
-  it("audits blocked test calls with the real board actor and selected agent", async () => {
-    const company = await createCompany(db);
-    const userId = `tool-tester-${randomUUID()}`;
-    await grantBoardUser(db, company.id, userId, ["tools:use"]);
-    const agent = await createAgent(db, company.id);
-    const { connection } = await createRemoteToolFixture(db, company.id);
-    await db.insert(toolPolicies).values({
-      companyId: company.id,
-      name: `Block ${randomUUID()}`,
-      policyType: "block",
-      priority: 100,
-      selectors: { connectionId: connection.id },
-    });
-    const app = createRouteApp(
-      db,
-      boardSessionActor(company.id, "operator", userId),
-      createToolGatewayService(db, { toolActionSigningSecret: "test-secret" }),
-    );
-
-    const res = await request(app)
-      .post(`/api/tool-connections/${connection.id}/test-calls`)
-      .send({
-        agentId: agent.id,
-        toolName: "send_email",
-        parameters: { to: "a@example.com" },
-      })
-      .expect(200);
-
-    const gatewayAudit = await db
-      .select()
-      .from(activityLog)
-      .where(
-        and(
-          eq(activityLog.companyId, company.id),
-          eq(activityLog.action, "tool_gateway.call_denied"),
-        ),
-      );
-    expect(gatewayAudit).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          agentId: agent.id,
-          details: expect.objectContaining({
-            source: "test",
-            invocationId: res.body.invocationId,
-            reasonCode: "deny_policy_block",
-          }),
-        }),
-      ]),
-    );
-
-    const dedicatedAudit = await db
-      .select()
-      .from(toolAccessAuditEvents)
-      .where(eq(toolAccessAuditEvents.companyId, company.id));
-    expect(dedicatedAudit).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actorType: "user",
-          actorId: userId,
-          action: "call_denied",
-          reasonCode: "deny_policy_block",
-          details: expect.objectContaining({
-            source: "test",
-            agentId: agent.id,
-            runId: null,
-          }),
-        }),
-      ]),
-    );
   });
 
   it("denies test calls through agents the board user cannot task", async () => {
@@ -4872,7 +4414,8 @@ describeEmbeddedPostgres("tool access service", () => {
       .get(`/api/tool-connections/${connection.id}/grants`);
     expect(response.status).toBe(200);
     expect(response.body.grants[0].lifecycle).toMatchObject({
-      grantStatus: "active", scopeNames: ["read:user", "repo"], state: "DEGRADED",
+      grantStatus: "active", scopeNames: ["read:user", "repo"], state: "PERMISSION_CHANGED",
+      reason: "provider_access_changed", action: "refresh_access",
       credentialExpiresAt: expiresAt, accessVersion: "access-version-1",
       webhook: { health: "healthy", lastDeliveryAt: "2026-10-27T23:00:00.000Z", expiry: "not_applicable" },
       providerLifecycle: "not_reported", syncReconciliation: {
@@ -9132,7 +8675,7 @@ describeEmbeddedPostgres("tool access service", () => {
     }
   }, 15_000);
 
-  it("synchronizes shared OAuth credentials to the organization grant used by gateway calls", async () => {
+  it("synchronizes shared OAuth grant credentials without admitting an opaque gateway call", async () => {
     vi.stubEnv("PAPERCLIP_TOOL_OAUTH_SLACK_CLIENT_ID", "slack-client-id");
     vi.stubEnv(
       "PAPERCLIP_TOOL_OAUTH_SLACK_CLIENT_SECRET",
@@ -9277,9 +8820,10 @@ describeEmbeddedPostgres("tool access service", () => {
         toolName: "get_channel",
         parameters: { channel: "general" },
       })
-      .expect(200);
+      .expect(409)
+      .expect((response) => expect(response.body.reasonCode).toBe("tool_model_effect_unqualified"));
 
-    expect(gatewayAuthorization).toBe("Bearer shared-access-token");
+    expect(gatewayAuthorization).toBeNull();
   });
 
   it("creates and resolves an agent-initiated user authorization grant card", async () => {
@@ -18125,10 +17669,9 @@ describeEmbeddedPostgres("tool access service", () => {
         toolName: "send_email",
         parameters: { to: "a@example.com" },
       })
-      .expect(200);
+      .expect(409);
     expect(deniedCall.body).toMatchObject({
-      decision: "off",
-      error: { reasonCode: "deny_default" },
+      reasonCode: "tool_model_effect_unqualified", code: "configuration_incomplete",
     });
     expect(fetchMock).not.toHaveBeenCalled();
 

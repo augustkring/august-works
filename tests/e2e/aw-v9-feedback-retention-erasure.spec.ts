@@ -56,6 +56,8 @@ test("erasure uses separate keyboard C3, reads an unknown reply, survives accoun
     if (url.pathname === base + "/retention-erasures") return route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: command ? [{ receipt: pending, command }] : [] });
     if (url.pathname === erase + "/review") return command ? route.fulfill({ status: 404, json: { error: "Feedback not found" } }) :
       route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: review });
+    // Quality is a read of the disposable Native company, outside the simulated erasure replies.
+    if (url.pathname === `${base}/quality` && req.method() === "GET") return route.continue();
     if (url.pathname === base) return route.fulfill({ json: command ? [] : [summary] });
     if (url.pathname === `${base}/${feedback.id}`) return command ? route.fulfill({ status: 404, json: { error: "Feedback not found" } }) : route.fulfill({ json: detail });
     if (url.pathname.endsWith("/images")) return route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: [] });

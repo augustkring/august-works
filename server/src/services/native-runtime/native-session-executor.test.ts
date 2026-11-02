@@ -11076,10 +11076,36 @@ describe("runnerd provider runtime wiring", () => {
     }
     const onLog = vi.fn(async () => undefined);
     const syncIn = vi.fn(async () => undefined);
+    const stagedRemoteFiles = new Map<string, Buffer>();
     const remoteExecute = vi.fn(
-      async (command: { command: string; args?: string[] }) => {
+      async (command: { command: string; args?: string[]; stdin?: string }) => {
         let stdout = "";
         const script = command.args?.[1] ?? "";
+        const initializeUpload = /^umask 077; mkdir -p '([^']+)' && rm -f '([^']+)' && : > '([^']+)'$/.exec(script);
+        const appendUpload = /^current=\$\(wc -c < '([^']+)'\); test "\$current" -le 67108864 && test \$\(\(current \+ ([0-9]+)\)\) -le 67108864 && base64 -d >> '([^']+)'$/.exec(script);
+        const finishUpload = /^chmod ([0-7]+) '([^']+)' && mv -f '([^']+)' '([^']+)'$/.exec(script);
+        if (initializeUpload) {
+          if (initializeUpload[2] !== initializeUpload[3] ||
+            !initializeUpload[3]!.startsWith(`${initializeUpload[1]}/`))
+            throw new Error("runner_artifact_upload_parent_mismatch");
+          stagedRemoteFiles.set(initializeUpload[3]!, Buffer.alloc(0));
+        } else if (appendUpload) {
+          const current = stagedRemoteFiles.get(appendUpload[1]!);
+          if (!current || appendUpload[1] !== appendUpload[3] || !command.stdin)
+            throw new Error("runner_artifact_upload_chunk_unbound");
+          const chunk = Buffer.from(command.stdin, "base64");
+          if (chunk.length !== Number(appendUpload[2]) || current.length + chunk.length > 64 * 1024 * 1024)
+            throw new Error("runner_artifact_upload_chunk_invalid");
+          stagedRemoteFiles.set(appendUpload[1]!, Buffer.concat([current, chunk]));
+        } else if (finishUpload) {
+          const contents = stagedRemoteFiles.get(finishUpload[3]!);
+          if (!contents || finishUpload[2] !== finishUpload[3])
+            throw new Error("runner_artifact_upload_finish_unbound");
+          stagedRemoteFiles.delete(finishUpload[3]!);
+          stagedRemoteFiles.set(finishUpload[4]!, contents);
+        } else if (script.startsWith("umask 077; mkdir -p ") && script.includes("paperclip-upload.")) {
+          throw new Error("runner_artifact_upload_init_invalid");
+        }
         if (script.includes('sha256sum "$1"')) {
           if (image.endsWith("-error")) throw new Error("checksum unavailable");
           return {
@@ -11116,7 +11142,8 @@ describe("runnerd provider runtime wiring", () => {
             : "/usr/local/bin/codex\n";
         } else if (
           !script.includes("ln -sfn") &&
-          !script.includes("paperclip_codex_launcher_tmp")
+          !script.includes("paperclip_codex_launcher_tmp") &&
+          !script.includes("paperclip-upload.")
         ) {
           throw new Error(`unexpected command: ${command.command}`);
         }
@@ -11168,13 +11195,9 @@ describe("runnerd provider runtime wiring", () => {
     }
     if (needsReplacement) {
       expect(transport.runnerBinary).toBe(controllerArtifact);
-      expect(syncIn).toHaveBeenCalledTimes(1);
-      expect(syncIn).toHaveBeenCalledWith([expect.objectContaining({
-        files: [expect.objectContaining({
-          sourcePath: controllerArtifact,
-          targetPath: "/workspace/.paperclip-runtime/paperclip-runner/bin/paperclip-runnerd",
-        })],
-      })]);
+      expect(syncIn).not.toHaveBeenCalled();
+      expect(stagedRemoteFiles.get("/workspace/.paperclip-runtime/paperclip-runner/bin/paperclip-runnerd"))
+        .toEqual(Buffer.from("fixture runner artifact"));
     } else {
       expect(syncIn).not.toHaveBeenCalled();
     }

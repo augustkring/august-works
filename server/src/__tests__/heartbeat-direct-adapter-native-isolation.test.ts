@@ -138,7 +138,7 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
   });
 
   it.each(DIRECT_ADAPTERS)(
-    "executes flag-off %s once without creating native records",
+    "denies unqualified flag-off %s before execution without creating native records",
     async (adapterType, provider) => {
       const companyId = randomUUID();
       const agentId = randomUUID();
@@ -178,19 +178,22 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
       expect(queued).not.toBeNull();
       const finished = await waitForRunToFinish(heartbeat, queued!.id);
 
-      expect(execute).toHaveBeenCalledOnce();
+      expect(execute).not.toHaveBeenCalled();
       expect(finished).toMatchObject({
-        status: "succeeded",
-        exitCode: 0,
-        signal: null,
-        runtimeMode: "legacy",
+        status: "failed",
+        errorCode: "configuration_incomplete",
         nativePhase: null,
       });
       const persistedResult = finished?.resultJson as Record<
         string,
         unknown
       > | null;
-      expect(persistedResult?.directProofJson).toBe(directProofJson);
+      expect(persistedResult?.configurationIncomplete).toMatchObject({
+        reason: "paid_transport_unqualified",
+        owner: "Managed model gateway owner",
+        actionUrl: `/agents/${agentId}/runtime`,
+      });
+      expect(persistedResult?.directProofJson).toBeUndefined();
 
       const nativeRows = await Promise.all([
         db.select().from(completionContracts),
