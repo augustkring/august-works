@@ -2550,6 +2550,39 @@ test("sandbox exec streams through pinned CLI argv without shell and journals no
   }, hooks);
 });
 
+test("sandbox exec stdin EPIPE is controlled unknown and never completes or replays its journal claim", async () => {
+  let spawnCount = 0, killCount = 0;
+  const hooks = {
+    spawnProcess() {
+      spawnCount++;
+      const child = new EventEmitter();
+      child.stdin = new Writable({ write(_chunk, _encoding, done) {
+        done(Object.assign(new Error("fixture closed stdin"), { code: "EPIPE" }));
+      } });
+      child.stdout = Readable.from([]); child.stderr = Readable.from([]);
+      child.kill = () => { killCount++; setImmediate(() => child.emit("close", 0, null)); return true; };
+      return child;
+    },
+  };
+  await fixture(async ({ engine, enablePhysical, setPhase, root }) => {
+    enablePhysical(); setPhase("Stopped");
+    await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission("stdin-epipe-policy", policyDocument) }, deadline());
+    await engine.execute(randomUUID(), { ...input("start"), start: { policyHash,
+      expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "stdin-epipe-start" } }, deadline());
+    const request = execRequest(deadline(), Buffer.from("input that was not accepted").toString("base64"));
+    const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId,
+      cellGeneration: "1", sandboxRef: scope.sandboxRef };
+    await assert.rejects(engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}), /exec_unknown/);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.ok(killCount > 0);
+    const journal = JSON.parse(await readFile(path.join(root, "openshell-journal.json"), "utf8"));
+    assert.equal(journal.commands[request.requestId].state, "claimed");
+    assert.equal(journal.commands[request.requestId].result, null);
+    await assert.rejects(engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}), /exec_unknown/);
+    assert.equal(spawnCount, 1);
+  }, hooks);
+});
+
 test("sandbox broker capability enters through an expiring native provider, never CLI argv or workload env", async () => {
   let spawnedArgs = null, providerEnvSeen = false;
   const hooks = {

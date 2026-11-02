@@ -4123,15 +4123,31 @@ export function openShellHostEngine({
       }
     };
     const readOutput = Promise.all([forward("stdout", child.stdout), forward("stderr", child.stderr)]);
-    child.stdin.end(Buffer.from(request.stdinBase64, "base64"));
+    let stdinFailed = false;
     let exitCode;
     try {
       const exited = new Promise((resolve, reject) => {
         child.once("error", reject);
         child.once("close", (code, signalName) => resolve({ code, signalName }));
       });
-      const result = await exited;
+      const written = new Promise((resolve, reject) => {
+        const onStdinError = () => {
+          stdinFailed = true;
+          terminate();
+          reject(new Error("exec_unknown"));
+        };
+        // Keep the stream listener for its lifetime: a child can close stdin
+        // before exit, and an unhandled EPIPE must not crash the Host process.
+        child.stdin.on("error", onStdinError);
+        try {
+          child.stdin.end(Buffer.from(request.stdinBase64, "base64"), error => {
+            if (error) onStdinError(); else resolve();
+          });
+        } catch { onStdinError(); }
+      });
+      const [result] = await Promise.all([exited, written]);
       await readOutput;
+      if (stdinFailed) throw new Error("exec_unknown");
       settled = true;
       exitCode = Number.isInteger(result.code) ? result.code : (timedOut ? 124 : 1);
     } catch (error) {
