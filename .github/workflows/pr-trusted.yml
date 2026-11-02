@@ -606,6 +606,17 @@ jobs:
           sudo install -d -o root -g root -m 0755 "$trusted_node_dir"
           sudo install -o root -g root -m 0755 "$(command -v node)" "$trusted_node_dir/node"
           echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
+          # Report the exact fixed binary profile when a hosted runner refuses it.
+          # These are public path/owner/mode facets; no environment values or file bodies.
+          for executable in "$trusted_node_dir/node" /bin/sh /usr/bin/env /usr/bin/readlink /usr/bin/stat /usr/bin/sha256sum /usr/bin/cut /usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin /bin; do
+            current_binary=$(/usr/bin/readlink -f -- "$executable")
+            while :; do
+              /usr/bin/stat -Lc 'eraser-profile path=%n uid=%u mode=%a' -- "$current_binary"
+              test "$current_binary" = / && break
+              current_binary=${current_binary%/*}
+              test -n "$current_binary" || current_binary=/
+            done
+          done
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
