@@ -1,0 +1,750 @@
+{
+  "baseHead": "d2e60093df7022606f73ecb0be40cd69dda42550",
+  "count": 41,
+  "excluded": "No raw logs, databases, homes, profiles, dependencies, runtime assets, root notes, shadows, credentials, or inventory seed payloads.",
+  "files": [
+    {
+      "archivePath": "workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/source-pins.json",
+      "atimeNs": 1793636053554445255,
+      "categories": [
+        "root-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 576150,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636053554421510,
+      "nlink": 1,
+      "sha256": "d4829510bbd6e603b842dcc779994769680b7eadbb9f75cc425de788e4e66c9d",
+      "size": 3761,
+      "source": "/workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/publication.json",
+      "atimeNs": 1793636189921884753,
+      "categories": [
+        "root-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 576154,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636141167200050,
+      "nlink": 1,
+      "sha256": "9c903348c7e6c01dba99f8f7d10f1517d69c2bf9c45775570a795a4371a1134e",
+      "size": 716,
+      "source": "/workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/publication.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/acp-oxc-receipt.json",
+      "atimeNs": 1793636135496746434,
+      "categories": [
+        "root-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 576151,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636097427946364,
+      "nlink": 1,
+      "sha256": "2d7186db88a36c788fee0776d46d0431492b71e231cb6fe5818dd970f57ce997",
+      "size": 239,
+      "source": "/workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/acp-oxc-receipt.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/yaml-structure-receipt.json",
+      "atimeNs": 1793636135496746434,
+      "categories": [
+        "root-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 576153,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636097750340567,
+      "nlink": 1,
+      "sha256": "7766fde7ec4688c765f5c107f3774d0eb893eaeae7976ff9a0d55c2ffc2f0b21",
+      "size": 312,
+      "source": "/workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/yaml-structure-receipt.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/files/.github/workflows/pr-trusted.yml",
+      "atimeNs": 1793636053551691159,
+      "categories": [
+        "root-plan-source"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 576147,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636053551644238,
+      "nlink": 1,
+      "sha256": "d25a061ef6038a4fc9712335919793e474aacab8e866a9768326e6ece99637ae",
+      "size": 74703,
+      "source": "/workspace/v10-preparation/reviewed-ci-control-reporting-notice-integration-20261102/files/.github/workflows/pr-trusted.yml",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/files/scripts/fixtures/native-session-handle-observer-check.mjs",
+      "atimeNs": 1793635447047257281,
+      "categories": [
+        "root-plan-source",
+        "native-r6-source"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563350,
+      "kind": "regular",
+      "mode": 420,
+      "mtimeNs": 1793635447046549212,
+      "nlink": 1,
+      "sha256": "a6fba302c87c6eaefe0c0a10b625cb3f14ae2959956900eeeb314c7912dfdfab",
+      "size": 11534,
+      "source": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/files/scripts/fixtures/native-session-handle-observer-check.mjs",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/files/scripts/run-vitest-stable.mjs",
+      "atimeNs": 1793633365813713964,
+      "categories": [
+        "root-plan-source"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 474146,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793633156802289801,
+      "nlink": 1,
+      "sha256": "002a283ebfdb2606ed7794fd5d9c9180b99414aaccac4d8b4beb4d55b9929d03",
+      "size": 24588,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/files/scripts/run-vitest-stable.mjs",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/files/scripts/vitest-module-results-reporter.mjs",
+      "atimeNs": 1793633365850479729,
+      "categories": [
+        "root-plan-source"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 474145,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793633156802032783,
+      "nlink": 1,
+      "sha256": "3e669c4dd44dff11dce3fa442461bb7d77fa82906ac0ab1ad48c5b8dec1782e4",
+      "size": 5477,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/files/scripts/vitest-module-results-reporter.mjs",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/company-portability-prefetch-readiness-20261102/r1/files/server/src/__tests__/company-portability.test.ts",
+      "atimeNs": 1793636053551644238,
+      "categories": [
+        "root-plan-source",
+        "portability-source"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563299,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793634462006184363,
+      "nlink": 1,
+      "sha256": "9ac9ec34cddc2b6cdae3a39e8db8a47d5fb942330273c489ded8d2f052170419",
+      "size": 256275,
+      "source": "/workspace/v10-preparation/company-portability-prefetch-readiness-20261102/r1/files/server/src/__tests__/company-portability.test.ts",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/files/tests/e2e/fixtures/assert-unqualified-runtime.ts",
+      "atimeNs": 1793634694515335870,
+      "categories": [
+        "root-plan-source",
+        "acp-notice-source"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563311,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793634694514928375,
+      "nlink": 1,
+      "sha256": "a0b31b1fe125d886e2f1ae37d554c80a5a118293409f05a7e26253dea460f71e",
+      "size": 4445,
+      "source": "/workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/files/tests/e2e/fixtures/assert-unqualified-runtime.ts",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/source-pins.json",
+      "atimeNs": 1793635447050396779,
+      "categories": [
+        "native-r6"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563356,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635447050378892,
+      "nlink": 1,
+      "sha256": "f7ef83aef6028e60db740717d16b0712a727056726b8b435887cdf13d4763553",
+      "size": 1396,
+      "source": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/measured-control-budget.patch",
+      "atimeNs": 1793635447050288826,
+      "categories": [
+        "native-r6"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563354,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635447049965217,
+      "nlink": 1,
+      "sha256": "7cb2788bc89a023af30745652b1f49cfe50f6ac8e73104671359048196e79894",
+      "size": 1935,
+      "source": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/measured-control-budget.patch",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/measured-rationale.json",
+      "atimeNs": 1793635447050327654,
+      "categories": [
+        "native-r6"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563355,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635447050288826,
+      "nlink": 1,
+      "sha256": "0dccecbf5b4034da7400686f8f42efdec8c651750336922232a122893e560ab8",
+      "size": 950,
+      "source": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/measured-rationale.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/syntax-receipt.json",
+      "atimeNs": 1793635537476160324,
+      "categories": [
+        "native-r6"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563357,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635537476117579,
+      "nlink": 1,
+      "sha256": "81441ce0fdec5aed5eb9f10c4c99d7a72853fe04051710505ee804575169c231",
+      "size": 403,
+      "source": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/syntax-receipt.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/files/.github/workflows/pr-trusted.yml",
+      "atimeNs": 1793635447049871736,
+      "categories": [
+        "native-r6-source"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563353,
+      "kind": "regular",
+      "mode": 420,
+      "mtimeNs": 1793635447047667039,
+      "nlink": 1,
+      "sha256": "de18f5b328f25bf109120419e925124148185f12c702aad43ecd662d5fd981eb",
+      "size": 74215,
+      "source": "/workspace/v10-preparation/native-session-handle-observer-implementation-20261102/r6-measured-control-budget/files/.github/workflows/pr-trusted.yml",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/source-pins.json",
+      "atimeNs": 1793634694515575972,
+      "categories": [
+        "acp-notice"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563313,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793634694515553889,
+      "nlink": 1,
+      "sha256": "f378d1fb0a90920df769a4cb9c4bd97c5d2fc606a69e37572ab1b8b155e886c2",
+      "size": 951,
+      "source": "/workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/notice-run-binding.patch",
+      "atimeNs": 1793634694515411574,
+      "categories": [
+        "acp-notice"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563312,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793634694515335870,
+      "nlink": 1,
+      "sha256": "3161792d58cc3ecd1b532bef6ff241a183d4f3afb1a929da8592c7368d175017",
+      "size": 4343,
+      "source": "/workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/notice-run-binding.patch",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/ordered-proof-pins.json",
+      "atimeNs": 1793635658061619216,
+      "categories": [
+        "acp-notice"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563366,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635658061577834,
+      "nlink": 1,
+      "sha256": "00f23a20a8902fef527a8d7680fe6d0f6fd3c9a5be61446f173415e4da458869",
+      "size": 2141,
+      "source": "/workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/ordered-proof-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/ordered-dedupe-contract-proof.md",
+      "atimeNs": 1793635658054761688,
+      "categories": [
+        "acp-notice"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563365,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635657960924365,
+      "nlink": 1,
+      "sha256": "4d1b3d1592f85c2f352c0e5bf8d3cb26ae47d8a547c8226bdcbe09406d7eebbf",
+      "size": 7114,
+      "source": "/workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/ordered-dedupe-contract-proof.md",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/source-evidence.json",
+      "atimeNs": 1793634890556541236,
+      "categories": [
+        "acp-notice"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563319,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793634890556436518,
+      "nlink": 1,
+      "sha256": "3899b7410a940c86091d5ea61515286f6e66fcdf667bbed1ca927849e31fd343",
+      "size": 1106,
+      "source": "/workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/source-evidence.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/REVIEW.md",
+      "atimeNs": 1793634807498258275,
+      "categories": [
+        "acp-notice"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563318,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793634807475197459,
+      "nlink": 1,
+      "sha256": "e8270aea920cf384ed2953343fa83978b3abfd806dbd9c9ace7f5d6d75ea231f",
+      "size": 4623,
+      "source": "/workspace/v10-preparation/unqualified-runtime-notice-run-binding-20261102/r1/REVIEW.md",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/source-pins.json",
+      "atimeNs": 1793633365879787426,
+      "categories": [
+        "reporter"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 474174,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793633365879765353,
+      "nlink": 1,
+      "sha256": "f6c88838fa0f35566d91b733b742d0aaa1a400fea23dfe894c9117a7c43ebf1e",
+      "size": 1726,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/reporting.patch",
+      "atimeNs": 1793633365879581105,
+      "categories": [
+        "reporter"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 474172,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793633365879357046,
+      "nlink": 1,
+      "sha256": "2baf9a768c5175e47a0c7dd2a3536744c857cd392558b6c5158707596df85943",
+      "size": 10364,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/reporting.patch",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/REVIEW.md",
+      "atimeNs": 1793633365879581105,
+      "categories": [
+        "reporter"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 474170,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793633365761632732,
+      "nlink": 1,
+      "sha256": "05eff7c9cd8cdb6acdd90e334aa49c99ce91a418b604a4f17dbbd06ab2a64488",
+      "size": 3445,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/REVIEW.md",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/CONTROLS.md",
+      "atimeNs": 1793633365879581105,
+      "categories": [
+        "reporter"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 474171,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793633365763159262,
+      "nlink": 1,
+      "sha256": "a1b0eef55722cf5c4447949c812e410c1eb507e121f5f17d7730da500c2ff897",
+      "size": 2469,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2/CONTROLS.md",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/preparation-pins.json",
+      "atimeNs": 1793635685560644170,
+      "categories": [
+        "reporter"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563367,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635685560502787,
+      "nlink": 1,
+      "sha256": "f1d8b394810bb8e23b01b3bc4b23989988a55fb7f4245e365cf0d686246f4df4",
+      "size": 1769,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/preparation-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/REVIEW.md",
+      "atimeNs": 1793635685555334952,
+      "categories": [
+        "reporter"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563321,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635685523334286,
+      "nlink": 1,
+      "sha256": "44b878555a4e1c65b8897f3d4d329667b7a6526acb82d977b97307d35d5f6678",
+      "size": 3775,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/REVIEW.md",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/preparation-pins.json",
+      "atimeNs": 1793635747306493776,
+      "categories": [
+        "reporter"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563371,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635747306441297,
+      "nlink": 1,
+      "sha256": "a4deb741cca0faafb4ce2e1addc5a05cde5f57c8e41edc3324e1f123b0afe67b",
+      "size": 933,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/preparation-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/qualify.py",
+      "atimeNs": 1793635747306262567,
+      "categories": [
+        "reporter-runner"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563369,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635747306114644,
+      "nlink": 1,
+      "sha256": "bb4d198d63243f98d766bb99b50ced421a0bfb9d773c078a7a02e156e126992e",
+      "size": 20713,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/qualify.py",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/REVIEW.md",
+      "atimeNs": 1793635747306356709,
+      "categories": [
+        "reporter"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563370,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635747306262567,
+      "nlink": 1,
+      "sha256": "f1e26263f21aa0dd0e2262302de662a073f0e19552fbdd2f4bc0acdff38ac632",
+      "size": 4059,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/REVIEW.md",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/qualification-r1/receipt.json",
+      "atimeNs": 1793635887935567127,
+      "categories": [
+        "reporter-qualification"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 576121,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793635831410390171,
+      "nlink": 1,
+      "sha256": "8dd702caf02a282186f9f26efba205de4a94d2f13ea907bac6d43156475788d2",
+      "size": 15564,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/qualification-r1/receipt.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/qualification-summary.json",
+      "atimeNs": 1793636007188300220,
+      "categories": [
+        "reporter-qualification"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 576143,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636007188268622,
+      "nlink": 1,
+      "sha256": "6e0737bd88849e0d49767f350e5a1659fc070e8e8358f9d9ab6e81f153e7b0ee",
+      "size": 2291,
+      "source": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r3/runner-r2/qualification-summary.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/company-portability-prefetch-readiness-20261102/r1/source-pins.json",
+      "atimeNs": 1793635987425642187,
+      "categories": [
+        "portability"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 563301,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793634462020245896,
+      "nlink": 1,
+      "sha256": "a699589d25a23228b4147fba8831b1c8faf5a0c93321e161f929aef8c0bbba23",
+      "size": 886,
+      "source": "/workspace/v10-preparation/company-portability-prefetch-readiness-20261102/r1/source-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r14.json",
+      "atimeNs": 1793630815374690798,
+      "categories": [
+        "metadata-owner-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 712649,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793630815373752491,
+      "nlink": 1,
+      "sha256": "7b6428bd2f78c9c615c6928413d9c69b219fe711465dc7d99c3dd3a8b3edb077",
+      "size": 403576,
+      "source": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r14.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/final-metadata-inventory-audit-nov01/r14-source-pins.json",
+      "atimeNs": 1793630815378677575,
+      "categories": [
+        "metadata-owner-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 712651,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793630815378366736,
+      "nlink": 1,
+      "sha256": "c0a4579d0309386b4581b5892d34e20d840062ab7a4ad5924b86b5183ee83dc9",
+      "size": 1339,
+      "source": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/r14-source-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/final-metadata-inventory-audit-nov01/r14-bounded-owner-audit.json",
+      "atimeNs": 1793630815375038252,
+      "categories": [
+        "metadata-owner-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 712650,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793630815374690798,
+      "nlink": 1,
+      "sha256": "aefe338164fd2f3319c20b559ecc742dcaebea0a2b0be4402b64935b814bae97",
+      "size": 13225,
+      "source": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/r14-bounded-owner-audit.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/final-metadata-inventory-audit-nov01/r14-SHA256SUMS",
+      "atimeNs": 1793630815378733790,
+      "categories": [
+        "metadata-owner-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 712652,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793630815378707130,
+      "nlink": 1,
+      "sha256": "839c829fbb70f83d9385f4ecc64e60db0cad0baa5b7ab89c70de55d0874f8d03",
+      "size": 276,
+      "source": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/r14-SHA256SUMS",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r15.json",
+      "atimeNs": 1793636236591930430,
+      "categories": [
+        "metadata-owner-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 712654,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636236591422543,
+      "nlink": 1,
+      "sha256": "c256f5e0b4a99d0cca6581872a30ce08d017367fa7fcc53648209b4a64b1aaab",
+      "size": 398939,
+      "source": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r15.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/final-metadata-inventory-audit-nov01/r15-source-pins.json",
+      "atimeNs": 1793636236594212714,
+      "categories": [
+        "metadata-owner-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 712656,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636236593862686,
+      "nlink": 1,
+      "sha256": "88824ce36cfd45773c64df63b09dd54f3532c4ce0253fe45642f6cd9f2612ffb",
+      "size": 1326,
+      "source": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/r15-source-pins.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/final-metadata-inventory-audit-nov01/r15-bounded-owner-audit.json",
+      "atimeNs": 1793636236592256742,
+      "categories": [
+        "metadata-owner-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 712655,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636236591930430,
+      "nlink": 1,
+      "sha256": "c6696406a2f5e1d3cfc42b422a3a9ff4820f00ddc6fde6fc66fcc72c193bd1a9",
+      "size": 3701,
+      "source": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/r15-bounded-owner-audit.json",
+      "uid": 1000
+    },
+    {
+      "archivePath": "workspace/v10-preparation/final-metadata-inventory-audit-nov01/r15-SHA256SUMS",
+      "atimeNs": 1793636236594296311,
+      "categories": [
+        "metadata-owner-plan"
+      ],
+      "device": 27,
+      "gid": 1000,
+      "inode": 712657,
+      "kind": "regular",
+      "mode": 384,
+      "mtimeNs": 1793636236594264713,
+      "nlink": 1,
+      "sha256": "5fc58985099ac7c5c79fc22e3cac0248ca99165d619bb4084b801c6edd59d209",
+      "size": 276,
+      "source": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/r15-SHA256SUMS",
+      "uid": 1000
+    }
+  ],
+  "schema": "blentera-r85-evidence-backup-manifest-v1",
+  "status": "PREPARED_PRIVATE_PENDING_ROOT_MANIFEST_REVIEW_NOT_PUSHED"
+}
