@@ -26,7 +26,8 @@ import { projectRoutes } from "../../routes/projects.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { documentService } from "../documents.js";
 import { instanceSettingsService } from "../instance-settings.js";
-import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
+import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
+import type { NativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
 import { grantsForHumanRole } from "../company-member-roles.js";
 
@@ -66,9 +67,7 @@ function toolUse(body: Record<string, unknown>, name: string, id: string, input:
   return { stop_reason: "tool_use" as const,
     content: [{ type: "tool_use", id, name: tool(body, name), input }] };
 }
-function finish(body: Record<string, unknown>, execution: { completionContract: { contract: {
-  revision: number; criteria: Array<{ id: string }>;
-} } }, id: string) {
+function finish(body: Record<string, unknown>, execution: Pick<NativeExecutionInput, "completionContract">, id: string) {
   const contract = execution.completionContract.contract;
   return toolUse(body, "paperclip_finish", id, { schema: "paperclip.run_result.v1", reportedWorkDisposition: "done",
     summary: "Completed the actual scheduler-owned source-bound task.", completionClaim: {
@@ -314,7 +313,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         await memoryService(db).reviewCandidate((await db.select({ companyId: issues.companyId }).from(issues)
           .where(eq(issues.id, currentIssueId)))[0]!.companyId, memoryARecordId, { decision: "accept" }, humanMemoryActor);
         const task = await issueService(db).getById(privateTaskId);
-        if (!task || task.visibility !== "private" || task.responsibleUserId !== humanMemoryActor.principal.userId)
+        if (!task || task.visibility !== "private" || humanMemoryActor.principal.type !== "user" ||
+            task.responsibleUserId !== humanMemoryActor.principal.userId)
           throw new Error("managed_source_private_root_task_changed");
         const observedAt = new Date();
         const excerpt = `Status: ${task.status}\nPriority: ${task.priority}\nDescription: ${task.description}`.slice(0, 60_000);
@@ -373,7 +373,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         expect(snapshotA.policy.memoryIds).not.toContain(privateRootMemoryId);
         expect(snapshotB.inputs.some(source => source.kind === "context")).toBe(true);
         expect(snapshotB.policy.memoryIds).toContain(privateRootMemoryId);
-        expect(snapshotB.inputs.find(source => source.kind === "context" && source.manifestId)?.manifestId)
+        expect(snapshotB.inputs.find((source): source is Extract<NativePayloadSourceInput, { kind: "context" }> =>
+          source.kind === "context" && Boolean(source.manifestId))?.manifestId)
           .toMatch(/^[0-9a-f-]{36}$/i);
         const [outputA] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot })
           .from(memoryRecords).where(eq(memoryRecords.id, memoryARecordId));
@@ -521,7 +522,6 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
   it("binds a managed Project GET result to the exact current public Project projection", async () => {
     const projectFixture = managedNativeProjectWorkspaceFixture({ root });
     const callId = `managed-project-read-${randomUUID()}`;
-    let api: Awaited<ReturnType<typeof projectApi>> | null = null;
     const oldApiUrl = process.env.PAPERCLIP_API_URL;
     let consumedExactProjectResult = false;
     let projectResultDigest: string | null = null;
@@ -575,7 +575,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         }
       },
       driveScheduler: async context => {
-        api = await projectApi(db, context.actor);
+        const api = await projectApi(db, context.actor);
         process.env.PAPERCLIP_API_URL = api.origin;
         const project = projectFixture.project();
         const result = await startTask(context, { title: "Managed Project source read", description: "Read the current Project once.",
@@ -587,7 +587,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         const profile = row?.runnerProfileJson && typeof row.runnerProfileJson === "object" ? row.runnerProfileJson as Record<string, unknown> : {};
         const receipt = nativeRunInputSourceReceiptSchema.parse(profile.nativeInputSourceReceipt);
         expect(receipt.bootstrap.inputs.some(value => value.kind === "project" && value.projectId === project.projectId)).toBe(true);
-        return { ...result, receipt };
+        return { ...result, receipt, projectApiServer: api.server };
       },
     });
     expect(consumedExactProjectResult).toBe(true);
@@ -596,7 +596,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
       expect.objectContaining({ kind: "project", projectId: projectFixture.project().projectId }),
       expect.objectContaining({ kind: "project_workspace", workspaceId: projectFixture.project().projectWorkspaceId }),
     ]));
-    if (api?.server.listening) await new Promise<void>(resolve => api!.server.close(() => resolve()));
+    if (outcome.projectApiServer.listening) await new Promise<void>(resolve => outcome.projectApiServer.close(() => resolve()));
     if (oldApiUrl === undefined) delete process.env.PAPERCLIP_API_URL; else process.env.PAPERCLIP_API_URL = oldApiUrl;
   }, 180_000);
 

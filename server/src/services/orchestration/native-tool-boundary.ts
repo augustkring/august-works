@@ -60,6 +60,7 @@ const reads = new Set([
   "read_context",
   "list_document_revisions",
   "paperclip_search_assigned_tools",
+  "connections_search",
 ]);
 const draftWrites = new Set([
   "write_document",
@@ -67,6 +68,7 @@ const draftWrites = new Set([
   "create_project",
   "report_progress",
   "request_human_input",
+  "connection_request",
 ]);
 
 async function scope(db: Db, b: Binding) {

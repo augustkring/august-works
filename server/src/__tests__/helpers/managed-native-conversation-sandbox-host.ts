@@ -718,7 +718,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     }
   };
   const { hostKeys, host, cell, environment, conversationHostCapacity, payerUserId, fixtureImageNode,
-    runtimeConnection, runtimePresence, createCanary, providerImageHome } = infrastructure;
+    runtimeConnection, runtimePresence, createCanary, providerImageHome, fixtureToolAccess, runtimeSecretValue } = infrastructure;
   // Every closure receives a fresh setup-only canary, never a revoked prior grant.
   // Qualification-only canary and the stable runtime connection have separate
   // grants. Requalification creates a new canary without changing Agent tools.

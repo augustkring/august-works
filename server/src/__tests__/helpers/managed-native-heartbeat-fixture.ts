@@ -606,7 +606,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
     brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest, observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
   if (input.beforeManagedModelRequest && sandboxHeartbeat) {
-    const modelRequest = sandboxHeartbeat.modelRequest.bind(sandboxHeartbeat);
+    const originalModelRequest = sandboxHeartbeat.modelRequest;
+    if (!originalModelRequest) throw new Error("scheduler_fixture_model_observer_host_method_missing");
+    const modelRequest = originalModelRequest.bind(sandboxHeartbeat);
     sandboxHeartbeat.modelRequest = (body, signal) =>
       authenticatedHostModelRequest.run(true, () => modelRequest(body, signal));
     if (sandboxHeartbeat.modelRequestAuthenticated) {

@@ -23,6 +23,8 @@ import {
   companies,
   companyMemberships,
   connectionGrants,
+  toolConnections,
+  toolConnectionInstalls,
   createDb,
   heartbeatRuns,
   heartbeatRunEvents,
@@ -1717,7 +1719,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         "reassign_task",
         "create_project",
         "create_skill",
-        "connections_search",
+        "opaque_provider_search",
       ]) {
         await expect(
           nativeTools().execute({ tool, callId: tool, arguments: {} }),
@@ -1745,6 +1747,61 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         )[0]?.toolActionsUsed,
       ).toBe(0);
     });
+    it("charges current Plan discovery and a Human connection card without installing or dispatching access", async () => {
+      const accessRows = async () => ({
+        connections: await db.select().from(toolConnections).where(eq(toolConnections.companyId, f.home)),
+        grants: await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, f.home)),
+        installs: await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.companyId, f.home)),
+      });
+      const before = await accessRows();
+      const authority = nativeTools();
+      await expect(authority.execute({ tool: "connections_search", callId: "plan-connection-search",
+        arguments: { query: "railway" } })).resolves.toMatchObject({
+        results: expect.arrayContaining([expect.objectContaining({ service: "railway" })]),
+      });
+      const call = { tool: "connection_request", callId: "plan-connection-card", arguments: { service: "railway" } };
+      await expect(authority.execute(call)).resolves.toMatchObject({ service: "railway", state: "needs_user_action",
+        connectionId: null, interactionId: expect.any(String) });
+      const [card] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
+      expect(card).toMatchObject({ companyId: f.home, kind: "connection_intent", status: "pending",
+        sourceRunId: run.id, addresseeUserId: f.userId, createdByAgentId: f.presence.id,
+        payload: { serviceSlug: "railway", requestingAgentId: f.presence.id, phase: "requested" } });
+      await expect(authority.execute(call)).rejects.toMatchObject({ status: 409 });
+      await expect(authority.execute({ ...call, arguments: { service: "github" } })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toHaveLength(1);
+      expect(await accessRows()).toEqual(before);
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+      const receipts = await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id));
+      expect(receipts).toHaveLength(2);
+      expect(receipts.every(receipt => receipt.status === "succeeded")).toBe(true);
+      expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0])
+        .toMatchObject({ toolActionsUsed: 2, status: "running" });
+      await expect(authority.execute({ tool: "connection_request", callId: "plan-connection-over-budget",
+        arguments: { service: "railway" } })).rejects.toMatchObject({ status: 403 });
+      expect(await accessRows()).toEqual(before);
+      expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toHaveLength(1);
+    });
+    it.each(["expired", "revoked", "cross_run", "unadmitted_plan"] as const)(
+      "withholds both connection tools when the current Plan binding is %s", async (reason) => {
+        if (reason === "expired") await db.update(orchestrationPlans).set({ startedAt: new Date(0) })
+          .where(eq(orchestrationPlans.id, plan.id));
+        if (reason === "revoked") await db.delete(companyMemberships).where(and(
+          eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+        if (reason === "unadmitted_plan") await db.delete(orchestrationWorkerAttempts)
+          .where(eq(orchestrationWorkerAttempts.id, binding.workerAttemptId));
+        const authority = new PaperclipRunnerToolAuthority(db, { ...nativeBinding(),
+          ...(reason === "cross_run" ? { runId: randomUUID() } : {}) });
+        for (const call of [
+          { tool: "connections_search", callId: "denied-connection-search", arguments: { query: "railway" } },
+          { tool: "connection_request", callId: "denied-connection-card", arguments: { service: "railway" } },
+        ]) await expect(authority.execute(call)).rejects.toMatchObject({ status: 403 });
+        expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toHaveLength(0);
+        expect(await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id))).toHaveLength(0);
+        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]?.toolActionsUsed).toBe(0);
+        expect(calls).toBe(0);
+      },
+    );
     it("binds dispatch-time Worker issuance to the current accountable attempt and rejects stale ownership", async () => {
       const input = { companyId: f.home, agentId: f.presence.id, runId: run.id, responsibleUserId: f.userId };
       const minted = await gateway().issueForRun(input);
