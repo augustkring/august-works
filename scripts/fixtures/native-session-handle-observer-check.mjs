@@ -13,8 +13,24 @@ const hashes={ [launcher]:'9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958
 const started=Date.now(), deadline=started+10_000, limit=150*1024*1024;
 let root, stage='prerequisite', ownsChildren=false;
 const facets={procDirectoryOwnerMatchesOriginalUid:null,statusEffectiveUidMatchesOriginalUid:null,
-  directCwdEACCES:false,directFdEACCES:false,observedHolders:null};
+  directCwdEACCES:false,directFdEACCES:false,observedHolders:null,
+  childFdValid:null,childInodeSafeInteger:null,parentRssBytes:null,ownedChildrenRssBytes:[],
+  observerReserveBytes:64*1024*1024,memoryLimitBytes:limit,memoryTotalBytes:null,lastSetupChildIndex:null};
 const children=[];
+let failureLabel=null;
+const failureLabels=new Set(['control_deadline','process_identity_unknown','prerequisite_alias','prerequisite_metadata',
+  'prerequisite_ancestor','prerequisite_hash','child_setup_deadline','child_setup_unavailable','child_setup_closed',
+  'child_output_bound','child_handle_identity','child_uid','child_fd_identity','child_start_identity','child_memory_unknown',
+  'control_memory_bound','close_child_identity','owned_child_close_deadline','unprivileged_parent_required',
+  'credential_uid_unknown','original_reader_not_denied','actual_holder_not_observed','startup_environment_not_cleared',
+  'wrong_uid_accepted','expired_deadline_accepted','extra_program_accepted','neighbor_identity','closed_target_not_zero',
+  'neighbor_holder_not_observed']);
+function recordFailure(error) {
+  if(failureLabel!==null)return;
+  // Only a complete exact static first line is retained, never actual/expected values or raw errors.
+  const firstLine=error instanceof Error ? error.message.split(/\r?\n/,1)[0] : '';
+  failureLabel=failureLabels.has(firstLine)?firstLine:'OTHER';
+}
 const digest='a'.repeat(64), neighbor='b'.repeat(64);
 const python = String.raw`import ctypes,json,os,sys
 root=sys.argv[1]
@@ -45,7 +61,7 @@ function safePrerequisite(file,hash) {
 }
 async function ownedChild(target) {
   remaining();const child=spawn('/usr/bin/python3',['-I','-c',python,target],{stdio:['pipe','pipe','pipe'],env:{PATH:'/usr/bin:/bin'}});
-  const owner={child,identity:null,closed:false};children.push(owner);
+  const owner={child,identity:null,closed:false};children.push(owner);facets.lastSetupChildIndex=children.length-1;
   child.on('close',()=>{owner.closed=true;});
   const line=await new Promise((resolve,reject)=>{
     let output='',errors=0;
@@ -58,13 +74,19 @@ async function ownedChild(target) {
   });
   const identity=JSON.parse(line);
   assert.equal(identity.pid,child.pid,'child_handle_identity');assert.equal(identity.uid,process.getuid(),'child_uid');
+  facets.childFdValid=Number.isSafeInteger(identity.fd)&&identity.fd>=0;
+  facets.childInodeSafeInteger=Number.isSafeInteger(identity.inode);
   assert.ok(Number.isSafeInteger(identity.fd)&&identity.fd>=0&&Number.isSafeInteger(identity.inode),'child_fd_identity');
   assert.equal(fingerprint(child.pid),identity.start,'child_start_identity');owner.identity=identity;
   // Resource guard includes both tiny Python children and a 64MiB observer reserve.
+  facets.parentRssBytes=process.memoryUsage().rss;
+  facets.ownedChildrenRssBytes=[];
   const rss=children.filter(item=>!item.closed).reduce((total,item)=>{
     const text=readFileSync(`/proc/${item.child.pid}/status`,'utf8'),match=/^VmRSS:\s*(\d+) kB$/m.exec(text);
-    assert.ok(match,'child_memory_unknown');return total+Number(match[1])*1024;
-  },process.memoryUsage().rss+64*1024*1024);
+    assert.ok(match,'child_memory_unknown');
+    const measured=Number(match[1])*1024;facets.ownedChildrenRssBytes.push(measured);return total+measured;
+  },facets.parentRssBytes+64*1024*1024);
+  facets.memoryTotalBytes=rss;
   assert.ok(rss<=limit,'control_memory_bound');
   return owner;
 }
@@ -89,7 +111,9 @@ function observe(request,extraEnv={}) {
 let failure=false;
 try {
   assert.ok(typeof process.getuid==='function'&&process.getuid()>0,'unprivileged_parent_required');
-  assert.ok(process.memoryUsage().rss+64*1024*1024<=limit,'control_memory_bound');
+  facets.parentRssBytes=process.memoryUsage().rss;
+  facets.memoryTotalBytes=facets.parentRssBytes+64*1024*1024;
+  assert.ok(facets.memoryTotalBytes<=limit,'control_memory_bound');
   for(const [file,hash]of Object.entries(hashes))safePrerequisite(file,hash);
   root=mkdtempSync(join(tmpdir(),'paperclip-proc-observer-control-'));
   const taskRoot=join(root,'task'),upperDir=join(root,'upper');
@@ -130,13 +154,13 @@ try {
   stage='zero_with_neighbor_retained';const empty=observe(request());assert.ok(empty&&empty.holders===0,'closed_target_not_zero');
   const neighborObserved=observe({...request(),sessionDigest:neighbor});assert.ok(neighborObserved&&neighborObserved.holders>=2,'neighbor_holder_not_observed');
   remaining();stage='passed';
-} catch { failure=true; } finally {
-  for(const owner of children)try{await closeOwned(owner);}catch{failure=true;}
+} catch(error) { recordFailure(error);failure=true; } finally {
+  for(const owner of children)try{await closeOwned(owner);}catch(error){recordFailure(error);failure=true;}
   // Never unlink a directory still owned by an unclosed control process.
   if(root&&children.every(owner=>owner.closed))rmSync(root,{recursive:true});
   else if(root)failure=true;
 }
 console.log(JSON.stringify({schema:'paperclip.fixture.native-session-handle-observer-check.v1',qualified:!failure,stage,
   elapsedMs:Date.now()-started,ownedChildrenStarted:children.length,ownedChildrenClosed:children.filter(owner=>owner.closed).length,
-  originalUidRetained:ownsChildren,...facets,scope:'CI_kernel_mechanics_only'}));
+  originalUidRetained:ownsChildren,failureLabel,...facets,scope:'CI_kernel_mechanics_only'}));
 if(failure)process.exitCode=1;

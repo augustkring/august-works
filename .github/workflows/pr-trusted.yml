@@ -696,7 +696,7 @@ jobs:
             observer_check_chain "$observer_target"
           done
           # Run ONLY the finite unprivileged kernel control; the observer itself cannot signal/write.
-          echo "b8ab28e009c8e014220c9208efd9dae1551984bbe16adece0d21f966691280b1  scripts/fixtures/native-session-handle-observer-check.mjs" | /usr/bin/sha256sum --check --strict
+          echo "9654f0ccdf73de89cf22e9f7bd049c06320b4c2009a882d01ff9d0928d129e3c  scripts/fixtures/native-session-handle-observer-check.mjs" | /usr/bin/sha256sum --check --strict
           /usr/bin/timeout --kill-after=2s 12s /usr/bin/env -i PATH=/usr/bin:/bin "$trusted_node_dir/node" --no-addons --disable-proto=throw scripts/fixtures/native-session-handle-observer-check.mjs
           echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
           echo "PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER=1" >> "$GITHUB_ENV"

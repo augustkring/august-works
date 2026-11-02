@@ -7,6 +7,7 @@ import { agents, agentWakeupRequests, createDb, heartbeatRuns, issueComments, is
 import { issueService } from "../services/issues.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { withManagedNativeHeartbeatFixture } from "./helpers/managed-native-heartbeat-fixture.js";
+import type { NativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "./helpers/managed-native-opencode-e2e-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -17,13 +18,13 @@ let completedTests = 0;
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), "heartbeat-comment-managed-positive-"));
   vi.stubEnv("PAPERCLIP_HOME", home);
-  database = await startEmbeddedPostgresTestDatabase("heartbeat-comment-managed-positive-", { preserveDataOnFailure: () => completedTests !== 2 });
+  database = await startEmbeddedPostgresTestDatabase("heartbeat-comment-managed-positive-", { preserveDataOnFailure: () => completedTests !== 3 });
   db = createDb(database.connectionString);
 }, 60_000);
 afterAll(async () => {
   await database?.cleanup();
   vi.unstubAllEnvs();
-  if (home && completedTests === 2) { await makeFixtureTreeWritable(home); await rm(home, { recursive: true, force: true }); }
+  if (home && completedTests === 3) { await makeFixtureTreeWritable(home); await rm(home, { recursive: true, force: true }); }
   else if (home) console.info("managed_comment_positive_failure_root_retained", JSON.stringify({ path: home }));
 }, 30_000);
 
@@ -40,7 +41,7 @@ function toolUse(body: Record<string, unknown>, name: string, id: string, input:
 }
 
 function realTaskCompletion(body: Record<string, unknown>, callIndex: number,
-  execution: { completionContract: { contract: { revision: number; criteria: Array<{ id: string }> } } },
+  execution: NativeExecutionInput,
   prefix: string) {
   if (callIndex === 1) return toolUse(body, "write_document", `${prefix}-document`, {
     idempotencyKey: `${prefix}-document`, key: `${prefix}-document`, title: "Managed comment wake result",
@@ -253,4 +254,89 @@ describe("heartbeat comment wake batching", () => {
       completedTests++;
     } finally { releaseProvider?.(); }
   }, 600_000);
+
+  it("cancels a deferred comment wake when its only queued comment is deleted before promotion", async () => {
+    let providerEntered = false;
+    let releaseProvider!: () => void;
+    const providerGate = new Promise<void>(resolve => { releaseProvider = resolve; });
+    let firstProviderResponse = true;
+    let providerRunId = "";
+    let firstRunId = "";
+    let companyId = "";
+    let agentId = "";
+
+    try {
+      await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+        providerReply: ({ body, callIndex, execution }) => realTaskCompletion(body, callIndex, execution, "deleted-before-promotion"),
+        beforeProviderResponse: async ({ run }) => {
+          if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; providerEntered = true; await providerGate; }
+          if (firstRunId && run.id !== firstRunId) throw new Error("deleted_comment_unexpected_second_run");
+        },
+        driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, factsForRun }) => {
+          try {
+            companyId = fixtureCompanyId; agentId = fixtureAgentId;
+            const task = await createAssignedTask({ actor, companyId, agentId, title: "Deleted follow-up must not reopen" });
+            await authorizeTask({ actor, companyId, taskId: task.id, expectedIssueUpdatedAt: task.updatedAt,
+              objective: "Complete the assigned task without promoting a deleted comment", outputKey: "deleted-before-promotion-document" });
+
+            const firstRun = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system",
+              reason: "issue_assigned", payload: { issueId: task.id },
+              contextSnapshot: { issueId: task.id, taskId: task.id, wakeReason: "issue_assigned" },
+              requestedByActorType: "system", requestedByActorId: null });
+            expect(firstRun).not.toBeNull(); firstRunId = firstRun!.id;
+            await waitFor(async () => (await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns)
+              .where(eq(heartbeatRuns.id, firstRunId)).then(rows => rows[0]?.status)) === "running");
+            await waitFor(() => providerEntered && Boolean(providerRunId), 120_000);
+            expect(providerRunId).toBe(firstRunId);
+
+            const queuedComment = await issueService(db).addComment(task.id,
+              "Please look at this once you finish", { userId: actor.userId! }, { manualInputActor: actor });
+            expect(await heartbeat.wakeup(agentId, { source: "automation", triggerDetail: "system", reason: "issue_commented",
+              payload: { issueId: task.id, commentId: queuedComment.id },
+              contextSnapshot: { issueId: task.id, taskId: task.id, commentId: queuedComment.id,
+                wakeCommentId: queuedComment.id, wakeReason: "issue_commented" },
+              requestedByActorType: "user", requestedByActorId: actor.userId! })).toBeNull();
+            await waitFor(async () => (await db.select().from(agentWakeupRequests).where(and(
+              eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+              eq(agentWakeupRequests.status, "deferred_issue_execution"))).then(rows => rows.length)) === 1);
+            const [deferredWake] = await db.select().from(agentWakeupRequests).where(and(
+              eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+              eq(agentWakeupRequests.status, "deferred_issue_execution")));
+            expect(deferredWake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_commented",
+              requestedByActorType: "user", requestedByActorId: actor.userId,
+              payload: { issueId: task.id, commentId: queuedComment.id } });
+            expect(deferredWake?.contextSnapshot).toMatchObject({ issueId: task.id, taskId: task.id,
+              commentId: queuedComment.id, wakeCommentId: queuedComment.id, wakeReason: "issue_commented" });
+
+            await issueService(db).removeComment(queuedComment.id);
+            releaseProvider();
+            await heartbeat.drainActiveRunExecutions();
+
+            const [finalWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, deferredWake!.id));
+            expect(finalWake).toMatchObject({ id: deferredWake!.id, status: "cancelled",
+              error: "Queued messages were discarded before promotion", source: "automation", reason: "issue_commented",
+              requestedByActorType: "user", requestedByActorId: actor.userId });
+            const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
+            expect(runs).toHaveLength(1);
+            expect(runs[0]).toMatchObject({ id: firstRunId, status: "succeeded", runtimeMode: "native",
+              invocationSource: "assignment", triggerDetail: "system", nativeIssueId: task.id,
+              responsibleUserId: actor.userId, nativeProcessCleanupPending: false,
+              contextSnapshot: expect.objectContaining({ issueId: task.id, taskId: task.id, wakeReason: "issue_assigned" }) });
+            expect((await factsForRun(firstRunId)).providerCallCount).toBeGreaterThan(0);
+            const cancelled = await db.select().from(agentWakeupRequests).where(and(
+              eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+              eq(agentWakeupRequests.status, "cancelled")));
+            expect(cancelled).toHaveLength(1);
+            expect(cancelled[0]?.id).toBe(deferredWake!.id);
+            const [finishedTask] = await db.select({ status: issues.status, completedAt: issues.completedAt })
+              .from(issues).where(eq(issues.id, task.id));
+            expect(finishedTask).toMatchObject({ status: "done" });
+            expect(finishedTask?.completedAt).not.toBeNull();
+          } finally { releaseProvider(); }
+        },
+      });
+      completedTests++;
+    } finally { releaseProvider?.(); }
+  }, 600_000);
+
 });
