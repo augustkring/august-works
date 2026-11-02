@@ -1,0 +1,11 @@
+# R84 reporting recovery only
+
+This archive preserves three exact private reporting candidate files from source parent c80b6f6f2fe4380fd4e1bcd7e6c6d336aebbcbd7. The private execution environment became unavailable before controls could run. Candidate contents were reconstructed from the original writes and immutable GitHub parent transforms, then independently SHA256 checked against all three saved file hashes; all matched.
+
+The normal source workflow and runner on this branch remain identical to the parent. Candidate files are stored only below this archive's files/ directory. Do not treat this recovery commit as deployment, acceptance, or proof that reporting controls passed.
+
+The candidate reuses installed Vitest JsonReporter after each actual onTestModuleEnd; native module/case JSON is atomically finalized with an actual-state lifecycle sidecar. Module hooks when run are distinct from still-pending worker/environment/process closure. An optional report directory activates the reporter without changing selectors, workers, stdout, exit codes or timeouts. The parent records actual child exit before its existing failure branch. A finite shared allowance caps notices at 20 across sequential children with explicit truncation. General CI uploads compact JSON using the existing pinned artifact action and unchanged hard timeout. Artifact absence after hard timeout remains UNKNOWN.
+
+Required follow-up controls: a passing case with failing afterAll must fail the module; a normal two-file pass must have matching final reason and actual exit0; interrupted worker/module must never become complete-pass; multiple invocations must not overwrite; workflow escaping and notice caps must hold; unset reporting environment must preserve original behavior. Use actual installed Vitest in a small private synthetic root with the exact source runner/reporter, original floors, canonical lock and owned process-group bounds. No DB, SDK, browser or paid network is needed. Review the concrete control launcher before running it.
+
+verification.json records original private hashes and reconstruction proof. It is new recovery metadata, not an exact copy of the unavailable private README/control plan.

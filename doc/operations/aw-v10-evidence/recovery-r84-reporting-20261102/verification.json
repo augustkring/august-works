@@ -1,0 +1,48 @@
+{
+  "status": "RECOVERY_ONLY_EXACT_THREE_SOURCE_FILES_NOT_QUALIFIED",
+  "sourceHead": "c80b6f6f2fe4380fd4e1bcd7e6c6d336aebbcbd7",
+  "originalPrivatePacket": "/workspace/v10-preparation/vitest-durable-module-reporting-20261102/r2",
+  "originalSourcePinsSha256": "f6c88838fa0f35566d91b733b742d0aaa1a400fea23dfe894c9117a7c43ebf1e",
+  "originalPatchSha256": "2baf9a768c5175e47a0c7dd2a3536744c857cd392558b6c5158707596df85943",
+  "originalReviewSha256": "05eff7c9cd8cdb6acdd90e334aa49c99ce91a418b604a4f17dbbd06ab2a64488",
+  "verification": "Pure JavaScript UTF-8 SHA256: empty/abc vectors and both published GitHub parent files matched known hashes; all three reconstructed candidates matched saved pre-outage file hashes exactly.",
+  "metadataNotice": "This is a newly written recovery receipt, not a byte copy of the unavailable original source-pins/proposal/control files.",
+  "files": [
+    {
+      "originalPath": "scripts/vitest-module-results-reporter.mjs",
+      "archivePath": "files/scripts/vitest-module-results-reporter.mjs",
+      "parentSha256": null,
+      "candidateSha256": "3e669c4dd44dff11dce3fa442461bb7d77fa82906ac0ab1ad48c5b8dec1782e4",
+      "reconstructionMatchesSavedHash": true,
+      "characters": 5477,
+      "lines": 91
+    },
+    {
+      "originalPath": "scripts/run-vitest-stable.mjs",
+      "archivePath": "files/scripts/run-vitest-stable.mjs",
+      "parentSha256": "5e6ce3e7884cc8272c212dfe5c3807715e5b9861a0560db3c88ae653dd542008",
+      "candidateSha256": "002a283ebfdb2606ed7794fd5d9c9180b99414aaccac4d8b4beb4d55b9929d03",
+      "reconstructionMatchesSavedHash": true,
+      "characters": 24582,
+      "lines": 632
+    },
+    {
+      "originalPath": ".github/workflows/pr-trusted.yml",
+      "archivePath": "files/.github/workflows/pr-trusted.yml",
+      "parentSha256": "0473db68e86748481a205a0d169ca3b9b16388ffac46e66bac233388a5f7bd4a",
+      "candidateSha256": "cbd3e7a1cacb547a38524566cdb99c45ff1635b6b6351110a7fa7547c1a8d205",
+      "reconstructionMatchesSavedHash": true,
+      "characters": 74697,
+      "lines": 1599
+    }
+  ],
+  "tests": {
+    "nodeSyntax": "2 JavaScript files passed node --check before outage",
+    "controls": "NOT RUN",
+    "semantic": "NOT RUN",
+    "sdk": "NOT RUN"
+  },
+  "scope": "Reporting instrumentation only, no acceptance/rollout. Controls require review and execution after environment recovery.",
+  "parentSourceFilesUnchanged": true,
+  "mainFeatureBranchMutation": false
+}
