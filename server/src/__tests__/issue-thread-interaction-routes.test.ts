@@ -667,7 +667,10 @@ describe.sequential("issue thread interaction routes", () => {
     mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
     const response = await request(await createApp()).get(`/api/issues/${ISSUE_ID}/interactions`);
     expect(response.status).toBe(403);
-    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(mockDb, "company-1", expect.objectContaining({ type: "board", userId: "local-board" }), { issueId: ISSUE_ID });
+    expect(mockAnalyticalPayloadAccess).toHaveBeenCalledWith(
+      mockDb, "company-1", expect.objectContaining({ type: "board", userId: "local-board" }),
+      { issueId: ISSUE_ID }, undefined, { privacyLockMode: "read" },
+    );
     expect(mockInteractionService.listForIssue).not.toHaveBeenCalled();
     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
   });

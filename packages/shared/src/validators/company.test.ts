@@ -34,16 +34,19 @@ describe("company schemas without the retired settings", () => {
     expect(parsed.name).toBe("Acme");
   });
 
-  it("strips brandColor and attachmentMaxBytes from an update payload", () => {
-    const parsed = updateCompanySchema.parse({
+  it.each(["brandColor", "attachmentMaxBytes"])("rejects the retired update field %s", (key) => {
+    const result = updateCompanySchema.safeParse({
       description: "Updated",
-      brandColor: "#123456",
-      attachmentMaxBytes: 25_000_000,
+      [key]: key === "brandColor" ? "#123456" : 25_000_000,
     });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({
+      code: "unrecognized_keys", keys: [key],
+    }));
+  });
 
-    expect(parsed).not.toHaveProperty("brandColor");
-    expect(parsed).not.toHaveProperty("attachmentMaxBytes");
-    expect(parsed.description).toBe("Updated");
+  it("accepts an update containing only supported company fields", () => {
+    expect(updateCompanySchema.parse({ description: "Updated" })).toEqual({ description: "Updated" });
   });
 
   it("rejects brandColor on the strict branding schema", () => {

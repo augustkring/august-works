@@ -124,6 +124,7 @@ import {
   createCompanySchema,
   updateCompanySchema,
   updateCompanyBrandingSchema,
+  updateCompanyResponsibilityContactsSchema,
   companyArtifactsQuerySchema,
   companyArtifactsResponseSchema,
   // Decisions
@@ -1457,6 +1458,7 @@ const PUBLIC_OPERATIONS = new Set([
   "GET /.well-known/security.txt",
   "GET /security.txt",
   "GET /api/openapi.json",
+  "POST /api/mcp/qualification/credential-echo",
   "GET /api/board-claim/{token}",
   "POST /api/cli-auth/challenges",
   "GET /api/cli-auth/challenges/{id}",
@@ -1743,6 +1745,8 @@ const HUMAN_SESSION_ONLY_MODEL_MIGRATION_MONITOR = new Set([
 function requiresBoardSession(method: string, path: string): boolean {
   return path.startsWith("/api/companies/{companyId}/trust/") ||
     HUMAN_SESSION_ONLY_MODEL_MIGRATION_MONITOR.has(operationKey(method, path)) ||
+    path === "/api/companies/{companyId}/responsibility-contacts" ||
+    operationKey(method, path) === "GET /api/companies/{companyId}/members/{memberId}/responsibility-preflight" ||
     path.startsWith("/api/companies/{companyId}/workflow-coverages") ||
     operationKey(method, path) === "POST /api/companies/{companyId}/members/{memberId}/security-suspend" ||
     operationKey(method, path) === "GET /api/companies/{companyId}/notices/action-required" ||
@@ -7051,6 +7055,31 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/api/companies/{companyId}/members/{memberId}/responsibility-preflight",
+  tags: ["access"],
+  summary: "Preview only currently authorized member-continuity responsibilities",
+  description: "Requires a current Human session and member-management authority. Coverage is an incomplete authorized subset; the preview never blocks member removal.",
+  request: { params: z.object({ companyId: z.string(), memberId: z.string() }),
+    headers: z.object({ "X-Blentera-Expected-User": z.string().optional(), "X-Blentera-Expected-Session": z.string().optional() }) },
+  responses: { 200: { ...r.ok(), headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } },
+    401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: { description: "Current account or session changed" } },
+});
+for (const method of ["get", "patch"]) registry.registerPath({
+  method,
+  path: "/api/companies/{companyId}/responsibility-contacts",
+  tags: ["companies"],
+  summary: method === "get" ? "Read responsibility contacts and eligible verified Human members" : "Update responsibility contacts through current company defaults authority",
+  description: "Requires a current Human owner or administrator (or trusted local operator). Contact labels grant no permissions.",
+  request: { params: z.object({ companyId: z.string() }),
+    headers: z.object({ "X-Blentera-Expected-User": z.string().optional(), "X-Blentera-Expected-Session": z.string().optional() }),
+    ...(method === "patch" ? { body: jsonBody(updateCompanyResponsibilityContactsSchema) } : {}) },
+  responses: { 200: { ...r.ok(), ...(method === "get" ? { headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } } : {}) },
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
+    409: { description: "Current account or session changed" } },
+});
+
+registry.registerPath({
   method: "patch",
   path: "/api/companies/{companyId}/members/{memberId}",
   tags: ["access"],
@@ -11862,6 +11891,21 @@ const toolGatewayCompanyBodySchema = z
   .passthrough();
 
 const mcpGatewayProtocolSchema = z.record(z.string(), z.unknown());
+
+registerCurrentRoute({
+  method: "post", path: "/api/mcp/qualification/credential-echo", tags: ["tool-gateway"],
+  summary: "Discover the fixed credential challenge or invoke its one-use qualification echo",
+  description: "tools/list exposes fixed non-model metadata without credentials. tools/call requires both the one-use scoped qualification capability and the observed current canary credential; it grants no generic tool or model access.",
+  headers: z.object({ "x-paperclip-qualification-capability": z.string().optional(), Authorization: z.string().optional() }),
+  body: z.union([
+    z.strictObject({ jsonrpc: z.literal("2.0"), id: z.string().min(1).max(200), method: z.literal("tools/list"), params: z.strictObject({}).optional() }),
+    z.strictObject({ jsonrpc: z.literal("2.0"), id: z.uuid(), method: z.literal("tools/call"),
+      params: z.strictObject({ name: z.literal("read_canary"), arguments: z.strictObject({ fixtureId: z.string(), caseId: z.string(), nonce: z.string() }) }) }),
+  ]),
+  responses: { 200: r.ok(), 401: r.unauthorized, 403: r.forbidden,
+    409: { description: "Qualification challenge is stale or already consumed" },
+    502: { description: "Qualification credential probe failed or its echo result changed" } },
+});
 
 registerCurrentRoute({
   method: "get",

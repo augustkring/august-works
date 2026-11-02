@@ -1,3 +1,4 @@
+import { runContextWithoutSecretRedactionRegistry } from "../run-secret-redaction.js";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { assertAuthoredProceduresCurrent } from "../agents/authoring-procedures.js";
@@ -1740,7 +1741,7 @@ export function workerModelGateway(db: Db, options: Options) {
     if (grants.length > 2000) throw forbidden("Conversation authority exceeds the bounded grant envelope");
     const authorityHash = nativeSha256(JSON.parse(JSON.stringify({ profile: p, binding, companyId: claims.company_id,
       companyBudgetMonthlyCents: company.budgetMonthlyCents,
-      run: { id: run.id, status: run.status, responsibleUserId: run.responsibleUserId, contextSnapshot: run.contextSnapshot },
+      run: { id: run.id, status: run.status, responsibleUserId: run.responsibleUserId, contextSnapshot: runContextWithoutSecretRedactionRegistry(run.contextSnapshot) },
       issue: { id: issue.id, updatedAt: issue.updatedAt, conversationAgentId: issue.conversationAgentId,
         conversationUserId: issue.conversationUserId, conversationSessionGeneration: issue.conversationSessionGeneration,
         conversationState: issue.conversationState, conversationRetiredAt: issue.conversationRetiredAt,

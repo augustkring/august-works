@@ -1079,6 +1079,29 @@ describe("openapi routes", () => {
     expect(connect.requestBody.content["application/json"].schema.properties.confirmProviderSetup.enum).toEqual([true]);
     expect(connect.responses[201]).toBeDefined(); expect(connect.responses[200]).toBeUndefined();
   });
+  it("documents responsibility admission, feedback withdrawal and the fixed qualification echo", () => {
+    const spec = buildOpenApiSpec() as any, root = "/api/companies/{companyId}";
+    const contacts = spec.paths[`${root}/responsibility-contacts`];
+    for (const operation of [contacts.get, contacts.patch,
+      spec.paths[`${root}/members/{memberId}/responsibility-preflight`].get]) {
+      expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+      expect(operation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+    }
+    expect(contacts.patch.requestBody.content["application/json"].schema).toMatchObject({
+      additionalProperties: false, required: ["securityContactUserId", "supportIncidentContactUserId"],
+    });
+    const quality = spec.paths["/api/internal/customer-feedback/{companyId}/quality"].get;
+    expect(quality["x-paperclip-authorization"]).toMatchObject({ configuredOperator: true, noCompanyAdminBypass: true });
+    expect(quality.parameters.filter((parameter: any) => parameter.in === "query").map((parameter: any) => parameter.name)).toEqual(["from", "to"]);
+    const withdraw = spec.paths[`${root}/customer-feedback/{feedbackId}/experience-measure/withdraw`].post;
+    expect(withdraw.requestBody.content["application/json"].schema).toMatchObject({ additionalProperties: false, required: ["idempotencyKey"] });
+    const echo = spec.paths["/api/mcp/qualification/credential-echo"].post;
+    expect(echo.security).toEqual([]);
+    expect(echo.responses[403]).toBeDefined();
+    expect(echo.requestBody.content["application/json"].schema.oneOf).toHaveLength(2);
+    expect(echo.description).toContain("one-use scoped qualification capability");
+  });
+
   it("covers the mounted server routes exactly", () => {
     const {
       routes: actualRoutes,
