@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-29
+last_verified_at: 2026-11-02
 review_trigger: Ændringer i workflowredigering, understøttede trin, test, publicering, kørsel eller genopretning
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/Workflows.tsx, ui/src/pages/WorkflowRun.tsx, ui/src/pages/WorkflowDescribe.tsx, ui/src/pages/WorkflowBuilder.tsx, ui/src/pages/WorkflowReview.tsx, server/src/routes/workflows.ts, server/src/services/workflows/workflow-node-registry.ts, server/src/services/workflows/workflow-service.ts, ui/src/pages/CompanyAccess.tsx, ui/src/pages/IssueDetail.tsx, server/src/routes/access.ts, server/src/services/access.ts, server/src/services/workflows/workflow-executor.ts, packages/shared/src/validators/access.ts, packages/db/src/schema/workflows.ts]
+linked_source_files: [ui/src/pages/Workflows.tsx, ui/src/pages/WorkflowRun.tsx, ui/src/pages/WorkflowDescribe.tsx, ui/src/pages/WorkflowBuilder.tsx, ui/src/pages/WorkflowReview.tsx, server/src/routes/workflows.ts, server/src/services/workflows/workflow-node-registry.ts, server/src/services/workflows/workflow-http-request.ts, server/src/services/workflows/workflow-service.ts, ui/src/pages/CompanyAccess.tsx, ui/src/pages/IssueDetail.tsx, server/src/routes/access.ts, server/src/services/access.ts, server/src/services/workflows/workflow-executor.ts, packages/shared/src/validators/access.ts, packages/db/src/schema/workflows.ts]
 ---
 
 Workflows er kun tilgængelige, når de er slået til for virksomheden og instansen. Hvis du ikke kan se **Workflows**, skal du spørge instansadministratoren, om funktionen er tilgængelig.
@@ -22,6 +22,8 @@ Workflows er kun tilgængelige, når de er slået til for virksomheden og instan
 Åbn **Workflows** for at se de workflows, du har adgang til. Opret eller åbn en kladde, og gennemgå trinnene samt de oplysninger, hvert trin bruger. Redigeringen kan tillade, at du gemmer en kladde, selv om et trin endnu ikke kan køres.
 
 Brug de tilgængelige test- og gennemgangshandlinger før publicering. Læs resultatet og eventuelle blokeringer. Et trin, der kun er til kladdebrug eller ikke er tilgængeligt, bliver ikke automatisk kørselsklart, fordi det vises i redigeringen. Ret eller fjern trin, der ikke understøttes, før du publicerer.
+
+Trinnet **HTTP Request** kan kun bruges i kladder. Erstat det med et tilgængeligt trin, før du publicerer eller starter workflowet.
 
 Publicering gør en bestemt gennemgået revision klar til kørsel. Kontrollér udløseren, input, handlinger og godkendelser, som vises i publiceringsforløbet. Ændringer i kladden efter publicering ændrer ikke den allerede publicerede revision. Publicér den opdaterede kladde, når den er klar.
 

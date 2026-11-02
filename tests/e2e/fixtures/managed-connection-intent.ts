@@ -3,11 +3,11 @@ import { createServer } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "../../../packages/db/node_modules/drizzle-orm/index.js";
 import { expect, type Page } from "@playwright/test";
-import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
+import { nativeRunInputSourceReceiptSchema } from "../../../packages/shared/src/validators/native-payload-source-snapshot.ts";
 import { createDb, agents, authSessions, authUsers, companies, heartbeatRuns, agentWakeupRequests,
-  issueComments, issueThreadInteractions, issues, documents, issueDocuments, environmentLeases } from "@paperclipai/db";
+  issueComments, issueThreadInteractions, issues, documents, issueDocuments, environmentLeases } from "../../../packages/db/src/index.ts";
 import { createApp } from "../../../server/src/app.js";
 import { createStorageService } from "../../../server/src/storage/service.js";
 import { createLocalDiskStorageProvider } from "../../../server/src/storage/local-disk-provider.js";

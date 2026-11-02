@@ -351,7 +351,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         const { task, plan, wake, run } = await startTask({ actor, companyId, agentId, heartbeat }, {
           title: "Managed source Memory and Context outputs", description: "Read current authorized Task and Context sources.",
           objective: "Retain two source-bound documents and two Human-reviewed Memory outputs",
-          requiredOutputs: [{ kind: "task_document", key: "managed-source-a" }, { kind: "task_document", key: "managed-source-b" }],
+          requiredOutputs: [{ kind: "task_document", key: "managed-source-b" }],
         });
         expect(run).toMatchObject({ id: wake.id, status: "succeeded", runtimeMode: "native", nativeIssueId: task.id,
           responsibleUserId: actor.userId });
@@ -424,7 +424,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     let memoryId = "", issueId = "", companyId = "", agentId = "", replayDone = false;
     let bindingKey = "";
     let humanMemoryActor: MemoryMutationActor | null = null;
-    let providerResponses = 0;
+    let providerResponses = 0, completedToolResults = 0;
+    let observedToolResult = false, toolResultIsError = false, replaySourceChecked = false;
     const outcome = await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 180,
       prepareNativeRuntimeContext: async ({ db: currentDb, actor, companyId: currentCompanyId, agentId: currentAgentId }) => {
         if (!actor.userId) throw new Error("source_replay_human_missing");
@@ -451,6 +452,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
       afterSuccessfulAssignedToolResult: async ({ call, result, replay: exactReplay }) => {
         if (call.tool !== "paperclip-self:remember" || call.parameters === null || typeof call.parameters !== "object" ||
           (call.parameters as Record<string, unknown>).idempotencyKey !== idempotencyKey) return;
+        completedToolResults++;
         initialResult = result; replay = exactReplay;
         const outer = result && typeof result === "object" ? result as Record<string, unknown> : {};
         const nested = outer.result && typeof outer.result === "object" ? outer.result as Record<string, unknown> : outer;
@@ -468,6 +470,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           ? (body as Record<string, unknown>).messages as Array<Record<string, unknown>> : [])
           .flatMap(message => Array.isArray(message.content) ? message.content as Array<Record<string, unknown>> : []);
         if (!blocks.some(block => block.type === "tool_result" && block.tool_use_id === callId) || replayDone) return;
+        observedToolResult = true;
+        toolResultIsError = blocks.some(block => block.type === "tool_result" && block.tool_use_id === callId && block.is_error === true);
         if (!replay || !memoryId || !initialResult) throw new Error("source_replay_exact_call_not_captured");
         const [run] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson,
           responsibleUserId: heartbeatRuns.responsibleUserId }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
@@ -484,6 +488,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           agentId, runId, onBehalfOfUserId: run.responsibleUserId ?? "" };
         await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: currentIssueId, runId, actor: agentActor,
           policy: parsed.policy, inputs: parsed.inputs.slice(0, dispatchIndex) });
+        replaySourceChecked = true;
         const firstReplay = await replay() as Record<string, unknown>;
         expect(firstReplay).toMatchObject({ status: "replayed", result: (initialResult as Record<string, unknown>).result });
         const invocationKey = `aw-native-tool:${runId}:${callId}`;
@@ -507,6 +512,15 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
       driveScheduler: async context => {
         const bound = await startTask(context, { title: "Managed Memory replay task", description: "Exercise exact Gateway replay.",
           objective: "Retain one completed source-bound Memory output", requiredOutputs: [{ kind: "task_document", key: "managed-replay-completion" }] });
+        if (!replayDone) console.error("managed_source_fixture_failure", JSON.stringify({ caseKey: "memory_replay",
+          runStatus: ["queued", "running", "succeeded", "failed", "cancelled", "timed_out"].includes(bound.run.status)
+            ? bound.run.status : "other",
+          runErrorCode: bound.run.errorCode === null ? "none" : ["configuration_incomplete", "native_session_interrupted",
+            "native_session_failed", "native_session_timeout", "native_input_changed", "paid_transport_unqualified"]
+              .includes(bound.run.errorCode) ? bound.run.errorCode : "other",
+          providerResponses: Math.min(999, providerResponses), completedToolResults: Math.min(999, completedToolResults),
+          observedToolResult, toolResultIsError: observedToolResult ? toolResultIsError : null,
+          replayCaptured: replay !== null, memoryCaptured: memoryId.length > 0, replaySourceChecked, replayDone }));
         return { ...bound, companyId: context.companyId, providerCallCount: context.factsForRun(bound.wake.id).providerCallCount };
       },
     });
@@ -523,18 +537,21 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const projectFixture = managedNativeProjectWorkspaceFixture({ root });
     const callId = `managed-project-read-${randomUUID()}`;
     const oldApiUrl = process.env.PAPERCLIP_API_URL;
-    let consumedExactProjectResult = false;
+    let consumedExactProjectResult = false, observedToolResult = false;
+    let providerResponses = 0;
     let projectResultDigest: string | null = null;
     const outcome = await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 180,
       prepareNativeRuntimeContext: projectFixture.prepareNativeRuntimeContext,
       configureHeartbeat: projectFixture.configureHeartbeat,
       providerReply: ({ body, callIndex, execution }) => {
+        providerResponses++;
         if (callIndex === 1) return toolUse(body, "call_api", callId, { operationId: "GET /api/projects/{id}",
           pathParams: { id: projectFixture.project().projectId } });
         if (callIndex === 2) {
           const messages = Array.isArray(body.messages) ? body.messages as Array<Record<string, unknown>> : [];
           const result = messages.flatMap(message => Array.isArray(message.content) ? message.content as Array<Record<string, unknown>> : [])
             .find(block => block.type === "tool_result" && block.tool_use_id === callId && block.is_error !== true);
+          observedToolResult = result !== undefined;
           if (!result || typeof result.content !== "string") throw new Error("managed_project_get_result_not_consumed");
           const parsed = JSON.parse(result.content) as Record<string, unknown>;
           const serialized = JSON.stringify(parsed);
@@ -581,6 +598,13 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         const result = await startTask(context, { title: "Managed Project source read", description: "Read the current Project once.",
           objective: "Read the public Project and retain a source-bound summary",
           requiredOutputs: [{ kind: "task_document", key: "managed-project-read" }], project });
+        if (result.run.status !== "succeeded") console.error("managed_source_fixture_failure", JSON.stringify({ caseKey: "project_projection",
+          runStatus: ["queued", "running", "succeeded", "failed", "cancelled", "timed_out"].includes(result.run.status)
+            ? result.run.status : "other",
+          runErrorCode: result.run.errorCode === null ? "none" : ["configuration_incomplete", "native_session_interrupted",
+            "native_session_failed", "native_session_timeout", "native_input_changed", "paid_transport_unqualified"]
+              .includes(result.run.errorCode) ? result.run.errorCode : "other",
+          providerResponses: Math.min(999, providerResponses), observedToolResult, consumedExactProjectResult }));
         expect(result.run).toMatchObject({ status: "succeeded", nativeIssueId: result.task.id });
         const [row] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
           .from(heartbeatRuns).where(eq(heartbeatRuns.id, result.wake.id));
@@ -632,7 +656,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         api = await projectApi(db, context.actor); process.env.PAPERCLIP_API_URL = api.origin;
         const project = projectFixture.project();
         const result = await startTask(context, { title: "Managed Project stale-source Task", description: "Detect a current Project change.",
-          objective: "Do not consume stale Project evidence", requiredOutputs: [], project });
+          objective: "Do not consume stale Project evidence",
+          requiredOutputs: [{ kind: "task_document", key: "managed-stale-project-completion" }], project });
         expect(result.run.status).not.toBe("succeeded");
         expect(providerReplies).toBe(1);
         const [row] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)

@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-29
+last_verified_at: 2026-11-02
 review_trigger: Ændringer i Co-worker-opsætning, kontoforbindelser, status, pause eller opgavefordeling
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/Agents.tsx, ui/src/components/AgentModelMigrationMonitor.tsx, server/src/services/agents/authoring-model-migration-monitor.ts, server/src/services/agents/authoring-tests.ts, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts, server/src/services/agents/authoring-publication.ts, server/src/services/experience/model-retirement-notices.ts, ui/src/components/AgentRuntimeCandidates.tsx, ui/src/components/AgentDraftPublication.tsx, ui/src/components/MandatoryProductNotices.tsx]
+linked_source_files: [ui/src/pages/Agents.tsx, ui/src/components/AgentModelMigrationMonitor.tsx, server/src/services/agents/authoring-model-migration-monitor.ts, server/src/services/agents/authoring-tests.ts, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts, server/src/services/agents/authoring-publication.ts, server/src/services/experience/model-retirement-notices.ts, ui/src/components/AgentRuntimeCandidates.tsx, ui/src/components/AgentDraftPublication.tsx, ui/src/components/MandatoryProductNotices.tsx, server/src/services/native-runtime/paid-transport-admission.ts, packages/adapter-utils/src/paid-model-probe.ts]
 ---
 
 Blentera kalder virksomhedens arbejdere for **Co-workers**. Nogle af de nuværende skærmbilleder bruger stadig betegnelsen **Agent**. Find dem under virksomhedens område for agenter, og åbn en Co-worker for at gennemgå dens indstillinger, forbindelse og seneste arbejde.
@@ -22,6 +22,12 @@ Blentera kalder virksomhedens arbejdere for **Co-workers**. Nogle af de nuværen
 Brug tilføj-handlingen i agentområdet, og udfyld felterne for rolle, instruktioner og AI-forbindelse. De tilgængelige indstillinger afhænger af forbindelsen og din instans. Kontrollér, hvem der kan bruge en delt forbindelse, og hvilke handlinger der kræver gennemgang, før du gemmer. En gemt adgang kan senere kræve genforbindelse, hvis udbyderen udløber eller tilbagekalder adgangen.
 
 Åbn Co-workerens detaljeside for at se dens status og seneste opgavekørsler. Læs den præcise fejl eller opsætningsbesked. En Co-worker, der er markeret som klar til at modtage arbejde, er ingen garanti for, at en bestemt kørsel hos en udbyder lykkes.
+
+## Vælg en tilgængelig runtime
+
+Hvis opsætningen viser, at runtime ikke er tilgængelig til administrerede modelkald, skal du åbne Co-workerens **Runtime**-indstillinger og vælge en aktuelt tilgængelig runtime. Følg opsætningsbeskeden, hvis der ikke vises en tilgængelig mulighed.
+
+Kontrol af installation, login eller tilgængelige modeller kan lykkes, selv om modeltesten er utilgængelig. Læs hele testresultatet, før du starter arbejde. En gemt forbindelse kvalificerer ikke i sig selv en runtime til modelkald.
 
 ## Sæt fremtidigt arbejde på pause
 

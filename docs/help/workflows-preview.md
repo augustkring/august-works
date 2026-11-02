@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-29
+last_verified_at: 2026-11-02
 review_trigger: Workflow authoring, supported steps, test, publish, run, or recovery behavior changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/Workflows.tsx, ui/src/pages/WorkflowRun.tsx, ui/src/pages/WorkflowDescribe.tsx, ui/src/pages/WorkflowBuilder.tsx, ui/src/pages/WorkflowReview.tsx, server/src/routes/workflows.ts, server/src/services/workflows/workflow-node-registry.ts, server/src/services/workflows/workflow-service.ts, ui/src/pages/CompanyAccess.tsx, ui/src/pages/IssueDetail.tsx, server/src/routes/access.ts, server/src/services/access.ts, server/src/services/workflows/workflow-executor.ts, packages/shared/src/validators/access.ts, packages/db/src/schema/workflows.ts]
+linked_source_files: [ui/src/pages/Workflows.tsx, ui/src/pages/WorkflowRun.tsx, ui/src/pages/WorkflowDescribe.tsx, ui/src/pages/WorkflowBuilder.tsx, ui/src/pages/WorkflowReview.tsx, server/src/routes/workflows.ts, server/src/services/workflows/workflow-node-registry.ts, server/src/services/workflows/workflow-http-request.ts, server/src/services/workflows/workflow-service.ts, ui/src/pages/CompanyAccess.tsx, ui/src/pages/IssueDetail.tsx, server/src/routes/access.ts, server/src/services/access.ts, server/src/services/workflows/workflow-executor.ts, packages/shared/src/validators/access.ts, packages/db/src/schema/workflows.ts]
 ---
 
 Workflows are available only when they are enabled for your company and instance. If you do not see **Workflows**, ask your instance administrator whether the feature is available.
@@ -22,6 +22,8 @@ Workflows are available only when they are enabled for your company and instance
 Open **Workflows** to view the workflows you can access. Create or open a draft, then review its steps and the information each step will use. The editor may let you save a draft even when a step is not ready to run.
 
 Use the available test and review actions before publishing. Read the result and any blocking issue. A step marked draft-only or unavailable cannot be assumed to run because it appears in an editor. Fix or remove unsupported steps before publishing.
+
+The **HTTP Request** step is available for drafts only. Replace it with an available step before publishing or starting the workflow.
 
 Publishing makes a specific reviewed revision available to run. Review the trigger, inputs, actions, and approvals shown in the publish flow. Changes to the draft after publishing do not change the already-published revision; publish the updated draft when it is ready.
 

@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-29
+last_verified_at: 2026-11-02
 review_trigger: Co-worker setup, account connections, status, pause, or task assignment changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/Agents.tsx, ui/src/components/AgentModelMigrationMonitor.tsx, server/src/services/agents/authoring-model-migration-monitor.ts, server/src/services/agents/authoring-tests.ts, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts, server/src/services/agents/authoring-publication.ts, server/src/services/experience/model-retirement-notices.ts, ui/src/components/AgentRuntimeCandidates.tsx, ui/src/components/AgentDraftPublication.tsx, ui/src/components/MandatoryProductNotices.tsx]
+linked_source_files: [ui/src/pages/Agents.tsx, ui/src/components/AgentModelMigrationMonitor.tsx, server/src/services/agents/authoring-model-migration-monitor.ts, server/src/services/agents/authoring-tests.ts, ui/src/pages/AgentDetail.tsx, server/src/services/agents.ts, server/src/services/agents/authoring-publication.ts, server/src/services/experience/model-retirement-notices.ts, ui/src/components/AgentRuntimeCandidates.tsx, ui/src/components/AgentDraftPublication.tsx, ui/src/components/MandatoryProductNotices.tsx, server/src/services/native-runtime/paid-transport-admission.ts, packages/adapter-utils/src/paid-model-probe.ts]
 ---
 
 Blentera calls the workers in your company **Co-workers**. Some current screens still use **Agent**. You can find them in the company’s Agents area and open a Co-worker to review its settings, connection, and recent work.
@@ -22,6 +22,12 @@ Blentera calls the workers in your company **Co-workers**. Some current screens 
 Use the add action in the Agents area and follow the fields shown for its role, instructions, and AI connection. The available setup depends on the selected connection and your instance. Review who can use a shared connection and which actions require review before saving. A saved credential may need to be reconnected later if its provider expires or revokes access.
 
 Open a Co-worker’s detail page to inspect its status and recent task runs. Check the exact error or setup notice shown there; a Co-worker marked ready to receive work is not a guarantee that a particular provider run will succeed.
+
+## Resolve an unavailable runtime
+
+If setup says the runtime is unavailable for managed model calls, open that Co-worker’s **Runtime** settings and choose a currently available runtime. Follow the setup notice if no available option is shown.
+
+Installation, sign-in, or model discovery checks may succeed while the model test is unavailable. Read the complete test result before starting work. A saved connection alone does not qualify a runtime for model calls.
 
 ## Pause future work
 

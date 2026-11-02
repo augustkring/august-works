@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-29
+last_verified_at: 2026-11-02
 review_trigger: App connection, provider authorization, credential renewal, or access review changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts, server/src/services/tool-connection-lifecycle.ts, server/src/services/experience/connector-recovery.ts, ui/src/pages/apps/app-detail/IdentitiesSection.tsx]
+linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/tool-gateway.ts, server/src/services/native-runtime/paid-transport-admission.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts, server/src/services/tool-connection-lifecycle.ts, server/src/services/experience/connector-recovery.ts, ui/src/pages/apps/app-detail/IdentitiesSection.tsx]
 ---
 
 Open **Apps** or **Company settings → Apps and data** to view connections available to your company. The apps, sign-in methods, and controls shown depend on the current deployment.
@@ -22,6 +22,8 @@ Open **Apps** or **Company settings → Apps and data** to view connections avai
 Choose the app and follow its connection flow. Before continuing, review the account or workspace being connected, who can use the connection, and the permissions or actions shown on screen. Finish any sign-in or provider consent in the provider’s own page, then return to Blentera and check the connection status.
 
 A connection is permission to use the selected account and scope. It does not mean every possible action is enabled. Review the app’s permissions and action settings before asking a Co-worker to use it.
+
+If an action says a tool is unavailable for managed work, choose an available action or contact your company administrator.
 
 For Slack agent tools, the standard option uses the Blentera-managed Slack app when the instance has it configured. Review the user permissions on the setup screen and on Slack’s consent page. The connection defaults to the signed-in person’s Slack account. If you explicitly choose organization access, that person’s Slack connection is shared with the company; this does not create a bot or service account. If the managed option is unavailable, a connection manager can use the advanced option for the organization’s own Slack OAuth app. The separate Slack bot app is used when people start work from Slack.
 

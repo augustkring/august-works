@@ -295,7 +295,9 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           requiredOutputs: [{ key: "result" }],
           businessInvariants: ["Use authorized sources only"],
         },
-        budgets: { maxModelCostMinor: 6, maxToolActions: context.task.name.startsWith("reviewed proposal:") && !context.task.name.includes("insufficient retained") ? 3 : 2 },
+        budgets: { maxModelCostMinor: 6, maxToolActions: context.task.name.startsWith("reviewed proposal:") && !context.task.name.includes("insufficient retained") ? 3 : 2,
+          ...(context.task.name === "withholds both connection tools when the current Plan binding is expired"
+            ? { maxWallClockSeconds: 30 } : {}) },
         workers: [{ key: "writer", issueId: task.id }],
       });
       // Private Native fixture setup only. Production launch remains closed for
@@ -1784,22 +1786,45 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     });
     it.each(["expired", "revoked", "cross_run", "unadmitted_plan"] as const)(
       "withholds both connection tools when the current Plan binding is %s", async (reason) => {
-        if (reason === "expired") await db.update(orchestrationPlans).set({ startedAt: new Date(0) })
-          .where(eq(orchestrationPlans.id, plan.id));
-        if (reason === "revoked") await db.delete(companyMemberships).where(and(
-          eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
-        if (reason === "unadmitted_plan") await db.delete(orchestrationWorkerAttempts)
-          .where(eq(orchestrationWorkerAttempts.id, binding.workerAttemptId));
-        const authority = new PaperclipRunnerToolAuthority(db, { ...nativeBinding(),
-          ...(reason === "cross_run" ? { runId: randomUUID() } : {}) });
-        for (const call of [
-          { tool: "connections_search", callId: "denied-connection-search", arguments: { query: "railway" } },
-          { tool: "connection_request", callId: "denied-connection-card", arguments: { service: "railway" } },
-        ]) await expect(authority.execute(call)).rejects.toMatchObject({ status: 403 });
-        expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toHaveLength(0);
-        expect(await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id))).toHaveLength(0);
-        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]?.toolActionsUsed).toBe(0);
-        expect(calls).toBe(0);
+        let pinnedStartedAt: Date | undefined;
+        try {
+          if (reason === "expired") {
+            const [current] = await db.select({ startedAt: orchestrationPlans.startedAt, budgets: orchestrationPlans.budgets })
+              .from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id));
+            if (!current?.startedAt) throw new Error("The expiry fixture requires its original started Plan");
+            pinnedStartedAt = current.startedAt;
+            expect(current.budgets.maxWallClockSeconds).toBe(30);
+            const deadline = current.startedAt.getTime() + current.budgets.maxWallClockSeconds * 1000;
+            expect(Date.now()).toBeLessThan(deadline);
+            // Keep the immutable Plan pin and real socket/timer behavior. Only
+            // Date advances just past this fixture's initial 30-second budget;
+            // the other current authority fixtures keep their longer lifetimes.
+            vi.useFakeTimers({ toFake: ["Date"] });
+            vi.setSystemTime(new Date(deadline + 1));
+          }
+          if (reason === "revoked") await db.delete(companyMemberships).where(and(
+            eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+          if (reason === "unadmitted_plan") await db.delete(orchestrationWorkerAttempts)
+            .where(eq(orchestrationWorkerAttempts.id, binding.workerAttemptId));
+          const authority = new PaperclipRunnerToolAuthority(db, { ...nativeBinding(),
+            ...(reason === "cross_run" ? { runId: randomUUID() } : {}) });
+          for (const call of [
+            { tool: "connections_search", callId: "denied-connection-search", arguments: { query: "railway" } },
+            { tool: "connection_request", callId: "denied-connection-card", arguments: { service: "railway" } },
+          ]) await expect(authority.execute(call)).rejects.toMatchObject({ status: 403,
+            ...(reason === "expired" ? { message: "Native plan tool authority is no longer current" } : {}) });
+          expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toHaveLength(0);
+          expect(await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id))).toHaveLength(0);
+          expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]?.toolActionsUsed).toBe(0);
+          expect(calls).toBe(0);
+          if (pinnedStartedAt) {
+            const [current] = await db.select({ startedAt: orchestrationPlans.startedAt }).from(orchestrationPlans)
+              .where(eq(orchestrationPlans.id, plan.id));
+            expect(current?.startedAt?.getTime()).toBe(pinnedStartedAt.getTime());
+          }
+        } finally {
+          if (reason === "expired") vi.useRealTimers();
+        }
       },
     );
     it("binds dispatch-time Worker issuance to the current accountable attempt and rejects stale ownership", async () => {

@@ -1124,7 +1124,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   };
   const nativeSessionHandleScanFailures: Array<{ stage: string; errno: string | null; elapsedMs: number;
     deadlineRemainingMs: number | null; numericPidsScanned: number; sameUidProcesses: number;
-    nonZombieProcesses: number; fdEntriesScanned: number }> = [];
+    nonZombieProcesses: number; fdEntriesScanned: number; observerPhase?: string; failureLabel?: string; failedChecks?: string[] }> = [];
   const nativeSessionHandleFacts = (sourceSessions: string, upperSessions: string, deadlineMs: number) => {
     const startedAt = Date.now();
     let numericPidsScanned = 0, sameUidProcesses = 0, nonZombieProcesses = 0, fdEntriesScanned = 0;
@@ -1209,11 +1209,40 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   const observeNativeSessionHandles = async (sourceTarget: string, upperTarget: string, deadlineMs: number) => {
     if (process.env.PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER !== "1")
       return nativeSessionHandleFacts(sourceTarget, upperTarget, deadlineMs);
-    const unknown = () => ({ holders: null, complete: false });
+    const startedAt = Date.now();
+    let observerPhase: "beforeScope" | "prerequisite" | "fileQualification" | "exec" | "response" | "afterScope" | "digestMismatch" = "beforeScope";
+    let observerFailedChecks: string[] = [];
+    let observedScopeDigest: string | null = null;
+    const errorLabels = new Set(["fixture_observer_scope_changed", "fixture_observer_roots_changed",
+      "fixture_observer_current_owner_changed", "fixture_observer_scope_expired", "fixture_observer_system_alias_unqualified",
+      "fixture_observer_source_ancestor_unqualified", "fixture_observer_file_unqualified", "fixture_observer_file_alias",
+      "fixture_observer_ancestor_unqualified", "fixture_observer_hash_mismatch", "prerequisite_unavailable",
+      "request_invalid_or_expired", "exec_unknown", "response_not_object", "response_scan_incomplete", "response_invalid",
+      "after_scope_changed", "caught_error"]);
+    const unknown = (label: string, error?: unknown) => {
+      // Diagnostics never change the unknown result or expose raw exception text.
+      try {
+        const firstLine = error instanceof Error ? error.message.split(/\r?\n/, 1)[0] ?? "" : "";
+        const failureLabel = errorLabels.has(firstLine) ? firstLine : label === "caught_error" || error !== undefined ? "OTHER" : errorLabels.has(label) ? label : "OTHER";
+        const code = error && typeof error === "object" && "code" in error ? error.code : null;
+        const errno = code === null ? null : typeof code === "string" &&
+          ["ENOENT", "ESRCH", "EACCES", "EPERM", "EBADF", "EIO", "ENOTDIR", "ELOOP", "EMFILE", "ENFILE", "EINVAL", "ETIMEDOUT", "EPIPE"].includes(code)
+          ? code : "OTHER";
+        const now = Date.now();
+        const fact = { stage: "privileged_observer_unknown", errno, elapsedMs: Math.max(0, now - startedAt),
+          deadlineRemainingMs: Number.isFinite(deadlineMs) ? Math.trunc(deadlineMs - now) : null,
+          numericPidsScanned: 0, sameUidProcesses: 0, nonZombieProcesses: 0, fdEntriesScanned: 0,
+          observerPhase, failureLabel, failedChecks: [...observerFailedChecks].slice(0, 16) };
+        nativeSessionHandleScanFailures.push(fact);
+        if (nativeSessionHandleScanFailures.length > 8) nativeSessionHandleScanFailures.shift();
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+          console.info("conversation_software_host_fd_scan_failed", JSON.stringify(fact));
+      } catch { /* Failure-only diagnostics cannot change the unknown result. */ }
+      return { holders: null, complete: false };
+    };
     const launcher = "/usr/local/libexec/paperclip-fixture-observers/native-session-handles-v1";
     const scanner = `${launcher}.mjs`;
     const fixedNode = "/usr/local/libexec/paperclip-erasure-test-node/node";
-    const startedAt = Date.now();
     const witness = nativeRunnerClosureWitness;
     const exactScope = async () => {
       if (!witness || nativeRunnerClosureWitness !== witness || !expectedRunId || !expectedTaskRoot ||
@@ -1242,21 +1271,43 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           !(run.processStartedAt instanceof Date) || run.processStartedAt.toISOString() !== witness.startedAt ||
           profile?.nativeExecutionInput?.workspace?.cwd !== expectedTaskRoot || !lease ||
           !["released", "expired", "retained"].includes(lease.status) || lease.cleanupStatus !== "success" ||
-          !lease.releasedAt || lease.failureReason || lease.metadata?.remoteCwd !== expectedTaskRoot)
+          !lease.releasedAt || lease.failureReason || lease.metadata?.remoteCwd !== expectedTaskRoot) {
+        // Evaluate diagnostics ONLY in this original failure branch; the predicate above is unchanged.
+        try {
+          observerFailedChecks = Object.entries({ startReceipt: Boolean(start), stopReceipt: Boolean(stop), runPresent: Boolean(run),
+            runTerminal: Boolean(run && ["succeeded", "failed", "cancelled", "interrupted", "timed_out"].includes(run.status)),
+            processCleanupClear: Boolean(run && !run.nativeProcessCleanupPending), pidMatches: Boolean(run && run.processPid === witness.pid),
+            startMatches: Boolean(run && run.processStartedAt instanceof Date && run.processStartedAt.toISOString() === witness.startedAt),
+            profileCwd: profile?.nativeExecutionInput?.workspace?.cwd === expectedTaskRoot, leasePresent: Boolean(lease),
+            leaseRetired: Boolean(lease && ["released", "expired", "retained"].includes(lease.status)),
+            cleanupSuccess: lease?.cleanupStatus === "success", releasedAt: Boolean(lease?.releasedAt),
+            leaseFailureClear: Boolean(lease && !lease.failureReason), leaseCwd: lease?.metadata?.remoteCwd === expectedTaskRoot,
+          }).filter(([, passed]) => !passed).map(([name]) => name);
+        } catch { /* The original owner failure remains authoritative. */ }
         throw new Error("fixture_observer_current_owner_changed");
+      }
+      observerFailedChecks = ["combinedStopRead"];
       const proof = await verifyNativeCleanupRuntimeState(db, { companyId, runId: expectedRunId, leaseId: witness.leaseId },
         lease.metadata?.remoteExecutionTermination);
+      observerFailedChecks = [];
       if (Date.now() >= deadlineMs || nativeRunnerClosureWitness !== witness || activeHostExecStreams !== 0)
         throw new Error("fixture_observer_scope_expired");
-      return nativeSha256({ runId: run.id, status: run.status, pid: run.processPid, startedAt: run.processStartedAt,
+      const digest = nativeSha256({ runId: run.id, status: run.status, pid: run.processPid, startedAt: run.processStartedAt,
         input: profile.nativeExecutionInput, leaseId: lease.id, statusLease: lease.status,
         metadata: lease.metadata, releasedAt: lease.releasedAt, proof, start, stop,
         taskRoot: expectedTaskRoot, upperDir: sessionOverlayUpperDir, witness });
+      observedScopeDigest = digest; // Private comparison only; no hash is diagnostic output.
+      return digest;
     };
     try {
       const before = await exactScope(); // Authorization BEFORE any privileged operation.
-      if (!witness || typeof process.getuid !== "function" || process.getuid() <= 0 || fixtureImageNode !== fixedNode)
-        return unknown();
+      observerPhase = "prerequisite";
+      if (!witness || typeof process.getuid !== "function" || process.getuid() <= 0 || fixtureImageNode !== fixedNode) {
+        observerFailedChecks = Object.entries({ witnessPresent: Boolean(witness), uidApiPresent: typeof process.getuid === "function",
+          originalUidPositive: typeof process.getuid === "function" && process.getuid() > 0,
+          fixedNodeSelected: fixtureImageNode === fixedNode }).filter(([, passed]) => !passed).map(([name]) => name);
+        return unknown("prerequisite_unavailable");
+      }
       const qualified = (file: string, expectedHash?: string) => {
         const resolved = realpathSync(file), sourceEntry = lstatSync(file), metadata = lstatSync(resolved);
         if (sourceEntry.uid !== 0 || (!sourceEntry.isSymbolicLink() && (sourceEntry.mode & 0o22) !== 0))
@@ -1281,18 +1332,31 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         if (expectedHash && (metadata.size > 32 * 1024 || createHash("sha256").update(readFileSync(file)).digest("hex") !== expectedHash))
           throw new Error("fixture_observer_hash_mismatch");
       };
+      observerPhase = "fileQualification";
       qualified(launcher, "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8");
       qualified(scanner, "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55");
       for (const executable of [fixedNode, "/usr/bin/sudo", "/usr/bin/env", "/usr/bin/id", "/bin/sh"]) qualified(executable);
+      observerPhase = "exec";
       const request = JSON.stringify({ schema: "paperclip.fixture.native-session-handles.v1", taskRoot: expectedTaskRoot,
         sessionDigest: witness.sessionDigest, upperDir: sessionOverlayUpperDir, observerUid: process.getuid(), deadlineAt: deadlineMs });
-      if (Buffer.byteLength(request) > 4096 || Date.now() >= deadlineMs) return unknown();
+      if (Buffer.byteLength(request) > 4096 || Date.now() >= deadlineMs) {
+        observerFailedChecks = Object.entries({ requestBounded: Buffer.byteLength(request) <= 4096, deadlineFuture: Date.now() < deadlineMs })
+          .filter(([, passed]) => !passed).map(([name]) => name);
+        return unknown("request_invalid_or_expired");
+      }
       const result = spawnSync("/usr/bin/sudo", ["-n", "--", launcher], { input: request, encoding: "utf8", cwd: "/",
         env: { PATH: "/usr/bin:/bin" }, timeout: Math.max(1, deadlineMs - Date.now()), maxBuffer: 8192 });
       if (result.error || result.signal || result.status !== 0 || result.stderr !== "" ||
-          typeof result.stdout !== "string" || Buffer.byteLength(result.stdout) > 8192 || Date.now() >= deadlineMs) return unknown();
+          typeof result.stdout !== "string" || Buffer.byteLength(result.stdout) > 8192 || Date.now() >= deadlineMs) {
+        observerFailedChecks = Object.entries({ execNoError: !result.error, execNoSignal: !result.signal, execSuccess: result.status === 0,
+          execStderrEmpty: result.stderr === "", execStdoutString: typeof result.stdout === "string",
+          execOutputBounded: typeof result.stdout === "string" && Buffer.byteLength(result.stdout) <= 8192,
+          deadlineFuture: Date.now() < deadlineMs }).filter(([, passed]) => !passed).map(([name]) => name);
+        return unknown("exec_unknown", result.error);
+      }
+      observerPhase = "response";
       const response: unknown = JSON.parse(result.stdout);
-      if (!response || typeof response !== "object" || Array.isArray(response)) return unknown();
+      if (!response || typeof response !== "object" || Array.isArray(response)) return unknown("response_not_object");
       const value = response as Record<string, unknown>;
       if (value.complete === false && value.holders === null &&
           Object.keys(value).sort().join(",") === "complete,failure,holders" && value.failure &&
@@ -1316,22 +1380,21 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
             console.info("conversation_software_host_fd_scan_failed", JSON.stringify(fact));
         }
-        return unknown();
+        return unknown("response_scan_incomplete");
       }
       if (value.complete !== true || !Number.isSafeInteger(value.holders) || (value.holders as number) < 0 ||
-          Object.keys(value).sort().join(",") !== "complete,holders") return unknown();
+          Object.keys(value).sort().join(",") !== "complete,holders") return unknown("response_invalid");
       // Blocking observation never replaces the original AFTER-observation currentness check.
-      if (await exactScope() !== before || Date.now() >= deadlineMs) return unknown();
+      observerPhase = "afterScope";
+      if (await exactScope() !== before || Date.now() >= deadlineMs) {
+        if (observedScopeDigest !== before) observerPhase = "digestMismatch";
+        observerFailedChecks = Object.entries({ scopeDigestSame: observedScopeDigest === before, deadlineFuture: Date.now() < deadlineMs })
+          .filter(([, passed]) => !passed).map(([name]) => name);
+        return unknown("after_scope_changed");
+      }
       return { holders: value.holders as number, complete: true };
-    } catch {
-      // No subprocess/error/path contents are diagnostic output.
-      const now = Date.now();
-      const fact = { stage: "privileged_observer_unknown", errno: null, elapsedMs: Math.max(0, now - startedAt),
-        deadlineRemainingMs: Number.isFinite(deadlineMs) ? Math.trunc(deadlineMs - now) : null,
-        numericPidsScanned: 0, sameUidProcesses: 0, nonZombieProcesses: 0, fdEntriesScanned: 0 };
-      nativeSessionHandleScanFailures.push(fact);
-      if (nativeSessionHandleScanFailures.length > 8) nativeSessionHandleScanFailures.shift();
-      return unknown();
+    } catch (error) {
+      return unknown("caught_error", error);
     }
   };
   const attachActualNativeSessionBacking = async (command: Record<string, any>, deadlineMs: number) => {

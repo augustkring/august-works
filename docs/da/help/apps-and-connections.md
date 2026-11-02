@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-29
+last_verified_at: 2026-11-02
 review_trigger: Ændringer i appforbindelser, udbydergodkendelse, fornyelse af adgang eller adgangskontrol
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts, server/src/services/tool-connection-lifecycle.ts, server/src/services/experience/connector-recovery.ts, ui/src/pages/apps/app-detail/IdentitiesSection.tsx]
+linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNotConnected.tsx, ui/src/pages/apps/AppDetail.tsx, ui/src/pages/apps/app-detail/PermissionsPanel.tsx, ui/src/features/connections/ConnectionSetupFlow.tsx, packages/shared/src/app-definitions/slack.json, server/src/services/tool-access.ts, server/src/services/tool-gateway.ts, server/src/services/native-runtime/paid-transport-admission.ts, server/src/services/paperclip-cloud-connector.ts, ui/src/components/JevSkillSuggestionSettings.tsx, server/src/routes/jev-decisions.ts, server/src/services/jev-skill-suggestions.ts, server/src/services/tool-connection-lifecycle.ts, server/src/services/experience/connector-recovery.ts, ui/src/pages/apps/app-detail/IdentitiesSection.tsx]
 ---
 
 Åbn **Apps** eller **Company settings → Apps and data** for at se de forbindelser, virksomheden kan bruge. Apps, loginmetoder og kontroller afhænger af den aktuelle installation.
@@ -22,6 +22,8 @@ linked_source_files: [ui/src/pages/apps/Connections.tsx, ui/src/pages/apps/AppNo
 Vælg appen, og følg forbindelsesforløbet. Før du fortsætter, skal du kontrollere den konto eller arbejdsplads, der tilsluttes, hvem der kan bruge forbindelsen, og hvilke tilladelser eller handlinger der vises. Gennemfør login eller samtykke på udbyderens egen side. Vend derefter tilbage til Blentera og kontrollér forbindelsens status.
 
 En forbindelse giver adgang til den valgte konto og det viste omfang. Det betyder ikke, at alle handlinger er slået til. Gennemgå appens tilladelser og handlingsindstillinger, før du beder en Co-worker om at bruge den.
+
+Hvis en handling viser, at et værktøj er utilgængeligt til administreret arbejde, skal du vælge en tilgængelig handling eller kontakte virksomhedens administrator.
 
 Til Slack-agentværktøjer bruger standardvalget Blenteras administrerede Slack-app, når den er konfigureret på installationen. Gennemgå brugertilladelserne på opsætningsskærmen og på Slacks samtykkeside. Forbindelsen bruger som standard den indloggede persons Slack-konto. Hvis du udtrykkeligt vælger organisationsadgang, deles personens Slack-forbindelse med virksomheden; det opretter ikke en bot eller servicekonto. Hvis den administrerede mulighed ikke er tilgængelig, kan en forbindelsesadministrator bruge den avancerede mulighed til organisationens egen Slack OAuth-app. Den separate Slack-botapp bruges, når personer starter arbejde fra Slack.
 

@@ -612,7 +612,17 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
                         "policy_capability_matches", "policy_has_no_credentials",
                       ].includes(check)).sort() : [], frames };
                 });
-              const hostRuntime = facts.sandboxRuntimeFacts ?? {};
+              // Admission facts are a pre-callback snapshot. Read the live owner at THIS rejection.
+              let hostRuntime: Record<string, unknown> = {};
+              let liveHostFactsReadSucceeded = false;
+              try { hostRuntime = sandboxHostFacts.read?.() ?? {}; liveHostFactsReadSucceeded = Boolean(sandboxHostFacts.read); }
+              catch { /* Diagnostics must not mask the original erasure rejection. */ }
+              // These existing private arrays contain only boolean/count/closed-enum closure facts, no identities/paths.
+              const liveClosureObservations = Array.isArray(hostRuntime.nativeSessionBackingObservations)
+                ? hostRuntime.nativeSessionBackingObservations.filter((value): value is Record<string, unknown> => Boolean(value &&
+                  typeof value === "object" && !Array.isArray(value) && value.processWitnessPresent === true)).slice(-4) : [];
+              const liveHandleScanFailures = Array.isArray(hostRuntime.nativeSessionHandleScanFailures)
+                ? hostRuntime.nativeSessionHandleScanFailures.slice(-8) : [];
               const erasureExecFacts = Array.isArray(hostRuntime.execFacts) ? hostRuntime.execFacts
                 .filter((value): value is Record<string, unknown> => Boolean(value && typeof value === "object" &&
                   !Array.isArray(value) && value.nativePreparationPurpose === "native_provider_data_erasure"))
@@ -637,6 +647,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
               const receipts = concurrent.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
               if (!receipts.length) console.info("managed remote erasure dispatch rejection facts", JSON.stringify({
                 rejectionFacts, erasureExecFacts, erasureExecutionFailures,
+                liveHostFactsReadSucceeded, liveClosureObservations, liveHandleScanFailures,
               }));
               expect(receipts.length).toBeGreaterThan(0);
               expect(receipts.every(receipt => receipt.commandRequestId === receipts[0]!.commandRequestId)).toBe(true);

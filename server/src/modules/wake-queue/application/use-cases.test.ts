@@ -399,6 +399,64 @@ describe("releaseIssueExecution", () => {
     expect(findNextDeferredWake).toHaveBeenCalledTimes(1);
   });
 
+  it("cancels the deleted Human-comment wake on a completed task without requesting another run", async () => {
+    // Case 787's application contract, not an accepted-runtime fixture. These
+    // typed port snapshots state that the lock owner already authorized the
+    // release; this test creates no database Run, admission or provider call.
+    // The mixed cancel/fail/normalize test below and the explicit agent-
+    // feedback variants do not cover this completed-task Human input branch.
+    const completedIssue = { ...ISSUE, status: "done", responsibleUserId: "responsible-user" };
+    const finishingRun: RunSnapshot = { ...RUN, status: "succeeded", runtimeMode: null,
+      errorCode: null, configurationIncompletePayload: null, responsibleUserId: "responsible-user",
+      contextSnapshot: { issueId: ISSUE.id } };
+    const issueBefore = structuredClone(completedIssue);
+    const runBefore = structuredClone(finishingRun);
+    const deletedCommentId = "deleted-follow-up-comment";
+    const deferred = wakeCandidate({ id: "deleted-comment-wake", agentId: finishingRun.agentId,
+      requestedByActorType: "user", requestedByActorId: "user-1",
+      queuedCommentIds: [deletedCommentId], deferredCommentIds: [deletedCommentId],
+      payload: { issueId: ISSUE.id, commentId: deletedCommentId },
+      deferredContextSeed: { issueId: ISSUE.id, wakeCommentIds: [deletedCommentId], wakeReason: "issue_commented" } });
+    const pending = [deferred];
+    const transaction = createFakeTransaction({
+      findNextDeferredWake: vi.fn(async () => pending.shift() ?? null),
+      findInvokableAgent: vi.fn(async () => ({ ...AGENT, id: finishingRun.agentId })),
+      // The actual adapter's liveness read is a port here. The genuine managed
+      // paired case tests deletion in PostgreSQL and the runtime boundary.
+      getQueuedCommentLiveness: vi.fn(async () => ({ liveNonSelfCommentIds: [], containedSelfAuthoredComment: false })),
+    });
+    const host = createFakeHost();
+    const recovery = createFakeRecovery();
+    const release = createReleaseIssueExecution({
+      issueLock: createFakeIssueLock(host, transaction, completedIssue, finishingRun), recovery,
+    });
+    const now = new Date("2026-11-02T00:00:00.000Z");
+
+    const result = await release({ companyId: RUN.companyId, runId: RUN.id, now });
+
+    expect(transaction.getQueuedCommentLiveness).toHaveBeenCalledExactlyOnceWith({
+      companyId: RUN.companyId, issueId: ISSUE.id, wakeAgentId: finishingRun.agentId,
+      finishingRunId: finishingRun.id, finishingRunAgentId: finishingRun.agentId,
+      queuedCommentIds: [deletedCommentId],
+    });
+    expect(transaction.cancelDeferredWake).toHaveBeenCalledExactlyOnceWith({
+      companyId: RUN.companyId, wakeId: deferred.id,
+      reason: "Queued messages were discarded before promotion", now,
+    });
+    expect(transaction.failDeferredWake).not.toHaveBeenCalled();
+    expect(transaction.normalizeDeferredWakeCommentIds).not.toHaveBeenCalled();
+    expect(transaction.claimDeferredWakeForPromotion).not.toHaveBeenCalled();
+    expect(transaction.finalizePromotedWake).not.toHaveBeenCalled();
+    expect(transaction.reopenIssue).not.toHaveBeenCalled();
+    expect(transaction.queueImmediateRecoveryRun).not.toHaveBeenCalled();
+    expect(transaction.queueReviewParticipantRecoveryRun).not.toHaveBeenCalled();
+    expect(recovery.escalateStrandedAssignedIssue).not.toHaveBeenCalled();
+    expect(recovery.escalateStrandedRecoveryIssueInPlace).not.toHaveBeenCalled();
+    expect(result).toEqual({ outcome: { kind: "released" }, postCommitEffects: [] });
+    expect(completedIssue).toEqual(issueBefore);
+    expect(finishingRun).toEqual(runBefore);
+  });
+
   it("continues the loop after a cancel outcome, a fail outcome, and a normalize outcome, then promotes", async () => {
     const queue = [
       // cancel_empty: queued comments, none live, no independent continuation.
