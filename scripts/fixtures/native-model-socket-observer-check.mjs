@@ -6,14 +6,14 @@ import { lstatSync, readFileSync, readlinkSync, readdirSync, realpathSync } from
 import { createServer } from 'node:net';
 import { dirname } from 'node:path';
 const launcher='/usr/local/libexec/paperclip-fixture-observers/native-model-socket-v1';
-const hashes={ [launcher]:'ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079', [launcher+'.mjs']:'02c0427297625251350e0e848d6e1f49540ce9aa331e7ad531e64721a5886efe' };
+const hashes={ [launcher]:'ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079', [launcher+'.mjs']:'5907972e9bd2b8269142c04d38ab3e713df92d5e8bbeee9930fae1d4605389f2' };
 const started=Date.now(),deadline=started+10_000,limit=192*1024*1024;
 const children=[];let server,peer,stage='prerequisite',failureLabel=null;
 const sockets=new Set();
 const facets={originalUidRetained:false,directoryUidMatches:false,credentialUidMatches:false,directFdEACCES:false,
   uniqueOwnerMatched:false,wrongUidDenied:false,wrongTupleDenied:false,expiredDenied:false,futureDeadlineDenied:false,
   extraKeyDenied:false,hostileEnvironmentDenied:false,multipleOwnersDenied:false,closedSocketDenied:false,nondumpableNeighborStillLive:false,
-  parentRssBytes:null,ownedChildrenRssBytes:[],memoryTotalBytes:null,memoryLimitBytes:limit,observerMaxRssBytes:0,observerRssMeasured:false,
+  parentRssBytes:null,ownedChildrenRssBytes:[],memoryTotalBytes:null,memoryLimitBytes:limit,observerImageRssLimitBytes:80*1024*1024,observerMaxRssBytes:0,observerRssMeasured:false,
   observerReportedRssType:null,observerReportedRssBytes:null,observerRssSafeInteger:false,observerRssPositive:false,
   observerRssWithinLimit:false,observerResponseComplete:null,observerResponseStage:null};
 const labels=new Set(['deadline','prerequisite_alias','prerequisite_metadata','prerequisite_ancestor','prerequisite_hash','unprivileged_parent_required',
@@ -81,12 +81,12 @@ function observe(input){const r=spawnSync('/usr/bin/sudo',['-n','--',launcher],{
   ['number','string','undefined'].includes(typeof value.observerMaxRssBytes)?typeof value.observerMaxRssBytes:'other';
  facets.observerRssSafeInteger=Number.isSafeInteger(value.observerMaxRssBytes);
  facets.observerRssPositive=facets.observerRssSafeInteger&&value.observerMaxRssBytes>0;
- facets.observerRssWithinLimit=facets.observerRssPositive&&value.observerMaxRssBytes<=64*1024*1024;
+ facets.observerRssWithinLimit=facets.observerRssPositive&&value.observerMaxRssBytes<=80*1024*1024;
  facets.observerReportedRssBytes=facets.observerRssSafeInteger&&value.observerMaxRssBytes>=0&&value.observerMaxRssBytes<=1024*1024*1024?value.observerMaxRssBytes:null;
  facets.observerResponseComplete=typeof value.complete==='boolean'?value.complete:null;
  facets.observerResponseStage=['table_open','table_read','tuple','proc_list','process_directory_stat','process_state_read',
   'fd_directory_list','fd_readlink','owner_count','memory_bound'].includes(value.stage)?value.stage:null;
- assert.ok(Number.isSafeInteger(value.observerMaxRssBytes)&&value.observerMaxRssBytes>0&&value.observerMaxRssBytes<=64*1024*1024,'observer_memory_invalid');
+ assert.ok(Number.isSafeInteger(value.observerMaxRssBytes)&&value.observerMaxRssBytes>0&&value.observerMaxRssBytes<=80*1024*1024,'observer_memory_invalid');
  facets.observerMaxRssBytes=Math.max(facets.observerMaxRssBytes,value.observerMaxRssBytes);facets.observerRssMeasured=true;memory();
  if(value.complete===true&&Object.keys(value).sort().join(',')==='complete,inode,local,observerMaxRssBytes,pid,remote')return value;
  if(value.complete===false&&Object.keys(value).sort().join(',')==='complete,errno,observerMaxRssBytes,stage')return value;

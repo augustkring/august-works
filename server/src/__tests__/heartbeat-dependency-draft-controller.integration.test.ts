@@ -329,7 +329,9 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(calls).toBe(1);
         expect(dispatchedPlanIds).toEqual([taskPlans[0]!.plan.id]);
       }, { timeout: 10_000, interval: 25 });
-      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, first!.id)))[0]?.status).toBe("running");
+      const activeRun = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, first!.id)))[0];
+      expect(activeRun).toMatchObject({ status: "running", errorCode: null });
+      expect(activeRun?.wakeupRequestId).toBeTruthy();
       const second = await wake(taskPlans[1]!.task.id);
       expect(second).not.toBeNull();
       expect(second!.id).not.toBe(first!.id);
@@ -340,6 +342,20 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(await db.select().from(orchestrationModelReservations)
         .where(eq(orchestrationModelReservations.planId, taskPlans[1]!.plan.id))).toEqual([]);
       expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, second!.id))).toEqual([]);
+      // The first real Native text-controller HTTP request is still held above.
+      // Age its actual Run row, then ask a second service instance to reap it.
+      // The module-shared activeRunExecutions ownership guard must retain the
+      // original running Run and claimed assignment wake until the owner settles.
+      await db.update(heartbeatRuns).set({ updatedAt: new Date("2026-03-19T00:00:00.000Z") })
+        .where(eq(heartbeatRuns.id, first!.id));
+      const reaperHeartbeat = heartbeatService(db);
+      expect(await reaperHeartbeat.reapOrphanedRuns({ staleThresholdMs: 1 }))
+        .toEqual({ reaped: 0, runIds: [] });
+      const heldRun = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, first!.id)))[0];
+      expect(heldRun).toMatchObject({ id: first!.id, status: "running", errorCode: null });
+      const heldWake = (await db.select().from(agentWakeupRequests)
+        .where(eq(agentWakeupRequests.id, activeRun!.wakeupRequestId!)))[0];
+      expect(heldWake).toMatchObject({ status: "claimed", runId: first!.id });
       expect(substitution).not.toHaveBeenCalled();
       releaseFirst();
       await heartbeat.drainActiveRunExecutions();

@@ -70,6 +70,7 @@ import {
 import * as activityLog from "../services/activity-log.js";
 import { dismissObsoleteNativePolicyReviews } from "../services/native-runtime/obsolete-policy-reviews.js";
 import { issueService } from "../services/issues.js";
+import { normalizeIssueExecutionPolicy } from "../services/issue-execution-policy.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -2066,6 +2067,87 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
     });
     return { ...seeded, decision: decision!, interaction: interaction! };
   }
+
+  it("projects Native completion through the configured review stage and publishes its assignment wake", async () => {
+    const fixture = corpus.fixtures.find((candidate) => candidate.id === "native-mechanical-completion")!;
+    const seeded = await seedFixture({ ...fixture, id: `native-stage-completion-${randomUUID()}` });
+    const policy = normalizeIssueExecutionPolicy({
+      stages: [{
+        id: randomUUID(),
+        type: "review",
+        participants: [{ id: randomUUID(), type: "agent", agentId: delegateAgentId }],
+      }],
+    })!;
+    await db.update(issues).set({ executionPolicy: policy }).where(eq(issues.id, seeded.issueId));
+    await db.update(completionContracts).set({ risk: "low", completionAuthority: "agent_claim_policy" })
+      .where(eq(completionContracts.id, seeded.contractId!));
+    await db.insert(workspaceOperations).values({
+      companyId, heartbeatRunId: seeded.runId, issueId: seeded.issueId,
+      phase: "workspace_finalize", status: "succeeded", exitCode: 0,
+      cwd: process.cwd(), finishedAt: new Date(),
+    });
+
+    const finalized = await finalizeNativeRun({ db, runId: seeded.runId, workspaceFinalizeStatus: "succeeded" });
+    await finalizeNativeRun({ db, runId: seeded.runId, workspaceFinalizeStatus: "succeeded" });
+    const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
+    const decisions = await db.select().from(statusDecisions).where(eq(statusDecisions.runId, seeded.runId));
+    const [decision] = decisions;
+    const wakes = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, delegateAgentId));
+    const stageWakes = wakes.filter((candidate) => candidate.idempotencyKey?.startsWith(`issue.execution_stage:${seeded.issueId}:`));
+    const [wake] = stageWakes;
+
+    expect(issue).toMatchObject({
+      status: "in_review",
+      assigneeAgentId: delegateAgentId,
+      executionState: expect.objectContaining({ status: "pending", currentStageType: "review" }),
+      executionRunId: null,
+    });
+    expect(decision).toMatchObject({ toStatus: "in_review", reasonCode: "execution_policy_stage_pending" });
+    expect(finalized).toMatchObject({ phase: "committed" });
+    expect(stageWakes).toHaveLength(1);
+    expect(decisions.filter((candidate) => candidate.toStatus === "in_review")).toHaveLength(1);
+    expect(decisions.filter((candidate) => candidate.toStatus === "done")).toHaveLength(0);
+    expect(wake).toBeDefined();
+    expect((wake!.payload as Record<string, unknown>)._paperclipWakeContext).toMatchObject({
+      source: "issue.execution_stage",
+      statusDecisionSource: "native_status_decision",
+      wakeReason: "execution_review_requested",
+    });
+    expect(wake).toMatchObject({
+      source: "assignment",
+      reason: "execution_review_requested",
+      requestedByActorType: "agent",
+      requestedByActorId: agentId,
+    });
+    expect(await db.select().from(statusDecisions).where(and(
+      eq(statusDecisions.issueId, seeded.issueId), eq(statusDecisions.toStatus, "done"),
+    ))).toHaveLength(0);
+  }, 30_000);
+
+  it("persists execution-policy completion metadata when Native completion auto-skips a self-only stage", async () => {
+    const fixture = corpus.fixtures.find((candidate) => candidate.id === "native-mechanical-completion")!;
+    const seeded = await seedFixture({ ...fixture, id: `native-stage-self-skip-${randomUUID()}` });
+    const policy = normalizeIssueExecutionPolicy({
+      stages: [{
+        id: randomUUID(),
+        type: "review",
+        participants: [{ id: randomUUID(), type: "agent", agentId }],
+      }],
+    })!;
+    await db.update(issues).set({ executionPolicy: policy }).where(eq(issues.id, seeded.issueId));
+    await db.update(completionContracts).set({ risk: "low", completionAuthority: "agent_claim_policy" })
+      .where(eq(completionContracts.id, seeded.contractId!));
+    await db.insert(workspaceOperations).values({
+      companyId, heartbeatRunId: seeded.runId, issueId: seeded.issueId,
+      phase: "workspace_finalize", status: "succeeded", exitCode: 0,
+      cwd: process.cwd(), finishedAt: new Date(),
+    });
+
+    await finalizeNativeRun({ db, runId: seeded.runId, workspaceFinalizeStatus: "succeeded" });
+    const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
+    expect(issue!.status).toBe("done");
+    expect(issue!.executionState).toMatchObject({ status: "completed", completedStageIds: [policy.stages[0]!.id] });
+  }, 30_000);
 
   async function seedAutomaticReview() {
     const seeded = await seedPolicyReview();

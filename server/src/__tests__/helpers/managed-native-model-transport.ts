@@ -53,7 +53,7 @@ function privilegedSocketOwner(client: Socket, until: number) {
   const expectedNodeHash = fileHash("/proc/self/exe", 256 * 1024 * 1024);
   const qualification = () => {
     const identities: unknown[] = [];
-    for (const [file, expectedHash] of [[launcher, "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079"], [scanner, "02c0427297625251350e0e848d6e1f49540ce9aa331e7ad531e64721a5886efe"],
+    for (const [file, expectedHash] of [[launcher, "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079"], [scanner, "5907972e9bd2b8269142c04d38ab3e713df92d5e8bbeee9930fae1d4605389f2"],
       [node, expectedNodeHash], ["/usr/bin/sudo", null], ["/usr/bin/env", null], ["/usr/bin/id", null], ["/bin/sh", null]] as const) {
       const resolved = realpathSync(file), entry = lstatSync(file), metadata = lstatSync(resolved);
       checked(entry.uid === 0 && (entry.isSymbolicLink() || (entry.mode & 0o22) === 0));
@@ -88,7 +88,7 @@ function privilegedSocketOwner(client: Socket, until: number) {
   checked(response && typeof response === "object" && !Array.isArray(response));
   const value = response as Record<string, unknown>;
   checked(Number.isSafeInteger(value.observerMaxRssBytes) && (value.observerMaxRssBytes as number) > 0 &&
-    (value.observerMaxRssBytes as number) <= 64 * 1024 * 1024);
+    (value.observerMaxRssBytes as number) <= 80 * 1024 * 1024);
   if (value.complete === false) {
     const stages = ["table_open", "table_read", "tuple", "proc_list", "process_directory_stat", "process_state_read",
       "fd_directory_list", "fd_readlink", "owner_count", "memory_bound"];

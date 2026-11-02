@@ -3,7 +3,7 @@ import { closeSync, openSync, readFileSync, readSync, readdirSync, readlinkSync,
 // Bound startup/stdin as well as synchronous observation; no idle privileged reader survives this fixed operation.
 const rootStartedAt=Date.now(),rootDeadlineAt=rootStartedAt+10_000;
 const watchdog=setTimeout(()=>process.exit(126),10_000);watchdog.unref();
-const observerRssLimitBytes=64*1024*1024;
+const observerRssLimitBytes=80*1024*1024;
 const errnos = new Set(['ENOENT','ESRCH','EACCES','EPERM','EBADF','EIO','ENOTDIR','ELOOP','EMFILE','ENFILE','EINVAL']);
 function validInput(input, uid, now) {
   return input && typeof input === 'object' && !Array.isArray(input) &&

@@ -1321,9 +1321,9 @@ export async function finalizeNativeRun(input: {
             finalizationPhase,
             assessmentId: assessmentRow.id,
             decisionId: committed.decision.id,
-            authoritativeDecision: decision.toStatus,
-            finalizationPolicyVersion: decision.policyVersion,
-            finalizationReasonCode: decision.reasonCode,
+            authoritativeDecision: committed.effectiveDecision.toStatus,
+            finalizationPolicyVersion: committed.effectiveDecision.policyVersion,
+            finalizationReasonCode: committed.effectiveDecision.reasonCode,
             // Only the locked status transaction can mint this presentation
             // proof. Never carry a runner-provided marker forward.
             externalChatReviewPresentation: record(
