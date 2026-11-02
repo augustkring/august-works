@@ -74,7 +74,7 @@ describe("TaskChatSystemNotice (PAP-443)", () => {
 
   it.each(["en","da"])("renders the accurate tool action in %s above generic configuration copy", async lang => {
     noticeLocale.language=lang;
-    renderNotice({text:TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE,presentation:{kind:"system_notice",title:"Configuration incomplete",tone:"warning"}});
+    renderNotice({text:TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE,presentation:{kind:"system_notice",title:"Configuration incomplete",tone:"warning",detailsDefaultOpen:false}});
     const copy=(lang==="da"?experienceDa:experienceEn).taskChatSystemNotice;
     expect(toggleButton().textContent).toContain(copy.toolUnavailableTitle);
     expect(container.textContent).toContain(copy.toolUnavailableDetail);

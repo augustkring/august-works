@@ -4130,8 +4130,12 @@ export function openShellHostEngine({
         child.once("error", reject);
         child.once("close", (code, signalName) => resolve({ code, signalName }));
       });
+      const stdinBytes = Buffer.from(request.stdinBase64, "base64");
       const written = new Promise((resolve, reject) => {
-        const onStdinError = () => {
+        const onStdinError = error => {
+          // No requested bytes can be lost when a fast child already closed
+          // its empty input. Its actual exit/output still determine the result.
+          if (stdinBytes.length === 0 && ["EPIPE", "ERR_STREAM_DESTROYED"].includes(error?.code)) { resolve(); return; }
           stdinFailed = true;
           terminate();
           reject(new Error("exec_unknown"));
@@ -4140,10 +4144,16 @@ export function openShellHostEngine({
         // before exit, and an unhandled EPIPE must not crash the Host process.
         child.stdin.on("error", onStdinError);
         try {
-          child.stdin.end(Buffer.from(request.stdinBase64, "base64"), error => {
-            if (error) onStdinError(); else resolve();
-          });
-        } catch { onStdinError(); }
+          if (stdinBytes.length === 0) {
+            child.stdin.end(error => {
+              if (error) onStdinError(error); else resolve();
+            });
+          } else {
+            child.stdin.end(stdinBytes, error => {
+              if (error) onStdinError(error); else resolve();
+            });
+          }
+        } catch (error) { onStdinError(error); }
       });
       const [result] = await Promise.all([exited, written]);
       await readOutput;

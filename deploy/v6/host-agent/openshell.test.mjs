@@ -2583,6 +2583,50 @@ test("sandbox exec stdin EPIPE is controlled unknown and never completes or repl
   }, hooks);
 });
 
+test("sandbox exec empty stdin sends no bytes and only tolerates an expected closed-pipe race", async () => {
+  for (const errorCode of ["EPIPE", "EIO"]) {
+    let writeCount = 0, killCount = 0, childClosedBeforeFinalError = false;
+    const hooks = {
+      spawnProcess() {
+        const child = new EventEmitter();
+        child.stdin = new Writable({
+          write(_chunk, _encoding, done) { writeCount++; done(); },
+          final(done) {
+            setImmediate(() => {
+              child.emit("close", 0, null);
+              childClosedBeforeFinalError = true;
+              setTimeout(() => done(Object.assign(new Error("fixture closed empty stdin"), { code: errorCode })), 5);
+            });
+          },
+        });
+        child.stdin.once("error", () => setImmediate(() => child.emit("close", 0, null)));
+        child.stdout = Readable.from([Buffer.from("known empty-input result")]); child.stderr = Readable.from([]);
+        child.kill = () => { killCount++; setImmediate(() => child.emit("close", 0, null)); return true; };
+        return child;
+      },
+    };
+    await fixture(async ({ engine, enablePhysical, setPhase, root }) => {
+      enablePhysical(); setPhase("Stopped");
+      await engine.execute(randomUUID(), { ...input("apply"), admission: hostAdmission(`empty-stdin-${errorCode}`, policyDocument) }, deadline());
+      await engine.execute(randomUUID(), { ...input("start"), start: { policyHash,
+        expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: `empty-stdin-${errorCode}` } }, deadline());
+      const request = execRequest();
+      const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId,
+        cellGeneration: "1", sandboxRef: scope.sandboxRef };
+      const execution = engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {});
+      if (errorCode === "EPIPE") assert.deepEqual(await execution, { exitCode: 0, timedOut: false });
+      else await assert.rejects(execution, /exec_unknown/);
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(childClosedBeforeFinalError, true, "known child close must not race a delayed stdin failure into success");
+      assert.equal(writeCount, 0, "an empty request closes stdin without issuing a zero-byte write");
+      assert.equal(killCount > 0, errorCode !== "EPIPE");
+      const journal = JSON.parse(await readFile(path.join(root, "openshell-journal.json"), "utf8"));
+      assert.equal(journal.commands[request.requestId].state, errorCode === "EPIPE" ? "completed" : "claimed");
+      if (errorCode !== "EPIPE") assert.equal(journal.commands[request.requestId].result, null);
+    }, hooks);
+  }
+});
+
 test("sandbox broker capability enters through an expiring native provider, never CLI argv or workload env", async () => {
   let spawnedArgs = null, providerEnvSeen = false;
   const hooks = {

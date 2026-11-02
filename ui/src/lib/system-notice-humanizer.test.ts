@@ -160,7 +160,7 @@ describe("humanizeSystemNotice", () => {
 describe("tool model-effect unavailable central copy", () => {
   it.each([experienceEn, experienceDa])("prioritizes localized tool action above generic configuration/secret copy", copy => {
     const translated={title:copy.taskChatSystemNotice.toolUnavailableTitle,detail:copy.taskChatSystemNotice.toolUnavailableDetail};
-    const result=humanizeSystemNotice({body:`${TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE} Latest retry failure: \`configuration_incomplete\`.`,presentation:{kind:"system_notice",title:"Configuration incomplete",tone:"warning"},toolUnavailableCopy:translated});
+    const result=humanizeSystemNotice({body:`${TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE} Latest retry failure: \`configuration_incomplete\`.`,presentation:{kind:"system_notice",title:"Configuration incomplete",tone:"warning",detailsDefaultOpen:false},toolUnavailableCopy:translated});
     expect(result).toMatchObject({...translated,tone:"warning"});
     expect(result.detail).not.toContain("Runtime");expect(result.detail).not.toContain("secret");
   });
