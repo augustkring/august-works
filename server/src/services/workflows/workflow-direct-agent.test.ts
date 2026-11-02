@@ -210,23 +210,33 @@ suite("Bounded Direct Agent Call", () => {
     expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]?.description).toBeNull();
     expect((await db.select().from(documents).where(eq(documents.id, document!.id)))[0]?.latestBody).toBe("");
     const jobs = memoryJobService(db, { runLogStore: logStore });
-    // Forgetting the current Task source also queues its runtime-asset cleanup.
-    // Drain that earlier outbox item before asserting the independently queued log erasure.
+    // Both content-free outbox owners must survive source erasure. Their
+    // transaction timestamps do not establish which kind claimNext selects first.
+    const outbox = await db.select().from(memoryJobs).where(eq(memoryJobs.companyId, seeded.companyId));
+    expect(outbox).toEqual(expect.arrayContaining([
+      expect.objectContaining({ jobKey: `runtime-asset-erasure:v1:${seeded.executionId}`,
+        sourceRefJson: { kind: "runtime_asset_erasure", runId: seeded.executionId, legacyDigests: [] } }),
+      expect.objectContaining({ jobKey: `run-log-erasure:v1:${seeded.executionId}`,
+        sourceRefJson: { kind: "run_log_erasure", runId: seeded.executionId,
+          agentId: seeded.agentId, logRef: handle.logRef } }),
+    ]));
     const claimedKinds: string[] = [];
     let logErasure = null as Awaited<ReturnType<typeof jobs.claimNext>>;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 3 &&
+      (!logErasure || !claimedKinds.includes("runtime_asset_erasure")); attempt++) {
       const claimed = await jobs.claimNext(new Date(), seeded.companyId);
       expect(claimed).toBeTruthy();
       claimedKinds.push(String(claimed!.sourceRefJson.kind));
       if (claimed!.sourceRefJson.kind === "run_log_erasure") {
+        expect(logErasure).toBeNull();
         logErasure = claimed;
-        break;
+        continue;
       }
       expect(claimed!.sourceRefJson.kind).toBe("runtime_asset_erasure");
       await jobs.executeClaimed(claimed!);
       expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id, claimed!.id)))[0]?.status).toBe("succeeded");
     }
-    expect(claimedKinds).toEqual(["runtime_asset_erasure", "run_log_erasure"]);
+    expect([...claimedKinds].sort()).toEqual(["run_log_erasure", "runtime_asset_erasure"]);
     expect(logErasure).toBeTruthy();
     await jobs.executeClaimed(logErasure!);
     expect((await db.select().from(memoryJobs).where(eq(memoryJobs.id, logErasure!.id)))[0]?.status).toBe("succeeded");

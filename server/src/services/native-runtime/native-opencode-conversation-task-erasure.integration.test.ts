@@ -55,10 +55,11 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode conversation Task
   }, 30_000);
 
   it("binds an actual conversation dispatch to its created Task and scrubs that Task when the producing Run is erased", async () => {
+    const fixtureDeadlineAt = new Date(Date.now() + 180_000);
     const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
     const taskTitle = `Conversation output Task ${suffix}`;
     const result = await runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
-      root, instanceId, steps: [
+      root, instanceId, fixtureDeadlineAt, steps: [
         { tool: "create_task", id: `conversation-task-${suffix}`, input: {
           idempotencyKey: randomUUID(), title: taskTitle,
           description: "Created from the authenticated conversation model response.",

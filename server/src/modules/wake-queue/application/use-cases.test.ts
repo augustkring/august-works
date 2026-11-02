@@ -399,8 +399,13 @@ describe("releaseIssueExecution", () => {
     expect(findNextDeferredWake).toHaveBeenCalledTimes(1);
   });
 
-  it("cancels the deleted Human-comment wake on a completed task without requesting another run", async () => {
-    // Case 787's application contract, not an accepted-runtime fixture. These
+  it.each([
+    { kind: "deleted", containedSelfAuthoredComment: false,
+      expectedReason: "Queued messages were discarded before promotion" },
+    { kind: "self-authored", containedSelfAuthoredComment: true,
+      expectedReason: "Deferred wake contained only comments authored by the finishing run" },
+  ])("cancels the $kind Human-comment wake on a completed task without requesting another run", async ({ kind, containedSelfAuthoredComment, expectedReason }) => {
+    // Cases 787/1552/2856's application contract, not an accepted-runtime fixture. These
     // typed port snapshots state that the lock owner already authorized the
     // release; this test creates no database Run, admission or provider call.
     // The mixed cancel/fail/normalize test below and the explicit agent-
@@ -411,19 +416,19 @@ describe("releaseIssueExecution", () => {
       contextSnapshot: { issueId: ISSUE.id } };
     const issueBefore = structuredClone(completedIssue);
     const runBefore = structuredClone(finishingRun);
-    const deletedCommentId = "deleted-follow-up-comment";
-    const deferred = wakeCandidate({ id: "deleted-comment-wake", agentId: finishingRun.agentId,
+    const queuedCommentId = `${kind}-follow-up-comment`;
+    const deferred = wakeCandidate({ id: `${kind}-comment-wake`, agentId: finishingRun.agentId,
       requestedByActorType: "user", requestedByActorId: "user-1",
-      queuedCommentIds: [deletedCommentId], deferredCommentIds: [deletedCommentId],
-      payload: { issueId: ISSUE.id, commentId: deletedCommentId },
-      deferredContextSeed: { issueId: ISSUE.id, wakeCommentIds: [deletedCommentId], wakeReason: "issue_commented" } });
+      queuedCommentIds: [queuedCommentId], deferredCommentIds: [queuedCommentId],
+      payload: { issueId: ISSUE.id, commentId: queuedCommentId },
+      deferredContextSeed: { issueId: ISSUE.id, wakeCommentIds: [queuedCommentId], wakeReason: "issue_commented" } });
     const pending = [deferred];
     const transaction = createFakeTransaction({
       findNextDeferredWake: vi.fn(async () => pending.shift() ?? null),
       findInvokableAgent: vi.fn(async () => ({ ...AGENT, id: finishingRun.agentId })),
       // The actual adapter's liveness read is a port here. The genuine managed
-      // paired case tests deletion in PostgreSQL and the runtime boundary.
-      getQueuedCommentLiveness: vi.fn(async () => ({ liveNonSelfCommentIds: [], containedSelfAuthoredComment: false })),
+      // paired cases test deletion/self-attribution in PostgreSQL and the runtime boundary.
+      getQueuedCommentLiveness: vi.fn(async () => ({ liveNonSelfCommentIds: [], containedSelfAuthoredComment })),
     });
     const host = createFakeHost();
     const recovery = createFakeRecovery();
@@ -437,11 +442,11 @@ describe("releaseIssueExecution", () => {
     expect(transaction.getQueuedCommentLiveness).toHaveBeenCalledExactlyOnceWith({
       companyId: RUN.companyId, issueId: ISSUE.id, wakeAgentId: finishingRun.agentId,
       finishingRunId: finishingRun.id, finishingRunAgentId: finishingRun.agentId,
-      queuedCommentIds: [deletedCommentId],
+      queuedCommentIds: [queuedCommentId],
     });
     expect(transaction.cancelDeferredWake).toHaveBeenCalledExactlyOnceWith({
       companyId: RUN.companyId, wakeId: deferred.id,
-      reason: "Queued messages were discarded before promotion", now,
+      reason: expectedReason, now,
     });
     expect(transaction.failDeferredWake).not.toHaveBeenCalled();
     expect(transaction.normalizeDeferredWakeCommentIds).not.toHaveBeenCalled();
@@ -978,6 +983,65 @@ describe("admitWakeBehindIssueExecution", () => {
       SCOPE,
       expect.objectContaining({ durableReceipt }),
     );
+  });
+
+  it("defers a durable dependency-ready wake behind the same issue run with its receipt and blocker context intact", async () => {
+    const durableReceipt = {
+      id: "dependency-ready-receipt",
+      requestedAt: new Date("2026-09-10T00:00:00Z"),
+    };
+    const writer = createFakeAdmissionWriter();
+    const reader = createFakeAdmissionReader();
+    const helpers = createFakeAdmissionHelpers({
+      shouldQueueFollowupForRunningIssueWake: vi.fn((input: {
+        contextSnapshot: Record<string, unknown> | null | undefined;
+        wakeCommentId: string | null;
+      }) => input.contextSnapshot?.wakeReason === "issue_blockers_resolved"),
+    });
+    const admit = createAdmitWakeBehindIssueExecution({ reader, writer, helpers });
+    const contextSnapshot = {
+      issueId: "issue-1",
+      wakeReason: "issue_blockers_resolved",
+      resolvedBlockerIssueId: "blocker-1",
+      blockerIssueIds: ["blocker-1", "blocker-2"],
+    };
+    const payload = {
+      issueId: "issue-1",
+      resolvedBlockerIssueId: "blocker-1",
+      blockerIssueIds: ["blocker-1", "blocker-2"],
+    };
+
+    const result = await admit(SCOPE, admissionInput({
+      activeExecutionRun: { ...ACTIVE_EXECUTION_RUN, status: "running" },
+      durableReceipt,
+      reason: "issue_blockers_resolved",
+      source: "automation",
+      triggerDetail: "system",
+      payload,
+      requestedByActorType: "system",
+      requestedByActorId: "issue-graph-backstop",
+      idempotencyKey: "dependency-ready-state-1",
+      contextSnapshot,
+    }));
+
+    expect(result).toEqual({ kind: "deferred" });
+    expect(helpers.shouldQueueFollowupForRunningIssueWake).toHaveBeenCalledExactlyOnceWith({
+      contextSnapshot,
+      wakeCommentId: null,
+    });
+    expect(writer.insertNewDeferredWake).toHaveBeenCalledExactlyOnceWith(SCOPE, {
+      companyId: "company-1",
+      agentId: "wake-agent",
+      source: "automation",
+      triggerDetail: "system",
+      payload: { ...payload, _paperclipWakeContext: contextSnapshot },
+      durableReceipt,
+      requestedByActorType: "system",
+      requestedByActorId: "issue-graph-backstop",
+      idempotencyKey: "dependency-ready-state-1",
+    });
+    expect(writer.coalesceIntoActiveExecutionRun).not.toHaveBeenCalled();
+    expect(writer.mergeIntoExistingDeferredWake).not.toHaveBeenCalled();
   });
 
   it("retains the durable receipt when the exact actor coalesces into the active execution", async () => {

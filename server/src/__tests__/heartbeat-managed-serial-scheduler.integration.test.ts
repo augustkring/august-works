@@ -31,6 +31,7 @@ afterAll(async () => {
 }, 30000);
 
 it("keeps two real serial Plan/Run lifecycles on one Task isolated after actual Stop and denies unowned model origins", async () => {
+  vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
   const providerRuns: string[] = [];
   await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
     schedulerMode: "serial", observeModelOriginDenials: true,

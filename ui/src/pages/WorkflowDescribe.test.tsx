@@ -65,6 +65,20 @@ it("saves only an explicit described draft and focuses the Original receipt", as
   expect(container.querySelector('a[href$="/workflows/' + workflowId + '"]')).not.toBeNull();
   expect(readPendingWorkflowReceipt(state.company, state.principal)).toBeNull();
 });
+it("does not present an enabled submit button when the workflow capability is unavailable", async () => {
+  const create = vi.spyOn(workflowAuthoringExperienceApi, "create");
+  await mount();
+  await field("name", "Review enquiries");
+  await field("outcome", "Prepare a summary");
+  client.setQueryData(queryKeys.instance.experimentalSettings, {
+    enableWorkflowsV1: false, experience_projection_v9: true, progressive_shell_v9: true,
+  });
+  await render();
+  const button = [...container.querySelectorAll("button")].find(value => value.textContent === "Save draft");
+  expect(button?.disabled).toBe(true);
+  expect(create).not.toHaveBeenCalled();
+  expect(readPendingWorkflowReceipt(state.company, state.principal)).toBeNull();
+});
 it("recovers a lost acknowledgement across reload using one POST and Original reads only", async () => {
   const create = vi.spyOn(workflowAuthoringExperienceApi, "create").mockRejectedValue(new Error("PRIVATE-RAW-ERROR"));
   const get = vi.spyOn(workflowAuthoringExperienceApi, "receipt").mockImplementation(async (_company, _user, id) => receipt(id));

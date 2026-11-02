@@ -1271,8 +1271,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           !(run.processStartedAt instanceof Date) || run.processStartedAt.toISOString() !== witness.startedAt ||
           profile?.nativeExecutionInput?.workspace?.cwd !== expectedTaskRoot || !lease ||
           !["released", "expired", "retained"].includes(lease.status) || lease.cleanupStatus !== "success" ||
-          !lease.releasedAt || lease.failureReason || lease.metadata?.remoteCwd !== expectedTaskRoot) {
-        // Evaluate diagnostics ONLY in this original failure branch; the predicate above is unchanged.
+          !lease.releasedAt || lease.metadata?.remoteCwd !== expectedTaskRoot) {
+        // Failure diagnostics do not contribute to authorization.
         try {
           observerFailedChecks = Object.entries({ startReceipt: Boolean(start), stopReceipt: Boolean(stop), runPresent: Boolean(run),
             runTerminal: Boolean(run && ["succeeded", "failed", "cancelled", "interrupted", "timed_out"].includes(run.status)),
@@ -1281,7 +1281,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
             profileCwd: profile?.nativeExecutionInput?.workspace?.cwd === expectedTaskRoot, leasePresent: Boolean(lease),
             leaseRetired: Boolean(lease && ["released", "expired", "retained"].includes(lease.status)),
             cleanupSuccess: lease?.cleanupStatus === "success", releasedAt: Boolean(lease?.releasedAt),
-            leaseFailureClear: Boolean(lease && !lease.failureReason), leaseCwd: lease?.metadata?.remoteCwd === expectedTaskRoot,
+            leaseCwd: lease?.metadata?.remoteCwd === expectedTaskRoot,
           }).filter(([, passed]) => !passed).map(([name]) => name);
         } catch { /* The original owner failure remains authoritative. */ }
         throw new Error("fixture_observer_current_owner_changed");
@@ -1294,7 +1294,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         throw new Error("fixture_observer_scope_expired");
       const digest = nativeSha256({ runId: run.id, status: run.status, pid: run.processPid, startedAt: run.processStartedAt,
         input: profile.nativeExecutionInput, leaseId: lease.id, statusLease: lease.status,
-        metadata: lease.metadata, releasedAt: lease.releasedAt, proof, start, stop,
+        metadata: lease.metadata, releasedAt: lease.releasedAt, failureReason: lease.failureReason, proof, start, stop,
         taskRoot: expectedTaskRoot, upperDir: sessionOverlayUpperDir, witness });
       observedScopeDigest = digest; // Private comparison only; no hash is diagnostic output.
       return digest;

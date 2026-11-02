@@ -66,6 +66,7 @@ describe("actual model-client kernel observation", () => {
   afterEach(() => vi.unstubAllEnvs());
   it("binds one real child socket/image/ancestry and denies wrong nonce, image and current capability", async () => {
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", "model-observer-unit-only");
+    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
     await withKernelClient(async ({ client, origin, observed, setObserved }) => {
       expect(await attestNativeModelClient(client, { ...origin, nonce: randomUUID() })).toBeNull();
       expect(await attestNativeModelClient(client, { ...origin, currentProvider: async () => ({ ...observed, imageSha256: "0".repeat(64) }) })).toBeNull();
@@ -82,6 +83,7 @@ describe("actual model-client kernel observation", () => {
   }, 30_000);
   it("rechecks expiry or Stop that commits during the asynchronous observation boundary", async () => {
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", "model-observer-unit-only");
+    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
     await withKernelClient(async ({ client, origin, observed }) => {
       for (const transition of ["expiry", "stop"] as const) {
         let armed = false, changed = false;

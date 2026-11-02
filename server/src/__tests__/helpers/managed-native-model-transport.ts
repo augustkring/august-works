@@ -148,7 +148,24 @@ export async function attestNativeModelClient(client: Socket, origin: SignedMode
       } });
     await channel.authorization();
     return channel;
-  } catch { close(); return null; }
+  } catch (error) {
+    close();
+    try {
+      if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+        const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+        const errno = typeof code === "string" &&
+          ["ENOENT", "ESRCH", "EACCES", "EPERM", "EBADF", "EIO", "ENOTDIR", "ELOOP", "EMFILE", "ENFILE", "EINVAL", "ETIMEDOUT", "EPIPE"].includes(code)
+          ? code : "OTHER";
+        const stack = error instanceof Error ? error.stack : undefined;
+        const frameClass = typeof stack === "string"
+          ? stack.split("\n").slice(1).map(line => /^\s*at (?:async )?(socketOwner|processIdentity|observation)(?:\s|\()/.exec(line)?.[1])
+            .find(frame => frame !== undefined) ?? "other"
+          : "other";
+        console.info("managed_native_model_transport_observation_failed", JSON.stringify({ errno, frameClass }));
+      }
+    } catch { /* Diagnostics cannot change the closed, unauthorized result. */ }
+    return null;
+  }
 }
 
 export type ManagedModelTunnel = { channel: ModelChannel; client: Socket; upstream: Socket; retired: boolean; tuple: string };

@@ -1877,10 +1877,10 @@
     {
       "source": "ui/src/pages/WorkflowDescribe.tsx",
       "articleId": "workflows-preview",
-      "sourceSha256": "f2cb06f632c77fbdd7c7e436961dc2fbf68e861bc51df8830f4359be377fc4c8",
+      "sourceSha256": "adb8398a293c67ea7306e4c0e1cf6190854b5aa66c81eb794132f109fed1a145",
       "articleSha256": "e1c5c2d77645ce6fd9586ca6d9185c4396adec71f7e850e059748261c062fd89",
-      "decision": "updated",
-      "rationale": "The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
+      "decision": "no_change",
+      "rationale": "The Describe page now checks current workflow availability and the selected session before saving. The existing English article already accurately describes current workflow availability and access."
     },
     {
       "source": "ui/src/pages/WorkflowReview.tsx",
@@ -1933,10 +1933,10 @@
     {
       "source": "ui/src/pages/WorkflowDescribe.tsx",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "f2cb06f632c77fbdd7c7e436961dc2fbf68e861bc51df8830f4359be377fc4c8",
+      "sourceSha256": "adb8398a293c67ea7306e4c0e1cf6190854b5aa66c81eb794132f109fed1a145",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired workflow article adds temporary coverage while preserving the existing draft, test, publish and preview guidance for this unchanged workflow source."
+      "decision": "no_change",
+      "rationale": "Beskrivelsessiden kontrollerer nu aktuelle workflows og den valgte session før lagring. Den eksisterende danske artikels indledning beskriver allerede tilgængelighed og aktuel adgang korrekt."
     },
     {
       "source": "ui/src/pages/WorkflowReview.tsx",
