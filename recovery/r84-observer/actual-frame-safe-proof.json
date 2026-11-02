@@ -1,0 +1,41 @@
+{
+  "schema": "paperclip.ci.safe-kernel-failure-proof.v1",
+  "sourceHead": "c80b6f6f2fe4380fd4e1bcd7e6c6d336aebbcbd7",
+  "runId": 41468921143,
+  "jobId": 125365450279,
+  "jobName": "ci / General tests (server (1/12))",
+  "jobHeadSha": "c80b6f6f2fe4380fd4e1bcd7e6c6d336aebbcbd7",
+  "jobConclusion": "failure",
+  "failedStep": {
+    "name": "Install root-owned Node for remote erasure mechanics tests",
+    "status": "completed",
+    "conclusion": "failure",
+    "number": 4,
+    "started_at": "2026-11-02T15:26:21Z",
+    "completed_at": "2026-11-02T15:26:21Z"
+  },
+  "kernelResult": {
+    "schema": "paperclip.fixture.native-session-handle-observer-check.v1",
+    "qualified": false,
+    "stage": "owned_holder",
+    "elapsedMs": 47,
+    "ownedChildrenStarted": 2,
+    "ownedChildrenClosed": 2,
+    "originalUidRetained": false,
+    "procDirectoryOwnerMatchesOriginalUid": null,
+    "statusEffectiveUidMatchesOriginalUid": null,
+    "directCwdEACCES": false,
+    "directFdEACCES": false,
+    "observedHolders": null,
+    "scope": "CI_kernel_mechanics_only"
+  },
+  "decodedOfficialLogSha256": "4e5b879ee51f0006f615358dc432018f95c769c42aa51908c2f2f5ba90bbc84e",
+  "decodedOfficialLogUtf8Bytes": 32130,
+  "sourceAndInstalledFixedHashesPassed": true,
+  "kernelControlHashPassed": true,
+  "rootObserverInvocationReached": false,
+  "sdkCollected": false,
+  "originalUidRetainedMeaning": "false because second ownedChild did not return; not a credential-UID mismatch finding",
+  "cause": "owned_holder exact assertion not yet exposed; no memory/inode cause inferred",
+  "source": "Authenticated GitHub workflow_job_logs decoded content + jobs API; raw log retained in tool store, local write failed before process creation"
+}
