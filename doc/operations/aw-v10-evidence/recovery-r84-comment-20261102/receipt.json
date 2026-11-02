@@ -1,0 +1,12 @@
+{
+  "status": "EXACT_FROZEN_SOURCE_BACKUP_ONLY_NOT_ACTIVATED",
+  "baseHead": "c80b6f6f2fe4380fd4e1bcd7e6c6d336aebbcbd7",
+  "candidateCommit": "1340e1c457548cc560838e77758769a9274dd448",
+  "originalPath": "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
+  "candidateSha256": "05ca60247f8c4f02491e3215a7d47b9de4912198d377419d4c633147a19acf0c",
+  "parentSha256": "0b6e61fdeae8ba2fc8f49958352246a0d11f60bbf26816be25436c4e81a8c06f",
+  "frozenPrivatePinsSha256": "e88ca276d39ea24841c279f6a7c4524c37a6cd97c521d15ce846bfd400617e0a",
+  "qualification": "Root full diff review and bounded Oxc syntax pass before shell disconnection; no DB/SDK/behavior or semantic typecheck result. Original cases retained until genuine qualification.",
+  "preservation": "Reconstructed from authenticated exact published parent and retained full diff; SHA-256 compared to original frozen candidate, then GitHub readback independently matched. No feature-branch mutation.",
+  "finalAcceptance": false
+}
