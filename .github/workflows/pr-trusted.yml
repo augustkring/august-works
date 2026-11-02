@@ -645,11 +645,61 @@ jobs:
         if: matrix.group == 'general-server-without-chat'
         env:
           ERASER_TEST_RUNNER_ENVIRONMENT: ${{ runner.environment }}
-        run: |
+        run: &managed_native_image_node |
           trusted_node_dir=/usr/local/libexec/paperclip-erasure-test-node
-          sudo install -d -o root -g root -m 0755 "$trusted_node_dir"
-          sudo install -o root -g root -m 0755 "$(command -v node)" "$trusted_node_dir/node"
+          observer_dir=/usr/local/libexec/paperclip-fixture-observers
+          # Check every existing target/ancestor BEFORE any privileged install.
+          # Missing descendants may be installed; existing different bytes are never replaced.
+          observer_check_chain() {
+            local current="$1" observer_mode
+            while [[ ! -e "$current" && ! -L "$current" ]]; do current=${current%/*}; done
+            while :; do
+              test "$(/usr/bin/readlink -f -- "$current")" = "$current"
+              test "$(/usr/bin/stat -Lc %u -- "$current")" = 0
+              observer_mode=$(/usr/bin/stat -Lc %a -- "$current")
+              (( (8#$observer_mode & 8#6022) == 0 ))
+              test "$current" = / && break
+              current=${current%/*}
+              test -n "$current" || current=/
+            done
+          }
+          for observer_target in "$trusted_node_dir/node" "$observer_dir/native-session-handles-v1" "$observer_dir/native-session-handles-v1.mjs"; do
+            if [[ -e "$observer_target" || -L "$observer_target" ]]; then test -f "$observer_target"; fi
+            observer_check_chain "$observer_target"
+          done
+          test ! -e "$trusted_node_dir/node" || /usr/bin/cmp -s "$(command -v node)" "$trusted_node_dir/node"
+          echo "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8  scripts/fixtures/native-session-handle-observer" | /usr/bin/sha256sum --check --strict
+          echo "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55  scripts/fixtures/native-session-handle-observer.mjs" | /usr/bin/sha256sum --check --strict
+          for observer_name in native-session-handles-v1 native-session-handles-v1.mjs; do
+            observer_expected=9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8
+            [[ "$observer_name" != *.mjs ]] || observer_expected=7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55
+            if [[ -e "$observer_dir/$observer_name" ]]; then
+              echo "$observer_expected  $observer_dir/$observer_name" | /usr/bin/sha256sum --check --strict
+            fi
+          done
+          for observer_directory in "$trusted_node_dir" "$observer_dir"; do
+            if [[ ! -e "$observer_directory" ]]; then sudo install -d -o root -g root -m 0755 "$observer_directory"; fi
+          done
+          if [[ ! -e "$trusted_node_dir/node" ]]; then
+            sudo install -o root -g root -m 0755 "$(command -v node)" "$trusted_node_dir/node"
+          fi
+          if [[ ! -e "$observer_dir/native-session-handles-v1" ]]; then
+            sudo install -o root -g root -m 0555 scripts/fixtures/native-session-handle-observer "$observer_dir/native-session-handles-v1"
+          fi
+          if [[ ! -e "$observer_dir/native-session-handles-v1.mjs" ]]; then
+            sudo install -o root -g root -m 0444 scripts/fixtures/native-session-handle-observer.mjs "$observer_dir/native-session-handles-v1.mjs"
+          fi
+          /usr/bin/cmp -s "$(command -v node)" "$trusted_node_dir/node"
+          echo "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8  $observer_dir/native-session-handles-v1" | /usr/bin/sha256sum --check --strict
+          echo "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55  $observer_dir/native-session-handles-v1.mjs" | /usr/bin/sha256sum --check --strict
+          for observer_target in "$trusted_node_dir/node" "$observer_dir/native-session-handles-v1" "$observer_dir/native-session-handles-v1.mjs"; do
+            observer_check_chain "$observer_target"
+          done
+          # Run ONLY the finite unprivileged kernel control; the observer itself cannot signal/write.
+          echo "b8ab28e009c8e014220c9208efd9dae1551984bbe16adece0d21f966691280b1  scripts/fixtures/native-session-handle-observer-check.mjs" | /usr/bin/sha256sum --check --strict
+          /usr/bin/timeout --kill-after=2s 12s /usr/bin/env -i PATH=/usr/bin:/bin "$trusted_node_dir/node" --no-addons --disable-proto=throw scripts/fixtures/native-session-handle-observer-check.mjs
           echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
+          echo "PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER=1" >> "$GITHUB_ENV"
           # The disposable GitHub image exposes this root-owned PATH directory
           # as 0777. Lock that known image directory before workspace installs;
           # self-hosted images retain their operator-managed permissions.
@@ -713,7 +763,7 @@ jobs:
 
       - name: Prepare managed Native fixture image bytes
         if: matrix.group == 'general-server-without-chat'
-        run: |
+        run: &managed_native_image_bytes |
           artifact_dir="$RUNNER_TEMP/paperclip-native-provider-pack-artifact"
           provider_pack="$RUNNER_TEMP/paperclip-native-provider-pack"
           (cd "$artifact_dir" && sha256sum --check provider-pack.sha256)
@@ -1308,7 +1358,7 @@ jobs:
 
   e2e_shards:
     name: e2e shard (${{ matrix.shard_label }})
-    needs: [gate]
+    needs: [gate, typecheck_release_registry]
     if: ${{ needs.gate.outputs.full_ci == 'true' }}
     runs-on: ${{ needs.gate.outputs.runner }}
     timeout-minutes: 30
@@ -1421,14 +1471,32 @@ jobs:
             --shard-index ${{ matrix.shard_index }} --shard-count ${{ matrix.shard_count }})"
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
 
+      # Reuse the same source-bound build and exact checks as the server lane.
+      - name: Install selected managed connection image Node
+        if: contains(steps.e2e_suites.outputs.specs, 'tests/e2e/connection-intents.spec.ts')
+        env:
+          ERASER_TEST_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: *managed_native_image_node
+
+      - name: Download selected managed connection provider pack
+        if: contains(steps.e2e_suites.outputs.specs, 'tests/e2e/connection-intents.spec.ts')
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: managed-native-provider-pack-${{ github.run_id }}
+          path: ${{ runner.temp }}/paperclip-native-provider-pack-artifact
+
+      - name: Prepare selected managed connection image bytes
+        if: contains(steps.e2e_suites.outputs.specs, 'tests/e2e/connection-intents.spec.ts')
+        run: *managed_native_image_bytes
+
       - name: Set up pinned optional numerical interpreter
         if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12.14'
 
-      - name: Install selected native numerical sandbox
-        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
+      - name: Install selected native sandbox
+        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'tests/e2e/connection-intents.spec.ts')
         run: bash scripts/ci-install-native-sandbox.sh
 
       - name: Install selected hash-locked numerical runtimes

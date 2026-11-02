@@ -959,7 +959,7 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     let query:BusinessMetricQuery|null=null,receivedMetricResult=false;
     let startupFacts:unknown=null;
     const result=await runManagedNativeConversationFrame({db,root,opencodeBinary:binary,
-      configureHeartbeat:async context=>{
+      prepareNativeRuntimeContext:async context=>{
         await instanceSettingsService(db).updateExperimental({analytical_lineage_v8:true,business_metrics_v8:true,
           management_reviews_v8:true,management_chat_tools_v8:true,ai_use_cases_v7:true,governance_evidence_v7:true});
         if(!context.actor.userId)throw new Error("metric_fixture_current_human_missing");
@@ -972,7 +972,6 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
           {manualInputActor:context.actor,privacyActor:context.actor});
         query={metricId:created.metric.id,versionId:created.version.id,from:new Date(Date.now()-86400000).toISOString(),
           until:new Date(Date.now()+3600000).toISOString(),dimensions:[],maxRows:100};
-        return {};
       },
       afterRunSettledBeforeTeardown:async facts=>{
         if(!facts.run||facts.run.status==="succeeded")return;

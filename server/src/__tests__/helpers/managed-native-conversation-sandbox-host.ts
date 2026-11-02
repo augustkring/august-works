@@ -1205,6 +1205,135 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       return { holders, complete: true };
     } catch (error) { return failed("proc_list_or_outer", error); }
   };
+  // Explicit CI prerequisite only; unconfigured local observation is unchanged.
+  const observeNativeSessionHandles = async (sourceTarget: string, upperTarget: string, deadlineMs: number) => {
+    if (process.env.PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER !== "1")
+      return nativeSessionHandleFacts(sourceTarget, upperTarget, deadlineMs);
+    const unknown = () => ({ holders: null, complete: false });
+    const launcher = "/usr/local/libexec/paperclip-fixture-observers/native-session-handles-v1";
+    const scanner = `${launcher}.mjs`;
+    const fixedNode = "/usr/local/libexec/paperclip-erasure-test-node/node";
+    const startedAt = Date.now();
+    const witness = nativeRunnerClosureWitness;
+    const exactScope = async () => {
+      if (!witness || nativeRunnerClosureWitness !== witness || !expectedRunId || !expectedTaskRoot ||
+          witness.runId !== expectedRunId || witness.taskRoot !== expectedTaskRoot ||
+          !["stop_observed", "gone_verified"].includes(witness.phase) || !witness.stopReceiptMatched ||
+          !witness.identityMatched || !witness.runPidStartedAtMatched || !witness.pid ||
+          activeHostExecStreams !== 0 || Date.now() >= deadlineMs || !sessionOverlayUpperDir ||
+          !/^[a-f0-9]{64}$/.test(witness.sessionDigest)) throw new Error("fixture_observer_scope_changed");
+      const expectedSource = join(expectedTaskRoot, ".paperclip-runtime", "paperclip-runner", "sessions", witness.sessionDigest);
+      if (sourceTarget !== expectedSource || upperTarget !== fixtureOverlayPath(expectedSource))
+        throw new Error("fixture_observer_roots_changed");
+      const start = modelBrokerSessionReceipts.find(receipt => receipt.phase === "start" &&
+        receipt.sessionKey === witness.sessionKey && receipt.nativeSessionIdDigest === witness.sessionDigest &&
+        receipt.startBindingDigest === witness.startBindingDigest);
+      const stop = modelBrokerSessionReceipts.find(receipt => receipt.phase === "stop" &&
+        receipt.sessionKey === witness.sessionKey && receipt.nativeSessionIdDigest === witness.sessionDigest &&
+        receipt.capabilityHash === witness.expectedCapabilityHash && receipt.sessionDeadlineAt === witness.sessionDeadlineAt);
+      const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.id, expectedRunId))).limit(1);
+      const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
+        eq(environmentLeases.id, witness.leaseId), eq(environmentLeases.heartbeatRunId, expectedRunId),
+        eq(environmentLeases.environmentId, environment.id))).limit(1);
+      const profile = run?.runnerProfileJson as Record<string, any> | null;
+      if (!start || !stop || !run || !["succeeded", "failed", "cancelled", "interrupted", "timed_out"].includes(run.status) ||
+          run.nativeProcessCleanupPending || run.processPid !== witness.pid ||
+          !(run.processStartedAt instanceof Date) || run.processStartedAt.toISOString() !== witness.startedAt ||
+          profile?.nativeExecutionInput?.workspace?.cwd !== expectedTaskRoot || !lease ||
+          !["released", "expired", "retained"].includes(lease.status) || lease.cleanupStatus !== "success" ||
+          !lease.releasedAt || lease.failureReason || lease.metadata?.remoteCwd !== expectedTaskRoot)
+        throw new Error("fixture_observer_current_owner_changed");
+      const proof = await verifyNativeCleanupRuntimeState(db, { companyId, runId: expectedRunId, leaseId: witness.leaseId },
+        lease.metadata?.remoteExecutionTermination);
+      if (Date.now() >= deadlineMs || nativeRunnerClosureWitness !== witness || activeHostExecStreams !== 0)
+        throw new Error("fixture_observer_scope_expired");
+      return nativeSha256({ runId: run.id, status: run.status, pid: run.processPid, startedAt: run.processStartedAt,
+        input: profile.nativeExecutionInput, leaseId: lease.id, statusLease: lease.status,
+        metadata: lease.metadata, releasedAt: lease.releasedAt, proof, start, stop,
+        taskRoot: expectedTaskRoot, upperDir: sessionOverlayUpperDir, witness });
+    };
+    try {
+      const before = await exactScope(); // Authorization BEFORE any privileged operation.
+      if (!witness || typeof process.getuid !== "function" || process.getuid() <= 0 || fixtureImageNode !== fixedNode)
+        return unknown();
+      const qualified = (file: string, expectedHash?: string) => {
+        const resolved = realpathSync(file), sourceEntry = lstatSync(file), metadata = lstatSync(resolved);
+        if (sourceEntry.uid !== 0 || (!sourceEntry.isSymbolicLink() && (sourceEntry.mode & 0o22) !== 0))
+          throw new Error("fixture_observer_system_alias_unqualified");
+        for (let parent = dirname(file); ; parent = dirname(parent)) {
+          const entry = lstatSync(parent);
+          if (entry.uid !== 0 || (!entry.isSymbolicLink() && (entry.mode & 0o6022) !== 0))
+            throw new Error("fixture_observer_source_ancestor_unqualified");
+          if (parent === "/") break;
+        }
+        const forbiddenMode = file === "/usr/bin/sudo" ? 0o2022 : 0o6022;
+        if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & forbiddenMode) !== 0 || metadata.uid !== 0 ||
+            (file !== scanner && (metadata.mode & 0o111) === 0)) throw new Error("fixture_observer_file_unqualified");
+        if ((file === launcher || file === scanner || file === fixedNode) && resolved !== file)
+          throw new Error("fixture_observer_file_alias");
+        for (let current = resolved; ; current = dirname(current)) {
+          const entry = lstatSync(current);
+          if (entry.isSymbolicLink() || entry.uid !== 0 || (entry.mode & (current === resolved ? forbiddenMode : 0o6022)) !== 0)
+            throw new Error("fixture_observer_ancestor_unqualified");
+          if (current === "/") break;
+        }
+        if (expectedHash && (metadata.size > 32 * 1024 || createHash("sha256").update(readFileSync(file)).digest("hex") !== expectedHash))
+          throw new Error("fixture_observer_hash_mismatch");
+      };
+      qualified(launcher, "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8");
+      qualified(scanner, "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55");
+      for (const executable of [fixedNode, "/usr/bin/sudo", "/usr/bin/env", "/usr/bin/id", "/bin/sh"]) qualified(executable);
+      const request = JSON.stringify({ schema: "paperclip.fixture.native-session-handles.v1", taskRoot: expectedTaskRoot,
+        sessionDigest: witness.sessionDigest, upperDir: sessionOverlayUpperDir, observerUid: process.getuid(), deadlineAt: deadlineMs });
+      if (Buffer.byteLength(request) > 4096 || Date.now() >= deadlineMs) return unknown();
+      const result = spawnSync("/usr/bin/sudo", ["-n", "--", launcher], { input: request, encoding: "utf8", cwd: "/",
+        env: { PATH: "/usr/bin:/bin" }, timeout: Math.max(1, deadlineMs - Date.now()), maxBuffer: 8192 });
+      if (result.error || result.signal || result.status !== 0 || result.stderr !== "" ||
+          typeof result.stdout !== "string" || Buffer.byteLength(result.stdout) > 8192 || Date.now() >= deadlineMs) return unknown();
+      const response: unknown = JSON.parse(result.stdout);
+      if (!response || typeof response !== "object" || Array.isArray(response)) return unknown();
+      const value = response as Record<string, unknown>;
+      if (value.complete === false && value.holders === null &&
+          Object.keys(value).sort().join(",") === "complete,failure,holders" && value.failure &&
+          typeof value.failure === "object" && !Array.isArray(value.failure)) {
+        const failure = value.failure as Record<string, unknown>;
+        const allowedStages = ["initial_deadline", "uid_api_unavailable", "process_deadline", "process_directory_stat",
+          "process_state_read", "cwd_readlink", "fd_directory_list", "fd_deadline", "fd_readlink", "proc_list_or_outer"];
+        const counts = ["elapsedMs", "numericPidsScanned", "sameUidProcesses", "nonZombieProcesses", "fdEntriesScanned"];
+        if (Object.keys(failure).sort().join(",") === "deadlineRemainingMs,elapsedMs,errno,fdEntriesScanned,nonZombieProcesses,numericPidsScanned,sameUidProcesses,stage" &&
+            typeof failure.stage === "string" && allowedStages.includes(failure.stage) &&
+            (failure.errno === null || typeof failure.errno === "string" &&
+              ["ENOENT", "ESRCH", "EACCES", "EPERM", "EBADF", "EIO", "ENOTDIR", "ELOOP", "EMFILE", "ENFILE", "EINVAL", "OTHER"].includes(failure.errno)) &&
+            counts.every(key => Number.isSafeInteger(failure[key]) && (failure[key] as number) >= 0) &&
+            Number.isSafeInteger(failure.deadlineRemainingMs)) {
+          const fact = { stage: failure.stage, errno: failure.errno as string | null, elapsedMs: failure.elapsedMs as number,
+            deadlineRemainingMs: failure.deadlineRemainingMs as number, numericPidsScanned: failure.numericPidsScanned as number,
+            sameUidProcesses: failure.sameUidProcesses as number, nonZombieProcesses: failure.nonZombieProcesses as number,
+            fdEntriesScanned: failure.fdEntriesScanned as number };
+          nativeSessionHandleScanFailures.push(fact);
+          if (nativeSessionHandleScanFailures.length > 8) nativeSessionHandleScanFailures.shift();
+          if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+            console.info("conversation_software_host_fd_scan_failed", JSON.stringify(fact));
+        }
+        return unknown();
+      }
+      if (value.complete !== true || !Number.isSafeInteger(value.holders) || (value.holders as number) < 0 ||
+          Object.keys(value).sort().join(",") !== "complete,holders") return unknown();
+      // Blocking observation never replaces the original AFTER-observation currentness check.
+      if (await exactScope() !== before || Date.now() >= deadlineMs) return unknown();
+      return { holders: value.holders as number, complete: true };
+    } catch {
+      // No subprocess/error/path contents are diagnostic output.
+      const now = Date.now();
+      const fact = { stage: "privileged_observer_unknown", errno: null, elapsedMs: Math.max(0, now - startedAt),
+        deadlineRemainingMs: Number.isFinite(deadlineMs) ? Math.trunc(deadlineMs - now) : null,
+        numericPidsScanned: 0, sameUidProcesses: 0, nonZombieProcesses: 0, fdEntriesScanned: 0 };
+      nativeSessionHandleScanFailures.push(fact);
+      if (nativeSessionHandleScanFailures.length > 8) nativeSessionHandleScanFailures.shift();
+      return unknown();
+    }
+  };
   const attachActualNativeSessionBacking = async (command: Record<string, any>, deadlineMs: number) => {
     const descriptor = command.nativeSessionErasure as Record<string, any> | undefined;
     if (!descriptor || typeof descriptor.sessionKey !== "string" || typeof descriptor.sessionDigest !== "string" ||
@@ -1254,7 +1383,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       try { lstatSync(targetAtUpper); } catch (error) { targetAbsent = (error as NodeJS.ErrnoException).code === "ENOENT"; }
       if (!targetAbsent) throw new Error("conversation_native_session_replay_target_present");
       const groups = nativeGroupSessionLiveCounts(previous.processGroupId, previous.processSessionId, deadlineMs);
-      const handles = nativeSessionHandleFacts(sourceTarget, targetAtUpper, deadlineMs);
+      const handles = await observeNativeSessionHandles(sourceTarget, targetAtUpper, deadlineMs);
       if (activeHostExecStreams !== 0 || !nativeProcessGone(previous.processPid, deadlineMs) ||
           groups?.groupLive !== 0 || groups.sessionLive !== 0 || !handles.complete || handles.holders !== 0)
         throw new Error("conversation_native_session_replay_process_closure_unverified");
@@ -1296,7 +1425,14 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     } catch { identityMarkerMatches = false; }
     const groupSessionLive = processWitness.processGroupId !== null && processWitness.processSessionId !== null
       ? nativeGroupSessionLiveCounts(processWitness.processGroupId, processWitness.processSessionId, deadlineMs) : null;
-    const handleFacts = nativeSessionHandleFacts(sourceTarget, targetAtUpper, deadlineMs);
+    if (process.env.PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER === "1") {
+      const [beforeObserverRun] = await db.select({ processPid: heartbeatRuns.processPid, processStartedAt: heartbeatRuns.processStartedAt })
+        .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, processWitness.runId))).limit(1);
+      if (beforeObserverRun?.processPid !== processWitness.pid || !(beforeObserverRun?.processStartedAt instanceof Date) ||
+          beforeObserverRun.processStartedAt.toISOString() !== processWitness.startedAt)
+        throw new Error("conversation_native_session_process_closure_unverified");
+    }
+    const handleFacts = await observeNativeSessionHandles(sourceTarget, targetAtUpper, deadlineMs);
     const [boundRun] = expectedRunId ? await db.select({ status: heartbeatRuns.status, processPid: heartbeatRuns.processPid,
       processStartedAt: heartbeatRuns.processStartedAt }).from(heartbeatRuns)
       .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, expectedRunId))).limit(1) : [];
@@ -3385,7 +3521,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       const sourceRoot = join(expectedTaskRoot, ".paperclip-runtime", "paperclip-runner", "sessions", witness.sessionDigest);
       const upperRoot = fixtureOverlayPath(sourceRoot);
       const groups = nativeGroupSessionLiveCounts(witness.processGroupId!, witness.processSessionId!, deadlineMs);
-      const handles = nativeSessionHandleFacts(sourceRoot, upperRoot, deadlineMs);
+      const handles = await observeNativeSessionHandles(sourceRoot, upperRoot, deadlineMs);
       if (!nativeProcessGone(witness.pid!, deadlineMs) || groups?.groupLive !== 0 || groups.sessionLive !== 0 ||
           !handles.complete || handles.holders !== 0 || activeHostExecStreams !== 0)
         throw new Error("scheduler_previous_run_process_closure_unverified");
