@@ -59,6 +59,17 @@ function observeSocketOwner(input, trustedUid, io = { closeSync,openSync,readFil
     return {complete:false,stage,errno:error?.code==null?null:errnos.has(error.code)?error.code:'OTHER'};
   }
 }
+// VmHWM belongs to this Linux process image; RUSAGE maxRSS can retain a pre-exec image's peak.
+function readOwnImagePeakRssBytes(io = { readFileSync }) {
+  const status=io.readFileSync('/proc/self/status','utf8');
+  if(typeof status!=='string'||Buffer.byteLength(status)>16*1024)return null;
+  const fields=status.match(/^VmHWM:.*$/gm)??[];
+  if(fields.length!==1)return null;
+  const row=/^VmHWM:[ \t]+([1-9][0-9]*)[ \t]+kB$/.exec(fields[0]);
+  if(!row)return null;
+  const kib=Number(row[1]),bytes=kib*1024;
+  return Number.isSafeInteger(kib)&&kib>0&&Number.isSafeInteger(bytes)&&bytes>0?bytes:null;
+}
 let bytes=0,chunks=[];
 process.stdin.on('data',chunk=>{bytes+=chunk.length;if(bytes>4096){process.exitCode=126;process.stdin.destroy();return;}chunks.push(chunk);});
 process.stdin.on('error',()=>{process.exitCode=126;});
@@ -70,7 +81,7 @@ process.stdin.on('end',()=>{
     const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if(process.argv.length!==2||process.getuid?.()!==0||Date.now()>=rootDeadlineAt||!validInput(input,uid,Date.now())){process.exitCode=126;return;}
     const observed=observeSocketOwner({...input,deadlineAt:Math.min(input.deadlineAt,rootDeadlineAt)},uid);
-    const observerMaxRssBytes=process.resourceUsage().maxRSS*1024;
+    const observerMaxRssBytes=readOwnImagePeakRssBytes();
     if(!Number.isSafeInteger(observerMaxRssBytes)||observerMaxRssBytes<=0){process.exitCode=126;return;}
     const bounded=observerMaxRssBytes<=observerRssLimitBytes?observed:{complete:false,stage:'memory_bound',errno:null};
     const result=JSON.stringify({...bounded,observerMaxRssBytes});if(Buffer.byteLength(result)>8192){process.exitCode=126;return;}
