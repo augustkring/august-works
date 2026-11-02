@@ -565,6 +565,11 @@ export async function createApp(
     decisionServiceOptions: DecisionServiceOptions;
     /** Server-owned operator qualification registry; absent profiles fail closed. */
     decisionShadow?: { sourceSha: string; profiles: readonly import("./services/jev-skill-suggestions.js").JevSkillSuggestionProfile[] };
+    /** Reuse an already registered server owner; preserves its current broker enforcement and transaction factory. */
+    assignedToolGateway?: ReturnType<typeof createToolGatewayService>;
+    /** Existing service HTTP seams for composed software fixtures. Never request- or environment-controlled. */
+    toolHttpTransport?: Pick<NonNullable<Parameters<typeof toolAccessService>[1]>,
+      "remoteHttpRequest" | "remoteHttpEndpointLookup">;
     /** Server-owned heartbeat instance for composed server fixtures. Never request-controlled. */
     heartbeat?: ReturnType<typeof heartbeatService>;
     betterAuthHandler?: express.RequestHandler;
@@ -582,6 +587,10 @@ export async function createApp(
     bundledPluginCatalogRoot?: string;
   },
 ) {
+  if (opts.assignedToolGateway && getAssignedMcpGateway(db) !== opts.assignedToolGateway)
+    throw new Error("Composed app requires its already registered Tool Gateway owner");
+  if (opts.assignedToolGateway && opts.saasPlatform?.runtime)
+    throw new Error("Composed app cannot replace an existing Tool Gateway runtime authority");
   const scopedStorage = opts.saasPlatform?.storage ?? opts.storageService;
   if (opts.deploymentProfile === "saas" && (
     opts.deploymentMode !== "authenticated" || opts.deploymentExposure !== "public" || !opts.publicAppOrigins?.length
@@ -1034,12 +1043,14 @@ export async function createApp(
     db,
   });
   const gatewayOAuthAccess = toolAccessService(db, {
+    ...opts.toolHttpTransport,
     deploymentMode: opts.deploymentMode,
     deploymentExposure: opts.deploymentExposure,
     trustedLocalStdioRuntimeHost,
   });
   const toolActionDeliveries = toolActionDeliveryService(db, connectionIntentHeartbeat);
-  const toolGateway = createToolGatewayService(db, {
+  const toolGateway = opts.assignedToolGateway ?? createToolGatewayService(db, {
+    remoteHttpRequest: opts.toolHttpTransport?.remoteHttpRequest,
     qualificationBrokerOrigin: opts.saasPlatform?.origins.primaryAppOrigin,
     operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
     supportCaseDataPolicy: readSupportCaseDataPolicy(process.env),
@@ -1071,7 +1082,8 @@ export async function createApp(
   }));
   api.use(slackToolRoutes(db, opts.authPublicBaseUrl));
   app.locals.toolGateway = toolGateway;
-  registerAssignedMcpGateway(db, toolGateway, (scopedDb) => createToolGatewayService(scopedDb, {
+  if (!opts.assignedToolGateway) registerAssignedMcpGateway(db, toolGateway, (scopedDb) => createToolGatewayService(scopedDb, {
+    remoteHttpRequest: opts.toolHttpTransport?.remoteHttpRequest,
     // Runtime authorization re-resolves broker grants inside its current
     // transaction. Keep the same deployment/policy posture while binding the
     // metadata-only resolver to that transaction; provider dispatch continues
@@ -1087,6 +1099,7 @@ export async function createApp(
   api.use(jevDecisionRoutes(db, { sourceSha: opts.decisionShadow?.sourceSha, profiles: opts.decisionShadow?.profiles }));
   api.use(
     toolAccessRoutes(db, {
+      ...opts.toolHttpTransport,
       deploymentMode: opts.deploymentMode,
       deploymentExposure: opts.deploymentExposure,
       authPublicBaseUrl: opts.authPublicBaseUrl,

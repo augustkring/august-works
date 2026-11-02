@@ -1,16 +1,20 @@
+import { assertManagedFixtureOpenCodeImage } from "./managed-native-opencode-fixture-pin.js";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createServer as createHttpServer, request as httpRequest } from "node:http";
-import { createConnection, type Socket } from "node:net";
+import { createConnection, Socket } from "node:net";
+import { createManagedModelTunnelAssociations, type ModelChannel, type ManagedModelTunnel } from "./managed-native-model-transport.js";
 import { createServer as createHttpsServer } from "node:https";
+import { connect as connectTls } from "node:tls";
 import { execFile, execFileSync } from "node:child_process";
 import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
-  heartbeatRuns, issueComments, issueThreadInteractions, issues,
+  heartbeatRuns, issueComments, issueThreadInteractions, issues, toolInvocations,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -35,12 +39,12 @@ import { mcpGatewayProtocolRoutes } from "../../routes/tool-gateway.js";
 import { registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
 
-const OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
 const sourceSha = "a".repeat(40);
 
 import { makeConversationFixtureTreeWritable } from "./managed-native-conversation-frame.js";
 import type { runManagedNativeConversationFrame } from "./managed-native-conversation-frame.js";
 import type { NativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import { nativeSha256 } from "../../services/native-runtime/canonical.js";
 import { registerNativeDraftGateway } from "../../services/orchestration/native-draft-runtime.js";
 
 type FrameInput = Parameters<typeof runManagedNativeConversationFrame>[0];
@@ -49,25 +53,55 @@ type FrameInput = Parameters<typeof runManagedNativeConversationFrame>[0];
  * Fake CLI/provider HTTP effects remain software-only, not physical evidence. */
 export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInput,
   "providerReply" | "createConversationApp" | "driveConversation" | "configureHeartbeat"> & {
-  providerReply: (facts: { body: Record<string, unknown>; callIndex: number; execution: NativeExecutionInput }) => {
+  /** Explicit opt-in. The default retains the original one-Run Host. */
+  schedulerMode?: "serial";
+  providerReply: (facts: { body: Record<string, unknown>; callIndex: number; execution: NativeExecutionInput;
+    runId: string; issueId: string | null }) => {
     stop_reason: "tool_use" | "end_turn"; content: Array<Record<string, unknown>>;
   };
+  /** Observe only after the fixture Host has authenticated the current provider and signed model request. */
+  beforeManagedModelRequest?: (facts: { body: unknown; runId: string; issueId: string | null }) => Promise<void>;
+  /** Observe a completed result from the real assigned-MCP owner; replay calls the same bound owner with captured inputs. */
+  afterSuccessfulAssignedToolResult?: (facts: {
+    call: Parameters<ReturnType<typeof createToolGatewayService>["executeTool"]>[0];
+    result: Awaited<ReturnType<ReturnType<typeof createToolGatewayService>["executeTool"]>>;
+    replay: () => ReturnType<ReturnType<typeof createToolGatewayService>["executeTool"]>;
+  }) => Promise<void>;
   configureHeartbeat?: FrameInput["configureHeartbeat"];
   driveScheduler: (context: { db: ReturnType<typeof createDb>; actor: AuthorizationActor; companyId: string;
     agentId: string; gateway: ReturnType<typeof workerModelGateway>; heartbeat: ReturnType<typeof heartbeatService>;
     facts: () => { providerCallCount: number; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
+      sandboxRuntimeFacts: Record<string, unknown> | null };
+    factsForRun: (runId: string) => { providerCallCount: number; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
       sandboxRuntimeFacts: Record<string, unknown> | null } }) => Promise<T>;
 }): Promise<T> {
   if (input.sandboxRelay === false) throw new Error("scheduler_fixture_requires_managed_sandbox");
+  if (input.schedulerMode === "serial" && input.configureHeartbeat)
+    throw new Error("scheduler_serial_fixture_requires_owned_host");
+  if (input.observeModelOriginDenials && input.schedulerMode !== "serial")
+    throw new Error("scheduler_origin_denials_require_serial_fixture");
+  const verifiedModelRun = new AsyncLocalStorage<string>();
+  const originHttpDenials = new Map<string, { directDenied: boolean; unownedConnectDenied: boolean; noAdditionalEffects: boolean }>();
+  let authenticatedModelRouteDenials = 0;
+  // This scope is entered only around the real Host model methods below, after
+  // their provider attachment/JWT checks and before the gateway's own source
+  // and admission checks.
+  const authenticatedHostModelRequest = new AsyncLocalStorage<boolean>();
   input = { ...input, sandboxRelay: true,
     configureHeartbeat: input.configureHeartbeat ?? (async context => {
-      const { configureManagedConversationSandboxHost } = await import("./managed-native-conversation-sandbox-host.js");
+      const { configureManagedConversationSandboxHost, configureManagedSerialSchedulerSandboxHost } =
+        await import("./managed-native-conversation-sandbox-host.js");
+      if (input.schedulerMode === "serial") return configureManagedSerialSchedulerSandboxHost({ ...context, root: context.runHome,
+        withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work) });
       return configureManagedConversationSandboxHost({ ...context, root: context.runHome, ordinaryWorker: true });
     }) };
   const { db } = input;
-  const opencodeBytes = await import("node:fs/promises").then(fs => fs.readFile(input.opencodeBinary));
-  if (createHash("sha256").update(opencodeBytes).digest("hex") !== OPENCODE_SHA256)
-    throw new Error("conversation_fixture_opencode_pin_mismatch");
+  try { await assertManagedFixtureOpenCodeImage(input.opencodeBinary); }
+  catch (error) {
+    if (error instanceof Error && error.message === "fixture_opencode_image_pin_changed")
+      throw new Error("conversation_fixture_opencode_pin_mismatch");
+    throw error;
+  }
   const runHome = await mkdtemp(join(input.root, "conversation-run-"));
   await chmod(runHome, 0o700);
   await instanceSettingsService(db).getExperimental();
@@ -148,6 +182,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     qualificationEvidenceRef: "https://protected.test.invalid/qualification/managed-conversation-fixture.json",
     qualificationArtifactSha256: "c".repeat(64),
   });
+  const executionsByRun = new Map<string, { execution: NativeExecutionInput; issueId: string | null }>();
   let activeToken: string | null = null;
   let activeExecution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput | null = null;
   let activeRunId: string | null = null;
@@ -159,13 +194,18 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   const brokerRequestFacts: Array<{ requestHash: string; status: number; code?: string; stage?: string;
     sqlState?: string; constraint?: string; errorName?: string; errorStatus?: number;
     errorCode?: string; serviceFrames?: string[] }> = [];
-  const providerCalls: Array<{ body: Record<string, unknown>; keyMatches: boolean }> = [];
+  const providerCalls: Array<{ body: Record<string, unknown>; keyMatches: boolean; runId: string }> = [];
   const reservationForRun = async (runId: string) => db.select({ reservation: orchestrationModelReservations })
     .from(orchestrationModelReservations).innerJoin(orchestrationWorkerAttempts,
       and(eq(orchestrationWorkerAttempts.companyId, orchestrationModelReservations.companyId),
         eq(orchestrationWorkerAttempts.id, orchestrationModelReservations.workerAttemptId)))
     .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, runId)))
     .orderBy(desc(orchestrationModelReservations.createdAt)).limit(1).then(rows => rows[0]?.reservation);
+  const reservationIdsForRun = (runId: string) => db.select({ id: orchestrationModelReservations.id })
+    .from(orchestrationModelReservations).innerJoin(orchestrationWorkerAttempts,
+      and(eq(orchestrationWorkerAttempts.companyId, orchestrationModelReservations.companyId),
+        eq(orchestrationWorkerAttempts.id, orchestrationModelReservations.workerAttemptId)))
+    .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, runId)));
   const gateway = workerModelGateway(db, { profiles: [profile], sourceSha,
     protectedEvidenceOrigin: "https://protected.test.invalid", fetch: async (url, init) => {
       if (String(url) !== "https://api.anthropic.com/v1/messages") {
@@ -175,8 +215,13 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const headers = new Headers(init.headers);
       const wireBody = String(init.body);
       const body = JSON.parse(wireBody) as Record<string, unknown>;
-      providerCalls.push({ body, keyMatches: headers.get("x-api-key") === apiKey });
-      const execution = activeExecution;
+      const scopedRunId = verifiedModelRun.getStore();
+      const runId = input.schedulerMode === "serial" ? scopedRunId : activeRunId;
+      const scoped = runId ? executionsByRun.get(runId) : undefined;
+      const execution = input.schedulerMode === "serial" ? scoped?.execution : activeExecution;
+      const issueId = input.schedulerMode === "serial" ? scoped?.issueId : activeIssueId;
+      if (!runId) throw new Error("scheduler_fixture_verified_model_run_missing");
+      providerCalls.push({ body, keyMatches: headers.get("x-api-key") === apiKey, runId });
       const contract = execution?.completionContract.contract;
       if (!execution || !contract) {
         providerStubFailure ??= { stage: "execution_contract", code: "completion_contract_missing" };
@@ -190,17 +235,35 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       // and yields to the next Human message; it does not need a Worker
       // paperclip_finish result.
       const usage = { input_tokens: 100, output_tokens: 32 };
-      const reply=input.providerReply({body,callIndex:providerCalls.length,execution})??{
+      const reply=input.providerReply({body,callIndex: input.schedulerMode === "serial"
+        ? providerCalls.filter(call => call.runId === runId).length : providerCalls.length,execution,runId,issueId:issueId ?? null})??{
         stop_reason:"end_turn",content:[{type:"text",text:"I’ve received your message and am ready to continue."}]};
       const responseBody = JSON.stringify({ id: `msg_conversation_${providerCalls.length}`, type: "message", role: "assistant", model,
         ...reply, usage });
       const response = new Response(responseBody,
       { status: 200, headers: { "content-type": "application/json" } });
-      if (input.beforeProviderResponse && activeRunId && activeIssueId) {
+      if (input.observeModelOriginDenials && runId && !originHttpDenials.has(runId)) {
+        const before = { calls: providerCalls.length, injections: appliedModelProfileInjections.length,
+          denied: authenticatedModelRouteDenials,
+          reservations: await reservationIdsForRun(runId),
+          tools: await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId), eq(toolInvocations.runId, runId))) };
+        const directStatus = await probeUnownedModelHttp(false, body);
+        const connectStatus = await probeUnownedModelHttp(true, body);
+        const after = await reservationIdsForRun(runId);
+        const toolsAfter = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId), eq(toolInvocations.runId, runId)));
+        const noEffects = providerCalls.length === before.calls && appliedModelProfileInjections.length === before.injections &&
+          authenticatedModelRouteDenials === before.denied + 2 &&
+          JSON.stringify(toolsAfter.map(row => row.id).sort()) === JSON.stringify(before.tools.map(row => row.id).sort()) &&
+          JSON.stringify(after.map(row => row.id).sort()) === JSON.stringify(before.reservations.map(row => row.id).sort());
+        if (directStatus < 400 || connectStatus < 400 || !noEffects)
+          throw new Error("scheduler_actual_origin_negative_effect_or_authentication_mismatch");
+        originHttpDenials.set(runId, { directDenied: true, unownedConnectDenied: true, noAdditionalEffects: true });
+      }
+      if (input.beforeProviderResponse && runId && issueId) {
         providerHookInvoked = true;
-        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, activeRunId)).limit(1);
-        const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, activeRunId)).limit(1);
-        const reservation = await reservationForRun(activeRunId);
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).limit(1);
+        const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId)).limit(1);
+        const reservation = await reservationForRun(runId);
         const [company] = await db.select({ budgetMonthlyCents: companies.budgetMonthlyCents }).from(companies).where(eq(companies.id, companyId)).limit(1);
         const [agent] = await db.select({ budgetMonthlyCents: agents.budgetMonthlyCents }).from(agents).where(eq(agents.id, agentId)).limit(1);
         if (!run || !manifest || !reservation || !company || !agent)
@@ -208,7 +271,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         const profileValue = run.runnerProfileJson && typeof run.runnerProfileJson === "object"
           ? run.runnerProfileJson as Record<string, unknown> : {};
         const sourceReceipt = profileValue.nativeInputSourceReceipt ?? null;
-        try { await input.beforeProviderResponse({ db, actor: human, companyId, agentId, issueId: activeIssueId,
+        try { await input.beforeProviderResponse({ db, actor: human, companyId, agentId, issueId: issueId,
           run, manifest, reservation, sourceReceipt,
           request: { body, bodySha256: createHash("sha256").update(JSON.stringify(body)).digest("hex"),
             wireBodySha256: createHash("sha256").update(wireBody).digest("hex"), byteLength: Buffer.byteLength(wireBody),
@@ -232,17 +295,58 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       };
       return response;
     } });
+  if (input.beforeManagedModelRequest) {
+    const callManagedMessages = gateway.callManagedMessages.bind(gateway);
+    gateway.callManagedMessages = async (claims, body, callerSignal, internal) => {
+      callerSignal?.throwIfAborted();
+      if (authenticatedHostModelRequest.getStore() === true) {
+        const runId = claims.run_id;
+        const execution = typeof runId === "string" ? executionsByRun.get(runId) : undefined;
+        if (typeof runId !== "string" || !execution)
+          throw new Error("scheduler_fixture_authenticated_model_run_unmapped");
+        // The observer receives an immutable-by-ownership snapshot. The
+        // original raw value and claim object continue to the real gateway.
+        await input.beforeManagedModelRequest!({ body: structuredClone(body), runId, issueId: execution.issueId });
+      }
+      return callManagedMessages(claims, body, callerSignal, internal);
+    };
+  }
   const issuerFacts: Array<{ scope: string; runId: string; manifestId: string }> = [];
+  const appliedModelProfileInjections: Array<{ runId: string; leaseId: string; sessionKey: string }> = [];
+  let authenticatedModelTunnels = 0;
+  // The origin is finalized before any proxy can connect; this closure keeps
+  // the exact existing origin while exposing the actual association owner.
+  let modelTunnelAssociations: ReturnType<typeof createManagedModelTunnelAssociations>;
   const brokerApp = express();
   brokerApp.use(express.json({ limit: "2mb" }));
   // Heartbeat delivers a run-scoped MCP URL to the actual runner. Give the
   // fixture that URL's real protocol endpoint instead of pointing it at a
   // dummy base URL or suppressing managed MCP delivery.
-  const assignedToolGateway = createToolGatewayService(db);
+  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest });
+  if (input.afterSuccessfulAssignedToolResult) {
+    const executeAssignedTool = assignedToolGateway.executeTool.bind(assignedToolGateway);
+    assignedToolGateway.executeTool = async (call, workflowContext, scopedContext) => {
+      // Capture the exact plain request before the asynchronous owner call. The
+      // workflow and scoped contexts remain the original owner objects.
+      const capturedCall = structuredClone(call);
+      const replayCall = structuredClone(capturedCall);
+      const result = await executeAssignedTool(call, workflowContext, scopedContext);
+      const status = result && typeof result === "object" && !Array.isArray(result)
+        ? (result as Record<string, unknown>).status : null;
+      if (status === "completed") await input.afterSuccessfulAssignedToolResult!({ call: capturedCall, result,
+        replay: () => executeAssignedTool(structuredClone(replayCall), workflowContext, scopedContext) });
+      return result;
+    };
+  }
   registerAssignedMcpGateway(db, assignedToolGateway);
   brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
   const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();
-  let sandboxHeartbeat: Awaited<ReturnType<NonNullable<typeof input.configureHeartbeat>>> | undefined;
+  let sandboxHeartbeat: (Awaited<ReturnType<NonNullable<typeof input.configureHeartbeat>>> & {
+    factsForRun?: (runId: string) => Record<string, unknown>;
+    attestModelProxyClient?: (client: Socket) => Promise<ModelChannel | null>;
+    modelRequestAuthenticated?: (body: unknown, signal: AbortSignal, authorization: string | undefined) =>
+      ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
+  }) | undefined;
   brokerApp.use((req, res, next) => {
     if (req.method === "POST" && req.path === "/runtime-tools/model/v1/messages") {
       const requestHash = createHash("sha256").update(JSON.stringify(req.body ?? null)).digest("hex");
@@ -259,16 +363,43 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     }
     next();
   });
+  brokerApp.use(async (req, _res, next) => {
+    if (input.schedulerMode !== "serial" || req.method !== "POST" || req.path !== "/runtime-tools/model/v1/messages") {
+      next(); return;
+    }
+    try {
+      const applied = await modelTunnelAssociations.authorization(req.socket, { method: req.method,
+        path: req.path, url: req.originalUrl, host: req.headers.host, authorization: req.headers.authorization });
+      if (!applied) { next(); return; }
+      req.headers.authorization = applied.authorization;
+      if (appliedModelProfileInjections.length >= 1024) throw new Error("serial_model_observation_limit");
+      appliedModelProfileInjections.push({ runId: applied.runId, leaseId: applied.leaseId, sessionKey: applied.sessionKey });
+      next();
+    } catch { next(new Error("serial_model_channel_not_current")); }
+  });
   brokerApp.use((req, res, next) => {
     if (!input.sandboxRelay || req.method !== "POST" || req.path !== "/runtime-tools/model/v1/messages") { next(); return; }
     if (!sandboxHeartbeat?.modelRequest) { next(new Error("conversation_fixture_host_model_request_unavailable")); return; }
     const controller = new AbortController();
     const cancel = () => { if (!res.writableEnded) controller.abort(); };
     req.once("aborted", cancel); res.once("close", cancel);
-    void sandboxHeartbeat.modelRequest(req.body, controller.signal).then(result => {
+    if (input.schedulerMode === "serial" && (req.headers.origin || req.headers.cookie || req.headers["sec-fetch-site"])) {
+      req.off("aborted", cancel); res.off("close", cancel);
+      next(new Error("scheduler_fixture_model_runtime_authentication_required")); return;
+    }
+    const call = input.schedulerMode === "serial"
+      ? sandboxHeartbeat.modelRequestAuthenticated?.(req.body, controller.signal, req.header("authorization"))
+      : sandboxHeartbeat.modelRequest(req.body, controller.signal);
+    if (!call) { req.off("aborted", cancel); res.off("close", cancel);
+      next(new Error("scheduler_fixture_authenticated_model_route_missing")); return; }
+    void call.then(result => {
       if (!res.writableEnded) res.status(200).set("Cache-Control", "no-store").set("X-Accel-Buffering", "no")
         .type("text/event-stream").send(result.sse);
-    }).catch(next).finally(() => { req.off("aborted", cancel); res.off("close", cancel); });
+    }).catch(error => {
+      if (error instanceof Error && error.message === "scheduler_software_host_incoming_model_authority_invalid")
+        authenticatedModelRouteDenials++;
+      next(error);
+    }).finally(() => { req.off("aborted", cancel); res.off("close", cancel); });
   });
   brokerApp.use((req, _res, next) => {
     if (!input.sandboxRelay && req.headers["x-api-key"] === "paperclip-managed-model-broker" && activeToken)
@@ -306,6 +437,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   });
   brokerApp.use(errorHandler);
   const broker = createHttpsServer({ key: await readFile(keyPath), cert: await readFile(certPath) }, brokerApp);
+  broker.on("secureConnection", socket => {
+    if (!modelTunnelAssociations) { socket.destroy(); return; }
+    modelTunnelAssociations.observeTls(socket);
+  });
   broker.listen(0, "127.0.0.1");
   await new Promise<void>(resolve => broker.once("listening", resolve));
   const address = broker.address();
@@ -313,6 +448,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   // Durable PRP and the runner accept only an origin, with no trailing path
   // separator; a slash would make the managed environment tuple invalid.
   const origin = new URL(`https://${brokerHostname}:${address.port}`).origin;
+  modelTunnelAssociations = createManagedModelTunnelAssociations(origin);
   let brokerProxy: ReturnType<typeof createHttpServer> | null = null;
   let brokerProxyOrigin: string | null = null;
   const brokerProxySockets = new Set<Socket>();
@@ -336,18 +472,28 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         return;
       }
       brokerProxyTunnelCount++;
-      const upstream = createConnection(address.port, "127.0.0.1");
-      brokerProxySockets.add(upstream);
-      upstream.setTimeout(60_000, () => upstream.destroy());
-      upstream.once("close", () => brokerProxySockets.delete(upstream));
-      upstream.once("connect", () => {
-        client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-        if (head.length > 0) upstream.write(head);
-        client.pipe(upstream);
-        upstream.pipe(client);
-      });
-      upstream.once("error", () => client.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n"));
-      client.once("error", () => upstream.destroy());
+      void (async () => {
+        const observed = input.schedulerMode === "serial" && client instanceof Socket && sandboxHeartbeat?.attestModelProxyClient
+          ? await sandboxHeartbeat.attestModelProxyClient(client) : null;
+        if (client.destroyed) { observed?.close(); return; }
+        const upstream = createConnection(address.port, "127.0.0.1");
+        brokerProxySockets.add(upstream);
+        upstream.setTimeout(60_000, () => upstream.destroy());
+        let entry: ManagedModelTunnel | null = null;
+        const discard = () => { if (entry) modelTunnelAssociations.retire(entry); else { observed?.close(); client.destroy(); upstream.destroy(); } };
+        upstream.once("close", () => { brokerProxySockets.delete(upstream); discard(); });
+        upstream.once("connect", () => {
+          if (observed && client instanceof Socket) {
+            try { entry = modelTunnelAssociations.register(client, upstream, observed); authenticatedModelTunnels++; }
+            catch { discard(); return; }
+          }
+          // Mapping is installed before the first TLS byte can be forwarded.
+          client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+          if (head.length > 0) upstream.write(head);
+          client.pipe(upstream); upstream.pipe(client);
+        });
+        upstream.once("error", discard); client.once("error", discard); client.once("close", discard);
+      })().catch(() => client.destroy());
     });
     brokerProxy.listen(0, "127.0.0.1");
     await new Promise<void>(resolve => brokerProxy!.once("listening", resolve));
@@ -399,6 +545,57 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = origin;
   process.env.PAPERCLIP_API_URL = origin;
   process.env.PAPERCLIP_AGENT_JWT_SECRET = `conversation-fixture-${randomUUID()}`;
+  async function probeUnownedModelHttp(tunnel: boolean, body: Record<string, unknown>): Promise<number> {
+    const target = new URL(origin);
+    const proxy = brokerProxyOrigin ? new URL(brokerProxyOrigin) : null;
+    if (tunnel && !proxy) throw new Error("scheduler_negative_owned_proxy_missing");
+    const raw = createConnection(Number(tunnel ? proxy!.port : target.port), "127.0.0.1");
+    let tls: ReturnType<typeof connectTls> | null = null;
+    const timeout = setTimeout(() => { raw.destroy(new Error("scheduler_negative_http_deadline")); tls?.destroy(); }, 5_000);
+    raw.on("error", () => {});
+    try {
+      await new Promise<void>((resolve, reject) => { raw.once("connect", resolve); raw.once("error", reject); });
+      if (tunnel) {
+        const ready = new Promise<void>((resolve, reject) => {
+          let header = "";
+          const data = (chunk: Buffer) => {
+            header += chunk.toString();
+            if (header.length > 4096) { raw.off("data", data); reject(new Error("scheduler_negative_connect_response_limit")); }
+            else if (header.includes("\r\n\r\n")) {
+              raw.off("data", data);
+              if (!header.startsWith("HTTP/1.1 200 ")) reject(new Error("scheduler_negative_connect_denied_before_model"));
+              else resolve();
+            }
+          };
+          raw.on("data", data); raw.once("error", reject);
+        });
+        raw.write(`CONNECT ${target.host} HTTP/1.1\r\nHost: ${target.host}\r\n\r\n`); await ready;
+      }
+      // No Authorization, API key, cookie or SDK credential is supplied. TLS
+      // server identity is checked using the actual fixture CA and fixed DNS.
+      tls = connectTls({ socket: raw, servername: target.hostname, ca: await readFile(certBundlePath) });
+      const secure = tls;
+      return await new Promise<number>((resolve, reject) => {
+        let header = ""; let responded = false;
+        secure.once("error", reject);
+        secure.once("close", () => { if (!responded) reject(new Error("scheduler_negative_model_response_missing")); });
+        secure.on("data", chunk => {
+          if (responded) return;
+          header += chunk.toString();
+          if (header.length > 65536) { reject(new Error("scheduler_negative_model_response_limit")); secure.destroy(); }
+          else if (header.includes("\r\n\r\n")) {
+            const status = /^HTTP\/1\.[01] (\d{3}) /.exec(header);
+            if (!status) reject(new Error("scheduler_negative_model_status_invalid"));
+            else { responded = true; resolve(Number(status[1])); }
+          }
+        });
+        secure.once("secureConnect", () => {
+          const payload = JSON.stringify(body);
+          secure.write(`POST /runtime-tools/model/v1/messages HTTP/1.1\r\nHost: ${target.host}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(payload)}\r\nConnection: close\r\n\r\n${payload}`);
+        });
+      });
+    } finally { clearTimeout(timeout); tls?.destroy(); raw.destroy(); }
+  }
   process.env.NODE_EXTRA_CA_CERTS = certBundlePath;
   if (input.sandboxRelay) {
     const runnerPublicUrl = new URL(origin);
@@ -407,7 +604,17 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   }
   sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
     providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
-    brokerOrigin: origin, brokerProxyOrigin, certBundlePath, setBrokerToken: token => { activeToken = token; } });
+    brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest, observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
+  if (input.beforeManagedModelRequest && sandboxHeartbeat) {
+    const modelRequest = sandboxHeartbeat.modelRequest.bind(sandboxHeartbeat);
+    sandboxHeartbeat.modelRequest = (body, signal) =>
+      authenticatedHostModelRequest.run(true, () => modelRequest(body, signal));
+    if (sandboxHeartbeat.modelRequestAuthenticated) {
+      const modelRequestAuthenticated = sandboxHeartbeat.modelRequestAuthenticated.bind(sandboxHeartbeat);
+      sandboxHeartbeat.modelRequestAuthenticated = (body, signal, authorization) =>
+        authenticatedHostModelRequest.run(true, () => modelRequestAuthenticated(body, signal, authorization));
+    }
+  }
   registerNativeDraftGateway(db, gateway);
   const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
     environmentRuntime: sandboxHeartbeat?.environmentRuntime,
@@ -415,9 +622,16 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     agentId: currentAgentId, responsibleUserId, bootstrapSourceClosure }) => {
     if (execution.provider.kind !== "opencode" || !responsibleUserId)
       throw new Error("conversation_fixture_provider_or_human_missing");
-    activeExecution = execution;
-    activeRunId = runId;
-    activeIssueId = issueId;
+    const existing = executionsByRun.get(runId);
+    if (input.schedulerMode === "serial" && existing &&
+        (existing.issueId !== issueId || nativeSha256(existing.execution) !== nativeSha256(execution)))
+      throw new Error("scheduler_fixture_execution_changed_for_run");
+    executionsByRun.set(runId, { execution: structuredClone(execution), issueId });
+    if (input.schedulerMode !== "serial") {
+      activeExecution = execution;
+      activeRunId = runId;
+      activeIssueId = issueId;
+    }
     const hostEnvironment = sandboxHeartbeat?.beforeNativeExecution
       ? await sandboxHeartbeat.beforeNativeExecution({ execution, runId, issueId, agentId: currentAgentId,
           responsibleUserId, bootstrapSourceClosure })
@@ -447,11 +661,23 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   try {
     return await input.driveScheduler({ db, actor: human, companyId, agentId, gateway, heartbeat,
       facts: () => ({ providerCallCount: providerCalls.length, issuerFacts: structuredClone(issuerFacts),
-        sandboxRuntimeFacts: sandboxHeartbeat?.facts?.() ?? null }) });
+        sandboxRuntimeFacts: input.schedulerMode === "serial" ? { ...sandboxHeartbeat?.facts?.(),
+          originHttpDenials: Object.fromEntries(originHttpDenials), authenticatedModelTunnels, appliedModelProfileInjections: structuredClone(appliedModelProfileInjections) }
+          : sandboxHeartbeat?.facts?.() ?? null }),
+      factsForRun: runId => {
+        if (!executionsByRun.has(runId)) throw new Error("scheduler_fixture_run_not_observed");
+        return { providerCallCount: providerCalls.filter(call => call.runId === runId).length,
+          issuerFacts: structuredClone(issuerFacts.filter(fact => fact.runId === runId)),
+          sandboxRuntimeFacts: input.schedulerMode === "serial" ? { ...sandboxHeartbeat?.factsForRun?.(runId),
+            originHttpDenials: originHttpDenials.get(runId) ?? null,
+            appliedModelProfileInjections: structuredClone(appliedModelProfileInjections.filter(entry => entry.runId === runId)) }
+            : runId === activeRunId ? sandboxHeartbeat?.facts?.() ?? null : null };
+      } });
   } finally {
     await heartbeat.drainActiveRunExecutions();
     registerNativeDraftGateway(db, undefined);
     await sandboxHeartbeat?.close?.();
+    modelTunnelAssociations.retireAll();
     for (const socket of brokerProxySockets) socket.destroy();
     if (brokerProxy?.listening) await new Promise<void>(resolve => brokerProxy!.close(() => resolve()));
     runnerPrpWebSocketInternals.resetForTests();

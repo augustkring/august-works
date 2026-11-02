@@ -53,6 +53,10 @@ export async function runManagedNativeConversationFrame(input: {
   db: ReturnType<typeof createDb>;
   root: string;
   opencodeBinary: string;
+  /** Constructor-only controlled HTTP transport; no tool or admission authority. */
+  /** Fixed observation-only model-origin negative controls; serial integration only. */
+  observeModelOriginDenials?: true;
+  assignedToolGatewayHttpRequest?: NonNullable<Parameters<typeof createToolGatewayService>[1]>["remoteHttpRequest"];
   /** Use a policy-valid DNS name that resolves to loopback for the signed host relay case. */
   sandboxRelay?: boolean;
   sandboxRelayDnsLookup?: (hostname: string, options: { all: true }) => Promise<Array<{ address: string; family: number }>>;
@@ -100,6 +104,8 @@ export async function runManagedNativeConversationFrame(input: {
     profile: WorkerModelProfile;
     runHome: string;
     opencodeBinary: string;
+    observeModelOriginDenials?: true;
+    assignedToolGatewayHttpRequest?: NonNullable<Parameters<typeof createToolGatewayService>[1]>["remoteHttpRequest"];
     brokerOrigin: string;
     brokerProxyOrigin: string | null;
     certBundlePath: string;
@@ -323,7 +329,7 @@ export async function runManagedNativeConversationFrame(input: {
   // Heartbeat delivers a run-scoped MCP URL to the actual runner. Give the
   // fixture that URL's real protocol endpoint instead of pointing it at a
   // dummy base URL or suppressing managed MCP delivery.
-  const assignedToolGateway = createToolGatewayService(db);
+  const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest });
   registerAssignedMcpGateway(db, assignedToolGateway);
   brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
   const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();
@@ -491,7 +497,7 @@ export async function runManagedNativeConversationFrame(input: {
   }
   sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
     providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
-    brokerOrigin: origin, brokerProxyOrigin, certBundlePath, setBrokerToken: token => { activeToken = token; } });
+    brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest, observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
   const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
     environmentRuntime: sandboxHeartbeat?.environmentRuntime,
     testNativeRunnerEnvironment: async ({ execution, runId, issueId,

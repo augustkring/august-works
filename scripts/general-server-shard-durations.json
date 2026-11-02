@@ -1,5 +1,5 @@
 {
-  "$comment": "Per-suite wall-clock durations (ms) for the general-server vitest lane, used by scripts/general-server-shard.mjs to balance suites across the PR shard matrix. Averaged from two real PR runs of .github/workflows/pr.yml (actions runs 35036001734 and 35024948947, 2026-09-15) by diffing consecutive per-suite completion timestamps in the 'Run grouped general test suites' logs across every shard — that captures each suite's true serial cost (import, setup, and run) under maxWorkers=1. The first suite of each shard is measured from Vitest's RUN banner, so per-shard startup lands on a measured suite instead of vanishing. Suites missing here get the median weight, so the manifest only needs occasional refreshes; regenerate the same way when the lane's shard steps drift apart by more than the heaviest suite.",
+  "$comment": "Per-suite wall-clock durations (ms) for the general-server vitest lane, used by scripts/general-server-shard.mjs to balance suites across the PR shard matrix. Averaged from two real PR runs of .github/workflows/pr.yml (actions runs 35036001734 and 35024948947, 2026-09-15) by diffing consecutive per-suite completion timestamps in the 'Run grouped general test suites' logs across every shard — that captures each suite's true serial cost (import, setup, and run) under maxWorkers=1. The first suite of each shard is measured from Vitest's RUN banner, so per-shard startup lands on a measured suite instead of vanishing. Suites missing here get the median weight, so the manifest only needs occasional refreshes; regenerate the same way when the lane's shard steps drift apart by more than the heaviest suite. Three timing-only records were added 2026-11-02 from PR run 41440401218 (merge checkout 3cdc4b70abcce2af630beab1f11e1de7ccd5355c; PR source head 13a96e3fefbcf6de25ff5a66f6ef3024be278da1): conversation-frame 723529 ms (5 tests, 2 failed), managed-source 42646 ms (5 tests, 4 failed), and private Project-create 23840 ms (2 tests, 1 failed). These failed/partial-run measurements are scheduling data only, not acceptance evidence. Existing rows are unchanged. Managed project-create-wait and managed-browser have no reliable per-file timing in the captured logs and keep the existing median fallback.",
   "unit": "ms",
   "durations": {
     "server/src/__tests__/access-service.test.ts": 6334,
@@ -579,6 +579,9 @@
     "server/src/services/native-runtime/native-deliverable-feedback.test.ts": 762,
     "server/src/services/native-runtime/native-execution-input.test.ts": 1287,
     "server/src/services/native-runtime/native-maintenance-no-launch.test.ts": 546,
+    "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts": 723529,
+    "server/src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts": 23840,
+    "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts": 42646,
     "server/src/services/native-runtime/native-provider-capacity.integration.test.ts": 6882,
     "server/src/services/native-runtime/native-question-bridge.test.ts": 13420,
     "server/src/services/native-runtime/native-replacement-evidence.test.ts": 163,
