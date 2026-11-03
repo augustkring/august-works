@@ -5,13 +5,17 @@ import { join } from "node:path";
 import request from "supertest";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { createDb, agentExecutionManifests, agentWakeupRequests, agents, environmentLeases, heartbeatRuns, issues, statusDecisions, statusDecisionEffects, workAssessments } from "@paperclipai/db";
+import { createDb, agentExecutionManifests, agentWakeupRequests, agents, environmentLeases, heartbeatRuns, issues,
+  statusDecisions, statusDecisionEffects, workAssessments } from "@paperclipai/db";
+import type { NativePayloadSourceInput } from "@paperclipai/shared";
 import { issueService } from "../issues.js";
 import { verifyNativeCleanupRuntimeState } from "../execution-sandbox/run-lease-cleanup.js";
 import { withManagedNativeHeartbeatFixture } from "../../__tests__/helpers/managed-native-heartbeat-fixture.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { createControlledNativeSignoffBackend } from "../../__tests__/helpers/controlled-native-signoff-backend.js";
+import { nativeSha256 } from "./canonical.js";
+import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 
 
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -176,6 +180,71 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       const [reviewerManifest] = await db.select().from(agentExecutionManifests)
         .where(and(eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.runId, reviewerRun!.id))).limit(1);
       expect(reviewerManifest).toBeTruthy();
+      const reviewerProfile = reviewerRun!.runnerProfileJson as Record<string, unknown>;
+      const inputReceipt = reviewerProfile.nativeInputSourceReceipt as { bootstrap?: { inputs?: Array<Record<string, unknown>> } } | null;
+      const bootstrapInputs = inputReceipt?.bootstrap?.inputs ?? [];
+      const capturedWake = bootstrapInputs.find(source => source.kind === "native_task_wake" &&
+        source.runId === reviewerRun!.id && source.issueId === issueId);
+      const capturedTask = bootstrapInputs.find(source => source.kind === "task" && source.issueId === issueId);
+      const reviewerWake = reviewerContext.paperclipWake as Record<string, unknown>;
+      expect(bootstrapInputs.filter(source => source.kind === "native_task_wake" && source.runId === reviewerRun!.id &&
+        source.issueId === issueId)).toHaveLength(1);
+      expect(bootstrapInputs.filter(source => source.kind === "task" && source.issueId === issueId)).toHaveLength(1);
+      expect(capturedWake).toBeTruthy();
+      expect(capturedTask).toBeTruthy();
+      expect(capturedWake).toMatchObject({ contentHash: nativeSha256(reviewerWake) });
+      expect(reviewerWake.executionStage).toMatchObject({ wakeRole: "reviewer", stageType: "review", stageId: reviewStageId,
+        currentParticipant: { type: "agent", agentId: managedAgentIds.reviewer } });
+      const reviewerIssue = reviewerWake.issue as Record<string, unknown>;
+      const workspaceSources = bootstrapInputs.filter(source => source.kind === "workspace_metadata" && source.runId === reviewerRun!.id);
+      expect(workspaceSources).toHaveLength(1);
+      const workspaceSource = workspaceSources[0];
+      const stageWorkspaceCapture = workspaceSource ? { execution: parseNativeExecutionInput(reviewerProfile.nativeExecutionInput),
+        source: workspaceSource as Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> } : undefined;
+      const stageCaptureInput = (runContext: Record<string, unknown>, payload: Record<string, unknown>) => ({
+        companyId, runId: reviewerRun!.id, issueId, sourceVersion: String(capturedTask!.sourceVersion),
+        task: { id: issueId, identifier: reviewerIssue.identifier as string | null, title: String(reviewerIssue.title),
+          description: reviewerIssue.description as string | null, status: String(reviewerIssue.status),
+          priority: String(reviewerIssue.priority), workMode: String(reviewerIssue.workMode) },
+        runContext, payload, workspaceCapture: stageWorkspaceCapture,
+        checkoutRunId: runContext.paperclipHarnessCheckedOut === true ? reviewerRun!.id : null,
+        commentSources: [],
+      });
+      const { captureNativeExecutionStageTaskWakeSource } = await import("../native-stage-wake-source.js");
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toEqual(capturedWake);
+      const [stageIntentBeforeControl] = await db.select().from(agentWakeupRequests)
+        .where(and(eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.id, reviewerContext.nativeStatusWakeIntentId as string))).limit(1);
+      const [deliveredWakeBeforeControl] = await db.select().from(agentWakeupRequests)
+        .where(and(eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.id, reviewerRun!.wakeupRequestId!))).limit(1);
+      expect(stageIntentBeforeControl).toBeTruthy();
+      expect(deliveredWakeBeforeControl).toBeTruthy();
+      await db.update(agentWakeupRequests).set({ status: "skipped" })
+        .where(eq(agentWakeupRequests.id, stageIntentBeforeControl!.id));
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toBeNull();
+      await db.update(agentWakeupRequests).set({ status: stageIntentBeforeControl!.status, runId: stageIntentBeforeControl!.runId })
+        .where(eq(agentWakeupRequests.id, stageIntentBeforeControl!.id));
+      await db.update(agentWakeupRequests).set({ status: "completed", runId: reviewerRun!.id })
+        .where(eq(agentWakeupRequests.id, stageIntentBeforeControl!.id));
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toBeNull();
+      await db.update(agentWakeupRequests).set({ status: "claimed", runId: reviewerRun!.id })
+        .where(eq(agentWakeupRequests.id, stageIntentBeforeControl!.id));
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toBeNull();
+      await db.update(agentWakeupRequests).set({ status: stageIntentBeforeControl!.status, runId: stageIntentBeforeControl!.runId })
+        .where(eq(agentWakeupRequests.id, stageIntentBeforeControl!.id));
+      await db.update(agentWakeupRequests).set({ status: "failed" })
+        .where(eq(agentWakeupRequests.id, deliveredWakeBeforeControl!.id));
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toBeNull();
+      await db.update(agentWakeupRequests).set({ status: deliveredWakeBeforeControl!.status })
+        .where(eq(agentWakeupRequests.id, deliveredWakeBeforeControl!.id));
+      const tamperedWake = structuredClone(reviewerWake);
+      (tamperedWake.executionStage as Record<string, unknown>).stageId = randomUUID();
+      const tamperedContext = { ...reviewerContext, paperclipWake: tamperedWake, executionStage: tamperedWake.executionStage };
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(tamperedContext, tamperedWake))).toBeNull();
+      const missingIntent = { ...reviewerContext };
+      delete missingIntent.nativeStatusWakeIntentId;
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(missingIntent, reviewerWake))).toBeNull();
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput({ ...reviewerContext,
+        nativeStatusWakeIntentId: randomUUID() }, reviewerWake))).toBeNull();
       expect(facts().sandboxRuntimeFacts?.closedAgentHosts).toContain(managedAgentIds.executor);
       expect(facts().sandboxRuntimeFacts?.closedAgentHosts).not.toContain(managedAgentIds.reviewer);
       await assertStoppedLease(executorRun!.id);
@@ -263,6 +332,7 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       await db.update(issues).set({ statusVersion: reviewStageIssue!.statusVersion + 1,
         lastStatusDecisionId: nextDecisionId, executionState: nextReviewState })
         .where(and(eq(issues.companyId, companyId), eq(issues.id, issueId)));
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toBeNull();
       const staleIntentId = randomUUID();
       const existingEffectOrdinals = await db.select({ ordinal: statusDecisionEffects.ordinal }).from(statusDecisionEffects)
         .where(and(eq(statusDecisionEffects.companyId, companyId), eq(statusDecisionEffects.decisionId, executorDecision!.id)));

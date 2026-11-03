@@ -564,7 +564,11 @@ describe("manual Human Task payload source capture", () => {
     if (mode === "workspace_project_changed") {
       const other = await http.post(`/api/companies/${f.companyId}/projects`).send({ name: "Different current Project" }).expect(201);
       await db.update(projectWorkspaces).set({ projectId: other.body.id }).where(eq(projectWorkspaces.id, workspace!.id));
-    } else await db.update(projects).set({ payloadSourceSnapshotInvalidated: true }).where(eq(projects.id, created.body.id));
+    } else {
+      const [invalidated] = await db.update(projects).set({ payloadSourceSnapshot: null })
+        .where(eq(projects.id, created.body.id)).returning();
+      expect(invalidated).toMatchObject({ payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
+    }
     await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
       source: { kind: "task", issueId: row.id, sourceVersion: "snapshot-owner-current", contentHash: proof.bodyHash } })).rejects.toBeDefined();
   });

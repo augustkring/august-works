@@ -25,7 +25,7 @@ import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
   agentPresenceRuntimeBindings, connectionGrants, toolApplications, toolCatalogEntries, toolConnections, toolProfileBindings, toolProfileEntries, toolProfiles,
   chatConversations, agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, createDb,
-  agents, agentExecutionManifests, environmentLeases, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
+  agents, agentExecutionManifests, environments, environmentLeases, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
   runtimeVersionCatalog, runtimeHostCommands, sandboxQualificationRuns,
 } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, type NativePayloadSourceInput, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
@@ -172,6 +172,7 @@ type ManagedSandboxHostInput = {
   companyId: string;
   agentId: string;
   providerBindingId: string;
+  preparedRegistration?: ManagedSandboxProviderRegistration;
   gateway: ReturnType<typeof workerModelGateway>;
   profile: import("../../services/orchestration/worker-model-profiles.js").WorkerModelProfile;
   root: string;
@@ -189,6 +190,9 @@ type ManagedSandboxHostInput = {
   /** Bind one real scheduler-created ordinary Run at the existing execution
    * callback. All persisted Task, Human, lease and source checks still run. */
   ordinaryWorker?: true;
+  /** Existing constructor-only controlled backend: this component performs no model dispatch. */
+  controlledNativeSessionBackendFactory?: (execution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput) =>
+    import("../../vendor/paperclip-runner/index.js").NativeSessionBackend;
   /** Explicit same-company Project prepared before the qualified profile; no caller cwd. */
   ordinaryWorkerProject?: ManagedNativeProjectWorkspaceScope;
   /** Invoked only after the closure verifies the attached provider's actual
@@ -265,9 +269,10 @@ export async function ensureManagedSandboxEnvironmentForAgent(
   return environment;
 }
 
-async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInput, fixtureImageNode: string) {
+export async function registerManagedSandboxProvider(
+  input: Pick<ManagedSandboxHostInput, "db" | "actor" | "companyId" | "agentId" | "providerBindingId">,
+) {
   const { db, actor, companyId, agentId, providerBindingId } = input;
-  const brokerOrigin = new URL(input.brokerOrigin).origin;
   const hostKeys = generateKeyPairSync("rsa", { modulusLength: 3072 });
   await instanceSettingsService(db).updateExperimental({
     sandbox_abstraction_v7: true, openshell_v7: true, runtime_host_agent_v6: true,
@@ -329,11 +334,60 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
   const qualifiedProvider = await providerService.assertRuntime(companyId, agentId);
   const providerProfileRef = qualifiedProvider.runtime.providerProfileRef;
   if (!providerProfileRef) throw new Error("conversation_software_host_provider_profile_missing");
-  input.profile.providerProfileRef = providerProfileRef;
   const providerSnapshotHash = qualifiedProvider.provider.capabilitySnapshotHash;
   if (!providerSnapshotHash) throw new Error("conversation_software_host_provider_snapshot_missing");
-  input.profile.providerSnapshotHash = providerSnapshotHash;
   const environment = await ensureManagedSandboxEnvironmentForAgent(db, companyId, agentId);
+
+  const configurationHash = qualifiedProvider.runtime.qualifiedConfigurationHash;
+  const conformanceHash = nativeSha256(qualifiedProvider.runtime.conformanceReport);
+  const assertCurrent = async (currentInput: Pick<ManagedSandboxHostInput,
+    "db" | "actor" | "companyId" | "agentId" | "providerBindingId">,
+    profile?: ManagedSandboxHostInput["profile"]) => {
+    if (currentInput.db !== db || currentInput.companyId !== companyId || currentInput.agentId !== agentId ||
+        currentInput.providerBindingId !== providerBindingId || currentInput.actor.userId !== payerUserId ||
+        currentInput.actor.sessionId !== actor.sessionId)
+      throw new Error("conversation_software_host_registration_owner_changed");
+    const current = await providerService.assertRuntime(companyId, agentId);
+    const [currentAgent] = await db.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
+    const [currentCell] = await db.select().from(runtimeCells).where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, cell.id)));
+    const [currentHost] = await db.select().from(runtimeHosts).where(eq(runtimeHosts.id, host.id));
+    const [currentEnvironment] = await db.select().from(environments).where(eq(environments.id, environment.id));
+    if (current.provider.id !== providerBindingId || current.runtime.id !== qualifiedProvider.runtime.id ||
+        current.runtime.providerProfileRef !== providerProfileRef || current.provider.capabilitySnapshotHash !== providerSnapshotHash ||
+        current.runtime.qualifiedConfigurationHash !== configurationHash || nativeSha256(current.runtime.conformanceReport) !== conformanceHash ||
+        !currentAgent || currentAgent.defaultEnvironmentId !== environment.id ||
+        !currentCell || currentCell.generation !== cell.generation || currentCell.runtimeHostId !== host.id || currentCell.providerBindingId !== providerBindingId ||
+        currentCell.billingAccountId !== account.id || currentCell.desiredImageDigest !== imageDigest ||
+        currentCell.capacityProfile !== cell.capacityProfile || currentCell.isolationMode !== cell.isolationMode ||
+        !currentHost || currentHost.publicKeyPem !== host.publicKeyPem || currentHost.credentialVersion !== host.credentialVersion ||
+        currentHost.credentialRevokedAt !== null || currentHost.fencedAt !== null || currentHost.retiredAt !== null ||
+        !currentEnvironment || currentEnvironment.status !== environment.status || currentEnvironment.driver !== environment.driver ||
+        nativeSha256(currentEnvironment.envVars) !== nativeSha256(environment.envVars) ||
+        nativeSha256(currentEnvironment.config) !== nativeSha256(environment.config) ||
+        (profile && (profile.companyId !== companyId || profile.workerAgentId !== agentId ||
+          profile.providerBindingId !== providerBindingId || profile.providerProfileRef !== providerProfileRef ||
+          profile.providerSnapshotHash !== providerSnapshotHash || profile.qualifiedConfigurationHash !== configurationHash)))
+      throw new Error("conversation_software_host_registration_changed");
+  };
+  // DB/provider preparation only: no Run, lease, image directory, process environment or gateway is installed.
+  return Object.freeze({ hostKeys, host, cell, environment, conversationHostCapacity, payerUserId,
+    providerProfileRef, providerSnapshotHash, assertCurrent });
+}
+export type ManagedSandboxProviderRegistration = Awaited<ReturnType<typeof registerManagedSandboxProvider>>;
+
+async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInput, fixtureImageNode: string) {
+  const registration = input.preparedRegistration ?? await registerManagedSandboxProvider(input);
+  const { hostKeys, host, cell, environment, conversationHostCapacity, payerUserId,
+    providerProfileRef, providerSnapshotHash } = registration;
+  // Existing single-Agent callers still install their canonical profile here.
+  // Pre-registered two-Agent callers must already have sealed this exact tuple.
+  if (!input.preparedRegistration) {
+    input.profile.providerProfileRef = providerProfileRef;
+    input.profile.providerSnapshotHash = providerSnapshotHash;
+  }
+  await registration.assertCurrent(input, input.profile);
+  const { db, companyId, agentId } = input;
+  const brokerOrigin = new URL(input.brokerOrigin).origin;
 
   const secrets = secretService(db);
   const runtimeSecretValue = `runtime-secret-${randomUUID()}`;
@@ -409,12 +463,7 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
   };
   return Object.freeze({ hostKeys, host, cell, environment, conversationHostCapacity, payerUserId, fixtureImageNode,
     runtimeConnection, runtimePresence, createCanary, providerImageHome, fixtureToolAccess, runtimeSecretValue,
-    assertInstalledProfileCurrent: async () => {
-      const current = await providerService.assertRuntime(companyId, agentId);
-      if (current.runtime.providerProfileRef !== providerProfileRef || current.provider.capabilitySnapshotHash !== providerSnapshotHash ||
-          input.profile.providerProfileRef !== providerProfileRef || input.profile.providerSnapshotHash !== providerSnapshotHash)
-        throw new Error("scheduler_software_host_installed_profile_changed");
-    },
+    assertInstalledProfileCurrent: () => registration.assertCurrent(input, input.profile),
     restoreEnvironment: () => {
       if (process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT === preinstalledPack) {
         if (previousInstalledPackRoot === undefined) delete process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT;
@@ -3526,11 +3575,20 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       command: "true", cwd: taskRoot, timeoutMs: 1000 }));
     // An existing child is valid for a generic Worker; a missing path would
     // only test ENOENT. Conversation/session-start exact-root guards stay separate.
-    if (ordinaryWorkerMode) {
+    // The controlled Native backend consumes no model capability. Keep Host
+    // admission/negative/Stop proofs, without claiming this positive model probe.
+    if (ordinaryWorkerMode && typeof input.controlledNativeSessionBackendFactory !== "function") {
       const allowedChild = mkdtempSync(join(taskRoot, ".native-cwd-child-"));
       try {
         const acceptedChild = await runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
-          command: "true", cwd: allowedChild, timeoutMs: 10_000 });
+          command: "sh", args: ["-c", "true"], cwd: allowedChild, timeoutMs: 10_000 });
+        if (!acceptedChild || acceptedChild.exitCode !== 0 || acceptedChild.timedOut) {
+          try { console.info("ordinary_worker_allowed_child_cwd_failure", JSON.stringify({
+            resultIsNull: acceptedChild === null,
+            exitCode: acceptedChild && Number.isSafeInteger(acceptedChild.exitCode) ? acceptedChild.exitCode : null,
+            timedOut: acceptedChild ? acceptedChild.timedOut : null,
+          })); } catch {/* diagnostics cannot alter the original assertion */}
+        }
         assert.ok(acceptedChild && acceptedChild.exitCode === 0 && !acceptedChild.timedOut,
           "ordinary_worker_allowed_child_cwd_rejected");
       } finally { rmSync(allowedChild, { recursive: true, force: true }); }
@@ -3756,6 +3814,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       return { mode: "controlled_signed_host_relay", hostId: host.id, cellId: cell.id,
       bindingId:binding?.id ?? null,qualificationEvidence,qualificationToolResponses,softwareProbeObservations, environmentId: environment.id, relayAuthenticated: relayHost.readyState === WebSocket.OPEN,
       providerAttestedLeaseExpiresAt: acquiredLeaseExpiresAt,
+      positiveModelProbeNotQualified: typeof input.controlledNativeSessionBackendFactory === "function",
       modelOriginDenialFacts: { ...modelOriginDenialFacts },
       preAdmissionObservation,
       modelBrokerSessionReceipts: [...modelBrokerSessionReceipts],

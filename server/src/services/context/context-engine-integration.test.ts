@@ -22,6 +22,9 @@ import {
   foundationChangeProposals,
   foundationDocuments,
   foundationSections,
+  companySecrets, companySecretBindings, connectionGrants, toolConnections,
+  orchestrationModelReservations, orchestrationPlans, orchestrationToolCharges,
+  supervisionSignals, supervisionInterventions, verificationRuns, agentExecutionManifests,
   heartbeatRuns,
   heartbeatRunEvents,
   externalObjectMentions,
@@ -70,8 +73,16 @@ import { createLocalAgentJwt, verifyLocalAgentJwt } from "../../agent-auth-jwt.j
 import type { AuthorizationActor } from "../authorization.js";
 import { createToolGatewayService } from "../tool-gateway.js";
 import { heartbeatService } from "../heartbeat.js";
-import type { NativeSessionBackend } from "../../vendor/paperclip-runner/index.js";
-import { CONTROL_PLANE_CONFORMANCE_RESULT, CONTROL_PLANE_CONFORMANCE_TERMINAL } from "../../vendor/paperclip-runner/testing.js";
+import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
+import { agentIdentityService } from "../agent-identities.js";
+import { agentProviderBindingService } from "../agent-provider-bindings.js";
+import { aiConnectionService } from "../ai-connections.js";
+import { discoverNativeCapabilities } from "../native-provider-conformance.js";
+import { workerModelGateway } from "../orchestration/worker-model-gateway.js";
+import { registerNativeDraftGateway } from "../orchestration/native-draft-runtime.js";
+import { orchestrationService } from "../orchestration/orchestration-service.js";
+import type { WorkerModelProfile } from "../orchestration/worker-model-profiles.js";
+import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported
@@ -81,6 +92,10 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported
 describeEmbeddedPostgres("Context Engine integration", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  const ownedContextSetupCompanies = new Set<string>();
+  const ownedContextConnections: Array<{ companyId: string; connectionId: string; grantId: string;
+    userId: string; secretIds: string[] }> = [];
+  const ownedContextPlans: Array<{ companyId: string; planId: string }> = [];
   const activeNativeMemoryRunDrains: Array<{ release: () => void; drain: () => Promise<void> }> = [];
 
   beforeAll(async () => {
@@ -91,7 +106,50 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   afterEach(async () => {
     const activeDrains = activeNativeMemoryRunDrains.splice(0);
     for (const active of activeDrains) active.release();
-    if (activeDrains[0]) await activeDrains[0].drain();
+    for (const active of activeDrains) await active.drain();
+    registerNativeDraftGateway(db, undefined);
+    for (const owned of ownedContextConnections) {
+      if (!ownedContextSetupCompanies.has(owned.companyId))
+        throw new Error("Context credential cleanup lost its original setup company");
+      await db.transaction(async tx => {
+        const [grant] = await tx.select().from(connectionGrants).where(and(
+          eq(connectionGrants.companyId, owned.companyId), eq(connectionGrants.id, owned.grantId),
+          eq(connectionGrants.connectionId, owned.connectionId))).for("update");
+        const refs = grant?.credentialSecretRefs;
+        if (!refs || refs.length !== 1 || refs[0]!.configPath !== "ai.credential" || !refs[0]!.secretId ||
+          owned.secretIds.length > 0 && (owned.secretIds.length !== 1 || owned.secretIds[0] !== refs[0]!.secretId))
+          throw new Error("Context credential cleanup lacks its exact original grant reference");
+        const secretId = refs[0]!.secretId;
+        const [secret] = await tx.select({ id: companySecrets.id, name: companySecrets.name,
+          scope: companySecrets.scope, createdByUserId: companySecrets.createdByUserId }).from(companySecrets).where(and(
+          eq(companySecrets.companyId, owned.companyId), eq(companySecrets.id, secretId))).for("update");
+        if (!secret || secret.name !== `ai-${owned.grantId}` || secret.scope !== "company" || secret.createdByUserId !== owned.userId)
+          throw new Error("Context credential cleanup does not own the saved private slot");
+        await tx.delete(toolConnections).where(and(eq(toolConnections.companyId, owned.companyId), eq(toolConnections.id, owned.connectionId)));
+        await tx.delete(companySecretBindings).where(and(eq(companySecretBindings.companyId, owned.companyId),
+          eq(companySecretBindings.secretId, secretId), eq(companySecretBindings.targetType, "tool_connection"),
+          eq(companySecretBindings.targetId, owned.connectionId)));
+        const remaining = await tx.select({ id: companySecretBindings.id }).from(companySecretBindings)
+          .where(eq(companySecretBindings.secretId, secretId)).limit(1);
+        if (remaining.length) throw new Error("Context credential still has another consumer");
+        await tx.delete(companySecrets).where(and(eq(companySecrets.companyId, owned.companyId), eq(companySecrets.id, secretId)));
+      });
+    }
+    ownedContextConnections.splice(0);
+    ownedContextSetupCompanies.clear();
+    const closedPlans = ownedContextPlans.splice(0);
+    for (const { companyId, planId } of closedPlans) {
+      // FK-dependent software-fixture ledger cleanup follows owned Run drain;
+      // no active Plan or output is removed during a business assertion.
+      await db.delete(supervisionInterventions).where(and(eq(supervisionInterventions.companyId, companyId), eq(supervisionInterventions.planId, planId)));
+      await db.delete(supervisionSignals).where(and(eq(supervisionSignals.companyId, companyId), eq(supervisionSignals.planId, planId)));
+      await db.delete(verificationRuns).where(and(eq(verificationRuns.companyId, companyId), eq(verificationRuns.planId, planId)));
+      await db.delete(orchestrationToolCharges).where(and(eq(orchestrationToolCharges.companyId, companyId), eq(orchestrationToolCharges.planId, planId)));
+      await db.delete(orchestrationModelReservations).where(and(eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.planId, planId)));
+      await db.delete(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, planId)));
+    }
+    for (const companyId of new Set(closedPlans.map(plan => plan.companyId)))
+      await db.delete(agentExecutionManifests).where(eq(agentExecutionManifests.companyId, companyId));
     await db.delete(activityLog);
     await db.delete(agentRuntimeState);
     await db.delete(companySkills);
@@ -133,7 +191,23 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await tempDb?.cleanup();
   });
 
-  async function seed() {
+  async function createContextPresence(companyId: string, human: AuthorizationActor, name: string, status: "idle" | "running" = "idle") {
+    // Only the installed controller's actual predecessor gates. Memory enablement
+    // and foundation:read remain the independent inputs of the original cases.
+    await instanceSettingsService(db).updateExperimental({ agent_identities_v5: true,
+      agent_provider_bindings_v5: true, agent_runtime_fabric_v5: true,
+      enableFoundationV1: true, enableContextEngineV1: true, enableWorkflowsV1: true,
+      readiness_engine_v7: true, orchestration_v7: true, supervision_v7: true });
+    const { presence } = await agentIdentityService(db).create(human, { homeCompanyId: companyId, name });
+    const [configured] = await db.update(agents).set({ role: "analyst", adapterType: "paperclip_runner",
+      adapterConfig: {}, runtimeConfig: {}, permissions: {}, status }).where(eq(agents.id, presence.id)).returning();
+    if (!configured) throw new Error("Context fixture identity-backed presence disappeared");
+    await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: configured.id,
+      status: "active", membershipRole: "member" }).onConflictDoNothing();
+    return configured;
+  }
+
+  async function seedContextOwners() {
     const companyId = randomUUID();
     const userId = `user-${companyId}`;
     await db.insert(companies).values({
@@ -152,23 +226,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       eq(principalPermissionGrants.principalId, userId),
       eq(principalPermissionGrants.permissionKey, "foundation:read"),
     ));
-    const [agent] = await db.insert(agents).values({
-      companyId,
-      name: "Context Agent",
-      role: "analyst",
-      adapterType: "paperclip_runner",
-      adapterConfig: {},
-      runtimeConfig: {},
-      permissions: {},
-      status: "running",
-    }).returning();
-    await db.insert(companyMemberships).values({
-      companyId,
-      principalType: "agent",
-      principalId: agent!.id,
-      status: "active",
-      membershipRole: "member",
-    });
+    const agent = await createContextPresence(companyId, humanActor, "Context Agent", "running");
     const [issue] = await db.insert(issues).values({
       companyId,
       title: "Prepare enterprise strategy recommendation",
@@ -178,9 +236,18 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       assigneeAgentId: agent!.id,
       responsibleUserId: userId,
     }).returning();
-    const [run] = await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,responsibleUserId:userId,
-      status:"running",runtimeMode:"native",nativeIssueId:issue!.id,issueId:issue!.id}).returning();
-    return { companyId, userId, humanActor, agent: agent!, issue: issue!, run:run! };
+    return { companyId, userId, humanActor, agent, issue: issue! };
+  }
+
+  // Existing direct Context-reader component cases retain their original row.
+  // Genuine Memory producers below start from owners only, leaving the single
+  // installed draft slot free without altering any pre-existing Run.
+  async function seed() {
+    const seeded = await seedContextOwners();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId,
+      agentId: seeded.agent.id, responsibleUserId: seeded.userId, status: "running",
+      runtimeMode: "native", nativeIssueId: seeded.issue.id, issueId: seeded.issue.id }).returning();
+    return { ...seeded, run: run! };
   }
 
   it("keeps a timed-out mandatory Task provider inside its deadline and releases its privacy locks", async () => {
@@ -330,7 +397,9 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     companyId: string; agentId: string; userId: string; issueId: string; bindingKey: string; content: string;
     sensitivity: "public" | "internal" | "confidential" | "restricted"; observedAt: Date; expiresAt: Date | null;
     onNativeRun?: (run: { id: string; actor: AuthorizationActor; issueId: string }) => void;
+    human: AuthorizationActor;
   }) {
+    ownedContextSetupCompanies.add(input.companyId);
     const previousSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
     const previousApiUrl = process.env.PAPERCLIP_API_URL;
     process.env.PAPERCLIP_AGENT_JWT_SECRET = randomUUID();
@@ -338,64 +407,106 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     // Keep the fixture on the same configured environment path.
     process.env.PAPERCLIP_API_URL = "http://127.0.0.1:3100/api";
     const previousMemorySettings = await instanceSettingsService(db).getExperimental();
-    await instanceSettingsService(db).updateExperimental({ enablePrivateAgentMemoryV1: true });
     let releaseTurn!: () => void;
     let signalTurnStarted!: () => void;
     const turnGate = new Promise<void>((resolve) => { releaseTurn = resolve; });
     const turnStarted = new Promise<void>((resolve) => { signalTurnStarted = resolve; });
-    const backend: NativeSessionBackend = {
-      async descriptor() {
-        return { kind: "mock", name: "context-memory-native-fixture", version: "1",
-          capabilities: { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true },
-          runtimeContextCapabilities: { instructions: "native", skills: "native", mcp: "native" } };
-      },
-      async openSession(openInput) {
-        const turnId = `context-memory-${openInput.identity.runId}`;
-        const terminalEvent = {
-          schema: "paperclip.prp.event.v1" as const,
-          sourceEventId: `context-memory:${openInput.identity.runId}:terminal`,
-          sourceSeq: 1,
-          sourceInstanceId: `context-memory:${openInput.identity.runId}`,
-          sourceKind: "runner" as const,
-          runId: openInput.identity.runId,
-          normalizedSessionId: openInput.identity.sessionId,
-          turnId,
-          eventType: "turn.completed" as const,
-          schemaVersion: 1 as const,
-          priority: 0 as const,
-          emittedAt: new Date().toISOString(),
-          payload: {},
-        };
-        return {
-          identity: () => openInput.identity,
-          async capabilities() { return { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true }; },
-          async *events() {
-            await turnStarted;
-            await turnGate;
-            yield terminalEvent;
-          },
-          async startTurn() {
-            signalTurnStarted();
-            return { turnId };
-          },
-          async result() {
-            const result = structuredClone(CONTROL_PLANE_CONFORMANCE_RESULT);
-            const terminal = { ...CONTROL_PLANE_CONFORMANCE_TERMINAL,
-              reportedWorkDisposition: result.reportedWorkDisposition };
-            return { result, terminal, turnId };
-          },
-          async snapshot() {
-            return { backendKind: "mock", sessionId: openInput.identity.sessionId,
-              identity: openInput.identity, providerSessionId: "context-memory-fixture" } as never;
-          },
-          async close() { signalTurnStarted(); releaseTurn(); },
-        };
-      },
-    };
-    const heartbeat = heartbeatService(db, { nativeSessionBackendFactory: () => backend });
+    let heartbeat: ReturnType<typeof heartbeatService> | undefined;
     let retainedForContextRead = false;
     try {
+      await instanceSettingsService(db).updateExperimental({ enablePrivateAgentMemoryV1: true });
+      // This is the installed text controller's real reservation/wire path with
+      // controlled software HTTP. It does not qualify OpenCode or a Sandbox.
+      const profileId = randomUUID(), model = "fixture-context-memory-text-v1";
+      const sourceSha = "a".repeat(40), credential = "context-memory-private-fixture-secret";
+      await db.update(agents).set({ adapterConfig: { provider: "aw_text_only", workerModelProfileId: profileId,
+        model, maxOutputTokens: 256, lifecycleMode: "per_turn" },
+        runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true, maxConcurrentRuns: 1 } },
+      }).where(and(eq(agents.companyId, input.companyId), eq(agents.id, input.agentId)));
+      const providers = agentProviderBindingService(db);
+      const provider = await providers.create(input.human, input.companyId, input.agentId, {
+        providerType: "paperclip_native", providerAgentRef: input.agentId,
+        isolationMode: "isolated_per_presence", providerEndpointRef: null });
+      await providers.attach(input.human, input.companyId, input.agentId,
+        { providerBindingId: provider.id, providerProfileRef: input.agentId });
+      const [presence] = await db.select().from(agents).where(and(eq(agents.companyId, input.companyId), eq(agents.id, input.agentId)));
+      if (!presence) throw new Error("Context Memory controller presence disappeared");
+      const advertised = await discoverNativeCapabilities({ companyId: input.companyId,
+        adapterType: "paperclip_runner", config: presence.adapterConfig });
+      const recorded = await providers.recordDiscovery(input.companyId, input.agentId, advertised, {
+        connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
+      await providers.revalidate(input.human, input.companyId, input.agentId, recorded.capabilitySnapshotHash!,
+        "Review the installed text-controller software contract for Context Memory; no live provider qualification claimed");
+      const qualified = await providers.assertRuntime(input.companyId, input.agentId);
+      if (!qualified.provider.capabilitySnapshotHash || !qualified.runtime.qualifiedConfigurationHash)
+        throw new Error("Context Memory controller profile is not current");
+      const connection = await aiConnectionService(db).save(input.companyId, input.userId, {
+        provider: "anthropic", method: "api_key", ownership: "shared", name: "Context Memory text fixture",
+        apiKey: "fixture", allAgents: false, agentIds: [input.agentId] }, credential);
+      // save is atomic. Record its exact returned IDs before any subsequent
+      // profile/Plan work, including failures while reading saved references.
+      const ownedConnection = { companyId: input.companyId, ...connection, userId: input.userId, secretIds: [] as string[] };
+      ownedContextConnections.push(ownedConnection);
+      const [savedGrant] = await db.select({ refs: connectionGrants.credentialSecretRefs }).from(connectionGrants).where(and(
+        eq(connectionGrants.companyId, input.companyId), eq(connectionGrants.id, connection.grantId),
+        eq(connectionGrants.connectionId, connection.connectionId)));
+      if (!savedGrant || savedGrant.refs.length !== 1 || savedGrant.refs[0]!.configPath !== "ai.credential")
+        throw new Error("Context saved connection lacks its exact credential reference");
+      ownedConnection.secretIds = [savedGrant.refs[0]!.secretId];
+      const profile: WorkerModelProfile = { id: profileId, companyId: input.companyId, workerAgentId: input.agentId,
+        providerBindingId: qualified.provider.id, providerSnapshotHash: qualified.provider.capabilitySnapshotHash,
+        providerProfileRef: qualified.runtime.providerProfileRef, qualifiedConfigurationHash: qualified.runtime.qualifiedConfigurationHash,
+        binding: { provider: "anthropic", method: "api_key", mode: "shared", ...connection },
+        transport: "server-text-only-v1", contract: "anthropic-text-messages-2023-06-01", maximumEnvelopeBytes: 64000,
+        inputTokensUpperBound: 100000, maxOutputTokens: 1024,
+        tariff: { provider: "anthropic", model, currency: "USD", inputMinorPerMillion: 0,
+          outputMinorPerMillion: 0, fixedMinor: 3, qualificationHash: "b".repeat(64), sourceSha,
+          testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 120_000).toISOString() },
+        qualificationEvidenceRef: "https://protected.test.invalid/qualification/context-memory-software-only.json",
+        qualificationArtifactSha256: "c".repeat(64) };
+      let modelCalls = 0, planId = "";
+      const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+        if (++modelCalls !== 1 || String(url) !== "https://api.anthropic.com/v1/messages" ||
+          new Headers(init.headers).get("x-api-key") !== credential)
+          throw new Error("Context Memory text request is not its exact installed transport");
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+        if (body.model !== model || body.max_tokens !== 256 || body.tools !== undefined)
+          throw new Error("Context Memory text request changed its closed profile");
+        const reservations = await db.select().from(orchestrationModelReservations)
+          .where(eq(orchestrationModelReservations.planId, planId));
+        if (reservations.length !== 1 || reservations[0]!.status !== "dispatched")
+          throw new Error("Context Memory text request lacks its real dispatched reservation");
+        signalTurnStarted();
+        // Release only this owned response gate; the real controller and its
+        // original source/budget checks own the Run and eventual document finish.
+        await turnGate;
+        init.signal?.throwIfAborted();
+        return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+          content: [{ type: "text", text: "Retained internal Context Memory fixture document for Human review." }],
+          usage: { input_tokens: 10, output_tokens: 20 } }),
+          { status: 200, headers: { "content-type": "application/json" } });
+      };
+      const consumer = workerModelGateway(db, { profiles: [profile], sourceSha,
+        protectedEvidenceOrigin: "https://protected.test.invalid", fetch });
+      registerNativeDraftGateway(db, consumer);
+      heartbeat = heartbeatService(db, { nativeSessionBackendFactory: () => {
+        throw new Error("Context Memory must use the installed text controller, not a backend substitute");
+      } });
       await instanceSettingsService(db).updateExperimental({ enableNativeRunner: true });
+      const [task] = await db.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)));
+      if (!task || task.assigneeAgentId !== input.agentId || !task.payloadSourceSnapshot)
+        throw new Error("Context Memory requires its original assigned Human Task source");
+      const plans = orchestrationService(db);
+      const plan = await plans.create(input.human, input.companyId, { issueId: task.id,
+        expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Retain one internal text document for Human review",
+          requiredOutputs: [{ kind: "task_document", key: "result" }],
+          businessInvariants: ["The Context assertions and private Memory remain owner scoped"] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "context-memory-writer", issueId: task.id }] });
+      planId = plan.id;
+      ownedContextPlans.push({ companyId: input.companyId, planId });
+      await plans.decide(input.human, input.companyId, plan.id, { expectedVersion: plan.version, action: "start",
+        rationale: "Admit the installed bounded text controller for the actual Context Memory producer Task" });
       const run = await heartbeat.invoke(input.agentId, "on_demand", { issueId: input.issueId }, "manual",
         { actorType: "user", actorId: input.userId });
       if (!run) throw new Error("Canonical Heartbeat owner did not create the Memory producer run");
@@ -414,12 +525,21 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       const currentRunRows = await db.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
         runtimeMode: heartbeatRuns.runtimeMode, nativeIssueId: heartbeatRuns.nativeIssueId,
         responsibleUserId: heartbeatRuns.responsibleUserId,
-        activeIdentityContextId: heartbeatRuns.activeIdentityContextId }).from(heartbeatRuns)
+        activeIdentityContextId: heartbeatRuns.activeIdentityContextId,
+        runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId)));
       const returnedRun = currentRunRows.find((candidate) => candidate.id === run.id);
       if (returnedRun?.status !== "running" || returnedRun.runtimeMode !== "native" ||
         returnedRun.nativeIssueId !== input.issueId || returnedRun.responsibleUserId !== input.userId)
         throw new Error(`Canonical Memory producer run is not active: ${JSON.stringify({returnedRun, currentRunRows})}`);
+
+      const profileJson = returnedRun.runnerProfileJson as Record<string, unknown>;
+      const receipt = nativeRunInputSourceReceiptSchema.safeParse(profileJson.nativeInputSourceReceipt);
+      if (!receipt.success || receipt.data.binding.companyId !== input.companyId ||
+        receipt.data.binding.agentId !== input.agentId || receipt.data.binding.runId !== run.id ||
+        receipt.data.binding.issueId !== input.issueId || receipt.data.binding.responsibleUserId !== input.userId ||
+        !receipt.data.bootstrap.inputs.some(source => source.kind === "task" && source.issueId === input.issueId))
+        throw new Error("Context Memory producer lacks its exact retained Native input source receipt");
 
       const token = createLocalAgentJwt(input.agentId, input.companyId, "paperclip_runner", run.id, input.userId);
       const claims = token ? verifyLocalAgentJwt(token) : null;
@@ -469,14 +589,16 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         eq(memoryRecords.id, recordId)));
       expect(persistedAfterRestart).toHaveLength(1);
       retainedForContextRead = true;
-      activeNativeMemoryRunDrains.push({ release: releaseTurn, drain: () => heartbeat.drainActiveRunExecutions() });
+      const retainedHeartbeat = heartbeat;
+      activeNativeMemoryRunDrains.push({ release: releaseTurn, drain: () => retainedHeartbeat.drainActiveRunExecutions() });
       return record;
     } finally {
       if (!retainedForContextRead) {
         releaseTurn();
         for (const active of activeNativeMemoryRunDrains) active.release();
-        await heartbeat.drainActiveRunExecutions();
+        await heartbeat?.drainActiveRunExecutions();
       }
+      if (!retainedForContextRead) registerNativeDraftGateway(db, undefined);
       if (previousSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
       else process.env.PAPERCLIP_AGENT_JWT_SECRET = previousSecret;
       if (previousApiUrl === undefined) delete process.env.PAPERCLIP_API_URL;
@@ -586,7 +708,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       companyIds:[input.companyId],memberships:[{companyId:input.companyId,membershipRole:"owner",status:"active"}]};next();}) as RequestHandler);
     app.use("/api",issueRoutes(db,{} as never)); app.use(errorHandler);
     const createdSourceIssue=await request(app).post(`/api/companies/${input.companyId}/issues`)
-      .send({title:`Actual Memory producer Task ${randomUUID()}`,description:input.sourceTaskBody??"Human-authored source for a native Memory candidate."});
+      .send({title:`Actual Memory producer Task ${randomUUID()}`,status:"todo",description:input.sourceTaskBody??"Human-authored source for a native Memory candidate."});
     if(createdSourceIssue.status!==201)throw new Error(`Canonical source Task creation returned ${createdSourceIssue.status}: ${JSON.stringify(createdSourceIssue.body)}`);
     const sourceIssueId=createdSourceIssue.body.id as string;
     await request(app).patch(`/api/issues/${sourceIssueId}`).send({assigneeAgentId:input.agentId}).expect(200);
@@ -596,7 +718,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       permissionKey:"company_scope:read"}).onConflictDoNothing();
     const memoryRecord=await createOwnerPrivateMemoryThroughNativeGateway({
       companyId:input.companyId,agentId:input.agentId,userId,issueId:sourceIssueId,bindingKey:binding!.key,content:input.content,
-      sensitivity:input.sensitivity??"internal",observedAt,expiresAt:input.expiresAt??null,onNativeRun:input.onNativeRun,
+      sensitivity:input.sensitivity??"internal",observedAt,expiresAt:input.expiresAt??null,onNativeRun:input.onNativeRun,human,
     });
     if(input.revokedAt){
       const [revoked]=await db.update(memoryRecords).set({revokedAt:input.revokedAt,revokedByActorType:"system",
@@ -642,7 +764,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   }
 
   it("executes Foundation and Memory query nodes with approved and accepted sources only", async () => {
-    const seeded = await seed();
+    const seeded = await seedContextOwners();
     await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableCollectiveMemoryV1: true });
     await db.insert(principalPermissionGrants).values({ companyId: seeded.companyId, principalType: "user",
       principalId: seeded.userId, permissionKey: "foundation:read", scope: null });
@@ -1153,7 +1275,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
 
 
   it("keeps Memory hydration disabled until Memory flags are enabled", async () => {
-    const seeded = await seed();
+    const seeded = await seedContextOwners();
     await seedMemory({
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
@@ -1185,7 +1307,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   });
 
   it("hydrates only eligible relevant shared and owner-private Memory into Context", async () => {
-    const seeded = await seed();
+    const seeded = await seedContextOwners();
     await instanceSettingsService(db).updateExperimental({
       enableCollectiveMemoryV1: true,
       enablePrivateAgentMemoryV1: true,
@@ -1215,22 +1337,8 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     });
     const nativeRun = nativeRuns[0];
     if (!nativeRun) throw new Error("Canonical private Memory producer did not retain its exact Agent run authority");
-    const [otherAgent] = await db.insert(agents).values({
-      companyId: seeded.companyId,
-      name: "Other Context Agent",
-      role: "analyst",
-      adapterType: "paperclip_runner",
-      adapterConfig: {},
-      runtimeConfig: {},
-      permissions: {},
-    }).returning();
-    await db.insert(companyMemberships).values({
-      companyId: seeded.companyId,
-      principalType: "agent",
-      principalId: otherAgent!.id,
-      status: "active",
-      membershipRole: "member",
-    });
+    const otherHuman = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
+    const otherAgent = await createContextPresence(seeded.companyId, otherHuman, "Other Context Agent");
     const otherPrivate = await seedMemory({
       companyId: seeded.companyId,
       agentId: otherAgent!.id,
@@ -1367,7 +1475,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   });
 
   it("omits Foundation without foundation:read but still admits authorized task context", async () => {
-    const seeded = await seed();
+    const seeded = await seedContextOwners();
     await createApprovedFoundation({
       companyId: seeded.companyId,
       userId: seeded.userId,
@@ -1377,13 +1485,19 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     });
 
     const nativeRuns: Array<{ id: string; actor: AuthorizationActor; issueId: string }> = [];
-    await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
+    await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id, humanActor: seeded.humanActor,
       content: "Enterprise strategy context for the native source reader.", scope: "agent",
       sourceTaskBody: "Enterprise strategy source task for the current native run.",
       onNativeRun: run => { nativeRuns.push(run); } });
     const nativeRun = nativeRuns[0];
     if (!nativeRun) throw new Error("Canonical native producer did not expose its exact run authority");
     const sourceIssueId = nativeRun.issueId;
+
+    // No fixture renewal may restore the grant whose absence this case tests.
+    expect(await db.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants).where(and(
+      eq(principalPermissionGrants.companyId, seeded.companyId), eq(principalPermissionGrants.principalType, "user"),
+      eq(principalPermissionGrants.principalId, seeded.userId), eq(principalPermissionGrants.permissionKey, "foundation:read"),
+    ))).toHaveLength(0);
 
     const result = await contextEngineService(db).assemble({
       runId: nativeRun.id,

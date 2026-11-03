@@ -457,6 +457,7 @@ import {
   parseIssueExecutionState,
 } from "./issue-execution-policy.js";
 import { buildExecutionStageWakeup } from "./issue-execution-stage-wakeup.js";
+import { captureNativeExecutionStageTaskWakeSource } from "./native-stage-wake-source.js";
 import {
   ISSUE_TREE_CONTROL_INTERACTION_WAKE_REASONS,
   isVerifiedIssueTreeControlInteractionWake,
@@ -24307,18 +24308,20 @@ export function heartbeatService(
             const capturedTaskSource = taskSourceCapture.value;
             const capturedAuthoredSources = nativeBootstrapAuthoredSources.value;
             const nativeBootstrapWakeDiagnostics: string[] = [];
-            const closedTaskContinuation = issueRef ? exactNativeTaskContinuation({ value: parseObject(context.paperclipWake).executionContinuation,
+            let closedTaskContinuation = issueRef ? exactNativeTaskContinuation({ value: parseObject(context.paperclipWake).executionContinuation,
               companyId: agent.companyId, issueId: issueRef.id, runId: run.id, agentId: agent.id,
               responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
               wakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
               capture: nativeTaskContinuationCapture.value ? { ...nativeTaskContinuationCapture.value,
                 ...(nativeBootstrapRetainedRunSource ? { retainedSource: nativeBootstrapRetainedRunSource.source } : {}) } : null }) : null;
             nativeBootstrapContinuationCapture = closedTaskContinuation;
-            const nativeTaskWakeSource = capturedTaskSource?.input.kind === "task" && issueRef
-              ? captureNativeTaskWakeSource({ companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
+            const nativeTaskWakeCapture: Parameters<typeof captureNativeTaskWakeSource>[0] | null =
+              capturedTaskSource?.input.kind === "task" && issueRef ? {
+                companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
                 sourceVersion: capturedTaskSource.input.sourceVersion, agentId: agent.id,
                 workspaceCapture: { execution: nativeWorkspaceExecution, source: nativeBootstrapWorkspaceSource },
-                responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId, continuationCapture: closedTaskContinuation,
+                responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
+                continuationCapture: closedTaskContinuation,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
                 checkoutRunId: issueContext?.checkoutRunId ?? null,
                 task: { id: issueRef.id, identifier: issueRef.identifier, title: issueRef.title,
@@ -24328,8 +24331,22 @@ export function heartbeatService(
                 ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
                   ? { onDiagnostic: (reason, fields) => {
                     nativeBootstrapWakeDiagnostics.push(fields?.length ? `${reason}:${fields.join("+")}` : reason);
-                  } } : {}) })
+                  } } : {})
+              } : null;
+            const nativeTaskWakeSource = nativeTaskWakeCapture
+              ? captureNativeTaskWakeSource(nativeTaskWakeCapture) ?? await captureNativeExecutionStageTaskWakeSource(db, {
+                companyId: agent.companyId, runId: run.id, issueId: nativeTaskWakeCapture.issueId,
+                sourceVersion: nativeTaskWakeCapture.sourceVersion, task: nativeTaskWakeCapture.task,
+                runContext: context, payload: context.paperclipWake,
+                workspaceCapture: nativeTaskWakeCapture.workspaceCapture,
+                checkoutRunId: nativeTaskWakeCapture.checkoutRunId,
+                commentSources: nativeTaskWakeCapture.commentSources,
+                continuationCapture: nativeTaskContinuationCapture.value ? { ...nativeTaskContinuationCapture.value,
+                  ...(nativeBootstrapRetainedRunSource ? { retainedSource: nativeBootstrapRetainedRunSource.source } : {}) } : null,
+                onContinuationCapture: capture => { closedTaskContinuation = capture; },
+              })
               : null;
+            nativeBootstrapContinuationCapture = closedTaskContinuation;
             if (capturedTaskSource?.input.kind === "task") nativeSourceCandidates.push({ kind: "task", id: capturedTaskSource.input.issueId,
               input: capturedTaskSource.input, payloadSourceSnapshot: capturedTaskSource.payloadSourceSnapshot });
             for (const capture of ancestorSourceCaptures) nativeSourceCandidates.push({ kind: "task", id: capture.input.issueId,

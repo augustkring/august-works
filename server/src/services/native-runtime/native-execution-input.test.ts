@@ -28,6 +28,57 @@ describe("native bootstrap rendered-source closure", () => {
       runtimeInputs: [], contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false, ...overrides });
   };
 
+  it("keeps the complete Stage thread under a distinct persisted-owner trigger", () => {
+    const humanId = "stage-responsible-human", wakeId = randomUUID(), intentId = randomUUID();
+    const human = nativeContinuationCommentProjection({ id: randomUUID(), authorType: "user", authorUserId: "another-readable-human",
+      authorAgentId: null, createdByRunId: null, body: "Please review the entire draft.",
+      createdAt: new Date("2026-10-01T00:00:00Z"), updatedAt: new Date("2026-10-01T00:00:00Z"), deletedAt: null, sourceTrust: null });
+    const agent = nativeContinuationCommentProjection({ id: randomUUID(), authorType: "agent", authorUserId: null,
+      authorAgentId: randomUUID(), createdByRunId: randomUUID(), body: "The draft is ready for review.",
+      createdAt: new Date("2026-10-01T00:01:00Z"), updatedAt: new Date("2026-10-01T00:01:00Z"), deletedAt: null, sourceTrust: null });
+    const reason = "execution_review_requested" as const;
+    const capture: NativeTaskContinuationCapture = { companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,
+      wake: {requestedByActorType:"system",requestedByActorId:`native-status-wake-dispatch:${intentId}`,reason,originCommentIds:[]},
+      envelope: { version:1, companyId,issueId,trigger:{reason,interactionId:null,sourceRunId:null},originCommentIds:[],
+        objective:human.body,messages:[human,agent],humanResponses:[],interactionOutcomes:[],completedWork:null,
+        recoveryOutcomes:[],unresolvedInteractionIds:[],completedActions:[],
+        coverage:{kind:"full_task_history",throughCommentId:agent.id,summaryThroughCommentId:null} },
+      commentSources:[human,agent].map(message=>({ input:{kind:"comment",issueId,commentId:message.id,
+        sourceVersion:"1",contentHash:nativeContinuationMessageHash(message)},payloadSourceSnapshot:null })) };
+    const stageTrigger: NonNullable<Parameters<typeof exactNativeTaskContinuation>[0]["stageTrigger"]> = {
+      version:1,companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,intentId,
+      effectId:randomUUID(),decisionId:randomUUID(),executorRunId:randomUUID(),executorAgentId:randomUUID(),
+      reason,stageHash:"a".repeat(64),chainHash:"b".repeat(64),taskObjective:"Task fallback objective" };
+    const check = (value = capture, proof: typeof stageTrigger | undefined = stageTrigger) => exactNativeTaskContinuation({
+      companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,wakeReason:reason,
+      value:value.envelope,capture:value,...(proof ? {stageTrigger:proof}: {}) });
+    expect(check()).toBe(capture);
+    expect(exactNativeTaskContinuation({companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,
+      wakeReason:reason,value:capture.envelope,capture})).toBeNull();
+    for (const mutate of [
+      (v:NativeTaskContinuationCapture)=>{v.wake.requestedByActorId=randomUUID();},
+      (v:NativeTaskContinuationCapture)=>{v.wake.requestedByActorType="user";},
+      (v:NativeTaskContinuationCapture)=>{v.envelope.originCommentIds=[human.id];},
+      (v:NativeTaskContinuationCapture)=>{v.wake.originCommentIds=[human.id];},
+      (v:NativeTaskContinuationCapture)=>{v.envelope.trigger.sourceRunId=stageTrigger.executorRunId;},
+      (v:NativeTaskContinuationCapture)=>{v.envelope.objective=agent.body;},
+      (v:NativeTaskContinuationCapture)=>{v.envelope.messages[0]!.body="Substituted body";},
+      (v:NativeTaskContinuationCapture)=>{v.commentSources.pop();},
+      (v:NativeTaskContinuationCapture)=>{Reflect.set(v.envelope.messages[0]!,"sourceTrust",{preset:"unknown"});},
+    ]) { const changed=structuredClone(capture);mutate(changed);expect(check(changed)).toBeNull(); }
+    for (const proof of [{...stageTrigger,runId:randomUUID()},{...stageTrigger,decisionId:"not-a-decision"},
+      {...stageTrigger,stageHash:"not-a-hash"},{...stageTrigger,reason:"execution_approval_requested" as const}])
+      expect(check(capture,proof)).toBeNull();
+    const agentOnly=structuredClone(capture);
+    agentOnly.envelope.messages=[agent];agentOnly.commentSources=agentOnly.commentSources.slice(1);
+    agentOnly.envelope.objective=stageTrigger.taskObjective;
+    expect(check(agentOnly)).toBe(agentOnly);
+    agentOnly.envelope.objective=human.body;
+    expect(check(agentOnly)).toBeNull();
+    const oversized=structuredClone(capture);oversized.envelope.messages[0]!.body="x".repeat(64_001);
+    expect(check(oversized)).toBeNull();
+  });
+
   it("requires a nonempty Task root and exact company, renderer identity and candidate input binding", () => {
     expect(input()?.inputs).toEqual([{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }]);
     expect(input({ references: [] })).toBeNull();

@@ -1565,7 +1565,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "e4e911d27d674ee3b51000920ef636ef9b760d453bec774f798925684b2def8a",
+      "sourceSha256": "29d0c5191aa48d840a717433b9ec9547bdcec675103f8d79b91f0f27562883a5",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "Native review wakes retain their exact applied-decision and current Task generation checks. Initial Human-comment continuations now retain final redacted comment snapshots, the actual admitted wake and current source access. The article still correctly directs users to the original Task and current run before retrying; Forget separately verifies process stop and storage removal."
@@ -1669,7 +1669,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "e4e911d27d674ee3b51000920ef636ef9b760d453bec774f798925684b2def8a",
+      "sourceSha256": "29d0c5191aa48d840a717433b9ec9547bdcec675103f8d79b91f0f27562883a5",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
       "rationale": "Native-vækninger til gennemgang bevarer kontrollen af den anvendte beslutning og opgavens aktuelle version. Fortsættelser efter en første Human-kommentar bevarer nu de endeligt redigerede kommentarkilder, den faktisk tilladte vækning og aktuel kildeadgang. Artiklen henviser fortsat korrekt til den oprindelige opgave og aktuelle kørsel før et nyt forsøg. Forget kontrollerer processtop og fjernelse fra lageret separat."
@@ -2053,7 +2053,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "e4e911d27d674ee3b51000920ef636ef9b760d453bec774f798925684b2def8a",
+      "sourceSha256": "29d0c5191aa48d840a717433b9ec9547bdcec675103f8d79b91f0f27562883a5",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
       "rationale": "Native review wakes retain their exact applied-decision and current Task generation checks. Initial Human-comment continuations now retain final redacted comment snapshots, the actual admitted wake and current source access. The article still correctly directs users to the original Task and current run before retrying; Forget separately verifies process stop and storage removal."
@@ -2061,7 +2061,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "e4e911d27d674ee3b51000920ef636ef9b760d453bec774f798925684b2def8a",
+      "sourceSha256": "29d0c5191aa48d840a717433b9ec9547bdcec675103f8d79b91f0f27562883a5",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
       "rationale": "Native-vækninger til gennemgang bevarer kontrollen af den anvendte beslutning og opgavens aktuelle version. Fortsættelser efter en første Human-kommentar bevarer nu de endeligt redigerede kommentarkilder, den faktisk tilladte vækning og aktuel kildeadgang. Artiklen henviser fortsat korrekt til den oprindelige opgave og aktuelle kørsel før et nyt forsøg. Forget kontrollerer processtop og fjernelse fra lageret separat."

@@ -22,6 +22,16 @@ import type { NativeCommentSourceCapture } from "./agent-conversations.js";
 
 /** A snapshot of the actual receiver and final redacted owner rendition; not
  * an authority boolean. Consumers still validate every source owner/current ACL. */
+/** A Stage trigger is selected only by the persisted Stage owner. Readers
+ * reconstruct every field; this projection is not itself execution authority. */
+export type NativeStageTaskContinuationTrigger = {
+  version: 1; companyId: string; issueId: string; runId: string; agentId: string;
+  responsibleUserId: string; wakeupRequestId: string; intentId: string; effectId: string;
+  decisionId: string; executorRunId: string; executorAgentId: string;
+  reason: "execution_review_requested" | "execution_approval_requested";
+  stageHash: string; chainHash: string; taskObjective: string;
+};
+
 export type NativeTaskContinuationCapture = {
   companyId: string; issueId: string; agentId: string; runId: string;
   responsibleUserId: string; wakeupRequestId: string;

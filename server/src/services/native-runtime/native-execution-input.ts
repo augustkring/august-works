@@ -154,7 +154,7 @@ function isClosedEmptyTaskContinuation(value: unknown, input: {
  * owner-produced rendition; unsupported action/recovery families stay closed. */
 export function exactNativeTaskContinuation(input: { value: unknown; companyId: string; issueId: string;
   runId: string; agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null; wakeReason: string | null;
-  capture?: NativeTaskContinuationCapture | null; historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[] }): NativeTaskContinuationCapture | null {
+  capture?: NativeTaskContinuationCapture | null; stageTrigger?: import("../execution-continuation.js").NativeStageTaskContinuationTrigger; historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[] }): NativeTaskContinuationCapture | null {
   const { capture } = input;
   let serialized: string;
   try {
@@ -187,6 +187,23 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   const hasGoverned = Array.isArray(governed) && governed.length > 0 && governed.length <= 256;
   const c = capture.envelope;
   const hasResolutionWake = capture.wake?.interaction !== undefined;
+  const stageTrigger = input.stageTrigger;
+  const hasStageTrigger = stageTrigger !== undefined;
+  if (hasStageTrigger) {
+    const id = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!stageTrigger || Object.keys(stageTrigger).sort().join(",") !==
+      "agentId,chainHash,companyId,decisionId,effectId,executorAgentId,executorRunId,intentId,issueId,reason,responsibleUserId,runId,stageHash,taskObjective,version,wakeupRequestId" ||
+      stageTrigger.version !== 1 || stageTrigger.companyId !== input.companyId || stageTrigger.issueId !== input.issueId ||
+      stageTrigger.runId !== input.runId || stageTrigger.agentId !== input.agentId ||
+      stageTrigger.responsibleUserId !== input.responsibleUserId || stageTrigger.wakeupRequestId !== input.wakeupRequestId ||
+      ![stageTrigger.intentId,stageTrigger.effectId,stageTrigger.decisionId,stageTrigger.executorRunId,stageTrigger.executorAgentId].every(value=>typeof value === "string" && id.test(value)) ||
+      ![stageTrigger.stageHash,stageTrigger.chainHash].every(value=>typeof value === "string" && /^[a-f0-9]{64}$/.test(value)) ||
+      !["execution_review_requested","execution_approval_requested"].includes(stageTrigger.reason) || stageTrigger.reason !== input.wakeReason ||
+      typeof stageTrigger.taskObjective !== "string" || Buffer.byteLength(stageTrigger.taskObjective,"utf8") > 64_000 ||
+      hasResolutionWake || capture.delivery !== undefined || capture.wake?.requestedByActorType !== "system" ||
+      capture.wake.requestedByActorId !== `native-status-wake-dispatch:${stageTrigger.intentId}` ||
+      !Array.isArray(capture.wake.originCommentIds) || capture.wake.originCommentIds.length !== 0) return null;
+  }
   if (!c || typeof c !== "object" || Array.isArray(c) || !c.trigger || typeof c.trigger !== "object" ||
     Array.isArray(c.trigger) || !c.coverage || typeof c.coverage !== "object" || Array.isArray(c.coverage) ||
     !capture.wake || Object.keys(capture.wake).sort().join(",") !== ["originCommentIds", "reason", "requestedByActorId", "requestedByActorType", ...(capture.wake.interaction ? ["interaction"] : [])].sort().join(",") ||
@@ -198,7 +215,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     c.trigger.reason !== (input.wakeReason ?? "task_execution") ||
     (!hasResolutionWake && (c.trigger.interactionId !== null || c.trigger.sourceRunId !== null)) ||
     !Array.isArray(c.messages) || c.messages.length === 0 || c.messages.length > 256 ||
-    !Array.isArray(c.originCommentIds) || c.originCommentIds.length === 0 || c.originCommentIds.length > 256 ||
+    !Array.isArray(c.originCommentIds) || (hasStageTrigger ? c.originCommentIds.length !== 0 : c.originCommentIds.length === 0) || c.originCommentIds.length > 256 ||
     new Set(c.originCommentIds).size !== c.originCommentIds.length ||
     (c.humanResponses !== undefined && (!Array.isArray(c.humanResponses) || (!hasGoverned && c.humanResponses.length !== 0))) ||
     !Array.isArray(c.interactionOutcomes) || (!hasGoverned && c.interactionOutcomes.length !== 0) ||
@@ -206,7 +223,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     (c.completedActions !== undefined && (!Array.isArray(c.completedActions) || c.completedActions.length !== 0)) ||
     (c.completedWork !== null && c.completedWork !== capture.summary?.rendition?.body && c.completedWork !== capture.finalizedSummary?.body) || !Array.isArray(c.unresolvedInteractionIds) || c.unresolvedInteractionIds.length > 256 ||
     capture.commentSources.length !== c.messages.length || capture.wake.reason !== input.wakeReason ||
-    (capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId)) return null;
+    (!hasStageTrigger && (capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId))) return null;
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (![input.companyId, input.issueId, input.runId, input.agentId, input.wakeupRequestId].every(id => typeof id === "string" && uuid.test(id)) ||
     capture.wake.originCommentIds.length > 256 || capture.wake.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id)) ||
@@ -366,14 +383,14 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
         trigger.interactionOutcome.kind !== capture.wake.interaction.interactionKind || trigger.owner.sourceRunId !== c.trigger.sourceRunId ||
         d.sourceVersion !== trigger.sourceVersion ||
         origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null || !originIds.has(message.id))) return null;
-    } else if (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null ||
+    } else if (!hasStageTrigger && (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null ||
       !capture.wake.originCommentIds.includes(message.id)) ||
-      !origins.some(message => message?.authorId === capture.wake.requestedByActorId)) return null;
-  } else if (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null ||
+      !origins.some(message => message?.authorId === capture.wake.requestedByActorId))) return null;
+  } else if (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || (!hasStageTrigger && (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null ||
     !capture.wake.originCommentIds.includes(message.id)) ||
-    !origins.some(message => message?.authorId === capture.wake.requestedByActorId)) return null;
+    !origins.some(message => message?.authorId === capture.wake.requestedByActorId)))) return null;
   const latest = c.messages.findLast(message => message.authorType === "user" && message.createdByRunId === null && message.body.trim());
-  if (!latest || c.objective !== latest.body || Object.keys(c.coverage).sort().join(",") !==
+  if ((!latest && !hasStageTrigger) || c.objective !== (latest?.body ?? stageTrigger?.taskObjective) || Object.keys(c.coverage).sort().join(",") !==
     "kind,summaryThroughCommentId,throughCommentId" || c.coverage.kind !== "full_task_history" ||
     c.coverage.throughCommentId !== c.messages.at(-1)?.id || c.coverage.summaryThroughCommentId !== null) return null;
   return capture;
@@ -424,6 +441,7 @@ export function captureNativeTaskWakeSource(input: {
   sourceVersion: string;
   agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null;
   continuationCapture?: NativeTaskContinuationCapture | null;
+  stageTrigger?: import("../execution-continuation.js").NativeStageTaskContinuationTrigger;
   historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
   /** Actual constructor input plus its captured metadata source. The recurring
    * reader re-parses the locked profile and checks the current metadata owner. */
@@ -475,7 +493,7 @@ export function captureNativeTaskWakeSource(input: {
   const emptyObject = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0;
   const closedContinuation = exactNativeTaskContinuation({ value: payload.executionContinuation, companyId: input.companyId,
     issueId: input.issueId, runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId,
-    wakeupRequestId: input.wakeupRequestId, wakeReason: input.persistedWakeReason, capture: input.continuationCapture, historicalPendingSources: input.historicalPendingSources });
+    wakeupRequestId: input.wakeupRequestId, wakeReason: input.persistedWakeReason, capture: input.continuationCapture, stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources });
   const governedWake = closedContinuation?.governedInteractions?.length ? closedContinuation.wake.interaction : null;
   const checks: Record<string, boolean> = {
     reason: payload.reason === input.persistedWakeReason,
@@ -486,7 +504,7 @@ export function captureNativeTaskWakeSource(input: {
       companyId: input.companyId, issueId: input.issueId, wakeReason: input.persistedWakeReason, task: input.task,
     }) || exactNativeTaskContinuation({ value: payload.executionContinuation, companyId: input.companyId, issueId: input.issueId,
       runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId, wakeupRequestId: input.wakeupRequestId,
-      wakeReason: input.persistedWakeReason, capture: input.continuationCapture, historicalPendingSources: input.historicalPendingSources }) !== null,
+      wakeReason: input.persistedWakeReason, capture: input.continuationCapture, stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources }) !== null,
     attachmentOmissions: Array.isArray(payload.attachmentOmissions) && payload.attachmentOmissions.length === 0,
     externalChatProvider: payload.externalChatProvider === null, recovery: payload.recovery === null,
     agentMessage: isDeepStrictEqual(payload.agentMessage, closedContinuation?.delivery?.projection.agentMessage ?? null),

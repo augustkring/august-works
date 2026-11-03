@@ -53,6 +53,8 @@ import { nativeSha256 } from "../../services/native-runtime/canonical.js";
 import { registerNativeDraftGateway } from "../../services/orchestration/native-draft-runtime.js";
 import { environmentRuntimeService } from "../../services/environment-runtime.js";
 
+import type { ManagedSandboxProviderRegistration } from "./managed-native-conversation-sandbox-host.js";
+
 type FrameInput = Parameters<typeof runManagedNativeConversationFrame>[0];
 /** Pre-run extraction of the existing controlled Host fixture. The driver
  * calls the real scheduler; this helper never inserts a Run or worker attempt.
@@ -101,6 +103,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     throw new Error("two_agent_signoff_requires_owned_host_admission");
   if (input.observeModelOriginDenials && input.schedulerMode !== "serial")
     throw new Error("scheduler_origin_denials_require_serial_fixture");
+  const registrationsByAgent = new Map<string, ManagedSandboxProviderRegistration>();
   const verifiedModelRun = new AsyncLocalStorage<string>();
   const originHttpDenials = new Map<string, { directDenied: boolean; unownedConnectDenied: boolean; noAdditionalEffects: boolean }>();
   let authenticatedModelRouteDenials = 0;
@@ -113,9 +116,12 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const { configureManagedConversationSandboxHost, configureManagedSerialSchedulerSandboxHost } =
         await import("./managed-native-conversation-sandbox-host.js");
       if (input.schedulerMode === "serial") return configureManagedSerialSchedulerSandboxHost({ ...context, root: context.runHome,
+        preparedRegistration: registrationsByAgent.get(context.agentId),
+        controlledNativeSessionBackendFactory: input.controlledNativeSessionBackendFactory,
         ...(input.ordinaryWorkerProject ? { ordinaryWorkerProject: input.ordinaryWorkerProject() } : {}),
         withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work) });
-      return configureManagedConversationSandboxHost({ ...context, root: context.runHome, ordinaryWorker: true });
+      return configureManagedConversationSandboxHost({ ...context, root: context.runHome, ordinaryWorker: true,
+        controlledNativeSessionBackendFactory: input.controlledNativeSessionBackendFactory });
     }) };
   const { db } = input;
   try { await assertManagedFixtureOpenCodeImage(input.opencodeBinary); }
@@ -177,16 +183,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   const profilesByAgent = new Map<string, WorkerModelProfile>();
   const providerBindingsByAgent = new Map<string, string>();
   const apiKeysByAgent = new Map<string, string>();
+  const preparedAgents: Array<{ agentId: string; adapterConfig: Record<string, unknown> }> = [];
   for (const configuredAgentId of agentIds) {
     await db.update(agents).set({ budgetMonthlyCents, adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,
       runtimeConfig: { timeoutSec: input.timeoutSec ?? 180 }, status: "idle" }).where(eq(agents.id, configuredAgentId));
     await input.prepareNativeRuntimeContext?.({ db, actor: human, companyId, agentId: configuredAgentId });
-    if (input.managedTwoAgentSignoff) {
-      const { ensureManagedSandboxEnvironmentForAgent } = await import("./managed-native-conversation-sandbox-host.js");
-      // Set the exact managed environment before Heartbeat resolves and seals
-      // this Agent's lease; full Host setup remains lazy and per-Agent.
-      await ensureManagedSandboxEnvironmentForAgent(db, companyId, configuredAgentId);
-    }
     const [configuredAgent] = await db.select({ adapterConfig: agents.adapterConfig })
       .from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, configuredAgentId))).limit(1);
     if (!configuredAgent || !configuredAgent.adapterConfig || typeof configuredAgent.adapterConfig !== "object" ||
@@ -203,6 +204,16 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       adapterType: "paperclip_runner", config: adapterConfig }));
     await providerService.recordDiscovery(companyId, configuredAgentId, snapshot,
       Object.fromEntries(providerConformanceRequirements(snapshot, providerBinding.isolationMode).map(check => [check, true])));
+    if (input.managedTwoAgentSignoff) {
+      const { registerManagedSandboxProvider } = await import("./managed-native-conversation-sandbox-host.js");
+      registrationsByAgent.set(configuredAgentId, await registerManagedSandboxProvider({ db, actor: human,
+        companyId, agentId: configuredAgentId, providerBindingId: providerBinding.id }));
+    }
+    providerBindingsByAgent.set(configuredAgentId, providerBinding.id);
+    preparedAgents.push({ agentId: configuredAgentId, adapterConfig });
+  }
+  // Both canonical registrations exist before any Worker profile or gateway is sealed.
+  for (const { agentId: configuredAgentId, adapterConfig } of preparedAgents) {
     const provider = await providerService.assertRuntime(companyId, configuredAgentId);
     const apiKey = `conversation-fixture-${randomUUID()}`;
     apiKeysByAgent.set(configuredAgentId, apiKey);
@@ -223,7 +234,6 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       qualificationArtifactSha256: "c".repeat(64),
     });
     profilesByAgent.set(configuredAgentId, profile);
-    providerBindingsByAgent.set(configuredAgentId, provider.provider.id);
   }
   const executionsByRun = new Map<string, { execution: NativeExecutionInput; issueId: string | null; agentId: string }>();
   const preModelFailures = new Map<string, { stage: "input" | "host" | "mint" | "issuer";
@@ -674,6 +684,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       throw new Error("scheduler_fixture_two_agent_host_reuse_not_supported");
     if (existing) return existing;
     if (!agentIds.includes(configuredAgentId)) throw new Error("scheduler_fixture_native_run_agent_unmapped");
+    if (input.managedTwoAgentSignoff && !registrationsByAgent.has(configuredAgentId))
+      throw new Error("scheduler_fixture_agent_registration_missing");
     const hostRoot = input.managedTwoAgentSignoff ? join(runHome, `agent-${configuredAgentId}`) : runHome;
     if (input.managedTwoAgentSignoff) { await mkdir(hostRoot, { mode: 0o700 }); await chmod(hostRoot, 0o700); }
     const host = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId: configuredAgentId,

@@ -39,6 +39,7 @@ import type { NativeTaskContinuationCapture } from "./execution-continuation.js"
 import { sanitizeQuarantinedCommentForHigherTrust, redactQuarantinedBodyForHigherTrust } from "./source-trust.js";
 import { captureNativeTaskWakeSource, type NativeConsumedSourceComponent, type NativeModelOutputCapture,
   type NativePayloadSourceSet } from "./native-runtime/native-execution-input.js";
+import { captureNativeExecutionStageTaskWakeSource } from "./native-stage-wake-source.js";
 import { isCurrentConversationModelRoot } from "./native-runtime/worker-conversation-root.js";
 import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 
@@ -1908,7 +1909,14 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined, persistedWakeReason: typeof context?.wakeReason === "string" ? context.wakeReason : null,
       task: wakeTask, checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
       commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
-        value.kind === "comment"), payload: wake }) : null;
+        value.kind === "comment"), payload: wake }) ?? await captureNativeExecutionStageTaskWakeSource(db, {
+          companyId: input.companyId, runId: input.runId, issueId: input.issueId, sourceVersion: taskSource.sourceVersion,
+          task: wakeTask, runContext: context, payload: wake, workspaceCapture,
+          checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
+          commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
+            value.kind === "comment"), continuationCapture,
+          historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined,
+        }) : null;
   if (!current || !isDeepStrictEqual(current, input.source) ||
     input.source.runId !== input.runId || input.source.issueId !== input.issueId ||
     input.bootstrapInputs.filter(value => value.kind === "native_task_wake" && value.runId === input.runId &&

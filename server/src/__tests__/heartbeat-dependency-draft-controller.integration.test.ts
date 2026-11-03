@@ -8,7 +8,7 @@ import request from "supertest";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
-  nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations } from "@paperclipai/db";
+  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -548,7 +548,8 @@ describe("dependency scheduling through the installed Native text draft controll
 
   async function withInstalledDraftTransport(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>,
     fetch: typeof guardedRemoteHttpFetch, drive: (heartbeat: ReturnType<typeof heartbeatService>) => Promise<void>,
-    beforeChatControlRecoveryCheck?: (input: { runId: string; issueId: string; stage: "claim" | "dispatch" }) => Promise<void>) {
+    beforeChatControlRecoveryCheck?: (input: { runId: string; issueId: string; stage: "claim" | "dispatch" }) => Promise<void>,
+    beforeNativeRuntimeSelection?: (runId: string) => Promise<void>) {
     const consumer = workerModelGateway(db, { profiles: [fixture.profile], sourceSha,
       protectedEvidenceOrigin: "https://protected.test.invalid", fetch });
     const app = express(); app.use(express.json()); app.use(mcpGatewayProtocolRoutes(createToolGatewayService(db))); app.use(errorHandler);
@@ -567,6 +568,7 @@ describe("dependency scheduling through the installed Native text draft controll
       heartbeat = heartbeatService(db, {
         nativeSessionBackendFactory: substitution,
         ...(beforeChatControlRecoveryCheck ? { beforeChatControlRecoveryCheck } : {}),
+        ...(beforeNativeRuntimeSelection ? { beforeNativeRuntimeSelection } : {}),
       });
       await drive(heartbeat);
       expect(substitution).not.toHaveBeenCalled();
@@ -921,6 +923,93 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(await documentService(db).getIssueDocumentByKey(entries[1]!.task.id, "result")).toBeNull();
       }
     },
+  );
+
+  // These are genuine scheduler/Plan/current-Human cancellation fences, not a
+  // provider backend mock. Both intentionally stop before the HTTP controller.
+  it.each(["before_selection", "after_selection"] as const)(
+    "cancels a real installed-controller Run at %s without dispatching its model",
+    async phase => {
+      const fixture = await seedInstalledDraft(), {f} = fixture;
+      let heartbeatOwner: ReturnType<typeof heartbeatService> | undefined;
+      let entry: Awaited<ReturnType<typeof createDraftPlan>> | undefined;
+      let selectedRunId: string | null = null;
+      let selectionReached = false, dispatchReached = false, calls = 0;
+      let cancellation: Promise<unknown> | undefined, cancellationError: unknown;
+      const fetch: typeof guardedRemoteHttpFetch = async () => {
+        calls++;
+        throw new Error("Cancellation fence must precede actual controlled model HTTP");
+      };
+      const beforeSelection = async (runId: string) => {
+        if (!heartbeatOwner || !entry) throw new Error("cancellation_fence_owner_missing");
+        selectionReached = true; selectedRunId = runId;
+        const current = await heartbeatOwner.getRun(runId);
+        expect(current).toMatchObject({companyId:f.home,agentId:f.presence.id,responsibleUserId:f.userId,
+          runtimeMode:"legacy",runtimeModeResolvedAt:null,nativeSessionId:null});
+        expect(calls).toBe(0);
+        if (phase === "before_selection") await heartbeatOwner.cancelRun(runId,"Cancel before Native selection");
+      };
+      const beforeDispatch = async ({runId,issueId,stage}: {runId:string;issueId:string;stage:"claim"|"dispatch"}) => {
+        if (stage !== "dispatch" || phase !== "after_selection") return;
+        if (!heartbeatOwner || !entry) throw new Error("cancellation_fence_owner_missing");
+        dispatchReached = true;
+        expect(issueId).toBe(entry.task.id);expect(runId).toBe(selectedRunId);
+        expect(await heartbeatOwner.getRun(runId)).toMatchObject({runtimeMode:"native",nativeIssueId:entry.task.id});
+        expect(calls).toBe(0);
+        // Cancellation can await this executor. Start it, observe its actual
+        // durable fence with a bounded wait, then let the hook unwind.
+        cancellation = heartbeatOwner.cancelRun(runId,"Cancel after Native selection")
+          .catch(error=>{cancellationError=error;});
+        await vi.waitFor(async () => {
+          const current=await heartbeatOwner!.getRun(runId);
+          expect(current?.resultJson).toMatchObject({startupCancellation:{requestedAt:expect.any(String)}});
+        },{timeout:5_000,interval:25});
+      };
+      await withInstalledDraftTransport(fixture,fetch,async heartbeat => {
+        heartbeatOwner=heartbeat;
+        // The helper installed this exact profile/gateway before Plan admission.
+        entry=await createDraftPlan(fixture,`Cancellation fence ${phase}`);
+        const wake=await heartbeat.wakeup(f.presence.id,{source:"automation",triggerDetail:"system",reason:"issue_assigned",
+          requestedByActorType:"user",requestedByActorId:f.userId,payload:{issueId:entry.task.id},
+          contextSnapshot:{issueId:entry.task.id,wakeReason:"issue_assigned"}});
+        expect(wake).not.toBeNull();
+        if (!wake) throw new Error("cancellation_fence_run_missing");
+        await heartbeat.drainActiveRunExecutions();
+        await cancellation;
+        expect(cancellationError).toBeUndefined();
+        expect(selectionReached).toBe(true);expect(selectedRunId).toBe(wake.id);
+        expect(dispatchReached).toBe(phase==="after_selection");
+        const runs=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId,f.home));
+        expect(runs).toHaveLength(1);
+        const run=runs[0]!;
+        expect(run).toMatchObject({id:wake.id,companyId:f.home,agentId:f.presence.id,responsibleUserId:f.userId,
+          status:"cancelled",runtimeMode:phase==="before_selection"?"legacy":"native",
+          resultJson:{startupPreparationSettledAt:expect.any(String)}});
+        const coordinators=await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId,wake.id));
+        if (phase==="before_selection") {
+          expect(run).toMatchObject({runtimeModeResolvedAt:null,nativeSessionId:null,
+            resultJson:{startupCancellation:{beforeNativeSelection:true}}});
+          expect(coordinators).toEqual([]);
+        } else {
+          expect(run.runtimeModeResolvedAt).toBeInstanceOf(Date);expect(run.nativeSessionId).toEqual(expect.any(String));
+          expect(coordinators).toEqual([expect.objectContaining({runId:wake.id,issueId:entry.task.id,attempt:0,leaseOwner:null})]);
+        }
+        const [task]=await db.select().from(issues).where(eq(issues.id,entry.task.id));
+        expect(task).toMatchObject({executionRunId:null,executionAgentNameKey:null,executionLockedAt:null});
+        expect(task?.status).not.toBe("done");
+        const [request]=await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id,run.wakeupRequestId!));
+        expect(request).toMatchObject({runId:wake.id,status:"cancelled"});
+        const attempts=await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId,entry.plan.id));
+        expect(attempts).toHaveLength(1);
+        expect(attempts[0]).toMatchObject({companyId:f.home,planId:entry.plan.id,runId:wake.id,agentId:f.presence.id});
+        const manifests=await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId,wake.id));
+        expect(manifests).toHaveLength(1);expect(attempts[0]!.executionManifestId).toBe(manifests[0]!.id);
+        expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId,entry.plan.id))).toEqual([]);
+        expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId,wake.id))).toEqual([]);
+        expect(await documentService(db).getIssueDocumentByKey(entry.task.id,"result")).toBeNull();
+        expect(calls).toBe(0);
+      },beforeDispatch,beforeSelection);
+    },60_000,
   );
 
 });
