@@ -7,7 +7,7 @@ import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolatio
 import { authUsers, closeRegisteredClients, companyMemberships, createDb, heartbeatRuns, issues,
   pipelineCaseEvents } from "../../packages/db/src/index.ts";
 import { eq } from "../../packages/db/node_modules/drizzle-orm/index.js";
-import { createLocalAgentJwt } from "../../server/src/agent-auth-jwt";
+import { withManagedPipelineProducer } from "./fixtures/managed-pipeline-producer";
 import { canActorReadHeartbeatRunPrivacy } from "../../server/src/services/authorization.ts";
 
 registerEnglishAccountLocaleIsolation(test);
@@ -79,142 +79,13 @@ async function createCompanyAgent(
   return response.json() as Promise<{ id: string }>;
 }
 
-async function createPipelineWriterAgentKey(board: APIRequestContext, companyId: string) {
-  await createCompanyAgent(board, companyId, {
-    name: "Pipeline CEO",
-    role: "ceo",
-    title: "CEO",
-    capabilities: "Approves agent join requests during e2e setup.",
-  });
-
-  const inviteResponse = await board.post(`/api/companies/${companyId}/invites`, {
-    data: {
-      allowedJoinTypes: "agent",
-      defaultsPayload: {
-        agent: {
-          grants: [
-            { permissionKey: "pipelines:write", scope: null },
-          ],
-        },
-      },
-    },
-  });
-  await expectOk(inviteResponse, "create pipeline-writer invite");
-  const invite = await inviteResponse.json() as { token: string };
-
-  const acceptResponse = await board.post(`/api/invites/${invite.token}/accept`, {
-    data: {
-      requestType: "agent",
-      agentName: "Pipeline Fanout Agent",
-      adapterType: "process",
-      capabilities: "Creates pipeline child work during e2e coverage.",
-    },
-  });
-  await expectOk(acceptResponse, "accept pipeline-writer invite");
-  const accepted = await acceptResponse.json() as { id: string };
-
-  const approveResponse = await board.post(`/api/companies/${companyId}/join-requests/${accepted.id}/approve`);
-  await expectOk(approveResponse, "approve pipeline-writer join");
-  const approved = await approveResponse.json() as { createdAgentId: string };
-
-  // Give the real heartbeat owner a bounded, observable process to keep alive
-  // while the Agent JWT performs its source-bound pipeline writes.
-  await expectOk(await board.patch(`/api/agents/${approved.createdAgentId}`, {
-    data: {
-      adapterConfig: {
-        command: process.execPath,
-        args: ["-e", "process.stdout.write('pipeline-writer-ready\\n'); setInterval(() => {}, 1000)"],
-      },
-      runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true } },
-    },
-  }), "configure controlled pipeline writer process");
-  const taskResponse = await board.post(`/api/companies/${companyId}/issues`, {
-    data: {
-      title: "Human-authored pipeline writer source",
-      status: "todo",
-      assigneeAgentId: approved.createdAgentId,
-    },
-  });
-  await expectOk(taskResponse, "create Human-owned pipeline writer Task");
-  const task = await taskResponse.json() as { id: string };
-  const wakeResponse = await board.post(`/api/agents/${approved.createdAgentId}/wakeup`, {
-    data: {
-      source: "on_demand",
-      triggerDetail: "manual",
-      reason: "Run source-bound pipeline writer acceptance",
-      payload: { issueId: task.id },
-    },
-  });
-  await expectOk(wakeResponse, "start original pipeline writer heartbeat run");
-  const wake = await wakeResponse.json() as {
-    id?: string;
-    status?: string;
-    agentId?: string;
-    companyId?: string;
-    reason?: string;
-    issueId?: string;
-    executionRunId?: string;
-    executionAgentId?: string;
-  };
-  // A wake can truthfully report that this exact issue is already executing.
-  // Reuse only the server-returned current run after the checks below prove its
-  // Human-created Task, company, Agent, live state, and reader privacy.
-  const runId = wake.id ?? (
-    wake.status === "skipped" &&
-    wake.reason === "issue_execution_deferred" &&
-    wake.issueId === task.id &&
-    wake.executionAgentId === approved.createdAgentId
-      ? wake.executionRunId
-      : undefined
-  );
-  if (!runId) throw new Error(`Pipeline writer wake did not identify a persisted current run: ${JSON.stringify(wake)}`);
-  try {
-    await expect.poll(async () => {
-      const response = await board.get(`/api/heartbeat-runs/${runId}`);
-      await expectOk(response, "read current Human-owned producer run");
-      const current = await response.json() as { status: string };
-      return current.status;
-    }, { timeout: 30_000, message: "the original heartbeat owner must start the source-bound producer run" }).toBe("running");
-    const readableRunResponse = await board.get(`/api/heartbeat-runs/${runId}`);
-    await expectOk(readableRunResponse, "read current Human-owned producer run");
-    const readableRun = await readableRunResponse.json() as {
-      id: string; status: string; agentId?: string; companyId?: string; issueId?: string;
-      contextSnapshot?: Record<string, unknown>;
-    };
-    expect(readableRun.id).toBe(runId);
-    expect(readableRun.agentId).toBe(approved.createdAgentId);
-    expect(readableRun.companyId).toBe(companyId);
-    expect(readableRun.status).toBe("running");
-    expect(readableRun.issueId ?? readableRun.contextSnapshot?.issueId).toBe(task.id);
-
-    const token = createLocalAgentJwt(approved.createdAgentId, companyId, "process", runId);
-    if (!token) throw new Error("PAPERCLIP_AGENT_JWT_SECRET is required for pipeline writer JWT setup");
-    return { agentId: approved.createdAgentId, runId, token, taskId: task.id };
-  } catch (error) {
-    try { await board.post(`/api/heartbeat-runs/${runId}/cancel`); } catch { /* Preserve the setup failure. */ }
-    throw error;
-  }
-}
-
 async function assertCurrentHumanReadableProducerRun(
   board: APIRequestContext,
   input: { runId: string; agentId: string; companyId: string; taskId: string },
+  db: ReturnType<typeof createDb>,
 ) {
-  const configPath = process.env.PAPERCLIP_E2E_SERVER_CONFIG;
-  if (!configPath || !configPath.startsWith(path.join(tmpdir(), "paperclip-e2e-home-")))
-    throw new Error("Pipeline producer proof requires the isolated authenticated E2E server config");
-  const config = JSON.parse(await readFile(configPath, "utf8")) as {
-    database: { embeddedPostgresDataDir: string };
-  };
-  const dataDir = path.resolve(config.database.embeddedPostgresDataDir);
-  if (dataDir !== path.join(path.dirname(configPath), "db"))
-    throw new Error("Pipeline producer proof is outside the isolated E2E database");
-  const pidFile = await readFile(path.join(dataDir, "postmaster.pid"), "utf8");
-  const port = pidFile.split("\n")[3];
-  if (!/^\d+$/.test(port ?? "")) throw new Error("Isolated E2E Postgres port is unavailable");
-  const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`;
-  const db = createDb(databaseUrl);
-  try {
+  // This exact Db also backs the owned authenticated app and actual Native
+  // Run. The fixture retains pool lifetime; no global E2E DB assumption.
     const sessionResponse = await board.get("/api/auth/get-session");
     await expectOk(sessionResponse, "read authenticated Human owner for producer proof");
     const session = await sessionResponse.json() as { user: { id: string }; session: { id: string } };
@@ -256,9 +127,6 @@ async function assertCurrentHumanReadableProducerRun(
     expect(run!.issueId ?? run!.contextSnapshot?.issueId).toBe(input.taskId);
     expect(run!.responsibleUserId).toBe(session.user.id);
     expect(await canActorReadHeartbeatRunPrivacy(db, actor, { id: input.runId, companyId: input.companyId })).toBe(true);
-  } finally {
-    await closeRegisteredClients(databaseUrl);
-  }
 }
 
 async function seedPrivateCaseEventSource(board: APIRequestContext, companyId: string, caseId: string) {
@@ -455,22 +323,13 @@ function reviewQueueRow(page: Page, title: string): Locator {
 test.describe("Pipelines tutorial UI flow", () => {
   test.setTimeout(240_000);
 
-  test("covers agent fan-out, drift acknowledgement gates, child-terminal gates, and stale approvals", async ({ request: board }) => {
-    const company = await createCompany(board);
-    const pipeline = await createPrimitivePipeline(board, company.id);
-    const key = await createPipelineWriterAgentKey(board, company.id);
-    const agentApi = await pwRequest.newContext({
-      baseURL: BASE_URL,
-      extraHTTPHeaders: {
-        Authorization: `Bearer ${key.token}`,
-        "X-Paperclip-Run-Id": key.runId,
-      },
-    });
-
-    try {
+  test("covers agent fan-out, drift acknowledgement gates, child-terminal gates, and stale approvals", async () => {
+    // Existing240s case budget; actual current Native API scope, no model claim.
+    await withManagedPipelineProducer(Date.now() + 240_000, async ({ board, agentApi, company, key, db }) => {
+      const pipeline = await createPrimitivePipeline(board, company.id);
       await assertCurrentHumanReadableProducerRun(board, {
         runId: key.runId, agentId: key.agentId, companyId: company.id, taskId: key.taskId,
-      });
+      }, db);
       const parent = await createItem(board, pipeline.id, {
         caseKey: "fanout-parent",
         title: "Fan-out parent",
@@ -611,12 +470,7 @@ test.describe("Pipelines tutorial UI flow", () => {
       expect(editedA.version).toBeGreaterThan(childA.version);
       expect(rereviewed.case.version).toBeGreaterThan(changedReview.version);
 
-    } finally {
-      await agentApi.dispose();
-      const cancelResponse = await board.post(`/api/heartbeat-runs/${key.runId}/cancel`);
-      if (cancelResponse.status() !== 404 && cancelResponse.status() !== 409)
-        await expectOk(cancelResponse, "cancel controlled pipeline writer run");
-    }
+    });
   });
 
   test("walks setup, intake, board moves, item detail, review queue, and learnings", async ({ page, request: board }) => {

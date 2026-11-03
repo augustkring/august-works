@@ -106,13 +106,8 @@ await api("/issues/" + issueId, "PATCH", { status: "done" });
   return script;
 }
 
-for (const journey of [
-  "approve",
-  "decline",
-  "always",
-  "failure",
-  "restart",
-] as const) {
+const retainedRestartJourneys: Array<"approve" | "decline" | "always" | "failure" | "restart"> = ["restart"];
+for (const journey of retainedRestartJourneys) {
   test(`connection review: ${journey}, synchronized task history and actual continuation`, async ({
     page,
     context,

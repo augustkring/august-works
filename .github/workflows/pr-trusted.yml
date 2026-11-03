@@ -1572,7 +1572,7 @@ jobs:
           managed_connection=false
           for spec in $specs; do
             case "$spec" in
-              tests/e2e/connection-intents.spec.ts|tests/e2e/connection-review-approve.spec.ts|tests/e2e/connection-review-decline.spec.ts|tests/e2e/connection-review-always.spec.ts|tests/e2e/connection-review-failure.spec.ts|tests/e2e/mcp-user-stories.spec.ts)
+              tests/e2e/connection-intents.spec.ts|tests/e2e/connection-review-approve.spec.ts|tests/e2e/connection-review-decline.spec.ts|tests/e2e/connection-review-always.spec.ts|tests/e2e/connection-review-failure.spec.ts|tests/e2e/mcp-user-stories.spec.ts|tests/e2e/signoff-policy.spec.ts|tests/e2e/pipelines-tutorial-flow.spec.ts)
                 managed_connection=true ;;
             esac
           done

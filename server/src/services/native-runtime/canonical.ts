@@ -74,3 +74,21 @@ export function nativeTaskWakeOriginCommentIds(payload: unknown): string[] {
   }
   return [...new Set(ids)];
 }
+
+/** Exact causal fields from the actual admitted wake. Conflicting direct and
+ * context projections do not acquire an authority by precedence. */
+export function nativeTaskWakeInteraction(payload: unknown): {
+  interactionId: string; interactionKind: string; interactionStatus: string; sourceRunId: string | null;
+} | null {
+  const record = (v: unknown): Record<string, unknown> => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
+  const root = record(payload), context = record(root._paperclipWakeContext);
+  const values: Record<string, unknown> = {};
+  for (const key of ["interactionId", "interactionKind", "interactionStatus", "sourceRunId"]) {
+    if (root[key] !== undefined && context[key] !== undefined && root[key] !== context[key]) return null;
+    values[key] = root[key] ?? context[key] ?? null;
+  }
+  return typeof values.interactionId === "string" && typeof values.interactionKind === "string" &&
+    typeof values.interactionStatus === "string" && (values.sourceRunId === null || typeof values.sourceRunId === "string")
+    ? { interactionId: values.interactionId, interactionKind: values.interactionKind,
+        interactionStatus: values.interactionStatus, sourceRunId: values.sourceRunId } : null;
+}

@@ -181,7 +181,7 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
           const task = await issueService(db).create(companyId, { title: "Read our Railway projects",
             description: connectedRead ? "Read the installed fixed Railway project inventory and retain its actual output."
               : "Read the fixed Railway project inventory after my connection approval; retain its actual output.",
-            status: "in_progress", responsibleUserId: actor.userId, createdByUserId: actor.userId, assigneeAgentId: agentId },
+            status: "todo", responsibleUserId: actor.userId, createdByUserId: actor.userId, assigneeAgentId: agentId },
             db, undefined, { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
           const plan = await orchestrationService(db).create(actor, companyId, { issueId: task.id,
             expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",

@@ -224,7 +224,7 @@ import {
 import { documentService, type DocumentRevisionSourceCapture } from "./documents.js";
 import { getTaskPlanContext } from "./task-plan-context.js";
 import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
-import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, exactNativeInitialTaskContinuation, type NativeBootstrapSourceClosure,
+import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, exactNativeTaskContinuation, type NativeBootstrapSourceClosure,
   prepareNativeTurnWithContext, type NativePreparedSourceCandidate, type NativeRenderedSourceReference } from "./native-runtime/native-execution-input.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
@@ -440,6 +440,7 @@ import {
 } from "./runner-goals.js";
 import { resolveChatRunPresentationAuthorizationReason } from "./chat-run-publications.js";
 import { projectService } from "./projects.js";
+import { formatNativeProjectRepositoryAppendix, prepareNativeProjectRepositoryPrompt } from "./native-runtime/native-project-repository-source.js";
 import {
   authorizationService,
   type AuthorizationActor,
@@ -4445,6 +4446,44 @@ function sanitizeAgentSessionMessageText(value: unknown): string | null {
   return redacted.trim().length > 0 ? redacted : null;
 }
 
+/** Exact internal agent-message rendition, shared with its Native source owner. */
+export function projectNativeAgentSessionMessage(value: unknown) {
+  const agentMessage = parseObject(value);
+  const agentMessageText = sanitizeAgentSessionMessageText(agentMessage.text);
+  return agentMessageText
+      ? {
+          text: agentMessageText,
+          source: readNonEmptyString(agentMessage.source),
+          pluginKey: readNonEmptyString(agentMessage.pluginKey),
+          sessionId: readNonEmptyString(agentMessage.sessionId),
+          ...(Array.isArray(agentMessage.untrustedToolResults)
+            ? {
+                untrustedToolResults: agentMessage.untrustedToolResults
+                  .slice(0, 8)
+                  .map((value) => {
+                    const result = parseObject(value);
+                    return {
+                      actionRequestId:
+                        sanitizeAgentSessionMessageText(
+                          result.actionRequestId,
+                        ) ?? "",
+                      toolName:
+                        sanitizeAgentSessionMessageText(result.toolName) ?? "",
+                      resultSummary:
+                        sanitizeAgentSessionMessageText(result.resultSummary) ??
+                        "",
+                      error: sanitizeAgentSessionMessageText(result.error),
+                      declineReason: sanitizeAgentSessionMessageText(
+                        result.declineReason,
+                      ),
+                    };
+                  }),
+              }
+            : {}),
+        }
+      : null;
+}
+
 type ManagedMcpGatewayRunConfig = {
   version: 1;
   managedMcpOnly: boolean;
@@ -7709,7 +7748,6 @@ export async function buildPaperclipWakePayload(input: {
   const agentMessage = parseObject(
     input.contextSnapshot[PAPERCLIP_AGENT_MESSAGE_KEY],
   );
-  const agentMessageText = sanitizeAgentSessionMessageText(agentMessage.text);
   const issueSummary =
     input.issueSummary ??
     (issueId
@@ -8123,38 +8161,7 @@ export async function buildPaperclipWakePayload(input: {
           workMode: issueSummary.workMode,
         }
       : null,
-    agentMessage: agentMessageText
-      ? {
-          text: agentMessageText,
-          source: readNonEmptyString(agentMessage.source),
-          pluginKey: readNonEmptyString(agentMessage.pluginKey),
-          sessionId: readNonEmptyString(agentMessage.sessionId),
-          ...(Array.isArray(agentMessage.untrustedToolResults)
-            ? {
-                untrustedToolResults: agentMessage.untrustedToolResults
-                  .slice(0, 8)
-                  .map((value) => {
-                    const result = parseObject(value);
-                    return {
-                      actionRequestId:
-                        sanitizeAgentSessionMessageText(
-                          result.actionRequestId,
-                        ) ?? "",
-                      toolName:
-                        sanitizeAgentSessionMessageText(result.toolName) ?? "",
-                      resultSummary:
-                        sanitizeAgentSessionMessageText(result.resultSummary) ??
-                        "",
-                      error: sanitizeAgentSessionMessageText(result.error),
-                      declineReason: sanitizeAgentSessionMessageText(
-                        result.declineReason,
-                      ),
-                    };
-                  }),
-              }
-            : {}),
-        }
-      : null,
+    agentMessage: projectNativeAgentSessionMessage(agentMessage),
     childIssueSummaries: Array.isArray(
       input.contextSnapshot.childIssueSummaries,
     )
@@ -20968,8 +20975,9 @@ export function heartbeatService(
               issueContext.executionWorkspacePreference,
           }
         : null;
+      let continuationSummarySource: import("./documents.js").DocumentRevisionSourceCapture | null = null;
       const continuationSummary = issueRef && !isConversation(issueContext)
-        ? await getIssueContinuationSummaryDocument(db, issueRef.id)
+        ? await getIssueContinuationSummaryDocument(db, issueRef.id, { onSourceCapture: capture => { continuationSummarySource = capture; } })
         : null;
       const exposeLowTrustRaw = trustPreset.kind === "low_trust_review";
       const safeContinuationSummary =
@@ -21048,6 +21056,8 @@ export function heartbeatService(
               context,
               previousContextRunId: taskSession?.lastRunId,
               summary: safeContinuationSummary?.body ?? null,
+              ...(safeContinuationSummary && continuationSummarySource ? { summaryDocument: {
+                source: continuationSummarySource, value: safeContinuationSummary } } : {}),
               exposeLowTrustRaw,
               onCommentSourceCapture: agent.adapterType === "paperclip_runner"
                 ? capture => continuationCommentSources.push(capture) : undefined,
@@ -22533,6 +22543,9 @@ export function heartbeatService(
       }
       await bindIssueToPersistedExecutionWorkspace(persistedExecutionWorkspace);
       const projectRepositoryPaths: string[] = [];
+      let nativeProjectRepositoryRows: Array<typeof projectWorkspaces.$inferSelect> = [];
+      let nativeProjectRepositoryMaterializations: Awaited<ReturnType<typeof prepareProjectRepositoryWorkspaces>> = [];
+
       if (executionWorkspace.projectId && resolvedWorkspace.source === "project_primary" && !resolvedWorkspace.baseCwdFallback) {
         const repositoryRows = await db.select().from(projectWorkspaces).where(and(
           eq(projectWorkspaces.companyId, agent.companyId),
@@ -22544,6 +22557,8 @@ export function heartbeatService(
           workspaces: repositoryRows,
           resolveGitAuth: workspaceGitAuthProvider,
         });
+        nativeProjectRepositoryRows = repositoryRows;
+        nativeProjectRepositoryMaterializations = repositories;
         const paths = new Map(repositories.map((repo) => [repo.workspaceId, repo.cwd]));
         projectRepositoryPaths.push(...repositories.map((repo) => path.relative(executionWorkspace.cwd, repo.cwd)));
         if (resolvedWorkspace.workspaceId) paths.set(resolvedWorkspace.workspaceId, executionWorkspace.cwd);
@@ -23689,6 +23704,7 @@ export function heartbeatService(
         let nativeBootstrapAncestorSources: NativeTaskSourceCapture[] | null = null;
         let nativeBootstrapRetainedRunSource: ReturnType<typeof nativeRetainedRunResumeWitness> | null = null;
         let nativeBootstrapSourceClosure: NativeBootstrapSourceClosure | null = null;
+        let nativeBootstrapContinuationCapture: import("./execution-continuation.js").NativeTaskContinuationCapture | null = null;
         let selectedNativeEnvironment: Record<string, string> | null = null;
         let nativeBootstrapAttachmentSourceClosureFactory: Parameters<typeof executePaperclipNativeSession>[0]["prepareBootstrapSourceClosure"];
         const nativeBootstrapInteractionSources: Array<Extract<NativePayloadSourceInput, { kind: "interaction" }>> = [];
@@ -24160,17 +24176,22 @@ export function heartbeatService(
               runtimeSkillEntries,
               onAuthoredSourceCapture: (capture) => { nativeBootstrapAuthoredSources.value = capture; },
             });
-            const selectedNativeTaskPrompt = [
-              nativeReviewRequest ?? readNonEmptyString(
-                selectPaperclipTaskMarkdown(context, {
-                  resumedSession: false,
-                  includeCommunicationGuidance: false,
-                }),
-              ) ?? `# ${issueRef.identifier ?? issueRef.id}: ${issueRef.title}`,
-              projectRepositoryPaths.length > 0
-                ? `## Project repositories\nThe task workspace also contains these editable Git repositories:\n${projectRepositoryPaths.map((repo) => `- ${repo}`).join("\n")}`
-                : null,
+            const selectedNativeTaskBasePrompt = nativeReviewRequest ?? readNonEmptyString(
+              selectPaperclipTaskMarkdown(context, { resumedSession: false, includeCommunicationGuidance: false }),
+            ) ?? `# ${issueRef.identifier ?? issueRef.id}: ${issueRef.title}`;
+            const nativeProjectRepositoryPrompt = projectRepositoryPaths.length > 0 &&
+              executionWorkspace.projectId && resolvedWorkspace.workspaceId && run.responsibleUserId
+              ? await prepareNativeProjectRepositoryPrompt({ db, companyId: agent.companyId, runId: run.id,
+                agentId: agent.id, responsibleUserId: run.responsibleUserId, issueId: issueRef.id,
+                projectId: executionWorkspace.projectId, selectedWorkspaceId: resolvedWorkspace.workspaceId,
+                cwd: executionWorkspace.cwd, repositoryRows: nativeProjectRepositoryRows,
+                repositories: nativeProjectRepositoryMaterializations, baseMarkdown: selectedNativeTaskBasePrompt,
+                baseSourceMap: nativeBootstrapTaskMarkdownSourceMap }) : null;
+            const selectedNativeTaskPrompt = nativeProjectRepositoryPrompt?.taskPrompt ?? [
+              selectedNativeTaskBasePrompt, formatNativeProjectRepositoryAppendix(projectRepositoryPaths),
             ].filter(Boolean).join("\n\n");
+            const selectedNativeTaskSourceMap = projectRepositoryPaths.length > 0
+              ? nativeProjectRepositoryPrompt?.sourceMap ?? null : nativeBootstrapTaskMarkdownSourceMap;
             const nativeExecutionWithCheckpoint =
               buildNativeExecutionWithCheckpoint({
                 previousRun: previousNativeRun,
@@ -24268,17 +24289,34 @@ export function heartbeatService(
                   requireConversationGeneration: isConversation(issueContext),
                   executionTargetKind: executionTarget?.kind === "remote" ? "remote" : "local" })
               : null;
+            const nativeWorkspaceExecution = nativeExecution;
+            if (!nativeWorkspaceExecution) throw new Error("native_bootstrap_execution_input_unavailable");
+            const nativeBootstrapWorkspaceSource: Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> = { kind: "workspace_metadata", runId: run.id,
+                    executionWorkspaceId: nativeWorkspaceExecution.binding.executionWorkspaceId,
+                    origin: persistedExecutionWorkspace ? "execution_workspace" as const :
+                      (executionWorkspace.source === "agent_home" ? "agent_home" as const : "task_session" as const),
+                    sourceVersion: persistedExecutionWorkspace?.updatedAt?.toISOString() ??
+                      (executionWorkspace.source === "agent_home" ? `agent-home:${agent.id}:v1` : `task-session:${run.id}`),
+                    contentHash: createHash("sha256").update(JSON.stringify({
+                      cwd: nativeWorkspaceExecution.workspace.cwd, repoUrl: nativeWorkspaceExecution.workspace.repoUrl,
+                      repoRef: nativeWorkspaceExecution.workspace.repoRef, branchName: nativeWorkspaceExecution.workspace.branchName,
+                    }), "utf8").digest("hex") };
             const nativeSourceCandidates: NativePreparedSourceCandidate[] = [];
+            if (nativeProjectRepositoryPrompt?.candidate) nativeSourceCandidates.push(nativeProjectRepositoryPrompt.candidate);
             const capturedTaskSource = taskSourceCapture.value;
             const capturedAuthoredSources = nativeBootstrapAuthoredSources.value;
             const nativeBootstrapWakeDiagnostics: string[] = [];
-            const closedTaskContinuation = issueRef ? exactNativeInitialTaskContinuation({ value: parseObject(context.paperclipWake).executionContinuation,
+            const closedTaskContinuation = issueRef ? exactNativeTaskContinuation({ value: parseObject(context.paperclipWake).executionContinuation,
               companyId: agent.companyId, issueId: issueRef.id, runId: run.id, agentId: agent.id,
               responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
-              wakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason), capture: nativeTaskContinuationCapture }) : null;
+              wakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
+              capture: nativeTaskContinuationCapture ? { ...nativeTaskContinuationCapture,
+                ...(nativeBootstrapRetainedRunSource ? { retainedSource: nativeBootstrapRetainedRunSource.source } : {}) } : null }) : null;
+            nativeBootstrapContinuationCapture = closedTaskContinuation;
             const nativeTaskWakeSource = capturedTaskSource?.input.kind === "task" && issueRef
               ? captureNativeTaskWakeSource({ companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
                 sourceVersion: capturedTaskSource.input.sourceVersion, agentId: agent.id,
+                workspaceCapture: { execution: nativeWorkspaceExecution, source: nativeBootstrapWorkspaceSource },
                 responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId, continuationCapture: closedTaskContinuation,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
                 checkoutRunId: issueContext?.checkoutRunId ?? null,
@@ -24307,8 +24345,7 @@ export function heartbeatService(
             // sent to buildNativeExecutionInput (full vs compact can differ).
             // A mismatch stays unknown rather than carrying full-render sources
             // onto a compact or otherwise substituted prompt.
-            const selectedMarkdown = nativeBootstrapTaskMarkdownSourceMap
-              ? selectedNativeTaskPrompt : "";
+            const selectedMarkdown = selectedNativeTaskSourceMap ? selectedNativeTaskPrompt : "";
             const nativeBootstrapUnsupported = {
               review: Boolean(nativeReviewRequest), directPrompt: Boolean(directAgentPrompt),
               previousRun: Boolean(previousNativeRun && !nativeBootstrapRetainedRunSource),
@@ -24322,7 +24359,8 @@ export function heartbeatService(
               // lines keep the explicit `unknown` renderer reference above.
               conversationHistory: isConversation(issueContext) && Boolean(nativeBootstrapConversationReplaySources?.length) &&
                 !nativeBootstrapConversationReplayClosed,
-              wake: Boolean(context.paperclipWake && !nativeTaskWakeSource), projectPaths: projectRepositoryPaths.length > 0,
+              wake: Boolean(context.paperclipWake && !nativeTaskWakeSource),
+              projectPaths: projectRepositoryPaths.length > 0 && !nativeProjectRepositoryPrompt?.candidate,
               authoredContextManifests: Boolean(capturedAuthoredSources?.contextManifests.length), missingTask: !capturedTaskSource,
             };
             const attachmentClosureExecution = nativeExecution;
@@ -24335,8 +24373,8 @@ export function heartbeatService(
                 agentId: agent.id,
                 issueId: issueRef.id,
                 renderedMarkdown: selectedMarkdown,
-                renderedMarkdownDigest: nativeBootstrapTaskMarkdownSourceMap?.renderedMarkdownDigest ?? null,
-                references: nativeBootstrapTaskMarkdownSourceMap?.references ?? null,
+                renderedMarkdownDigest: selectedNativeTaskSourceMap?.renderedMarkdownDigest ?? null,
+                references: selectedNativeTaskSourceMap?.references ?? null,
                 candidates: [...nativeSourceCandidates, ...attachmentCandidates],
                 runtimeInputs: capturedAuthoredSources?.inputs ?? null,
                 additionalInputs: [
@@ -24345,20 +24383,18 @@ export function heartbeatService(
                     revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 }] : []),
                   ...(nativeTaskWakeSource ? [nativeTaskWakeSource] : []),
                   ...(nativeBootstrapRetainedRunSource ? [nativeBootstrapRetainedRunSource.source] : []),
-                  { kind: "workspace_metadata" as const, runId: run.id,
-                    executionWorkspaceId: attachmentClosureExecution.binding.executionWorkspaceId,
-                    origin: persistedExecutionWorkspace ? "execution_workspace" as const :
-                      (executionWorkspace.source === "agent_home" ? "agent_home" as const : "task_session" as const),
-                    sourceVersion: persistedExecutionWorkspace?.updatedAt?.toISOString() ??
-                      (executionWorkspace.source === "agent_home" ? `agent-home:${agent.id}:v1` : `task-session:${run.id}`),
-                    contentHash: createHash("sha256").update(JSON.stringify({
-                      cwd: attachmentClosureExecution.workspace.cwd, repoUrl: attachmentClosureExecution.workspace.repoUrl,
-                      repoRef: attachmentClosureExecution.workspace.repoRef, branchName: attachmentClosureExecution.workspace.branchName,
-                    }), "utf8").digest("hex") },
+                  nativeBootstrapWorkspaceSource,
                 ],
                 taskWakeCommentCandidates: nativeTaskWakeSource && closedTaskContinuation
                   ? closedTaskContinuation.commentSources.map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
                       input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) : [],
+                taskWakeDocumentCandidates: nativeTaskWakeSource && closedTaskContinuation?.summary
+                  ? [{ kind: "document_revision" as const, id: closedTaskContinuation.summary.source.input.revisionId,
+                    input: closedTaskContinuation.summary.source.input, payloadSourceSnapshot: closedTaskContinuation.summary.source.payloadSourceSnapshot }] : [],
+                taskWakeInteractionSources: nativeTaskWakeSource && closedTaskContinuation
+                  ? [...(closedTaskContinuation.governedInteractions?.flatMap(capture => [capture.nativeSource, capture.continuationSource]) ?? []),
+                    ...(closedTaskContinuation.pendingInteractions?.map(capture => capture.source) ?? []),
+                    ...(closedTaskContinuation.delivery ? [closedTaskContinuation.delivery.source] : [])] : [],
                 additionalPolicy: nativeBootstrapRetainedRunSource
                   ? { issueIds: [], projectIds: [], runIds: [nativeBootstrapRetainedRunSource.source.runId], memoryIds: [], foundationRevisionIds: [] }
                   : null,
@@ -24550,6 +24586,8 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapWakeCommentSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContinuationCommentSources: continuationCommentSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInteractionSources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapFinalizedContinuationSummary: nativeBootstrapContinuationCapture?.finalizedSummary ?? null,
+                    nativeBootstrapContinuationSummaryDocument: nativeBootstrapContinuationCapture?.summary ?? null }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:

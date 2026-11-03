@@ -15,7 +15,7 @@ import type {
   StrictCompletionContractInput,
 } from "../../vendor/paperclip-runner/index.js";
 import {
-  nativePayloadSourceInputSchema, sourceTrustMetadataSchema,
+  nativePayloadSourceInputSchema, sourceTrustMetadataSchema, nativeRunInputSourceReceiptSchema, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY,
   nativePayloadSourceSnapshotSchema,
   type NativePayloadSourceInput,
   type NativePayloadSourcePolicy,
@@ -37,7 +37,7 @@ const NATIVE_GITHUB_ATTACHMENT_RECOVERY_GUIDANCE = [
 ].join("\n");
 
 export type NativeRenderedSourceReference = {
-  kind: "task" | "comment" | "document_revision" | "attachment" | "unknown";
+  kind: "task" | "comment" | "document_revision" | "attachment" | "project" | "unknown";
   id: string;
   commentId?: string;
   filename?: string;
@@ -46,7 +46,7 @@ export type NativeRenderedSourceReference = {
 };
 
 export type NativePreparedSourceCandidate = {
-  kind: "task" | "comment" | "document_revision" | "attachment";
+  kind: "task" | "comment" | "document_revision" | "attachment" | "project";
   id: string;
   input: NativePayloadSourceInput;
   payloadSourceSnapshot: unknown;
@@ -149,45 +149,95 @@ function isClosedEmptyTaskContinuation(value: unknown, input: {
     coverageRecord.kind === "full_task_history" && coverageRecord.throughCommentId === null && coverageRecord.summaryThroughCommentId === null;
 }
 
-/** Closed initial Human-comment continuation. Rich retained/action/interaction
- * envelopes remain unsupported until their own independent owner is closed. */
-export function exactNativeInitialTaskContinuation(input: { value: unknown; companyId: string; issueId: string;
+/** Closed Task continuation profiles. Each nonempty family requires its own
+ * owner-produced rendition; unsupported action/recovery families stay closed. */
+export function exactNativeTaskContinuation(input: { value: unknown; companyId: string; issueId: string;
   runId: string; agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null; wakeReason: string | null;
-  capture?: NativeTaskContinuationCapture | null }): NativeTaskContinuationCapture | null {
+  capture?: NativeTaskContinuationCapture | null; historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[] }): NativeTaskContinuationCapture | null {
   const { capture } = input;
   let serialized: string;
-  try { const value = JSON.stringify(input.value); if (typeof value !== "string") return null; serialized = value; }
+  try {
+    const rejectNonJson = (_key: string, value: unknown) => {
+      if (["function", "symbol", "bigint"].includes(typeof value)) throw new Error("non_json_continuation");
+      return value;
+    };
+    const value = JSON.stringify(input.value,rejectNonJson); if (typeof value !== "string") return null;
+    serialized = value; JSON.stringify(capture,rejectNonJson);
+  }
   catch { return null; }
   if (!capture || !input.agentId || !input.responsibleUserId || !input.wakeupRequestId ||
     capture.companyId !== input.companyId || capture.issueId !== input.issueId || capture.runId !== input.runId ||
     capture.agentId !== input.agentId || capture.responsibleUserId !== input.responsibleUserId ||
     capture.wakeupRequestId !== input.wakeupRequestId || !isDeepStrictEqual(capture.envelope, input.value) ||
     Buffer.byteLength(serialized, "utf8") > 64_000) return null;
-  if (Object.keys(capture).sort().join(",") !== "agentId,commentSources,companyId,envelope,issueId,responsibleUserId,runId,wake,wakeupRequestId") return null;
+  const captureKeys = ["agentId", "commentSources", "companyId", "envelope", "issueId", "responsibleUserId", "runId", "wake", "wakeupRequestId",
+    ...(capture.governedInteractions !== undefined ? ["governedInteractions"] : []),
+    ...(capture.summary !== undefined ? ["summary"] : []),
+    ...(capture.finalizedSummary !== undefined ? ["finalizedSummary"] : []),
+    ...(capture.delivery !== undefined ? ["delivery"] : []),
+    ...(capture.pendingInteractions !== undefined ? ["pendingInteractions"] : []),
+    ...(capture.previousContext !== undefined ? ["previousContext"] : []), ...(capture.retainedSource !== undefined ? ["retainedSource"] : [])];
+  if (Object.keys(capture).sort().join(",") !== captureKeys.sort().join(",")) return null;
+  for (const value of [capture.summary,capture.finalizedSummary,capture.delivery,capture.previousContext,capture.retainedSource])
+    if (value !== undefined && (!value || typeof value !== "object" || Array.isArray(value))) return null;
+  if (capture.pendingInteractions !== undefined && !Array.isArray(capture.pendingInteractions) ||
+    capture.governedInteractions !== undefined && !Array.isArray(capture.governedInteractions)) return null;
+  const governed = capture.governedInteractions;
+  const hasGoverned = Array.isArray(governed) && governed.length > 0 && governed.length <= 256;
   const c = capture.envelope;
+  const hasResolutionWake = capture.wake?.interaction !== undefined;
   if (!c || typeof c !== "object" || Array.isArray(c) || !c.trigger || typeof c.trigger !== "object" ||
     Array.isArray(c.trigger) || !c.coverage || typeof c.coverage !== "object" || Array.isArray(c.coverage) ||
-    !capture.wake || Object.keys(capture.wake).sort().join(",") !== "originCommentIds,reason,requestedByActorId,requestedByActorType" ||
+    !capture.wake || Object.keys(capture.wake).sort().join(",") !== ["originCommentIds", "reason", "requestedByActorId", "requestedByActorType", ...(capture.wake.interaction ? ["interaction"] : [])].sort().join(",") ||
     !Array.isArray(capture.wake.originCommentIds) || !Array.isArray(capture.commentSources)) return null;
   const keys = ["version", "companyId", "issueId", "trigger", "originCommentIds", "objective", "messages", "humanResponses",
-    "interactionOutcomes", "completedWork", "recoveryOutcomes", "unresolvedInteractionIds", "coverage", "completedActions"];
+    "interactionOutcomes", "completedWork", "recoveryOutcomes", "unresolvedInteractionIds", "coverage", "completedActions", "resumeDelta"];
   if (Object.keys(c).some(key => !keys.includes(key)) || c.version !== 1 || c.companyId !== input.companyId || c.issueId !== input.issueId ||
     Object.keys(c.trigger).sort().join(",") !== "interactionId,reason,sourceRunId" ||
-    c.trigger.reason !== (input.wakeReason ?? "task_execution") || c.trigger.interactionId !== null || c.trigger.sourceRunId !== null ||
+    c.trigger.reason !== (input.wakeReason ?? "task_execution") ||
+    (!hasResolutionWake && (c.trigger.interactionId !== null || c.trigger.sourceRunId !== null)) ||
     !Array.isArray(c.messages) || c.messages.length === 0 || c.messages.length > 256 ||
     !Array.isArray(c.originCommentIds) || c.originCommentIds.length === 0 || c.originCommentIds.length > 256 ||
     new Set(c.originCommentIds).size !== c.originCommentIds.length ||
-    (c.humanResponses !== undefined && (!Array.isArray(c.humanResponses) || c.humanResponses.length !== 0)) ||
-    !Array.isArray(c.interactionOutcomes) || c.interactionOutcomes.length !== 0 ||
+    (c.humanResponses !== undefined && (!Array.isArray(c.humanResponses) || (!hasGoverned && c.humanResponses.length !== 0))) ||
+    !Array.isArray(c.interactionOutcomes) || (!hasGoverned && c.interactionOutcomes.length !== 0) ||
     (c.recoveryOutcomes !== undefined && (!Array.isArray(c.recoveryOutcomes) || c.recoveryOutcomes.length !== 0)) ||
     (c.completedActions !== undefined && (!Array.isArray(c.completedActions) || c.completedActions.length !== 0)) ||
-    c.completedWork !== null || !Array.isArray(c.unresolvedInteractionIds) || c.unresolvedInteractionIds.length !== 0 ||
+    (c.completedWork !== null && c.completedWork !== capture.summary?.rendition?.body && c.completedWork !== capture.finalizedSummary?.body) || !Array.isArray(c.unresolvedInteractionIds) || c.unresolvedInteractionIds.length > 256 ||
     capture.commentSources.length !== c.messages.length || capture.wake.reason !== input.wakeReason ||
-    capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId) return null;
+    (capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId)) return null;
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (![input.companyId, input.issueId, input.runId, input.agentId, input.wakeupRequestId].every(id => typeof id === "string" && uuid.test(id)) ||
     capture.wake.originCommentIds.length > 256 || capture.wake.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id)) ||
     c.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id))) return null;
+  if (capture.summary) {
+    const summary = capture.summary;
+    if (Object.keys(summary).sort().join(",") !== "rawTrustHash,rendition,source" ||
+      typeof summary.rawTrustHash !== "string" || !/^[a-f0-9]{64}$/.test(summary.rawTrustHash) || !summary.source || !summary.rendition || !nativePayloadSourceInputSchema.safeParse(summary.source.input).success ||
+      Object.keys(summary.rendition).sort().join(",") !== "body,key,sourceTrust,title,updatedAt" ||
+      summary.rendition.key !== ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY || typeof summary.rendition.body !== "string" ||
+      !(summary.rendition.title === null || typeof summary.rendition.title === "string") ||
+      typeof summary.rendition.updatedAt !== "string" || !Number.isFinite(Date.parse(summary.rendition.updatedAt)) ||
+      (summary.rendition.sourceTrust !== null && !sourceTrustMetadataSchema.safeParse(summary.rendition.sourceTrust).success) ||
+      summary.source.input.kind !== "document_revision" || summary.source.input.issueId !== input.issueId ||
+      c.completedWork !== summary.rendition.body) return null;
+  }
+  if (capture.finalizedSummary) {
+    const value = capture.finalizedSummary, receipt = nativeRunInputSourceReceiptSchema.safeParse(value.parentReceipt);
+    if (!hasGoverned || capture.summary || Object.keys(value).sort().join(",") !==
+      "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId" ||
+      value.companyId !== input.companyId || value.issueId !== input.issueId || value.agentId !== input.agentId ||
+      value.receiverRunId !== input.runId || value.sourceRunId !== c.trigger.sourceRunId ||
+      ![value.sourceRunId,value.resultId,value.assessmentId,value.decisionId].every(id => typeof id === "string" && uuid.test(id)) ||
+      typeof value.resultCanonicalSha256 !== "string" || !/^(?:sha256:)?[a-f0-9]{64}$/.test(value.resultCanonicalSha256) ||
+      typeof value.decisionDigest !== "string" || !/^[a-f0-9]{64}$/.test(value.decisionDigest) ||
+      typeof value.decisionSnapshotHash !== "string" || !/^[a-f0-9]{64}$/.test(value.decisionSnapshotHash) ||
+      typeof value.resultCreatedAt !== "string" || !Number.isFinite(Date.parse(value.resultCreatedAt)) ||
+      typeof value.finalizationVersion !== "string" || !Number.isFinite(Date.parse(value.finalizationVersion)) ||
+      typeof value.body !== "string" || value.body.length > 32_000 || c.completedWork !== value.body || !receipt.success ||
+      receipt.data.binding.companyId !== input.companyId || receipt.data.binding.issueId !== input.issueId ||
+      receipt.data.binding.agentId !== input.agentId || receipt.data.binding.runId !== value.sourceRunId) return null;
+  }
   const ids = new Set<string>();
   for (const message of c.messages) {
     if (!message || Object.keys(message).sort().join(",") !==
@@ -197,15 +247,128 @@ export function exactNativeInitialTaskContinuation(input: { value: unknown; comp
       (message.sourceTrust !== null && !sourceTrustMetadataSchema.safeParse(message.sourceTrust).success) ||
       !(message.authorId === null || typeof message.authorId === "string") ||
       !(message.createdByRunId === null || typeof message.createdByRunId === "string") ||
+      typeof message.createdAt !== "string" || typeof message.updatedAt !== "string" ||
       !Number.isFinite(Date.parse(message.createdAt)) || !Number.isFinite(Date.parse(message.updatedAt))) return null;
     ids.add(message.id);
     const sources = capture.commentSources.filter(value => value && value.input?.kind === "comment" && value.input.commentId === message.id &&
-      value.input.issueId === input.issueId && /^\d+(?:\.\d+)?$/.test(value.input.sourceVersion) &&
+      value.input.issueId === input.issueId && typeof value.input.sourceVersion === "string" && /^\d+(?:\.\d+)?$/.test(value.input.sourceVersion) &&
       value.input.contentHash === nativeContinuationMessageHash(message));
     if (sources.length !== 1) return null;
   }
+  if (c.resumeDelta !== undefined) {
+    if (!c.resumeDelta || typeof c.resumeDelta !== "object" || Array.isArray(c.resumeDelta)) return null;
+    const previous = capture.previousContext, retained = capture.retainedSource;
+    if (!previous || !retained || !nativePayloadSourceInputSchema.safeParse(retained).success || retained.kind !== "retained_run" ||
+      Object.keys(previous).sort().join(",") !== "messages,runId" || previous.runId !== retained.runId ||
+      !Array.isArray(previous.messages) || previous.messages.length > 256 ||
+      Object.keys(c.resumeDelta).sort().join(",") !== "baseRunId,messages" || c.resumeDelta.baseRunId !== previous.runId ||
+      !Array.isArray(c.resumeDelta.messages) || c.resumeDelta.messages.length > 256 ||
+      !isDeepStrictEqual(c.resumeDelta.messages, c.messages.filter(message => c.originCommentIds.includes(message.id) ||
+        !previous.messages.some(prior => prior && prior.id === message.id && prior.updatedAt === message.updatedAt &&
+          prior.body === message.body && prior.deleted === message.deleted && prior.authorId === message.authorId &&
+          (prior.createdByRunId ?? null) === message.createdByRunId && isDeepStrictEqual(prior.sourceTrust, message.sourceTrust))))) return null;
+  } else if (capture.previousContext !== undefined) return null;
+  const pending = capture.pendingInteractions ?? [];
+  if (!Array.isArray(pending) || pending.length !== c.unresolvedInteractionIds.length ||
+    new Set(c.unresolvedInteractionIds).size !== c.unresolvedInteractionIds.length ||
+    new Set(pending.map(value => value?.projection?.interactionId)).size !== pending.length) return null;
+  for (const value of pending) {
+    if (!value || !value.projection || !value.source ||
+      Object.keys(value).sort().join(",") !== "agentId,companyId,issueId,projection,runId,source" ||
+      value.companyId !== input.companyId || value.issueId !== input.issueId || value.agentId !== input.agentId || value.runId !== input.runId) return null;
+    const p = value.projection;
+    if (Object.keys(p).sort().join(",") !== "actionRequestId,argumentsHash,companyId,expiresAt,interactionId,invocationId,invocationStatus,issueId,kind,originCommentIds,requestStatus,sourceCommentId,sourceRunId,sourceVersion,status,version" ||
+      p.version !== 1 || p.companyId !== input.companyId || p.issueId !== input.issueId || p.kind !== "request_confirmation" || p.status !== "pending" ||
+      !c.unresolvedInteractionIds.includes(p.interactionId) || ![p.interactionId,p.actionRequestId,p.invocationId,p.sourceRunId].every(id => typeof id === "string" && uuid.test(id)) ||
+      typeof p.sourceVersion !== "string" || typeof p.argumentsHash !== "string" ||
+      !/^\d+(?:\.\d+)?$/.test(p.sourceVersion) || !/^[a-f0-9]{64}$/.test(p.argumentsHash) ||
+      p.requestStatus !== "pending" || p.invocationStatus !== "awaiting_approval" ||
+      !Array.isArray(p.originCommentIds) || p.originCommentIds.length > 256 || p.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id)) ||
+      !(p.sourceCommentId === null || typeof p.sourceCommentId === "string" && uuid.test(p.sourceCommentId)) ||
+      !(p.expiresAt === null || typeof p.expiresAt === "string" && Number.isFinite(Date.parse(p.expiresAt)) &&
+        Date.parse(p.expiresAt) > (input.historicalPendingSources?.some(source=>isDeepStrictEqual(source,value)) ? Number(p.sourceVersion)*1000 : Date.now())) ||
+      !isDeepStrictEqual(value.source, { kind: "interaction", issueId: input.issueId, interactionId: p.interactionId,
+        sourceVersion: p.sourceVersion, contentHash: nativeSha256({ rendition: "native_governed_pending_reference_v1", projection: p }) })) return null;
+  }
   const origins = c.originCommentIds.map(id => c.messages.find(message => message.id === id));
-  if (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null ||
+  if (hasGoverned) {
+    const captures = governed!;
+    if (captures.some(value => !value || typeof value !== "object" || !value.projection || typeof value.projection !== "object" ||
+      !value.projection.owner || typeof value.projection.owner !== "object" || !Array.isArray(value.projection.owner.originCommentIds) ||
+      !value.projection.humanResponse || typeof value.projection.humanResponse !== "object" ||
+      !value.projection.interactionOutcome || typeof value.projection.interactionOutcome !== "object" ||
+      !value.nativeResponse || typeof value.nativeResponse !== "object" || !value.nativeResponse.response || typeof value.nativeResponse.response !== "object" || !value.nativeSource || !value.continuationSource)) return null;
+    if (captures.length !== c.interactionOutcomes.length || captures.length !== c.humanResponses?.length ||
+      new Set(captures.map(value => value.projection.interactionId)).size !== captures.length) return null;
+    const delivery = capture.delivery, d = delivery?.projection;
+    if (hasResolutionWake) {
+      if (!capture.wake.interaction || Object.keys(capture.wake.interaction).sort().join(",") !==
+        "interactionId,interactionKind,interactionStatus,sourceRunId" || c.trigger.interactionId !== capture.wake.interaction.interactionId ||
+        c.trigger.sourceRunId !== capture.wake.interaction.sourceRunId || !c.trigger.sourceRunId || !uuid.test(c.trigger.sourceRunId)) return null;
+      if (!delivery || !d || !d.agentMessage || Object.keys(delivery).sort().join(",") !== "agentId,companyId,issueId,projection,runId,source,wakeupRequestId" ||
+        delivery.companyId !== input.companyId || delivery.issueId !== input.issueId || delivery.agentId !== input.agentId ||
+        delivery.runId !== input.runId || delivery.wakeupRequestId !== input.wakeupRequestId ||
+        Object.keys(d).sort().join(",") !== "actionRequestIds,agentId,agentMessage,companyId,cutoff,idempotencyKey,interactionId,interactionKind,interactionStatus,issueId,runId,sourceRunId,sourceVersion,version,wakeupRequestId" ||
+        d.version !== 1 || d.companyId !== input.companyId || d.issueId !== input.issueId || d.agentId !== input.agentId ||
+        d.runId !== input.runId || d.wakeupRequestId !== input.wakeupRequestId || d.interactionId !== c.trigger.interactionId ||
+        d.sourceRunId !== c.trigger.sourceRunId || d.interactionKind !== "request_confirmation" ||
+        d.interactionStatus !== capture.wake.interaction.interactionStatus || !Array.isArray(d.actionRequestIds) ||
+        d.actionRequestIds.length === 0 || d.actionRequestIds.length > 256 || new Set(d.actionRequestIds).size !== d.actionRequestIds.length ||
+        !d.cutoff || Object.keys(d.cutoff).sort().join(",") !== "actionRequestId,createdAt" ||
+        d.cutoff.actionRequestId !== d.actionRequestIds.at(-1) || typeof d.cutoff.createdAt !== "string" || !Number.isFinite(Date.parse(d.cutoff.createdAt)) ||
+        d.idempotencyKey !== `tool-action-response:${d.actionRequestIds[0]}` ||
+        d.actionRequestIds.some(id => !captures.some(value => value.projection.owner.actionRequestId === id && value.projection.owner.sourceRunId === d.sourceRunId)) ||
+        Object.keys(d.agentMessage).sort().join(",") !== "pluginKey,sessionId,source,text,untrustedToolResults" ||
+        d.agentMessage.source !== "tool_action_review" || d.agentMessage.pluginKey !== null || d.agentMessage.sessionId !== d.interactionId ||
+        typeof d.agentMessage.text !== "string" || !Array.isArray(d.agentMessage.untrustedToolResults) || d.agentMessage.untrustedToolResults.length > 8 ||
+        d.agentMessage.untrustedToolResults.some(value => !value || typeof value !== "object" || Object.keys(value).sort().join(",") !== "actionRequestId,declineReason,error,resultSummary,toolName" ||
+          !d.actionRequestIds.includes(value.actionRequestId) || typeof value.toolName !== "string" || typeof value.resultSummary !== "string" ||
+          !(value.error === null || typeof value.error === "string") || !(value.declineReason === null || typeof value.declineReason === "string")) ||
+        !isDeepStrictEqual(delivery.source, { kind: "interaction", issueId: input.issueId, interactionId: d.interactionId,
+          sourceVersion: d.sourceVersion, contentHash: nativeSha256({ rendition: "native_tool_action_delivery_v1", projection: d }) })) return null;
+    } else if (capture.delivery !== undefined) return null;
+    const originIds = new Set<string>();
+    for (const value of captures) {
+      const p = value.projection;
+      if (value.companyId !== input.companyId || value.issueId !== input.issueId || value.runId !== input.runId || value.agentId !== input.agentId ||
+        Object.keys(value).sort().join(",") !== "agentId,companyId,continuationSource,issueId,nativeResponse,nativeSource,projection,runId" ||
+        Object.keys(p).sort().join(",") !== "companyId,humanResponse,interactionId,interactionOutcome,issueId,nativeResponseDigest,owner,sourceVersion,version" ||
+        Object.keys(p.owner).sort().join(",") !== "actionRequestId,argumentsHash,continuationPolicy,invocationId,invocationStatus,originCommentIds,requestStatus,resolvedAt,resolvedByUserId,sourceCommentId,sourceRunId" ||
+        p.owner.originCommentIds.length > 256 || p.owner.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id)) ||
+        p.version !== 1 || p.companyId !== input.companyId || p.issueId !== input.issueId ||
+        typeof p.interactionId !== "string" || !uuid.test(p.interactionId) || typeof p.sourceVersion !== "string" || !/^\d+(?:\.\d+)?$/.test(p.sourceVersion) ||
+        value.nativeSource.kind !== "interaction" || value.nativeSource.issueId !== input.issueId || value.nativeSource.interactionId !== p.interactionId ||
+        value.nativeResponse.interactionId !== p.interactionId || value.nativeResponse.kind !== "request_confirmation" ||
+        value.nativeResponse.response.status !== p.interactionOutcome.status ||
+        value.nativeSource.sourceVersion !== p.sourceVersion || nativeSha256(value.nativeResponse) !== value.nativeSource.contentHash ||
+        p.nativeResponseDigest !== value.nativeSource.contentHash ||
+        !isDeepStrictEqual(value.continuationSource, { ...value.nativeSource,
+          contentHash: nativeSha256({ rendition: "native_governed_continuation_v1", projection: p }) }) ||
+        p.humanResponse.id !== p.interactionId || p.interactionOutcome.id !== p.interactionId ||
+        p.humanResponse.kind !== "request_confirmation" || p.interactionOutcome.kind !== "request_confirmation" ||
+        p.humanResponse.status !== p.interactionOutcome.status || !["accepted", "rejected"].includes(p.humanResponse.status) ||
+        p.owner.resolvedByUserId !== p.humanResponse.resolvedByUserId || p.owner.resolvedAt !== p.humanResponse.resolvedAt ||
+        typeof p.owner.sourceRunId !== "string" || !uuid.test(p.owner.sourceRunId) ||
+        typeof p.owner.actionRequestId !== "string" || !uuid.test(p.owner.actionRequestId) ||
+        typeof p.owner.invocationId !== "string" || !uuid.test(p.owner.invocationId) || typeof p.owner.argumentsHash !== "string" ||
+        !/^[a-f0-9]{64}$/.test(p.owner.argumentsHash) ||
+        !["executed", "failed", "rejected"].includes(p.owner.requestStatus) ||
+        p.owner.invocationStatus !== (p.owner.requestStatus === "executed" ? "succeeded" : p.owner.requestStatus === "rejected" ? "denied" : "failed") ||
+        p.humanResponse.status !== (p.owner.requestStatus === "rejected" ? "rejected" : "accepted") ||
+        nativeSha256(c.humanResponses?.find(response => response.id === p.interactionId)) !== nativeSha256(p.humanResponse) ||
+        nativeSha256(c.interactionOutcomes.find(outcome => outcome.id === p.interactionId)) !== nativeSha256(p.interactionOutcome)) return null;
+      for (const id of [...p.owner.originCommentIds, ...(p.owner.sourceCommentId ? [p.owner.sourceCommentId] : [])]) originIds.add(id);
+    }
+    if (hasResolutionWake) {
+      const trigger = captures.find(value => value.projection.interactionId === c.trigger.interactionId)?.projection;
+      if (!capture.wake.interaction || !d || !trigger || capture.wake.requestedByActorId !== trigger.owner.resolvedByUserId || trigger.interactionOutcome.status !== capture.wake.interaction.interactionStatus ||
+        trigger.interactionOutcome.kind !== capture.wake.interaction.interactionKind || trigger.owner.sourceRunId !== c.trigger.sourceRunId ||
+        d.sourceVersion !== trigger.sourceVersion ||
+        origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null || !originIds.has(message.id))) return null;
+    } else if (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null ||
+      !capture.wake.originCommentIds.includes(message.id)) ||
+      !origins.some(message => message?.authorId === capture.wake.requestedByActorId)) return null;
+  } else if (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null ||
     !capture.wake.originCommentIds.includes(message.id)) ||
     !origins.some(message => message?.authorId === capture.wake.requestedByActorId)) return null;
   const latest = c.messages.findLast(message => message.authorType === "user" && message.createdByRunId === null && message.body.trim());
@@ -215,10 +378,43 @@ export function exactNativeInitialTaskContinuation(input: { value: unknown; comp
   return capture;
 }
 
+export function exactNativeInitialTaskContinuation(input: Parameters<typeof exactNativeTaskContinuation>[0]): NativeTaskContinuationCapture | null {
+  if (input.capture?.governedInteractions !== undefined || input.capture?.wake.interaction !== undefined) return null;
+  return exactNativeTaskContinuation(input);
+}
+
 /** Capture only the closed Task wake profile. Inline comments are admitted only
  * when their exact bounded renditions match unique owner captures. Any other
  * wake source, attachment, annotation, interaction, continuation or unknown
  * key stays unknown and prevents the bootstrap source set from closing. */
+/** A branch hint is derived from the exact Native workspace input. It is
+ * not a caller-provided workspace/Project grant or a substitute for currentness. */
+function exactNativeTaskWakeWorkspaceHint(input: {
+  companyId: string; issueId: string; runId: string; agentId?: string; value: unknown;
+  capture?: { execution: NativeExecutionInputV4;
+    source: Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> } | null;
+}): boolean {
+  if (!input.value || typeof input.value !== "object" || Array.isArray(input.value) ||
+    Object.keys(input.value).join(",") !== "branchName") return false;
+  const hint = input.value as Record<string, unknown>;
+  const execution = input.capture?.execution;
+  const binding = execution?.binding, workspace = execution?.workspace;
+  const parsed = nativePayloadSourceInputSchema.safeParse(input.capture?.source);
+  if (!binding || !workspace || !parsed.success || parsed.data.kind !== "workspace_metadata" ||
+    binding.companyId !== input.companyId || binding.issueId !== input.issueId ||
+    binding.runId !== input.runId || binding.agentId !== input.agentId ||
+    typeof workspace.branchName !== "string" || !workspace.branchName.trim() ||
+    hint.branchName !== workspace.branchName || parsed.data.runId !== input.runId ||
+    parsed.data.executionWorkspaceId !== binding.executionWorkspaceId) return false;
+  const source = parsed.data;
+  const originMatches = source.origin === "execution_workspace"
+    ? source.executionWorkspaceId !== input.runId && Number.isFinite(Date.parse(source.sourceVersion)) &&
+      new Date(source.sourceVersion).toISOString() === source.sourceVersion
+    : source.origin === "task_session" && source.sourceVersion === `task-session:${input.runId}`;
+  const tuple = { cwd: workspace.cwd, repoUrl: workspace.repoUrl, repoRef: workspace.repoRef, branchName: workspace.branchName };
+  return originMatches && source.contentHash === createHash("sha256").update(JSON.stringify(tuple), "utf8").digest("hex");
+}
+
 export function captureNativeTaskWakeSource(input: {
   companyId: string;
   runId: string;
@@ -226,6 +422,11 @@ export function captureNativeTaskWakeSource(input: {
   sourceVersion: string;
   agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null;
   continuationCapture?: NativeTaskContinuationCapture | null;
+  historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
+  /** Actual constructor input plus its captured metadata source. The recurring
+   * reader re-parses the locked profile and checks the current metadata owner. */
+  workspaceCapture?: { execution: NativeExecutionInputV4;
+    source: Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> } | null;
   task: { id: string; identifier: string | null; title: string; description: string | null; status: string;
     priority: string; workMode: string };
   /** Read from the persisted heartbeat run, independently of the rendered
@@ -258,7 +459,8 @@ export function captureNativeTaskWakeSource(input: {
     "continuationSummary", "commentIds", "latestCommentId", "comments", "annotationDeltas", "planReviewContext",
     "documentReviewContext", "commentWindow", "truncated", "fallbackFetchNeeded"].sort();
   const actualKeys = Object.keys(payload).sort();
-  const expectedKeys = payload.connectorSkillInstructions === undefined ? keys : [...keys, "connectorSkillInstructions"].sort();
+  const expectedKeys = [...(payload.connectorSkillInstructions === undefined ? keys : [...keys, "connectorSkillInstructions"]),
+    ...(Object.hasOwn(payload, "executionWorkspace") ? ["executionWorkspace"] : [])].sort();
   if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) return reject("payload_keys");
   const issue = payload.issue;
   if (!issue || typeof issue !== "object" || Array.isArray(issue)) return null;
@@ -269,20 +471,30 @@ export function captureNativeTaskWakeSource(input: {
       description: wakeIssue.description, status: wakeIssue.status, priority: wakeIssue.priority, workMode: wakeIssue.workMode }) !==
     JSON.stringify(input.task) || wakeIssue.descriptionTruncated !== false) return reject("task_projection");
   const emptyObject = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0;
+  const closedContinuation = exactNativeTaskContinuation({ value: payload.executionContinuation, companyId: input.companyId,
+    issueId: input.issueId, runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId,
+    wakeupRequestId: input.wakeupRequestId, wakeReason: input.persistedWakeReason, capture: input.continuationCapture, historicalPendingSources: input.historicalPendingSources });
+  const governedWake = closedContinuation?.governedInteractions?.length ? closedContinuation.wake.interaction : null;
   const checks: Record<string, boolean> = {
     reason: payload.reason === input.persistedWakeReason,
+    executionWorkspace: !Object.hasOwn(payload, "executionWorkspace") || exactNativeTaskWakeWorkspaceHint({
+      companyId: input.companyId, issueId: input.issueId, runId: input.runId, agentId: input.agentId,
+      value: payload.executionWorkspace, capture: input.workspaceCapture }),
     continuation: payload.executionContinuation === null || isClosedEmptyTaskContinuation(payload.executionContinuation, {
       companyId: input.companyId, issueId: input.issueId, wakeReason: input.persistedWakeReason, task: input.task,
-    }) || exactNativeInitialTaskContinuation({ value: payload.executionContinuation, companyId: input.companyId, issueId: input.issueId,
+    }) || exactNativeTaskContinuation({ value: payload.executionContinuation, companyId: input.companyId, issueId: input.issueId,
       runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId, wakeupRequestId: input.wakeupRequestId,
-      wakeReason: input.persistedWakeReason, capture: input.continuationCapture }) !== null,
+      wakeReason: input.persistedWakeReason, capture: input.continuationCapture, historicalPendingSources: input.historicalPendingSources }) !== null,
     attachmentOmissions: Array.isArray(payload.attachmentOmissions) && payload.attachmentOmissions.length === 0,
-    externalChatProvider: payload.externalChatProvider === null, recovery: payload.recovery === null, agentMessage: payload.agentMessage === null,
+    externalChatProvider: payload.externalChatProvider === null, recovery: payload.recovery === null,
+    agentMessage: isDeepStrictEqual(payload.agentMessage, closedContinuation?.delivery?.projection.agentMessage ?? null),
     childIssueSummaries: Array.isArray(payload.childIssueSummaries) && payload.childIssueSummaries.length === 0,
     childIssueSummaryTruncated: payload.childIssueSummaryTruncated === false,
     dispositionRepair: payload.dispositionRepair === null, livenessContinuation: payload.livenessContinuation === null,
-    interactionKind: payload.interactionKind === null, interactionStatus: payload.interactionStatus === null,
-    interactionId: payload.interactionId === null, sourceRunId: payload.sourceRunId === null,
+    interactionKind: payload.interactionKind === (governedWake?.interactionKind ?? null),
+    interactionStatus: payload.interactionStatus === (governedWake?.interactionStatus ?? null),
+    interactionId: payload.interactionId === (governedWake?.interactionId ?? null),
+    sourceRunId: payload.sourceRunId === (governedWake?.sourceRunId ?? null),
     externalChatQuestionResponse: payload.externalChatQuestionResponse === null,
     externalInteractionContinuation: payload.externalInteractionContinuation === false, checkboxSelection: payload.checkboxSelection === null,
     checkedOutByHarness: payload.checkedOutByHarness === (input.checkoutRunId === input.runId),
@@ -292,7 +504,11 @@ export function captureNativeTaskWakeSource(input: {
     unresolvedBlockerIssueIds: Array.isArray(payload.unresolvedBlockerIssueIds) && payload.unresolvedBlockerIssueIds.length === 0,
     unresolvedBlockerSummaries: Array.isArray(payload.unresolvedBlockerSummaries) && payload.unresolvedBlockerSummaries.length === 0,
     executionStage: payload.executionStage === null, taskWatchdog: payload.taskWatchdog === null, skillTest: payload.skillTest === null,
-    continuationSummary: payload.continuationSummary === null,
+    continuationSummary: isDeepStrictEqual(payload.continuationSummary, closedContinuation?.summary ? {
+      key: closedContinuation.summary.rendition.key, title: closedContinuation.summary.rendition.title,
+      body: closedContinuation.summary.rendition.body.slice(0, 4_000), bodyTruncated: closedContinuation.summary.rendition.body.length > 4_000,
+      sourceTrust: closedContinuation.summary.rendition.sourceTrust, updatedAt: closedContinuation.summary.rendition.updatedAt,
+    } : null),
     connectorSkillInstructions: payload.connectorSkillInstructions === undefined || payload.connectorSkillInstructions === null || payload.connectorSkillInstructions === "",
     commentIds: Array.isArray(payload.commentIds) && payload.commentIds.every(value => typeof value === "string"),
     latestCommentId: Array.isArray(payload.commentIds) && payload.commentIds.length > 0
@@ -358,6 +574,8 @@ export function buildNativeBootstrapSourceSet(input: {
   runtimeInputs: readonly NativePayloadSourceInput[] | null;
   additionalInputs?: readonly NativePayloadSourceInput[] | null;
   taskWakeCommentCandidates?: readonly NativePreparedSourceCandidate[];
+  taskWakeInteractionSources?: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[];
+  taskWakeDocumentCandidates?: readonly NativePreparedSourceCandidate[];
   additionalPolicy?: NativePayloadSourcePolicy | null;
   interactionResponses?: readonly NativeInteractionResponseEnvelope[] | null;
   interactionSources?: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null;
@@ -422,6 +640,8 @@ export function buildNativeBootstrapSourceSet(input: {
     const expectedOwner = reference.kind === "task" ? "issue" : reference.kind;
     const sourceMatchesReference = reference.kind === "task"
       ? candidate.input.kind === "task" && candidate.input.issueId === reference.id
+      : reference.kind === "project"
+        ? candidate.input.kind === "project" && candidate.input.projectId === reference.id
       : reference.kind === "document_revision"
         ? candidate.input.kind === "document_revision" && candidate.input.revisionId === reference.id
         : reference.kind === "comment"
@@ -446,6 +666,20 @@ export function buildNativeBootstrapSourceSet(input: {
       candidate.input.commentId !== candidate.id || candidate.input.issueId !== input.issueId ||
       !addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: "comment", id: candidate.id })) return reject("source_snapshot_invalid");
     append(candidate.input);
+  }
+  if ((input.taskWakeInteractionSources?.length ?? 0) > 0 &&
+    input.additionalInputs?.filter(source => source.kind === "native_task_wake" &&
+      source.runId === input.runId && source.issueId === input.issueId).length !== 1) return reject("interaction_sources");
+  for (const candidate of input.taskWakeDocumentCandidates ?? []) {
+    if (candidate.kind !== "document_revision" || candidate.input.kind !== "document_revision" ||
+      candidate.input.revisionId !== candidate.id || candidate.input.issueId !== input.issueId ||
+      input.additionalInputs?.filter(source => source.kind === "native_task_wake" && source.runId === input.runId && source.issueId === input.issueId).length !== 1 ||
+      !addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: "document_revision", id: candidate.id })) return reject("source_snapshot_invalid");
+    append(candidate.input);
+  }
+  for (const source of input.taskWakeInteractionSources ?? []) {
+    if (source.kind !== "interaction" || source.issueId !== input.issueId) return reject("interaction_sources");
+    append(source);
   }
   for (const source of input.runtimeInputs) append(source);
   if (input.additionalInputs === null) return reject("additional_inputs_unknown");

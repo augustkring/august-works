@@ -863,27 +863,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     return { environmentId, leaseId };
   }
 
-  it("does not reap active adapter executions started by another heartbeat service instance", async () => {
-    let releaseAdapter: (() => void) | null = null;
-    const adapterStarted = new Promise<void>((resolve) => {
-      mockAdapterExecute.mockImplementationOnce(async () => {
-        resolve();
-        await new Promise<void>((release) => {
-          releaseAdapter = release;
-        });
-        return {
-          exitCode: 0,
-          signal: null,
-          timedOut: false,
-          errorMessage: null,
-          summary: "Remote run completed.",
-          provider: "test",
-          model: "test-model",
-        };
-      });
-    });
-
-    const { runId, wakeupRequestId } = await seedRunFixture({
+  it("denies unsupported legacy model dispatch before adapter execution", async () => {
+    const { companyId, agentId, runId } = await seedRunFixture({
       adapterType: "openclaw_gateway",
       agentStatus: "idle",
       runStatus: "queued",
@@ -895,51 +876,36 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const reaperHeartbeat = heartbeatService(db);
 
     await executorHeartbeat.resumeQueuedRuns();
-    await Promise.race([
-      adapterStarted,
-      new Promise<never>((_, reject) => {
-        setTimeout(
-          () =>
-            reject(
-              new Error("Timed out waiting for adapter execution to start"),
-            ),
-          3_000,
-        );
-      }),
-    ]);
+    await executorHeartbeat.drainActiveRunExecutions();
 
-    await db
-      .update(heartbeatRuns)
-      .set({
-        updatedAt: new Date("2026-03-19T00:00:00.000Z"),
-      })
-      .where(eq(heartbeatRuns.id, runId));
+    const runsBeforeReap = await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId)));
+    expect(runsBeforeReap.map((run) => run.id)).toEqual([runId]);
 
-    const result = await reaperHeartbeat.reapOrphanedRuns({
-      staleThresholdMs: 1,
+    const deniedRun = await reaperHeartbeat.getRun(runId);
+    expect(deniedRun).toMatchObject({
+      id: runId,
+      status: "failed",
+      errorCode: "configuration_incomplete",
+      processPid: null,
+      processGroupId: null,
     });
-    expect(result).toEqual({ reaped: 0, runIds: [] });
+    expect(deniedRun?.error).toContain("not available for managed model calls");
+    expect(mockAdapterExecute).not.toHaveBeenCalled();
 
-    const activeRun = await reaperHeartbeat.getRun(runId);
-    expect(activeRun?.status).toBe("running");
-    expect(activeRun?.errorCode).toBeNull();
-
-    const wakeup = await db
-      .select()
-      .from(agentWakeupRequests)
-      .where(eq(agentWakeupRequests.id, wakeupRequestId))
-      .then((rows) => rows[0] ?? null);
-    expect(wakeup?.status).toBe("claimed");
-
-    if (!releaseAdapter)
-      throw new Error("Adapter release handle was not captured");
-    releaseAdapter();
-    const settledRun = await waitForRunToSettle(
-      executorHeartbeat,
-      runId,
-      5_000,
-    );
-    expect(settledRun?.status).toBe("succeeded");
+    // A second service instance must not reinterpret this denied dispatch as
+    // an orphaned active process or create a recovery attempt for it.
+    expect(await reaperHeartbeat.reapOrphanedRuns({ staleThresholdMs: 1 }))
+      .toEqual({ reaped: 0, runIds: [] });
+    const runs = await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId)));
+    expect(runs.map((run) => run.id)).toEqual([runId]);
+    expect(runs[0]).toMatchObject({
+      status: "failed",
+      errorCode: "configuration_incomplete",
+      processPid: null,
+      processGroupId: null,
+    });
   });
 
   async function seedStrandedIssueFixture(input: {

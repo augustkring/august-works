@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { agentWakeupRequests, companyMemberships, createDb, heartbeatRuns, issueComments, issues } from "@paperclipai/db";
+import { agentWakeupRequests, companyMemberships, createDb, heartbeatRuns, issueComments, issues, issueThreadInteractions, toolInvocations, toolActionRequests } from "@paperclipai/db";
 import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -9,8 +9,11 @@ import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixt
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
 import { buildExecutionContinuation, type NativeTaskContinuationCapture } from "../services/execution-continuation.js";
-import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource } from "../services/native-runtime/native-execution-input.js";
+import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, exactNativeTaskContinuation } from "../services/native-runtime/native-execution-input.js";
 import { assertNativePayloadSourceSetCurrent } from "../services/native-direct-input.js";
+import { captureNativeGovernedPendingInteractions, materializeNativeInteractionResponses,
+  type NativeGovernedInteractionContinuationCapture } from "../services/native-runtime/native-interaction-bridge.js";
+import { commitToolActionReview } from "../services/tool-action-review.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 
 // Source-owner component fixtures only. The running row and structural input
@@ -29,7 +32,7 @@ async function fixture(otherHumanHistory = false) {
   const f = await seedV5Presences(db), actor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
   const tasks = issueService(db);
   const task = await tasks.create(f.home, { title: "Source-owner continuation Task", description: "Original Task context",
-    status: "in_progress", assigneeAgentId: f.presence.id, responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
+    status: "todo", assigneeAgentId: f.presence.id, responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
     { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
   if (otherHumanHistory) {
     const otherUserId = `other-human-${randomUUID()}`;
@@ -93,7 +96,7 @@ async function fixture(otherHumanHistory = false) {
     agentId: f.presence.id, runId: run.id, onBehalfOfUserId: f.userId };
   const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.home, issueId: task.id, runId: run.id,
     actor: reader, ...sourceSet });
-  return { f, task, comment, run, wake, envelope, capture, validate };
+  return { f, task, comment, run, wake, envelope, capture, validate, sourceSet, reader, payload };
 }
 
 it("captures a real initial Human comment and independently revalidates its selected source rendition", async () => {
@@ -129,3 +132,146 @@ it.each(["edit", "delete", "revoke", "forged_wake", "cross_company_wake"] as con
   }
   await expect(f.validate()).rejects.toBeDefined();
 }, 30_000);
+
+// Explicit persisted PENDING domain inputs, never an accepted model/worker/tool
+// result. The real source reader and Human review owner consume these rows.
+async function pendingFixture(base?: Awaited<ReturnType<typeof fixture>>) {
+  const f = base ?? await fixture();
+  const [producer] = await db.insert(heartbeatRuns).values({ companyId: f.f.home, agentId: f.f.presence.id,
+    issueId: f.task.id, nativeIssueId: f.task.id, runtimeMode: "native", status: "running", responsibleUserId: f.f.userId,
+    contextSnapshot: { issueId: f.task.id } }).returning();
+  if (!producer) throw new Error("component_pending_producer_missing");
+  const invocationId = randomUUID(), requestId = randomUUID(), interactionId = randomUUID(), expiresAt = new Date(Date.now() + 60_000);
+  const argsHash = "a".repeat(64);
+  await db.insert(toolInvocations).values({ id: invocationId, companyId: f.f.home, issueId: f.task.id,
+    agentId: f.f.presence.id, runId: producer.id, toolName: "railway_update_variable", argumentsHash: argsHash,
+    status: "awaiting_approval", approvalState: "pending" });
+  await db.insert(issueThreadInteractions).values({ id: interactionId, companyId: f.f.home, issueId: f.task.id,
+    kind: "request_confirmation", status: "pending", continuationPolicy: "wake_assignee", sourceRunId: producer.id,
+    sourceCommentId: f.comment.id, originCommentIds: [f.comment.id], createdByAgentId: f.f.presence.id,
+    requestedResolverPolicy: "human_only", effectiveResolverPolicy: "human_only", resolverPolicyProvenance: "explicit",
+    effectiveResolverPolicySource: "requested", payload: { version: 1, prompt: "Review the pending action.", toolAction: {
+      version: 1, actionRequestId: requestId, invocationId, toolName: "railway_update_variable", toolDisplayName: "Update variable",
+      connectionId: null, applicationId: null, appDisplayName: null, risk: "write", previewMarkdown: "Update this exact variable.",
+      argumentsSummaryJson: "{}", argumentsHash: argsHash, expiresAt: expiresAt.toISOString() } } });
+  await db.insert(toolActionRequests).values({ id: requestId, companyId: f.f.home, issueId: f.task.id,
+    invocationId, interactionId, status: "pending", canonicalArgumentsHash: argsHash, canonicalArgumentsSummary: { summary: "Exact pending source-owner component arguments" },
+    requestedByAgentId: f.f.presence.id, expiresAt });
+  const capture = () => captureNativeGovernedPendingInteractions({ db, companyId: f.f.home, issueId: f.task.id,
+    runId: f.run.id, agentId: f.f.presence.id, interactionIds: [interactionId] });
+  return { ...f, producer, invocationId, requestId, interactionId, capture };
+}
+
+it("binds an unresolved reference to its real pending request, invocation and original Run without granting a response", async () => {
+  const f = await pendingFixture(), captures = await f.capture();
+  expect(captures).toHaveLength(1);
+  expect(captures[0]!.projection).toMatchObject({ interactionId: f.interactionId, sourceRunId: f.producer.id,
+    requestStatus: "pending", invocationStatus: "awaiting_approval" });
+  expect(captures[0]).not.toHaveProperty("nativeResponse");
+  const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, f.invocationId));
+  expect(invocation?.status).toBe("awaiting_approval"); expect(invocation?.completedAt).toBeNull();
+}, 30_000);
+
+it.each(["arguments", "expiry", "deleted", "revoked_reader", "changed_run", "resolved"] as const)("rejects pending owner %s mutations", async mutation => {
+  const f = await pendingFixture(); await f.capture();
+  if (mutation === "arguments") await db.update(toolActionRequests).set({ canonicalArgumentsHash: "b".repeat(64) }).where(eq(toolActionRequests.id, f.requestId));
+  else if (mutation === "expiry") await db.update(toolActionRequests).set({ expiresAt: new Date(0) }).where(eq(toolActionRequests.id, f.requestId));
+  else if (mutation === "deleted") await db.delete(toolActionRequests).where(eq(toolActionRequests.id, f.requestId));
+  else if (mutation === "revoked_reader") await db.update(companyMemberships).set({ status: "inactive" })
+    .where(and(eq(companyMemberships.companyId, f.f.home), eq(companyMemberships.principalId, f.f.userId)));
+  else if (mutation === "changed_run") await db.update(toolInvocations).set({ runId: f.run.id }).where(eq(toolInvocations.id, f.invocationId));
+  else await commitToolActionReview(db, { companyId: f.f.home, issueId: f.task.id, interactionId: f.interactionId,
+    actionRequestId: f.requestId, decision: "rejected", reason: "The actual Human declines.", actor: { userId: f.f.userId } });
+  await expect(f.capture()).rejects.toBeDefined();
+}, 30_000);
+
+it("captures distinct Native and continuation renditions only after the actual Human decline owner commits", async () => {
+  const f = await pendingFixture();
+  await commitToolActionReview(db, { companyId: f.f.home, issueId: f.task.id, interactionId: f.interactionId,
+    actionRequestId: f.requestId, decision: "rejected", reason: "  Do not perform the action.  ", actor: { userId: f.f.userId } });
+  const selected: NativeGovernedInteractionContinuationCapture[] = [];
+  const responses = await materializeNativeInteractionResponses({ db, companyId: f.f.home, issueId: f.task.id,
+    runId: f.run.id, agentId: f.f.presence.id, interactionIds: [f.interactionId], onContinuationSourceCapture: value => { selected.push(value); } });
+  expect(selected).toHaveLength(1);
+  expect(selected[0]!.nativeResponse).toEqual(responses[0]);
+  expect(responses[0]!.response.result).toMatchObject({ reason: "Do not perform the action." });
+  expect(selected[0]!.projection.humanResponse).toMatchObject({ id: f.interactionId, status: "rejected", resolvedByUserId: f.f.userId,
+    result: { outcome: "rejected", reason: "  Do not perform the action.  " } });
+  expect(selected[0]!.nativeSource.contentHash).not.toBe(selected[0]!.continuationSource.contentHash);
+  const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, f.invocationId));
+  expect(invocation?.status).toBe("denied");
+}, 30_000);
+
+it("independently rejects a changed governed rendition after the actual Human decline", async () => {
+  const f = await pendingFixture();
+  await commitToolActionReview(db, { companyId: f.f.home, issueId: f.task.id, interactionId: f.interactionId,
+    actionRequestId: f.requestId, decision: "rejected", actor: { userId: f.f.userId } });
+  const selected: NativeGovernedInteractionContinuationCapture[] = [];
+  await materializeNativeInteractionResponses({ db, companyId: f.f.home, issueId: f.task.id,
+    runId: f.run.id, agentId: f.f.presence.id, interactionIds: [f.interactionId], onContinuationSourceCapture: value => { selected.push(value); } });
+  if (selected.length !== 1) throw new Error("component_governed_source_missing");
+  const sourceSet = { policy: f.sourceSet.policy,
+    inputs: [...f.sourceSet.inputs, selected[0]!.nativeSource, selected[0]!.continuationSource] };
+  const receiptBody = { version: 1 as const, binding: { companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id,
+    runId: f.run.id, responsibleUserId: f.f.userId }, bootstrap: { executionInputDigest: nativeSha256({ componentReader: f.run.id }), ...sourceSet },
+    dispatches: [], additionalInputs: [] };
+  await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeInputSourceReceipt:
+    nativeRunInputSourceReceiptSchema.parse({ ...receiptBody, digest: nativeSha256(receiptBody) }) } }).where(eq(heartbeatRuns.id, f.run.id));
+  const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.f.home, issueId: f.task.id,
+    runId: f.run.id, actor: f.reader, ...sourceSet });
+  await expect(validate()).resolves.toBeUndefined();
+  await db.update(toolActionRequests).set({ canonicalArgumentsHash: "b".repeat(64) }).where(eq(toolActionRequests.id, f.requestId));
+  await expect(validate()).rejects.toBeDefined();
+}, 30_000);
+
+it("assembles a real pending-note continuation and revalidates its unresolved owner through the complete source reader", async () => {
+  const f = await pendingFixture();
+  let captured: NativeTaskContinuationCapture | null = null;
+  const envelope = await buildExecutionContinuation({ db, companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id,
+    runId: f.run.id, context: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment.id },
+    summary: null, exposeLowTrustRaw: false, onContinuationSourceCapture: value => { captured = value; } });
+  const capture = captured as NativeTaskContinuationCapture | null;
+  if (!capture) throw new Error("component_pending_capture_missing");
+  expect(envelope.unresolvedInteractionIds).toEqual([f.interactionId]);
+  expect(envelope.humanResponses).toEqual([]); expect(envelope.interactionOutcomes).toEqual([]);
+  expect(exactNativeTaskContinuation({ value: envelope, companyId: f.f.home, issueId: f.task.id, runId: f.run.id,
+    agentId: f.f.presence.id, responsibleUserId: f.f.userId, wakeupRequestId: f.wake.id,
+    wakeReason: "issue_commented", capture })).toBe(capture);
+  const taskInput = f.sourceSet.inputs.find(source => source.kind === "task" && source.issueId === f.task.id);
+  if (!taskInput || taskInput.kind !== "task") throw new Error("component_pending_task_source_missing");
+  const payload = { ...f.payload, executionContinuation: envelope };
+  const wake = captureNativeTaskWakeSource({ companyId: f.f.home, issueId: f.task.id, runId: f.run.id,
+    agentId: f.f.presence.id, responsibleUserId: f.f.userId, wakeupRequestId: f.wake.id,
+    persistedWakeReason: "issue_commented", sourceVersion: taskInput.sourceVersion, continuationCapture: capture,
+    task: { id: f.task.id, identifier: f.task.identifier, title: f.task.title, description: f.task.description,
+      status: f.task.status, priority: f.task.priority, workMode: f.task.workMode }, payload });
+  if (!wake || !capture.pendingInteractions?.length) throw new Error("component_pending_wake_not_closed");
+  const sourceSet = { policy: f.sourceSet.policy,
+    inputs: [...f.sourceSet.inputs.filter(source => source.kind !== "native_task_wake"), ...capture.pendingInteractions.map(value => value.source), wake] };
+  const receiptBody = { version: 1 as const, binding: { companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id,
+    runId: f.run.id, responsibleUserId: f.f.userId }, bootstrap: { executionInputDigest: nativeSha256({ componentReader: f.run.id }), ...sourceSet },
+    dispatches: [], additionalInputs: [] };
+  await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: f.task.id, wakeReason: "issue_commented", executionContinuation: envelope, paperclipWake: payload },
+    runnerProfileJson: { nativeInputSourceReceipt: nativeRunInputSourceReceiptSchema.parse({ ...receiptBody, digest: nativeSha256(receiptBody) }) } }).where(eq(heartbeatRuns.id, f.run.id));
+  const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.f.home, issueId: f.task.id,
+    runId: f.run.id, actor: f.reader, ...sourceSet });
+  await expect(validate()).resolves.toBeUndefined();
+  await db.update(toolActionRequests).set({ expiresAt: new Date(0) }).where(eq(toolActionRequests.id, f.requestId));
+  await expect(validate()).rejects.toBeDefined();
+}, 30_000);
+
+// Live domain-owner coverage only: no accepted parent receipt/SDK row is seeded.
+it("retains an unchanged live pending sibling when a Human resolves the other governed request", async () => {
+  const a = await pendingFixture(), b = await pendingFixture(a);
+  const before = await b.capture();
+  await commitToolActionReview(db, { companyId:a.f.home,issueId:a.task.id,interactionId:a.interactionId,
+    actionRequestId:a.requestId,decision:"rejected",actor:{userId:a.f.userId} });
+  const terminal: NativeGovernedInteractionContinuationCapture[] = [];
+  await materializeNativeInteractionResponses({db,companyId:a.f.home,issueId:a.task.id,runId:a.run.id,
+    agentId:a.f.presence.id,interactionIds:[a.interactionId],onContinuationSourceCapture:value=>{terminal.push(value);}});
+  expect(terminal).toHaveLength(1);
+  expect(await b.capture()).toEqual(before);
+  await expect(a.capture()).rejects.toBeDefined();
+  const [untouched] = await db.select().from(toolInvocations).where(eq(toolInvocations.id,b.invocationId));
+  expect(untouched?.status).toBe("awaiting_approval");expect(untouched?.completedAt).toBeNull();
+},30_000);

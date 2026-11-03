@@ -23,6 +23,7 @@ export async function prepareConnectionIntentRailwayFixture(input: {
   companyId: string;
   userId: string;
   holderAgentId: string;
+  reviewJourney?: "approve" | "decline" | "always" | "failure";
 }) {
   const workspaceId = randomUUID();
   const projectId = randomUUID();
@@ -59,13 +60,15 @@ export async function prepareConnectionIntentRailwayFixture(input: {
     }
     const variables = object(body.variables);
     if (body.query !== RAILWAY_QUERIES.projects || variables.workspaceId !== workspaceId ||
-        (variables.first !== 1 && variables.first !== 25) ||
+        (variables.first !== 1 && variables.first !== 25 && !(input.reviewJourney === "always" && variables.first === 2)) ||
         Object.keys(variables).some(key => !["workspaceId", "first", "after"].includes(key)) ||
         (variables.after !== undefined && variables.after !== null))
       throw new Error("railway_fixture_graphql_contract_not_fixed");
     captures.push({ purpose: variables.first === 1 ? "projects_probe" : "projects_call" });
+    if (input.reviewJourney === "failure" && variables.first !== 1)
+      return Response.json({ errors: [{ message: "Fixture provider unavailable" }] }, { status: 502 });
     return Response.json({ data: { projects: { edges: [{ node: {
-      id: projectId, name: "Fixture project inventory", workspaceId,
+      id: projectId, name: input.reviewJourney ? "Roadmap" : "Fixture project inventory", workspaceId,
     } }], pageInfo: { hasNextPage: false, endCursor: null } } } });
   };
   const actor = { actorType: "user" as const, actorId: input.userId, userId: input.userId };
@@ -90,7 +93,7 @@ export async function prepareConnectionIntentRailwayFixture(input: {
       typeof tool.versionHash !== "string" || !/^[a-f0-9]{64}$/.test(tool.versionHash))
     throw new Error("railway_fixture_canonical_discovery_failed");
   await toolAccessPolicyService(input.db).createPolicy(input.companyId, {
-    name: "Read fixture Railway projects", policyType: "allow", priority: 200, enabled: true,
+    name: "Read fixture Railway projects", policyType: input.reviewJourney ? "require_approval" : "allow", priority: 200, enabled: true,
     selectors: { connectionId: connection.id, toolName: tool.toolName },
   }, { userId: input.userId });
   await access.putConnectionInstalls(connection.id, {

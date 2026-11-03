@@ -15,6 +15,8 @@ import {
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   issueDocuments,
   issues,
+  projects,
+  projectWorkspaces,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -478,4 +480,114 @@ describe("manual Human Task payload source capture", () => {
     await expect(creating).rejects.toBeDefined();
     expect(await db.select().from(issues).where(and(eq(issues.companyId, f.companyId), eq(issues.title, title)))).toHaveLength(0);
   });
+  it.each(["explicit", "default_primary"] as const)("captures the actual resolved Project workspace selector: %s", async mode => {
+    const f = await seed("admin"), http = request(appFor(f.actor));
+    const created = await http.post(`/api/companies/${f.companyId}/projects`).send({
+      name: "Current selected Project", workspace: { name: "Primary repository",
+        repoUrl: "https://example.test/current-project.git", isPrimary: true },
+    }).expect(201);
+    const [workspace] = await db.select().from(projectWorkspaces).where(and(
+      eq(projectWorkspaces.companyId, f.companyId), eq(projectWorkspaces.projectId, created.body.id)));
+    expect(workspace).toBeDefined();
+    const response = await http.post(`/api/companies/${f.companyId}/issues`).send({
+      title: `Literal workspace request ${mode}`, description: "Only the Human's literal request, not copied repository bytes.",
+      projectId: created.body.id, ...(mode === "explicit" ? { projectWorkspaceId: workspace!.id } : {}),
+    }).expect(201);
+    const { row, proof } = await readOwner(response.body.id);
+    expect(row.projectWorkspaceId).toBe(workspace!.id);
+    expect(row.payloadSourceProtocolVersion).toBe(1);
+    expect(row.payloadSourceSnapshotInvalidated).toBe(false);
+    expect(proof.digestValid).toBe(true);
+    expect(row.payloadSourceSnapshot).toMatchObject({ owner: { kind: "issue", companyId: f.companyId, id: row.id,
+      contentHash: proof.bodyHash }, policy: { issueIds: [], projectIds: [created.body.id], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] });
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: row.id, sourceVersion: "snapshot-owner-current", contentHash: proof.bodyHash } })).resolves.toBeUndefined();
+    const audit = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId),
+      eq(activityLog.entityId, row.id), eq(activityLog.action, "issue.payload_source_captured")));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.details).toMatchObject({ producer: "direct_manual_related_input", projectId: created.body.id,
+      projectWorkspaceId: workspace!.id, digest: row.payloadSourceSnapshot!.digest });
+  });
+
+  it.each(["wrong_project", "foreign_company", "missing_workspace", "source_access_revoked"] as const)(
+    "denies an unauthorized explicit Project workspace before Task persistence: %s", async mode => {
+    const f = await seed("admin"), http = request(appFor(f.actor));
+    const selected = await http.post(`/api/companies/${f.companyId}/projects`).send({
+      name: "Selected Project", workspace: { name: "Selected workspace", repoUrl: "https://example.test/selected.git" },
+    }).expect(201);
+    const [primary] = await db.select().from(projectWorkspaces).where(and(eq(projectWorkspaces.companyId, f.companyId),
+      eq(projectWorkspaces.projectId, selected.body.id)));
+    let workspaceId = primary!.id;
+    if (mode === "wrong_project" || mode === "foreign_company") {
+      const other = mode === "foreign_company" ? await seed("admin") : f;
+      const created = await request(appFor(other.actor)).post(`/api/companies/${other.companyId}/projects`).send({
+        name: "Unselected Project", workspace: { name: "Unselected workspace", repoUrl: "https://example.test/unselected.git" },
+      }).expect(201);
+      const [workspace] = await db.select().from(projectWorkspaces).where(eq(projectWorkspaces.projectId, created.body.id));
+      workspaceId = workspace!.id;
+    }
+    if (mode === "missing_workspace") workspaceId = randomUUID();
+    if (mode === "source_access_revoked") await db.delete(companyMemberships).where(and(
+      eq(companyMemberships.companyId, f.companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, f.userId)));
+    const title = `Rejected selector ${randomUUID()}`;
+    const response = await http.post(`/api/companies/${f.companyId}/issues`).send({ title, projectId: selected.body.id,
+      projectWorkspaceId: workspaceId });
+    expect([403, 404, 422]).toContain(response.status);
+    expect(await db.select().from(issues).where(and(eq(issues.companyId, f.companyId), eq(issues.title, title)))).toHaveLength(0);
+  });
+
+  it("keeps workspace-only inference outside the authenticated manual related Source domain", async () => {
+    const f = await seed("admin"), http = request(appFor(f.actor));
+    const created = await http.post(`/api/companies/${f.companyId}/projects`).send({ name: "Inferred Project",
+      workspace: { name: "Existing workspace", repoUrl: "https://example.test/inferred.git" } }).expect(201);
+    const [workspace] = await db.select().from(projectWorkspaces).where(eq(projectWorkspaces.projectId, created.body.id));
+    const response = await http.post(`/api/companies/${f.companyId}/issues`).send({ title: "Unknown workspace-only source",
+      projectWorkspaceId: workspace!.id }).expect(201);
+    const { row } = await readOwner(response.body.id);
+    expect(row.projectId).toBe(created.body.id);
+    expect(row.payloadSourceProtocolVersion).toBe(0);
+    expect(row.payloadSourceSnapshot).toBeNull();
+  });
+
+  it.each(["workspace_project_changed", "project_invalidated"] as const)(
+    "rechecks the original workspace and Project privacy owner on recurring Task reads: %s", async mode => {
+    const f = await seed("admin"), http = request(appFor(f.actor));
+    const created = await http.post(`/api/companies/${f.companyId}/projects`).send({ name: "Captured Project",
+      workspace: { name: "Captured workspace", repoUrl: "https://example.test/captured.git" } }).expect(201);
+    const [workspace] = await db.select().from(projectWorkspaces).where(eq(projectWorkspaces.projectId, created.body.id));
+    const response = await http.post(`/api/companies/${f.companyId}/issues`).send({ title: "Recurring selected workspace",
+      projectId: created.body.id, projectWorkspaceId: workspace!.id }).expect(201);
+    const { row, proof } = await readOwner(response.body.id);
+    await assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: row.id, sourceVersion: "snapshot-owner-current", contentHash: proof.bodyHash } });
+    if (mode === "workspace_project_changed") {
+      const other = await http.post(`/api/companies/${f.companyId}/projects`).send({ name: "Different current Project" }).expect(201);
+      await db.update(projectWorkspaces).set({ projectId: other.body.id }).where(eq(projectWorkspaces.id, workspace!.id));
+    } else await db.update(projects).set({ payloadSourceSnapshotInvalidated: true }).where(eq(projects.id, created.body.id));
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: row.id, sourceVersion: "snapshot-owner-current", contentHash: proof.bodyHash } })).rejects.toBeDefined();
+  });
+
+  it("binds the original same-Project workspace selector in the capture audit independently of the body hash", async () => {
+    const f = await seed("admin"), http = request(appFor(f.actor));
+    const created = await http.post(`/api/companies/${f.companyId}/projects`).send({ name: "Selector audit Project",
+      workspace: { name: "Original primary", repoUrl: "https://example.test/original.git" } }).expect(201);
+    const [original] = await db.select().from(projectWorkspaces).where(eq(projectWorkspaces.projectId, created.body.id));
+    const secondary = await http.post(`/api/projects/${created.body.id}/workspaces`).send({
+      name: "Different same-Project workspace", repoUrl: "https://example.test/secondary.git" }).expect(201);
+    const response = await http.post(`/api/companies/${f.companyId}/issues`).send({ title: "Original explicit selector",
+      projectId: created.body.id, projectWorkspaceId: original!.id }).expect(201);
+    const before = await readOwner(response.body.id);
+    await assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: before.row.id, sourceVersion: "snapshot-owner-current", contentHash: before.proof.bodyHash } });
+    await db.update(issues).set({ projectWorkspaceId: secondary.body.id }).where(eq(issues.id, before.row.id));
+    const after = await readOwner(before.row.id);
+    expect(after.row.projectWorkspaceId).toBe(secondary.body.id);
+    expect(after.proof.bodyHash).toBe(before.proof.bodyHash);
+    expect(after.row.payloadSourceSnapshot).toEqual(before.row.payloadSourceSnapshot);
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: after.row.id, sourceVersion: "snapshot-owner-current", contentHash: after.proof.bodyHash } })).rejects.toBeDefined();
+  });
+
 });

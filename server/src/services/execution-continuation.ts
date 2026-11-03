@@ -5,18 +5,19 @@ import {
   heartbeatRuns,
   issueComments,
   issueRecoveryActions,
+  nativeRunFinalizations, nativeRunResults, statusDecisions,
   issueThreadInteractions,
   issues,
   type Db,
 } from "@paperclipai/db";
-import type { ExecutionContinuationEnvelope } from "@paperclipai/shared";
+import { nativeRunInputSourceReceiptSchema, type NativeRunInputSourceReceipt, type ExecutionContinuationEnvelope } from "@paperclipai/shared";
 import { sanitizeQuarantinedCommentForHigherTrust } from "./source-trust.js";
 import { hasConversationContinuationPolicy } from "./conversation-continuation.js";
 import { queuedCommentIdsFromWakePayload } from "./issue-queued-comment-queue.js";
 import { childReviewOutcomes } from "./native-runtime/child-review-outcomes.js";
 import { canActorReadHeartbeatRunPrivacy, type AuthorizationActor } from "./authorization.js";
 import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
-import { nativeContinuationCommentProjection, nativeContinuationMessageHash, nativeTaskWakeOriginCommentIds } from "./native-runtime/canonical.js";
+import { nativeContinuationCommentProjection, nativeContinuationMessageHash, nativeTaskWakeOriginCommentIds, nativeTaskWakeInteraction, nativeSha256 } from "./native-runtime/canonical.js";
 import type { NativeCommentSourceCapture } from "./agent-conversations.js";
 
 /** A snapshot of the actual receiver and final redacted owner rendition; not
@@ -25,8 +26,79 @@ export type NativeTaskContinuationCapture = {
   companyId: string; issueId: string; agentId: string; runId: string;
   responsibleUserId: string; wakeupRequestId: string;
   envelope: ExecutionContinuationEnvelope; commentSources: NativeCommentSourceCapture[];
-  wake: { requestedByActorType: string | null; requestedByActorId: string | null; reason: string | null; originCommentIds: string[] };
+  delivery?: import("./tool-action-delivery.js").NativeToolActionDeliveryCapture;
+  finalizedSummary?: NativeFinalizedContinuationSummaryCapture;
+  previousContext?: { runId: string; messages: ExecutionContinuationEnvelope["messages"] };
+  retainedSource?: Extract<import("@paperclipai/shared").NativePayloadSourceInput, { kind: "retained_run" }>;
+  summary?: { rawTrustHash: string; source: import("./documents.js").DocumentRevisionSourceCapture;
+    rendition: { key: string; title: string | null; body: string;
+      sourceTrust: import("@paperclipai/shared").SourceTrustMetadata | null; updatedAt: string } };
+  pendingInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
+  governedInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[];
+  wake: { requestedByActorType: string | null; requestedByActorId: string | null; reason: string | null; originCommentIds: string[];
+    interaction?: NonNullable<ReturnType<typeof nativeTaskWakeInteraction>> };
 };
+
+/** A low-trust summary of one actual finalized Native result. Its parent
+ * receipt is recursively revalidated for the current reader, never a Run grant. */
+export type NativeFinalizedContinuationSummaryCapture = {
+  companyId: string; issueId: string; agentId: string; receiverRunId: string; sourceRunId: string;
+  resultId: string; resultCanonicalSha256: string; resultCreatedAt: string;
+  finalizationVersion: string; assessmentId: string; decisionId: string; decisionDigest: string; decisionSnapshotHash: string;
+  parentReceipt: NativeRunInputSourceReceipt; body: string;
+};
+
+export async function captureNativeFinalizedContinuationSummary(input: {
+  db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0]; companyId: string; issueId: string; agentId: string; receiverRunId: string; sourceRunId: string; reader?: AuthorizationActor;
+}): Promise<NativeFinalizedContinuationSummaryCapture | null> {
+  const [receiver] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.receiverRunId),
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId))).limit(1);
+  const [source] = await input.db.select({ run: heartbeatRuns,
+    receiptDigestValid: sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->>'digest') =
+      encode(sha256(convert_to(((${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt')-'digest')::text,'UTF8')),'hex')`,
+    inputDigestValid: sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->'bootstrap'->>'executionInputDigest') =
+      encode(sha256(convert_to((${heartbeatRuns.runnerProfileJson}->'nativeExecutionInput')::text,'UTF8')),'hex')`,
+  }).from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.sourceRunId), eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"))).for("share");
+  if (!receiver || (!input.reader && receiver.status !== "running") ||
+    ![receiver.issueId,receiver.nativeIssueId,object(receiver.contextSnapshot).issueId,object(receiver.contextSnapshot).taskId].includes(input.issueId) ||
+    !receiver.responsibleUserId || !source || source.run.nativeInputSourceProtocolVersion !== 1 || source.run.id === receiver.id || !source.run.finishedAt ||
+    !["succeeded", "failed", "timed_out", "cancelled"].includes(source.run.status) || source.receiptDigestValid !== true || source.inputDigestValid !== true) return null;
+  const reader: AuthorizationActor = input.reader ?? { type: "agent", source: "agent_jwt", companyId: input.companyId,
+    agentId: input.agentId, runId: receiver.id, onBehalfOfUserId: receiver.responsibleUserId };
+  if (!await canActorReadHeartbeatRunPrivacy(input.db, reader, receiver) || !await canActorReadHeartbeatRunPrivacy(input.db, reader, source.run)) return null;
+  const [coordinator] = await input.db.select().from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.runId, source.run.id),
+    eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
+    eq(nativeRunFinalizations.phase, "committed"), isNull(nativeRunFinalizations.leaseOwner))).for("share");
+  if (!coordinator?.resultId || !coordinator.assessmentId || !coordinator.decisionId || coordinator.failureCode) return null;
+  const [accepted] = await input.db.select().from(nativeRunResults).where(and(eq(nativeRunResults.id, coordinator.resultId),
+    eq(nativeRunResults.companyId, input.companyId), eq(nativeRunResults.issueId, input.issueId), eq(nativeRunResults.runId, source.run.id),
+    eq(nativeRunResults.schemaStatus, "accepted"))).for("share");
+  const [decision] = await input.db.select().from(statusDecisions).where(and(eq(statusDecisions.id, coordinator.decisionId),
+    eq(statusDecisions.companyId, input.companyId), eq(statusDecisions.issueId, input.issueId), eq(statusDecisions.runId, source.run.id),
+    eq(statusDecisions.assessmentId, coordinator.assessmentId), eq(statusDecisions.applicationState, "applied"), isNotNull(statusDecisions.appliedAt))).for("share");
+  const profile = object(source.run.runnerProfileJson), receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  if (!accepted || !decision || !receipt.success || accepted.completionContractId !== source.run.completionContractId ||
+    receipt.data.binding.companyId !== input.companyId || receipt.data.binding.issueId !== input.issueId ||
+    receipt.data.binding.agentId !== input.agentId || receipt.data.binding.runId !== source.run.id ||
+    receipt.data.binding.responsibleUserId !== source.run.responsibleUserId ||
+    object(source.run.resultJson).decisionId !== decision.id || object(source.run.resultJson).finalizationPhase !== "committed") return null;
+  const { acceptedResponseDigestMatches } = await import("./native-runtime/native-run-finalizer.js");
+  if (!await acceptedResponseDigestMatches(input.db, source.run, accepted)) return null;
+  const acceptedResult = object(object(accepted.resultJson).result);
+  const rawSummary = string(object(object(source.run.resultJson).nativeResult).summary) ?? string(object(source.run.resultJson).summary);
+  if (acceptedResult.schema !== "paperclip.run_result.v1" || !rawSummary || rawSummary !== acceptedResult.summary) return null;
+  const sets = [receipt.data.bootstrap, ...receipt.data.dispatches, ...receipt.data.additionalInputs];
+  if (sets.length > 64) return null;
+  const body = await createRunSecretRedactionRegistry(input.db as Db).redactForIssue(input.companyId, input.issueId, rawSummary.slice(0, 32_000));
+  return { companyId: input.companyId, issueId: input.issueId, agentId: input.agentId, receiverRunId: receiver.id, sourceRunId: source.run.id,
+    resultId: accepted.id, resultCanonicalSha256: accepted.canonicalSha256, resultCreatedAt: accepted.createdAt.toISOString(),
+    finalizationVersion: coordinator.updatedAt.toISOString(), assessmentId: coordinator.assessmentId, decisionId: decision.id,
+    decisionDigest: decision.decisionDigest, decisionSnapshotHash: nativeSha256({decisionVersion:decision.decisionVersion,
+      policyVersion:decision.policyVersion,fromStatus:decision.fromStatus,toStatus:decision.toStatus,reasonCode:decision.reasonCode,
+      decisionJson:decision.decisionJson,applicationState:decision.applicationState,appliedAt:decision.appliedAt?.toISOString()}),
+    parentReceipt: receipt.data, body };
+}
 
 export class StaleExecutionContinuationError extends Error {
   constructor(readonly code: "continuation_task_ownership_changed") {
@@ -135,6 +207,8 @@ export async function buildExecutionContinuation(input: {
   /** Server-owned current run identity when validating dispatch authority. */
   runId?: string;
   summary: string | null;
+  summaryDocument?: { source: import("./documents.js").DocumentRevisionSourceCapture;
+    value: import("./issue-continuation-summary.js").IssueContinuationSummaryDocument };
   exposeLowTrustRaw: boolean;
   /** Selected message sources only; interactions and prior results are separate. */
   onCommentSourceCapture?: (capture: NativeCommentSourceCapture) => void;
@@ -288,8 +362,8 @@ export async function buildExecutionContinuation(input: {
                   prior.deleted === message.deleted &&
                   prior.authorId === message.authorId &&
                   (prior.createdByRunId ?? null) === message.createdByRunId &&
-                  JSON.stringify(prior.sourceTrust) ===
-                    JSON.stringify(message.sourceTrust),
+                  nativeSha256(prior.sourceTrust) ===
+                    nativeSha256(message.sourceTrust),
               ),
           ),
         }
@@ -474,10 +548,44 @@ export async function buildExecutionContinuation(input: {
       eq(agentWakeupRequests.id, receiver.wakeupRequestId), eq(agentWakeupRequests.companyId, companyId),
       eq(agentWakeupRequests.agentId, input.agentId), eq(agentWakeupRequests.runId, receiver.id),
     )).limit(1);
+    const governedInteractions: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
+    if (wake && envelope.interactionOutcomes.length > 0) {
+      const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
+      // Every included historical outcome is selected through its actual
+      // authoritative owner, not only the triggering row.
+      await materializeNativeInteractionResponses({ db, companyId, issueId, runId: receiver.id, agentId: input.agentId,
+        interactionIds: envelope.interactionOutcomes.map(outcome => outcome.id),
+        onContinuationSourceCapture: capture => { governedInteractions.push(capture); } });
+    }
+    const { captureNativeGovernedPendingInteractions } = await import("./native-runtime/native-interaction-bridge.js");
+    const pendingInteractions = wake && envelope.unresolvedInteractionIds.length
+      ? await captureNativeGovernedPendingInteractions({ db, companyId, issueId, runId: receiver.id, agentId: input.agentId,
+          interactionIds: envelope.unresolvedInteractionIds }) : [];
+    const finalizedSummary = wake && input.summary === null && sourceRunId && envelope.completedWork !== null
+      ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
+          receiverRunId: receiver.id, sourceRunId }) : null;
+    const { captureNativeToolActionDelivery } = await import("./tool-action-delivery.js");
+    const delivery = wake && governedInteractions.length ? await captureNativeToolActionDelivery({ db, companyId, issueId,
+      agentId: input.agentId, runId: receiver.id, wakeupRequestId: wake.id }) : null;
+    const interaction = nativeTaskWakeInteraction(wake?.payload);
+    const summary = input.summaryDocument && input.summary === input.summaryDocument.value.body
+      ? { source: input.summaryDocument.source, rawTrustHash: nativeSha256(input.summaryDocument.value.sourceTrust),
+          rendition: await createRunSecretRedactionRegistry(db).redactForIssue(companyId, issueId, {
+            key: input.summaryDocument.value.key, title: input.summaryDocument.value.title,
+            body: input.summaryDocument.value.body, sourceTrust: input.summaryDocument.value.sourceTrust,
+            updatedAt: input.summaryDocument.value.updatedAt.toISOString() }) } : null;
     if (wake) input.onContinuationSourceCapture(structuredClone({ companyId, issueId, agentId: input.agentId, runId: receiver.id,
       responsibleUserId: receiver.responsibleUserId, wakeupRequestId: wake.id, envelope, commentSources: finalCommentSources,
+      ...(governedInteractions.length ? { governedInteractions } : {}),
+      ...(delivery ? { delivery } : {}),
+      ...(pendingInteractions.length ? { pendingInteractions } : {}),
+      ...(summary ? { summary } : {}),
+      ...(finalizedSummary ? { finalizedSummary } : {}),
+      ...(input.previousContextRunId && deliveredMessages ? { previousContext: { runId: input.previousContextRunId,
+        messages: deliveredMessages as ExecutionContinuationEnvelope["messages"] } } : {}),
       wake: { requestedByActorType: wake.requestedByActorType, requestedByActorId: wake.requestedByActorId, reason: wake.reason,
-        originCommentIds: nativeTaskWakeOriginCommentIds(wake.payload) } }));
+        originCommentIds: nativeTaskWakeOriginCommentIds(wake.payload),
+        ...(interaction ? { interaction } : {}) } }));
   }
   return envelope;
 }

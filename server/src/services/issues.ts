@@ -2369,7 +2369,9 @@ function isManualRootPayloadInput(data: IssueCreateInput) {
 /** Literal text is independent input; selected parent/Project links remain privacy dependencies. */
 export function isManualRelatedPayloadInput(data: IssueCreateInput) {
   return !!(data.parentId || data.projectId) && (!data.parentId || isUuidLike(data.parentId)) &&
-    (!data.projectId || isUuidLike(data.projectId)) && isManualRootPayloadInput({ ...data, parentId: null, projectId: null });
+    (!data.projectId || isUuidLike(data.projectId)) &&
+    (data.projectWorkspaceId == null || Boolean(data.projectId && isUuidLike(data.projectWorkspaceId))) &&
+    isManualRootPayloadInput({ ...data, parentId: null, projectId: null, projectWorkspaceId: null });
 }
 
 async function bindManualTaskPayload(tx: DbTransaction, issue: typeof issues.$inferSelect,
@@ -2390,7 +2392,8 @@ async function bindManualTaskPayload(tx: DbTransaction, issue: typeof issues.$in
     companyId: issue.companyId, actorType: "user", actorId: actor.userId!,
     action: "issue.payload_source_captured", entityType: "issue", entityId: issue.id,
     details: { producer: related ? "direct_manual_related_input" : "direct_manual_input",
-      ...(related ?? {}), contentHash: snapshot.owner.contentHash, digest: snapshot.digest },
+      ...(related ?? {}), ...(related ? { projectWorkspaceId: captured.projectWorkspaceId } : {}),
+      contentHash: snapshot.owner.contentHash, digest: snapshot.digest },
   });
   publications.push(activity.publication);
   const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
@@ -10327,7 +10330,8 @@ export function issueService(db: Db) {
         const finishManualInput = async <T>(result: T) => {
           if (captureManualInput && manualActor && manualExpiresAt !== null) {
             if (captureManualRelated) await assertManualRelatedSourcesCurrent(tx, companyId,
-              { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null });
+              { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null,
+                projectWorkspaceId: issueData.projectWorkspaceId ?? null });
             if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
             await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
           }
@@ -10402,7 +10406,8 @@ export function issueService(db: Db) {
           await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
           if (captureManualRelated && manualActor)
             await assertManualRelatedSourcesCurrent(tx, companyId,
-              { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null });
+              { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, { parentId: issueData.parentId ?? null, projectId: issueData.projectId ?? null,
+                projectWorkspaceId: issueData.projectWorkspaceId ?? null });
         if (issueData.conversationAgentId && issueData.conversationUserId) {
           await lockBusinessEventCompany(tx, companyId);
           await lockMemoryPrivacy(tx as unknown as Db, companyId);

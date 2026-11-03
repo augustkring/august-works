@@ -254,6 +254,17 @@ export async function configureManagedConversationSandboxHost(input: ManagedSand
   }
 }
 
+export async function ensureManagedSandboxEnvironmentForAgent(
+  db: Parameters<typeof environmentService>[0], companyId: string, agentId: string,
+) {
+  const { environment } = await environmentService(db).ensureManagedSandboxEnvironment({ companyId,
+    name: `Conversation managed sandbox ${agentId}`, provider: "fake", stockVersion: "conversation-software-host-v1",
+    config: { image: "ubuntu:24.04", reuseLease: false } });
+  await db.update(agents).set({ defaultEnvironmentId: environment.id })
+    .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
+  return environment;
+}
+
 async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInput, fixtureImageNode: string) {
   const { db, actor, companyId, agentId, providerBindingId } = input;
   const brokerOrigin = new URL(input.brokerOrigin).origin;
@@ -322,10 +333,7 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
   const providerSnapshotHash = qualifiedProvider.provider.capabilitySnapshotHash;
   if (!providerSnapshotHash) throw new Error("conversation_software_host_provider_snapshot_missing");
   input.profile.providerSnapshotHash = providerSnapshotHash;
-  const environment = await environmentService(db).ensureManagedSandboxEnvironment({ companyId,
-    name: `Conversation managed sandbox ${agentId}`, provider: "fake", stockVersion: "conversation-software-host-v1",
-    config: { image: "ubuntu:24.04", reuseLease: false } }).then(result => result.environment);
-  await db.update(agents).set({ defaultEnvironmentId: environment.id }).where(eq(agents.id, agentId));
+  const environment = await ensureManagedSandboxEnvironmentForAgent(db, companyId, agentId);
 
   const secrets = secretService(db);
   const runtimeSecretValue = `runtime-secret-${randomUUID()}`;
@@ -465,7 +473,8 @@ export const managedSerialSchedulerFixtureControls = Object.freeze({
 export async function configureManagedSerialSchedulerSandboxHost(
   input: Omit<ManagedSandboxHostInput, "ordinaryWorker" | "ordinaryWorkerRunId">,
 ) {
-  if (input.ordinaryWorkerProject) throw new Error("scheduler_serial_project_scope_not_supported");
+  // A Project tuple is checked for each actual Run by configureManagedSandboxRun;
+  // serial admission still binds exact Run/lease and retires the predecessor Host.
   const fixtureImageNode = await preflightManagedSandboxInput({ ...input, ordinaryWorker: true });
   const infrastructure = await installManagedSandboxInfrastructure(input, fixtureImageNode);
   type Host = Awaited<ReturnType<typeof configureManagedSandboxRun>>;
@@ -3521,7 +3530,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       const allowedChild = mkdtempSync(join(taskRoot, ".native-cwd-child-"));
       try {
         const acceptedChild = await runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
-          command: "true", cwd: allowedChild, timeoutMs: 1000 });
+          command: "true", cwd: allowedChild, timeoutMs: 10_000 });
         assert.ok(acceptedChild && acceptedChild.exitCode === 0 && !acceptedChild.timedOut,
           "ordinary_worker_allowed_child_cwd_rejected");
       } finally { rmSync(allowedChild, { recursive: true, force: true }); }

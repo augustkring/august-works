@@ -1,6 +1,8 @@
+import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
+import { isDeepStrictEqual } from "node:util";
 import type { Db } from "@paperclipai/db";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   agents,
   toolActionRequests,
@@ -13,7 +15,7 @@ import {
   statusDecisions,
   workAssessments,
 } from "@paperclipai/db";
-import { getAgentWorkEligibility, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { getAgentWorkEligibility, requestConfirmationResultSchema, type ExecutionContinuationEnvelope, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { commitNativeStatusDecision } from "./status-decision-committer.js";
 import { nativeSha256 } from "./canonical.js";
@@ -27,6 +29,246 @@ import {
   type NativeStatusDecision,
   type NativeStatusEffect,
 } from "./status-arbiter.js";
+
+/** Distinct final-redacted renditions selected by the existing governed owner.
+ * A source consumer must reconstruct this owner; this descriptor grants nothing. */
+export type NativeGovernedInteractionContinuationCapture = {
+  companyId: string; issueId: string; runId: string; agentId: string;
+  nativeSource: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  continuationSource: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  nativeResponse: NativeInteractionResponseEnvelope;
+  projection: {
+    version: 1; companyId: string; issueId: string; interactionId: string; sourceVersion: string;
+    nativeResponseDigest: string;
+    owner: { sourceRunId: string | null; sourceCommentId: string | null; originCommentIds: string[];
+      continuationPolicy: string; resolvedByUserId: string; resolvedAt: string;
+      actionRequestId: string; invocationId: string; argumentsHash: string; requestStatus: string; invocationStatus: string };
+    humanResponse: NonNullable<ExecutionContinuationEnvelope["humanResponses"]>[number];
+    interactionOutcome: ExecutionContinuationEnvelope["interactionOutcomes"][number];
+  };
+};
+
+export type NativeGovernedPendingInteractionCapture = {
+  companyId: string; issueId: string; runId: string; agentId: string;
+  source: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  projection: { version: 1; companyId: string; issueId: string; interactionId: string; sourceVersion: string;
+    kind: "request_confirmation"; status: "pending"; sourceRunId: string; sourceCommentId: string | null;
+    originCommentIds: string[]; actionRequestId: string; invocationId: string; argumentsHash: string;
+    requestStatus: "pending"; invocationStatus: "awaiting_approval"; expiresAt: string | null };
+};
+
+function nativeGovernedPendingProjection(input: { companyId: string; issueId: string; sourceVersion: string;
+  sourceRunId: string; interaction: { id: string; sourceCommentId?: string | null; originCommentIds?: string[] };
+  request: typeof toolActionRequests.$inferSelect; invocation: typeof toolInvocations.$inferSelect;
+}): NativeGovernedPendingInteractionCapture["projection"] {
+  return { version: 1, companyId: input.companyId, issueId: input.issueId, interactionId: input.interaction.id,
+    sourceVersion: input.sourceVersion, kind: "request_confirmation", status: "pending", sourceRunId: input.sourceRunId,
+    sourceCommentId: input.interaction.sourceCommentId ?? null, originCommentIds: [...(input.interaction.originCommentIds ?? [])],
+    actionRequestId: input.request.id, invocationId: input.invocation.id, argumentsHash: input.request.canonicalArgumentsHash,
+    requestStatus: "pending", invocationStatus: "awaiting_approval", expiresAt: input.request.expiresAt?.toISOString() ?? null };
+}
+
+/** Read-only unresolved-ID witness. It never projects a pending request into a
+ * Native Human response, executes a tool, or grants approval. */
+export async function captureNativeGovernedPendingInteractions(input: {
+  db: Db; companyId: string; issueId: string; runId: string; agentId: string; interactionIds: string[];
+  reader?: import("../authorization.js").AuthorizationActor;
+}): Promise<NativeGovernedPendingInteractionCapture[]> {
+  if (input.interactionIds.length === 0) return [];
+  if (input.interactionIds.length > 256 || new Set(input.interactionIds).size !== input.interactionIds.length)
+    throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Pending interaction selection is invalid");
+  const [run] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.runId),
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"))).limit(1);
+  const [task] = await input.db.select().from(issues).where(and(eq(issues.id, input.issueId), eq(issues.companyId, input.companyId),
+    eq(issues.assigneeAgentId, input.agentId))).limit(1);
+  const { canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
+  if (!run || !task || ["done", "cancelled"].includes(task.status) || !run.responsibleUserId ||
+    ![run.issueId, run.nativeIssueId, record(run.contextSnapshot).issueId].includes(input.issueId) ||
+    !await canActorReadHeartbeatRunPrivacy(input.db, input.reader ?? { type: "agent", source: "agent_jwt", companyId: input.companyId,
+      agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId }, run))
+    throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Pending interaction reader is unavailable");
+  const versions = new Map<string, string>();
+  const rows = await issueThreadInteractionService(input.db).listForIssue(input.issueId,
+    { onSourceVersionSelected: (id, version) => { versions.set(id, version); } });
+  const captures: NativeGovernedPendingInteractionCapture[] = [];
+  for (const id of input.interactionIds) {
+    const row = rows.find(value => value.id === id), version = versions.get(id);
+    if (!row || !version || row.companyId !== input.companyId || row.issueId !== input.issueId || row.kind !== "request_confirmation" ||
+      row.status !== "pending" || !row.payload.toolAction || !row.sourceRunId || row.result !== null || row.resolvedAt ||
+      row.resolvedByUserId || row.resolvedByAgentId || row.resolvedByRunId)
+      throw new NativeInteractionBridgeError("native_interaction_unresolved", "Pending governed interaction changed");
+    const action = row.payload.toolAction;
+    const [request] = await input.db.select().from(toolActionRequests).where(and(eq(toolActionRequests.id, action.actionRequestId),
+      eq(toolActionRequests.companyId, input.companyId), eq(toolActionRequests.issueId, input.issueId),
+      eq(toolActionRequests.interactionId, id), eq(toolActionRequests.invocationId, action.invocationId))).limit(1);
+    const [invocation] = await input.db.select().from(toolInvocations).where(and(eq(toolInvocations.id, action.invocationId),
+      eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.issueId, input.issueId), eq(toolInvocations.agentId, input.agentId))).limit(1);
+    const [producer] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, row.sourceRunId),
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId))).limit(1);
+    if (!request || !invocation || !producer || ![producer.nativeIssueId, producer.issueId, record(producer.contextSnapshot).issueId].includes(input.issueId) ||
+      request.status !== "pending" || invocation.status !== "awaiting_approval" || invocation.approvalState !== "pending" ||
+      request.requestedByAgentId !== input.agentId || invocation.runId !== producer.id ||
+      request.canonicalArgumentsHash !== action.argumentsHash || invocation.argumentsHash !== action.argumentsHash ||
+      request.decidedByUserId || request.decidedByAgentId || request.decidedAt || request.resolvedAt ||
+      (request.expiresAt && request.expiresAt.getTime() <= Date.now()) ||
+      (action.expiresAt != null && (!Number.isFinite(Date.parse(action.expiresAt)) || Date.parse(action.expiresAt) <= Date.now())) ||
+      (request.expiresAt?.toISOString() ?? null) !== (action.expiresAt ?? null))
+      throw new NativeInteractionBridgeError("native_interaction_governed_request_unresolved", "Pending request has no exact live invocation owner");
+    const projection = nativeGovernedPendingProjection({ companyId: input.companyId, issueId: input.issueId,
+      sourceVersion: version, sourceRunId: producer.id, interaction: row, request, invocation });
+    captures.push({ companyId: input.companyId, issueId: input.issueId, runId: input.runId, agentId: input.agentId,
+      projection, source: { kind: "interaction", issueId: input.issueId, interactionId: id, sourceVersion: version,
+        contentHash: nativeSha256({ rendition: "native_governed_pending_reference_v1", projection }) } });
+  }
+  return captures;
+}
+
+export type NativeHistoricalPendingTransitionContext = {
+  consumerRunId: string; parentRunId: string; parentReceiptDigest: string;
+  terminalSources: NativeGovernedInteractionContinuationCapture[];
+  lineage: Array<{ runId: string; receiptDigest: string }>;
+};
+
+/** A narrowly scoped historical fact, never live pending authority. Both the
+ * original parent receipt and the actual current terminal transition context are required.
+ * A still-pending sibling must also remain an exact live consumer source. */
+export async function nativeGovernedPendingTransitionCurrent(input: {
+  db: Db; companyId: string; issueId: string; agentId: string;
+  source: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  context: NativeHistoricalPendingTransitionContext; reader: import("../authorization.js").AuthorizationActor; readWork?: () => void;
+}): Promise<NativeGovernedPendingInteractionCapture | null> {
+  const c = input.context, source = input.source;
+  if (!Array.isArray(c.lineage) || c.lineage.length === 0 || c.lineage.length > 64 ||
+    new Set(c.lineage.map(step => step.runId)).size !== c.lineage.length ||
+    c.lineage.at(-1)?.runId !== c.parentRunId || c.lineage.at(-1)?.receiptDigest !== c.parentReceiptDigest ||
+    c.parentRunId === c.consumerRunId || !/^\d+(?:\.\d+)?$/.test(source.sourceVersion) || (!Array.isArray(c.terminalSources) || c.terminalSources.length > 256)) return null;
+  const [parent] = await input.db.select({ run: heartbeatRuns,
+    digestValid: sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->>'digest') =
+      encode(sha256(convert_to(((${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt')-'digest')::text,'UTF8')),'hex')`,
+    inputDigestValid: sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->'bootstrap'->>'executionInputDigest') =
+      encode(sha256(convert_to((${heartbeatRuns.runnerProfileJson}->'nativeExecutionInput')::text,'UTF8')),'hex')`,
+  }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, c.parentRunId),
+    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"))).for("share");
+  const [consumer] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.id, c.consumerRunId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+    eq(heartbeatRuns.runtimeMode, "native"))).for("share");
+  if (!parent || !consumer || parent.digestValid !== true || parent.inputDigestValid !== true || parent.run.nativeInputSourceProtocolVersion !== 1 || consumer.nativeInputSourceProtocolVersion !== 1 || !parent.run.finishedAt || ["queued", "running"].includes(parent.run.status)) return null;
+  const parentReceipt = nativeRunInputSourceReceiptSchema.safeParse(record(parent.run.runnerProfileJson).nativeInputSourceReceipt);
+  const consumerReceipt = nativeRunInputSourceReceiptSchema.safeParse(record(consumer.runnerProfileJson).nativeInputSourceReceipt);
+  if (!parentReceipt.success || !consumerReceipt.success || parentReceipt.data.digest !== c.parentReceiptDigest ||
+    parentReceipt.data.binding.companyId !== input.companyId || parentReceipt.data.binding.issueId !== input.issueId ||
+    parentReceipt.data.binding.agentId !== input.agentId || parentReceipt.data.binding.runId !== parent.run.id ||
+    parentReceipt.data.binding.responsibleUserId !== parent.run.responsibleUserId ||
+    consumerReceipt.data.binding.companyId !== input.companyId || consumerReceipt.data.binding.issueId !== input.issueId ||
+    consumerReceipt.data.binding.agentId !== input.agentId || consumerReceipt.data.binding.runId !== consumer.id ||
+    consumerReceipt.data.binding.responsibleUserId !== consumer.responsibleUserId ||
+    ![parentReceipt.data.bootstrap,...parentReceipt.data.dispatches,...parentReceipt.data.additionalInputs]
+      .some(set => set.inputs.some(value => isDeepStrictEqual(value,source)))) return null;
+  const [consumerDigest] = await input.db.select({valid:sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->>'digest') =
+    encode(sha256(convert_to(((${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt')-'digest')::text,'UTF8')),'hex')`,
+    inputValid:sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->'bootstrap'->>'executionInputDigest') =
+      encode(sha256(convert_to((${heartbeatRuns.runnerProfileJson}->'nativeExecutionInput')::text,'UTF8')),'hex')`})
+    .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,input.companyId),eq(heartbeatRuns.id,consumer.id)));
+  if (consumerDigest?.valid !== true || consumerDigest.inputValid !== true) return null;
+  const { nativeRetainedRunResumeWitness, nativeToolContractFingerprintForTarget } = await import("./native-session-resume.js");
+  const { parseNativeExecutionInput } = await import("../../vendor/paperclip-runner/index.js");
+  const { captureNativeFinalizedContinuationSummary } = await import("../execution-continuation.js");
+  let lineageOwner = consumer, lineageReceipt = consumerReceipt.data;
+  for (const step of c.lineage) {
+    input.readWork?.();
+    const [selected] = await input.db.select({ run: heartbeatRuns,
+      digestValid: sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->>'digest') =
+        encode(sha256(convert_to(((${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt')-'digest')::text,'UTF8')),'hex')`,
+    inputDigestValid: sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->'bootstrap'->>'executionInputDigest') =
+      encode(sha256(convert_to((${heartbeatRuns.runnerProfileJson}->'nativeExecutionInput')::text,'UTF8')),'hex')`,
+    }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,input.companyId),eq(heartbeatRuns.id,step.runId),
+      eq(heartbeatRuns.agentId,input.agentId),eq(heartbeatRuns.nativeIssueId,input.issueId))).for("share");
+    const receipt = nativeRunInputSourceReceiptSchema.safeParse(record(selected?.run.runnerProfileJson).nativeInputSourceReceipt);
+    if (!selected || selected.digestValid !== true || selected.inputDigestValid !== true || selected.run.nativeInputSourceProtocolVersion !== 1 || selected.run.runtimeMode !== "native" || !receipt.success || receipt.data.digest !== step.receiptDigest ||
+      receipt.data.binding.runId !== step.runId || receipt.data.binding.companyId !== input.companyId ||
+      receipt.data.binding.issueId !== input.issueId || receipt.data.binding.agentId !== input.agentId ||
+      receipt.data.binding.responsibleUserId !== selected.run.responsibleUserId) return null;
+    const profile = record(lineageOwner.runnerProfileJson);
+    let retained: ReturnType<typeof nativeRetainedRunResumeWitness> = null;
+    try {
+      const execution = parseNativeExecutionInput(profile.nativeExecutionInput), generation = record(lineageOwner.contextSnapshot).conversationSessionGeneration;
+      const target = profile.nativeToolContractFingerprint === nativeToolContractFingerprintForTarget("remote") ? "remote" :
+        profile.nativeToolContractFingerprint === nativeToolContractFingerprintForTarget("local") ? "local" : null;
+      retained = target ? nativeRetainedRunResumeWitness({previousRun:selected.run,currentExecution:execution,
+        currentResponsibleUserId:lineageOwner.responsibleUserId,currentConversationSessionGeneration:
+          Number.isSafeInteger(generation) && Number(generation)>=0 ? Number(generation) : null,
+        requireConversationGeneration:false,executionTargetKind:target}) : null;
+    } catch { retained = null; }
+    const retainedEdge = retained && lineageReceipt.bootstrap.inputs.some(value => isDeepStrictEqual(value,retained!.source));
+    let summaryEdge = false;
+    if (!retainedEdge && record(profile.nativeBootstrapFinalizedContinuationSummary).sourceRunId === step.runId) {
+      const summary = await captureNativeFinalizedContinuationSummary({db:input.db,companyId:input.companyId,issueId:input.issueId,
+        agentId:input.agentId,receiverRunId:lineageOwner.id,sourceRunId:step.runId,reader:input.reader});
+      summaryEdge = Boolean(summary && summary.parentReceipt.digest === step.receiptDigest &&
+        isDeepStrictEqual(summary,profile.nativeBootstrapFinalizedContinuationSummary));
+    }
+    if (!retainedEdge && !summaryEdge) return null;
+    lineageOwner=selected.run;lineageReceipt=receipt.data;
+  }
+  const { canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
+  if (!await canActorReadHeartbeatRunPrivacy(input.db,input.reader,parent.run) || !await canActorReadHeartbeatRunPrivacy(input.db,input.reader,consumer)) return null;
+  const [currentState] = await input.db.select({ status: issueThreadInteractions.status }).from(issueThreadInteractions)
+    .where(and(eq(issueThreadInteractions.companyId,input.companyId),eq(issueThreadInteractions.issueId,input.issueId),
+      eq(issueThreadInteractions.id,source.interactionId))).for("share");
+  if (currentState?.status === "pending") {
+    // One sibling may remain pending while another supplied the terminal
+    // transition. Re-read through the actual current running consumer and
+    // current reader, never by impersonating the finished parent Run.
+    const pending = await captureNativeGovernedPendingInteractions({db:input.db,companyId:input.companyId,
+      issueId:input.issueId,agentId:input.agentId,runId:consumer.id,interactionIds:[source.interactionId],reader:input.reader});
+    if (pending.length !== 1 || !isDeepStrictEqual(pending[0]!.source,source) ||
+      !consumerReceipt.data.bootstrap.inputs.some(value=>isDeepStrictEqual(value,source))) return null;
+    // runId is only the enclosing historical rendition; its actor and all
+    // live owner reads above remain bound to the current consumer.
+    return {...pending[0]!,runId:parent.run.id};
+  }
+  const expected = c.terminalSources.filter(value => value.continuationSource.interactionId === source.interactionId);
+  if (expected.length !== 1 || !consumerReceipt.data.bootstrap.inputs.some(value => isDeepStrictEqual(value,expected[0]!.continuationSource))) return null;
+  const current: NativeGovernedInteractionContinuationCapture[] = [];
+  await materializeNativeInteractionResponses({ db: input.db, companyId: input.companyId, issueId: input.issueId,
+    runId: consumer.id, agentId: input.agentId, interactionIds: [source.interactionId], onContinuationSourceCapture: value => { current.push(value); } });
+  if (current.length !== 1 || !isDeepStrictEqual(current[0],expected[0])) return null;
+  const owner = current[0]!.projection.owner;
+  const [row] = await input.db.select({ interaction: issueThreadInteractions, request: toolActionRequests, invocation: toolInvocations,
+    originalBeforeDecision: sql<boolean>`${source.sourceVersion}::numeric >= extract(epoch from ${issueThreadInteractions.createdAt}) and
+      ${source.sourceVersion}::numeric >= extract(epoch from ${toolActionRequests.createdAt}) and
+      ${source.sourceVersion}::numeric >= extract(epoch from ${toolInvocations.createdAt}) and
+      ${source.sourceVersion}::numeric < extract(epoch from ${toolActionRequests.decidedAt}) and
+      ${source.sourceVersion}::numeric < extract(epoch from ${issueThreadInteractions.resolvedAt}) and
+      ${parent.run.finishedAt}::timestamptz <= ${toolActionRequests.decidedAt} and
+      (${toolActionRequests.expiresAt} is null or ${source.sourceVersion}::numeric < extract(epoch from ${toolActionRequests.expiresAt}))`,
+  }).from(issueThreadInteractions).innerJoin(toolActionRequests,and(eq(toolActionRequests.interactionId,issueThreadInteractions.id),
+    eq(toolActionRequests.id,owner.actionRequestId),eq(toolActionRequests.companyId,input.companyId),eq(toolActionRequests.issueId,input.issueId)))
+    .innerJoin(toolInvocations,and(eq(toolInvocations.id,toolActionRequests.invocationId),eq(toolInvocations.id,owner.invocationId),
+      eq(toolInvocations.companyId,input.companyId),eq(toolInvocations.issueId,input.issueId),eq(toolInvocations.agentId,input.agentId)))
+    .where(and(eq(issueThreadInteractions.id,source.interactionId),eq(issueThreadInteractions.companyId,input.companyId),
+      eq(issueThreadInteractions.issueId,input.issueId))).for("share");
+  if (!row || row.originalBeforeDecision !== true || row.invocation.runId !== owner.sourceRunId ||
+    row.request.decidedByUserId !== owner.resolvedByUserId || row.request.canonicalArgumentsHash !== owner.argumentsHash ||
+    row.invocation.argumentsHash !== owner.argumentsHash) return null;
+  const projection = nativeGovernedPendingProjection({ companyId:input.companyId,issueId:input.issueId,
+    sourceVersion:source.sourceVersion,sourceRunId:owner.sourceRunId!,interaction:row.interaction,request:row.request,invocation:row.invocation });
+  return source.contentHash === nativeSha256({rendition:"native_governed_pending_reference_v1",projection})
+    ? { companyId:input.companyId,issueId:input.issueId,runId:parent.run.id,agentId:input.agentId,projection,source } : null;
+}
+
+// Schema parsing may trim recognized strings. Reject any raw field that the
+// existing result schema would discard, while retaining the distinct raw DTO.
+function sameGovernedResultShape(raw: unknown, parsed: unknown): boolean {
+  if (Array.isArray(raw) || Array.isArray(parsed)) return Array.isArray(raw) && Array.isArray(parsed) && raw.length === parsed.length &&
+    raw.every((value,index)=>sameGovernedResultShape(value,parsed[index]));
+  if (raw && typeof raw === "object" || parsed && typeof parsed === "object") {
+    if (!raw || !parsed || typeof raw !== "object" || typeof parsed !== "object") return false;
+    const a=raw as Record<string,unknown>,b=parsed as Record<string,unknown>;
+    return Object.keys(a).sort().join(",")===Object.keys(b).sort().join(",") && Object.keys(a).every(key=>sameGovernedResultShape(a[key],b[key]));
+  }
+  return true;
+}
 
 export class NativeInteractionBridgeError extends Error {
   constructor(readonly code: string, message: string) {
@@ -160,12 +402,13 @@ export async function materializeNativeInteractionResponses(input: {
   agentId: string;
   interactionIds: string[];
   onSourceCapture?: (source: Extract<NativePayloadSourceInput, { kind: "interaction" }>) => void;
+  onContinuationSourceCapture?: (capture: NativeGovernedInteractionContinuationCapture) => void;
 }): Promise<NativeInteractionResponseEnvelope[]> {
   const requestedIds = new Set(input.interactionIds.filter(Boolean));
   if (requestedIds.size === 0) return [];
   const selectedVersions = new Map<string, string>();
   const [interactions, issue] = await Promise.all([
-    issueThreadInteractionService(input.db).listForIssue(input.issueId, input.onSourceCapture ? {
+    issueThreadInteractionService(input.db).listForIssue(input.issueId, (input.onSourceCapture || input.onContinuationSourceCapture) ? {
       onSourceVersionSelected: (id, version) => { selectedVersions.set(id, version); },
     } : undefined),
     input.db.select({ status: issues.status }).from(issues).where(and(
@@ -175,6 +418,7 @@ export async function materializeNativeInteractionResponses(input: {
   ]);
   if (!issue) throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Issue binding not found");
   const responses: NativeInteractionResponseEnvelope[] = [];
+  const governedOwners = new Map<string, NativeGovernedInteractionContinuationCapture["projection"]["owner"]>();
 
   for (const interaction of interactions) {
     if (!requestedIds.has(interaction.id)) continue;
@@ -204,6 +448,19 @@ export async function materializeNativeInteractionResponses(input: {
       }
       const expectedInvocationStatus = request.status === "executed" ? "succeeded" : request.status === "rejected" ? "denied" : "failed";
       if (invocation.status !== expectedInvocationStatus || (request.status !== "rejected" && interaction.result?.toolAction?.status !== request.status)) throw new NativeInteractionBridgeError("native_interaction_governed_result_mismatch", "Tool review outcome does not match its invocation");
+      if (input.onContinuationSourceCapture && interaction.resolvedByUserId && interaction.resolvedAt &&
+        !interaction.resolvedByAgentId && !interaction.resolvedByRunId && interaction.sourceRunId) {
+        const [producer] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, interaction.sourceRunId),
+          eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId))).limit(1);
+        if (!producer || invocation.runId !== producer.id ||
+          ![producer.nativeIssueId, producer.issueId, record(producer.contextSnapshot).issueId].includes(input.issueId))
+          throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Governed continuation producer changed");
+        governedOwners.set(interaction.id, { sourceRunId: interaction.sourceRunId ?? null, sourceCommentId: interaction.sourceCommentId ?? null,
+          originCommentIds: [...(interaction.originCommentIds ?? [])], continuationPolicy: interaction.continuationPolicy,
+          resolvedByUserId: interaction.resolvedByUserId, resolvedAt: new Date(interaction.resolvedAt).toISOString(),
+          actionRequestId: request.id, invocationId: invocation.id, argumentsHash: request.canonicalArgumentsHash,
+          requestStatus: request.status, invocationStatus: invocation.status });
+      }
     }
     const interactionResult = record(interaction.result);
     const supersessionOutcome = interaction.status === "expired"
@@ -414,14 +671,37 @@ export async function materializeNativeInteractionResponses(input: {
     input.issueId,
     responses.sort((left, right) => left.interactionId.localeCompare(right.interactionId)),
   );
-  if (input.onSourceCapture) {
+  if (input.onSourceCapture || input.onContinuationSourceCapture) {
     for (const response of redacted) {
       const sourceVersion = selectedVersions.get(response.interactionId);
       if (!sourceVersion) throw new NativeInteractionBridgeError(
         "native_interaction_source_missing", "Selected interaction version is unavailable",
       );
-      input.onSourceCapture({ kind: "interaction", issueId: input.issueId,
-        interactionId: response.interactionId, sourceVersion, contentHash: nativeSha256(response) });
+      const nativeSource = { kind: "interaction" as const, issueId: input.issueId,
+        interactionId: response.interactionId, sourceVersion, contentHash: nativeSha256(response) };
+      input.onSourceCapture?.(nativeSource);
+      const owner = governedOwners.get(response.interactionId);
+      const selected = interactions.find(row => row.id === response.interactionId);
+      if (input.onContinuationSourceCapture && owner && selected) {
+        const { projectHumanInteractionResponse } = await import("../execution-continuation.js");
+        const [raw] = await input.db.select({row:issueThreadInteractions,
+          version:sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text`}).from(issueThreadInteractions)
+          .where(and(eq(issueThreadInteractions.id,selected.id),eq(issueThreadInteractions.companyId,input.companyId),eq(issueThreadInteractions.issueId,input.issueId))).for("share");
+        const parsedResult=requestConfirmationResultSchema.safeParse(raw?.row.result);
+        if(!raw || raw.version!==sourceVersion || !parsedResult.success || !sameGovernedResultShape(raw.row.result,parsedResult.data))
+          throw new NativeInteractionBridgeError("native_interaction_governed_result_mismatch","Governed continuation rendition changed");
+        const humanResponse = projectHumanInteractionResponse(raw.row);
+        if (!humanResponse) throw new NativeInteractionBridgeError("native_interaction_governed_result_mismatch",
+          "Governed interaction has no exact Human response projection");
+        const projection = await createRunSecretRedactionRegistry(input.db).redactForIssue(input.companyId, input.issueId, {
+          version: 1 as const, companyId: input.companyId, issueId: input.issueId,
+          interactionId: response.interactionId, sourceVersion, nativeResponseDigest: nativeSource.contentHash,
+          owner, humanResponse, interactionOutcome: { id: raw.row.id, kind: raw.row.kind, status: raw.row.status, result: raw.row.result },
+        });
+        input.onContinuationSourceCapture(structuredClone({ companyId: input.companyId, issueId: input.issueId,
+          runId: input.runId, agentId: input.agentId, nativeResponse: response, nativeSource,
+          continuationSource: { ...nativeSource, contentHash: nativeSha256({ rendition: "native_governed_continuation_v1", projection }) }, projection }));
+      }
     }
   }
   return redacted;

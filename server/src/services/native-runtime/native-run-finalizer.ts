@@ -706,8 +706,8 @@ async function materializeCommittedReviewResponse(db: Db, runId: string) {
   }
 }
 
-async function acceptedResponseDigestMatches(
-  db: Db,
+export async function acceptedResponseDigestMatches(
+  db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0],
   run: typeof heartbeatRuns.$inferSelect,
   accepted: typeof nativeRunResults.$inferSelect,
 ): Promise<boolean> {

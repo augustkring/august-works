@@ -5,7 +5,7 @@ import type { ExecutionContinuationEnvelope, AskUserQuestionsInteraction } from 
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, exactNativeInitialTaskContinuation } from "./native-execution-input.js";
+import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, exactNativeInitialTaskContinuation, exactNativeTaskContinuation } from "./native-execution-input.js";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
@@ -203,6 +203,178 @@ describe("native bootstrap rendered-source closure", () => {
       payload: { ...payload, executionContinuation: { ...emptyContinuation, completedActions: [{ runId, receiptId: "x" }] } } })).toBeNull();
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "different_reason", task,
       payload: { ...payload, executionContinuation: emptyContinuation } })).toBeNull();
+  });
+
+  it("closes distinct governed Native/Human renditions and preserves pending references, summary and actual retained history", () => {
+    // Pure owner-capture inputs only. These descriptors are not DB/SDK or
+    // authorization proof; the independent bridge/source-reader tests own that.
+    const responsibleUserId = "current-task-human", resolver = "authorized-different-human", wakeupRequestId = randomUUID();
+    const interactionId = randomUUID(), sourceRunId = randomUUID(), commentId = randomUUID();
+    const message = nativeContinuationCommentProjection({ id: commentId, authorType: "user", authorUserId: responsibleUserId,
+      authorAgentId: null, createdByRunId: null, body: "Keep the review truthful.", createdAt: new Date("2026-10-01T00:00:00Z"),
+      updatedAt: new Date("2026-10-01T00:00:00Z"), deletedAt: null, sourceTrust: null });
+    const base: NativeTaskContinuationCapture = { companyId, issueId, agentId, runId, responsibleUserId, wakeupRequestId,
+      envelope: { version: 1, companyId, issueId, trigger: { reason: "issue_commented", interactionId: null, sourceRunId: null },
+        originCommentIds: [commentId], objective: message.body, messages: [message], humanResponses: [], interactionOutcomes: [],
+        completedWork: null, completedActions: [], recoveryOutcomes: [], unresolvedInteractionIds: [],
+        coverage: { kind: "full_task_history", throughCommentId: commentId, summaryThroughCommentId: null } },
+      commentSources: [{ input: { kind: "comment", issueId, commentId, sourceVersion: "1", contentHash: nativeContinuationMessageHash(message) }, payloadSourceSnapshot: null }],
+      wake: { requestedByActorType: "user", requestedByActorId: responsibleUserId, reason: "issue_commented", originCommentIds: [commentId] } };
+    const check = (capture: NativeTaskContinuationCapture) => exactNativeTaskContinuation({ value: capture.envelope,
+      companyId, issueId, agentId, runId, responsibleUserId, wakeupRequestId, wakeReason: capture.wake.reason, capture });
+    for (const status of ["executed", "failed", "rejected"] as const) {
+      const c = structuredClone(base), interactionStatus = status === "rejected" ? "rejected" : "accepted";
+      const result = status === "rejected" ? { version: 1, outcome: interactionStatus } :
+        { version: 1, outcome: interactionStatus, toolAction: { version: 1, status, updatedAt: "2026-10-01T00:00:00.000Z" } };
+      const humanResponse = { id: interactionId, kind: "request_confirmation", status: interactionStatus,
+        resolvedByUserId: resolver, resolvedAt: "2026-10-01T00:00:00.000Z", result: { outcome: interactionStatus, reason: undefined } };
+      const nativeResponse: NativeInteractionResponseEnvelope = { interactionId, kind: "request_confirmation",
+        response: { status: interactionStatus, result } };
+      const nativeSource = { kind: "interaction" as const, issueId, interactionId, sourceVersion: "2", contentHash: nativeSha256(nativeResponse) };
+      const projection: import("./native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture["projection"] = {
+        version: 1, companyId, issueId, interactionId, sourceVersion: "2", nativeResponseDigest: nativeSource.contentHash,
+        owner: { sourceRunId, sourceCommentId: commentId, originCommentIds: [commentId], continuationPolicy: "wake_assignee",
+          resolvedByUserId: resolver, resolvedAt: humanResponse.resolvedAt, actionRequestId: randomUUID(), invocationId: randomUUID(),
+          argumentsHash: "a".repeat(64), requestStatus: status,
+          invocationStatus: status === "executed" ? "succeeded" : status === "rejected" ? "denied" : "failed" },
+        humanResponse, interactionOutcome: { id: interactionId, kind: "request_confirmation", status: interactionStatus, result },
+      };
+      c.governedInteractions = [{ companyId, issueId, runId, agentId, nativeSource, nativeResponse, projection,
+        continuationSource: { ...nativeSource, contentHash: nativeSha256({ rendition: "native_governed_continuation_v1", projection }) } }];
+      c.envelope.trigger = { reason: "issue_commented", interactionId, sourceRunId };
+      c.wake = { requestedByActorType: "user", requestedByActorId: resolver, reason: "issue_commented",
+        originCommentIds: [], interaction: { interactionId, interactionKind: "request_confirmation", interactionStatus, sourceRunId } };
+      c.envelope.humanResponses = [humanResponse]; c.envelope.interactionOutcomes = [projection.interactionOutcome];
+      const delivery: NonNullable<NativeTaskContinuationCapture["delivery"]>["projection"] = {
+        version: 1, companyId, issueId, agentId, runId, wakeupRequestId,
+        idempotencyKey: `tool-action-response:${projection.owner.actionRequestId}`, sourceRunId, interactionId,
+        sourceVersion: "2", interactionKind: "request_confirmation", interactionStatus,
+        actionRequestIds: [projection.owner.actionRequestId], cutoff: { createdAt: "2026-10-01 00:00:01+00", actionRequestId: projection.owner.actionRequestId },
+        agentMessage: { text: "Actual fixed owner delivery rendition.", source: "tool_action_review", pluginKey: null, sessionId: interactionId,
+          untrustedToolResults: [{ actionRequestId: projection.owner.actionRequestId, toolName: "railway_update_variable",
+            resultSummary: "Recorded outcome", error: null, declineReason: null }] },
+      };
+      c.delivery = { companyId, issueId, agentId, runId, wakeupRequestId, projection: delivery,
+        source: { kind: "interaction", issueId, interactionId, sourceVersion: "2",
+          contentHash: nativeSha256({ rendition: "native_tool_action_delivery_v1", projection: delivery }) } };
+
+      expect(check(c)).toBe(c);
+      // A new genuine Human comment is a separate trigger from recorded
+      // historical review outcomes. Never borrow the historical resolver.
+      const ordinary = structuredClone(c), laterCommentId = randomUUID();
+      const laterMessage = {...message,id:laterCommentId,body:"A new Human question after the recorded review."};
+      ordinary.envelope.messages.push(laterMessage);
+      ordinary.commentSources.push({input:{kind:"comment",issueId,commentId:laterCommentId,sourceVersion:"3",
+        contentHash:nativeContinuationMessageHash(laterMessage)},payloadSourceSnapshot:null});
+      ordinary.envelope.trigger={reason:"issue_commented",interactionId:null,sourceRunId:null};
+      ordinary.envelope.originCommentIds=[laterCommentId];ordinary.envelope.objective=laterMessage.body;
+      ordinary.envelope.coverage.throughCommentId=laterCommentId;
+      ordinary.wake={requestedByActorType:"user",requestedByActorId:responsibleUserId,reason:"issue_commented",originCommentIds:[laterCommentId]};
+      delete ordinary.delivery;
+      expect(check(ordinary)).toBe(ordinary);
+      const retainedOrdinary=structuredClone(ordinary);
+      retainedOrdinary.retainedSource={kind:"retained_run",runId:sourceRunId,inputDigest:"d".repeat(64),dispatchDigest:"e".repeat(64)};
+      retainedOrdinary.previousContext={runId:sourceRunId,messages:[message]};
+      retainedOrdinary.envelope.resumeDelta={baseRunId:sourceRunId,messages:[laterMessage]};
+      expect(check(retainedOrdinary)).toBe(retainedOrdinary);
+      const missingHistory=structuredClone(ordinary);delete missingHistory.governedInteractions;
+      expect(check(missingHistory)).toBeNull();
+      const resolverSubstitution=structuredClone(ordinary);resolverSubstitution.wake.requestedByActorId=resolver;
+      expect(check(resolverSubstitution)).toBeNull();
+      const graftedDelivery=structuredClone(ordinary);graftedDelivery.delivery=c.delivery;
+      expect(check(graftedDelivery)).toBeNull();
+      const forgedTrigger=structuredClone(ordinary);forgedTrigger.envelope.trigger.sourceRunId=sourceRunId;
+      expect(check(forgedTrigger)).toBeNull();
+      const wrongOrigins=structuredClone(ordinary);wrongOrigins.wake.originCommentIds=[commentId];
+      expect(check(wrongOrigins)).toBeNull();
+      const changedHistory=structuredClone(ordinary);changedHistory.envelope.interactionOutcomes[0]!.result={outcome:"changed"};
+      expect(check(changedHistory)).toBeNull();
+      const changedPrior=structuredClone(retainedOrdinary);changedPrior.envelope.resumeDelta!.baseRunId=randomUUID();
+      expect(check(changedPrior)).toBeNull();
+      const mixed = structuredClone(c), siblingId = randomUUID();
+      const sibling: import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture["projection"] = {
+        version:1,companyId,issueId,interactionId:siblingId,sourceVersion:"2",kind:"request_confirmation",status:"pending",
+        sourceRunId,sourceCommentId:commentId,originCommentIds:[commentId],actionRequestId:randomUUID(),invocationId:randomUUID(),
+        argumentsHash:"b".repeat(64),requestStatus:"pending",invocationStatus:"awaiting_approval",expiresAt:new Date(Date.now()+60_000).toISOString() };
+      mixed.envelope.unresolvedInteractionIds=[siblingId];
+      mixed.pendingInteractions=[{companyId,issueId,agentId,runId,projection:sibling,
+        source:{kind:"interaction",issueId,interactionId:siblingId,sourceVersion:"2",
+          contentHash:nativeSha256({rendition:"native_governed_pending_reference_v1",projection:sibling})}}];
+      expect(check(mixed)).toBe(mixed);
+      const ordinaryMixed=structuredClone(ordinary);ordinaryMixed.envelope.unresolvedInteractionIds=[siblingId];
+      ordinaryMixed.pendingInteractions=structuredClone(mixed.pendingInteractions);
+      expect(check(ordinaryMixed)).toBe(ordinaryMixed);
+      const missingSibling=structuredClone(mixed);delete missingSibling.pendingInteractions;
+      expect(check(missingSibling)).toBeNull();
+      const jsonbPersisted = structuredClone(c); jsonbPersisted.envelope = JSON.parse(JSON.stringify(c.envelope));
+      expect(check(jsonbPersisted)).toBe(jsonbPersisted);
+      expect(c.governedInteractions[0]!.nativeSource.contentHash).not.toBe(c.governedInteractions[0]!.continuationSource.contentHash);
+      const finalized = structuredClone(c);
+      finalized.finalizedSummary = { companyId, issueId, agentId, receiverRunId: runId, sourceRunId,
+        resultId: randomUUID(), resultCanonicalSha256: "sha256:" + "f".repeat(64), resultCreatedAt: "2026-10-01T00:00:00.000Z",
+        finalizationVersion: "2026-10-01T00:00:01.000Z", assessmentId: randomUUID(), decisionId: randomUUID(), decisionDigest: "a".repeat(64), decisionSnapshotHash: "d".repeat(64),
+        parentReceipt: { version: 1, binding: { companyId, issueId, agentId, runId: sourceRunId, responsibleUserId },
+          bootstrap: { executionInputDigest: "b".repeat(64), policy, inputs: [{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }] },
+          dispatches: [], additionalInputs: [], digest: "c".repeat(64) }, body: "Prior finalized low-trust summary." };
+      finalized.envelope.completedWork = finalized.finalizedSummary.body;
+      expect(check(finalized)).toBe(finalized);
+      const changedSummary = structuredClone(finalized); changedSummary.finalizedSummary!.body = "Replaced summary bytes.";
+      expect(check(changedSummary)).toBeNull();
+      const changedSourceOwner = structuredClone(finalized); changedSourceOwner.finalizedSummary!.sourceRunId = randomUUID();
+      expect(check(changedSourceOwner)).toBeNull();
+
+      for (const mutate of [
+        (v: NativeTaskContinuationCapture) => { v.governedInteractions![0]!.projection.owner.argumentsHash = "b".repeat(64); },
+        (v: NativeTaskContinuationCapture) => { v.governedInteractions![0]!.projection.owner.requestStatus = "pending"; },
+        (v: NativeTaskContinuationCapture) => { v.governedInteractions![0]!.projection.owner.resolvedByUserId = "forged-human"; },
+        (v: NativeTaskContinuationCapture) => { v.envelope.humanResponses![0]!.result = result; },
+        (v: NativeTaskContinuationCapture) => { v.envelope.interactionOutcomes[0]!.result = { outcome: "unowned" }; },
+        (v: NativeTaskContinuationCapture) => { v.wake.interaction!.sourceRunId = randomUUID(); },
+        (v: NativeTaskContinuationCapture) => { v.governedInteractions![0]!.continuationSource = v.governedInteractions![0]!.nativeSource; },
+        (v: NativeTaskContinuationCapture) => { v.delivery!.projection.agentMessage!.untrustedToolResults![0]!.resultSummary = "Forged recorded result"; },
+        (v: NativeTaskContinuationCapture) => { v.delivery!.projection.cutoff.actionRequestId = randomUUID(); },
+        (v: NativeTaskContinuationCapture) => { delete v.delivery; },
+      ]) { const changed = structuredClone(c); mutate(changed); expect(check(changed)).toBeNull(); }
+    }
+    const pending = structuredClone(base);
+    const projection: import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture["projection"] = {
+      version: 1, companyId, issueId, interactionId, sourceVersion: "2", kind: "request_confirmation", status: "pending",
+      sourceRunId, sourceCommentId: commentId, originCommentIds: [commentId], actionRequestId: randomUUID(), invocationId: randomUUID(),
+      argumentsHash: "a".repeat(64), requestStatus: "pending", invocationStatus: "awaiting_approval", expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    pending.envelope.unresolvedInteractionIds = [interactionId];
+    pending.pendingInteractions = [{ companyId, issueId, agentId, runId, projection,
+      source: { kind: "interaction", issueId, interactionId, sourceVersion: "2",
+        contentHash: nativeSha256({ rendition: "native_governed_pending_reference_v1", projection }) } }];
+    expect(check(pending)).toBe(pending);
+    const expired = structuredClone(pending); expired.pendingInteractions![0]!.projection.expiresAt = "2020-01-01T00:00:00.000Z";
+    expired.pendingInteractions![0]!.source.contentHash = nativeSha256({ rendition: "native_governed_pending_reference_v1", projection: expired.pendingInteractions![0]!.projection });
+    expect(check(expired)).toBeNull();
+    // Pure rendition-only clock control. The DB reader must independently
+    // authenticate this exact old capture through its parent/terminal owner.
+    const historical = () => exactNativeTaskContinuation({ value: expired.envelope, companyId, issueId, agentId, runId,
+      responsibleUserId, wakeupRequestId, wakeReason: expired.wake.reason, capture: expired,
+      historicalPendingSources: [expired.pendingInteractions![0]!] });
+    expect(historical()).toBe(expired);
+    expect(check(expired)).toBeNull();
+    expect(check(expired)).toBeNull();
+    expect(historical()).toBe(expired);
+    const differentOriginal = structuredClone(expired.pendingInteractions![0]!);
+    differentOriginal.projection.actionRequestId = randomUUID();
+    expect(exactNativeTaskContinuation({ value: expired.envelope, companyId, issueId, agentId, runId,
+      responsibleUserId, wakeupRequestId, wakeReason: expired.wake.reason, capture: expired,
+      historicalPendingSources: [differentOriginal] })).toBeNull();
+    const missing = structuredClone(pending); delete missing.pendingInteractions; expect(check(missing)).toBeNull();
+    const summary = structuredClone(pending);
+    summary.summary = { rawTrustHash: nativeSha256(null), source: { input: { kind: "document_revision", issueId, documentId: randomUUID(), revisionId: randomUUID(), contentHash: "c".repeat(64) }, payloadSourceSnapshot: null },
+      rendition: { key: "continuation-summary", title: "Continuation Summary", body: "Previous truthful low-trust result.", sourceTrust: null, updatedAt: "2026-10-01T00:00:00.000Z" } };
+    summary.envelope.completedWork = summary.summary.rendition.body;
+    summary.retainedSource = { kind: "retained_run", runId: sourceRunId, inputDigest: "d".repeat(64), dispatchDigest: "e".repeat(64) };
+    summary.previousContext = { runId: sourceRunId, messages: [message] };
+    summary.envelope.resumeDelta = { baseRunId: sourceRunId, messages: [message] };
+    expect(check(summary)).toBe(summary);
+    const forgedHistory = structuredClone(summary); forgedHistory.envelope.resumeDelta!.baseRunId = randomUUID(); expect(check(forgedHistory)).toBeNull();
+    const droppedHistory = structuredClone(summary); droppedHistory.envelope.resumeDelta!.messages = []; expect(check(droppedHistory)).toBeNull();
   });
 
   it("adds only an exact server-minted approved Context closure bound to the native run and rendered markdown", () => {

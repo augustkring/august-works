@@ -48,6 +48,7 @@ const sourceSha = "a".repeat(40);
 import { makeConversationFixtureTreeWritable } from "./managed-native-conversation-frame.js";
 import type { runManagedNativeConversationFrame } from "./managed-native-conversation-frame.js";
 import type { NativeExecutionInput, NativeSessionBackend } from "../../vendor/paperclip-runner/index.js";
+import type { ManagedNativeProjectWorkspaceScope } from "./managed-native-project-workspace-fixture.js";
 import { nativeSha256 } from "../../services/native-runtime/canonical.js";
 import { registerNativeDraftGateway } from "../../services/orchestration/native-draft-runtime.js";
 import { environmentRuntimeService } from "../../services/environment-runtime.js";
@@ -60,6 +61,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   "providerReply" | "createConversationApp" | "driveConversation" | "configureHeartbeat"> & {
   /** Explicit opt-in. The default retains the original one-Run Host. */
   schedulerMode?: "serial";
+  /** Actual prepared project tuple for the existing per-Run serial Host owner. */
+  ordinaryWorkerProject?: () => ManagedNativeProjectWorkspaceScope;
   /** Explicit two-presence opt-in for real Executor→Reviewer issue journeys. */
   managedTwoAgentSignoff?: true;
   /** Existing Native session test seam for API-policy components that must not dispatch a provider request. */
@@ -90,6 +93,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   if (input.sandboxRelay === false) throw new Error("scheduler_fixture_requires_managed_sandbox");
   if (input.schedulerMode === "serial" && input.configureHeartbeat)
     throw new Error("scheduler_serial_fixture_requires_owned_host");
+  if (input.ordinaryWorkerProject && input.schedulerMode !== "serial")
+    throw new Error("project_workspace_scope_requires_serial_scheduler_host");
   if (input.managedTwoAgentSignoff && input.schedulerMode !== "serial")
     throw new Error("two_agent_signoff_requires_serial_host_admission");
   if (input.managedTwoAgentSignoff && input.configureHeartbeat)
@@ -108,6 +113,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const { configureManagedConversationSandboxHost, configureManagedSerialSchedulerSandboxHost } =
         await import("./managed-native-conversation-sandbox-host.js");
       if (input.schedulerMode === "serial") return configureManagedSerialSchedulerSandboxHost({ ...context, root: context.runHome,
+        ...(input.ordinaryWorkerProject ? { ordinaryWorkerProject: input.ordinaryWorkerProject() } : {}),
         withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work) });
       return configureManagedConversationSandboxHost({ ...context, root: context.runHome, ordinaryWorker: true });
     }) };
@@ -175,6 +181,12 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     await db.update(agents).set({ budgetMonthlyCents, adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,
       runtimeConfig: { timeoutSec: input.timeoutSec ?? 180 }, status: "idle" }).where(eq(agents.id, configuredAgentId));
     await input.prepareNativeRuntimeContext?.({ db, actor: human, companyId, agentId: configuredAgentId });
+    if (input.managedTwoAgentSignoff) {
+      const { ensureManagedSandboxEnvironmentForAgent } = await import("./managed-native-conversation-sandbox-host.js");
+      // Set the exact managed environment before Heartbeat resolves and seals
+      // this Agent's lease; full Host setup remains lazy and per-Agent.
+      await ensureManagedSandboxEnvironmentForAgent(db, companyId, configuredAgentId);
+    }
     const [configuredAgent] = await db.select({ adapterConfig: agents.adapterConfig })
       .from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, configuredAgentId))).limit(1);
     if (!configuredAgent || !configuredAgent.adapterConfig || typeof configuredAgent.adapterConfig !== "object" ||
