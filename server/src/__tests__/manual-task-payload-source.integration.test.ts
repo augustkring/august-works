@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
@@ -13,6 +13,10 @@ import {
   createDb,
   documents,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
+  environments,
+  environmentLeases,
+  executionWorkspaces,
+  heartbeatRuns,
   issueDocuments,
   issues,
   projects,
@@ -592,6 +596,146 @@ describe("manual Human Task payload source capture", () => {
     expect(after.row.payloadSourceSnapshot).toEqual(before.row.payloadSourceSnapshot);
     await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
       source: { kind: "task", issueId: after.row.id, sourceVersion: "snapshot-owner-current", contentHash: after.proof.bodyHash } })).rejects.toBeDefined();
+  });
+
+  it("binds a private manual Project Task through the real database transform guard and keeps purge fail-closed", async () => {
+    const f = await seed("admin"), http = request(appFor(f.actor));
+    const [agent] = await db.insert(agents).values({ companyId: f.companyId, name: "Workspace binder",
+      adapterType: "paperclip_runner", status: "active" }).returning();
+    const projectResponse = await http.post(`/api/companies/${f.companyId}/projects`).send({
+      name: "Source transform Project", workspace: { name: "Initial Project workspace",
+        repoUrl: "https://example.test/source-transform.git", isPrimary: true },
+    }).expect(201);
+    const projectId = projectResponse.body.id as string;
+    const [firstProjectWorkspace] = await db.select().from(projectWorkspaces)
+      .where(and(eq(projectWorkspaces.companyId, f.companyId), eq(projectWorkspaces.projectId, projectId)));
+    const secondWorkspaceResponse = await http.post(`/api/projects/${projectId}/workspaces`).send({
+      name: "Second Project workspace", repoUrl: "https://example.test/source-transform-second.git",
+    }).expect(201);
+    const secondProjectWorkspaceId = secondWorkspaceResponse.body.id as string;
+    const [secondProjectWorkspace] = await db.select().from(projectWorkspaces)
+      .where(eq(projectWorkspaces.id, secondProjectWorkspaceId));
+    expect(firstProjectWorkspace).toBeDefined();
+    expect(secondProjectWorkspace).toBeDefined();
+
+    const task = await issueService(db).create(f.companyId, {
+      title: `Private related Task ${randomUUID()}`, description: "Literal Human source remains unchanged.",
+      projectId, projectWorkspaceId: firstProjectWorkspace!.id, visibility: "private",
+      responsibleUserId: f.userId, createdByUserId: f.userId, assigneeAgentId: agent!.id,
+    }, db, undefined, manualActorOptions(f.actor));
+    const neighbor = await issueService(db).create(f.companyId, {
+      title: `Neighbor source ${randomUUID()}`, description: "Independent Human source.", projectId,
+      responsibleUserId: f.userId, createdByUserId: f.userId,
+    }, db, undefined, manualActorOptions(f.actor));
+    const original = await readOwner(task.id);
+    const neighborBefore = await readOwner(neighbor.id);
+    expect(original.row.visibility).toBe("private");
+    expect(original.row.createdByUserId).toBe(f.userId);
+    expect(original.row.payloadSourceSnapshot).toMatchObject({ version: 1, inputs: [],
+      owner: { kind: "issue", companyId: f.companyId, id: task.id, contentHash: original.proof.bodyHash },
+      policy: { issueIds: [], projectIds: [projectId], runIds: [], memoryIds: [], foundationRevisionIds: [] } });
+    expect(neighborBefore.row.payloadSourceSnapshot).not.toBeNull();
+
+    const [environment] = await db.insert(environments).values({
+      name: `workspace-transform-${randomUUID()}`, driver: "local", status: "active", config: {},
+    }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({
+      companyId: f.companyId, agentId: agent!.id, scopeKind: "issue", issueId: task.id, nativeIssueId: task.id,
+      responsibleUserId: f.userId, status: "running", runtimeMode: "native", runtimeModeResolvedAt: new Date(),
+      startedAt: new Date(), contextSnapshot: { issueId: task.id },
+    }).returning();
+
+    async function createExecutionWorkspace(projectWorkspaceId: string, name: string) {
+      const [workspace] = await db.insert(executionWorkspaces).values({
+        companyId: f.companyId, projectId, projectWorkspaceId, sourceIssueId: task.id,
+        mode: "shared_workspace", strategyType: "project_primary", name, status: "active",
+        cwd: `/tmp/${randomUUID()}`, repoUrl: "https://example.test/source-transform.git", providerType: "local_fs",
+      }).returning();
+      await db.insert(environmentLeases).values({
+        companyId: f.companyId, environmentId: environment!.id, executionWorkspaceId: workspace!.id,
+        issueId: task.id, heartbeatRunId: run!.id, status: "active", leasePolicy: "ephemeral",
+        provider: "local", expiresAt: new Date(Date.now() + 60 * 60_000),
+      });
+      return workspace!;
+    }
+    const firstExecutionWorkspace = await createExecutionWorkspace(firstProjectWorkspace!.id, "First bound workspace");
+    const secondExecutionWorkspace = await createExecutionWorkspace(secondProjectWorkspace!.id, "Second bound workspace");
+
+    async function bind(workspaceId: string, projectWorkspaceId: string) {
+      const before = await readOwner(task.id);
+      const snapshot = before.row.payloadSourceSnapshot!;
+      await issueService(db).update(task.id, {
+        actorAgentId: agent!.id, actorRunId: run!.id,
+        executionWorkspaceId: workspaceId, projectWorkspaceId,
+        executionWorkspacePreference: "reuse_existing", executionWorkspaceSettings: { mode: "shared_workspace" },
+      }, db, undefined, undefined, {
+        bindRuntimeSharedWorkspace: true,
+        workspaceBindingSourceTransform: { agentId: agent!.id, runId: run!.id, workspaceId,
+          expectedPreviousSnapshotDigest: snapshot.digest },
+      });
+      const after = await readOwner(task.id);
+      expect(after.proof.digestValid).toBe(true);
+      expect(after.row.payloadSourceSnapshot?.owner.contentHash).toBe(after.proof.bodyHash);
+      expect(after.row.payloadSourceSnapshot?.policy).toEqual(snapshot.policy);
+      expect(after.row.payloadSourceSnapshot?.inputs).toEqual(snapshot.inputs);
+      await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+        source: { kind: "task", issueId: task.id, sourceVersion: "snapshot-owner-current", contentHash: after.proof.bodyHash } })).resolves.toBeUndefined();
+      return after;
+    }
+
+    const afterFirstBinding = await bind(firstExecutionWorkspace.id, firstProjectWorkspace!.id);
+    expect(afterFirstBinding.row.payloadSourceSnapshot?.transforms).toHaveLength(1);
+    const afterSecondBinding = await bind(secondExecutionWorkspace.id, secondProjectWorkspace!.id);
+    expect(afterSecondBinding.row.executionWorkspaceId).toBe(secondExecutionWorkspace.id);
+    expect(afterSecondBinding.row.projectWorkspaceId).toBe(secondProjectWorkspace!.id);
+    expect(afterSecondBinding.row.payloadSourceSnapshot?.transforms).toHaveLength(2);
+    const captureAudits = await db.select().from(activityLog).where(and(
+      eq(activityLog.companyId, f.companyId), eq(activityLog.entityType, "issue"), eq(activityLog.entityId, task.id),
+      eq(activityLog.action, "issue.payload_source_captured"),
+    ));
+    expect(captureAudits).toHaveLength(1);
+    expect(captureAudits[0]).toMatchObject({ actorType: "user", actorId: f.userId });
+    const bindingAudits = await db.select().from(activityLog).where(and(
+      eq(activityLog.companyId, f.companyId), eq(activityLog.entityType, "issue"), eq(activityLog.entityId, task.id),
+      eq(activityLog.action, "issue.payload_source_workspace_bound"),
+    ));
+    expect(bindingAudits).toHaveLength(2);
+    expect(bindingAudits.map(row => row.runId)).toEqual([run!.id, run!.id]);
+
+    const fakeActivityId = randomUUID();
+    let forgedWriteCause: { code?: string; message?: string } | undefined;
+    try {
+      await db.execute(sql`WITH changed AS (
+        SELECT jsonb_set(payload_source_snapshot-'digest', '{transforms,0,activityId}', to_jsonb(${fakeActivityId}::text)) AS body
+        FROM issues WHERE company_id=${f.companyId}::uuid AND id=${task.id}::uuid
+      ), forged AS (
+        SELECT body || jsonb_build_object('digest', encode(sha256(convert_to(body::text,'UTF8')),'hex')) AS snapshot
+        FROM changed
+      ) UPDATE issues AS target SET payload_source_snapshot=forged.snapshot FROM forged
+        WHERE target.company_id=${f.companyId}::uuid AND target.id=${task.id}::uuid`);
+    } catch (error) {
+      forgedWriteCause = (error as { cause?: { code?: string; message?: string } }).cause;
+    }
+    expect(forgedWriteCause?.code).toBe("23514");
+    expect(forgedWriteCause?.message).toContain("Workspace source transform must append one exact Task binding transition");
+    const afterForgery = await readOwner(task.id);
+    expect(afterForgery.row.payloadSourceSnapshot).toEqual(afterSecondBinding.row.payloadSourceSnapshot);
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: task.id, sourceVersion: "snapshot-owner-current", contentHash: afterForgery.proof.bodyHash } })).resolves.toBeUndefined();
+
+    const erased = await db.delete(activityLog).where(and(
+      eq(activityLog.companyId, f.companyId), eq(activityLog.entityType, "issue"), eq(activityLog.entityId, task.id),
+      inArray(activityLog.action, ["issue.payload_source_captured", "issue.payload_source_workspace_bound"]),
+    )).returning({ id: activityLog.id });
+    expect(erased).toHaveLength(3);
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: task.id, sourceVersion: "snapshot-owner-current", contentHash: afterForgery.proof.bodyHash } })).rejects.toBeDefined();
+    const neighborAfter = await readOwner(neighbor.id);
+    expect(neighborAfter.row.payloadSourceSnapshot).toEqual(neighborBefore.row.payloadSourceSnapshot);
+    await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: { kind: "task", issueId: neighbor.id, sourceVersion: "snapshot-owner-current", contentHash: neighborAfter.proof.bodyHash } })).resolves.toBeUndefined();
+    expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId),
+      eq(activityLog.entityId, neighbor.id), eq(activityLog.action, "issue.payload_source_captured")))).toHaveLength(1);
   });
 
 });

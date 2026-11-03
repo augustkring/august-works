@@ -18,6 +18,7 @@ import { conflict, forbidden } from "../../errors.js";
 import { assertV7Authorization } from "../v7-authorization.js";
 import type { workerModelGateway } from "./worker-model-gateway.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
+import { minimumNativeDraftToolActions, nativeDraftToolActionBudgetFits } from "./native-draft-output-capability.js";
 import { readNativeRuntimeAssetText } from "../native-runtime/runtime-context.js";
 import { createAwTextDraftBackend } from "../native-runtime/aw-text-draft-backend.js";
 import type { NativeBootstrapSourceClosure } from "../native-runtime/native-execution-input.js";
@@ -145,19 +146,19 @@ export async function qualifyNativeDraftWorker(
     plan.companyId,
     task.id,
   );
-  if (
-    !contract ||
-    orchestrationCompletionSchema.parse(contract.row.contractJson.v7).requiredOutputs.length !== 1 ||
-    orchestrationCompletionSchema.parse(contract.row.contractJson.v7).requiredOutputs[0]?.kind !== "task_document"
-  )
-    throw forbidden(
-      "The one-call draft requires one declared canonical output",
-    );
-  return gateway.qualifyManagedWorker(tx, {
+  if (!contract)
+    throw forbidden("The cost-capped native draft requires its current completion contract");
+  const completion = orchestrationCompletionSchema.parse(contract.row.contractJson.v7);
+  const qualified = await gateway.qualifyManagedWorker(tx, {
     companyId: plan.companyId,
     agentId: worker.agentId,
     responsibleUserId,
   });
+  const minimumToolActions = minimumNativeDraftToolActions(
+    qualified.providerKind,
+    completion.requiredOutputs,
+  );
+  return { ...qualified, minimumToolActions };
 }
 
 /** Called under the original plan lock before start, without spending or
@@ -187,20 +188,22 @@ export async function qualifyNativeDraftPlan(
   if (!pending.length || workers.length > plan.budgets.maxWorkerCount)
     throw forbidden("No bounded draft workers remain");
   let maximum = 0;
-  for (const worker of pending)
-    maximum += (
-      await qualifyNativeDraftWorker(
-        rootDb,
-        tx,
-        plan,
-        worker,
-        responsibleUserId,
-      )
-    ).maximumMinor;
+  let minimumToolActions = 0;
+  for (const worker of pending) {
+    const qualified = await qualifyNativeDraftWorker(
+      rootDb,
+      tx,
+      plan,
+      worker,
+      responsibleUserId,
+    );
+    maximum += qualified.maximumMinor;
+    minimumToolActions += qualified.minimumToolActions;
+  }
   if (
     plan.budgets.maxModelCostMinor === null ||
     plan.modelCostReserved + maximum > plan.budgets.maxModelCostMinor ||
-    plan.toolActionsUsed + pending.length * 2 > plan.budgets.maxToolActions
+    !nativeDraftToolActionBudgetFits(plan.toolActionsUsed, plan.budgets.maxToolActions, minimumToolActions)
   )
     throw conflict(
       "The remaining model/tool budget cannot produce each declared draft",

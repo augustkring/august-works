@@ -2254,9 +2254,15 @@ const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
           currentOnboarding = storedOnboarding;
         }
       } else {
-        const [createdTask] = await db.insert(issues).values({ companyId: f.home, title: "Private first-result draft", status: "todo",
-          assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
-        task = createdTask!;
+        if (starterModelProfile) {
+          task = await issueService(db).create(f.home, { title: "Private first-result draft", description: intent,
+            status: "todo", assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId },
+            db, undefined, { manualInputActor: f.actor, privacyActor: f.actor, sourceAccessActor: f.actor });
+        } else {
+          const [createdTask] = await db.insert(issues).values({ companyId: f.home, title: "Private first-result draft", status: "todo",
+            assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
+          task = createdTask!;
+        }
         governanceDeployment = await governance.bind(f.actor, f.home, useCase.id, {
           expectedVersion: useCase.version,
           issueId: task.id,
@@ -3199,10 +3205,12 @@ const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
       expect(Number((await counts())!.agents)).toBe(Number(before!.agents) + 1);
     }, 60000);
     async function firstValueFixture(starter?: StarterFixture, configurePresence?: () => Promise<void>) {
-      const sourceSha = input.manifest.sourceRevision;
-      const { onboarding, installation, task, created, intent, orchestration, useCase, governanceDeployment } = await prepareFirstValueFixture(
-        starter ? { maxModelCostMinor: BLENTERA_MANAGED_STARTER_PROFILE.execution.currentV9ActivationOwnerMaximumModelCostMinor } : {},
-        configurePresence,
+      if (!starter) starterModelOutput = "Source-bound research draft. Source: the approved company profile states that the native test company prepares source-bound customer research drafts. This fixture supplies no customer findings; independent Human review is required.";
+      const configureNativePresence = configurePresence ?? await configureManagedStarterModel();
+      const { onboarding, installation, task, created, orchestration, useCase, governanceDeployment } = await prepareFirstValueFixture(
+        starter ? { maxModelCostMinor: BLENTERA_MANAGED_STARTER_PROFILE.execution.currentV9ActivationOwnerMaximumModelCostMinor }
+          : { maxModelCostMinor: 10, maxToolActions: 2 },
+        configureNativePresence,
         starter,
       );
       const plan = starter
@@ -3212,7 +3220,7 @@ const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
       let run: typeof heartbeatRuns.$inferSelect,
         document: typeof documents.$inferSelect,
         revision: typeof documentRevisions.$inferSelect;
-      if (starter && starterModelProfile && starterModelTransport) {
+      if (starterModelProfile && starterModelTransport) {
         if (!governanceDeployment) throw new Error("The managed starter has no exact intended-purpose deployment");
         const worker = (await orchestration.get(f.actor, f.home, plan.id)).workers[0]!;
         // start_first_task dispatches the canonical plan through the normal
@@ -3265,26 +3273,13 @@ const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
           deploymentIssueId: task!.id, deploymentAgentId: f.presence.id, deploymentStatus: "active", deploymentCurrent: true,
           installationUseCaseId: useCase.id, runIssueId: task!.id, runDeploymentId: governanceDeployment.id });
         expect(starterModelCalls).toBe(1);
-        expect(starterModelObservedRequest).toEqual({ endpoint: true, credential: true, model: true, maxTokens: true, system: true, taskNotes: true });
+        expect(starterModelObservedRequest).toEqual({ endpoint: true, credential: true, model: true, maxTokens: true, system: true, taskNotes: starter ? true : null });
         const saved = await documentService(db).getIssueDocumentByKey(task!.id, "result");
         if (!saved) throw new Error("Controlled native model draft was not saved by its original document owner");
         document = (await db.select().from(documents).where(eq(documents.id, saved.id)))[0]!;
         revision = (await db.select().from(documentRevisions).where(eq(documentRevisions.id, saved.latestRevisionId)))[0]!;
       } else {
-        const [createdRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
-          status: "running", contextSnapshot: { issueId: task!.id } }).returning();
-        run = createdRun!;
-        await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: run.id,
-          responsibleUserId: f.userId, issueId: task!.id, query: intent });
-        const [createdDocument] = await db.insert(documents).values({ companyId: f.home, title: "Research result",
-          latestBody: "Native fixture output for an independent human review", createdByAgentId: f.presence.id }).returning();
-        const [createdRevision] = await db.insert(documentRevisions).values({ companyId: f.home, documentId: createdDocument!.id,
-          revisionNumber: 1, body: createdDocument!.latestBody }).returning();
-        await db.update(documents).set({ latestRevisionId: createdRevision!.id }).where(eq(documents.id, createdDocument!.id));
-        await db.insert(issueDocuments).values({ companyId: f.home, issueId: task!.id, documentId: createdDocument!.id, key: "result" });
-        await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run.id));
-        document = createdDocument!;
-        revision = createdRevision!;
+        throw new Error("First-value result fixtures require the installed Native Text controller");
       }
       const worker = (await orchestration.get(f.actor, f.home, plan.id)).workers[0]!;
       const verifier = verificationService(db), packet = await verifier.packet(f.actor, f.home, plan.id, worker.id);

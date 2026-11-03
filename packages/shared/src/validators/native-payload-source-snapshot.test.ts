@@ -48,6 +48,22 @@ describe("Native payload source snapshot structural boundary", () => {
       versionId: "catalog-release-2026.10", skillKey: "native/review", contentHash: hash }] }).success).toBe(false);
   });
 
+  it("accepts bounded issue workspace history without making it an input or permission grant", () => {
+    const value = snapshot();
+    const transform = { kind: "workspace_binding" as const, activityId: randomUUID(), transitionId: randomUUID(),
+      runId: randomUUID(), workspaceId: randomUUID(), workspaceTupleHash: hash,
+      beforeProjectWorkspaceId: null, afterProjectWorkspaceId: randomUUID(),
+      previousSnapshotDigest: hash, previousOwnerContentHash: hash, nextOwnerContentHash: "b".repeat(64),
+      beforePreference: null, beforeMode: null, beforeSettingsHash: hash,
+      afterPreference: "reuse_existing" as const, afterMode: "shared_workspace" as const, afterSettingsHash: hash };
+    expect(nativePayloadSourceSnapshotSchema.parse({ ...value, transforms: [transform] }).transforms).toEqual([transform]);
+    expect(nativePayloadSourceSnapshotSchema.safeParse({ ...value, transforms: [] }).success).toBe(false);
+    expect(nativePayloadSourceSnapshotSchema.safeParse({ ...value, owner: { ...value.owner, kind: "project" }, transforms: [transform] }).success).toBe(false);
+    expect(nativePayloadSourceSnapshotSchema.safeParse({ ...value, transforms: Array.from({ length: 33 }, () => ({ ...transform,
+      activityId: randomUUID(), transitionId: randomUUID() })) }).success).toBe(false);
+    expect(nativePayloadSourceSnapshotSchema.safeParse({ ...value, transforms: [transform, transform] }).success).toBe(false);
+  });
+
   it("accepts only complete review-transition provenance on a Memory input", () => {
     const base = { kind: "memory" as const, memoryId: randomUUID(), sourceVersion: "before-review", contentHash: hash };
     expect(nativePayloadSourceSnapshotSchema.safeParse(snapshot([base])).success).toBe(true);

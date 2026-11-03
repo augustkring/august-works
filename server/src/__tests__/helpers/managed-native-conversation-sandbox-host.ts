@@ -24,7 +24,7 @@ import { WebSocket } from "ws";
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
   agentPresenceRuntimeBindings, connectionGrants, toolApplications, toolCatalogEntries, toolConnections, toolProfileBindings, toolProfileEntries, toolProfiles,
-  chatConversations, agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, createDb,
+  chatConversations, agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, companies, createDb,
   agents, agentExecutionManifests, environments, environmentLeases, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
   runtimeVersionCatalog, runtimeHostCommands, sandboxQualificationRuns,
 } from "@paperclipai/db";
@@ -41,6 +41,8 @@ import { checkOpenShellBoundary } from "../../services/execution-sandbox/openshe
 import { sandboxProbeCases, type SandboxIdentity, type SandboxProbeCase } from "../../services/execution-sandbox/backend.js";
 import { nativeSandboxHostTransport } from "../../services/execution-sandbox/native-host-bridge.js";
 import { agentProviderBindingService } from "../../services/agent-provider-bindings.js";
+import { assertV5Authorization, v5HumanActorId } from "../../services/v5-authorization.js";
+import { entitlementService } from "../../services/billing/entitlements.js";
 import { discoverNativeCapabilities } from "../../services/native-provider-conformance.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../../services/provider-capabilities.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
@@ -301,14 +303,41 @@ export async function registerManagedSandboxProvider(
     hostAgentVersion: "6.0.2", lastHeartbeatAt: new Date() }).returning();
   if (!host) throw new Error("conversation_software_host_row_missing");
   const payerUserId = actor.userId;
-  if (!payerUserId) throw new Error("conversation_software_host_payer_missing");
-  const [account] = await db.insert(billingAccounts).values({ displayName: "Conversation software host fixture", payerUserId }).returning();
-  if (!account) throw new Error("conversation_software_host_billing_account_missing");
-  await db.insert(billingAccountCompanies).values({ companyId, billingAccountId: account.id });
-  for (const productKeys of [["platform", "runtime_standard"], ["runtime_standard"]])
-    await db.insert(billingSubscriptions).values({ billingAccountId: account.id,
-      providerSubscriptionId: `conversation-software-${randomUUID()}`, status: "active", productKeys,
-      currentPeriodEnd: new Date(Date.now() + 86_400_000), providerUpdatedAt: new Date(), sourceHash: "controlled-software-host-fixture" });
+  if (!payerUserId || v5HumanActorId(actor) !== payerUserId) throw new Error("conversation_software_host_payer_missing");
+  const account = await db.transaction(async tx => {
+    await assertV5Authorization(tx as unknown as ReturnType<typeof createDb>, actor, companyId, "agents:configure",
+      { type: "agent", companyId, agentId });
+    // The company lock serializes the absent-association case as well as reuse.
+    // The existing unique active-company association remains authoritative.
+    const [company] = await tx.select({ id: companies.id }).from(companies)
+      .where(and(eq(companies.id, companyId), eq(companies.status, "active"))).for("update");
+    if (!company) throw new Error("conversation_software_host_billing_company_unavailable");
+    const [association] = await tx.select().from(billingAccountCompanies).where(and(
+      eq(billingAccountCompanies.companyId, companyId), eq(billingAccountCompanies.status, "active"))).limit(1);
+    let selected: typeof billingAccounts.$inferSelect;
+    if (association) {
+      const [existing] = await tx.select().from(billingAccounts)
+        .where(eq(billingAccounts.id, association.billingAccountId)).limit(1).for("update");
+      if (!existing || existing.payerUserId !== payerUserId || existing.status !== "active" || existing.closedAt !== null)
+        throw new Error("conversation_software_host_billing_account_changed");
+      selected = existing;
+    } else {
+      const [created] = await tx.insert(billingAccounts)
+        .values({ displayName: "Conversation software host fixture", payerUserId }).returning();
+      if (!created) throw new Error("conversation_software_host_billing_account_missing");
+      await tx.insert(billingAccountCompanies).values({ companyId, billingAccountId: created.id });
+      for (const productKeys of [["platform", "runtime_standard"], ["runtime_standard"]])
+        await tx.insert(billingSubscriptions).values({ billingAccountId: created.id,
+          providerSubscriptionId: `conversation-software-${randomUUID()}`, status: "active", productKeys,
+          currentPeriodEnd: new Date(Date.now() + 86_400_000), providerUpdatedAt: new Date(), sourceHash: "controlled-software-host-fixture" });
+      selected = created;
+    }
+    const entitlement = await entitlementService(tx as unknown as ReturnType<typeof createDb>)
+      .require(companyId, "hosted_runtime.provision");
+    if (entitlement.billingAccountId !== selected.id || entitlement.entitlements["platform.access"] !== true)
+      throw new Error("conversation_software_host_billing_entitlement_changed");
+    return selected;
+  });
   const [cell] = await db.insert(runtimeCells).values({ companyId, billingAccountId: account.id,
     capacityProfile: "conversation-software-host", desiredImageDigest: imageDigest, status: "STOPPED",
     isolationMode: "company_cell", runtimeHostId: host.id, providerBindingId }).returning();
@@ -352,10 +381,16 @@ export async function registerManagedSandboxProvider(
     const [currentCell] = await db.select().from(runtimeCells).where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, cell.id)));
     const [currentHost] = await db.select().from(runtimeHosts).where(eq(runtimeHosts.id, host.id));
     const [currentEnvironment] = await db.select().from(environments).where(eq(environments.id, environment.id));
+    const [currentBilling] = await db.select().from(billingAccountCompanies).where(and(
+      eq(billingAccountCompanies.companyId, companyId), eq(billingAccountCompanies.status, "active"),
+      eq(billingAccountCompanies.billingAccountId, account.id))).limit(1);
+    const [currentAccount] = await db.select().from(billingAccounts).where(eq(billingAccounts.id, account.id)).limit(1);
     if (current.provider.id !== providerBindingId || current.runtime.id !== qualifiedProvider.runtime.id ||
         current.runtime.providerProfileRef !== providerProfileRef || current.provider.capabilitySnapshotHash !== providerSnapshotHash ||
         current.runtime.qualifiedConfigurationHash !== configurationHash || nativeSha256(current.runtime.conformanceReport) !== conformanceHash ||
         !currentAgent || currentAgent.defaultEnvironmentId !== environment.id ||
+        !currentBilling || !currentAccount || currentAccount.payerUserId !== payerUserId ||
+        currentAccount.status !== "active" || currentAccount.closedAt !== null ||
         !currentCell || currentCell.generation !== cell.generation || currentCell.runtimeHostId !== host.id || currentCell.providerBindingId !== providerBindingId ||
         currentCell.billingAccountId !== account.id || currentCell.desiredImageDigest !== imageDigest ||
         currentCell.capacityProfile !== cell.capacityProfile || currentCell.isolationMode !== cell.isolationMode ||

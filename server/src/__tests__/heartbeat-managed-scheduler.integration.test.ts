@@ -28,6 +28,7 @@ afterAll(async () => {
 }, 30000);
 
 it("dispatches an ordinary scheduler-created capped Worker through current Sandbox admission and model reservation", async () => {
+  const terminalDeadlineAt = Date.now() + 600_000;
   // Serial fixture transport authenticates each incoming model channel; the production scheduler still creates one ordinary Worker Run.
   await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
     schedulerMode: "serial",
@@ -76,6 +77,10 @@ it("dispatches an ordinary scheduler-created capped Worker through current Sandb
         responsibleUserId: human.userId! })).rejects.toThrow("installed worker model transport");
       await expect(gateway.qualifyManagedWorker(db, { companyId, agentId,
         responsibleUserId: "missing-current-human" })).rejects.toThrow();
+      await expect(gateway.qualifyManagedWorker(db, { companyId, agentId,
+        responsibleUserId: human.userId! })).resolves.toMatchObject({
+          providerKind: "opencode", maximumEnvelopeBytes: expect.any(Number),
+        });
       const [originalAgent] = await db.select().from(agents).where(eq(agents.id, agentId));
       if (!originalAgent) throw new Error("scheduler_fixture_agent_missing");
       for (const drift of [{ model: "anthropic/unselected-model" }, { provider: "codex" }]) {
@@ -94,6 +99,14 @@ it("dispatches an ordinary scheduler-created capped Worker through current Sandb
         requestedByActorType: "user", requestedByActorId: human.userId!, payload: { issueId: task.id },
         contextSnapshot: { issueId: task.id } });
       expect(wake).not.toBeNull();
+      // A drain clears delayed session-resume timers; observe this Run's terminal state first.
+      const remainingTerminalMs = terminalDeadlineAt - Date.now();
+      if (remainingTerminalMs <= 0) throw new Error("scheduler_fixture_terminal_deadline_exhausted");
+      await expect.poll(async () => {
+        const [current] = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, wake!.id)));
+        return current ? ["succeeded", "failed", "cancelled", "interrupted", "timed_out"].includes(current.status) : false;
+      }, { timeout: remainingTerminalMs }).toBe(true);
       await heartbeat.drainActiveRunExecutions();
       const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake!.id));
       expect(run, JSON.stringify({ code: run?.errorCode, error: run?.error })).toMatchObject({ status: "succeeded",

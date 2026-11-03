@@ -4,7 +4,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, lstat, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { lookup } from "node:dns/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer as createHttpServer, request as httpRequest } from "node:http";
 import { createConnection, Socket } from "node:net";
 import { createManagedModelTunnelAssociations, type ModelChannel, type ManagedModelTunnel } from "./managed-native-model-transport.js";
@@ -42,6 +43,53 @@ import { createToolGatewayService } from "../../services/tool-gateway.js";
 import { mcpGatewayProtocolRoutes } from "../../routes/tool-gateway.js";
 import { getAssignedMcpGateway, registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
+
+/** Failure-only location hints. Arbitrary messages, function names and file
+ * paths never cross this projection; the output path comes from this closed list. */
+function managedModelRepositorySourceFrames(error: unknown): Array<{ sourceFile: string; line: number; column: number }> {
+  try {
+    if (!(error instanceof Error)) return [];
+    const stack = error.stack;
+    if (typeof stack !== "string" || stack.length > 65_536) return [];
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+    const files = [
+      "server/src/services/orchestration/worker-model-gateway.ts",
+      "server/src/services/orchestration/native-tool-boundary.ts",
+      "server/src/services/orchestration/native-draft-runtime.ts",
+      "server/src/services/native-direct-input.ts",
+      "server/src/services/native-runtime/native-execution-input.ts",
+      "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "server/src/services/native-runtime/native-session-executor.ts",
+      "server/src/services/native-runtime/native-interaction-bridge.ts",
+      "server/src/services/tool-gateway.ts",
+      "server/src/services/runtime/control.ts",
+      "server/src/services/execution-continuation.ts",
+      "server/src/services/native-stage-wake-source.ts",
+      "server/src/services/memory/memory-service.ts",
+      "server/src/services/memory/memory-privacy.ts",
+      "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "tests/e2e/fixtures/managed-connection-review.ts",
+      "tests/e2e/fixtures/managed-connection-intent.ts"
+];
+    const allowed = new Map(files.map(file => [resolve(root, file), file]));
+    const frames: Array<{ sourceFile: string; line: number; column: number }> = [];
+    for (const frame of stack.split("\n").slice(1, 33)) {
+      const match = /(?:\(|^\s*at )(file:\/\/[^()]+|\/[^()]+):(\d+):(\d+)\)?$/.exec(frame);
+      if (!match) continue;
+      let absolute: string;
+      try { absolute = match[1]!.startsWith("file:") ? fileURLToPath(match[1]!) : match[1]!; }
+      catch { continue; }
+      const sourceFile = allowed.get(absolute), line = Number(match[2]), column = Number(match[3]);
+      if (!sourceFile || !Number.isSafeInteger(line) || line < 1 || line > 100_000 ||
+        !Number.isSafeInteger(column) || column < 1 || column > 10_000) continue;
+      frames.push({ sourceFile, line, column });
+      if (frames.length === 3) break;
+    }
+    return frames;
+  } catch { return []; } // Diagnostics cannot replace the original error.
+}
 
 const sourceSha = "a".repeat(40);
 
@@ -248,7 +296,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   let providerToolNames: string[] = [];
   const brokerRequestFacts: Array<{ requestHash: string; status: number; code?: string; stage?: string;
     sqlState?: string; constraint?: string; errorName?: string; errorStatus?: number;
-    errorCode?: string; serviceFrames?: string[] }> = [];
+    errorCode?: string; serviceFrames?: string[]; sourceFrames?: ReturnType<typeof managedModelRepositorySourceFrames> }> = [];
   const providerCalls: Array<{ body: Record<string, unknown>; keyMatches: boolean; runId: string }> = [];
   const reservationForRun = async (runId: string) => db.select({ reservation: orchestrationModelReservations })
     .from(orchestrationModelReservations).innerJoin(orchestrationWorkerAttempts,
@@ -480,6 +528,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     } : null;
     const safeIdentifier = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_:-]{1,96}$/.test(value) ? value : null;
     if (fact && diagnostic) {
+      fact.sourceFrames = managedModelRepositorySourceFrames(error);
       fact.errorName = safeIdentifier(diagnostic.name) ?? "UnknownError";
       fact.errorCode = safeIdentifier(diagnostic.code) ?? safeIdentifier(diagnostic.cause?.code) ?? undefined;
       const status = typeof diagnostic.status === "number" ? diagnostic.status
@@ -1008,7 +1057,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.agentId, agentIds),
           eq(heartbeatRuns.status, "failed"))).orderBy(desc(heartbeatRuns.createdAt)).limit(8);
       // Broker facts are fixture-wide, not Run-scoped. Never emit request hashes,
-      // arbitrary server strings, constraints, stack frames or credential data.
+      // arbitrary server strings, constraints, full stacks or credential data.
       if (failedRuns.length > 0) {
         const brokerFailures = brokerRequestFacts.filter(fact => Number.isInteger(fact.status)
           && fact.status >= 400 && fact.status <= 599);
@@ -1038,6 +1087,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
             stage: closed(fact.stage, knownStages), sqlState: closed(fact.sqlState, knownSqlStates),
             constraintPresent: typeof fact.constraint === "string",
             errorName: closed(fact.errorName, knownErrorNames),
+            sourceFrames: fact.sourceFrames ?? [],
           })),
         }));
       }

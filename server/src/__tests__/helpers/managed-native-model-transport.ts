@@ -14,12 +14,34 @@ export type ModelChannel = { readonly runId: string; readonly leaseId: string; r
 const hash = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
 const transient = (error: unknown) => ["ENOENT", "ESRCH"].includes((error as NodeJS.ErrnoException).code ?? "");
 const checked = (condition: unknown) => { if (!condition) throw new Error("model_channel_observation_unavailable"); };
-function processIdentity(pid: number) {
-  checked(Number.isSafeInteger(pid) && pid > 0 && statSync(`/proc/${pid}`).uid === process.getuid?.());
-  const raw = readFileSync(`/proc/${pid}/stat`, "utf8"), end = raw.lastIndexOf(") ");
-  checked(end > 0); const fields = raw.slice(end + 2).trim().split(/\s+/);
-  checked(fields[0] !== "Z" && /^\d+$/.test(fields[1] ?? "") && /^\d+$/.test(fields[19] ?? ""));
-  return { pid, parent: Number(fields[1]), start: fields[19]! };
+const identityFailurePhases = ["pid_invalid", "directory_stat", "uid_mismatch", "stat_read", "stat_shape",
+  "zombie", "parent_invalid", "start_invalid"] as const;
+const identityObservationRoles = ["runner", "socket_ancestry", "ancestry_recheck"] as const;
+const identityFailures = new WeakMap<object, { phase: typeof identityFailurePhases[number];
+  role: typeof identityObservationRoles[number] }>();
+function modelIdentityFailureFacts(error: unknown) {
+  const failure = error && typeof error === "object" ? identityFailures.get(error) : undefined;
+  return failure && identityFailurePhases.some(value => value === failure.phase) &&
+    identityObservationRoles.some(value => value === failure.role)
+    ? { identityFailurePhase: failure.phase, identityObservationRole: failure.role } : {};
+}
+function processIdentity(pid: number, role: typeof identityObservationRoles[number]) {
+  let phase: typeof identityFailurePhases[number] = "pid_invalid";
+  try {
+    const directoryUid = () => { phase = "directory_stat"; const uid = statSync(`/proc/${pid}`).uid;
+      phase = "uid_mismatch"; return uid; };
+    checked(Number.isSafeInteger(pid) && pid > 0 && directoryUid() === process.getuid?.());
+    phase = "stat_read";
+    const raw = readFileSync(`/proc/${pid}/stat`, "utf8"), end = raw.lastIndexOf(") ");
+    phase = "stat_shape";
+    checked(end > 0); const fields = raw.slice(end + 2).trim().split(/\s+/);
+    phase = fields[0] === "Z" ? "zombie" : !/^\d+$/.test(fields[1] ?? "") ? "parent_invalid" : "start_invalid";
+    checked(fields[0] !== "Z" && /^\d+$/.test(fields[1] ?? "") && /^\d+$/.test(fields[19] ?? ""));
+    return { pid, parent: Number(fields[1]), start: fields[19]! };
+  } catch (error) {
+    if (error && typeof error === "object") identityFailures.set(error, { phase, role });
+    throw error;
+  }
 }
 function endpoint(address: string | undefined, port: number | undefined) {
   checked(address === "127.0.0.1" && Number.isInteger(port) && port! > 0 && port! <= 65535);
@@ -149,7 +171,7 @@ async function observation(client: Socket, origin: SignedModelOrigin, image: Mod
   // The caller separately binds this exact path/nonce to its actual signed start.
   checked(markerStat.isFile() && marker[0] === origin.nonce && marker[3] === origin.runnerInstanceId &&
     /^[1-9]\d*$/.test(marker[1] ?? "") && /^linux:[a-f0-9-]+:\d+$/.test(marker[4] ?? ""));
-  const root = processIdentity(Number(marker[1]));
+  const root = processIdentity(Number(marker[1]), "runner");
   const boot = readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
   checked(marker[4] === `linux:${boot}:${root.start}`);
   checked((image.runPid === null || image.runPid === root.pid) &&
@@ -160,7 +182,7 @@ async function observation(client: Socket, origin: SignedModelOrigin, image: Mod
   let pid = owner.pid;
   for (let depth = 0; depth < 32; depth++) {
     checked(Date.now() < until && !ancestry.some(item => item.pid === pid));
-    const observed = processIdentity(pid);
+    const observed = processIdentity(pid, "socket_ancestry");
     const entry = pid === root.pid ? { ...observed, parent: 0 } : observed; ancestry.push(entry);
     if (pid === root.pid) break;
     pid = entry.parent;
@@ -190,7 +212,7 @@ async function observation(client: Socket, origin: SignedModelOrigin, image: Mod
     imageHandle ??= { fd: executable, stream: ownedStream!, dev: before.dev, ino: before.ino, size: before.size,
       mtimeMs: before.mtimeMs, ctimeMs: before.ctimeMs };
   checked(JSON.stringify(ancestry.map(item => {
-    const observed = processIdentity(item.pid); return item.pid === root.pid ? { ...observed, parent: 0 } : observed;
+    const observed = processIdentity(item.pid, "ancestry_recheck"); return item.pid === root.pid ? { ...observed, parent: 0 } : observed;
   })) === JSON.stringify(ancestry));
   checked(JSON.stringify(socketOwner(client, until)) === JSON.stringify(owner));
   const markerAfter = lstatSync(origin.markerPath);
@@ -244,7 +266,7 @@ export async function attestNativeModelClient(client: Socket, origin: SignedMode
           ? stack.split("\n").slice(1).map(line => /^\s*at (?:async )?(socketOwner|processIdentity|observation)(?:\s|\()/.exec(line)?.[1])
             .find(frame => frame !== undefined) ?? "other"
           : "other";
-        console.info("managed_native_model_transport_observation_failed", JSON.stringify({ errno, frameClass }));
+        console.info("managed_native_model_transport_observation_failed", JSON.stringify({ errno, frameClass, ...modelIdentityFailureFacts(error) }));
       }
     } catch { /* Diagnostics cannot change the closed, unauthorized result. */ }
     return null;

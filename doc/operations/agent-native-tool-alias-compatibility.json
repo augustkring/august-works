@@ -246,19 +246,27 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "82823e883175b1d09bb2d4cd9a003a02d29d75f9e8bb1bf73c9bf685aacab9e2"
+      "sha256": "ab20b8c3bc01d7be7e5f3959975bb1c9d96677947e79f5f65401da8e0baa7845"
+    },
+    {
+      "path": "server/src/__tests__/helpers/native-managed-output-references.ts",
+      "sha256": "344428ffb55a24134f97b95b6330ce59ffd056127377c9f16044024974a466de"
     },
     {
       "path": "server/src/__tests__/helpers/native-private-memory-producer.ts",
       "sha256": "4558e0de6b54923369980c41ec67deeddbcfa4fcad0814f9d6a442ab9108bed1"
     },
     {
+      "path": "server/src/__tests__/native-managed-output-references.test.ts",
+      "sha256": "e9fbbd9759f2e079f06bcdee74626e965eee224aaa3d118b3c0e752c3072d983"
+    },
+    {
       "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
-      "sha256": "ea4e872b6eb7dc4b01000dc47c5120aa5372cfdfeaa9ddbf1a563b89dde0e91c"
+      "sha256": "c951c2cfaeac101bc899cab955a8cc8fd55ad11099e9c36aebc8b5c01d7bd840"
     },
     {
       "path": "server/src/__tests__/tool-gateway-service.test.ts",
-      "sha256": "2e63de4131856f6e809e0af9d7664c9e44573cc01bc20d08ad3d46a5c32e098a"
+      "sha256": "2cefe47613d09d924db389cbf4231378fcd37b021fde2f8f1386aca8e1e56a90"
     },
     {
       "path": "server/src/__tests__/v9-agent-setup-conversation.integration.test.ts",
@@ -330,7 +338,7 @@
     },
     {
       "path": "server/src/services/context/context-engine-integration.test.ts",
-      "sha256": "02d26054d8a0710329181533365a137ed79e9207f59213349426971cf4fd944d"
+      "sha256": "6cc44dce14adc366e57b3112ec5d78e94596ca8d77619fb445902f3ea7275f73"
     },
     {
       "path": "server/src/services/decisions.ts",
@@ -350,7 +358,7 @@
     },
     {
       "path": "server/src/services/issues.ts",
-      "sha256": "a8b4b40f4fc835e879d7401ee8bed7e921c6b7fd67a6c5deb4890f37b54c4d3c"
+      "sha256": "aa5d0fb27382753aed7f79e0fad8fe3b30d8fcfaf06bab267b1936f1efe19964"
     },
     {
       "path": "server/src/services/memory/memory-agent-tools.ts",
@@ -358,19 +366,23 @@
     },
     {
       "path": "server/src/services/memory/memory-privacy.ts",
-      "sha256": "aef38e88cbfb991c400a3bb519613f8a39eba6e81ab6886fe9cff2bf2db085f1"
+      "sha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f"
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "8dd0c70829503173f5de7aa924c5ab6a61db2ddfb2cd119701c95c227257f3f7"
+      "sha256": "35b6b336fb3c8c78b1e3dbf11f187e44f4c553eb8116e1ebb394d17340ca3a90"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "sha256": "8f18932945ce7abea19ee42f41bae8f306ea971a8af88e99e947a4cad8ebac11"
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "4e3d721fbccdf40cbe11305bbe70aa2e5112af36975647141bd13ca2573b63ae"
+      "sha256": "389cba8641dc2d86340bf67cdb61bc3e8283b742a39e06e4a11d38f4f4c1ee5d"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "f33550530ce8edee95549f84aff6d4d9bf04c31155da70d7bb48f7e6b731c925"
+      "sha256": "27fe646ec991a32a761bffcf884a504ede28d9c5d74744b4021ebc9f1c53e90c"
     },
     {
       "path": "server/src/services/notification-preference-proposals.ts",
@@ -378,7 +390,7 @@
     },
     {
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "06935699dc5fe2411f661b3c70daf0f2d7f976342e710dcfa05ec1c2ccf67ee4"
+      "sha256": "644e7d7be679bc7b83c23c1431a3f9739c2ffa92f417d5d9a494717ff11b0ca8"
     },
     {
       "path": "server/src/services/process-findings.ts",
@@ -398,7 +410,7 @@
     },
     {
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "edb3c85b30c222ed4174891bf4cc8c08b036546dcce25ba05846fad14ec860b8"
+      "sha256": "7750e0d0038a189dd0b025551446a6c864df636feed7f518bb7b8c302360769c"
     },
     {
       "path": "server/src/services/workflows/workflow-authoring-tools.ts",
@@ -1016,13 +1028,16 @@
       "lifecycle": "active_compatibility",
       "repositoryConsumerPaths": [
         "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "server/src/__tests__/helpers/native-managed-output-references.ts",
         "server/src/__tests__/helpers/native-private-memory-producer.ts",
+        "server/src/__tests__/native-managed-output-references.test.ts",
         "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
         "server/src/__tests__/tool-gateway-service.test.ts",
         "server/src/services/agent-native-operation-manifest.ts",
         "server/src/services/context/context-engine-integration.test.ts",
         "server/src/services/memory/memory-privacy.ts",
         "server/src/services/native-direct-input.ts",
+        "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
         "server/src/services/native-runtime/native-session-executor.ts",
         "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
         "server/src/services/orchestration/worker-model-gateway.ts",
@@ -1171,7 +1186,9 @@
   ],
   "repositoryConsumerPaths": [
     "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+    "server/src/__tests__/helpers/native-managed-output-references.ts",
     "server/src/__tests__/helpers/native-private-memory-producer.ts",
+    "server/src/__tests__/native-managed-output-references.test.ts",
     "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
     "server/src/__tests__/tool-gateway-service.test.ts",
     "server/src/__tests__/v9-agent-setup-conversation.integration.test.ts",
@@ -1182,6 +1199,7 @@
     "server/src/services/context/context-engine-integration.test.ts",
     "server/src/services/memory/memory-privacy.ts",
     "server/src/services/native-direct-input.ts",
+    "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
     "server/src/services/native-runtime/native-session-executor.ts",
     "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
     "server/src/services/orchestration/worker-model-gateway.ts",

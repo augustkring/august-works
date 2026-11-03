@@ -1005,7 +1005,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const bootstrapSourceClosure = { sourceSet,
       taskEnvelopeDigest: nativeSha256(execution.task) };
     await db.update(heartbeatRuns).set({ runnerProfileJson: sql`coalesce(${heartbeatRuns.runnerProfileJson}, '{}'::jsonb) ||
-      ${JSON.stringify({ nativeExecutionInput: execution,
+      ${JSON.stringify({ nativeExecutionInput: execution, nativeBootstrapTaskSource: taskSource,
         ...(wakeComment ? { nativeBootstrapWakeCommentSources: { request: wakeComment.capture, context: wakeComment.capture },
           nativeBootstrapTaskMarkdownSourceMap: { version: 1,
             renderedMarkdownDigest: createHash("sha256").update(taskPrompt, "utf8").digest("hex"),

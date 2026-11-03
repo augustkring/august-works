@@ -1,3 +1,5 @@
+import { formatNativeWorkspaceCoordination, recordNativeWorkspaceCoordination, exactNativeWorkspaceCoordination, composeNativeWorkspaceCoordinationMap,
+  type NativeWorkspaceCoordinationCapture, type WorkspaceCoordinationReadDb } from "./native-runtime/native-workspace-coordination-source.js";
 import { isResourceAdmissionDeferred } from "./resource-governance.js";
 import { readTaskDrain, computeTaskDrain, applyTaskDrain, startTaskDrain, stopTaskDrain, idleWorkSnapshot } from "./task-admission.js";
 export { computeTaskDrain, applyTaskDrain, startTaskDrain, stopTaskDrain } from "./task-admission.js";
@@ -8616,6 +8618,7 @@ export async function getIssueExecutionContext(db: Db, companyId: string, issueI
       executionWorkspaceSettings: issues.executionWorkspaceSettings,
       parentId: issues.parentId,
       createdByUserId: issues.createdByUserId,
+      createdByAgentId: issues.createdByAgentId,
       responsibleUserId: issues.responsibleUserId,
       originKind: issues.originKind,
       originId: issues.originId,
@@ -16254,12 +16257,12 @@ export function heartbeatService(
     excludeRunId: string;
     honorIsolatedWorkspaceModes: boolean;
     now?: Date;
-  }): Promise<SharedWorkspaceHolder | null> {
+  }, readDb: WorkspaceCoordinationReadDb = db): Promise<SharedWorkspaceHolder | null> {
     const staleCutoff = new Date(
       (input.now ?? new Date()).getTime() -
         WORKSPACE_BUSY_HOLDER_STALE_AFTER_MS,
     );
-    return await db
+    return await readDb
       .select({
         runId: heartbeatRuns.id,
         agentId: heartbeatRuns.agentId,
@@ -17085,6 +17088,7 @@ export function heartbeatService(
           ),
         )
         .limit(1);
+      if (current?.resultJson?.startupCancellation) return null;
       if (
         current &&
         current.wakeupRequestId === run.wakeupRequestId &&
@@ -17143,7 +17147,8 @@ export function heartbeatService(
           .limit(1);
         if (
           !current ||
-          current.status !== (stage === "claim" ? "queued" : "running")
+          current.status !== (stage === "claim" ? "queued" : "running") ||
+          (stage === "dispatch" && current.resultJson?.startupCancellation)
         )
           return null;
         const admission = readChatControlRecoveryAdmission(current);
@@ -20959,7 +20964,7 @@ export function heartbeatService(
         resolvedExecutionWorkspaceMode === "shared_workspace"
           ? "isolated_workspace"
           : resolvedExecutionWorkspaceMode;
-      const issueRef = issueContext
+      let issueRef = issueContext
         ? {
             id: issueContext.id,
             identifier: issueContext.identifier,
@@ -21537,6 +21542,7 @@ export function heartbeatService(
           },
         );
       }
+      let nativeWorkspaceCoordinationCapture: NativeWorkspaceCoordinationCapture | null = null;
       const sharedWorkspaceConcurrency = resolveSharedWorkspaceConcurrency({
         projectPolicy: projectExecutionWorkspacePolicy,
         issueSettings: issueExecutionWorkspaceSettings,
@@ -21577,11 +21583,17 @@ export function heartbeatService(
             });
           }
 
-          const holderIssueLabel =
-            workspaceHolder.issueIdentifier ?? workspaceHolder.issueId;
-          const concurrentWorkspaceNote =
-            `shared workspace is concurrently held by run ${workspaceHolder.runId} (issue ${holderIssueLabel}); ` +
-            "expect concurrent mutations, coordinate via commits";
+          const coordinationProjectWorkspaceId = issueRef.projectWorkspaceId;
+          if (agent.adapterType === "paperclip_runner" && !persistedNativeExecutionInput) {
+            nativeWorkspaceCoordinationCapture = await recordNativeWorkspaceCoordination(db, {
+              companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: issueRef.id,
+              projectWorkspaceId: coordinationProjectWorkspaceId, expectedHolder: workspaceHolder,
+              selectCurrentHolder: (tx, observedAt) => findSharedWorkspaceHolder({ companyId: agent.companyId,
+                projectWorkspaceId: coordinationProjectWorkspaceId, excludeIssueId: issueRef.id, excludeRunId: run.id,
+                honorIsolatedWorkspaceModes: isolatedWorkspacesEnabled, now: observedAt }, tx),
+            });
+          }
+          const concurrentWorkspaceNote = formatNativeWorkspaceCoordination(workspaceHolder);
           const appendConcurrentWorkspaceNote = (value: unknown) => {
             const existing = typeof value === "string" ? value.trimEnd() : "";
             return existing
@@ -22303,19 +22315,30 @@ export function heartbeatService(
             issueExecutionWorkspaceModeForRun !== nextIssueWorkspaceMode)
         ) {
           nextIssuePatch.executionWorkspacePreference = "reuse_existing";
+          const persistedIssueSettings = issueContext?.executionWorkspaceSettings &&
+            typeof issueContext.executionWorkspaceSettings === "object" && !Array.isArray(issueContext.executionWorkspaceSettings)
+            ? issueContext.executionWorkspaceSettings as Record<string, unknown> : {};
           nextIssuePatch.executionWorkspaceSettings = {
-            ...(issueExecutionWorkspaceSettings ?? {}),
+            ...persistedIssueSettings,
             mode: nextIssueWorkspaceMode,
           };
         }
         if (Object.keys(nextIssuePatch).length > 0) {
+          const workspaceBindingSourceTransform = issueContext?.originKind === "manual" &&
+            Boolean(issueContext.createdByUserId) && issueContext.createdByAgentId === null &&
+            Boolean(issueContext.parentId || issueContext.projectId) && issueContext.conversationAgentId === null && Boolean(taskSourceCapture.value?.payloadSourceSnapshot?.digest)
+            ? { agentId: agent.id, runId: run.id, workspaceId: workspace.id,
+                expectedPreviousSnapshotDigest: taskSourceCapture.value?.payloadSourceSnapshot?.digest ?? "" }
+            : undefined;
           await issuesSvc.update(
             issueId,
-            { ...nextIssuePatch, companyGuard: agent.companyId },
+            { ...nextIssuePatch, companyGuard: agent.companyId,
+              ...(workspaceBindingSourceTransform ? { actorAgentId: agent.id, actorRunId: run.id } : {}) },
             db,
             undefined,
             undefined,
-            { bindRuntimeSharedWorkspace: (warmReusableExecutionWorkspace || nativeSharedWorkspace) && workspace.mode === "shared_workspace" },
+            { bindRuntimeSharedWorkspace: (warmReusableExecutionWorkspace || nativeSharedWorkspace) && workspace.mode === "shared_workspace",
+              ...(workspaceBindingSourceTransform ? { workspaceBindingSourceTransform } : {}) },
           );
           issueExecutionWorkspaceIdForRun = workspace.id;
           issueProjectWorkspaceIdForRun =
@@ -22324,7 +22347,9 @@ export function heartbeatService(
             issueExecutionWorkspacePreferenceForRun = "reuse_existing";
             issueExecutionWorkspaceModeForRun = nextIssueWorkspaceMode;
           }
+          return true;
         }
+        return false;
       };
       const baseExecutionWorkspaceMetadata =
         mergeExecutionWorkspaceMetadataForPersistence({
@@ -22543,7 +22568,6 @@ export function heartbeatService(
           },
         );
       }
-      await bindIssueToPersistedExecutionWorkspace(persistedExecutionWorkspace);
       const projectRepositoryPaths: string[] = [];
       let nativeProjectRepositoryRows: Array<typeof projectWorkspaces.$inferSelect> = [];
       let nativeProjectRepositoryMaterializations: Awaited<ReturnType<typeof prepareProjectRepositoryWorkspaces>> = [];
@@ -22753,7 +22777,17 @@ export function heartbeatService(
       // after the host-side provisioning boundary above. Bind that final ID to
       // the issue before dispatch so warm turns reuse the exact same workspace
       // and lease scope instead of silently creating a per-run replacement.
-      await bindIssueToPersistedExecutionWorkspace(persistedExecutionWorkspace);
+      const issueWorkspaceBindingChanged = await bindIssueToPersistedExecutionWorkspace(persistedExecutionWorkspace);
+      if (issueWorkspaceBindingChanged && issueId) {
+        issueContext = await getIssueExecutionContext(db, agent.companyId, issueId, captureTaskSource);
+        if (issueContext && issueRef) issueRef = {
+          ...issueRef, identifier: issueContext.identifier, title: issueContext.title, status: issueContext.status,
+          priority: issueContext.priority, workMode: issueContext.workMode, description: issueContext.description,
+          projectId: issueContext.projectId, projectWorkspaceId: issueContext.projectWorkspaceId,
+          executionWorkspaceId: issueContext.executionWorkspaceId,
+          executionWorkspacePreference: issueContext.executionWorkspacePreference,
+        };
+      }
       const workspaceRealization = realizationResult.workspaceRealization;
       const executionTarget = realizationResult.executionTarget;
       if (managedAiRuntime && aiBinding) {
@@ -24181,6 +24215,14 @@ export function heartbeatService(
             const selectedNativeTaskBasePrompt = nativeReviewRequest ?? readNonEmptyString(
               selectPaperclipTaskMarkdown(context, { resumedSession: false, includeCommunicationGuidance: false }),
             ) ?? `# ${issueRef.identifier ?? issueRef.id}: ${issueRef.title}`;
+            const originalCoordinationCapture = nativeWorkspaceCoordinationCapture ??
+              (persistedNativeExecutionInput ? exactNativeWorkspaceCoordination(
+                parseObject(run.runnerProfileJson).nativeWorkspaceCoordinationCapture,
+                { companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: issueRef.id }) : null);
+            const coordinatedBaseMap = originalCoordinationCapture
+              ? composeNativeWorkspaceCoordinationMap({ companyId: agent.companyId, runId: run.id, agentId: agent.id,
+                issueId: issueRef.id, capture: originalCoordinationCapture, baseMap: nativeBootstrapTaskMarkdownSourceMap,
+                renderedMarkdown: selectedNativeTaskBasePrompt }) : nativeBootstrapTaskMarkdownSourceMap;
             const nativeProjectRepositoryPrompt = projectRepositoryPaths.length > 0 &&
               executionWorkspace.projectId && resolvedWorkspace.workspaceId && run.responsibleUserId
               ? await prepareNativeProjectRepositoryPrompt({ db, companyId: agent.companyId, runId: run.id,
@@ -24188,12 +24230,12 @@ export function heartbeatService(
                 projectId: executionWorkspace.projectId, selectedWorkspaceId: resolvedWorkspace.workspaceId,
                 cwd: executionWorkspace.cwd, repositoryRows: nativeProjectRepositoryRows,
                 repositories: nativeProjectRepositoryMaterializations, baseMarkdown: selectedNativeTaskBasePrompt,
-                baseSourceMap: nativeBootstrapTaskMarkdownSourceMap }) : null;
+                baseSourceMap: coordinatedBaseMap }) : null;
             const selectedNativeTaskPrompt = nativeProjectRepositoryPrompt?.taskPrompt ?? [
               selectedNativeTaskBasePrompt, formatNativeProjectRepositoryAppendix(projectRepositoryPaths),
             ].filter(Boolean).join("\n\n");
             const selectedNativeTaskSourceMap = projectRepositoryPaths.length > 0
-              ? nativeProjectRepositoryPrompt?.sourceMap ?? null : nativeBootstrapTaskMarkdownSourceMap;
+              ? nativeProjectRepositoryPrompt?.sourceMap ?? null : coordinatedBaseMap;
             const nativeExecutionWithCheckpoint =
               buildNativeExecutionWithCheckpoint({
                 previousRun: previousNativeRun,
@@ -24308,18 +24350,30 @@ export function heartbeatService(
             const capturedTaskSource = taskSourceCapture.value;
             const capturedAuthoredSources = nativeBootstrapAuthoredSources.value;
             const nativeBootstrapWakeDiagnostics: string[] = [];
+            let continuationCaptureForWake = nativeTaskContinuationCapture.value ? { ...nativeTaskContinuationCapture.value,
+              ...(nativeBootstrapRetainedRunSource ? { retainedSource: nativeBootstrapRetainedRunSource.source } : {}) } : null;
+            if (continuationCaptureForWake && taskPlan && paperclipWakePayload?.planReviewContext && issueRef && run.responsibleUserId) {
+              const { captureNativeAcceptedPlanReview } = await import("./native-runtime/accepted-plan-review-source.js");
+              const acceptedPlanReview = await captureNativeAcceptedPlanReview({ db, companyId: agent.companyId,
+                issueId: issueRef.id, agentId: agent.id, runId: run.id, responsibleUserId: run.responsibleUserId,
+                envelope: continuationCaptureForWake.envelope, wakePayload: context.paperclipWake, context,
+                workMode: issueRef.workMode, exposeLowTrustRaw,
+                interactionSources: nativeBootstrapInteractionSources,
+                documentSources: nativeBootstrapTaskPlanSources ?? [] });
+              if (acceptedPlanReview) continuationCaptureForWake = { ...continuationCaptureForWake, acceptedPlanReview };
+            }
             let closedTaskContinuation = issueRef ? exactNativeTaskContinuation({ value: parseObject(context.paperclipWake).executionContinuation,
               companyId: agent.companyId, issueId: issueRef.id, runId: run.id, agentId: agent.id,
               responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
               wakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
-              capture: nativeTaskContinuationCapture.value ? { ...nativeTaskContinuationCapture.value,
-                ...(nativeBootstrapRetainedRunSource ? { retainedSource: nativeBootstrapRetainedRunSource.source } : {}) } : null }) : null;
+              capture: continuationCaptureForWake }) : null;
             nativeBootstrapContinuationCapture = closedTaskContinuation;
             const nativeTaskWakeCapture: Parameters<typeof captureNativeTaskWakeSource>[0] | null =
               capturedTaskSource?.input.kind === "task" && issueRef ? {
                 companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
                 sourceVersion: capturedTaskSource.input.sourceVersion, agentId: agent.id,
                 workspaceCapture: { execution: nativeWorkspaceExecution, source: nativeBootstrapWorkspaceSource },
+                workspaceCoordinationCapture: originalCoordinationCapture,
                 responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
                 continuationCapture: closedTaskContinuation,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
@@ -24334,7 +24388,7 @@ export function heartbeatService(
                   } } : {})
               } : null;
             const nativeTaskWakeSource = nativeTaskWakeCapture
-              ? captureNativeTaskWakeSource(nativeTaskWakeCapture) ?? await captureNativeExecutionStageTaskWakeSource(db, {
+              ? captureNativeTaskWakeSource(nativeTaskWakeCapture) ?? (originalCoordinationCapture ? null : await captureNativeExecutionStageTaskWakeSource(db, {
                 companyId: agent.companyId, runId: run.id, issueId: nativeTaskWakeCapture.issueId,
                 sourceVersion: nativeTaskWakeCapture.sourceVersion, task: nativeTaskWakeCapture.task,
                 runContext: context, payload: context.paperclipWake,
@@ -24344,7 +24398,7 @@ export function heartbeatService(
                 continuationCapture: nativeTaskContinuationCapture.value ? { ...nativeTaskContinuationCapture.value,
                   ...(nativeBootstrapRetainedRunSource ? { retainedSource: nativeBootstrapRetainedRunSource.source } : {}) } : null,
                 onContinuationCapture: capture => { closedTaskContinuation = capture; },
-              })
+              }))
               : null;
             nativeBootstrapContinuationCapture = closedTaskContinuation;
             if (capturedTaskSource?.input.kind === "task") nativeSourceCandidates.push({ kind: "task", id: capturedTaskSource.input.issueId,
@@ -24378,6 +24432,7 @@ export function heartbeatService(
               conversationHistory: isConversation(issueContext) && Boolean(nativeBootstrapConversationReplaySources?.length) &&
                 !nativeBootstrapConversationReplayClosed,
               wake: Boolean(context.paperclipWake && !nativeTaskWakeSource),
+              workspaceCoordination: Boolean(originalCoordinationCapture && !nativeTaskWakeSource),
               projectPaths: projectRepositoryPaths.length > 0 && !nativeProjectRepositoryPrompt?.candidate,
               authoredContextManifests: Boolean(capturedAuthoredSources?.contextManifests.length), missingTask: !capturedTaskSource,
             };
@@ -24412,6 +24467,7 @@ export function heartbeatService(
                 taskWakeInteractionSources: nativeTaskWakeSource && closedTaskContinuation
                   ? [...(closedTaskContinuation.governedInteractions?.flatMap(capture => [capture.nativeSource, capture.continuationSource]) ?? []),
                     ...(closedTaskContinuation.pendingInteractions?.map(capture => capture.source) ?? []),
+                    ...(closedTaskContinuation.acceptedPlanReview ? [closedTaskContinuation.acceptedPlanReview.interactionSource] : []),
                     ...(closedTaskContinuation.delivery ? [closedTaskContinuation.delivery.source] : [])] : [],
                 additionalPolicy: nativeBootstrapRetainedRunSource
                   ? { issueIds: [], projectIds: [], runIds: [nativeBootstrapRetainedRunSource.source.runId], memoryIds: [], foundationRevisionIds: [] }
@@ -24598,7 +24654,8 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapRolePackSources: v5Fabric ? v5Fabric.inputRolePackSources ?? null : [] }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapConversationReplaySources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskPlanSources, nativeBootstrapPlanningSources }),
-                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture.value, nativeBootstrapAncestorSources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture.value, nativeBootstrapAncestorSources,
+                    ...(originalCoordinationCapture ? { nativeWorkspaceCoordinationCapture: originalCoordinationCapture } : {}) }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskMarkdownSourceMap }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInlineWakeCommentSources: inlineWakeCommentSourceCaptures }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapWakeCommentSources }),

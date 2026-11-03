@@ -98,6 +98,30 @@ export function unionNativePayloadSourceInputs(groups: readonly (readonly unknow
   return result;
 }
 
+const workspaceBindingTransformSchema = z.object({
+  kind: z.literal("workspace_binding"),
+  activityId: id,
+  transitionId: id,
+  runId: id,
+  workspaceId: id,
+  workspaceTupleHash: sha256,
+  beforeProjectWorkspaceId: id.nullable(),
+  afterProjectWorkspaceId: id.nullable(),
+  previousSnapshotDigest: sha256,
+  previousOwnerContentHash: sha256,
+  nextOwnerContentHash: sha256,
+  beforePreference: z.enum(["inherit", "shared_workspace", "isolated_workspace", "operator_branch", "reuse_existing", "agent_default"]).nullable(),
+  beforeMode: z.enum(["inherit", "shared_workspace", "isolated_workspace", "isolated", "project_primary", "operator_branch", "reuse_existing", "agent_default"]).nullable(),
+  beforeSettingsHash: sha256,
+  afterPreference: z.enum(["inherit", "shared_workspace", "isolated_workspace", "operator_branch", "reuse_existing", "agent_default"]).nullable(),
+  afterMode: z.enum(["inherit", "shared_workspace", "isolated_workspace", "isolated", "project_primary", "operator_branch", "reuse_existing", "agent_default"]).nullable(),
+  afterSettingsHash: sha256,
+}).strict();
+
+export const nativePayloadSourceTransformSchema = workspaceBindingTransformSchema;
+export type NativePayloadSourceTransform = z.infer<typeof nativePayloadSourceTransformSchema>;
+const MAX_NATIVE_PAYLOAD_SOURCE_TRANSFORMS = 32;
+
 const sourceFields = {
   policy: nativePayloadSourcePolicySchema,
   inputs: z.array(nativePayloadSourceInputSchema).max(NATIVE_PAYLOAD_SOURCE_REFERENCE_LIMIT),
@@ -133,8 +157,19 @@ export const nativePayloadSourceSnapshotSchema = z.object({
   version: z.literal(1),
   owner: nativePayloadSourceOwnerSchema,
   ...sourceFields,
+  transforms: z.array(nativePayloadSourceTransformSchema).min(1).max(MAX_NATIVE_PAYLOAD_SOURCE_TRANSFORMS).optional(),
   digest: sha256,
-}).strict().superRefine(checkSources);
+}).strict().superRefine((snapshot, ctx) => {
+  checkSources(snapshot, ctx);
+  if (snapshot.transforms?.length && snapshot.owner.kind !== "issue") {
+    ctx.addIssue({ code: "custom", path: ["transforms"], message: "Only Task source snapshots can record workspace binding history." });
+  }
+  const activityIds = snapshot.transforms?.map(item => item.activityId) ?? [];
+  const transitionIds = snapshot.transforms?.map(item => item.transitionId) ?? [];
+  if (new Set(activityIds).size !== activityIds.length || new Set(transitionIds).size !== transitionIds.length) {
+    ctx.addIssue({ code: "custom", path: ["transforms"], message: "Duplicate workspace binding transition." });
+  }
+});
 
 /** Original run input representation, never an admission or permission claim.
  * The base binds the persisted execution input. Each actual dispatch or later

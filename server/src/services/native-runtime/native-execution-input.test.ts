@@ -79,6 +79,50 @@ describe("native bootstrap rendered-source closure", () => {
     expect(check(oversized)).toBeNull();
   });
 
+  it("keeps accepted-plan agent origins and a Task objective in the closed continuation", () => {
+    const companyId = randomUUID(), issueId = randomUUID(), runId = randomUUID(), agentId = randomUUID();
+    const sourceRunId = randomUUID(), interactionId = randomUUID(), commentId = randomUUID(), wakeupRequestId = randomUUID();
+    const humanId = "human-auth-user:non-uuid-735", resolvedAt = "2026-11-03T00:00:00.000Z";
+    const taskObjective = "Task description used when the accepted-plan wake has no Human comment.";
+    const message = { id: commentId, authorType: "agent", authorId: agentId, createdByRunId: sourceRunId,
+      body: "Please confirm the current plan.", createdAt: resolvedAt, updatedAt: resolvedAt, deleted: false, sourceTrust: null };
+    const documentId = randomUUID(), revisionId = randomUUID(), bodyHash = "c".repeat(64);
+    const planSourceInput = { kind: "document_revision" as const, issueId, documentId, revisionId, contentHash: bodyHash };
+    const interactionResult = { outcome: "accepted", reason: null, commentId: null };
+    const planReviewContext = { documentKey: "plan" as const, issueId, latestRevisionId: revisionId, latestRevisionNumber: 3,
+      threads: [], interaction: { id: interactionId, kind: "request_confirmation", status: "accepted", continuationPolicy: "wake_assignee",
+        sourceCommentId: commentId, sourceRunId, target: { issueId, documentId, key: "plan", revisionId, revisionNumber: 3 },
+        acceptedTargetRevision: { issueId, documentId, key: "plan", revisionId, revisionNumber: 3 }, result: interactionResult, resolvedAt },
+      totals: { openThreadCount: 0, includedThreadCount: 0, omittedThreadCount: 0, commentCount: 0, includedCommentCount: 0, omittedCommentCount: 0 },
+      limits: { maxThreads: 20, maxComments: 80, maxBodyChars: 1200, maxTotalBodyChars: 12000, maxAnchorTextChars: 500 }, truncated: false };
+    const capture: NativeTaskContinuationCapture = {
+      companyId, issueId, agentId, runId, responsibleUserId: humanId, wakeupRequestId,
+      envelope: { version: 1, companyId, issueId, trigger: { reason: "issue_commented", interactionId, sourceRunId },
+        originCommentIds: [commentId], objective: taskObjective, messages: [message],
+        humanResponses: [{ id: interactionId, kind: "request_confirmation", status: "accepted", resolvedByUserId: humanId, resolvedAt, result: interactionResult }],
+        interactionOutcomes: [{ id: interactionId, kind: "request_confirmation", status: "accepted", result: interactionResult }],
+        completedWork: null, recoveryOutcomes: [], unresolvedInteractionIds: [], completedActions: [],
+        coverage: { kind: "full_task_history", throughCommentId: commentId, summaryThroughCommentId: null } },
+      commentSources: [{ input: { kind: "comment", issueId, commentId, sourceVersion: "2.0", contentHash: nativeContinuationMessageHash(message) }, payloadSourceSnapshot: null }],
+      wake: { requestedByActorType: "user", requestedByActorId: humanId, reason: "issue_commented", originCommentIds: [commentId],
+        interaction: { interactionId, interactionKind: "request_confirmation", interactionStatus: "accepted", sourceRunId } },
+      acceptedPlanReview: { version: 1, companyId, issueId, agentId, runId, interactionId, sourceRunId,
+        resolvedByUserId: humanId, resolvedAt, originCommentIds: [commentId], taskObjective,
+        interactionSource: { kind: "interaction", issueId, interactionId, sourceVersion: "2.0", contentHash: "a".repeat(64) },
+        planSource: { input: planSourceInput, payloadSourceSnapshot: null },
+        planRendition: { documentId, revisionId, revisionNumber: 3, bodyHash }, planReviewContext },
+    };
+    const check = (value: NativeTaskContinuationCapture) => exactNativeTaskContinuation({ value: value.envelope, companyId, issueId,
+      runId, agentId, responsibleUserId: humanId, wakeupRequestId, wakeReason: "issue_commented", capture: value });
+    expect(check(capture)).toBe(capture);
+    const missingOrigins = structuredClone(capture); Reflect.deleteProperty(missingOrigins.acceptedPlanReview!, "originCommentIds");
+    expect(check(missingOrigins)).toBeNull();
+    const missingObjective = structuredClone(capture); Reflect.deleteProperty(missingObjective.acceptedPlanReview!, "taskObjective");
+    expect(check(missingObjective)).toBeNull();
+    const changedOrigin = structuredClone(capture); changedOrigin.acceptedPlanReview!.originCommentIds = [];
+    expect(check(changedOrigin)).toBeNull();
+  });
+
   it("requires a nonempty Task root and exact company, renderer identity and candidate input binding", () => {
     expect(input()?.inputs).toEqual([{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }]);
     expect(input({ references: [] })).toBeNull();

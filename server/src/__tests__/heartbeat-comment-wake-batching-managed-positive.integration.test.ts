@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, agentWakeupRequests, createDb, heartbeatRuns, issueComments, issues } from "@paperclipai/db";
+import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { issueService } from "../services/issues.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { withManagedNativeHeartbeatFixture } from "./helpers/managed-native-heartbeat-fixture.js";
@@ -97,6 +99,7 @@ describe("heartbeat comment wake batching", () => {
     let providerEntered = false;
     let releaseProvider!: () => void;
     const providerGate = new Promise<void>(resolve => { releaseProvider = resolve; });
+    let authenticatedRequests = 0;
     let firstProviderResponse = true;
     let providerRunId = "";
     let taskId = "";
@@ -107,8 +110,13 @@ describe("heartbeat comment wake batching", () => {
     try {
       await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
         providerReply: ({ body, callIndex, execution }) => realTaskCompletion(body, callIndex, execution, "empty-deferred"),
+        beforeManagedModelRequest: async ({ runId }) => {
+          if (firstRunId && runId !== firstRunId) throw new Error("empty_deferred_unexpected_second_run");
+          authenticatedRequests++;
+          if (authenticatedRequests === 2) { providerEntered = true; await providerGate; }
+        },
         beforeProviderResponse: async ({ run }) => {
-          if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; providerEntered = true; await providerGate; }
+          if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; }
           if (firstRunId && run.id !== firstRunId) throw new Error("empty_deferred_unexpected_second_run");
         },
         driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, factsForRun }) => {
@@ -204,8 +212,26 @@ describe("heartbeat comment wake batching", () => {
             await injectSelfComment!();
           }
         },
-        beforeProviderResponse: async ({ run }) => {
-          if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; providerEntered = true; }
+        beforeProviderResponse: async ({ run, sourceReceipt }) => {
+          if (firstProviderResponse) {
+            firstProviderResponse = false; providerRunId = run.id;
+            const [admittedWake] = await db.select().from(agentWakeupRequests).where(and(
+              eq(agentWakeupRequests.companyId, run.companyId), eq(agentWakeupRequests.agentId, run.agentId),
+              eq(agentWakeupRequests.id, run.wakeupRequestId!), eq(agentWakeupRequests.runId, run.id)));
+            expect(admittedWake).toMatchObject({ reason: "issue_assigned", source: "assignment", triggerDetail: "system",
+              requestedByActorType: "system", requestedByActorId: null, runId: run.id });
+            expect(run.contextSnapshot).toMatchObject({ issueId: run.nativeIssueId, taskId: run.nativeIssueId,
+              wakeReason: "issue_assigned" });
+            const wakePayload = run.contextSnapshot?.paperclipWake;
+            expect(wakePayload).toMatchObject({ reason: "issue_assigned", issue: { id: run.nativeIssueId } });
+            const receipt = nativeRunInputSourceReceiptSchema.parse(sourceReceipt);
+            expect(receipt.binding).toMatchObject({ companyId: run.companyId, agentId: run.agentId,
+              runId: run.id, issueId: run.nativeIssueId });
+            expect(receipt.bootstrap.inputs.filter(source => source.kind === "native_task_wake"))
+              .toEqual([expect.objectContaining({ runId: run.id, issueId: run.nativeIssueId,
+                contentHash: nativeSha256(wakePayload) })]);
+            providerEntered = true;
+          }
           if (firstRunId && run.id !== firstRunId) throw new Error("self_comment_unexpected_second_run");
         },
         driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, factsForRun }) => {
@@ -264,7 +290,16 @@ describe("heartbeat comment wake batching", () => {
           expect(runs[0]).toMatchObject({ id: firstRunId, status: "succeeded", runtimeMode: "native",
             invocationSource: "assignment", triggerDetail: "system", nativeIssueId: task.id,
             responsibleUserId: actor.userId, nativeProcessCleanupPending: false,
-            contextSnapshot: expect.objectContaining({ issueId: task.id, taskId: task.id, wakeReason: "issue_assigned" }) });
+            contextSnapshot: expect.objectContaining({ issueId: task.id, taskId: task.id }) });
+          // Status-decision wake coalescence updates current control metadata, not the admitted assignment above.
+          const statusWakes = requests.filter(request => request.runId === firstRunId &&
+            request.status === "coalesced" && request.reason === "issue_status_changed");
+          expect(statusWakes.length).toBeGreaterThan(0);
+          expect(statusWakes.every(request => request.source === "automation" &&
+            request.requestedByActorType === "system" && request.requestedByActorId === "native-status-committer" &&
+            typeof request.payload?.nativeDecisionId === "string")).toBe(true);
+          expect(runs[0]?.contextSnapshot).toMatchObject({ source: "native_status_decision",
+            statusDecisionSource: "native_status_decision", wakeReason: "issue_status_changed" });
           expect((await factsForRun(firstRunId)).providerCallCount).toBeGreaterThan(0);
           const [issueAfterPromotion] = await db.select({ status: issues.status, completedAt: issues.completedAt })
             .from(issues).where(eq(issues.id, task.id));
@@ -279,6 +314,7 @@ describe("heartbeat comment wake batching", () => {
     let providerEntered = false;
     let releaseProvider!: () => void;
     const providerGate = new Promise<void>(resolve => { releaseProvider = resolve; });
+    let authenticatedRequests = 0;
     let firstProviderResponse = true;
     let providerRunId = "";
     let firstRunId = "";
@@ -288,8 +324,13 @@ describe("heartbeat comment wake batching", () => {
     try {
       await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
         providerReply: ({ body, callIndex, execution }) => realTaskCompletion(body, callIndex, execution, "deleted-before-promotion"),
+        beforeManagedModelRequest: async ({ runId }) => {
+          if (firstRunId && runId !== firstRunId) throw new Error("deleted_comment_unexpected_second_run");
+          authenticatedRequests++;
+          if (authenticatedRequests === 2) { providerEntered = true; await providerGate; }
+        },
         beforeProviderResponse: async ({ run }) => {
-          if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; providerEntered = true; await providerGate; }
+          if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; }
           if (firstRunId && run.id !== firstRunId) throw new Error("deleted_comment_unexpected_second_run");
         },
         driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, factsForRun }) => {

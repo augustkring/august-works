@@ -18,6 +18,7 @@ import { managedNativeProjectWorkspaceFixture } from "../../__tests__/helpers/ma
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
 import { memoryService, type MemoryMutationActor } from "../memory/memory-service.js";
 import { issueService } from "../issues.js";
+import { verificationService } from "../supervision/verification-service.js";
 import { orchestrationService } from "../orchestration/orchestration-service.js";
 import { actorMiddleware } from "../../middleware/auth.js";
 import type { BetterAuthSessionResult } from "../../auth/better-auth.js";
@@ -352,10 +353,15 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         const { task, plan, wake, run } = await startTask({ actor, companyId, agentId, heartbeat }, {
           title: "Managed source Memory and Context outputs", description: "Read current authorized Task and Context sources.",
           objective: "Retain two source-bound documents and two Human-reviewed Memory outputs",
-          requiredOutputs: [{ kind: "task_document", key: "managed-source-b" }],
+          requiredOutputs: [{ kind: "task_document", key: "managed-source-a" },
+            { kind: "task_document", key: "managed-source-b" }],
         });
         expect(run).toMatchObject({ id: wake.id, status: "succeeded", runtimeMode: "native", nativeIssueId: task.id,
           responsibleUserId: actor.userId });
+        const packet = await verificationService(db).currentPacket(actor, companyId, plan.id);
+        expect(packet.deterministicFailures).not.toContain("output_missing:managed-source-a");
+        expect(packet.deterministicFailures).not.toContain("output_missing:managed-source-b");
+        expect(packet.evidence.filter(item => item.type === "task_document")).toHaveLength(2);
         const [row] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
           .from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id));
         const profile = row?.runnerProfileJson && typeof row.runnerProfileJson === "object" ? row.runnerProfileJson as Record<string, unknown> : {};

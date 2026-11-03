@@ -10,7 +10,7 @@ import { execFile, execFileSync } from "node:child_process";
 import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
-  heartbeatRuns, issueComments, issueThreadInteractions, issues,
+  heartbeatRuns, issueComments, issueThreadInteractions, issues, nativeRunFinalizations, workspaceOperations,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -37,6 +37,26 @@ import type { AuthorizationActor } from "../../services/authorization.js";
 
 const OPENCODE_SHA256 = "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
 const sourceSha = "a".repeat(40);
+
+function frameWorkspaceFinalizeFailureFacets(value: unknown) {
+  const firstLine = typeof value === "string" ? value.slice(0, 4096).split(/\r?\n/, 1)[0]! : "";
+  const exactCodes = ["runner_remote_checkpoint_failed", "runner_remote_checkpoint_snapshot_failed",
+    "workspace_sync_out_unrecoverable",
+    "WORKSPACE_RESTORE_UNSAFE_ARCHIVE", "ERR_WORKSPACE_RESTORE_LOCK_TIMEOUT"] as const;
+  const ownerCode = exactCodes.find(code => firstLine === code) ??
+    (firstLine.startsWith("runner_remote_checkpoint_incomplete: exact suspended harness state unavailable (") ? "runner_remote_checkpoint_incomplete" :
+      firstLine.startsWith("Remote file read was truncated for ") ? "remote_file_truncated" :
+      firstLine.startsWith("Could not determine remote file size for ") ? "remote_file_size_unknown" :
+      firstLine.startsWith("Project repository escaped its workspace") ? "project_workspace_escape" :
+      firstLine.startsWith("Timed out waiting for workspace restore lock at ") ? "restore_lock_timeout" :
+      firstLine.startsWith("Daytona syncOut refusing ") ? "restore_archive_refused" : "other");
+  const errno = /^(?:Error: )?(EACCES|EPERM|ENOENT|ENOSPC|EIO|ETIMEDOUT)(?=[:\s]|$)/.exec(firstLine)?.[1] ?? null;
+  const rawExit = / failed with exit code (-?\d+|null)(?=[:\s]|$)/.exec(firstLine)?.[1];
+  const exitNumber = rawExit !== undefined && rawExit !== "null" ? Number(rawExit) : null;
+  const exitCode = exitNumber !== null && Number.isSafeInteger(exitNumber) && exitNumber >= -255 && exitNumber <= 255 ? exitNumber : null;
+  return { messagePresent: typeof value === "string" && value.length > 0, ownerCode, errno, exitCode,
+    timeout: ownerCode === "restore_lock_timeout" || errno === "ETIMEDOUT" };
+}
 
 export async function makeConversationFixtureTreeWritable(path: string): Promise<void> {
   const metadata = await lstat(path).catch(() => null);
@@ -675,6 +695,28 @@ export async function runManagedNativeConversationFrame(input: {
       sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${conversationIssueId}`,
       sql`${heartbeatRuns.contextSnapshot}->>'wakeCommentId' = ${firstCommentId}`,
     )).orderBy(desc(heartbeatRuns.startedAt)).limit(1);
+    if (finalRun && finalRun.status !== "succeeded") {
+      try {
+        const [coordinator] = await db.select({ phase: nativeRunFinalizations.phase,
+          attempt: nativeRunFinalizations.attempt, failureCode: nativeRunFinalizations.failureCode })
+          .from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, companyId),
+            eq(nativeRunFinalizations.runId, finalRun.id))).limit(1);
+        const operations = await db.select({ status: workspaceOperations.status, metadata: workspaceOperations.metadata })
+          .from(workspaceOperations).where(and(eq(workspaceOperations.companyId, companyId),
+            eq(workspaceOperations.heartbeatRunId, finalRun.id), eq(workspaceOperations.phase, "workspace_finalize")))
+          .orderBy(desc(workspaceOperations.createdAt)).limit(4);
+        console.info("conversation_frame_workspace_finalize_failure", JSON.stringify({
+          coordinatorPresent: !!coordinator,
+          phase: ["pending", "proposed", "committed", "retryable_failure", "terminal_failure"].find(value => value === coordinator?.phase) ?? "other",
+          attempt: Number.isSafeInteger(coordinator?.attempt) && coordinator!.attempt >= 0 ? coordinator!.attempt : null,
+          failureCode: ["native_workspace_sync_out_failed", "native_workspace_sync_out_unrecoverable", "native_finalization_invalid"].find(value => value === coordinator?.failureCode) ?? "other",
+          operations: operations.map(operation => ({
+            status: ["succeeded", "failed", "running"].find(value => value === operation.status) ?? "other",
+            ...frameWorkspaceFinalizeFailureFacets(operation.metadata?.errorMessage),
+          })),
+        }));
+      } catch { /* Failure diagnostics must not replace the original Run outcome. */ }
+    }
     const [manifest] = finalRun ? await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, finalRun.id)).limit(1) : [];
     const [reservation] = finalRun ? await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.conversationRunId, finalRun.id)).limit(1) : [];
     const [plan] = finalRun ? await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.issueId, conversationIssueId)).limit(1) : [];

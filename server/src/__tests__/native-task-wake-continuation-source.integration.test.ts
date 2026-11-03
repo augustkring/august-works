@@ -9,12 +9,14 @@ import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixt
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
 import { buildExecutionContinuation, type NativeTaskContinuationCapture } from "../services/execution-continuation.js";
+import { nativeRuntimeContextFixture } from "../services/native-runtime/runtime-context.test-fixture.js";
+import { buildNativeExecutionInput } from "../services/native-runtime/native-execution-input.js";
 import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, exactNativeTaskContinuation } from "../services/native-runtime/native-execution-input.js";
+import { mergeCoalescedContextSnapshot } from "../services/heartbeat.js";
 import { assertNativePayloadSourceSetCurrent } from "../services/native-direct-input.js";
 import { captureNativeGovernedPendingInteractions, materializeNativeInteractionResponses,
   type NativeGovernedInteractionContinuationCapture } from "../services/native-runtime/native-interaction-bridge.js";
 import { commitToolActionReview } from "../services/tool-action-review.js";
-import { nativeSha256 } from "../services/native-runtime/canonical.js";
 
 // Source-owner component fixtures only. The running row and structural input
 // receipt represent a reader scope; they are NOT SDK/provider/Run admission or
@@ -28,7 +30,39 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(async () => { await database?.cleanup(); });
 
-async function fixture(otherHumanHistory = false) {
+async function jsonbSha256(value: unknown): Promise<string> {
+  const [row] = await db.execute<{ digest: string }>(sql`select encode(sha256(convert_to((${JSON.stringify(value)}::jsonb)::text,'UTF8')),'hex') as digest`);
+  if (!row) throw new Error("component_jsonb_digest_missing");
+  return row.digest;
+}
+
+function buildSourceReaderExecutionInput(input: Pick<Parameters<typeof buildNativeExecutionInput>[0],
+  "companyId" | "runId" | "agentId" | "issue" | "taskPrompt" | "wakePayload" | "interactionResponses">) {
+  return buildNativeExecutionInput({ ...input,
+    workspace: { id: randomUUID(), cwd: "/workspace", repoUrl: null, repoRef: null, branchName: null },
+    normalizedSessionId: randomUUID(), provider: "codex",
+    completionContract: { id: randomUUID(), sha256: `sha256:${"a".repeat(64)}`, schemaVersion: "paperclip.run-result.v1",
+      contract: { revision: "1", objective: "Produce a bounded task result", criteria: [{ id: "result", requirement: "Return a task result" }] } },
+    runtimeContext: nativeRuntimeContextFixture() });
+}
+
+async function writeFirstReceipt(input: {
+  companyId: string; issueId: string; agentId: string; runId: string; responsibleUserId: string;
+  sourceSet: Exclude<ReturnType<typeof buildNativeBootstrapSourceSet>, null>;
+  executionInput: ReturnType<typeof buildNativeExecutionInput>; contextSnapshot: Record<string, unknown>;
+}) {
+  const receiptBody = { version: 1 as const, binding: { companyId: input.companyId, issueId: input.issueId,
+    agentId: input.agentId, runId: input.runId, responsibleUserId: input.responsibleUserId },
+    bootstrap: { executionInputDigest: await jsonbSha256(input.executionInput), ...input.sourceSet },
+    dispatches: [], additionalInputs: [] };
+  const receipt = nativeRunInputSourceReceiptSchema.parse({ ...receiptBody, digest: await jsonbSha256(receiptBody) });
+  await db.update(heartbeatRuns).set({ contextSnapshot: input.contextSnapshot,
+    runnerProfileJson: { nativeExecutionInput: input.executionInput, nativeInputSourceReceipt: receipt } })
+    .where(eq(heartbeatRuns.id, input.runId));
+  return receipt;
+}
+
+async function fixture(otherHumanHistory = false, deferFirstReceipt = false) {
   const f = await seedV5Presences(db), actor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
   const tasks = issueService(db);
   const task = await tasks.create(f.home, { title: "Source-owner continuation Task", description: "Original Task context",
@@ -48,7 +82,7 @@ async function fixture(otherHumanHistory = false) {
   const context = { issueId: task.id, wakeReason: "issue_commented", commentId: comment.id };
   const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, issueId: task.id,
     nativeIssueId: task.id, runtimeMode: "native", status: "running", responsibleUserId: f.userId,
-    wakeupRequestId: wake.id, contextSnapshot: context }).returning();
+    wakeupRequestId: wake.id, nativeInputSourceProtocolVersion: 1, contextSnapshot: context }).returning();
   if (!run) throw new Error("component_reader_missing");
   await db.update(agentWakeupRequests).set({ runId: run.id }).where(eq(agentWakeupRequests.id, wake.id));
   let selected: NativeTaskContinuationCapture | null = null;
@@ -86,17 +120,20 @@ async function fixture(otherHumanHistory = false) {
     taskWakeCommentCandidates: capture.commentSources.map(value => ({ kind: "comment", id: value.input.commentId,
       input: value.input, payloadSourceSnapshot: value.payloadSourceSnapshot })), additionalInputs: [wakeSource] });
   expect(sourceSet).toBeTruthy(); if (!sourceSet) throw new Error("component_source_set_missing");
-  const receiptBody = { version: 1 as const, binding: { companyId: f.home, issueId: task.id, agentId: f.presence.id,
-    runId: run.id, responsibleUserId: f.userId }, bootstrap: { executionInputDigest: nativeSha256({ componentReader: run.id }), ...sourceSet },
-    dispatches: [], additionalInputs: [] };
-  const receipt = nativeRunInputSourceReceiptSchema.parse({ ...receiptBody, digest: nativeSha256(receiptBody) });
-  await db.update(heartbeatRuns).set({ contextSnapshot: { ...context, executionContinuation: envelope, paperclipWake: payload },
-    runnerProfileJson: { nativeInputSourceReceipt: receipt } }).where(eq(heartbeatRuns.id, run.id));
+  // The DB receipt trigger requires the actual typed native execution input.
+  // This component-only reader fixture does not create a dispatch intent or
+  // claim an accepted model/worker result.
+  const executionInput = deferFirstReceipt ? null : buildSourceReaderExecutionInput({ companyId: f.home, runId: run.id, agentId: f.presence.id,
+    issue: { id: task.id, identifier: task.identifier, title: task.title, description: task.description, workMode: task.workMode },
+    taskPrompt: task.title, wakePayload: payload });
+  const receipt = executionInput ? await writeFirstReceipt({ companyId: f.home, issueId: task.id,
+    agentId: f.presence.id, runId: run.id, responsibleUserId: f.userId, sourceSet, executionInput,
+    contextSnapshot: { ...context, executionContinuation: envelope, paperclipWake: payload } }) : null;
   const reader = { type: "agent" as const, source: "agent_jwt" as const, companyId: f.home,
     agentId: f.presence.id, runId: run.id, onBehalfOfUserId: f.userId };
   const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.home, issueId: task.id, runId: run.id,
     actor: reader, ...sourceSet });
-  return { f, task, comment, run, wake, envelope, capture, validate, sourceSet, reader, payload };
+  return { f, task, comment, run, wake, envelope, capture, validate, sourceSet, reader, payload, executionInput, receipt };
 }
 
 it("captures a real initial Human comment and independently revalidates its selected source rendition", async () => {
@@ -106,6 +143,43 @@ it("captures a real initial Human comment and independently revalidates its sele
   expect(f.capture.envelope.objective).toBe(f.comment.body);
   await expect(f.validate()).resolves.toBeUndefined();
 }, 30_000);
+
+
+it("revalidates the original admitted wake after a status-control wake coalesces into current Run context", async () => {
+  const f = await fixture(); await f.validate();
+  const [beforeRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+  const [beforeWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, f.wake.id));
+  if (!beforeRun || !beforeWake) throw new Error("component_original_wake_missing");
+  const context = mergeCoalescedContextSnapshot(beforeRun.contextSnapshot, { issueId: f.task.id,
+    taskId: f.task.id, source: "native_status_decision", statusDecisionSource: "native_status_decision",
+    wakeReason: "issue_status_changed" });
+  await db.update(heartbeatRuns).set({ contextSnapshot: context }).where(eq(heartbeatRuns.id, f.run.id));
+  const [current] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+  expect(current?.contextSnapshot).toMatchObject({ wakeReason: "issue_status_changed" });
+  expect(current?.contextSnapshot?.paperclipWake).toEqual(beforeRun.contextSnapshot?.paperclipWake);
+  expect(current?.runnerProfileJson).toEqual(beforeRun.runnerProfileJson);
+  expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, f.wake.id))).toEqual([beforeWake]);
+  await expect(f.validate()).resolves.toBeUndefined();
+}, 30_000);
+
+it.each(["reason", "missing_run_binding", "foreign_company", "foreign_agent", "foreign_run"] as const)(
+  "rejects original admitted wake %s changes despite unchanged sealed payload and input receipt", async mutation => {
+    const f = await fixture(); await f.validate();
+    const [before] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+    if (mutation === "reason") await db.update(agentWakeupRequests).set({ reason: "issue_status_changed" })
+      .where(eq(agentWakeupRequests.id, f.wake.id));
+    else if (mutation === "missing_run_binding") await db.update(agentWakeupRequests).set({ runId: null })
+      .where(eq(agentWakeupRequests.id, f.wake.id));
+    else if (mutation === "foreign_company") await db.update(agentWakeupRequests).set({ companyId: f.f.guest })
+      .where(eq(agentWakeupRequests.id, f.wake.id));
+    else if (mutation === "foreign_agent") await db.update(agentWakeupRequests).set({ agentId: f.f.guestPresence.id })
+      .where(eq(agentWakeupRequests.id, f.wake.id));
+    else await db.update(agentWakeupRequests).set({ runId: randomUUID() }).where(eq(agentWakeupRequests.id, f.wake.id));
+    const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+    expect(after?.contextSnapshot).toEqual(before?.contextSnapshot);
+    expect(after?.runnerProfileJson).toEqual(before?.runnerProfileJson);
+    await expect(f.validate()).rejects.toBeDefined();
+  }, 30_000);
 
 it("retains another legitimate Human's readable history without promoting it to this trigger", async () => {
   const f = await fixture(true);
@@ -135,8 +209,8 @@ it.each(["edit", "delete", "revoke", "forged_wake", "cross_company_wake"] as con
 
 // Explicit persisted PENDING domain inputs, never an accepted model/worker/tool
 // result. The real source reader and Human review owner consume these rows.
-async function pendingFixture(base?: Awaited<ReturnType<typeof fixture>>) {
-  const f = base ?? await fixture();
+async function pendingFixture(base?: Awaited<ReturnType<typeof fixture>>, deferFirstReceipt = false) {
+  const f = base ?? await fixture(false, deferFirstReceipt);
   const [producer] = await db.insert(heartbeatRuns).values({ companyId: f.f.home, agentId: f.f.presence.id,
     issueId: f.task.id, nativeIssueId: f.task.id, runtimeMode: "native", status: "running", responsibleUserId: f.f.userId,
     contextSnapshot: { issueId: f.task.id } }).returning();
@@ -203,20 +277,22 @@ it("captures distinct Native and continuation renditions only after the actual H
 }, 30_000);
 
 it("independently rejects a changed governed rendition after the actual Human decline", async () => {
-  const f = await pendingFixture();
+  const f = await pendingFixture(undefined, true);
   await commitToolActionReview(db, { companyId: f.f.home, issueId: f.task.id, interactionId: f.interactionId,
     actionRequestId: f.requestId, decision: "rejected", actor: { userId: f.f.userId } });
   const selected: NativeGovernedInteractionContinuationCapture[] = [];
-  await materializeNativeInteractionResponses({ db, companyId: f.f.home, issueId: f.task.id,
+  const responses = await materializeNativeInteractionResponses({ db, companyId: f.f.home, issueId: f.task.id,
     runId: f.run.id, agentId: f.f.presence.id, interactionIds: [f.interactionId], onContinuationSourceCapture: value => { selected.push(value); } });
   if (selected.length !== 1) throw new Error("component_governed_source_missing");
   const sourceSet = { policy: f.sourceSet.policy,
     inputs: [...f.sourceSet.inputs, selected[0]!.nativeSource, selected[0]!.continuationSource] };
-  const receiptBody = { version: 1 as const, binding: { companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id,
-    runId: f.run.id, responsibleUserId: f.f.userId }, bootstrap: { executionInputDigest: nativeSha256({ componentReader: f.run.id }), ...sourceSet },
-    dispatches: [], additionalInputs: [] };
-  await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeInputSourceReceipt:
-    nativeRunInputSourceReceiptSchema.parse({ ...receiptBody, digest: nativeSha256(receiptBody) }) } }).where(eq(heartbeatRuns.id, f.run.id));
+  const executionInput = buildSourceReaderExecutionInput({ companyId: f.f.home, runId: f.run.id, agentId: f.f.presence.id,
+    issue: { id: f.task.id, identifier: f.task.identifier, title: f.task.title, description: f.task.description, workMode: f.task.workMode },
+    taskPrompt: f.task.title, wakePayload: f.payload, interactionResponses: responses });
+  await writeFirstReceipt({ companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id, runId: f.run.id,
+    responsibleUserId: f.f.userId, sourceSet, executionInput,
+    contextSnapshot: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment.id,
+      executionContinuation: f.envelope, paperclipWake: f.payload } });
   const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.f.home, issueId: f.task.id,
     runId: f.run.id, actor: f.reader, ...sourceSet });
   await expect(validate()).resolves.toBeUndefined();
@@ -225,7 +301,7 @@ it("independently rejects a changed governed rendition after the actual Human de
 }, 30_000);
 
 it("assembles a real pending-note continuation and revalidates its unresolved owner through the complete source reader", async () => {
-  const f = await pendingFixture();
+  const f = await pendingFixture(undefined, true);
   let captured: NativeTaskContinuationCapture | null = null;
   const envelope = await buildExecutionContinuation({ db, companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id,
     runId: f.run.id, context: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment.id },
@@ -248,11 +324,13 @@ it("assembles a real pending-note continuation and revalidates its unresolved ow
   if (!wake || !capture.pendingInteractions?.length) throw new Error("component_pending_wake_not_closed");
   const sourceSet = { policy: f.sourceSet.policy,
     inputs: [...f.sourceSet.inputs.filter(source => source.kind !== "native_task_wake"), ...capture.pendingInteractions.map(value => value.source), wake] };
-  const receiptBody = { version: 1 as const, binding: { companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id,
-    runId: f.run.id, responsibleUserId: f.f.userId }, bootstrap: { executionInputDigest: nativeSha256({ componentReader: f.run.id }), ...sourceSet },
-    dispatches: [], additionalInputs: [] };
-  await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: f.task.id, wakeReason: "issue_commented", executionContinuation: envelope, paperclipWake: payload },
-    runnerProfileJson: { nativeInputSourceReceipt: nativeRunInputSourceReceiptSchema.parse({ ...receiptBody, digest: nativeSha256(receiptBody) }) } }).where(eq(heartbeatRuns.id, f.run.id));
+  const executionInput = buildSourceReaderExecutionInput({ companyId: f.f.home, runId: f.run.id, agentId: f.f.presence.id,
+    issue: { id: f.task.id, identifier: f.task.identifier, title: f.task.title, description: f.task.description, workMode: f.task.workMode },
+    taskPrompt: f.task.title, wakePayload: payload });
+  await writeFirstReceipt({ companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id, runId: f.run.id,
+    responsibleUserId: f.f.userId, sourceSet, executionInput,
+    contextSnapshot: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment.id,
+      executionContinuation: envelope, paperclipWake: payload } });
   const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.f.home, issueId: f.task.id,
     runId: f.run.id, actor: f.reader, ...sourceSet });
   await expect(validate()).resolves.toBeUndefined();

@@ -1,3 +1,4 @@
+import { readNativeWorkspaceCoordination } from "./native-runtime/native-workspace-coordination-source.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -1740,10 +1741,12 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   const continuation = wakeRecord?.executionContinuation;
   const continuationMessages = nativeSourceRecord(continuation).messages;
   const hasBoundedContinuation = Array.isArray(continuationMessages) && continuationMessages.length > 0 && continuationMessages.length <= 256;
-  const [admittedWake] = hasBoundedContinuation && run?.wakeupRequestId ? await db.select().from(agentWakeupRequests).where(and(
+  const [admittedWake] = run?.wakeupRequestId ? await db.select().from(agentWakeupRequests).where(and(
     eq(agentWakeupRequests.companyId, input.companyId), eq(agentWakeupRequests.id, run.wakeupRequestId),
     eq(agentWakeupRequests.agentId, run.agentId), eq(agentWakeupRequests.runId, input.runId),
   )).limit(1) : [];
+  // Control wakes can coalesce into Run context; original wake authority is the exact admitted queue row.
+  if (!admittedWake) throw forbidden("The original Native task wake is unavailable");
   const governedInteractions: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
   const outcomes = nativeSourceRecord(continuation).interactionOutcomes;
   if (run && admittedWake && Array.isArray(outcomes) && outcomes.length > 0 && outcomes.length <= 256 &&
@@ -1858,12 +1861,26 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     if (selected && input.inputs.some(source => isDeepStrictEqual(source, selected.source))) delivery = selected;
   }
   const admittedInteraction = nativeTaskWakeInteraction(admittedWake?.payload);
+  let acceptedPlanReview: NativeTaskContinuationCapture["acceptedPlanReview"];
+  const continuationEnvelope = nativeSourceRecord(continuation);
+  if (run && admittedWake && run.responsibleUserId && wakeTask && Array.isArray(continuationEnvelope.interactionOutcomes) &&
+      continuationEnvelope.interactionOutcomes.length > 0 && wake) {
+    const { captureNativeAcceptedPlanReview } = await import("./native-runtime/accepted-plan-review-source.js");
+    acceptedPlanReview = await captureNativeAcceptedPlanReview({ db: db as Db, companyId: input.companyId,
+      issueId: input.issueId, agentId: run.agentId, runId: input.runId, responsibleUserId: run.responsibleUserId,
+      envelope: continuation as NativeTaskContinuationCapture["envelope"], wakePayload: wake, context,
+      workMode: wakeTask.workMode, interactionSources: input.inputs.filter((source): source is Extract<NativePayloadSourceInput,{kind:"interaction"}> =>
+        source.kind === "interaction" && source.issueId === input.issueId),
+      documentSources: input.inputs.filter((source): source is Extract<NativePayloadSourceInput,{kind:"document_revision"}> =>
+        source.kind === "document_revision" && source.issueId === input.issueId) });
+  }
   const continuationCapture: NativeTaskContinuationCapture | null = run && admittedWake && run.responsibleUserId &&
     Array.isArray(continuationMessages) && hasBoundedContinuation && isDeepStrictEqual(context?.executionContinuation, continuation) ? {
       companyId: input.companyId, issueId: input.issueId, agentId: run.agentId, runId: input.runId,
       responsibleUserId: run.responsibleUserId, wakeupRequestId: admittedWake.id,
       envelope: continuation as NativeTaskContinuationCapture["envelope"],
       ...(governedInteractions.length ? { governedInteractions } : {}),
+      ...(acceptedPlanReview ? { acceptedPlanReview } : {}),
       ...(delivery ? { delivery } : {}),
       ...(pendingInteractions?.length ? { pendingInteractions } : {}),
       ...(summary ? { summary } : {}),
@@ -1900,23 +1917,29 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     await assertNativeWorkspaceMetadataSourcesCurrent(db, input.companyId, [metadata[0]!], scope);
     workspaceCapture = { execution, source: metadata[0]! };
   }
+  const originalCoordinationCapture = nativeSourceRecord(run?.runnerProfileJson).nativeWorkspaceCoordinationCapture;
+  if (originalCoordinationCapture !== undefined && !run?.agentId)
+    throw forbidden("Native workspace coordination consumer unavailable");
+  const workspaceCoordinationCapture = originalCoordinationCapture !== undefined && run?.agentId
+    ? await readNativeWorkspaceCoordination(db, { companyId: input.companyId, runId: input.runId,
+      agentId: run.agentId, issueId: input.issueId, capture: originalCoordinationCapture, reader: input.actor }) : null;
   const current = run && run.nativeIssueId === input.issueId && taskSources.length === 1 && taskSource && wakeTask &&
     taskSource.sourceVersion === input.source.sourceVersion
     ? captureNativeTaskWakeSource({ companyId: input.companyId, runId: input.runId, issueId: input.issueId,
       sourceVersion: taskSource.sourceVersion, agentId: run.agentId, responsibleUserId: run.responsibleUserId,
-      workspaceCapture,
+      workspaceCapture, workspaceCoordinationCapture,
       wakeupRequestId: run.wakeupRequestId, continuationCapture,
-      historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined, persistedWakeReason: typeof context?.wakeReason === "string" ? context.wakeReason : null,
+      historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined, persistedWakeReason: admittedWake.reason,
       task: wakeTask, checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
       commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
-        value.kind === "comment"), payload: wake }) ?? await captureNativeExecutionStageTaskWakeSource(db, {
+        value.kind === "comment"), payload: wake }) ?? (workspaceCoordinationCapture ? null : await captureNativeExecutionStageTaskWakeSource(db, {
           companyId: input.companyId, runId: input.runId, issueId: input.issueId, sourceVersion: taskSource.sourceVersion,
           task: wakeTask, runContext: context, payload: wake, workspaceCapture,
           checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
           commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
             value.kind === "comment"), continuationCapture,
           historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined,
-        }) : null;
+        })) : null;
   if (!current || !isDeepStrictEqual(current, input.source) ||
     input.source.runId !== input.runId || input.source.issueId !== input.issueId ||
     input.bootstrapInputs.filter(value => value.kind === "native_task_wake" && value.runId === input.runId &&
@@ -5311,6 +5334,14 @@ export function directHumanPayloadSnapshotSql(kind: "issue" | "project" | "comme
   )`;
 }
 
+async function nativePayloadSourceDigest(db: Db | Transaction, snapshot: unknown) {
+  const [row] = await db.execute<{ digest: string }>(sql`select encode(sha256(convert_to(${JSON.stringify(snapshot)}::jsonb::text,'UTF8')),'hex') as digest`);
+  return row?.digest ?? "";
+}
+async function nativePayloadSnapshotDigest(db: Db | Transaction, snapshot: Record<string, unknown>) {
+  return nativePayloadSourceDigest(db, snapshot);
+}
+
 /** Literal Human text contains no copied parent/Project bytes. Only its original
  * capture audit admits the empty byte-input set with these exact privacy edges. */
 async function readAuditedManualRelatedOwner(db: Db | Transaction, companyId: string, issueId: string,
@@ -5324,6 +5355,61 @@ async function readAuditedManualRelatedOwner(db: Db | Transaction, companyId: st
       owner.conversationAgentId || snapshot.inputs.length !== 0 || !isDeepStrictEqual(snapshot.policy, {
         issueIds: owner.parentId ? [owner.parentId] : [], projectIds: owner.projectId ? [owner.projectId] : [], runIds: [], memoryIds: [], foundationRevisionIds: [],
       })) return false;
+  const transforms = snapshot.transforms ?? [];
+  const originalProjectWorkspaceId = transforms.length ? transforms[0]!.beforeProjectWorkspaceId : owner.projectWorkspaceId;
+  let originalContentHash = snapshot.owner.contentHash;
+  let originalDigest = snapshot.digest;
+  let priorProjectWorkspaceId = originalProjectWorkspaceId;
+  if (transforms.length) {
+    originalContentHash = transforms[0]!.previousOwnerContentHash;
+    const originalSnapshot = {
+      version: 1 as const,
+      owner: { ...snapshot.owner, contentHash: originalContentHash },
+      policy: snapshot.policy,
+      inputs: snapshot.inputs,
+    };
+    originalDigest = await nativePayloadSnapshotDigest(db, originalSnapshot);
+    let prefix: typeof transforms = [];
+    let priorContentHash = originalContentHash;
+    let priorDigest = originalDigest;
+    for (const transform of transforms) {
+      if (transform.beforeProjectWorkspaceId !== priorProjectWorkspaceId ||
+          transform.previousOwnerContentHash !== priorContentHash ||
+          transform.previousSnapshotDigest !== priorDigest) return null;
+      const [transition] = await db.select({ id: activityLog.id, actorType: activityLog.actorType,
+        actorId: activityLog.actorId, agentId: activityLog.agentId, runId: activityLog.runId,
+        details: activityLog.details }).from(activityLog).where(and(
+        eq(activityLog.companyId, companyId), eq(activityLog.id, transform.activityId),
+        eq(activityLog.action, "issue.payload_source_workspace_bound"),
+        eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
+      )).limit(1);
+      const details = transition?.details as Record<string, unknown> | null;
+      if (!transition || transition.actorType !== "agent" || !transition.agentId ||
+          transition.actorId !== transition.agentId || transition.runId !== transform.runId ||
+          !details || details.kind !== transform.kind || details.transitionId !== transform.transitionId ||
+          details.runId !== transform.runId || details.workspaceId !== transform.workspaceId ||
+          details.workspaceTupleHash !== transform.workspaceTupleHash ||
+          details.beforeProjectWorkspaceId !== transform.beforeProjectWorkspaceId ||
+          details.afterProjectWorkspaceId !== transform.afterProjectWorkspaceId ||
+          details.previousSnapshotDigest !== transform.previousSnapshotDigest ||
+          details.previousOwnerContentHash !== transform.previousOwnerContentHash ||
+          details.nextOwnerContentHash !== transform.nextOwnerContentHash ||
+          details.beforePreference !== transform.beforePreference || details.beforeMode !== transform.beforeMode ||
+          details.beforeSettingsHash !== transform.beforeSettingsHash ||
+          details.afterPreference !== transform.afterPreference || details.afterMode !== transform.afterMode ||
+          details.afterSettingsHash !== transform.afterSettingsHash) return null;
+      prefix = [...prefix, transform];
+      priorProjectWorkspaceId = transform.afterProjectWorkspaceId;
+      priorContentHash = transform.nextOwnerContentHash;
+      priorDigest = await nativePayloadSourceDigest(db, {
+        ...originalSnapshot,
+        owner: { ...originalSnapshot.owner, contentHash: priorContentHash },
+        transforms: prefix,
+      });
+    }
+    if (snapshot.owner.contentHash !== priorContentHash || snapshot.digest !== priorDigest ||
+        owner.projectWorkspaceId !== priorProjectWorkspaceId) return null;
+  }
   const [audit] = await db.select({ id: activityLog.id }).from(activityLog).where(and(
     eq(activityLog.companyId, companyId), eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
     eq(activityLog.action, "issue.payload_source_captured"), eq(activityLog.actorType, "user"),
@@ -5334,10 +5420,10 @@ async function readAuditedManualRelatedOwner(db: Db | Transaction, companyId: st
     // Older default/implicit captures did not attest an original workspace
     // selector. New capture audits bind the resolved selector explicitly.
     sql`(not (${activityLog.details} ? 'projectWorkspaceId') or
-      (${activityLog.details}->>'projectWorkspaceId') is not distinct from ${owner.projectWorkspaceId}::text)`,
-    sql`${activityLog.details}->>'digest'=${snapshot.digest}`,
-    sql`${activityLog.details}->>'contentHash'=${snapshot.owner.contentHash}`)).limit(1);
-  return audit ? owner : null;
+      (${activityLog.details}->>'projectWorkspaceId') is not distinct from ${originalProjectWorkspaceId}::text)`,
+    sql`${activityLog.details}->>'digest'=${originalDigest}`,
+    sql`${activityLog.details}->>'contentHash'=${originalContentHash}`)).limit(1);
+  return audit ? { ...owner, projectWorkspaceId: originalProjectWorkspaceId } : null;
 }
 
 /** Original create owner only: revalidate selected privacy dependencies before

@@ -1875,8 +1875,14 @@ export function workerModelGateway(db: Db, options: Options) {
         throw forbidden("Draft credential grant is no longer current");
       const quote = quoteModelReservation({ tariff: p.tariff, sourceSha: options.sourceSha,
         inputTokensUpperBound: p.inputTokensUpperBound, maxOutputTokens });
-      return { profileId: p.id, model: p.tariff.model, maxOutputTokens,
+      const qualification = { profileId: p.id, model: p.tariff.model, maxOutputTokens,
         maximumEnvelopeBytes: p.maximumEnvelopeBytes, maximumMinor: quote.maximumMinor };
+      const providerKind = selected.provider === "aw_text_only"
+        ? "aw_text_only" as const
+        : selected.provider === "opencode"
+          ? "opencode" as const
+          : (() => { throw forbidden("The installed worker model transport is required"); })();
+      return { ...qualification, providerKind };
   }
   return {
     runtimeCandidates: agentRuntimeCandidateService(db, options),
@@ -1885,8 +1891,13 @@ export function workerModelGateway(db: Db, options: Options) {
     executeAuthoringTest: authoringTestRuntime(db, options, (companyId, agentId, profileId) => profile(companyId, agentId, profileId, undefined, "candidate_evaluation")).execute,
     /** Private pre-start qualification. Editable provider configuration is a
      * selector; only the installed operator profile supplies prices/authority. */
-    qualifyDraft: (tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) =>
-      qualifyWorkerTransport(tx, input, false),
+    qualifyDraft: async (tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) => {
+      const qualified = await qualifyWorkerTransport(tx, input, false);
+      // Preserve the original public/internal draft-quote result shape.
+      return { profileId: qualified.profileId, model: qualified.model,
+        maxOutputTokens: qualified.maxOutputTokens, maximumEnvelopeBytes: qualified.maximumEnvelopeBytes,
+        maximumMinor: qualified.maximumMinor };
+    },
     /** Existing capped Worker-plan admission, separate from draft conformance. */
     qualifyManagedWorker: (tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) =>
       qualifyWorkerTransport(tx, input, true),

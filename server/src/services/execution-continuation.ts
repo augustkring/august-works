@@ -45,6 +45,7 @@ export type NativeTaskContinuationCapture = {
       sourceTrust: import("@paperclipai/shared").SourceTrustMetadata | null; updatedAt: string } };
   pendingInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
   governedInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[];
+  acceptedPlanReview?: import("./native-runtime/accepted-plan-review-source.js").NativeAcceptedPlanReviewCapture;
   wake: { requestedByActorType: string | null; requestedByActorId: string | null; reason: string | null; originCommentIds: string[];
     interaction?: NonNullable<ReturnType<typeof nativeTaskWakeInteraction>> };
 };

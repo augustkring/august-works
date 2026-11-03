@@ -10,6 +10,7 @@ import type { ActivityPublication } from "../activity-log.js";
 import { logActivity } from "../v7-mutations.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
 import { qualifyNativeDraftWorker } from "./native-draft-runtime.js";
+import { nativeDraftToolActionBudgetFits } from "./native-draft-output-capability.js";
 
 type Plan = typeof orchestrationPlans.$inferSelect;
 /** Called under the plan lock. Terminal provider runs release slots, never certify work. */
@@ -51,7 +52,7 @@ async function admit(tx: Db, input: { companyId: string; issueId: string; actor:
   if (!task || !worker || ["done", "cancelled"].includes(task.status) || task.assigneeAgentId !== worker.agentId) throw forbidden("Worker no longer has the plan's canonical assignment");
   if (plan.budgets.maxModelCostMinor !== null) {
     const qualified = await qualifyNativeDraftWorker(rootDb!, tx, plan, worker, (plan.executionPrincipal as { type: "user"; userId: string }).userId);
-    if (plan.modelCostReserved + qualified.maximumMinor > plan.budgets.maxModelCostMinor || plan.toolActionsUsed + 2 > plan.budgets.maxToolActions)
+    if (plan.modelCostReserved + qualified.maximumMinor > plan.budgets.maxModelCostMinor || !nativeDraftToolActionBudgetFits(plan.toolActionsUsed, plan.budgets.maxToolActions, qualified.minimumToolActions))
       throw forbidden("The remaining budget cannot admit the declared draft");
   }
   await assertV7Authorization(tx, input.actor, input.companyId, "issue:mutate", { type: "issue", companyId: input.companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId, status: task.status });
