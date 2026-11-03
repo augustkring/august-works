@@ -1,3 +1,4 @@
+import type { NativeRenderedSourceReference } from "./native-execution-input.js";
 import * as cloudIdentity from "../cloud-runtime-identity.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
@@ -134,7 +135,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       const taskCapture = taskCaptureHolder.value;
       if (!task || !taskCapture?.payloadSourceSnapshot)
         throw new Error("dispatch_fixture_task_source_snapshot_unavailable");
-      const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+      const references: NativeRenderedSourceReference[] = [];
       const rendered = buildPaperclipTaskMarkdown({ issue: { id: fixture.issueId, identifier: task.identifier,
         title: task.title, description: task.description, workMode: task.workMode } },
       { onRenderedSource: source => references.push(source) });

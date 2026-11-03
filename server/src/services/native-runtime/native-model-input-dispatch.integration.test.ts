@@ -1,3 +1,4 @@
+import type { NativeRenderedSourceReference } from "./native-execution-input.js";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, mkdtemp, mkdir, readdir, rm } from "node:fs/promises";
 import { Readable } from "node:stream";
@@ -266,8 +267,7 @@ describe("native model input dispatch intent", () => {
     const selectedTask = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCaptureHolder.value = capture; });
     const taskCapture = taskCaptureHolder.value;
     if (!selectedTask || !taskCapture?.payloadSourceSnapshot) throw new Error("The Task owner snapshot is unavailable");
-    const renderedReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string;
-      commentId?: string; filename?: string; contentType?: string; byteSize?: number }> = [];
+    const renderedReferences: NativeRenderedSourceReference[] = [];
     const renderedMarkdown = buildPaperclipTaskMarkdown({
       issue: { id: createdIssue.id, identifier: selectedTask.identifier, title: selectedTask.title,
         description: selectedTask.description, workMode: "standard" },
@@ -490,7 +490,7 @@ describe("native model input dispatch intent", () => {
     const selectedTask = await getIssueExecutionContext(db, companyId, sourceTask.id, capture => { taskCaptureHolder.value = capture; });
     expect(selectedTask).not.toBeNull();
     expect(taskCaptureHolder.value?.input.kind).toBe("task");
-    const renderedReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+    const renderedReferences: NativeRenderedSourceReference[] = [];
     const renderedMarkdown = buildPaperclipTaskMarkdown({ issue: { id: sourceTask.id, identifier: selectedTask!.identifier,
       title: selectedTask!.title, description: selectedTask!.description, workMode: selectedTask!.workMode } },
       { onRenderedSource: source => renderedReferences.push(source) });
@@ -830,7 +830,7 @@ describe("native model input dispatch intent", () => {
     const runtimeContext = await buildRetainedNativeRuntimeContext({ db, agent: runtimeAgent!, runId: seeded.runId,
       runtimeConfig: {}, runtimeSkillEntries: [], onAuthoredSourceCapture: capture => { runtimeSourceCapture.value = capture; } });
     const runtimeInputs = runtimeSourceCapture.value?.inputs ?? [];
-    const renderedReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+    const renderedReferences: NativeRenderedSourceReference[] = [];
     const renderedMarkdown = buildPaperclipTaskMarkdown({
       issue: { id: createdIssue.id, identifier: selectedTask!.identifier, title: selectedTask!.title, description: selectedTask!.description, workMode: "standard" },
       taskPlan: { documentId: document.document.id, revisionId: revisionCapture!.input.revisionId,
@@ -974,7 +974,7 @@ describe("native model input dispatch intent", () => {
     let taskCapture: NativeTaskSourceCapture | null = null;
     const task = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCapture = capture; });
     expect(task).not.toBeNull();
-    const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+    const references: NativeRenderedSourceReference[] = [];
     const markdown = buildPaperclipTaskMarkdown({ issue: { id: createdIssue.id, identifier: task!.identifier,
       title: task!.title, description: task!.description, workMode: task!.workMode } },
       { onRenderedSource: source => references.push(source) })!;
@@ -1057,7 +1057,7 @@ describe("native model input dispatch intent", () => {
       const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
       const task = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCaptureHolder.value = capture; });
       expect(task).not.toBeNull();
-      const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+      const references: NativeRenderedSourceReference[] = [];
       const markdown = buildPaperclipTaskMarkdown({ issue: { id: createdIssue.id, identifier: task!.identifier,
         title: task!.title, description: task!.description, workMode: task!.workMode } },
         { onRenderedSource: source => references.push(source) })!;
@@ -1232,7 +1232,7 @@ describe("native model input dispatch intent", () => {
     const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
     const task = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCaptureHolder.value = capture; });
     expect(task).not.toBeNull();
-    const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+    const references: NativeRenderedSourceReference[] = [];
     const markdown = buildPaperclipTaskMarkdown({ issue: { id: createdIssue.id, identifier: task!.identifier,
       title: task!.title, description: task!.description, workMode: task!.workMode } },
       { onRenderedSource: source => references.push(source) })!;

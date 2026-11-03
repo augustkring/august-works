@@ -64,6 +64,10 @@ describe("Native wake branch hint source components", () => {
     f = fixture(); f.input.workspaceCapture.source.contentHash = "f".repeat(64); expect(captureNativeTaskWakeSource(f.input)).toBeNull();
     f = fixture(); Reflect.set(f.input.workspaceCapture.source, "origin", "agent_home"); expect(captureNativeTaskWakeSource(f.input)).toBeNull();
     f = fixture(); Reflect.deleteProperty(f.input.workspaceCapture.source, "sourceVersion"); expect(captureNativeTaskWakeSource(f.input)).toBeNull();
+    f = fixture(); Reflect.set(f.input.workspaceCapture.execution, "schema", "paperclip.native-execution-input.v3");
+    expect(captureNativeTaskWakeSource(f.input)).toBeNull();
+    const { executionWorkspace: _v3Hint, ...withoutHint } = f.input.payload;
+    expect(captureNativeTaskWakeSource({ ...f.input, payload: withoutHint })).toMatchObject({ kind: "native_task_wake" });
   });
   it.each(["companyId", "issueId", "runId", "agentId", "executionWorkspaceId"] as const)("rejects foreign immutable binding %s", key => {
     const f = fixture(); f.input.workspaceCapture.execution.binding[key] = randomUUID();

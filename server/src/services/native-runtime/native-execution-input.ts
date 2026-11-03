@@ -7,6 +7,7 @@ import type {
   NativeAcpxAgent,
   NativeAcpxPermissionMode,
   NativeCodexApprovalPolicy,
+  NativeExecutionInput,
   NativeExecutionInputV4,
   NativeInteractionResponseEnvelope,
   NativeOpenCodePermissionMode,
@@ -391,14 +392,15 @@ export function exactNativeInitialTaskContinuation(input: Parameters<typeof exac
  * not a caller-provided workspace/Project grant or a substitute for currentness. */
 function exactNativeTaskWakeWorkspaceHint(input: {
   companyId: string; issueId: string; runId: string; agentId?: string; value: unknown;
-  capture?: { execution: NativeExecutionInputV4;
+  capture?: { execution: NativeExecutionInput;
     source: Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> } | null;
 }): boolean {
   if (!input.value || typeof input.value !== "object" || Array.isArray(input.value) ||
     Object.keys(input.value).join(",") !== "branchName") return false;
   const hint = input.value as Record<string, unknown>;
   const execution = input.capture?.execution;
-  const binding = execution?.binding, workspace = execution?.workspace;
+  if (!execution || execution.schema !== "paperclip.native-execution-input.v4") return false;
+  const binding = execution.binding, workspace = execution.workspace;
   const parsed = nativePayloadSourceInputSchema.safeParse(input.capture?.source);
   if (!binding || !workspace || !parsed.success || parsed.data.kind !== "workspace_metadata" ||
     binding.companyId !== input.companyId || binding.issueId !== input.issueId ||
@@ -425,7 +427,7 @@ export function captureNativeTaskWakeSource(input: {
   historicalPendingSources?: readonly import("./native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
   /** Actual constructor input plus its captured metadata source. The recurring
    * reader re-parses the locked profile and checks the current metadata owner. */
-  workspaceCapture?: { execution: NativeExecutionInputV4;
+  workspaceCapture?: { execution: NativeExecutionInput;
     source: Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> } | null;
   task: { id: string; identifier: string | null; title: string; description: string | null; status: string;
     priority: string; workMode: string };

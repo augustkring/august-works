@@ -1,3 +1,4 @@
+import type { NativeRenderedSourceReference } from "../../services/native-runtime/native-execution-input.js";
 import { collectNativeManagedOutputReferences } from "./native-managed-output-references.js";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -935,7 +936,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const selectedTask = await getIssueExecutionContext(db, companyId, task.id, capture => { taskCapture.value = capture; });
     const taskSource = taskCapture.value;
     if (!selectedTask || !taskSource || taskSource.input.kind !== "task") throw new Error("Current task source capture is unavailable.");
-    const renderedReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+    const renderedReferences: NativeRenderedSourceReference[] = [];
     const taskPrompt = buildPaperclipTaskMarkdown({ issue: { id: task.id, identifier: selectedTask.identifier,
       title: selectedTask.title, description: selectedTask.description, workMode: selectedTask.workMode,
       conversationAgentId: task.conversationAgentId },

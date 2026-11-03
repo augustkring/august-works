@@ -1,3 +1,4 @@
+import type { NativeRenderedSourceReference } from "../native-runtime/native-execution-input.js";
 import { createHash, randomUUID } from "node:crypto";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
@@ -828,7 +829,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     const taskCapture = taskCaptureHolder.value;
     expect(renderedTask).not.toBeNull();
     expect(taskCapture).not.toBeNull();
-    const references: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+    const references: NativeRenderedSourceReference[] = [];
     const renderedMarkdown = buildPaperclipTaskMarkdown({ issue: { id: task.id, identifier: renderedTask!.identifier,
       title: renderedTask!.title, description: renderedTask!.description, workMode: renderedTask!.workMode } },
       { onRenderedSource: reference => references.push(reference) });

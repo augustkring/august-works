@@ -7748,6 +7748,7 @@ export async function buildPaperclipWakePayload(input: {
   const agentMessage = parseObject(
     input.contextSnapshot[PAPERCLIP_AGENT_MESSAGE_KEY],
   );
+  const projectedAgentMessage = projectNativeAgentSessionMessage(agentMessage);
   const issueSummary =
     input.issueSummary ??
     (issueId
@@ -7771,7 +7772,7 @@ export async function buildPaperclipWakePayload(input: {
     commentIds.length === 0 &&
     Object.keys(executionStage).length === 0 &&
     !issueSummary &&
-    !agentMessageText
+    !projectedAgentMessage
   )
     return null;
 
@@ -8161,7 +8162,7 @@ export async function buildPaperclipWakePayload(input: {
           workMode: issueSummary.workMode,
         }
       : null,
-    agentMessage: projectNativeAgentSessionMessage(agentMessage),
+    agentMessage: projectedAgentMessage,
     childIssueSummaries: Array.isArray(
       input.contextSnapshot.childIssueSummaries,
     )
@@ -21044,7 +21045,7 @@ export function heartbeatService(
         delete context.paperclipSkillTest;
       }
       const continuationCommentSources: NativeCommentSourceCapture[] = [];
-      let nativeTaskContinuationCapture: import("./execution-continuation.js").NativeTaskContinuationCapture | null = null;
+      const nativeTaskContinuationCapture: { value: import("./execution-continuation.js").NativeTaskContinuationCapture | null } = { value: null };
       const executionContinuation =
         issueRef && !isConversation(issueContext) && issueContext?.assigneeAgentId === agent.id
           ? await buildExecutionContinuation({
@@ -21062,7 +21063,7 @@ export function heartbeatService(
               onCommentSourceCapture: agent.adapterType === "paperclip_runner"
                 ? capture => continuationCommentSources.push(capture) : undefined,
               onContinuationSourceCapture: agent.adapterType === "paperclip_runner"
-                ? capture => { nativeTaskContinuationCapture = capture; } : undefined,
+                ? capture => { nativeTaskContinuationCapture.value = capture; } : undefined,
             })
           : null;
       context.executionContinuation = executionContinuation;
@@ -24310,7 +24311,7 @@ export function heartbeatService(
               companyId: agent.companyId, issueId: issueRef.id, runId: run.id, agentId: agent.id,
               responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
               wakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
-              capture: nativeTaskContinuationCapture ? { ...nativeTaskContinuationCapture,
+              capture: nativeTaskContinuationCapture.value ? { ...nativeTaskContinuationCapture.value,
                 ...(nativeBootstrapRetainedRunSource ? { retainedSource: nativeBootstrapRetainedRunSource.source } : {}) } : null }) : null;
             nativeBootstrapContinuationCapture = closedTaskContinuation;
             const nativeTaskWakeSource = capturedTaskSource?.input.kind === "task" && issueRef

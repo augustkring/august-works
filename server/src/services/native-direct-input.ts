@@ -1892,7 +1892,8 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     let execution: ReturnType<typeof parseNativeExecutionInput>;
     try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); }
     catch { throw forbidden("The Native wake branch workspace input is unavailable"); }
-    if (execution.binding.companyId !== input.companyId || execution.binding.runId !== input.runId ||
+    if (execution.schema !== "paperclip.native-execution-input.v4" ||
+      execution.binding.companyId !== input.companyId || execution.binding.runId !== input.runId ||
       execution.binding.issueId !== input.issueId || execution.binding.agentId !== run.agentId)
       throw forbidden("The Native wake branch workspace binding changed");
     await assertNativeWorkspaceMetadataSourcesCurrent(db, input.companyId, [metadata[0]!], scope);
